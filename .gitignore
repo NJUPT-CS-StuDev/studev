@@ -24,7 +24,6 @@ AGENTS.md
 CLAUDE.md
 .vscode/
 
-# local duplicate source asset (the published copy lives in public/)
 /logo.png
 
 # macOS-specific files
