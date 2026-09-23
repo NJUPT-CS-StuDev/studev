@@ -3,6 +3,12 @@ import { getCollection } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
 const entries = (await getCollection('study')).filter((item) => item.data.status === 'published').sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
 ---
-<SiteLayout title="文章 — StuDev" active="study">
-  <div class="listing"><h1>文章</h1>{entries.map((entry) => <a class="post-row" href={`/study/${entry.id}/`}><h2>{entry.data.title}</h2></a>)}</div>
+<SiteLayout title="Study — StuDev" active="study">
+  <section class="listing" aria-labelledby="page-title">
+    <p class="eyebrow">学习 · 动手</p>
+    <h1 id="page-title">Study</h1>
+    <div class="rows">
+      {entries.map((entry) => <a class="entry-row" href={`/study/${entry.id}/`}><span class="entry-title">{entry.data.shortTitle ?? entry.data.title}</span><span class="entry-arrow" aria-hidden="true">↗</span></a>)}
+    </div>
+  </section>
 </SiteLayout>

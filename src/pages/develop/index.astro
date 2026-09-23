@@ -1,0 +1,14 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+const entries = (await getCollection('develop')).filter((item) => item.data.status === 'published').sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
+---
+<SiteLayout title="Develop — StuDev" active="develop">
+  <section class="listing" aria-labelledby="page-title">
+    <p class="eyebrow">项目 · 开源</p>
+    <h1 id="page-title">Develop</h1>
+    <div class="rows">
+      {entries.map((entry) => <a class="entry-row project-row" href={entry.data.repository} target="_blank" rel="noopener noreferrer"><span><span class="entry-title">{entry.data.title}</span><span class="entry-description">{entry.data.description}</span></span><span class="entry-arrow" aria-hidden="true">↗</span></a>)}
+    </div>
+  </section>
+</SiteLayout>

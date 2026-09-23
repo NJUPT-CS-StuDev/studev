@@ -1,6 +1,13 @@
 ---
+import { getCollection, render } from 'astro:content';
 import SiteLayout from '../layouts/SiteLayout.astro';
+const [entry] = await getCollection('about');
+const { Content } = await render(entry);
 ---
-<SiteLayout title="关于 — StuDev" active="about">
-  <div class="about-page"><h1>关于</h1><p>StuDev 是南京邮电大学计算机学院、软件学院、网络空间安全学院学生发展中心维护的博客。</p></div>
+<SiteLayout title="About — StuDev" description={entry.data.description} active="about">
+  <article class="detail-wrap static-page">
+    <p class="eyebrow">认识我们</p>
+    <h1>About</h1>
+    <div class="prose"><Content /></div>
+  </article>
 </SiteLayout>

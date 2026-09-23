@@ -1,0 +1,18 @@
+---
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+export async function getStaticPaths() {
+  const entries = await getCollection('history', ({ data }) => data.status === 'published');
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+<SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="history">
+  <article class="detail-wrap">
+    <a class="back-link" href="/history/">← History</a>
+    <h1>{entry.data.title}</h1>
+    <p class="article-description">{entry.data.description}</p>
+    <div class="prose"><Content /></div>
+  </article>
+</SiteLayout>

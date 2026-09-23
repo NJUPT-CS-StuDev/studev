@@ -7,8 +7,13 @@ export default defineConfig({
   output: 'static',
   redirects: {
     '/explore': '/study',
-    '/explore/00-access': '/study/web-pages',
-    '/explore/01-git-history': '/study/git-commits',
-    '/projects': '/',
+    '/explore/00-access': '/study',
+    '/explore/01-git-history': '/study/first-star',
+    '/projects': '/develop',
+    '/study/ai-learning': '/study',
+    '/study/git-commits': '/study/first-star',
+    '/study/network-access': '/study',
+    '/study/search-practice': '/study',
+    '/study/web-pages': '/study',
   },
 });

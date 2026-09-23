@@ -5,5 +5,11 @@ export async function getStaticPaths() { const entries = await getCollection('st
 const { entry } = Astro.props; const { Content } = await render(entry);
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="study">
-  <article class="detail-wrap"><a class="back-link" href="/study/">← 文章</a><h1>{entry.data.title}</h1><div class="prose"><Content /></div></article>
+  <article class="detail-wrap">
+    <a class="back-link" href="/study/">← Study</a>
+    <p class="eyebrow article-kicker">StuDev 2026 招新热身 · 01</p>
+    <h1>{entry.data.title}</h1>
+    <p class="article-description">{entry.data.description}</p>
+    <div class="prose"><Content /></div>
+  </article>
 </SiteLayout>

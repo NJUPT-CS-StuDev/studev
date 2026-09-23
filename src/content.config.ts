@@ -11,6 +11,22 @@ const baseSchema = z.object({
 export const collections = {
   study: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/study' }),
+    schema: baseSchema.extend({ shortTitle: z.string().optional() }),
+  }),
+  develop: defineCollection({
+    loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/develop' }),
+    schema: baseSchema.extend({ repository: z.string().url() }),
+  }),
+  life: defineCollection({
+    loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/life' }),
+    schema: baseSchema,
+  }),
+  history: defineCollection({
+    loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/history' }),
+    schema: baseSchema.extend({ period: z.string() }),
+  }),
+  about: defineCollection({
+    loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/about' }),
     schema: baseSchema,
   }),
 };

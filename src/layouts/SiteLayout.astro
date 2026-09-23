@@ -3,8 +3,11 @@ import '../styles/global.css';
 interface Props { title?: string; description?: string; active?: string; }
 const { title = 'StuDev', description = 'StuDev，由南邮计软网安学生发展中心维护。', active = '' } = Astro.props;
 const nav = [
-  { href: '/study/', label: '文章', key: 'study' },
-  { href: '/about', label: '关于', key: 'about' },
+  { href: '/study/', label: 'Study', key: 'study' },
+  { href: '/develop/', label: 'Develop', key: 'develop' },
+  { href: '/life/', label: 'Life', key: 'life' },
+  { href: '/history/', label: 'History', key: 'history' },
+  { href: '/about/', label: 'About', key: 'about' },
 ];
 ---
 <!doctype html>
@@ -19,11 +22,11 @@ const nav = [
   <body>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="/" aria-label="StuDev 首页"><img src="/logo.png" alt="" /></a>
+        <a class="brand" href="/" aria-label="StuDev 首页"><img src="/logo.png" alt="" width="48" height="48" /></a>
         <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
       </div>
     </header>
     <main><slot /></main>
-    <footer class="site-footer"><div class="footer-inner"><span>StuDev</span><a href="https://github.com/NJUPT-CS-StuDev" rel="noreferrer">GitHub ↗</a></div></footer>
+    <footer class="site-footer"><div class="footer-inner"><span>© {new Date().getFullYear()} StuDev</span><a href="https://github.com/NJUPT-CS-StuDev/studev" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div></footer>
   </body>
 </html>

@@ -1,0 +1,14 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+const entries = (await getCollection('history')).filter((item) => item.data.status === 'published').sort((a, b) => (b.data.order ?? 0) - (a.data.order ?? 0));
+---
+<SiteLayout title="History — StuDev" active="history">
+  <section class="listing" aria-labelledby="page-title">
+    <p class="eyebrow">历届 · 人与事</p>
+    <h1 id="page-title">History</h1>
+    <div class="timeline">
+      {entries.map((entry) => <a class="timeline-item" href={`/history/${entry.id}/`}><span class="timeline-year">{entry.data.period}</span><span class="timeline-text">{entry.data.description}</span><span class="entry-arrow" aria-hidden="true">↗</span></a>)}
+    </div>
+  </section>
+</SiteLayout>
