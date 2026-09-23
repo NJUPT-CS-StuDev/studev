@@ -1,0 +1,22 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  name: string;
+  role?: string;
+  avatar: ImageMetadata;
+  signature?: string;
+  featured?: boolean;
+}
+
+const { name, role, avatar, signature, featured = false } = Astro.props;
+---
+<article class:list={['member', { 'member-featured': featured }]}>
+  <Image src={avatar} alt={`${name}的头像`} width={144} height={144} class="member-avatar" loading={featured ? 'eager' : 'lazy'} />
+  <div class="member-copy">
+    <h4>{name}</h4>
+    {role && <p class="member-role">{role}</p>}
+    {signature && <p class="member-signature">{signature}</p>}
+  </div>
+</article>

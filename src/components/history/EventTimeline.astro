@@ -1,0 +1,27 @@
+---
+interface Event {
+  date: string;
+  time?: string;
+  title: string;
+  detail: string;
+  participants?: string;
+  href?: string;
+}
+
+interface Props { events: Event[]; }
+const { events } = Astro.props;
+const orderedEvents = [...events].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''));
+---
+<ol class="event-timeline">
+  {orderedEvents.map((event) => (
+    <li class="event-item">
+      <div class="event-date"><time datetime={event.date}>{event.date.replaceAll('-', '.')}</time>{event.time && <span>{event.time}</span>}</div>
+      <div class="event-body">
+        <h3>{event.title}</h3>
+        <p>{event.detail}</p>
+        {event.participants && <p class="event-people">参与 · {event.participants}</p>}
+        {event.href && <a href={event.href} target="_blank" rel="noopener noreferrer">查看记录 ↗</a>}
+      </div>
+    </li>
+  ))}
+</ol>

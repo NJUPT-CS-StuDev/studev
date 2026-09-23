@@ -10,6 +10,8 @@ GitHub 组织：https://github.com/NJUPT-CS-StuDev
 
 `src/content/` 中，Study、Develop、Life、History、About 各有一份 Markdown 内容；`src/pages/` 提供对应路由。首页不展示文章流。
 
+历届成员和事件维护在 `src/content/history/<学年>.md` 的 frontmatter，头像放在同目录的 `avatars/` 中。只提交获准公开的头像与文字，不要提交 QQ 资料截图、联系方式或内部人员表。
+
 ```powershell
 npm install
 npm run astro -- dev --background
