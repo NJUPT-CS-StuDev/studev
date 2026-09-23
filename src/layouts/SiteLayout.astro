@@ -1,0 +1,31 @@
+---
+import '../styles/global.css';
+interface Props { title?: string; description?: string; active?: string; }
+const { title = 'StuDev', description = 'StuDev', active = '' } = Astro.props;
+const nav = [
+  { href: '/study/', label: '文章', key: 'study' },
+  { href: '/explore/', label: '探索', key: 'explore' },
+  { href: '/projects/', label: '项目', key: 'projects' },
+  { href: '/about', label: '关于', key: 'about' },
+];
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="StuDev 首页"><img src="/logo.png" alt="" /></a>
+        <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
+      </div>
+    </header>
+    <main><slot /></main>
+    <footer class="site-footer"><div class="footer-inner"><span>StuDev</span><a href="https://github.com/NJUPT-StuDev" rel="noreferrer">GitHub ↗</a></div></footer>
+  </body>
+</html>
