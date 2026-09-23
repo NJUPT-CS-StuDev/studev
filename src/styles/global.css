@@ -25,7 +25,7 @@ a:hover { color: var(--blue); }
 .site-nav a.active { color: var(--ink); border-bottom-color: var(--blue); }
 main { min-height: calc(100vh - 137px); }
 .home, .listing, .detail-wrap, .about-page { width: min(var(--max), calc(100% - 48px)); margin: auto; }
-.home { padding: 88px 0 100px; }
+.home { min-height: calc(100vh - 137px); display: flex; flex-direction: column; justify-content: center; }
 .home h1 { margin: 0; font-size: clamp(2.8rem, 8vw, 5rem); font-weight: 500; letter-spacing: -.07em; line-height: 1; }
 .home h1 span { color: var(--blue); }
 .home-subtitle { margin: 24px 0 0; color: var(--muted); font-size: 1rem; }
@@ -48,4 +48,4 @@ main { min-height: calc(100vh - 137px); }
 .prose pre code { padding: 0; background: transparent; }
 .about-page { padding: 72px 0 110px; max-width: 720px; }.about-page h1 { margin: 0 0 38px; font-size: 2.1rem; font-weight: 500; letter-spacing: -.05em; }.about-page p { max-width: 620px; color: var(--muted); }
 .site-footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }.footer-inner { min-height: 68px; }.footer-inner a:hover { color: var(--blue); }
-@media (max-width: 640px) { .header-inner, .footer-inner, .home, .listing, .detail-wrap, .about-page { width: min(100% - 32px, var(--max)); }.site-nav { gap: 15px; }.site-nav a { padding: 23px 0 20px; }.home { padding-top: 60px; } }
+@media (max-width: 640px) { .header-inner, .footer-inner, .home, .listing, .detail-wrap, .about-page { width: min(100% - 32px, var(--max)); }.site-nav { gap: 15px; }.site-nav a { padding: 23px 0 20px; } }
