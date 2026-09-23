@@ -169,13 +169,34 @@ main { min-height: calc(100vh - 145px); }
 .prose ul, .prose ol { padding-left: 24px; }
 .prose a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
 .prose strong { font-weight: 600; }
+.prose img, .prose video, .prose svg { display: block; max-width: 100%; height: auto; }
+.prose img { margin: 28px auto; border: 1px solid var(--line); border-radius: 6px; }
+.prose mark { padding: 0 2px; color: inherit; background: #e8f0fe; }
+.prose kbd { padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: #f8f9fa; font: .83em ui-monospace, Consolas, monospace; }
+.prose blockquote { margin: 26px 0; padding: 1px 0 1px 18px; color: var(--muted); border-left: 2px solid var(--line); }
+.prose blockquote > :last-child { margin-bottom: 0; }
+.prose .markdown-alert { margin: 28px 0; padding: 13px 18px; border-left: 3px solid var(--blue); background: #f8fafd; }
+.prose .markdown-alert-title { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: .9rem; font-weight: 600; }
+.prose .markdown-alert-title svg { width: 16px; height: 16px; }
+.prose .markdown-alert > :last-child { margin-bottom: 0; }
+.prose .markdown-alert-tip { border-left-color: #188038; background: #f7fbf8; }
+.prose .markdown-alert-warning, .prose .markdown-alert-caution { border-left-color: #d56a00; background: #fffaf3; }
+.prose .markdown-alert-important { border-left-color: #9334e6; background: #fbf8fe; }
+.prose .task-list-item { list-style: none; margin-left: -22px; }
+.prose .task-list-item input { margin-right: 8px; accent-color: var(--blue); }
+.prose mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+.prose .diagram-panel { margin: 30px 0; padding: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.prose .diagram-panel svg { margin: auto; max-width: none; }
 .prose code { padding: 2px 5px; border-radius: 3px; background: #f1f3f4; font-size: .9em; }
 .prose pre { overflow-x: auto; padding: 18px 20px; background: #f8f9fa; border: 1px solid var(--line); border-radius: 4px; }
 .prose pre code { padding: 0; background: transparent; }
-.prose table { width: 100%; border-collapse: collapse; margin: 22px 0 32px; font-size: .96rem; }
+.prose table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; margin: 22px 0 32px; font-size: .96rem; }
 .prose th, .prose td { padding: 11px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
 .prose th { color: var(--muted); font-weight: 500; }
-.prose th:first-child, .prose td:first-child { width: 40%; padding-left: 0; }
+.prose th:first-child, .prose td:first-child { padding-left: 0; }
+.project-link { margin: 24px 0 0; }
+.project-link a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+.term-narrative { max-width: 720px; margin-inline: auto; }
 
 .term-page {
   width: min(var(--max), calc(100% - 64px));

@@ -8,7 +8,7 @@ const entries = (await getCollection('develop')).filter((item) => item.data.stat
     <p class="eyebrow">项目 · 开源</p>
     <h1 id="page-title">Develop</h1>
     <div class="rows">
-      {entries.map((entry) => <a class="entry-row project-row" href={entry.data.repository} target="_blank" rel="noopener noreferrer"><span><span class="entry-title">{entry.data.title}</span><span class="entry-description">{entry.data.description}</span></span><span class="entry-arrow" aria-hidden="true">↗</span></a>)}
+      {entries.map((entry) => <a class="entry-row project-row" href={`/develop/${entry.id}/`}><span><span class="entry-title">{entry.data.title}</span><span class="entry-description">{entry.data.description}</span></span><span class="entry-arrow" aria-hidden="true">↗</span></a>)}
     </div>
   </section>
 </SiteLayout>

@@ -1,5 +1,5 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
 import Member from '../../components/history/Member.astro';
 import EventTimeline from '../../components/history/EventTimeline.astro';
@@ -8,6 +8,7 @@ export async function getStaticPaths() {
   return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 const { entry } = Astro.props;
+const { Content } = await render(entry);
 const memberCount = entry.data.groups.reduce((count, group) => count + group.people.length, 0);
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="history">
@@ -35,6 +36,10 @@ const memberCount = entry.data.groups.reduce((count, group) => count + group.peo
     <section class="term-section" id="events" aria-labelledby="events-title">
       <div class="term-section-heading"><span class="section-number">02</span><h2 id="events-title">大事记</h2><span class="section-aside">{entry.data.events.length} 个节点</span></div>
       <EventTimeline events={entry.data.events} />
+    </section>
+
+    <section class="term-section term-narrative" aria-label="本届纪事">
+      <div class="prose"><Content /></div>
     </section>
   </article>
 </SiteLayout>
