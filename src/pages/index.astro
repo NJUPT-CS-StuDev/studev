@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content';
 import SiteLayout from '../layouts/SiteLayout.astro';
 const posts = (await getCollection('study')).filter((item) => item.data.status === 'published').sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
 ---
-<SiteLayout title="StuDev" description="StuDev" active="">
+<SiteLayout title="StuDev" active="">
   <div class="home">
     <h1>Stu<span>Dev</span></h1>
     <section class="home-section">

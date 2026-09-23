@@ -1,7 +1,7 @@
 ---
 import '../styles/global.css';
 interface Props { title?: string; description?: string; active?: string; }
-const { title = 'StuDev', description = 'StuDev', active = '' } = Astro.props;
+const { title = 'StuDev', description = 'StuDev · 南京邮电大学计软网安学院学生发展中心', active = '' } = Astro.props;
 const nav = [
   { href: '/study/', label: '文章', key: 'study' },
   { href: '/explore/', label: '探索', key: 'explore' },
@@ -26,6 +26,6 @@ const nav = [
       </div>
     </header>
     <main><slot /></main>
-    <footer class="site-footer"><div class="footer-inner"><span>StuDev</span><a href="https://github.com/NJUPT-StuDev" rel="noreferrer">GitHub ↗</a></div></footer>
+    <footer class="site-footer"><div class="footer-inner"><span>StuDev</span><a href="https://github.com/NJUPT-CS-StuDev" rel="noreferrer">GitHub ↗</a></div></footer>
   </body>
 </html>

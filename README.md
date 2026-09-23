@@ -1,6 +1,10 @@
 # StuDev
 
-StuDev 是一个静态博客，记录学习、项目和探索。
+StuDev 是南京邮电大学计算机学院、软件学院、网络空间安全学院学生发展中心的公开网站，记录学习、实践与分享。
+
+网站：https://studev.hicancan.top/
+
+GitHub 组织：https://github.com/NJUPT-CS-StuDev
 
 技术栈：Astro、Markdown、EdgeOne Static Hosting。
 
@@ -9,5 +13,3 @@ npm install
 npm run dev
 npm run build
 ```
-
-公开内容不包含人员信息、内部资料或联系方式。
