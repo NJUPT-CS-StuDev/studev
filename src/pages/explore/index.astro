@@ -1,8 +1,0 @@
----
-import { getCollection } from 'astro:content';
-import SiteLayout from '../../layouts/SiteLayout.astro';
-const entries = (await getCollection('explore')).filter((item) => item.data.status === 'published').sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
----
-<SiteLayout title="探索 — StuDev" active="explore">
-  <div class="listing"><h1>探索</h1>{entries.map((entry) => <a class="post-row" href={`/explore/${entry.id}/`}><h2>{entry.data.title}</h2><time>{entry.data.type}</time></a>)}</div>
-</SiteLayout>

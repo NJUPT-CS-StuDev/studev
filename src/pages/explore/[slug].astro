@@ -1,9 +1,0 @@
----
-import { getCollection, render } from 'astro:content';
-import SiteLayout from '../../layouts/SiteLayout.astro';
-export async function getStaticPaths() { const entries = await getCollection('explore'); return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } })); }
-const { entry } = Astro.props; const { Content } = await render(entry);
----
-<SiteLayout title={`${entry.data.title} — StuDev`} active="explore">
-  <article class="detail-wrap"><a class="back-link" href="/explore/">← 探索</a><div class="meta" style="margin-top:32px">{entry.data.type}</div><h1>{entry.data.title}</h1><div class="prose"><Content /></div></article>
-</SiteLayout>

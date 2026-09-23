@@ -4,5 +4,5 @@ import SiteLayout from '../../layouts/SiteLayout.astro';
 const entries = (await getCollection('study')).filter((item) => item.data.status === 'published').sort((a, b) => (a.data.order ?? 99) - (b.data.order ?? 99));
 ---
 <SiteLayout title="文章 — StuDev" active="study">
-  <div class="listing"><h1>文章</h1>{entries.map((entry) => <a class="post-row" href={`/study/${entry.id}/`}><h2>{entry.data.title}</h2><time>{entry.data.type}</time></a>)}</div>
+  <div class="listing"><h1>文章</h1>{entries.map((entry) => <a class="post-row" href={`/study/${entry.id}/`}><h2>{entry.data.title}</h2></a>)}</div>
 </SiteLayout>

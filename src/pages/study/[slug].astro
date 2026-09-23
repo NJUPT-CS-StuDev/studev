@@ -1,9 +1,9 @@
 ---
 import { getCollection, render } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
-export async function getStaticPaths() { const entries = await getCollection('study'); return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } })); }
+export async function getStaticPaths() { const entries = await getCollection('study', ({ data }) => data.status === 'published'); return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } })); }
 const { entry } = Astro.props; const { Content } = await render(entry);
 ---
-<SiteLayout title={`${entry.data.title} — StuDev`} active="study">
-  <article class="detail-wrap"><a class="back-link" href="/study/">← 文章</a><div class="meta" style="margin-top:32px">{entry.data.type} {entry.data.duration ? `· ${entry.data.duration}` : ''}</div><h1>{entry.data.title}</h1><div class="prose"><Content /></div></article>
+<SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="study">
+  <article class="detail-wrap"><a class="back-link" href="/study/">← 文章</a><h1>{entry.data.title}</h1><div class="prose"><Content /></div></article>
 </SiteLayout>
