@@ -13,6 +13,7 @@ export default defineConfig({
   site: 'https://studev.hicancan.top',
   output: 'static',
   markdown: {
+    shikiConfig: { langAlias: { flow: 'plaintext', sequence: 'plaintext' } },
     processor: unified({
       gfm: false,
       remarkPlugins: [[remarkGfm, { singleTilde: false }], remarkMath, remarkTyporaInline],

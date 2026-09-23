@@ -10,6 +10,7 @@ import remarkTyporaInline from '../src/plugins/remark-typora-inline.mjs';
 
 const markdown = await createMarkdownProcessor({
   gfm: false,
+  shikiConfig: { langAlias: { flow: 'plaintext', sequence: 'plaintext' } },
   remarkPlugins: [[remarkGfm, { singleTilde: false }], remarkMath, remarkTyporaInline],
   rehypePlugins: [[rehypeMathjax, { tex: { packages: [...AllPackages, 'physics'] } }], rehypeGithubAlerts],
 });
@@ -37,4 +38,11 @@ test('GitHub alerts and GFM task lists', async () => {
   const { code } = await markdown.render('> [!NOTE]\n> 说明\n\n- [x] 完成');
   assert.match(code, /markdown-alert-note/);
   assert.match(code, /type="checkbox"/);
+});
+
+test('flow and sequence blocks keep their browser renderer labels', async () => {
+  for (const kind of ['flow', 'sequence']) {
+    const { code } = await markdown.render(`\`\`\`${kind}\nA->B\n\`\`\``);
+    assert.match(code, new RegExp(`data-language="${kind}"`));
+  }
 });
