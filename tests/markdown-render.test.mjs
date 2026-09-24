@@ -10,7 +10,10 @@ import remarkTyporaInline from '../src/plugins/remark-typora-inline.mjs';
 
 const markdown = await createMarkdownProcessor({
   gfm: false,
-  shikiConfig: { langAlias: { flow: 'plaintext', sequence: 'plaintext' } },
+  shikiConfig: {
+    themes: { light: 'github-light', dark: 'github-dark' },
+    langAlias: { flow: 'plaintext', sequence: 'plaintext' },
+  },
   remarkPlugins: [[remarkGfm, { singleTilde: false }], remarkMath, remarkTyporaInline],
   rehypePlugins: [[rehypeMathjax, { tex: { packages: [...AllPackages, 'physics'] } }], rehypeGithubAlerts],
 });
@@ -45,4 +48,10 @@ test('flow and sequence blocks keep their browser renderer labels', async () => 
     const { code } = await markdown.render(`\`\`\`${kind}\nA->B\n\`\`\``);
     assert.match(code, new RegExp(`data-language="${kind}"`));
   }
+});
+
+test('code fences contain both syntax palettes', async () => {
+  const { code } = await markdown.render('```js\nconst answer = 42;\n```');
+  assert.match(code, /astro-code-themes github-light github-dark/);
+  assert.match(code, /--shiki-dark/);
 });

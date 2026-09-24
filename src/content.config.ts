@@ -1,5 +1,6 @@
-import { defineCollection, z } from 'astro:content';
+import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
 
 const baseSchema = z.object({
   title: z.string(),
@@ -15,7 +16,7 @@ export const collections = {
   }),
   develop: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/develop' }),
-    schema: baseSchema.extend({ repository: z.string().url() }),
+    schema: baseSchema.extend({ repository: z.url() }),
   }),
   life: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/life' }),
@@ -40,7 +41,7 @@ export const collections = {
         title: z.string(),
         detail: z.string(),
         participants: z.string().optional(),
-        href: z.string().url().optional(),
+        href: z.url().optional(),
       })),
     }),
   }),

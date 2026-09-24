@@ -8,12 +8,13 @@ import { AllPackages } from 'mathjax-full/js/input/tex/AllPackages.js';
 import { rehypeGithubAlerts } from 'rehype-github-alerts';
 import remarkTyporaInline from './src/plugins/remark-typora-inline.mjs';
 
-// https://astro.build/config
 export default defineConfig({
   site: 'https://studev.hicancan.top',
-  output: 'static',
   markdown: {
-    shikiConfig: { langAlias: { flow: 'plaintext', sequence: 'plaintext' } },
+    shikiConfig: {
+      themes: { light: 'github-light', dark: 'github-dark' },
+      langAlias: { flow: 'plaintext', sequence: 'plaintext' },
+    },
     processor: unified({
       gfm: false,
       remarkPlugins: [[remarkGfm, { singleTilde: false }], remarkMath, remarkTyporaInline],

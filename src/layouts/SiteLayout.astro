@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import ThemeToggle from '../components/ThemeToggle.astro';
 interface Props { title?: string; description?: string; active?: string; }
 const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '' } = Astro.props;
 const nav = [
@@ -15,6 +16,16 @@ const nav = [
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#ffffff" />
+    <script is:inline>
+      let preference;
+      try { preference = localStorage.getItem('site-theme'); } catch { /* Storage may be unavailable. */ }
+      const theme = preference === 'light' || preference === 'dark'
+        ? preference
+        : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
+    </script>
     <meta name="description" content={description} />
     <link rel="icon" type="image/png" href="/logo.png" />
     <title>{title}</title>
@@ -24,6 +35,7 @@ const nav = [
       <div class="header-inner">
         <a class="brand" href="/" aria-label="StuDev 首页"><img src="/logo.png" alt="" width="48" height="48" /></a>
         <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
+        <ThemeToggle />
       </div>
     </header>
     <main><slot /></main>
