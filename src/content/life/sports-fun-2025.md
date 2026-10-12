@@ -1,6 +1,7 @@
 ---
 title: "走出机房的身体、奔跑的笨拙与大地的重力感"
 description: "告别敲击键盘的久坐，在仙林绿茵场上重获呼吸、重心与真实大笑。"
+pubDate: "2025-06-10"
 order: 5
 status: published
 ---

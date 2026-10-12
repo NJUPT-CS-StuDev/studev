@@ -14,6 +14,11 @@ const { Content } = await render(entry);
   <article class="detail-wrap">
     <a class="back-link" href="/develop/">← Develop</a>
     <h1>{entry.data.title}</h1>
+    {entry.data.pubDate && (
+      <p class="article-meta" style="color: var(--muted); font-size: 0.92rem; margin-top: -8px; margin-bottom: 20px;">
+        <span>发布于 {entry.data.pubDate}</span>
+      </p>
+    )}
     <p class="article-description">{entry.data.description}</p>
     <p class="project-link"><a href={entry.data.repository} target="_blank" rel="noopener noreferrer">GitHub 源码 ↗</a></p>
     <div class="prose"><Content /></div>

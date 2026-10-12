@@ -2,6 +2,7 @@
 title: "StuDev 网站源码"
 description: "StuDev 数字化平台的开源代码与架构手记。"
 repository: "https://github.com/NJUPT-CS-StuDev/studev"
+pubDate: "2026-09-22"
 order: 1
 ---
 

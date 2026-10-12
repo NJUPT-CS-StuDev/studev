@@ -1,8 +1,12 @@
 ---
 import { getCollection, render } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
-export async function getStaticPaths() { const entries = await getCollection('study', ({ data }) => data.status === 'published'); return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } })); }
-const { entry } = Astro.props; const { Content } = await render(entry);
+export async function getStaticPaths() {
+  const entries = await getCollection('study', ({ data }) => data.status === 'published');
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const { Content } = await render(entry);
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="study">
   <article class="detail-wrap">
@@ -13,6 +17,11 @@ const { entry } = Astro.props; const { Content } = await render(entry);
       <p class="eyebrow article-kicker">Study · 深度特写</p>
     )}
     <h1>{entry.data.title}</h1>
+    {entry.data.pubDate && (
+      <p class="article-meta" style="color: var(--muted); font-size: 0.92rem; margin-top: -8px; margin-bottom: 20px;">
+        <span>发布于 {entry.data.pubDate}</span>
+      </p>
+    )}
     <p class="article-description">{entry.data.description}</p>
     <div class="prose"><Content /></div>
   </article>

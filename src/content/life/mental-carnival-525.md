@@ -1,6 +1,7 @@
 ---
 title: "解忧树洞与操场夜风：那些未曾对屏幕言说的脆弱"
 description: "从报告厅的心理电影展映、超大画布涂鸦疗愈，到操场上的盲行互助与解忧树洞。"
+pubDate: "2026-05-20"
 order: 4
 status: published
 ---

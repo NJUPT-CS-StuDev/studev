@@ -1,6 +1,7 @@
 ---
 title: "在高负荷运转的系统里，允许自己发一次呆"
 description: "初春草坪上的夏新音响、莫生气黄色小椅子与教二楼走廊里流转的32封手写信。"
+pubDate: "2023-04-30"
 order: 3
 status: published
 ---

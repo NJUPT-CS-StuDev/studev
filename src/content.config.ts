@@ -6,6 +6,8 @@ const baseSchema = z.object({
   title: z.string(),
   description: z.string(),
   order: z.number().optional(),
+  pubDate: z.string().optional(),
+  author: z.string().optional(),
   status: z.enum(['published', 'draft']).default('published'),
 });
 

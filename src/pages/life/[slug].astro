@@ -12,6 +12,12 @@ const { Content } = await render(entry);
   <article class="detail-wrap">
     <a class="back-link" href="/life/">← Life</a>
     <h1>{entry.data.title}</h1>
+    {(entry.data.pubDate || entry.data.author) && (
+      <p class="article-meta" style="color: var(--muted); font-size: 0.92rem; margin-top: -8px; margin-bottom: 20px;">
+        {entry.data.pubDate && <span>发布于 {entry.data.pubDate}</span>}
+        {entry.data.author && <span> · 作者：{entry.data.author}</span>}
+      </p>
+    )}
     <p class="article-description">{entry.data.description}</p>
     <div class="prose"><Content /></div>
   </article>
