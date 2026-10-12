@@ -12,7 +12,10 @@ const baseSchema = z.object({
 export const collections = {
   study: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/study' }),
-    schema: baseSchema.extend({ shortTitle: z.string().optional() }),
+    schema: baseSchema.extend({
+      shortTitle: z.string().optional(),
+      kicker: z.string().optional(),
+    }),
   }),
   develop: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/develop' }),

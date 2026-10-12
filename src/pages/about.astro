@@ -1,7 +1,8 @@
 ---
 import { getCollection, render } from 'astro:content';
 import SiteLayout from '../layouts/SiteLayout.astro';
-const [entry] = await getCollection('about');
+const entries = await getCollection('about');
+const entry = entries.find((e) => e.id === 'studev') ?? entries[0];
 const { Content } = await render(entry);
 ---
 <SiteLayout title="About — StuDev" description={entry.data.description} active="about">
