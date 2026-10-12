@@ -21,7 +21,10 @@ export const collections = {
   }),
   develop: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/develop' }),
-    schema: baseSchema.extend({ repository: z.url() }),
+    schema: baseSchema.extend({
+      repository: z.url(),
+      demo: z.url().optional(),
+    }),
   }),
   life: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/life' }),
