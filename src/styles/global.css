@@ -563,6 +563,5 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .entry-arrow { transition: none; }
-  .typewriter-cursor { animation: none; }
   .home-terminal, .terminal-link-pill, .project-btn { transition: none; }
 }

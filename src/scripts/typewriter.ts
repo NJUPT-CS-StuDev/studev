@@ -7,14 +7,13 @@ const phrases = [
 ];
 
 const element = document.getElementById('typewriter-text');
-const motion = matchMedia('(prefers-reduced-motion: reduce)');
 let phrase = 0;
 let character = phrases[0].length;
 let deleting = true;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 function schedule(delay: number) {
-  if (!motion.matches && !document.hidden) timer = setTimeout(tick, delay);
+  if (!document.hidden) timer = setTimeout(tick, delay);
 }
 
 function tick() {
@@ -36,17 +35,10 @@ function tick() {
 
 function resume() {
   clearTimeout(timer);
-  if (motion.matches && element) {
-    element.textContent = phrases[0];
-    phrase = 0;
-    character = phrases[0].length;
-    deleting = true;
-  }
-  schedule(3500);
+  schedule(900);
 }
 
 if (element) {
   resume();
   document.addEventListener('visibilitychange', resume);
-  motion.addEventListener('change', resume);
 }
