@@ -135,3 +135,61 @@ test('every page can share its clean canonical URL', async () => {
     else assert.match(html, /分享本页/);
   }
 });
+
+test('sitemap lists every unique indexable canonical page on the formal domain', async () => {
+  const expected = new Set();
+  for (const file of await pages(output)) {
+    if (file === join(output, '404.html')) continue;
+    walk(parse(await readFile(file, 'utf8')), (node) => {
+      const attr = attributes(node);
+      if (node.tagName === 'link' && attr.rel === 'canonical') expected.add(attr.href);
+    });
+  }
+
+  const index = await readFile(join(output, 'sitemap-index.xml'), 'utf8');
+  const indexUrls = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+  assert.deepEqual(indexUrls, ['https://studev.hicancan.top/sitemap-0.xml']);
+
+  const sitemap = await readFile(join(output, 'sitemap-0.xml'), 'utf8');
+  const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+  assert.equal(urls.length, 23);
+  assert.equal(new Set(urls).size, urls.length, 'sitemap must not contain duplicate URLs');
+  assert.deepEqual([...urls].sort(), [...expected].sort(), 'sitemap must match indexable canonical URLs');
+  for (const value of urls) {
+    const url = new URL(value);
+    assert.equal(url.origin, 'https://studev.hicancan.top');
+    assert.equal(url.search, '');
+    assert.equal(url.hash, '');
+    assert.doesNotMatch(url.pathname, /^\/(?:404\/?|life\/(?:organizational-genesis|anti-formalism-council)\/?)$/);
+  }
+});
+
+test('robots and HTML advertise the formal sitemap', async () => {
+  const sitemapUrl = 'https://studev.hicancan.top/sitemap-index.xml';
+  const robots = await readFile(join(output, 'robots.txt'), 'utf8');
+  assert.match(robots, /^User-agent: \*$/m);
+  assert.match(robots, /^Allow: \/$/m);
+  assert.ok(robots.includes(`Sitemap: ${sitemapUrl}`));
+  assert.doesNotMatch(robots, /^Disallow: \//m);
+  for (const file of await pages(output)) {
+    let discovery;
+    walk(parse(await readFile(file, 'utf8')), (node) => {
+      const attr = attributes(node);
+      if (node.tagName === 'link' && attr.rel === 'sitemap') discovery = attr;
+    });
+    assert.equal(discovery?.href, sitemapUrl, `${file}: missing sitemap discovery`);
+    assert.equal(discovery?.type, 'application/xml');
+  }
+});
+
+test('only the error page declares noindex', async () => {
+  for (const file of await pages(output)) {
+    let robots;
+    walk(parse(await readFile(file, 'utf8')), (node) => {
+      const attr = attributes(node);
+      if (node.tagName === 'meta' && attr.name === 'robots') robots = attr.content;
+    });
+    if (file === join(output, '404.html')) assert.equal(robots, 'noindex');
+    else assert.ok(!robots?.includes('noindex'), `${file}: a content page must remain indexable`);
+  }
+});

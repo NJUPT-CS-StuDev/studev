@@ -3,8 +3,8 @@ import '../styles/global.css';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import { Image, getImage } from 'astro:assets';
 import logo from '../assets/logo.png';
-interface Props { title?: string; description?: string; active?: string; }
-const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '' } = Astro.props;
+interface Props { title?: string; description?: string; active?: string; noindex?: boolean; }
+const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false } = Astro.props;
 const nav = [
   { href: '/study/', label: 'Study', key: 'study' },
   { href: '/develop/', label: 'Develop', key: 'develop' },
@@ -34,8 +34,10 @@ if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
     </script>
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex" />}
     <link rel="icon" type="image/png" href={favicon.src} />
     <link rel="canonical" href={canonical} />
+    <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
     <title>{title}</title>
   </head>
   <body>
