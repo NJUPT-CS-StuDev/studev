@@ -510,6 +510,11 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 
 .site-footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
 .footer-inner { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.footer-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 20px; }
+.text-copy { padding: 6px 0; min-height: 44px; border: 0; background: transparent; color: inherit; font-family: var(--font-sans); font-size: .8rem; cursor: pointer; }
+.text-copy:hover { color: var(--blue); }
+.text-copy:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
+.copy-fallback { width: 100%; min-width: 0; flex-basis: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: var(--paper); font-family: var(--font-mono); font-size: .75rem; }
 
 @media (max-width: 680px) {
   .header-inner, .footer-inner, .home, .listing, .detail-wrap, .term-page { width: calc(100% - 40px); }

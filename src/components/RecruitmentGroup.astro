@@ -10,9 +10,14 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
   <div class="recruitment-info">
     <h2 id="recruitment-title">2026 招新群</h2>
     <p class="recruitment-number"><span>QQ</span> <span data-group-number>{groupNumber}</span></p>
-    <button class="copy-group" type="button" data-copy-group={groupNumber}>
-      <span aria-live="polite" data-copy-label>复制群号</span>
-    </button>
+    <div class="recruitment-actions">
+      <button class="text-copy" type="button" data-copy-group data-copy-text={groupNumber}>
+        <span aria-live="polite" data-copy-label>复制群号</span>
+      </button>
+      <button class="text-copy" type="button" data-copy-link title="复制网站网址，便于转发">
+        <span aria-live="polite" data-copy-label>分享网站</span>
+      </button>
+    </div>
   </div>
   <a class="recruitment-qr" href={fullQr.src} data-qr-open aria-label="放大招新群二维码" aria-haspopup="dialog" aria-controls="recruitment-dialog">
     <Image src={qrCode} width={224} height={224} densities={[1, 2, 3]} format="png" alt="2026 学生发展中心招新 QQ 群二维码，群号 1097757336" loading="eager" />
@@ -36,22 +41,6 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
 </dialog>
 
 <script>
-  const copyButton = document.querySelector<HTMLButtonElement>('[data-copy-group]');
-  const copyLabel = copyButton?.querySelector<HTMLElement>('[data-copy-label]');
-  let resetLabel: ReturnType<typeof setTimeout> | undefined;
-
-  copyButton?.addEventListener('click', async () => {
-    if (!copyLabel) return;
-    clearTimeout(resetLabel);
-    try {
-      await navigator.clipboard.writeText(copyButton.dataset.copyGroup ?? '');
-      copyLabel.textContent = '已复制';
-    } catch {
-      copyLabel.textContent = '请选择群号复制';
-    }
-    resetLabel = setTimeout(() => { copyLabel.textContent = '复制群号'; }, 2500);
-  });
-
   const qrLink = document.querySelector<HTMLAnchorElement>('[data-qr-open]');
   const dialog = document.querySelector<HTMLDialogElement>('#recruitment-dialog');
   qrLink?.addEventListener('click', (event) => {
@@ -78,17 +67,17 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
     border-top: 1px solid var(--line);
     font-family: var(--font-sans);
   }
-  .recruitment-info { flex: none; }
+  .recruitment-info { flex: 1; min-width: 0; }
   .recruitment h2 { margin: 0; font-size: 1rem; font-weight: 500; }
   .recruitment-number { margin: 14px 0 8px; font-size: 1.15rem; line-height: 1.5; }
   .recruitment-number > span:first-child { color: var(--muted); font-size: .75rem; }
   [data-group-number] { font-variant-numeric: tabular-nums; user-select: all; }
-  .copy-group { padding: 6px 0; border: 0; background: transparent; color: var(--blue); font: inherit; font-size: .8rem; cursor: pointer; min-height: 44px; }
-  .copy-group:hover { text-decoration: underline; }
+  .recruitment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; max-width: 140px; }
+  .recruitment-actions .text-copy { color: var(--blue); }
   .recruitment-qr { flex: none; display: grid; justify-items: center; gap: 7px; text-decoration: none; color: var(--muted); font-size: .75rem; }
   .recruitment-qr img { display: block; width: 196px; height: 196px; border-radius: 10px; background: #fff; }
   .recruitment-qr:hover { color: var(--blue); }
-  .copy-group:focus-visible, .recruitment-qr:focus-visible, .qr-close:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
+  .recruitment-qr:focus-visible, .qr-close:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
   .recruitment-dialog {
     width: min(680px, calc(100vw - 32px));
     max-width: none;

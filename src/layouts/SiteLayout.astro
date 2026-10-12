@@ -47,7 +47,16 @@ if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical
       </div>
     </header>
     <main><slot /></main>
-    <footer class="site-footer"><div class="footer-inner"><span>© {new Date().getFullYear()} StuDev</span><a href="https://github.com/NJUPT-CS-StuDev/studev" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div></footer>
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span>© {new Date().getFullYear()} StuDev</span>
+        <div class="footer-actions">
+          <button class="text-copy" type="button" data-copy-link title="复制当前页面网址，便于转发"><span aria-live="polite" data-copy-label>{Astro.url.pathname === '/' ? '分享网站' : '分享本页'}</span></button>
+          <a href="https://github.com/NJUPT-CS-StuDev/studev" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        </div>
+      </div>
+    </footer>
+    <script>import '../scripts/copy-text';</script>
     <script>import '../scripts/diagrams';</script>
   </body>
 </html>

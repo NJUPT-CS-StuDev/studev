@@ -101,7 +101,7 @@ test('homepage recruitment entry keeps the group number and a square QR enlargem
   walk(parse(html), (node) => {
     const attr = attributes(node);
     if (node.tagName === 'dialog' && attr.id === 'recruitment-dialog') dialog = attr;
-    if (attr['data-copy-group']) group = attr['data-copy-group'];
+    if ('data-copy-group' in attr) group = attr['data-copy-text'];
     if ('data-qr-open' in attr) qrLink = attr;
     if (node.tagName === 'img' && attr.alt?.includes('招新')) qrImages.push(attr);
   });
@@ -111,4 +111,27 @@ test('homepage recruitment entry keeps the group number and a square QR enlargem
   assert.equal(dialog['aria-labelledby'], 'qr-dialog-title');
   assert.equal(qrLink['aria-controls'], 'recruitment-dialog');
   assert.ok(existsSync(localFile(qrLink.href, join(output, 'index.html'))));
+});
+
+test('every page can share its clean canonical URL', async () => {
+  for (const file of await pages(output)) {
+    const html = await readFile(file, 'utf8');
+    let canonical;
+    let shares = 0;
+    walk(parse(html), (node) => {
+      const attr = attributes(node);
+      if (node.tagName === 'link' && attr.rel === 'canonical') canonical = attr.href;
+      if (node.tagName === 'button' && 'data-copy-link' in attr) {
+        shares++;
+        assert.equal(attr.type, 'button');
+      }
+    });
+    assert.ok(shares > 0, `${file}: missing share action`);
+    const url = new URL(canonical);
+    assert.equal(url.origin, 'https://studev.hicancan.top');
+    assert.equal(url.search, '');
+    assert.equal(url.hash, '');
+    if (file === join(output, 'index.html')) assert.equal(shares, 2);
+    else assert.match(html, /分享本页/);
+  }
 });
