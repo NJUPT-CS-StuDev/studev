@@ -91,3 +91,24 @@ test('article metadata and Markdown emphasis remain correct', async () => {
     });
   }
 });
+
+test('homepage recruitment entry keeps the group number and a square QR enlargement', async () => {
+  const html = await readFile(join(output, 'index.html'), 'utf8');
+  const qrImages = [];
+  let dialog;
+  let group;
+  let qrLink;
+  walk(parse(html), (node) => {
+    const attr = attributes(node);
+    if (node.tagName === 'dialog' && attr.id === 'recruitment-dialog') dialog = attr;
+    if (attr['data-copy-group']) group = attr['data-copy-group'];
+    if ('data-qr-open' in attr) qrLink = attr;
+    if (node.tagName === 'img' && attr.alt?.includes('招新')) qrImages.push(attr);
+  });
+  assert.equal(group, '1097757336');
+  assert.equal(qrImages.length, 2);
+  assert.ok(qrImages.every((attr) => attr.width === attr.height && attr.srcset));
+  assert.equal(dialog['aria-labelledby'], 'qr-dialog-title');
+  assert.equal(qrLink['aria-controls'], 'recruitment-dialog');
+  assert.ok(existsSync(localFile(qrLink.href, join(output, 'index.html'))));
+});

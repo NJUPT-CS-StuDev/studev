@@ -1,0 +1,118 @@
+---
+import { Image, getImage } from 'astro:assets';
+import qrCode from '../assets/recruitment/qq-2026.png';
+
+const groupNumber = '1097757336';
+const fullQr = await getImage({ src: qrCode, format: 'png' });
+---
+
+<section class="recruitment" aria-labelledby="recruitment-title">
+  <div class="recruitment-info">
+    <h2 id="recruitment-title">2026 招新群</h2>
+    <p class="recruitment-number"><span>QQ</span> <span data-group-number>{groupNumber}</span></p>
+    <button class="copy-group" type="button" data-copy-group={groupNumber}>
+      <span aria-live="polite" data-copy-label>复制群号</span>
+    </button>
+  </div>
+  <a class="recruitment-qr" href={fullQr.src} data-qr-open aria-label="放大招新群二维码" aria-haspopup="dialog" aria-controls="recruitment-dialog">
+    <Image src={qrCode} width={224} height={224} densities={[1, 2, 3]} format="png" alt="2026 学生发展中心招新 QQ 群二维码，群号 1097757336" loading="eager" />
+    <span>QQ 扫码加入</span>
+  </a>
+</section>
+
+<dialog id="recruitment-dialog" class="recruitment-dialog" aria-labelledby="qr-dialog-title">
+  <div class="qr-dialog-header">
+    <div>
+      <h2 id="qr-dialog-title">2026 招新群</h2>
+      <p>QQ {groupNumber}</p>
+    </div>
+    <form method="dialog">
+      <button class="qr-close" aria-label="关闭二维码" autofocus>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      </button>
+    </form>
+  </div>
+  <Image src={qrCode} width={640} height={640} densities={[1, 1.5]} format="png" alt="使用 QQ 扫码加入 2026 学生发展中心招新群" loading="lazy" />
+</dialog>
+
+<script>
+  const copyButton = document.querySelector<HTMLButtonElement>('[data-copy-group]');
+  const copyLabel = copyButton?.querySelector<HTMLElement>('[data-copy-label]');
+  let resetLabel: ReturnType<typeof setTimeout> | undefined;
+
+  copyButton?.addEventListener('click', async () => {
+    if (!copyLabel) return;
+    clearTimeout(resetLabel);
+    try {
+      await navigator.clipboard.writeText(copyButton.dataset.copyGroup ?? '');
+      copyLabel.textContent = '已复制';
+    } catch {
+      copyLabel.textContent = '请选择群号复制';
+    }
+    resetLabel = setTimeout(() => { copyLabel.textContent = '复制群号'; }, 2500);
+  });
+
+  const qrLink = document.querySelector<HTMLAnchorElement>('[data-qr-open]');
+  const dialog = document.querySelector<HTMLDialogElement>('#recruitment-dialog');
+  qrLink?.addEventListener('click', (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!dialog || typeof dialog.showModal !== 'function') return;
+    event.preventDefault();
+    dialog.showModal();
+  });
+  dialog?.addEventListener('click', (event) => {
+    const bounds = dialog.getBoundingClientRect();
+    if (event.target === dialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) dialog.close();
+  });
+</script>
+
+<style>
+  .recruitment {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    max-width: 440px;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-sans);
+  }
+  .recruitment-info { flex: none; }
+  .recruitment h2 { margin: 0; font-size: 1rem; font-weight: 500; }
+  .recruitment-number { margin: 14px 0 8px; font-size: 1.15rem; line-height: 1.5; }
+  .recruitment-number > span:first-child { color: var(--muted); font-size: .75rem; }
+  [data-group-number] { font-variant-numeric: tabular-nums; user-select: all; }
+  .copy-group { padding: 6px 0; border: 0; background: transparent; color: var(--blue); font: inherit; font-size: .8rem; cursor: pointer; min-height: 44px; }
+  .copy-group:hover { text-decoration: underline; }
+  .recruitment-qr { flex: none; display: grid; justify-items: center; gap: 7px; text-decoration: none; color: var(--muted); font-size: .75rem; }
+  .recruitment-qr img { display: block; width: 196px; height: 196px; border-radius: 10px; background: #fff; }
+  .recruitment-qr:hover { color: var(--blue); }
+  .copy-group:focus-visible, .recruitment-qr:focus-visible, .qr-close:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
+  .recruitment-dialog {
+    width: min(680px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100dvh - 32px);
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+  .recruitment-dialog::backdrop { background: rgb(0 0 0 / .58); }
+  .qr-dialog-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+  .qr-dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 500; }
+  .qr-dialog-header p { margin: 8px 0 0; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+  .qr-close { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+  .qr-close:hover { color: var(--ink); background: var(--code-block); }
+  .recruitment-dialog > img { display: block; width: min(100%, calc(100dvh - 160px)); height: auto; margin-inline: auto; border-radius: 10px; background: #fff; }
+  @media (min-width: 861px) and (max-width: 940px) {
+    .recruitment-qr img { width: 180px; height: 180px; }
+  }
+  @media (max-width: 460px) {
+    .recruitment { gap: 12px; margin-top: 32px; padding-top: 20px; }
+    .recruitment-qr img { width: clamp(132px, 43vw, 176px); height: auto; }
+    .recruitment-number { font-size: 1.02rem; }
+  }
+</style>
