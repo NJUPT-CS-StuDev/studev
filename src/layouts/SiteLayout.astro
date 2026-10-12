@@ -34,6 +34,8 @@ if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
     </script>
     <meta name="description" content={description} />
+    {Astro.url.pathname === '/' && <meta name="baidu-site-verification" content="codeva-J4MgSBcNRe" />}
+    {Astro.url.pathname === '/' && <meta name="msvalidate.01" content="E44C2F6A09F0A678DED98C8374E549A1" />}
     {noindex && <meta name="robots" content="noindex" />}
     <link rel="icon" type="image/png" href={favicon.src} />
     <link rel="canonical" href={canonical} />

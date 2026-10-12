@@ -193,3 +193,35 @@ test('only the error page declares noindex', async () => {
     else assert.ok(!robots?.includes('noindex'), `${file}: a content page must remain indexable`);
   }
 });
+
+test('homepage exposes the Baidu and Bing ownership verifications in its head', async () => {
+  const html = await readFile(join(output, 'index.html'), 'utf8');
+  const verifications = {};
+  walk(parse(html), (node) => {
+    const attr = attributes(node);
+    if (node.tagName === 'meta' && ['baidu-site-verification', 'msvalidate.01'].includes(attr.name)) {
+      assert.equal(node.parentNode.tagName, 'head');
+      verifications[attr.name] = attr.content;
+    }
+  });
+  assert.equal(verifications['baidu-site-verification'], 'codeva-J4MgSBcNRe');
+  assert.equal(verifications['msvalidate.01'], 'E44C2F6A09F0A678DED98C8374E549A1');
+});
+
+test('stable sitemap files revalidate without changing other asset headers', async () => {
+  assert.ok(existsSync('public/edgeone.json'), 'deployment configuration must live with static deployment inputs');
+  assert.ok(existsSync(join(output, 'edgeone.json')), 'raw dist deployment must include the cache policy');
+  assert.ok(!existsSync('edgeone.json'), 'keep a single source for deployment configuration');
+  const sourceConfig = await readFile('public/edgeone.json', 'utf8');
+  const builtConfig = await readFile(join(output, 'edgeone.json'), 'utf8');
+  assert.equal(builtConfig, sourceConfig, 'Astro must copy the deployment configuration unchanged');
+  const config = JSON.parse(builtConfig);
+  const sitemap = config.headers.find((rule) => rule.source === '/sitemap-*.xml');
+  assert.ok(sitemap, 'cache policy must apply to the index and all sitemap chunks');
+  const cache = sitemap.headers.find((header) => header.key.toLowerCase() === 'cache-control')?.value;
+  assert.match(cache, /(?:^|,\s*)max-age=0(?:,|$)/);
+  assert.match(cache, /(?:^|,\s*)must-revalidate(?:,|$)/);
+  assert.doesNotMatch(cache, /immutable/);
+  const cacheRules = config.headers.filter((rule) => rule.headers.some((header) => header.key.toLowerCase() === 'cache-control'));
+  assert.ok(cacheRules.every((rule) => rule.source.startsWith('/sitemap-')), 'only stable sitemap URLs may receive this cache override');
+});
