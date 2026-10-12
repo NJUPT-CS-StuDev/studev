@@ -1,11 +1,83 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
 ---
-<SiteLayout title="StuDev" active="">
+<SiteLayout title="StuDev — 南邮计软网安学生发展中心" active="">
   <div class="home">
-    <div>
+    <div class="home-brand">
       <h1>Stu<span>Dev</span></h1>
       <p class="home-subtitle">南邮计软网安学生发展中心</p>
     </div>
+
+    <div class="home-terminal">
+      <div class="terminal-header">
+        <span class="terminal-dot"></span>
+        <span class="terminal-dot"></span>
+        <span class="terminal-dot"></span>
+        <span class="terminal-meta">studev ~ terminal</span>
+      </div>
+      <div class="terminal-body">
+        <p class="typewriter-line">
+          <span class="typewriter-prompt">&gt;</span>
+          <span class="typewriter-content" id="typewriter-text">未来的空白，由你来书写。</span><span class="typewriter-cursor" aria-hidden="true"></span>
+        </p>
+        <p class="terminal-footnote">计算机学院 · 软件学院 · 网络空间安全学院</p>
+      </div>
+      <div class="terminal-links">
+        <a class="terminal-link-pill" href="/life/">🌿 生活手记</a>
+        <a class="terminal-link-pill" href="/study/">📖 研学启航</a>
+        <a class="terminal-link-pill" href="/develop/">🚀 开源矩阵</a>
+        <a class="terminal-link-pill" href="/about/">🏛 组织原点</a>
+      </div>
+    </div>
   </div>
+
+  <script is:inline>
+    (function () {
+      const el = document.getElementById('typewriter-text');
+      if (!el) return;
+
+      const phrases = [
+        '未来的空白，由你来书写。',
+        '在薛定谔的叠加态里，选择温润而纯粹的同行。',
+        '去功利化地分享知识，在仙林四年好好生活。',
+        '击穿孤岛与壁垒，用代码缝合有温度的数字世界。',
+        '大学没有唯一标准答案，慢慢走，学长姐在前面搭把手。',
+      ];
+
+      let phraseIdx = 0;
+      let charIdx = phrases[0].length;
+      let isDeleting = false;
+
+      function tick() {
+        const current = phrases[phraseIdx];
+
+        if (isDeleting) {
+          charIdx--;
+          el.textContent = current.slice(0, charIdx);
+          if (charIdx === 0) {
+            isDeleting = false;
+            phraseIdx = (phraseIdx + 1) % phrases.length;
+            waitTimer = setTimeout(tick, 450);
+            return;
+          }
+          waitTimer = setTimeout(tick, 35);
+        } else {
+          charIdx++;
+          el.textContent = current.slice(0, charIdx);
+          if (charIdx === current.length) {
+            isDeleting = true;
+            waitTimer = setTimeout(tick, 3600); // 驻留品味时间
+            return;
+          }
+          waitTimer = setTimeout(tick, 90 + Math.random() * 30);
+        }
+      }
+
+      // 页面初始加载时，首句完整停留 3.5 秒后开启律动
+      waitTimer = setTimeout(() => {
+        isDeleting = true;
+        tick();
+      }, 3500);
+    })();
+  </script>
 </SiteLayout>

@@ -104,19 +104,138 @@ html[data-theme='dark'] .theme-icon-moon { display: none; }
 main { min-height: calc(100vh - 145px); }
 .home {
   min-height: calc(100vh - 145px);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.18fr);
   align-items: center;
-  padding-block: 80px;
+  gap: clamp(36px, 5.5vw, 76px);
+  padding-block: 60px;
 }
-.home h1 {
+@media (max-width: 860px) {
+  .home {
+    grid-template-columns: 1fr;
+    gap: 44px;
+    padding-block: 48px;
+  }
+}
+
+.home-brand h1 {
   margin: 0;
-  font-size: clamp(4.2rem, 9vw, 7.4rem);
+  font-size: clamp(3.8rem, 8vw, 6.8rem);
   font-weight: 500;
   letter-spacing: -.075em;
   line-height: 1.05;
 }
-.home h1 span { color: var(--blue); }
-.home-subtitle { margin: 22px 0 0; color: var(--muted); font-size: 1rem; letter-spacing: .01em; }
+.home-brand h1 span { color: var(--blue); }
+.home-subtitle { margin: 20px 0 0; color: var(--muted); font-size: 1.02rem; letter-spacing: .02em; }
+
+/* Home Typewriter Terminal Card */
+.home-terminal {
+  position: relative;
+  background: var(--code-block);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px 28px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+html[data-theme='dark'] .home-terminal {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+.home-terminal:hover {
+  border-color: var(--blue);
+  box-shadow: 0 6px 32px rgba(26, 115, 232, 0.08);
+}
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 22px;
+}
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.terminal-dot:nth-child(1) { background: #ea4335; }
+.terminal-dot:nth-child(2) { background: #fbbc05; }
+.terminal-dot:nth-child(3) { background: #34a853; }
+.terminal-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.terminal-body {
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.typewriter-line {
+  margin: 0;
+  font-size: clamp(1.22rem, 2.1vw, 1.55rem);
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.typewriter-prompt {
+  color: var(--blue);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  margin-right: 8px;
+}
+.typewriter-cursor {
+  display: inline-block;
+  width: 2.5px;
+  height: 1.25em;
+  background-color: var(--blue);
+  vertical-align: -0.15em;
+  margin-left: 4px;
+  animation: cursor-blink 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+}
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.terminal-footnote {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.terminal-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.terminal-link-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+  font-family: var(--font-sans);
+  transition: all 0.15s ease;
+}
+.terminal-link-pill:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  transform: translateY(-1px);
+}
 
 .listing { padding-block: clamp(64px, 10vh, 108px) 128px; }
 .eyebrow {
