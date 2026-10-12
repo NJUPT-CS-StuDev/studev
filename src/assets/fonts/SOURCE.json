@@ -1,0 +1,10 @@
+{
+  "name": "LXGW WenKai GB Screen",
+  "version": "1.522",
+  "upstream": "https://github.com/lxgw/LxgwWenKai-Screen",
+  "download": "https://github.com/lxgw/LxgwWenKai-Screen/releases/download/v1.522/LXGWWenKaiGBScreen.ttf",
+  "sourceSha256": "23ec023913e1851925eb94462c4b0ccd1d78bb89533745aaa8cc682ccd339dc0",
+  "license": "OFL-1.1",
+  "storedFile": "WenKaiGBScreen-v1.522.woff2",
+  "conversion": "Lossless TrueType to WOFF2; complete glyph repertoire retained."
+}

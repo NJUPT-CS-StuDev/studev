@@ -31,53 +31,5 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     </div>
   </div>
 
-  <script is:inline>
-    (function () {
-      const el = document.getElementById('typewriter-text');
-      if (!el) return;
-
-      const phrases = [
-        '未来的空白，由你来书写。',
-        '在薛定谔的叠加态里，选择温润而纯粹的同行。',
-        '去功利化地分享知识，在仙林四年好好生活。',
-        '击穿孤岛与壁垒，用代码缝合有温度的数字世界。',
-        '大学没有唯一标准答案，慢慢走，学长姐在前面搭把手。',
-      ];
-
-      let phraseIdx = 0;
-      let charIdx = phrases[0].length;
-      let isDeleting = false;
-
-      function tick() {
-        const current = phrases[phraseIdx];
-
-        if (isDeleting) {
-          charIdx--;
-          el.textContent = current.slice(0, charIdx);
-          if (charIdx === 0) {
-            isDeleting = false;
-            phraseIdx = (phraseIdx + 1) % phrases.length;
-            waitTimer = setTimeout(tick, 450);
-            return;
-          }
-          waitTimer = setTimeout(tick, 35);
-        } else {
-          charIdx++;
-          el.textContent = current.slice(0, charIdx);
-          if (charIdx === current.length) {
-            isDeleting = true;
-            waitTimer = setTimeout(tick, 3600); // 驻留品味时间
-            return;
-          }
-          waitTimer = setTimeout(tick, 90 + Math.random() * 30);
-        }
-      }
-
-      // 页面初始加载时，首句完整停留 3.5 秒后开启律动
-      waitTimer = setTimeout(() => {
-        isDeleting = true;
-        tick();
-      }, 3500);
-    })();
-  </script>
+  <script>import '../scripts/typewriter';</script>
 </SiteLayout>

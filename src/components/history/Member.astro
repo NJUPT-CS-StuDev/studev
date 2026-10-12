@@ -13,7 +13,7 @@ interface Props {
 const { name, role, avatar, signature, featured = false } = Astro.props;
 ---
 <article class:list={['member', { 'member-featured': featured }]}>
-  <Image src={avatar} alt={`${name}的头像`} width={144} height={144} class="member-avatar" loading={featured ? 'eager' : 'lazy'} />
+  <Image src={avatar} alt={`${name}的头像`} width={featured ? 68 : 58} height={featured ? 68 : 58} densities={[1, 2]} class="member-avatar" loading="lazy" />
   <div class="member-copy">
     <h4>{name}</h4>
     {role && <p class="member-role">{role}</p>}

@@ -3,13 +3,14 @@
   "type": "module",
   "version": "0.0.1",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "check": "astro check",
     "test:markdown": "node --test tests/markdown-render.test.mjs",
+    "test:render": "node --test tests/static-mermaid.test.mjs tests/site-output.test.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
@@ -19,7 +20,6 @@
     "astro": "^7.3.3",
     "flowchart.js": "^1.18.0",
     "mathjax-full": "^3.2.1",
-    "mermaid": "^11.17.2",
     "rehype-github-alerts": "^4.2.0",
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
@@ -33,7 +33,11 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@mermaid-js/mermaid-cli": "12.0.0",
     "@types/raphael": "^2.3.10",
+    "parse5": "^8.0.1",
+    "sharp": "^0.35.5",
+    "subset-font": "^2.9.0",
     "typescript": "^6.0.3"
   }
 }

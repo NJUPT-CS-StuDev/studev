@@ -1,6 +1,8 @@
 ---
 import '../styles/global.css';
 import ThemeToggle from '../components/ThemeToggle.astro';
+import { Image, getImage } from 'astro:assets';
+import logo from '../assets/logo.png';
 interface Props { title?: string; description?: string; active?: string; }
 const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '' } = Astro.props;
 const nav = [
@@ -10,6 +12,11 @@ const nav = [
   { href: '/history/', label: 'History', key: 'history' },
   { href: '/about/', label: 'About', key: 'about' },
 ];
+const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
+const canonical = new URL(Astro.url.pathname, Astro.site);
+if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical.pathname)) {
+  canonical.pathname = canonical.pathname.replace('/life/', '/about/');
+}
 ---
 <!doctype html>
 <html lang="zh-CN">
@@ -27,15 +34,14 @@ const nav = [
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
     </script>
     <meta name="description" content={description} />
-    <link rel="icon" type="image/png" href="/logo.png" />
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-web/style.css" />
+    <link rel="icon" type="image/png" href={favicon.src} />
+    <link rel="canonical" href={canonical} />
     <title>{title}</title>
   </head>
   <body>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="/" aria-label="StuDev 首页"><img src="/logo.png" alt="" width="48" height="48" /></a>
+        <a class="brand" href="/" aria-label="StuDev 首页"><Image src={logo} alt="" width={56} height={56} densities={[1, 2, 3]} loading="eager" decoding="async" /></a>
         <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
         <ThemeToggle />
       </div>

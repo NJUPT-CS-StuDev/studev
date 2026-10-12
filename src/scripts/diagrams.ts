@@ -1,117 +1,64 @@
-type DiagramKind = 'mermaid' | 'flow' | 'sequence';
-type DiagramBlock = { pre: HTMLElement; source: string; panel?: HTMLElement };
+type DiagramKind = 'flow' | 'sequence';
+type DiagramBlock = { pre: HTMLElement; source: string; panel?: HTMLElement; kind: DiagramKind };
 
-function panelFor(block: DiagramBlock, label: string, kind: DiagramKind) {
+function panelFor(block: DiagramBlock) {
   if (block.panel) return block.panel;
   const panel = document.createElement('div');
   panel.className = 'diagram-panel';
-  panel.dataset.diagram = kind;
+  panel.dataset.diagram = block.kind;
   panel.setAttribute('role', 'img');
-  panel.setAttribute('aria-label', label);
+  panel.setAttribute('aria-label', block.kind === 'flow' ? '流程图' : '时序图');
   block.pre.replaceWith(panel);
   block.panel = panel;
   return panel;
 }
 
-function diagramColors() {
-  const styles = getComputedStyle(document.documentElement);
-  return Object.fromEntries(['ink', 'muted', 'line', 'diagram-bg'].map((name) => [name, styles.getPropertyValue(`--${name}`).trim()])) as Record<string, string>;
+function colors() {
+  const style = getComputedStyle(document.documentElement);
+  return Object.fromEntries(['ink', 'muted', 'line', 'diagram-bg'].map((name) => [name, style.getPropertyValue(`--${name}`).trim()]));
 }
 
-async function drawMermaid(blocks: DiagramBlock[], generation: number) {
-  const { default: mermaid } = await import('mermaid');
-  const colors = diagramColors();
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: 'base',
-    themeVariables: {
-      primaryColor: colors['diagram-bg'],
-      primaryBorderColor: colors.line,
-      primaryTextColor: colors.ink,
-      secondaryColor: colors['diagram-bg'],
-      tertiaryColor: colors['diagram-bg'],
-      lineColor: colors.muted,
-      textColor: colors.ink,
-      background: colors['diagram-bg'],
-      fontFamily: 'Google Sans, Segoe UI, Arial, Microsoft YaHei, sans-serif',
-    },
+async function draw(block: DiagramBlock) {
+  if (block.kind === 'flow') {
+    const { default: flowchart } = await import('flowchart.js');
+    const palette = colors();
+    const panel = panelFor(block);
+    panel.replaceChildren();
+    flowchart.parse(block.source).drawSVG(panel, {
+      'font-family': 'Segoe UI, Arial, sans-serif',
+      'font-size': 14,
+      'line-color': palette.muted,
+      'element-color': palette.line,
+      'font-color': palette.ink,
+      fill: palette['diagram-bg'],
+    });
+  } else {
+    const { default: raphael } = await import('raphael');
+    (window as typeof window & { Raphael: typeof raphael }).Raphael = raphael;
+    const { Diagram } = await import('@hackmd/js-sequence-diagrams/dist/parser/diagram.js');
+    const { DiagramPainter } = await import('@hackmd/js-sequence-diagrams/dist/painter/DiagramPainter.js');
+    new DiagramPainter(Diagram.parse(block.source)).drawSvg(panelFor(block));
+  }
+}
+
+const blocks: DiagramBlock[] = [...document.querySelectorAll<HTMLElement>('.prose pre[data-language="flow"], .prose pre[data-language="sequence"]')]
+  .map((pre) => ({ pre, source: pre.textContent?.trim() ?? '', kind: pre.dataset.language as DiagramKind }));
+
+if (blocks.length) {
+  let queue = Promise.resolve();
+  const render = (block: DiagramBlock) => {
+    queue = queue.then(() => draw(block)).catch((error) => console.error(`${block.kind} diagram:`, error));
+  };
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(entry.target);
+      const block = blocks.find(({ pre }) => pre === entry.target);
+      if (block) render(block);
+    }
+  }, { rootMargin: '300px' });
+  blocks.forEach(({ pre }) => observer.observe(pre));
+  document.addEventListener('site:theme-change', () => {
+    blocks.filter((block) => block.kind === 'flow' && block.panel).forEach(render);
   });
-
-  for (const [index, block] of blocks.entries()) {
-    try {
-      const { svg, bindFunctions } = await mermaid.render(`studev-diagram-${generation}-${index}`, block.source);
-      const panel = panelFor(block, '图表', 'mermaid');
-      panel.innerHTML = svg;
-      bindFunctions?.(panel);
-    } catch (error) {
-      console.error('Mermaid diagram:', error);
-    }
-  }
 }
-
-async function drawFlow(blocks: DiagramBlock[]) {
-  const { default: flowchart } = await import('flowchart.js');
-  const colors = diagramColors();
-  for (const block of blocks) {
-    try {
-      const chart = flowchart.parse(block.source);
-      const panel = panelFor(block, '流程图', 'flow');
-      panel.replaceChildren();
-      chart.drawSVG(panel, {
-        'font-family': 'Google Sans, Segoe UI, Arial, sans-serif',
-        'font-size': 14,
-        'line-color': colors.muted,
-        'element-color': colors.line,
-        'font-color': colors.ink,
-        fill: colors['diagram-bg'],
-      });
-    } catch (error) {
-      console.error('Flow diagram:', error);
-    }
-  }
-}
-
-async function drawSequence(blocks: DiagramBlock[]) {
-  const { default: raphael } = await import('raphael');
-  (window as typeof window & { Raphael: typeof raphael }).Raphael = raphael;
-  const { Diagram } = await import('@hackmd/js-sequence-diagrams/dist/parser/diagram.js');
-  const { DiagramPainter } = await import('@hackmd/js-sequence-diagrams/dist/painter/DiagramPainter.js');
-  for (const block of blocks) {
-    try {
-      const diagram = Diagram.parse(block.source);
-      const panel = panelFor(block, '时序图', 'sequence');
-      new DiagramPainter(diagram).drawSvg(panel);
-    } catch (error) {
-      console.error('Sequence diagram:', error);
-    }
-  }
-}
-
-const diagrams = Object.fromEntries(
-  (['mermaid', 'flow', 'sequence'] as DiagramKind[]).map((kind) => [
-    kind,
-    [...document.querySelectorAll<HTMLElement>(`.prose pre[data-language="${kind}"]`)].map((pre) => ({ pre, source: pre.textContent?.trim() ?? '' })),
-  ]),
-) as Record<DiagramKind, DiagramBlock[]>;
-
-let renderCount = 0;
-let mermaidQueue = Promise.resolve();
-let flowQueue = Promise.resolve();
-function renderMermaid() {
-  if (!diagrams.mermaid.length) return;
-  const generation = ++renderCount;
-  mermaidQueue = mermaidQueue.then(() => drawMermaid(diagrams.mermaid, generation)).catch((error) => console.error('Mermaid diagram:', error));
-}
-function renderFlow() {
-  if (!diagrams.flow.length) return;
-  flowQueue = flowQueue.then(() => drawFlow(diagrams.flow)).catch((error) => console.error('Flow diagram:', error));
-}
-
-renderMermaid();
-renderFlow();
-if (diagrams.sequence.length) void drawSequence(diagrams.sequence);
-document.addEventListener('site:theme-change', () => {
-  renderMermaid();
-  renderFlow();
-});

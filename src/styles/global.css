@@ -21,13 +21,13 @@
 
   /* Academic & Literary Typography System */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-literary: "LXGW WenKai GB Screen", "LXGW WenKai Screen", "LXGW WenKai", "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", "STSong", "华文宋体", Charter, "Latin Modern Roman", "Computer Modern", Georgia, serif;
+  --font-literary: "StuDev WenKai", "LXGW WenKai GB Screen", "LXGW WenKai Screen", "LXGW WenKai", "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", "STSong", "华文宋体", Charter, "Latin Modern Roman", "Computer Modern", Georgia, serif;
   --font-mono: ui-monospace, "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
 
   font-family: var(--font-literary);
   color: var(--ink);
   background: var(--paper);
-  font-synthesis: none;
+  font-synthesis: weight;
 }
 
 :root[data-theme='dark'] {
@@ -90,6 +90,7 @@ a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-ra
   color: var(--muted);
   font-size: .94rem;
   border-bottom: 2px solid transparent;
+  font-family: var(--font-sans);
 }
 .site-nav a:hover, .site-nav a.active { color: var(--ink); }
 .site-nav a.active { border-bottom-color: var(--blue); }
@@ -124,6 +125,7 @@ main { min-height: calc(100vh - 145px); }
   font-weight: 500;
   letter-spacing: -.075em;
   line-height: 1.05;
+  font-family: var(--font-sans);
 }
 .home-brand h1 span { color: var(--blue); }
 .home-subtitle { margin: 20px 0 0; color: var(--muted); font-size: 1.02rem; letter-spacing: .02em; }
@@ -170,7 +172,7 @@ html[data-theme='dark'] .home-terminal {
   letter-spacing: 0.02em;
 }
 .terminal-body {
-  min-height: 100px;
+  min-height: 142px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -182,6 +184,7 @@ html[data-theme='dark'] .home-terminal {
   line-height: 1.55;
   color: var(--ink);
   letter-spacing: 0.01em;
+  min-height: 3.1em;
 }
 .typewriter-prompt {
   color: var(--blue);
@@ -335,6 +338,7 @@ html[data-theme='dark'] .home-terminal {
   line-height: 1.82;
   border-bottom: 1px solid var(--line);
 }
+.detail-wrap h1 + .article-description { margin-top: 24px; }
 .static-page h1 { margin: 0 0 44px; }
 .prose {
   margin-top: 42px;
@@ -346,6 +350,7 @@ html[data-theme='dark'] .home-terminal {
 .prose > :first-child { margin-top: 0; }
 .prose p, .prose ul, .prose ol { margin-block: 0 24px; }
 .prose p { text-align: justify; }
+.prose p, .prose li, .article-description { overflow-wrap: anywhere; }
 .prose h2 {
   margin: 56px 0 18px;
   font-size: 1.5rem;
@@ -360,6 +365,10 @@ html[data-theme='dark'] .home-terminal {
 .prose strong { font-weight: 600; }
 .prose img, .prose video, .prose svg { display: block; max-width: 100%; height: auto; }
 .prose img { margin: 28px auto; border: 1px solid var(--line); border-radius: 6px; }
+.prose .article-image-portrait { max-height: 640px; width: auto; object-fit: contain; }
+.prose .article-figure { margin: 32px 0; }
+.prose .article-figure img { margin: 0 auto; }
+.prose figcaption { max-width: 640px; margin: 12px auto 0; color: var(--muted); font-size: .88rem; line-height: 1.65; text-align: center; }
 .prose mark { padding: 0 2px; color: inherit; background: var(--mark); }
 .prose kbd { padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--kbd); font: .83em ui-monospace, Consolas, monospace; }
 .prose blockquote {
@@ -383,8 +392,13 @@ html[data-theme='dark'] .home-terminal {
 .prose mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 .prose .diagram-panel { margin: 30px 0; padding: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--diagram-bg); }
 .prose .diagram-panel svg { margin: auto; max-width: none; }
+.diagram-static .diagram-dark { display: none; }
+.diagram-static { letter-spacing: normal; font-synthesis: none; }
+.prose .diagram-static p { text-align: center; overflow-wrap: normal; letter-spacing: normal; }
+html[data-theme='dark'] .diagram-static .diagram-light { display: none; }
+html[data-theme='dark'] .diagram-static .diagram-dark { display: block; }
 html[data-theme='dark'] .prose .diagram-panel[data-diagram='sequence'] svg { filter: invert(1) hue-rotate(180deg); }
-.prose code { padding: 2px 5px; border-radius: 3px; background: var(--inline-code); font-size: .9em; }
+.prose code { padding: 2px 5px; border-radius: 3px; background: var(--inline-code); font-family: var(--font-mono); font-size: .9em; }
 .prose pre { overflow-x: auto; padding: 18px 20px; background: var(--code-block) !important; border: 1px solid var(--line); border-radius: 4px; }
 .prose pre code { padding: 0; background: transparent; }
 html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astro-code span { color: var(--shiki-dark) !important; }
@@ -508,6 +522,10 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
   .home { padding-block: 64px; }
   .home h1 { font-size: clamp(3.7rem, 16vw, 5.7rem); }
   .home-subtitle { font-size: .9rem; }
+  .home-terminal { padding: 20px; }
+  .terminal-body { min-height: 152px; }
+  .typewriter-line { min-height: 4.65em; }
+  .terminal-meta { font-size: .7rem; }
   .listing { padding-block: 64px 88px; }
   .rows, .timeline { margin-top: 56px; }
   .entry-row { min-height: 84px; gap: 14px; }
@@ -545,4 +563,6 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .entry-arrow { transition: none; }
+  .typewriter-cursor { animation: none; }
+  .home-terminal, .terminal-link-pill, .project-btn { transition: none; }
 }

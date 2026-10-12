@@ -2,7 +2,7 @@
 title: "如何点亮你的计算机生涯的第一颗小星星"
 shortTitle: "点亮你的第一颗小星星"
 description: "从孤岛到开源世界：为什么学计算机必须懂 GitHub，以及如何迈出你的第一步。"
-pubDate: "2023-09-20"
+pubDate: "2026-09-23"
 order: 1
 kicker: "StuDev 2026 招新热身 · 01"
 ---
