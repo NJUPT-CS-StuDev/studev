@@ -384,3 +384,16 @@ test('CSV separates fields whose type changes under the same id and retains orig
   const res = await f.request(`/admin/forms/${form.id}/export`, { user: 'owner' }); const csv = await res.text();
   assert.match(csv, /必须保留的旧文字/); assert.match(csv, /名称（版本 1）/); assert.match(csv, /名称（版本 2）/); assert.equal(csv.includes('[name]'), false);
 });
+
+test('staff can delete a form and its index and data are purged', async () => {
+  const f = fixture(); const form = await createForm(f);
+  assert.equal((await f.request(`/admin/forms/${form.id}`, { method: 'DELETE', user: 'member' })).status, 403);
+  assert.equal((await f.request(`/admin/forms/${form.id}`, { method: 'DELETE', user: 'owner' })).status, 200);
+  assert.equal((await f.request(`/admin/forms/${form.id}`, { user: 'owner' })).status, 404);
+  const list = await (await f.request('/admin/forms', { user: 'owner' })).json();
+  assert.ok(!list.items.some((item) => item.id === form.id));
+
+  const form2 = await createForm(f);
+  assert.equal((await f.request(`/admin/forms/${form2.id}/delete`, { method: 'POST', user: 'owner' })).status, 200);
+  assert.equal((await f.request(`/admin/forms/${form2.id}`, { user: 'owner' })).status, 404);
+});

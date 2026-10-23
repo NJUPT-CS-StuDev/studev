@@ -41,9 +41,23 @@ function renderForms() { const term = q<HTMLInputElement>('[data-admin-form-sear
     if (f.deadline)
         card.append(el('p', `截止 ${formatTime(f.deadline)}`, 'p-help'));
     const actions = el('div', undefined, 'p-actions');
-    actions.append(button('查看记录', () => guard(() => openRecords(f))), button('编辑', () => { openEditor(f); }), button('复制链接', () => copy(formLink(f), status)), button('复制表单', () => guard(async () => { const result = await api<{
-        form: FormDefinition;
-    }>(`/admin/forms/${encodeURIComponent(f.id)}/duplicate`, {}); await refreshForms(); openEditor(result.form); message(status, '已复制为新草稿，原表记录保持不变。', 'success'); })));
+    actions.append(
+      button('查看记录', () => guard(() => openRecords(f))),
+      button('编辑', () => { openEditor(f); }),
+      button('复制链接', () => copy(formLink(f), status)),
+      button('复制表单', () => guard(async () => {
+        const result = await api<{ form: FormDefinition }>(`/admin/forms/${encodeURIComponent(f.id)}/duplicate`, {});
+        await refreshForms();
+        openEditor(result.form);
+        message(status, '已复制为新草稿，原表记录保持不变。', 'success');
+      })),
+      button('删除', () => guard(async () => {
+        if (await confirmAction('删除表单', `确认彻底删除表单“${f.title}”？删除后不可恢复。`) === null) return;
+        await api(`/admin/forms/${encodeURIComponent(f.id)}/delete`, {}, { method: 'POST' });
+        await refreshForms();
+        message(status, '表单已删除。', 'success');
+      }), 'danger small')
+    );
     card.append(actions);
     root.append(card);
 } }

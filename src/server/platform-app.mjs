@@ -22,8 +22,8 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       const request = context.request;
       const path = new URL(request.url).pathname.replace(/\/+$/, '');
       if (!path.startsWith('/api/platform/')) fail(404, 'NOT_FOUND', '接口不存在。');
-      if (!['GET', 'POST'].includes(request.method)) fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
-      if (request.method === 'POST') requireOrigin(request, env);
+      if (!['GET', 'POST', 'DELETE'].includes(request.method)) fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
+      if (['POST', 'DELETE'].includes(request.method)) requireOrigin(request, env);
       const store = getStore(env);
       const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET });
       const identity = createIdentity({ repo, env, now });

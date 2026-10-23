@@ -231,16 +231,16 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
     async handle(context, path) {
       const request = context.request; const method = request.method;
       if (!path.startsWith(`${API}/`)) return null;
-      if (method === 'POST') requireOrigin(request, env);
+      if (['POST', 'DELETE'].includes(method)) requireOrigin(request, env);
       if (path === `${API}/admin/forms` && ['GET', 'POST'].includes(method)) {
         const session = await identity.authenticate(request, { staff: true, csrf: method === 'POST' });
         if (method === 'POST') return response({ form: publicForm(await addForm(formInput(await readJson(request)), session.user)) }, 201);
         const items = await Promise.all((await repo.list('form-index/')).slice(-1000).map(indexedForm));
         return response({ items: items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(publicForm) });
       }
-      const adminForm = path.match(/^\/api\/platform\/admin\/forms\/([^/]+)(?:\/(duplicate|submissions|export))?$/);
+      const adminForm = path.match(/^\/api\/platform\/admin\/forms\/([^/]+)(?:\/(duplicate|submissions|export|delete))?$/);
       if (adminForm) {
-        const session = await identity.authenticate(request, { staff: true, csrf: method === 'POST' });
+        const session = await identity.authenticate(request, { staff: true, csrf: ['POST', 'DELETE'].includes(method) });
         const form = await getForm(adminForm[1]); const action = adminForm[2];
         if (!action && method === 'POST') {
           const body = await readJson(request);
@@ -248,6 +248,16 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
           await repo.put(`form-index/${form.id}.json`, { id: form.id, form: publicForm(changed) });
           await repo.audit(session.user, 'form.update', form.id, { status: changed.status, revision: changed.revision, fieldCount: changed.fields.length });
           return response({ form: publicForm(changed) });
+        }
+        if ((!action && method === 'DELETE') || (action === 'delete' && ['POST', 'DELETE'].includes(method))) {
+          await repo.remove(`form-index/${form.id}.json`);
+          const prefixes = [`forms/${form.id}/`, `form-quota/${form.id}/`, `form-submissions/${form.id}/`];
+          for (const p of prefixes) {
+            const keys = await repo.list(p);
+            for (const key of keys) await repo.remove(key);
+          }
+          await repo.audit(session.user, 'form.delete', form.id, { title: form.title });
+          return response({ ok: true });
         }
         if (action === 'duplicate' && method === 'POST') return response({ form: publicForm(await addForm({ ...formInput(form), title: `${form.title.slice(0, 94)} · 副本`, status: 'draft', deadline: '' }, session.user)) }, 201);
         if (['submissions', 'export'].includes(action) && method === 'GET') {
