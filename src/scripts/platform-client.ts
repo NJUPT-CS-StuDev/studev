@@ -2,15 +2,21 @@ export type Role = 'owner' | 'admin' | 'member';
 export interface User {
     id: string;
     qq: string;
+    avatarUrl?: string;
     nickname: string;
     studentId:string;
     realName:string;
     identityVerified:boolean;
     profileComplete:boolean;
+    term?: string;
+    department?: string;
+    title?: string;
+    order?: number;
+    signature?: string;
     email: string;
     emailVerified: boolean;
     role: Role;
-    status: 'active' | 'disabled';
+    status: 'active' | 'disabled' | 'pending';
     revision: number;
     totpEnabled: boolean;
     mustChangePassword: boolean;
@@ -87,7 +93,10 @@ export class PlatformError extends Error {
 }
 let currentSession: Session | null = null;
 let sessionRequest: Promise<Session | null> | null = null;
-export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '成员填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用' };
+export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '成员填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
+export function avatarUrl(user: { qq?: string; avatarUrl?: string }): string {
+    return user.avatarUrl || (user.qq ? `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(user.qq)}&s=640` : '');
+}
 export function q<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T { const value = root.querySelector<T>(selector); if (!value)
     throw new Error(`页面组件缺失：${selector}`); return value; }
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] { const node = document.createElement(tag); if (text !== undefined)
@@ -186,7 +195,7 @@ export async function session(required = false, staff = false): Promise<Session 
 } if (staff && currentSession) {
     if (currentSession.user.role === 'member')
         throw new PlatformError('只有管理员可以进入管理后台。', 403);
-    if (!currentSession.mfaVerified || currentSession.enrollmentRequired || currentSession.passwordChangeRequired || currentSession.profileRequired) {
+    if ((currentSession.user.role === 'owner' && !currentSession.mfaVerified) || currentSession.mfaRequired || currentSession.enrollmentRequired || currentSession.passwordChangeRequired || currentSession.profileRequired) {
         location.replace('/account/?setup=1');
         return null;
     }

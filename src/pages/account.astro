@@ -16,6 +16,7 @@ import '../styles/platform.css';
     <div class="p-message" role="status" aria-live="polite" data-account-status>正在读取账号……</div>
     <div data-account-content hidden>
       <div class="p-message" data-account-required hidden></div>
+      <section class="p-id-card" data-account-id-card aria-label="数字身份名片"></section>
       <div class="p-grid">
         <section class="p-card">
           <h2>个人资料</h2>
@@ -35,6 +36,11 @@ import '../styles/platform.css';
             <div class="p-field">
               <label for="account-nickname">显示昵称</label>
               <input id="account-nickname" name="nickname" maxlength="40" autocomplete="nickname" placeholder="自定义昵称（选填）" />
+            </div>
+            <div class="p-field">
+              <label for="account-signature">个人签名</label>
+              <input id="account-signature" name="signature" maxlength="120" autocomplete="off" placeholder="显示在历届档案与个人名片上的一句话（选填）" />
+              <p class="p-help">保存后将实时同步至中心历届档案名录。</p>
             </div>
             <button class="p-button" type="submit" data-profile-save>保存资料</button>
           </form>
@@ -65,7 +71,7 @@ import '../styles/platform.css';
         </section>
       </div>
       <section class="p-card" data-account-mfa hidden style="margin-top:20px">
-        <h2>管理员双重验证</h2>
+        <h2>双重验证（TOTP 动态码）</h2>
         <p class="p-muted" data-mfa-state></p>
         <form data-totp-setup style="margin-top:16px">
           <div class="p-field">

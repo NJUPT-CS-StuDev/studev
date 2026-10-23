@@ -1,7 +1,6 @@
 ---
 import { getCollection, render } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
-import Member from '../../components/history/Member.astro';
 import EventTimeline from '../../components/history/EventTimeline.astro';
 export async function getStaticPaths() {
   const entries = await getCollection('history', ({ data }) => data.status === 'published');
@@ -9,7 +8,7 @@ export async function getStaticPaths() {
 }
 const { entry } = Astro.props;
 const { Content } = await render(entry);
-const memberCount = entry.data.groups.reduce((count, group) => count + group.people.length, 0);
+const term = entry.data.term || entry.id;
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="history">
   <article class="term-page">
@@ -21,16 +20,11 @@ const memberCount = entry.data.groups.reduce((count, group) => count + group.peo
       <nav class="term-nav" aria-label="本届页面导航"><a href="#people">成员</a><a href="#events">大事记</a></nav>
     </header>
 
-    <section class="term-section" id="people" aria-labelledby="people-title">
-      <div class="term-section-heading"><span class="section-number">01</span><h2 id="people-title">成员</h2><span class="section-aside">{memberCount} 人</span></div>
-      {entry.data.groups.map((group, index) => (
-        <section class="member-group" aria-labelledby={`group-${index}`}>
-          <h3 id={`group-${index}`}>{group.name}</h3>
-          <div class="member-grid">
-            {group.people.map((person) => <Member {...person} featured={index === 0} />)}
-          </div>
-        </section>
-      ))}
+    <section class="term-section" id="people" aria-labelledby="people-title" data-roster-term={term}>
+      <div class="term-section-heading"><span class="section-number">01</span><h2 id="people-title">成员</h2><span class="section-aside" data-roster-count>加载中…</span></div>
+      <div data-roster-container>
+        <p style="padding: 28px 0; color: var(--muted); font-size: .9rem;">正在同步本届成员名册…</p>
+      </div>
     </section>
 
     <section class="term-section" id="events" aria-labelledby="events-title">
@@ -42,4 +36,5 @@ const memberCount = entry.data.groups.reduce((count, group) => count + group.peo
       <div class="prose"><Content /></div>
     </section>
   </article>
+  <script>import '../../scripts/history-roster';</script>
 </SiteLayout>

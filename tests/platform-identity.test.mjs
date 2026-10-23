@@ -158,23 +158,29 @@ test('profile updates are versioned and cannot mutate QQ, user ID, role or email
   await rejects(f.call('/auth/profile', 'POST', { nickname: 'Stale', revision: member.user.revision }, member), 'REVISION_CONFLICT', 409);
 });
 
-test('promotion revokes sessions and admin authority stays inactive until mandatory enrollment completes', async () => {
+test('promotion revokes sessions; admin authority works without mandatory TOTP while optional TOTP is enforced when enabled', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
   const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin' }, owner);
   assert.equal(promoted.user.role, 'admin');
   await rejects(f.call('/auth/session', 'GET', undefined, member), 'AUTH_REQUIRED', 401);
-  const pendingAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
-  assert.equal(pendingAdmin.enrollmentRequired, true);
-  await rejects(f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, pendingAdmin), { staff: true }), 'AUTH_SETUP_REQUIRED', 403);
-  await rejects(f.identity.authenticate(f.request('/forms', 'GET', undefined, pendingAdmin), { required: true }), 'AUTH_SETUP_REQUIRED', 403);
-  const setup = await f.call('/auth/totp/setup', 'POST', { password: MEMBER_PASSWORD }, pendingAdmin);
-  await f.call('/auth/totp/confirm', 'POST', { code: f.factor(setup.secret) }, pendingAdmin);
-  const admin = { ...pendingAdmin, ...(await f.call('/auth/session', 'GET', undefined, pendingAdmin)), cookie: pendingAdmin.cookie };
-  assert.equal((await f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, admin), { staff: true })).user.role, 'admin');
-  await rejects(f.call('/admin/users', 'GET', undefined, admin), 'OWNER_REQUIRED', 403);
-  await rejects(f.call('/auth/totp/disable', 'POST', { password: MEMBER_PASSWORD, code: '000000' }, admin), 'STAFF_TOTP_REQUIRED', 403);
-  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: admin.user.revision, status: 'disabled' }, owner);
-  await rejects(f.call('/auth/session', 'GET', undefined, admin), 'AUTH_REQUIRED', 401);
+  const directAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
+  assert.equal(directAdmin.enrollmentRequired, false);
+  assert.equal((await f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, directAdmin), { staff: true })).user.role, 'admin');
+  await rejects(f.call('/admin/users', 'GET', undefined, directAdmin), 'OWNER_REQUIRED', 403);
+  const setup = await f.call('/auth/totp/setup', 'POST', { password: MEMBER_PASSWORD }, directAdmin);
+  await f.call('/auth/totp/confirm', 'POST', { code: f.factor(setup.secret) }, directAdmin);
+  const mfaAdmin = { ...directAdmin, ...(await f.call('/auth/session', 'GET', undefined, directAdmin)), cookie: directAdmin.cookie };
+  assert.equal((await f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, mfaAdmin), { staff: true })).user.role, 'admin');
+  const unverifiedAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
+  assert.equal(unverifiedAdmin.mfaRequired, true);
+  await rejects(f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, unverifiedAdmin), { staff: true }), 'AUTH_SETUP_REQUIRED', 403);
+  f.advance();
+  const disableCode = f.factor(setup.secret);
+  await f.call('/auth/totp/disable', 'POST', { password: MEMBER_PASSWORD, code: disableCode }, mfaAdmin);
+  const afterDisable = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
+  assert.equal(afterDisable.user.totpEnabled, false);
+  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: afterDisable.user.revision, status: 'disabled' }, owner);
+  await rejects(f.call('/auth/session', 'GET', undefined, afterDisable), 'AUTH_REQUIRED', 401);
   await rejects(f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD }), 'LOGIN_FAILED', 401);
 });
 
@@ -214,16 +220,17 @@ test('controlled password reset revokes sessions and forces change before user b
   assert.equal(changed.passwordChangeRequired, false);
 });
 
-test('TOTP reset revokes sessions; promotion requirement is reinstated and old recovery codes fail', async () => {
+test('TOTP reset revokes sessions; admin can log in without TOTP while owner cannot disable TOTP', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
+  await rejects(f.call('/auth/totp/disable', 'POST', { password: CHANGED, code: '000000' }, owner), 'STAFF_TOTP_REQUIRED', 403);
   const setup = await f.call('/auth/totp/setup', 'POST', { password: MEMBER_PASSWORD }, member);
   await f.call('/auth/totp/confirm', 'POST', { code: f.factor(setup.secret) }, member);
   const refreshed = await f.call('/auth/session', 'GET', undefined, member);
   await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin' }, owner);
   await f.call(`/admin/users/${member.user.id}/reset-totp`, 'POST', {}, owner);
-  const limited = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
-  assert.equal(limited.enrollmentRequired, true);
-  await rejects(f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, limited), { staff: true }), 'AUTH_SETUP_REQUIRED', 403);
+  const resetAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
+  assert.equal(resetAdmin.enrollmentRequired, false);
+  assert.equal((await f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, resetAdmin), { staff: true })).user.role, 'admin');
   const audit = await f.call('/admin/audit', 'GET', undefined, owner);
   assert.ok(audit.items.some((item) => item.action === 'identity.totp.reset'));
   assert.ok(!JSON.stringify(audit).includes(setup.secret)); assert.ok(!JSON.stringify(audit).includes(MEMBER_PASSWORD));
@@ -495,4 +502,57 @@ test('invalid binding fields and already-occupied student IDs leave no new inten
   }
   const recovered = await f.call('/auth/profile', 'POST', base, member);
   assert.equal(recovered.user.studentId, base.studentId);
+});
+
+test('unified roster SSOT seeds pending members, claims pending records on registration, and updates public projection on profile signature edit', async () => {
+  const f = fixture(), owner = await f.owner();
+  const roster = await f.call('/public/roster?term=2026-2027', 'GET');
+  assert.equal(roster.term, '2026-2027');
+  assert.equal(roster.totalCount, 17);
+  assert.equal(roster.groups.length, 5);
+  assert.ok(!JSON.stringify(roster).includes('B24041902'));
+
+  // Pending member 李雅婷 (B24041902) cannot log in before registering
+  await rejects(f.call('/auth/login', 'POST', { studentId: 'B24041902', password: MEMBER_PASSWORD }), 'LOGIN_FAILED', 401);
+
+  // Registering with B24041902 claims and activates the pre-seeded pending record while preserving department and title
+  const claimed = await f.call('/auth/register', 'POST', {
+    qq: '1775706379',
+    studentId: 'B24041902',
+    realName: '李雅婷',
+    password: MEMBER_PASSWORD,
+    inviteCode: INVITE,
+  });
+  assert.equal(claimed.status, 201);
+  assert.equal(claimed.user.status, 'active');
+  assert.equal(claimed.user.department, '主席团与统筹');
+  assert.equal(claimed.user.title, '分管协调 · 媒体宣传部');
+  assert.equal(claimed.user.term, '2026-2027');
+
+  // Login and update personal signature via /auth/profile -> immediately updates public roster SSOT
+  const login = await f.call('/auth/login', 'POST', { studentId: 'B24041902', password: MEMBER_PASSWORD });
+  const updatedProfile = await f.call('/auth/profile', 'POST', {
+    nickname: '李雅婷',
+    signature: '追光而遇，沐光而行',
+    revision: login.user.revision,
+  }, login);
+  assert.equal(updatedProfile.user.signature, '追光而遇，沐光而行');
+
+  const updatedRoster = await f.call('/public/roster?term=2026-2027', 'GET');
+  const presGroup = updatedRoster.groups.find((g) => g.name === '主席团与统筹');
+  const yating = presGroup.people.find((p) => p.name === '李雅婷');
+  assert.equal(yating.signature, '追光而遇，沐光而行');
+  assert.equal(yating.role, '分管协调 · 媒体宣传部');
+  assert.ok(yating.avatarUrl.includes('1775706379'));
+
+  // Owner can also edit department/title/signature in /admin/users/:id
+  const ownerEdited = await f.call(`/admin/users/${login.user.id}`, 'POST', {
+    revision: updatedProfile.user.revision,
+    role: 'admin',
+    title: '分管主席 · 媒体宣传部',
+  }, owner);
+  assert.equal(ownerEdited.user.role, 'admin');
+  assert.equal(ownerEdited.user.title, '分管主席 · 媒体宣传部');
+  const afterOwnerEdit = await f.call('/public/roster?term=2026-2027', 'GET');
+  assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').role, '分管主席 · 媒体宣传部');
 });

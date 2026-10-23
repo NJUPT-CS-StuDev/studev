@@ -250,6 +250,7 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
           return response({ form: publicForm(changed) });
         }
         if ((!action && method === 'DELETE') || (action === 'delete' && ['POST', 'DELETE'].includes(method))) {
+          await identity.authenticate(request, { owner: true, csrf: true });
           await repo.remove(`form-index/${form.id}.json`);
           const prefixes = [`forms/${form.id}/`, `form-quota/${form.id}/`, `form-submissions/${form.id}/`];
           for (const p of prefixes) {

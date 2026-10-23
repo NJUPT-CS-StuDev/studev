@@ -40,17 +40,9 @@ export const collections = {
   }),
   history: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/history' }),
-    schema: ({ image }) => baseSchema.extend({
+    schema: baseSchema.extend({
       period: z.string(),
-      groups: z.array(z.object({
-        name: z.string(),
-        people: z.array(z.object({
-          name: z.string(),
-          role: z.string().optional(),
-          avatar: image(),
-          signature: z.string().optional(),
-        })),
-      })),
+      term: z.string().optional(),
       events: z.array(z.object({
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         time: z.string().optional(),

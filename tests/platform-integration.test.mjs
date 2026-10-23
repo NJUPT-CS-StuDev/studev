@@ -87,14 +87,18 @@ test('real identity permits anonymous public submissions and receipt downloads w
   assert.equal((await guest.call(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', body: {} })).status, 404);
 });
 
-test('role promotion and suspension revoke existing sessions and administrator rights stay gated by TOTP', async () => {
+test('role promotion and suspension revoke existing sessions; admin can manage forms but cannot delete forms or manage users', async () => {
   const f = await fixture(); const member = await f.member('100002', '待提升成员');
   const promoted = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: member.user.revision, role: 'admin' } });
   assert.equal(promoted.status, 200);
   assert.equal((await member.client.call('/auth/session')).status, 401);
   const login = await member.client.call('/auth/login', { method: 'POST', body: { studentId: member.user.studentId, password: f.password } });
-  assert.equal(login.body.enrollmentRequired, true);
-  assert.equal((await member.client.call('/admin/forms')).status, 403);
+  assert.equal(login.body.enrollmentRequired, false);
+  assert.equal((await member.client.call('/admin/forms')).status, 200);
+  const createdForm = await member.client.call('/admin/forms', { method: 'POST', body: { title: '管理员新建表', status: 'draft', access: 'members', fields: [{ id: 'note', type: 'text', label: '说明' }] } });
+  assert.equal(createdForm.status, 201);
+  assert.equal((await member.client.call(`/admin/forms/${createdForm.body.form.id}/delete`, { method: 'POST', body: {} })).status, 403);
+  assert.equal((await member.client.call('/admin/users')).status, 403);
   const disabled = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: promoted.body.user.revision, status: 'disabled' } });
   assert.equal(disabled.status, 200);
   assert.equal((await member.client.call('/auth/session')).status, 401);
