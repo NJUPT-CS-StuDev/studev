@@ -1,12 +1,15 @@
 ---
 title: "五星联动与赛博新秩序：njupt-search 及其背后的南邮开源宇宙"
+shortTitle: "njupt-search 开源宇宙"
 description: "从教务解析、网站图谱到 3D 地图与零后端 Rust 引擎：一个工科青年为整座大学构筑的数字化公共基建。"
-repository: "https://github.com/hicancan/njupt-search"
-demo: "https://njupt.hicancan.top"
 pubDate: "2026-10-12"
+tags: ["开源与代码", "校园基建", "Rust与离线搜索"]
 order: 2
 status: published
+repository: "https://github.com/hicancan/njupt-search"
+demo: "https://njupt.hicancan.top"
 ---
+
 
 ## 序幕 · 信息孤岛与“数字重力”缺失的校园
 

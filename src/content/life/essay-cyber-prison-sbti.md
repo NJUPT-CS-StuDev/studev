@@ -3,11 +3,13 @@ title: "当 MBTI 成为精神枷锁：刷屏的 SBTI，与一场名为“疲惫�
 shortTitle: "SBTI 与赛博越狱"
 kicker: "深度文化观察 · 赛博心理学"
 description: "在无穷无尽的 KPI 与标签规训中，一场名为“疲惫”的赛博越狱与群体性叹息。"
+pubDate: "2026-05-20"
 author: "hicancan"
-pubDate: "2026-04-09"
+tags: ["时代审视", "精神枷锁", "文化反思"]
 order: 1
 status: published
 ---
+
 
 > **文 / hicancan**  
 > *写于 2026 年 4 月 9 日 · 仙林*

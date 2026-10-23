@@ -1,9 +1,13 @@
 ---
 title: "从草坪与易班走来：StuDev 数字化平台的历史回响"
+shortTitle: "StuDev 平台创世纪"
 description: "2022至2026年，从最初的心理工作站、易班工作室，到学生发展中心与开源 StuDev 平台的诞生史，探讨我们为何坚持以开源管理社团资产。"
-order: 5
+pubDate: "2026-09-22"
+tags: ["历史源流", "草坪易班", "开源平台"]
+order: 3
 status: published
 ---
+
 
 ## 序章 · 提交记录里的四载回响
 

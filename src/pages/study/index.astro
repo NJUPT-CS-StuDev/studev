@@ -3,22 +3,75 @@ import { getCollection } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
 const entries = (await getCollection('study'))
   .filter((item) => item.data.status === 'published')
-  .sort((a, b) => (b.data.pubDate ?? '').localeCompare(a.data.pubDate ?? ''));
+  .sort((a, b) => {
+    if (a.data.order !== undefined && b.data.order !== undefined) {
+      return a.data.order - b.data.order;
+    }
+    return (b.data.pubDate ?? '').localeCompare(a.data.pubDate ?? '');
+  });
+
+const allTags = Array.from(new Set(entries.flatMap((e) => e.data.tags ?? [])));
 ---
 <SiteLayout title="Study — StuDev" active="study">
   <section class="listing" aria-labelledby="page-title">
     <p class="eyebrow">学习 · 深度</p>
     <h1 id="page-title">Study</h1>
-    <div class="rows">
+    
+    {allTags.length > 0 && (
+      <div class="filter-tags-wrap" aria-label="主题标签筛选">
+        <div class="filter-tags">
+          <button class="filter-tag-btn active" data-filter="all">全部 ({entries.length})</button>
+          {allTags.map((tag) => (
+            <button class="filter-tag-btn" data-filter={tag}>#{tag}</button>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <div class="rows" id="study-rows">
       {entries.map((entry) => (
-        <a class="entry-row" href={`/study/${entry.id}/`}>
+        <a class="entry-row" href={`/study/${entry.id}/`} data-tags={JSON.stringify(entry.data.tags ?? [])}>
           <span>
-            <span class="entry-title">{entry.data.shortTitle ?? entry.data.title}</span>
+            <span class="entry-title">
+              {entry.data.audio && <span style="font-size:0.85em;margin-right:6px;" title="内含音频母带">🎙️</span>}
+              {entry.data.shortTitle ?? entry.data.title}
+            </span>
             <span class="entry-description">{entry.data.description}</span>
+            {entry.data.tags && entry.data.tags.length > 0 && (
+              <span class="article-tags" style="margin-top:8px;">
+                {entry.data.tags.map((t: string) => <span class="tag-badge">#{t}</span>)}
+              </span>
+            )}
           </span>
           <span class="entry-arrow" aria-hidden="true">↗</span>
         </a>
       ))}
     </div>
   </section>
+
+  <script is:inline>
+    const filterBtns = document.querySelectorAll('.filter-tag-btn');
+    const rows = document.querySelectorAll('#study-rows .entry-row');
+
+    filterBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.getAttribute('data-filter');
+
+        rows.forEach((row) => {
+          if (filter === 'all') {
+            row.style.display = '';
+          } else {
+            const tags = JSON.parse(row.getAttribute('data-tags') || '[]');
+            if (tags.includes(filter)) {
+              row.style.display = '';
+            } else {
+              row.style.display = 'none';
+            }
+          }
+        });
+      });
+    });
+  </script>
 </SiteLayout>

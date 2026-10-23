@@ -13,11 +13,21 @@ const { Content } = await render(entry);
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="develop">
   <article class="detail-wrap">
     <a class="back-link" href="/develop/">← Develop</a>
+    {entry.data.kicker ? (
+      <p class="eyebrow article-kicker">{entry.data.kicker}</p>
+    ) : (
+      <p class="eyebrow article-kicker">Develop · 研发工程</p>
+    )}
     <h1>{entry.data.title}</h1>
     {(entry.data.pubDate || entry.data.author) && (
       <div class="article-meta">
         {entry.data.pubDate && <span>发布于 {entry.data.pubDate}</span>}
         {entry.data.author && <span>· 作者：{entry.data.author}</span>}
+      </div>
+    )}
+    {entry.data.tags && entry.data.tags.length > 0 && (
+      <div class="article-tags">
+        {entry.data.tags.map((tag: string) => <span class="tag-badge">#{tag}</span>)}
       </div>
     )}
     <p class="article-description">{entry.data.description}</p>

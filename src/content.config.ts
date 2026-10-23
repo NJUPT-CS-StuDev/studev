@@ -8,6 +8,9 @@ const baseSchema = z.object({
   order: z.number().optional(),
   pubDate: z.string().optional(),
   author: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  audio: z.string().optional(),
+  duration: z.string().optional(),
   status: z.enum(['published', 'draft']).default('published'),
 });
 
@@ -22,13 +25,18 @@ export const collections = {
   develop: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/develop' }),
     schema: baseSchema.extend({
+      shortTitle: z.string().optional(),
+      kicker: z.string().optional(),
       repository: z.url(),
       demo: z.url().optional(),
     }),
   }),
   life: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/life' }),
-    schema: baseSchema,
+    schema: baseSchema.extend({
+      shortTitle: z.string().optional(),
+      kicker: z.string().optional(),
+    }),
   }),
   history: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/history' }),
@@ -55,6 +63,9 @@ export const collections = {
   }),
   about: defineCollection({
     loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/about' }),
-    schema: baseSchema,
+    schema: baseSchema.extend({
+      shortTitle: z.string().optional(),
+      kicker: z.string().optional(),
+    }),
   }),
 };

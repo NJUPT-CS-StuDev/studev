@@ -1,16 +1,23 @@
 ---
 import { getCollection, render } from 'astro:content';
 import SiteLayout from '../../layouts/SiteLayout.astro';
+
 export async function getStaticPaths() {
   const entries = await getCollection('life', ({ data }) => data.status === 'published');
   return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
+
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="life">
   <article class="detail-wrap">
     <a class="back-link" href="/life/">← Life</a>
+    {entry.data.kicker ? (
+      <p class="eyebrow article-kicker">{entry.data.kicker}</p>
+    ) : (
+      <p class="eyebrow article-kicker">Life · 随笔特写</p>
+    )}
     <h1>{entry.data.title}</h1>
     {(entry.data.pubDate || entry.data.author) && (
       <div class="article-meta">
@@ -18,7 +25,23 @@ const { Content } = await render(entry);
         {entry.data.author && <span>· 作者：{entry.data.author}</span>}
       </div>
     )}
+    {entry.data.tags && entry.data.tags.length > 0 && (
+      <div class="article-tags">
+        {entry.data.tags.map((tag: string) => <span class="tag-badge">#{tag}</span>)}
+      </div>
+    )}
     <p class="article-description">{entry.data.description}</p>
+    {entry.data.audio && (
+      <div class="audio-player-card">
+        <div class="audio-player-header">
+          <span class="audio-badge">🎙️ 声音纪录 · {entry.data.duration ?? '音频'}</span>
+          <span class="audio-format">高保真音频 · AAC/M4A</span>
+        </div>
+        <audio controls preload="metadata" class="audio-player" src={entry.data.audio}>
+          您的浏览器不支持音频播放，请直接下载收听。
+        </audio>
+      </div>
+    )}
     <div class="prose"><Content /></div>
   </article>
 </SiteLayout>

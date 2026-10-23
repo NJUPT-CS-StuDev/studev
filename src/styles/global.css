@@ -581,6 +581,97 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
   .event-date span { margin-left: 9px; }
 }
 
+/* Audio Player & Tag System */
+.audio-player-card {
+  margin: 28px 0 36px;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+.audio-player-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.audio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: var(--kbd);
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.audio-format {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.audio-player {
+  width: 100%;
+  height: 44px;
+  border-radius: 8px;
+  outline: none;
+}
+.article-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 0;
+}
+.tag-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 14px;
+  background: var(--kbd);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.tag-badge:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+.filter-tags-wrap {
+  margin: 18px 0 28px;
+}
+.filter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.filter-tag-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.filter-tag-btn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.filter-tag-btn.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--paper);
+}
+html[data-theme='dark'] .filter-tag-btn.active {
+  color: #14181d;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .entry-arrow { transition: none; }

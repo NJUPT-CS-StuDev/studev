@@ -77,9 +77,9 @@ test('homepage ships a small local logo, fonts, and JavaScript', async () => {
 });
 
 test('article metadata and Markdown emphasis remain correct', async () => {
-  const firstStar = await readFile(join(output, 'study/first-star/index.html'), 'utf8');
+  const firstStar = await readFile(join(output, 'study/guide-first-star/index.html'), 'utf8');
   assert.match(firstStar, /2026-09-23/);
-  for (const slug of ['cyber-prison-sbti', 'peer-mentors-letter', 'volunteer-teaching-dream']) {
+  for (const slug of ['essay-cyber-prison-sbti', 'guide-peer-mentors', 'journey-volunteer-teaching']) {
     const html = await readFile(join(output, `life/${slug}/index.html`), 'utf8');
     walk(parse(html), (node) => {
       if (node.nodeName === '#text' && node.value.includes('**')) {
@@ -155,7 +155,7 @@ test('sitemap lists every unique indexable canonical page on the formal domain',
 
   const sitemap = await readFile(join(output, 'sitemap-0.xml'), 'utf8');
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.equal(urls.length, 23);
+  assert.equal(urls.length, 25);
   assert.equal(new Set(urls).size, urls.length, 'sitemap must not contain duplicate URLs');
   assert.deepEqual([...urls].sort(), [...expected].sort(), 'sitemap must match indexable canonical URLs');
   for (const value of urls) {

@@ -15,9 +15,6 @@ const nav = [
 ];
 const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
 const canonical = new URL(Astro.url.pathname, Astro.site);
-if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical.pathname)) {
-  canonical.pathname = canonical.pathname.replace('/life/', '/about/');
-}
 ---
 <!doctype html>
 <html lang="zh-CN">

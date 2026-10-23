@@ -1,10 +1,13 @@
 ---
-title: "StuDev 网站源码"
+title: "StuDev 网站源码与架构手记"
+shortTitle: "StuDev 平台自研架构"
 description: "StuDev 数字化平台的开源代码与架构手记。"
-repository: "https://github.com/NJUPT-CS-StuDev/studev"
 pubDate: "2026-09-22"
+tags: ["开源与代码", "自研平台", "云原生基建"]
 order: 1
+repository: "https://github.com/NJUPT-CS-StuDev/studev"
 ---
+
 
 StuDev 是南京邮电大学计软网安学生发展中心的官方网站，也是我们交付给全院同学的第一个开源作品。
 

@@ -23,7 +23,23 @@ const { Content } = await render(entry);
         {entry.data.author && <span>· 作者：{entry.data.author}</span>}
       </div>
     )}
+    {entry.data.tags && entry.data.tags.length > 0 && (
+      <div class="article-tags">
+        {entry.data.tags.map((tag: string) => <span class="tag-badge">#{tag}</span>)}
+      </div>
+    )}
     <p class="article-description">{entry.data.description}</p>
+    {entry.data.audio && (
+      <div class="audio-player-card">
+        <div class="audio-player-header">
+          <span class="audio-badge">🎙️ 思想母带广播 · {entry.data.duration ?? '完整原声'}</span>
+          <span class="audio-format">高保真音频 · AAC/M4A</span>
+        </div>
+        <audio controls preload="metadata" class="audio-player" src={entry.data.audio}>
+          您的浏览器不支持音频播放，请直接下载收听。
+        </audio>
+      </div>
+    )}
     <div class="prose"><Content /></div>
   </article>
 </SiteLayout>
