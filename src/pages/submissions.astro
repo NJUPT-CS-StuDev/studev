@@ -1,0 +1,14 @@
+---
+import PlatformShell from '../components/PlatformShell.astro';
+---
+<PlatformShell title="我的提交" active="submissions">
+  <div class="p-toolbar"><input class="p-input" id="submission-search" type="search" placeholder="搜索提交记录" data-submissions-search /><span class="p-count" data-submissions-count></span></div>
+  <div class="p-message" role="status" aria-live="polite" data-submissions-status>正在加载……</div>
+  <div data-submissions-list></div>
+  <section class="p-card p-record-detail" data-submission-detail hidden>
+    <div class="p-toolbar"><h2>提交详情</h2><div class="p-actions"><button class="p-button secondary small" type="button" data-submission-close>收起</button></div></div>
+    <div data-submission-content></div>
+    <div data-submission-edit hidden><hr class="p-divider" /><h3>修改信息</h3><form data-submission-edit-form><div data-submission-edit-fields></div><button class="p-button" type="submit">保存修改</button></form></div>
+  </section>
+  <script>import '../scripts/platform-submissions';</script>
+</PlatformShell>

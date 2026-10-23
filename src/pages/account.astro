@@ -1,0 +1,105 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import '../styles/platform.css';
+---
+<SiteLayout title="我的账号 — StuDev" active="account" noindex={true}>
+  <div class="platform platform-narrow">
+    <header class="p-heading">
+      <div>
+        <h1>我的账号</h1>
+      </div>
+      <div class="p-actions">
+        <a class="p-button secondary" href="/admin/" data-account-admin hidden>进入管理后台</a>
+        <button class="p-button secondary" type="button" data-account-logout hidden>退出登录</button>
+      </div>
+    </header>
+    <div class="p-message" role="status" aria-live="polite" data-account-status>正在读取账号……</div>
+    <div data-account-content hidden>
+      <div class="p-message" data-account-required hidden></div>
+      <div class="p-grid">
+        <section class="p-card">
+          <h2>个人资料</h2>
+          <dl class="p-meta" data-account-info></dl>
+          <hr class="p-divider" />
+          <form data-profile-form>
+            <div data-profile-identity hidden>
+              <div class="p-field">
+                <label for="account-student-id">学号</label>
+                <input id="account-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+              </div>
+              <div class="p-field">
+                <label for="account-real-name">姓名</label>
+                <input id="account-real-name" name="realName" maxlength="40" autocomplete="name" />
+              </div>
+            </div>
+            <div class="p-field">
+              <label for="account-nickname">显示昵称</label>
+              <input id="account-nickname" name="nickname" maxlength="40" autocomplete="nickname" placeholder="自定义昵称（选填）" />
+            </div>
+            <button class="p-button" type="submit" data-profile-save>保存资料</button>
+          </form>
+        </section>
+        <section class="p-card">
+          <h2>修改密码</h2>
+          <form data-password-form>
+            <div class="p-field">
+              <label for="current-password">当前密码</label>
+              <input id="current-password" name="currentPassword" type="password" maxlength="256" autocomplete="current-password" required />
+            </div>
+            <div class="p-field">
+              <label for="new-password">新密码</label>
+              <input id="new-password" name="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位" required />
+            </div>
+            <div class="p-field" data-password-totp hidden>
+              <label for="password-totp">双重验证码</label>
+              <input id="password-totp" name="totp" maxlength="64" autocomplete="one-time-code" placeholder="6 位动态码或恢复码" />
+            </div>
+            <button class="p-button secondary" type="submit">修改密码</button>
+          </form>
+        </section>
+      </div>
+      <section class="p-card" data-account-mfa hidden style="margin-top:20px">
+        <h2>管理员双重验证</h2>
+        <p class="p-muted" data-mfa-state></p>
+        <form data-totp-setup style="margin-top:16px">
+          <div class="p-field">
+            <label for="setup-password">确认当前密码</label>
+            <input id="setup-password" name="password" type="password" maxlength="256" autocomplete="current-password" required />
+          </div>
+          <button class="p-button" type="submit">设置验证器</button>
+        </form>
+        <div data-totp-enrollment hidden>
+          <hr class="p-divider" />
+          <p class="p-muted">使用身份验证器应用扫描下方二维码：</p>
+          <canvas data-totp-qr aria-label="验证器绑定二维码" style="max-width:100%;margin:16px 0"></canvas>
+          <div class="p-field">
+            <label>手动输入密钥</label>
+            <div class="p-actions">
+              <code class="p-secret" data-totp-secret></code>
+              <button class="p-button secondary small" type="button" data-copy-secret>复制密钥</button>
+            </div>
+          </div>
+          <form data-totp-confirm style="margin-top:16px">
+            <div class="p-field">
+              <label for="confirm-totp">验证码</label>
+              <input id="confirm-totp" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="输入 6 位动态码" required />
+            </div>
+            <button class="p-button" type="submit">确认绑定</button>
+          </form>
+        </div>
+        <div data-totp-recovery hidden>
+          <hr class="p-divider" />
+          <h3>恢复码</h3>
+          <p class="p-muted">请妥善保存一次性恢复码：</p>
+          <pre class="p-secret" data-recovery-codes></pre>
+          <div class="p-actions">
+            <button class="p-button secondary" type="button" data-copy-recovery>复制</button>
+            <button class="p-button secondary" type="button" data-save-recovery>下载</button>
+            <button class="p-button" type="button" data-recovery-done>完成</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script>import '../scripts/platform-account';</script>
+</SiteLayout>

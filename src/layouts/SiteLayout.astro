@@ -11,6 +11,7 @@ const nav = [
   { href: '/life/', label: 'Life', key: 'life' },
   { href: '/history/', label: 'History', key: 'history' },
   { href: '/about/', label: 'About', key: 'about' },
+  { href: '/forms/', label: 'Forms', key: 'forms' },
 ];
 const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -47,6 +48,7 @@ if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical
       <div class="header-inner">
         <a class="brand" href="/" aria-label="StuDev 首页"><Image src={logo} alt="" width={56} height={56} densities={[1, 2, 3]} loading="eager" decoding="async" /></a>
         <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
+        <a class:list={['nav-account', { active: active === 'account' || active === 'login' }]} href="/login/" data-global-account-link>Login</a>
         <ThemeToggle />
       </div>
     </header>
@@ -62,5 +64,6 @@ if (/^\/life\/(organizational-genesis|anti-formalism-council)\/$/.test(canonical
     </footer>
     <script>import '../scripts/copy-text';</script>
     <script>import '../scripts/diagrams';</script>
+    <script>import '../scripts/auth-status';</script>
   </body>
 </html>

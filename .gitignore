@@ -1,6 +1,7 @@
 # build output
 dist/
 .edgeone/
+.collection-build/
 # generated types
 .astro/
 
@@ -23,6 +24,9 @@ pnpm-debug.log*
 AGENTS.md
 CLAUDE.md
 .vscode/
+
+# private local operations documentation and acceptance evidence
+/docs/
 
 /logo.png
 

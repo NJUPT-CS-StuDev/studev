@@ -1,0 +1,3 @@
+StuDev collection verification fixture.
+This file contains no personal information.
+Expected workflow: invited upload, private storage, administrator review and download.

@@ -14,12 +14,24 @@ import localFonts from './src/integrations/local-fonts.mjs';
 
 const excludedSitemapPaths = new Set([
   '/404',
+  '/submit',
+  '/admin',
+  '/login',
+  '/account',
+  '/forms',
+  '/fill',
+  '/submissions',
+  '/legacy-collection',
   '/life/organizational-genesis',
   '/life/anti-formalism-council',
 ]);
 
 export default defineConfig({
   site: 'https://studev.hicancan.top',
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: 'hover',
+  },
   integrations: [localFonts(), sitemap({
     filter: (page) => !excludedSitemapPaths.has(new URL(page).pathname.replace(/\/$/, '')),
   })],

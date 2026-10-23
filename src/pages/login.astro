@@ -1,0 +1,64 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import '../styles/platform.css';
+---
+<SiteLayout title="登录 — StuDev" active="login" noindex={true}>
+  <div class="platform platform-narrow">
+    <section class="p-card p-auth">
+      <h1>登录 StuDev</h1>
+      <div class="p-tabs p-auth-tabs" role="tablist" aria-label="账号操作">
+        <button class="p-tab" id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="login-panel" data-auth-tab="login">登录</button>
+        <button class="p-tab" id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="register-panel" data-auth-tab="register">注册账号</button>
+      </div>
+      <div class="p-message" role="status" aria-live="polite" data-auth-status></div>
+      <form id="login-panel" role="tabpanel" aria-labelledby="login-tab" data-login-form>
+        <div class="p-field">
+          <label for="login-student-id">学号</label>
+          <input id="login-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="你的学号" required />
+        </div>
+        <div class="p-field">
+          <label for="login-password">密码</label>
+          <input id="login-password" name="password" type="password" maxlength="256" autocomplete="current-password" placeholder="请输入密码" required />
+        </div>
+        <div class="p-field" data-login-totp hidden>
+          <label for="login-totp">双重验证码</label>
+          <input id="login-totp" name="totp" autocomplete="one-time-code" maxlength="64" placeholder="6 位动态码或恢复码" />
+        </div>
+        <button class="p-button wide" type="submit">立即登录</button>
+        <details style="margin-top:16px"><summary class="p-help">忘记密码？</summary><p class="p-help">若忘记密码，请联系社团管理员重置。</p></details>
+      </form>
+      <form id="register-panel" role="tabpanel" aria-labelledby="register-tab" data-register-form hidden>
+        <div class="p-field">
+          <label for="register-student-id">学号</label>
+          <input id="register-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="你的学号" required />
+        </div>
+        <div class="p-field">
+          <label for="register-real-name">姓名</label>
+          <input id="register-real-name" name="realName" maxlength="40" autocomplete="name" placeholder="真实姓名" required />
+        </div>
+        <div class="p-field">
+          <label for="register-qq">联系 QQ</label>
+          <div class="p-input-suffix-wrap">
+            <input id="register-qq" name="qq" inputmode="numeric" pattern="[1-9][0-9]{4,11}" maxlength="12" autocomplete="off" placeholder="常用 QQ 号" required />
+            <span class="p-input-suffix">@qq.com</span>
+          </div>
+          <p class="p-help" data-qq-email>用于重要通知联系</p>
+        </div>
+        <div class="p-field">
+          <label for="register-password">设置密码</label>
+          <input id="register-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位密码" required />
+        </div>
+        <div class="p-field">
+          <label for="register-confirm">确认密码</label>
+          <input id="register-confirm" name="confirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required />
+        </div>
+        <div class="p-field">
+          <label for="register-invite">社团邀请码</label>
+          <input id="register-invite" name="inviteCode" type="password" maxlength="200" autocomplete="off" placeholder="注册邀请码" required />
+        </div>
+        <button class="p-button wide" type="submit">立即注册</button>
+      </form>
+    </section>
+  </div>
+  <script>import '../scripts/platform-login';</script>
+</SiteLayout>

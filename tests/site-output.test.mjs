@@ -27,7 +27,7 @@ const localFile = (url, document) => {
 
 test('every built page has valid local links and complete rendering', async () => {
   const files = await pages(output);
-  assert.equal(files.length, 26);
+  assert.equal(files.length, 34);
   let diagrams = 0;
   let captions = 0;
   for (const file of files) {
@@ -139,11 +139,14 @@ test('every page can share its clean canonical URL', async () => {
 test('sitemap lists every unique indexable canonical page on the formal domain', async () => {
   const expected = new Set();
   for (const file of await pages(output)) {
-    if (file === join(output, '404.html')) continue;
+    let canonical;
+    let noindex = false;
     walk(parse(await readFile(file, 'utf8')), (node) => {
       const attr = attributes(node);
-      if (node.tagName === 'link' && attr.rel === 'canonical') expected.add(attr.href);
+      if (node.tagName === 'link' && attr.rel === 'canonical') canonical = attr.href;
+      if (node.tagName === 'meta' && attr.name === 'robots' && attr.content.includes('noindex')) noindex = true;
     });
+    if (!noindex) expected.add(canonical);
   }
 
   const index = await readFile(join(output, 'sitemap-index.xml'), 'utf8');
@@ -182,14 +185,15 @@ test('robots and HTML advertise the formal sitemap', async () => {
   }
 });
 
-test('only the error page declares noindex', async () => {
+test('error and all private platform pages stay outside search indexes', async () => {
+  const privatePages = new Set(['404.html', ...['submit', 'admin', 'login', 'account', 'forms', 'fill', 'submissions', 'legacy-collection'].map((path) => `${path}/index.html`)].map((path) => join(output, path)));
   for (const file of await pages(output)) {
     let robots;
     walk(parse(await readFile(file, 'utf8')), (node) => {
       const attr = attributes(node);
       if (node.tagName === 'meta' && attr.name === 'robots') robots = attr.content;
     });
-    if (file === join(output, '404.html')) assert.equal(robots, 'noindex');
+    if (privatePages.has(file)) assert.equal(robots, 'noindex');
     else assert.ok(!robots?.includes('noindex'), `${file}: a content page must remain indexable`);
   }
 });

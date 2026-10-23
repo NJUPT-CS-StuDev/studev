@@ -1,0 +1,20 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import '../styles/platform.css';
+interface Props { title: string; description?: string; active?: string; narrow?: boolean; }
+const {title, description = 'StuDev 表单与信息登记', active = '', narrow = false} = Astro.props;
+---
+<SiteLayout title={`${title} — StuDev`} description={description} active="forms" noindex={true}>
+  <div class:list={['platform', { 'platform-narrow': narrow }]}>
+    <nav class="p-nav" aria-label="表单导航">
+      <div class="p-nav-group">
+        <a href="/forms/" aria-current={active === 'forms' ? 'page' : undefined}>全部表单</a>
+        <a href="/submissions/" aria-current={active === 'submissions' ? 'page' : undefined}>我的提交</a>
+        <a href="/admin/" data-platform-staff hidden aria-current={active === 'admin' ? 'page' : undefined}>管理后台</a>
+      </div>
+    </nav>
+    <noscript><p class="p-message" data-kind="error">此功能需要启用 JavaScript。</p></noscript>
+    <slot />
+  </div>
+  <script>import '../scripts/platform-nav';</script>
+</SiteLayout>
