@@ -1,4 +1,4 @@
-import { api, busy, errorText, message, q, safeNext, type Session } from './platform-client';
+import { api, busy, errorText, initPasswordToggles, message, q, safeNext, type Session } from './platform-client';
 const status = q<HTMLElement>('[data-auth-status]');
 const login = q<HTMLFormElement>('[data-login-form]');
 const register = q<HTMLFormElement>('[data-register-form]');
@@ -96,3 +96,5 @@ if (inviteParam) {
 } else if (tabParam === 'register') {
   showTab('register');
 }
+
+initPasswordToggles();

@@ -27,6 +27,11 @@
 .p-input-suffix-wrap { position:relative; display:flex; align-items:center; }
 .p-input-suffix-wrap input { padding-right:84px; }
 .p-input-suffix { position:absolute; right:12px; color:var(--muted); font-size:.88rem; font-family:var(--font-sans); pointer-events:none; user-select:none; }
+.p-password-wrap { position:relative; display:flex; align-items:center; width:100%; }
+.p-password-wrap input { padding-right:42px; width:100%; }
+.p-password-toggle { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:0; padding:6px; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; transition:color .15s ease, background-color .15s ease; }
+.p-password-toggle:hover { color:var(--ink); background:var(--mark); }
+.p-password-toggle:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
 .p-field input[type=file] { background:var(--kbd)!important; font-size:.82rem!important; }
 .p-field input[type=file]::file-selector-button { border:0; padding:6px 10px; border-radius:4px; background:var(--mark); color:var(--blue); margin-right:12px; cursor:pointer; font:inherit; }
 .p-field input:focus-visible,.p-field textarea:focus-visible,.p-field select:focus-visible,.p-input:focus-visible,.p-button:focus-visible,.p-tab:focus-visible { outline:2px solid var(--blue); outline-offset:3px; }

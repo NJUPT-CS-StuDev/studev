@@ -44,11 +44,17 @@ import '../styles/platform.css';
           <form data-password-form>
             <div class="p-field">
               <label for="current-password">当前密码</label>
-              <input id="current-password" name="currentPassword" type="password" maxlength="256" autocomplete="current-password" required />
+              <div class="p-password-wrap">
+                <input id="current-password" name="currentPassword" type="password" maxlength="256" autocomplete="current-password" required />
+                <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+              </div>
             </div>
             <div class="p-field">
               <label for="new-password">新密码</label>
-              <input id="new-password" name="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位" required />
+              <div class="p-password-wrap">
+                <input id="new-password" name="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位" required />
+                <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+              </div>
             </div>
             <div class="p-field" data-password-totp hidden>
               <label for="password-totp">双重验证码</label>

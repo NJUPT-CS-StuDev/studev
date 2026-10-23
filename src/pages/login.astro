@@ -18,7 +18,10 @@ import '../styles/platform.css';
         </div>
         <div class="p-field">
           <label for="login-password">密码</label>
-          <input id="login-password" name="password" type="password" maxlength="256" autocomplete="current-password" placeholder="请输入密码" required />
+          <div class="p-password-wrap">
+            <input id="login-password" name="password" type="password" maxlength="256" autocomplete="current-password" placeholder="请输入密码" required />
+            <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+          </div>
         </div>
         <div class="p-field" data-login-totp hidden>
           <label for="login-totp">双重验证码</label>
@@ -46,15 +49,24 @@ import '../styles/platform.css';
         </div>
         <div class="p-field">
           <label for="register-password">设置密码</label>
-          <input id="register-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位密码" required />
+          <div class="p-password-wrap">
+            <input id="register-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位密码" required />
+            <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+          </div>
         </div>
         <div class="p-field">
           <label for="register-confirm">确认密码</label>
-          <input id="register-confirm" name="confirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required />
+          <div class="p-password-wrap">
+            <input id="register-confirm" name="confirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required />
+            <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+          </div>
         </div>
         <div class="p-field">
           <label for="register-invite">社团邀请码</label>
-          <input id="register-invite" name="inviteCode" type="text" maxlength="200" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="例如：STUDEV-2026" required />
+          <div class="p-password-wrap">
+            <input id="register-invite" name="inviteCode" type="password" maxlength="200" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="请输入社团邀请码" required />
+            <button class="p-password-toggle" type="button" aria-label="显示邀请码" data-toggle-password></button>
+          </div>
         </div>
         <button class="p-button wide" type="submit">立即注册</button>
       </form>

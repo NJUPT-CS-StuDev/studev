@@ -1,4 +1,4 @@
-import { api, busy, copy, el, errorText, labels, message, q, saveBlob, session, type Session, type User } from './platform-client';
+import { api, busy, copy, el, errorText, initPasswordToggles, labels, message, q, saveBlob, session, type Session, type User } from './platform-client';
 const status = q<HTMLElement>('[data-account-status]');
 let current: Session | null = null;
 let secret = '';
@@ -88,6 +88,7 @@ void (async () => { try {
     current = await session(true);
     if (current) {
         render();
+        initPasswordToggles();
         message(status);
     }
 }
