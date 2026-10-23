@@ -15,8 +15,8 @@ export function safeEqual(left, right) {
 
 // Provisioning helper. Never call this with a password taken from a public request.
 export async function hashPassword(password, salt = randomBytes(16).toString('hex')) {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 256) {
-    throw new Error('Use a password or collection code containing 12–256 characters.');
+  if (typeof password !== 'string' || password.length < 6 || password.length > 256) {
+    throw new Error('Use a password or collection code containing 6–256 characters.');
   }
   const result = await scrypt(password, salt, 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
   return `scrypt$16384$8$1$${salt}$${Buffer.from(result).toString('hex')}`;

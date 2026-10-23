@@ -227,7 +227,12 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const nickname = body.nickname === undefined || body.nickname === '' ? realName : text(body.nickname, '昵称', 40, true);
       await repo.throttle('register-account', qq, 3, 600);
       if (!validPasswordHash(env.PLATFORM_REGISTRATION_HASH)) fail(403, 'REGISTRATION_CLOSED', '注册暂未开放。');
-      if (!await verifyPassword(body.inviteCode, env.PLATFORM_REGISTRATION_HASH)) fail(403, 'INVITE_INVALID', '注册邀请码不正确。');
+      const rawInvite = typeof body.inviteCode === 'string' ? body.inviteCode.trim() : '';
+      let inviteValid = await verifyPassword(rawInvite, env.PLATFORM_REGISTRATION_HASH);
+      if (!inviteValid && rawInvite.toUpperCase() !== rawInvite) {
+        inviteValid = await verifyPassword(rawInvite.toUpperCase(), env.PLATFORM_REGISTRATION_HASH);
+      }
+      if (!inviteValid) fail(403, 'INVITE_INVALID', '注册邀请码不正确。');
       const indexKey = `identity/qq/${qq}.json`;
       let index = await repo.get(indexKey);
       if (index && await repo.latest(userKey(index.id))) fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录或联系所有者。');
