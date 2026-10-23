@@ -1,14 +1,21 @@
 const CACHE_KEY = 'studev_auth_user';
 
-function setAccountLabel(isLoggedIn: boolean) {
-  const link = document.querySelector<HTMLAnchorElement>('[data-global-account-link]');
-  if (!link) return;
-  if (isLoggedIn) {
-    link.textContent = 'Account';
-    link.href = '/account/';
-  } else {
-    link.textContent = 'Login';
-    link.href = '/login/';
+function updateNavLinks(isLoggedIn: boolean) {
+  const accountLink = document.querySelector<HTMLAnchorElement>('[data-global-account-link]');
+  if (accountLink) {
+    if (isLoggedIn) {
+      accountLink.textContent = 'Account';
+      accountLink.href = '/account/';
+    } else {
+      accountLink.textContent = 'Login';
+      accountLink.href = '/login/';
+    }
+  }
+
+  // 访客点击 Forms 直达登录页，已登录直达表单，杜绝中间重定向延迟
+  const formsLink = document.querySelector<HTMLAnchorElement>('.site-nav a[href="/forms/"], .site-nav a[href*="/login/?next="]');
+  if (formsLink) {
+    formsLink.href = isLoggedIn ? '/forms/' : '/login/?next=%2Fforms%2F';
   }
 }
 
@@ -22,7 +29,7 @@ try {
     const cached = JSON.parse(raw);
     if (cached && (cached.nickname || cached.role)) {
       hasCachedUser = true;
-      setAccountLabel(true);
+      updateNavLinks(true);
       // 60秒内不重复向后端发送网络验证请求，避免页面连续切换时的网络开销
       const now = Date.now();
       if (!cached.verifiedAt || now - cached.verifiedAt > 60_000) {
@@ -32,14 +39,18 @@ try {
   }
 } catch {}
 
+if (!hasCachedUser) {
+  updateNavLinks(false);
+}
+
 // 多标签页实时同步登录状态
 window.addEventListener('storage', (e) => {
   if (e.key === CACHE_KEY) {
     try {
       const data = e.newValue ? JSON.parse(e.newValue) : null;
-      setAccountLabel(Boolean(data?.nickname || data?.role));
+      updateNavLinks(Boolean(data?.nickname || data?.role));
     } catch {
-      setAccountLabel(false);
+      updateNavLinks(false);
     }
   }
 });
@@ -64,12 +75,12 @@ if (hasCachedUser && shouldVerify) {
               verifiedAt: Date.now()
             }));
           } catch {}
-          setAccountLabel(true);
+          updateNavLinks(true);
           return;
         }
       }
       try { localStorage.removeItem(CACHE_KEY); } catch {}
-      setAccountLabel(false);
+      updateNavLinks(false);
     } catch {}
   })();
 }

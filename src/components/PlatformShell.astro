@@ -5,6 +5,14 @@ interface Props { title: string; description?: string; active?: string; narrow?:
 const {title, description = 'StuDev 表单与信息登记', active = '', narrow = false} = Astro.props;
 ---
 <SiteLayout title={`${title} — StuDev`} description={description} active="forms" noindex={true}>
+  <script is:inline>
+    // 0ms 瞬间拦截：若客户端本地无登录态，在首帧 DOM 渲染前直接重定向至登录页，杜绝加载延迟
+    try {
+      if (!localStorage.getItem('studev_auth_user')) {
+        location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
+      }
+    } catch {}
+  </script>
   <div class:list={['platform', { 'platform-narrow': narrow }]}>
     <nav class="p-nav" aria-label="表单导航">
       <div class="p-nav-group">

@@ -1,4 +1,4 @@
-import { api, el, empty, errorText, formatTime, link, message, pill, q, session, type FormDefinition } from './platform-client';
+import { api, el, empty, errorText, formatTime, link, message, pill, q, type FormDefinition } from './platform-client';
 
 const status = q<HTMLElement>('[data-forms-status]');
 let forms: FormDefinition[] = [];
@@ -37,12 +37,11 @@ q('[data-forms-search]').addEventListener('input', render);
 // 0ms SWR 优先从客户端本地缓存展示表单，消灭初次白屏骨架等待
 try {
   const cached = localStorage.getItem(FORMS_CACHE_KEY);
-  if (cached) {
+  if (cached !== null) {
     const parsed = JSON.parse(cached) as FormDefinition[];
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       forms = parsed;
       render();
-      message(status);
     }
   }
 } catch {
@@ -51,18 +50,19 @@ try {
 
 void (async () => {
   try {
-    const [currentSession, data] = await Promise.all([
-      session(true),
-      api<{ items: FormDefinition[] }>('/forms'),
-    ]);
-    if (!currentSession) return;
+    const data = await api<{ items: FormDefinition[] }>('/forms');
     forms = data.items;
     render();
-    message(status);
     try {
       localStorage.setItem(FORMS_CACHE_KEY, JSON.stringify(forms));
     } catch {}
   } catch (e) {
+    const err = e as { status?: number };
+    if (err?.status === 401) {
+      try { localStorage.removeItem('studev_auth_user'); } catch {}
+      location.replace(`/login/?next=${encodeURIComponent(location.pathname + location.search)}`);
+      return;
+    }
     message(status, errorText(e), 'error');
   }
 })();

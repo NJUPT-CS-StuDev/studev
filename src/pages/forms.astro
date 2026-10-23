@@ -3,7 +3,7 @@ import PlatformShell from '../components/PlatformShell.astro';
 ---
 <PlatformShell title="表单" active="forms">
   <div class="p-toolbar"><input class="p-input" id="form-search" type="search" placeholder="搜索表单" data-forms-search /><span class="p-count" data-forms-count></span></div>
-  <div class="p-message" role="status" aria-live="polite" data-forms-status>正在加载……</div>
+  <div class="p-message" role="status" aria-live="polite" data-forms-status></div>
   <div class="p-list" data-forms-list></div>
   <script>import '../scripts/platform-forms';</script>
 </PlatformShell>

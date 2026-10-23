@@ -75,12 +75,11 @@ q<HTMLButtonElement>('[data-submission-close]').addEventListener('click', () => 
 // 0ms SWR 优先从本地渲染
 try {
   const cached = localStorage.getItem(CACHE_KEY);
-  if (cached) {
+  if (cached !== null) {
     const parsed = JSON.parse(cached);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       items = parsed;
       render();
-      message(status);
     }
   }
 } catch {}
@@ -92,7 +91,6 @@ void (async () => {
     const data = await api<{ items: Submission[] }>('/me/submissions');
     items = data.items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     render();
-    message(status);
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(items));
     } catch {}
