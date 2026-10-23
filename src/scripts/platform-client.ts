@@ -336,7 +336,7 @@ export function readAnswers(root: ParentNode, fields: Field[]): Record<string, u
     }
 } return values; }
 export function renderSubmission(root: HTMLElement, submission: Submission, form: FormDefinition, onError: (e: unknown) => void, receipt?: string) { const meta = el('dl', undefined, 'p-meta'); for (const [k, v] of [['回执编号', submission.id], ['填写者', submission.submitterName || '—'], ['提交时间', formatTime(submission.createdAt)], ['状态', labels[submission.status] || submission.status]])
-    meta.append(el('dt', k), el('dd', v)); if(submission.submitterIdentity){meta.append(el('dt','提交时学号'),el('dd',submission.submitterIdentity.studentId),el('dt','提交时姓名'),el('dd',submission.submitterIdentity.realName),el('dt','提交时核验'),el('dd',submission.submitterIdentity.identityVerified?'已核验':'未核验'));} root.append(meta, el('hr', undefined, 'p-divider')); for (const field of form.fields) {
+    meta.append(el('dt', k), el('dd', v)); if(submission.submitterIdentity){meta.append(el('dt','提交时学号'),el('dd',submission.submitterIdentity.studentId),el('dt','提交时姓名'),el('dd',submission.submitterIdentity.realName));} root.append(meta, el('hr', undefined, 'p-divider')); for (const field of form.fields) {
     if (field.type === 'file')
         continue;
     const v = submission.answers[field.id];

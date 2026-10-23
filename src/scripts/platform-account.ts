@@ -10,8 +10,7 @@ function render() {
     const info=q('[data-account-info]');info.replaceChildren();
     for(const [key,value]of [
         ['学号',user.studentId||'待补充'],['姓名',user.realName||'待补充'],
-        ['身份核验',user.identityVerified?'已通过社团核验':'待社团核验'],['QQ 号',user.qq],
-        ['联系邮箱',user.email||`${user.qq}@qq.com`],
+        ['QQ 号',user.qq],['联系邮箱',user.email||`${user.qq}@qq.com`],
         ['角色',labels[user.role]],['账号状态',labels[user.status]],
     ])info.append(el('dt',key),el('dd',value));
     q<HTMLInputElement>('#account-nickname').value=user.nickname;

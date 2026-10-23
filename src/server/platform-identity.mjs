@@ -362,10 +362,19 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const keys = (await repo.list('audit/')).slice(0, 500);
       return response({ items: (await Promise.all(keys.map((key) => repo.get(key)))).filter(Boolean) });
     }
-    const management = route.match(/^\/admin\/users\/([a-f0-9-]{36})(\/reset-password|\/reset-totp)?$/);
-    if (method === 'POST' && management) {
+    const management = route.match(/^\/admin\/users\/([a-f0-9-]{36})(\/reset-password|\/reset-totp|\/delete)?$/);
+    if (['POST', 'DELETE'].includes(method) && management) {
       const auth = await authenticate(request, { owner: true, csrf: true });
       const user = await loadUser(management[1]);
+      if (management[2] === '/delete' || method === 'DELETE') {
+        if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
+        await repo.remove(`identity/qq/${user.qq}.json`);
+        if (user.studentId) await repo.remove(studentKey(user.studentId));
+        const userKeys = await repo.list(`identity/users/${user.id}`);
+        for (const k of userKeys) await repo.remove(k);
+        await repo.audit(auth.user.id, 'identity.user.deleted', user.id, { studentId: user.studentId, qq: user.qq });
+        return response({ ok: true });
+      }
       const body = await readJson(request, 8192);
       if (management[2] === '/reset-password') {
         const passwordHash = await hashPassword(validatePassword(body.password));

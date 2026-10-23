@@ -273,9 +273,9 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
             const version = (labels.get(f.label) || 0) + 1; labels.set(f.label, version);
             return count > 1 ? `${f.label}（版本 ${version}）` : f.label;
           });
-          const rows = [['提交编号', '提交者', '学号', '姓名', '身份核验状态', '提交时间', '状态', '审核说明', ...headers], ...items.map((row, index) => {
+          const rows = [['提交编号', '提交者', '学号', '姓名', '提交时间', '状态', '审核说明', ...headers], ...items.map((row, index) => {
             const ownSchema = new Set(records[index].schemaSnapshot.fields.map(signature));
-            return [row.id, row.submitterName, row.submitterIdentity?.studentId || '', row.submitterIdentity?.realName || '', row.submitterIdentity ? (row.submitterIdentity.identityVerified ? '已核验' : '未核验（自填）') : '', row.createdAt, row.status, row.review?.comment || '', ...schema.map(([key, f]) => !ownSchema.has(key) ? '' : f.type === 'file' ? row.files.filter((file) => file.fieldId === f.id).map((file) => file.name).join('；') : row.answers[f.id])];
+            return [row.id, row.submitterName, row.submitterIdentity?.studentId || '', row.submitterIdentity?.realName || '', row.createdAt, row.status, row.review?.comment || '', ...schema.map(([key, f]) => !ownSchema.has(key) ? '' : f.type === 'file' ? row.files.filter((file) => file.fieldId === f.id).map((file) => file.name).join('；') : row.answers[f.id])];
           })];
           await repo.audit(session.user, 'form.export', form.id, { count: items.length });
           return new Response(`\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="studev-${form.id}.csv"`, 'Cache-Control': 'no-store, private', 'X-Content-Type-Options': 'nosniff' } });

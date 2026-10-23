@@ -217,13 +217,13 @@ test('identity CSV exports submission-time values and leaves historical identity
   Object.assign(f.users.member, { studentId: '202600000099', realName: '测试更正姓名', identityVerified: true });
   await f.repo.append(`identity/users/${member.id}`, f.users.member, 0);
   const csv = await (await f.request(`/admin/forms/${form.id}/export`, { user: 'owner' })).text();
-  assert.match(csv, /"学号","姓名","身份核验状态"/);
+  assert.match(csv, /"学号","姓名"/);
   const rows = csv.split('\r\n');
   const currentRow = rows.find((row) => row.includes(current.submission.id));
   const legacyRow = rows.find((row) => row.includes(historical.submission.id));
   assert.ok(currentRow); assert.ok(legacyRow);
-  assert.match(currentRow, /"202600000001","测试成员甲","未核验（自填）"/);
-  assert.match(legacyRow, /"测试旧昵称","","",""/);
+  assert.match(currentRow, /"202600000001","测试成员甲"/);
+  assert.match(legacyRow, /"测试旧昵称","",""/);
   assert.equal(csv.includes('202600000099'), false); assert.equal(csv.includes('测试更正姓名'), false);
   const legacyDetail = await (await f.request(`/submissions/${historical.submission.id}`, { user: 'member' })).json();
   assert.equal(legacyDetail.submission.submitterIdentity, undefined); assert.equal(legacyDetail.submission.submitterName, '测试旧昵称');
