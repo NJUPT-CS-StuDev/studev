@@ -9,6 +9,13 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 const term = entry.data.term || entry.id;
+const skeletonGroups = [
+  { name: '主席团与统筹', count: 4, featured: true },
+  { name: '运营支持部', count: 3, featured: false },
+  { name: '易班建设部', count: 3, featured: false },
+  { name: '媒体宣传部', count: 3, featured: false },
+  { name: '心理工作部', count: 4, featured: false },
+];
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="history">
   <article class="term-page">
@@ -21,9 +28,24 @@ const term = entry.data.term || entry.id;
     </header>
 
     <section class="term-section" id="people" aria-labelledby="people-title" data-roster-term={term}>
-      <div class="term-section-heading"><span class="section-number">01</span><h2 id="people-title">成员</h2><span class="section-aside" data-roster-count>加载中…</span></div>
+      <div class="term-section-heading"><span class="section-number">01</span><h2 id="people-title">成员</h2><span class="section-aside" data-roster-count>17 人</span></div>
       <div data-roster-container>
-        <p style="padding: 28px 0; color: var(--muted); font-size: .9rem;">正在同步本届成员名册…</p>
+        {skeletonGroups.map((group, gIdx) => (
+          <section class="member-group" aria-labelledby={`skeleton-group-${gIdx}`}>
+            <h3 id={`skeleton-group-${gIdx}`}>{group.name}</h3>
+            <div class="member-grid">
+              {Array.from({ length: group.count }).map(() => (
+                <article class:list={['member', 'member-skeleton', { 'member-featured': group.featured }]} aria-hidden="true">
+                  <div class="member-avatar skeleton-circle"></div>
+                  <div class="member-copy">
+                    <div class="skeleton-line skeleton-name"></div>
+                    <div class="skeleton-line skeleton-sig"></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </section>
 

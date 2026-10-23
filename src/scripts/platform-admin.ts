@@ -316,6 +316,7 @@ function renderUsers() {
                 revision: user.revision,
                 ...nextProfile,
             });
+            try { localStorage.removeItem('studev_roster_2026-2027'); } catch {}
             await refreshUsers();
             message(status, '成员档案已更新并同步至公开历届名录。', 'success');
         }));
@@ -399,6 +400,7 @@ q<HTMLButtonElement>('[data-users-sync-roster]').addEventListener('click', (e) =
     void guard(async () => {
         await busy(btn, async () => {
             await api('/admin/roster/sync', { term: '2026-2027' });
+            try { localStorage.removeItem('studev_roster_2026-2027'); } catch {}
             await refreshUsers();
             message(status, '已将 2026—2027 届 17 位在编成员同步至统一用户表并更新公开档案快照。', 'success');
         });

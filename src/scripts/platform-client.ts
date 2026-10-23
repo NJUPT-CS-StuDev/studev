@@ -167,7 +167,8 @@ async function loadSession(): Promise<Session | null> {
                 try {
                     localStorage.setItem('studev_auth_user', JSON.stringify({
                         nickname: currentSession.user.nickname,
-                        role: currentSession.user.role || 'member'
+                        role: currentSession.user.role || 'member',
+                        verifiedAt: Date.now()
                     }));
                 } catch {}
             }

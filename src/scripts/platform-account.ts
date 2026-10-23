@@ -7,6 +7,8 @@ let recoveryCodes: string[] = [];
 function renderIdCard(user: User) {
     const card = q('[data-account-id-card]');
     card.replaceChildren();
+
+    const top = el('div', undefined, 'p-id-top');
     const img = el('img', undefined, 'p-id-avatar');
     img.src = avatarUrl(user);
     img.alt = `${user.realName || user.nickname}的头像`;
@@ -14,7 +16,7 @@ function renderIdCard(user: User) {
     img.height = 72;
     img.referrerPolicy = 'no-referrer';
 
-    const body = el('div', undefined, 'p-id-body');
+    const titleWrap = el('div', undefined, 'p-id-title-wrap');
     const head = el('div', undefined, 'p-id-head');
     head.append(el('h2', user.realName || user.nickname), pill(user.role));
     if (user.identityVerified) {
@@ -22,15 +24,19 @@ function renderIdCard(user: User) {
         verified.dataset.state = 'active';
         head.append(verified);
     }
-    body.append(head);
+    titleWrap.append(head);
+    if (user.studentId) {
+        titleWrap.append(el('p', `学号 ${user.studentId}${user.nickname && user.nickname !== user.realName ? ` · 昵称 ${user.nickname}` : ''}`, 'p-id-sub'));
+    }
+    top.append(img, titleWrap);
 
-    const parts: string[] = [];
-    if (user.studentId) parts.push(`学号 ${user.studentId}`);
-    if (user.term) parts.push(`${user.term} 届`);
-    if (user.department) parts.push(user.department);
-    if (user.title) parts.push(user.title);
-    if (parts.length) {
-        body.append(el('p', parts.join(' · '), 'p-id-sub'));
+    const body = el('div', undefined, 'p-id-body');
+    const orgParts: string[] = [];
+    if (user.term) orgParts.push(`${user.term} 届`);
+    if (user.department) orgParts.push(user.department);
+    if (user.title) orgParts.push(user.title);
+    if (orgParts.length) {
+        body.append(el('p', orgParts.join(' · '), 'p-id-org'));
     }
 
     if (user.signature) {
@@ -45,7 +51,7 @@ function renderIdCard(user: User) {
         body.append(archiveLink);
     }
 
-    card.append(img, body);
+    card.append(top, body);
 }
 
 function render() {
@@ -121,6 +127,7 @@ q<HTMLFormElement>('[data-profile-form]').addEventListener('submit', async (e) =
                 revision: current!.user.revision,
             });
             current!.user = result.user;
+            try { localStorage.removeItem(`studev_roster_${result.user.term || '2026-2027'}`); } catch {}
             current = await session(true);
             render();
             message(status, '个人资料与签名已保存，并已同步至历届档案。', 'success');

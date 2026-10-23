@@ -1,3 +1,5 @@
+export const SUPPORTED_ROSTER_TERMS = new Set(['2026-2027']);
+
 export const DEPARTMENTS_2026_2027 = [
   '主席团与统筹',
   '运营支持部',

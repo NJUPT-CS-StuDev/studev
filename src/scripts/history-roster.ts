@@ -28,7 +28,8 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
   img.alt = `${person.name}的头像`;
   img.width = featured ? 68 : 58;
   img.height = featured ? 68 : 58;
-  img.loading = 'lazy';
+  img.loading = featured ? 'eager' : 'lazy';
+  img.decoding = 'async';
   img.referrerPolicy = 'no-referrer';
   article.append(img);
 
@@ -57,6 +58,33 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
   return article;
 }
 
+function renderRoster(container: HTMLElement, countNode: HTMLElement | null, data: RosterSnapshot) {
+  if (countNode) {
+    countNode.textContent = `${data.totalCount} 人`;
+  }
+  container.replaceChildren();
+  data.groups.forEach((group, index) => {
+    const groupSec = document.createElement('section');
+    groupSec.className = 'member-group';
+    const headingId = `group-${index}`;
+    groupSec.setAttribute('aria-labelledby', headingId);
+
+    const h3 = document.createElement('h3');
+    h3.id = headingId;
+    h3.textContent = group.name;
+    groupSec.append(h3);
+
+    const grid = document.createElement('div');
+    grid.className = 'member-grid';
+    const isFeatured = index === 0 || group.name === '主席团与统筹';
+    for (const person of group.people) {
+      grid.append(createMemberNode(person, Boolean(person.featured ?? isFeatured)));
+    }
+    groupSec.append(grid);
+    container.append(groupSec);
+  });
+}
+
 async function initRoster() {
   const section = document.querySelector<HTMLElement>('[data-roster-term]');
   const container = document.querySelector<HTMLElement>('[data-roster-container]');
@@ -64,42 +92,49 @@ async function initRoster() {
   if (!section || !container) return;
 
   const term = section.dataset.rosterTerm || '2026-2027';
+  const cacheKey = `studev_roster_${term}`;
+  let cachedRaw = '';
+
+  // 0ms instant hydration from local cache (SWR)
+  try {
+    const saved = localStorage.getItem(cacheKey);
+    if (saved) {
+      const parsed = JSON.parse(saved) as RosterSnapshot;
+      if (parsed && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
+        cachedRaw = JSON.stringify(parsed.groups);
+        renderRoster(container, countNode, parsed);
+      }
+    }
+  } catch {}
+
   try {
     const res = await fetch(`/api/platform/public/roster?term=${encodeURIComponent(term)}`, {
       headers: { Accept: 'application/json' },
-      cache: 'no-store',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as RosterSnapshot;
-
-    if (countNode) {
-      countNode.textContent = `${data.totalCount} 人`;
-    }
-
-    container.replaceChildren();
-    data.groups.forEach((group, index) => {
-      const groupSec = document.createElement('section');
-      groupSec.className = 'member-group';
-      const headingId = `group-${index}`;
-      groupSec.setAttribute('aria-labelledby', headingId);
-
-      const h3 = document.createElement('h3');
-      h3.id = headingId;
-      h3.textContent = group.name;
-      groupSec.append(h3);
-
-      const grid = document.createElement('div');
-      grid.className = 'member-grid';
-      const isFeatured = index === 0 || group.name === '主席团与统筹';
-      for (const person of group.people) {
-        grid.append(createMemberNode(person, Boolean(person.featured ?? isFeatured)));
+    const freshRaw = JSON.stringify(data.groups);
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch {}
+    if (freshRaw !== cachedRaw) {
+      renderRoster(container, countNode, data);
+      if (location.hash && location.hash !== '#people') {
+        const target = document.querySelector(location.hash);
+        target?.scrollIntoView();
       }
-      groupSec.append(grid);
-      container.append(groupSec);
-    });
+    }
   } catch {
-    if (countNode) countNode.textContent = '名册暂不可用';
-    container.innerHTML = '<p style="padding: 24px 0; color: var(--muted); font-size: .9rem;">名册加载未完成，请稍后刷新页面重试。</p>';
+    if (!cachedRaw) {
+      if (countNode) countNode.textContent = '名册暂不可用';
+      container.replaceChildren();
+      const err = document.createElement('p');
+      err.style.padding = '24px 0';
+      err.style.color = 'var(--muted)';
+      err.style.fontSize = '.9rem';
+      err.textContent = '名册加载未完成，请稍后刷新页面重试。';
+      container.append(err);
+    }
   }
 }
 

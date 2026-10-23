@@ -506,6 +506,8 @@ test('invalid binding fields and already-occupied student IDs leave no new inten
 
 test('unified roster SSOT seeds pending members, claims pending records on registration, and updates public projection on profile signature edit', async () => {
   const f = fixture(), owner = await f.owner();
+  await rejects(f.call('/public/roster?term=2099-2100', 'GET'), 'ROSTER_NOT_FOUND', 404);
+  assert.equal(await f.repo.get('roster/2099-2100.json'), null);
   const roster = await f.call('/public/roster?term=2026-2027', 'GET');
   assert.equal(roster.term, '2026-2027');
   assert.equal(roster.totalCount, 17);

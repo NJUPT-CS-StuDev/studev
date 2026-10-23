@@ -3,7 +3,7 @@ import { digest, hashPassword, mac, safeEqual, validPasswordHash, verifyPassword
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './platform-totp.mjs';
-import { ROSTER_SEED_2026_2027, buildRosterSnapshot, qqAvatarUrl } from './platform-roster.mjs';
+import { ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, qqAvatarUrl } from './platform-roster.mjs';
 
 const API = '/api/platform';
 const MAX_SESSION_SECONDS = 7200;
@@ -336,14 +336,16 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const url = new URL(request.url);
       const term = (url.searchParams.get('term') || '2026-2027').trim();
       if (!/^[0-9]{4}-[0-9]{4}$/.test(term)) fail(400, 'INVALID_TERM', '届别格式无效。');
+      if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
       if (!snapshot) snapshot = await seedAndSyncRoster(term);
-      return response(snapshot);
+      return response(snapshot, 200, { 'Cache-Control': 'public, max-age=10, stale-while-revalidate=60' });
     }
     if (method === 'POST' && route === '/admin/roster/sync') {
       const auth = await authenticate(request, { owner: true, csrf: true });
       const body = await readJson(request, 8192);
       const term = typeof body.term === 'string' && /^[0-9]{4}-[0-9]{4}$/.test(body.term) ? body.term : '2026-2027';
+      if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(400, 'INVALID_TERM', '不支持该届别名册同步。');
       const snapshot = await seedAndSyncRoster(term);
       await repo.audit(auth.user.id, 'identity.roster.synced', term, { totalCount: snapshot.totalCount, activeCount: snapshot.activeCount });
       return response({ snapshot });

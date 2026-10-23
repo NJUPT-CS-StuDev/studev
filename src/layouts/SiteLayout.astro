@@ -36,6 +36,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {Astro.url.pathname === '/' && <meta name="msvalidate.01" content="E44C2F6A09F0A678DED98C8374E549A1" />}
     {noindex && <meta name="robots" content="noindex" />}
     <link rel="icon" type="image/png" href={favicon.src} />
+    {(active === 'history' || active === 'account' || active === 'forms') && <link rel="preconnect" href="https://q1.qlogo.cn" crossorigin />}
     <link rel="canonical" href={canonical} />
     <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
     <title>{title}</title>

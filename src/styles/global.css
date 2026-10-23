@@ -509,6 +509,10 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .member-role { margin: 4px 0 0; color: var(--muted); font-size: .79rem; line-height: 1.45; }
 .member-signature { margin: 10px 0 0; color: var(--signature); font-size: .88rem; line-height: 1.55; overflow-wrap: anywhere; }
 .member-role + .member-signature { margin-top: 7px; }
+.skeleton-circle { background: var(--kbd); border-color: var(--line); }
+.skeleton-line { border-radius: 4px; background: var(--kbd); }
+.skeleton-name { width: 84px; height: 18px; margin-top: 4px; }
+.skeleton-sig { width: 180px; max-width: 100%; height: 14px; margin-top: 12px; }
 
 .event-timeline { position: relative; list-style: none; margin: 48px 0 0; padding: 0; }
 .event-timeline::before { content: ""; position: absolute; top: 10px; bottom: 38px; left: 151px; width: 1px; background: var(--line); }

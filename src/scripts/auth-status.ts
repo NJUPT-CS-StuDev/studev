@@ -55,9 +55,10 @@ window.addEventListener('storage', (e) => {
   }
 });
 
-// 只有处于登录缓存且超过静默缓存周期时，才在后台静默校准会话；
-// 未登录普通访客绝对不触发无意义的 /api/platform/auth/session 请求，消灭 401 网络瀑布
-if (hasCachedUser && shouldVerify) {
+// 只有处于登录缓存且超过静默缓存周期、且不在由 platform-client 接管会话的平台功能页时，才在后台静默校准会话；
+// 未登录普通访客绝对不触发无意义的 /api/platform/auth/session 请求，消灭 401 网络瀑布與重复请求
+const isPlatformManagedPage = /^\/(?:account|admin|forms|fill|submissions)(?:\/|$)/.test(location.pathname);
+if (hasCachedUser && shouldVerify && !isPlatformManagedPage) {
   void (async () => {
     try {
       const res = await fetch('/api/platform/auth/session', {
