@@ -49,23 +49,22 @@ async function locateData(): Promise<{ dir: string; version: string }> {
         const index = await read<Index>(join(local, 'index.json'));
         return { dir: local, version: `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}` };
     }
-    const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-    const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const release = await (await fetch(`https://api.github.com/repos/${campusConfig.dataRepository}/releases/latest`, { headers })).json() as
-        { tag_name: string; assets: { name: string; browser_download_url: string }[] };
-    const asset = release.assets?.find(item => item.name === 'campus-data.tar.gz');
-    if (!asset) throw new Error(`no campus-data.tar.gz in the latest ${campusConfig.dataRepository} release`);
-    const dir = join(root, '.data', release.tag_name);
+    // The latest-release download link redirects to the tagged asset; reading the
+    // redirect names the version without calling the (rate-limited) API.
+    const latest = `https://github.com/${campusConfig.dataRepository}/releases/latest/download/campus-data.tar.gz`;
+    const location = (await fetch(latest, { redirect: 'manual' })).headers.get('location') ?? '';
+    const version = /\/releases\/download\/([^/]+)\//.exec(location)?.[1];
+    if (!version) throw new Error(`no campus-data.tar.gz in the latest ${campusConfig.dataRepository} release`);
+    const dir = join(root, '.data', version);
     if (!existsSync(join(dir, 'index.json'))) {
         await mkdir(dir, { recursive: true });
-        const archive = join(root, '.data', `${release.tag_name}.tar.gz`);
-        await writeFile(archive, Buffer.from(await (await fetch(asset.browser_download_url)).arrayBuffer()));
+        const archive = join(root, '.data', `${version}.tar.gz`);
+        await writeFile(archive, Buffer.from(await (await fetch(new URL(location, latest))).arrayBuffer()));
         const result = spawnSync('tar', ['-xzf', archive, '-C', dir], { stdio: 'inherit' });
         if (result.status !== 0) throw new Error('could not extract the campus-data archive');
         await rm(archive);
     }
-    return { dir, version: release.tag_name };
+    return { dir, version };
 }
 
 // ---- search -----------------------------------------------------------------
