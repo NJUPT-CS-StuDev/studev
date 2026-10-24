@@ -27,7 +27,7 @@ const localFile = (url, document) => {
 
 test('every built page has valid local links and complete rendering', async () => {
   const files = await pages(output);
-  assert.equal(files.length, 34);
+  assert.equal(files.length, 36);
   let diagrams = 0;
   let captions = 0;
   for (const file of files) {
@@ -155,7 +155,7 @@ test('sitemap lists every unique indexable canonical page on the formal domain',
 
   const sitemap = await readFile(join(output, 'sitemap-0.xml'), 'utf8');
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.equal(urls.length, 25);
+  assert.equal(urls.length, 27);
   assert.equal(new Set(urls).size, urls.length, 'sitemap must not contain duplicate URLs');
   assert.deepEqual([...urls].sort(), [...expected].sort(), 'sitemap must match indexable canonical URLs');
   for (const value of urls) {

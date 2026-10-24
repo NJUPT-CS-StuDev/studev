@@ -1,7 +1,7 @@
 ---
 title: "五星联动与赛博新秩序：njupt-search 及其背后的南邮开源宇宙"
 shortTitle: "njupt-search 开源宇宙"
-description: "从教务解析、网站图谱到 3D 地图与零后端 Rust 引擎：一个工科青年为整座大学构筑的数字化公共基建。"
+description: "从教务数据解析、网站图谱到 3D 地图与零后端 Rust 引擎：为整座大学构筑的数字化公共基建。"
 pubDate: "2026-10-12"
 tags: ["开源与代码", "校园基建", "Rust与离线搜索"]
 order: 2
@@ -22,9 +22,9 @@ demo: "https://njupt.hicancan.top"
 
 这些散落在不同系统、不同服务器和不同格式里的碎片，构成了大学里无处不在的“信息摩擦力”。
 
-大多数人选择了默许与忍受，把这当成大学生活不得不支付的摩擦成本。但对于一个骨子里流淌着黑客精神的工科学生而言，**混乱即是对工程秩序的挑衅，而碎裂的信息孤岛，本身就是等待被攻克的系统性 bug**。
+大多数人选择了默许与忍受，把这当成大学生活不得不支付的摩擦成本。但对于热爱工程与实践的学生开发者而言，**碎裂的信息孤岛，本身就是等待被改善的系统痛点**。
 
-这就是 `njupt-search` 以及整个 `njupt-suite` 开源矩阵诞生的原点。
+这就是 `njupt-search` 及其开源生态诞生的原点。
 
 ---
 
@@ -68,7 +68,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    JWXT["njupt-jwxt<br/>(教务数据协议逆向)"] -->|课表 / 考场 / 教学占用| SEARCH["njupt-search<br/>(Rust Wasm 零后端检索汇聚)"]
+    JWXT["njupt-jwxt<br/>(教务数据解析与清洗)"] -->|课表 / 考场 / 教学占用| SEARCH["njupt-search<br/>(Rust Wasm 零后端检索汇聚)"]
     SITE["njupt-site-graph<br/>(全校爬虫与图谱清洗)"] -->|SitePackage 统一语料快照| SEARCH
     MAP["njupt-map<br/>(QGIS地理 + Blender 3D空间)"] -->|129栋建筑实体 / 教室拓扑| SEARCH
     
@@ -82,15 +82,15 @@ flowchart LR
 | 矩阵模块 | 核心技术栈 | 职责与数据流向 | 开源仓库与在线入口 |
 | :--- | :--- | :--- | :--- |
 | **`njupt-search`** | Rust (Wasm) + React + Kotlin | 核心零后端检索枢纽、内容寻址二进制切片分发、全平台搜索与空间拓扑呈现 | [github.com/hicancan/njupt-search ↗](https://github.com/hicancan/njupt-search)<br/>🌐 **[在线使用 njupt.hicancan.top ↗](https://njupt.hicancan.top)** |
-| **`njupt-jwxt`** | Python / HTTP 逆向工程 | 突破教务系统协议壁垒，自动化清洗班级课表、期末考场、教室占用并导出 ICS 日历 | [github.com/hicancan/njupt-jwxt ↗](https://github.com/hicancan/njupt-jwxt) |
+| **`njupt-jwxt`** | Python / 数据接口解析 | 规范化解析教务数据，自动化清洗班级课表、期末考场、教室占用并导出 ICS 日历 | [github.com/hicancan/njupt-jwxt ↗](https://github.com/hicancan/njupt-jwxt) |
 | **`njupt-site-graph`** | Rust / Node.js 爬虫引擎 | 遍历抓取全校通知、深入解构 Office/PDF 附件深层文本，并将学生社区手册图谱化 | [github.com/hicancan/njupt-site-graph ↗](https://github.com/hicancan/njupt-site-graph)<br/>[爬虫底层 static-site-graph ↗](https://github.com/hicancan/static-site-graph) |
 | **`njupt-map`** | QGIS 测绘 + Blender 3D | 仙林校区 129 栋建筑数字孪生、564 个教室拓扑空间建模，完成地理与教学物理映射 | [github.com/hicancan/njupt-map ↗](https://github.com/hicancan/njupt-map) |
 | **`njupt-net`** | Rust / CLI 命令行 | 极简命令行校园网认证，脱离臃肿浏览器页面，提供网络状态心跳探测与断线自愈 | [github.com/hicancan/njupt-net ↗](https://github.com/hicancan/njupt-net) |
 
 ---
 
-### 1. [`njupt-jwxt`](https://github.com/hicancan/njupt-jwxt)：击穿教务系统的协议壁垒
-负责深入南邮教务系统底层的响应流，将晦涩的 HTML 表格和隐藏接口清洗为强类型的结构化数据。全校班级课表、期末考试编排以及课程教室占用，全部在此被自动化解构，并支持一键导出标准 ICS 日历，把混乱的教务日程直接装进系统级日历提醒。
+### 1. [`njupt-jwxt`](https://github.com/hicancan/njupt-jwxt)：教务数据的高效清洗与日历同步
+负责解析教务网页的公开课表与考场页面，将多层嵌套的 HTML 表格规范化清洗为强类型的结构化数据。全校班级课表、期末考试编排以及课程教室占用，全部支持一键导出为标准 ICS 日历格式，方便同学直接导入手机或电脑系统日历进行统一日程管理。
 
 ### 2. [`njupt-site-graph`](https://github.com/hicancan/njupt-site-graph) 与 [`static-site-graph`](https://github.com/hicancan/static-site-graph)：校园知识的统一图谱
 不仅抓取学校主站与各学院通知，更自动深入解析 Word、Excel 与 PDF 附件的深层文本。同时，它将南邮学生社群历年积淀的《南邮生存手册》（`NJUPT-Survival-Guide`）与《南邮历年资料》（`NJUPT-General-Free-Exams`）无缝编织进索引边界，真正做到了“校方公文、学生经验、学业资料”的三位一体。
