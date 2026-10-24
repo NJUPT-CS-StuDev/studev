@@ -148,7 +148,7 @@ function openMemberCardModal(user: User) {
   if (user.term && user.department) {
     const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
     const archiveLink = el('a', '在历届档案中定位名片 ↗', 'p-button secondary small');
-    archiveLink.href = `/history/${encodeURIComponent(user.term)}/${anchor}`;
+    archiveLink.href = user.term === '2026-2027' ? `/history/${anchor}` : `/history/${encodeURIComponent(user.term)}/${anchor}`;
     quickActions.append(archiveLink);
   }
   body.append(quickActions);
@@ -205,7 +205,7 @@ function renderIdCard(user: User) {
   if (user.term && user.department) {
     const archiveLink = el('a', '在历届档案中查看我的名片 ↗', 'p-link');
     const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
-    archiveLink.href = `/history/${encodeURIComponent(user.term)}/${anchor}`;
+    archiveLink.href = user.term === '2026-2027' ? `/history/${anchor}` : `/history/${encodeURIComponent(user.term)}/${anchor}`;
     linksRow.append(archiveLink);
   }
   if (user.qq) {

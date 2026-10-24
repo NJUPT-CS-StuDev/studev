@@ -41,7 +41,7 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
     img.style.cursor = 'zoom-in';
     img.title = '点击查看 1080×1080 原图头像';
     img.addEventListener('click', () => {
-      window.open(`https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=0`, '_blank', 'noopener');
+      window.open(`https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=0`, '_blank', 'noopener,noreferrer');
     });
     let step = 0;
     img.addEventListener('error', () => {
@@ -56,11 +56,12 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
       }
     });
   } else {
-    img.src = person.avatarUrl || fallbackAvatarSvg(person.name);
+    const safeUrl = person.avatarUrl && /^https?:\/\//i.test(person.avatarUrl) ? person.avatarUrl : '';
+    img.src = safeUrl || fallbackAvatarSvg(person.name);
   }
   img.alt = `${person.name}的头像`;
-  img.width = featured ? 68 : 58;
-  img.height = featured ? 68 : 58;
+  img.width = featured ? 52 : 48;
+  img.height = featured ? 52 : 48;
   img.loading = featured ? 'eager' : 'lazy';
   img.decoding = 'async';
   img.referrerPolicy = 'no-referrer';
@@ -97,9 +98,17 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
   return article;
 }
 
-function renderRoster(container: HTMLElement, countNode: HTMLElement | null, data: RosterSnapshot) {
+function renderRoster(
+  container: HTMLElement,
+  countNode: HTMLElement | null,
+  tabCountNode: HTMLElement | null,
+  data: RosterSnapshot
+) {
   if (countNode) {
     countNode.textContent = `${data.totalCount} 人`;
+  }
+  if (tabCountNode) {
+    tabCountNode.textContent = String(data.totalCount);
   }
   container.replaceChildren();
   data.groups.forEach((group, index) => {
@@ -108,10 +117,20 @@ function renderRoster(container: HTMLElement, countNode: HTMLElement | null, dat
     const headingId = `group-${index}`;
     groupSec.setAttribute('aria-labelledby', headingId);
 
+    const headRow = document.createElement('div');
+    headRow.className = 'member-group-header';
+
     const h3 = document.createElement('h3');
     h3.id = headingId;
     h3.textContent = group.name;
-    groupSec.append(h3);
+    headRow.append(h3);
+
+    const badge = document.createElement('span');
+    badge.className = 'member-group-count';
+    badge.textContent = String(group.people.length);
+    headRow.append(badge);
+
+    groupSec.append(headRow);
 
     const grid = document.createElement('div');
     grid.className = 'member-grid';
@@ -124,10 +143,42 @@ function renderRoster(container: HTMLElement, countNode: HTMLElement | null, dat
   });
 }
 
+function setActiveTab(tab: 'events' | 'people') {
+  const viewRoot = document.querySelector<HTMLElement>('[data-history-view]');
+  if (!viewRoot) return;
+  viewRoot.dataset.activeTab = tab;
+  const triggers = viewRoot.querySelectorAll<HTMLButtonElement>('[data-tab-trigger]');
+  triggers.forEach((btn) => {
+    const isMatch = btn.dataset.tabTrigger === tab;
+    btn.classList.toggle('is-active', isMatch);
+    btn.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+  });
+}
+
+function initMobileTabs() {
+  const viewRoot = document.querySelector<HTMLElement>('[data-history-view]');
+  if (!viewRoot) return;
+  const triggers = viewRoot.querySelectorAll<HTMLButtonElement>('[data-tab-trigger]');
+  triggers.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.dataset.tabTrigger === 'people' ? 'people' : 'events';
+      setActiveTab(targetTab);
+    });
+  });
+}
+
 function scrollToHashTarget() {
-  if (!location.hash || location.hash === '#people') return;
+  if (!location.hash) return;
   try {
     const rawId = decodeURIComponent(location.hash.slice(1));
+    if (rawId === 'people' || rawId.startsWith('member-')) {
+      setActiveTab('people');
+    } else if (rawId === 'events') {
+      setActiveTab('events');
+    }
+    if (rawId === 'people' || rawId === 'events') return;
+
+    document.querySelectorAll('.member.member-highlight').forEach((el) => el.classList.remove('member-highlight'));
     const target = document.getElementById(rawId);
     if (target) {
       target.classList.add('member-highlight');
@@ -137,10 +188,16 @@ function scrollToHashTarget() {
 }
 
 async function initRoster() {
+  initMobileTabs();
+  window.addEventListener('hashchange', scrollToHashTarget);
+
   const section = document.querySelector<HTMLElement>('[data-roster-term]');
   const container = document.querySelector<HTMLElement>('[data-roster-container]');
   const countNode = document.querySelector<HTMLElement>('[data-roster-count]');
+  const tabCountNode = document.querySelector<HTMLElement>('[data-roster-tab-count]');
   if (!section || !container) return;
+
+  scrollToHashTarget();
 
   const term = section.dataset.rosterTerm || '2026-2027';
   const cacheKey = `studev_roster_${term}`;
@@ -153,7 +210,7 @@ async function initRoster() {
       const parsed = JSON.parse(saved) as RosterSnapshot;
       if (parsed && parsed.schema === 3 && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
         cachedRaw = JSON.stringify(parsed.groups);
-        renderRoster(container, countNode, parsed);
+        renderRoster(container, countNode, tabCountNode, parsed);
         scrollToHashTarget();
       }
     }
@@ -170,7 +227,7 @@ async function initRoster() {
       localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch {}
     if (freshRaw !== cachedRaw) {
-      renderRoster(container, countNode, data);
+      renderRoster(container, countNode, tabCountNode, data);
       scrollToHashTarget();
     }
   } catch {

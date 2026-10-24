@@ -1,0 +1,143 @@
+---
+import { render, type CollectionEntry } from 'astro:content';
+import EventTimeline from './EventTimeline.astro';
+
+interface Props {
+  entry: CollectionEntry<'history'>;
+  allEntries?: CollectionEntry<'history'>[];
+}
+
+const { entry, allEntries = [] } = Astro.props;
+const { Content } = await render(entry);
+const term = entry.data.term || entry.id;
+const skeletonGroups = [
+  { name: '主席团', count: 4, featured: true },
+  { name: '运营支持部', count: 3, featured: false },
+  { name: '易班建设部', count: 3, featured: false },
+  { name: '媒体宣传部', count: 3, featured: false },
+  { name: '心理工作部', count: 4, featured: false },
+];
+---
+<article class="term-page" data-history-view data-active-tab="events">
+  <header class="term-header">
+    <p class="eyebrow">历届档案 · 人与事</p>
+    <div class="term-title-row">
+      <h1 id="page-title">History</h1>
+      <div class="term-badges" aria-label="当前届别信息">
+        <span class="term-period-pill">{entry.data.period} 学年</span>
+        <span class="term-org-pill">第一届 · 南邮计软网安学生发展中心</span>
+      </div>
+    </div>
+    {allEntries.length > 1 && (
+      <nav class="term-switcher" aria-label="切换历届学年">
+        {allEntries.map((item) => (
+          <a
+            href={item.id === '2026-2027' ? '/history/' : `/history/${item.id}/`}
+            class:list={['term-switch-link', { active: item.id === entry.id }]}
+          >
+            {item.data.period}
+          </a>
+        ))}
+      </nav>
+    )}
+
+    <div class="term-mobile-tabs" role="tablist" aria-label="视图切换">
+      <button
+        type="button"
+        role="tab"
+        aria-selected="true"
+        aria-controls="events"
+        class="term-tab-btn is-active"
+        data-tab-trigger="events"
+      >
+        <span>大事记</span>
+        <span class="term-tab-badge">{entry.data.events.length}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected="false"
+        aria-controls="people"
+        class="term-tab-btn"
+        data-tab-trigger="people"
+      >
+        <span>成员名册</span>
+        <span class="term-tab-badge" data-roster-tab-count>17</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="term-split-grid">
+    <!-- 左栏：大事记与编年索引 -->
+    <section
+      class="term-col term-col-events"
+      id="events"
+      aria-labelledby="events-title"
+      data-tab-panel="events"
+    >
+      <div class="term-section-heading">
+        <span class="section-number">01</span>
+        <h2 id="events-title">大事记</h2>
+        <span class="section-aside">{entry.data.events.length} 个时间节点</span>
+      </div>
+
+      <EventTimeline events={entry.data.events} />
+
+      <aside class="history-archival-box" aria-label="纪事说明与延伸阅读">
+        <div class="history-archival-prose">
+          <Content />
+        </div>
+        <div class="history-related-links">
+          <a class="history-related-item" href="/about/organizational-genesis/">
+            <span class="history-related-kicker">前史回响 · 2022—2025</span>
+            <span class="history-related-title">《从草坪与易班走来：StuDev 数字化平台的历史回响》</span>
+            <span class="history-related-arrow" aria-hidden="true">→</span>
+          </a>
+          <a class="history-related-item" href="/life/guide-peer-mentors/">
+            <span class="history-related-kicker">迎新纪实 · 同伴守望</span>
+            <span class="history-related-title">《给刚踏入仙林校门的你：一份来自学长姐的避坑与同行指南》</span>
+            <span class="history-related-arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+      </aside>
+    </section>
+
+    <!-- 右栏：当届公开成员名册 -->
+    <section
+      class="term-col term-col-people"
+      id="people"
+      aria-labelledby="people-title"
+      data-roster-term={term}
+      data-tab-panel="people"
+    >
+      <div class="term-section-heading">
+        <span class="section-number">02</span>
+        <h2 id="people-title">历届成员</h2>
+        <span class="section-aside" data-roster-count>17 人</span>
+      </div>
+
+      <div data-roster-container class="roster-container">
+        {skeletonGroups.map((group, gIdx) => (
+          <section class="member-group" aria-labelledby={`skeleton-group-${gIdx}`}>
+            <div class="member-group-header">
+              <h3 id={`skeleton-group-${gIdx}`}>{group.name}</h3>
+              <span class="member-group-count">{group.count}</span>
+            </div>
+            <div class="member-grid">
+              {Array.from({ length: group.count }).map(() => (
+                <article class:list={['member', 'member-skeleton', { 'member-featured': group.featured }]} aria-hidden="true">
+                  <div class="member-avatar skeleton-circle"></div>
+                  <div class="member-copy">
+                    <div class="skeleton-line skeleton-name"></div>
+                    <div class="skeleton-line skeleton-sig"></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+  </div>
+</article>
+<script>import '../../scripts/history-roster';</script>

@@ -1,27 +1,71 @@
 ---
-interface Event {
+export interface TimelineEvent {
   date: string;
   time?: string;
   title: string;
   detail: string;
   participants?: string;
   href?: string;
+  linkLabel?: string;
+  badge?: string;
 }
 
-interface Props { events: Event[]; }
+interface Props { events: TimelineEvent[]; }
 const { events } = Astro.props;
 const orderedEvents = [...events].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''));
 ---
 <ol class="event-timeline">
-  {orderedEvents.map((event) => (
-    <li class="event-item">
-      <div class="event-date"><time datetime={event.date}>{event.date.replaceAll('-', '.')}</time>{event.time && <span>{event.time}</span>}</div>
-      <div class="event-body">
-        <h3>{event.title}</h3>
-        <p>{event.detail}</p>
-        {event.participants && <p class="event-people">参与 · {event.participants}</p>}
-        {event.href && <a href={event.href} target="_blank" rel="noopener noreferrer">查看记录 ↗</a>}
-      </div>
-    </li>
-  ))}
+  {orderedEvents.map((event) => {
+    const isExternal = Boolean(event.href && /^https?:\/\//i.test(event.href));
+    const defaultLabel = isExternal ? '查看记录 ↗' : '阅读纪实 →';
+    const label = event.linkLabel || defaultLabel;
+    return (
+      <li class="event-item">
+        <div class="event-date">
+          <time datetime={event.date}>{event.date.replaceAll('-', '.')}</time>
+          {event.time && <span class="event-time">{event.time}</span>}
+        </div>
+        <div class="event-body">
+          <div class="event-head">
+            <h3>
+              {event.href ? (
+                <a
+                  class="event-title-link"
+                  href={event.href}
+                  target={isExternal ? '_blank' : undefined}
+                  rel={isExternal ? 'noopener noreferrer' : undefined}
+                >
+                  {event.title}
+                </a>
+              ) : (
+                event.title
+              )}
+            </h3>
+            {event.badge && <span class="event-badge">{event.badge}</span>}
+          </div>
+          <p class="event-detail">{event.detail}</p>
+          {(event.participants || event.href) && (
+            <div class="event-meta-row">
+              {event.participants && (
+                <span class="event-people">
+                  <span class="event-people-dot" aria-hidden="true"></span>
+                  参与 · {event.participants}
+                </span>
+              )}
+              {event.href && (
+                <a
+                  class:list={['event-link-pill', { 'is-internal': !isExternal }]}
+                  href={event.href}
+                  target={isExternal ? '_blank' : undefined}
+                  rel={isExternal ? 'noopener noreferrer' : undefined}
+                >
+                  {label}
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </li>
+    );
+  })}
 </ol>
