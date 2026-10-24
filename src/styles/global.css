@@ -308,6 +308,16 @@ html[data-theme] .theme-toggle { display: inline-flex; }
 html[data-theme='dark'] .theme-icon-sun { display: block; }
 html[data-theme='dark'] .theme-icon-moon { display: none; }
 
+html[data-search-route='subpage'] #root > div > header > div,
+html[data-search-route='subpage'] #root > div > main > div {
+  max-width: none;
+  width: min(var(--max), calc(100% - 64px));
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 main { min-height: calc(100vh - 145px); }
 .home {
   min-height: calc(100vh - 145px);
@@ -1150,6 +1160,23 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
     left: -52px;
     width: calc(100vw - 32px);
     max-width: 360px;
+  }
+  nav[aria-label='studev-search 模块切换'] {
+    justify-content: space-between;
+    gap: 0;
+  }
+  nav[aria-label='studev-search 模块切换'] > a {
+    padding: 4px 6px;
+    font-size: 0.75rem;
+  }
+  html[data-search-route='subpage'] #root > div > header > div,
+  html[data-search-route='subpage'] #root > div > main > div {
+    max-width: none !important;
+    width: calc(100% - 32px) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
   .site-nav { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; justify-content: space-between; gap: 10px; }
   .site-nav a { min-height: 44px; font-size: clamp(.75rem, 2.8vw, .88rem); }
