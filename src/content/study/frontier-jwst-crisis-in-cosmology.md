@@ -8,7 +8,7 @@ author: "hicancan"
 tags: ["思维对撞机", "科学哲学", "天体物理", "哈勃张力"]
 audio: "/audio/002-jwst-crisis-in-cosmology.m4a"
 duration: "18分45秒"
-order: 2
+order: 5
 status: published
 ---
 

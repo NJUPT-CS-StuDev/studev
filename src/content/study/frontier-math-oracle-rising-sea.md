@@ -8,7 +8,7 @@ author: "hicancan"
 tags: ["思维对撞机", "科学哲学", "AI与数学", "格罗滕迪克"]
 audio: "/audio/001-math-oracle-rising-sea.m4a"
 duration: "11分31秒"
-order: 1
+order: 3
 status: published
 ---
 

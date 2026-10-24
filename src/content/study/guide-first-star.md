@@ -5,7 +5,7 @@ kicker: "StuDev 2026 招新热身 · 01"
 description: "从孤岛到开源世界：为什么学计算机必须懂 GitHub，以及如何迈出你的第一步。"
 pubDate: "2026-09-23"
 tags: ["开源与代码", "技术启蒙", "新手教程"]
-order: 1
+order: 4
 ---
 
 
