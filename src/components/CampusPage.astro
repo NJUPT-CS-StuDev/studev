@@ -1,0 +1,21 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import CampusApp from '../campus/CampusApp';
+import { PAGE_IDENTITIES } from '../campus/app/seo/pageSeo';
+import type { AppRoute } from '../campus/app/routing/useUrlState';
+
+interface Props {
+  route: AppRoute;
+}
+
+const { route } = Astro.props;
+const page = PAGE_IDENTITIES[route];
+---
+<SiteLayout title={page.title} description={page.description} active="search">
+  <CampusApp client:only="react">
+    <div slot="fallback" class="campus-fallback">
+      <h1>{page.title}</h1>
+      <p>{page.description}</p>
+    </div>
+  </CampusApp>
+</SiteLayout>

@@ -9,7 +9,7 @@ const output = resolve('dist');
 async function pages(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name === 'generated') continue;
+    if (entry.name === 'data') continue;
     const path = join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await pages(path));
     else if (entry.name.endsWith('.html')) files.push(path);
@@ -228,5 +228,5 @@ test('stable sitemap files revalidate without changing other asset headers', asy
   assert.match(cache, /(?:^|,\s*)must-revalidate(?:,|$)/);
   assert.doesNotMatch(cache, /immutable/);
   const cacheRules = config.headers.filter((rule) => rule.headers.some((header) => header.key.toLowerCase() === 'cache-control'));
-  assert.ok(cacheRules.every((rule) => rule.source.startsWith('/sitemap-') || rule.source.startsWith('/generated/')), 'only stable sitemap and search bundle URLs may receive this cache override');
+  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/**/*', '/_astro/**/*'].includes(rule.source)), 'only sitemaps and versioned data/build assets may receive a cache override');
 });

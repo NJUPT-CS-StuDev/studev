@@ -8,7 +8,7 @@ const phrases = [
 
 const element = document.getElementById('typewriter-text');
 let phrase = 0;
-let character = phrases[0].length;
+let character = phrases[0]?.length ?? 0;
 let deleting = true;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -18,7 +18,7 @@ function schedule(delay: number) {
 
 function tick() {
   if (!element) return;
-  const current = phrases[phrase];
+  const current = phrases[phrase] ?? '';
   character += deleting ? -1 : 1;
   element.textContent = current.slice(0, character);
   if (deleting && character === 0) {

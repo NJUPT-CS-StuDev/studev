@@ -214,8 +214,8 @@ if (page) {
       if (epoch === sessionEpoch && selected) renderDetail(selected, selected === item);
     }
   }
-  reviewButtons[0].addEventListener('click', () => void review('accepted'));
-  reviewButtons[1].addEventListener('click', () => void review('rejected'));
+  reviewButtons[0]?.addEventListener('click', () => void review('accepted'));
+  reviewButtons[1]?.addEventListener('click', () => void review('rejected'));
 
   downloadButton.addEventListener('click', async () => {
     if (!selected || actionBusy) return;
