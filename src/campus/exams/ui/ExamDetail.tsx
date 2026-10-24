@@ -104,7 +104,7 @@ export function ExamDetail({
         <div className="fade-in w-full">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
                 <div>
-                    <h2 className="text-[28px] font-normal text-[#202124] dark:text-[#e8eaed] leading-tight mb-2">
+                    <h2 className="text-[28px] font-normal text-[#202124] dark:text-[#e8edf3] leading-tight mb-2">
                         {className} 考试安排
                     </h2>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-[#70757a] dark:text-[#9aa0a6]">
@@ -157,7 +157,7 @@ export function ExamDetail({
                         inline-flex items-center justify-center gap-2 px-6 py-2 rounded-full text-[14px] font-medium transition-all shrink-0
                         ${selectedIds.size > 0
                             ? 'bg-[var(--color-google-blue)] hover:bg-[#3b78e7] text-white shadow-sm'
-                            : 'bg-[#f8f9fa] dark:bg-[#303134] text-[#9aa0a6] cursor-not-allowed border border-[#dadce0] dark:border-[#3c4043]'}
+                            : 'bg-[#f8f9fa] dark:bg-[#1c232b] text-[#9aa0a6] cursor-not-allowed border border-[#dadce0] dark:border-[#323a44]'}
                     `}
                 >
                     <Download className="w-4 h-4" aria-hidden="true" />
@@ -175,9 +175,9 @@ export function ExamDetail({
                 <ReminderSettings selected={reminders} onChange={onRemindersChange} />
             </Suspense>
 
-            <div className="space-y-0 border border-[#dadce0] dark:border-[#3c4043] rounded-lg overflow-hidden bg-white dark:bg-[#202124]">
+            <div className="space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
                 {exams.map((exam, idx) => (
-                    <div key={exam.id || idx} className={idx !== exams.length - 1 ? "border-b border-[#dadce0] dark:border-[#3c4043]" : ""}>
+                    <div key={exam.id || idx} className={idx !== exams.length - 1 ? "border-b border-[#dadce0] dark:border-[#323a44]" : ""}>
                         <ExamCard
                             exam={exam}
                             isSelected={selectedIds.has(exam.id)}

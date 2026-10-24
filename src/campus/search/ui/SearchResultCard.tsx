@@ -90,9 +90,9 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
     };
 
     return (
-        <a {...wrapperProps} className="block w-full text-left py-3 group border-b border-[#e8eaed] dark:border-[#3c4043] last:border-b-0">
+        <a {...wrapperProps} className="block w-full text-left py-3 group border-b border-[#e8eaed] dark:border-[#323a44] last:border-b-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[#70757a] dark:text-[#9aa0a6]">
-                <span className="font-medium text-[#3c4043] dark:text-[#bdc1c6]">{CATEGORY_LABELS[(document.category ?? 'notice_article') as SearchCategory]}</span>
+                <span className="font-medium text-[#3c4043] dark:text-[#aeb8c5]">{CATEGORY_LABELS[(document.category ?? 'notice_article') as SearchCategory]}</span>
                 <span>{document.sourceName}</span>
                 <span>›</span>
                 <span>{document.section || '其他'}</span>
@@ -122,7 +122,7 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
             {document.snippet ? (
                 <p
                     data-testid="search-result-snippet"
-                    className="mt-2 text-[14px] text-[#4d5156] dark:text-[#bdc1c6] line-clamp-3 sm:line-clamp-2 break-words"
+                    className="mt-2 text-[14px] text-[#4d5156] dark:text-[#aeb8c5] line-clamp-3 sm:line-clamp-2 break-words"
                 >
                     <HighlightedText
                         text={document.snippet}
@@ -132,7 +132,7 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
             ) : (
                 <div
                     data-testid="search-result-snippet-loading"
-                    className="mt-2 h-4 w-4/5 animate-pulse rounded bg-[#f1f3f4] dark:bg-[#303134]"
+                    className="mt-2 h-4 w-4/5 animate-pulse rounded bg-[#f1f3f4] dark:bg-[#1c232b]"
                 />
             )}
 

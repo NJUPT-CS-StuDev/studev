@@ -51,7 +51,7 @@ export function SearchControls({
 
     return (
         <div className="mb-2 flex flex-wrap items-center gap-2">
-            <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#3c4043] bg-white dark:bg-[#202124] px-2 text-sm text-[#4d5156] dark:text-[#bdc1c6]">
+            <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#14181d] px-2 text-sm text-[#4d5156] dark:text-[#aeb8c5]">
                 <Filter size={14} aria-hidden="true" />
                 <span className="sr-only">搜索范围</span>
                 <select
@@ -67,12 +67,12 @@ export function SearchControls({
                     ))}
                 </select>
             </label>
-            <div className="inline-flex h-9 items-center rounded-md border border-[#dadce0] dark:border-[#3c4043] bg-white dark:bg-[#202124] p-0.5" aria-label="排序方式">
+            <div className="inline-flex h-9 items-center rounded-md border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#14181d] p-0.5" aria-label="排序方式">
                 <button
                     type="button"
                     aria-pressed={sortMode === 'relevance'}
                     onClick={() => onSortModeChange('relevance')}
-                    className={`inline-flex h-7 items-center gap-1 rounded px-2.5 text-sm ${sortMode === 'relevance' ? 'bg-[#e8f0fe] text-[#1967d2] dark:bg-[#263850] dark:text-[#8ab4f8]' : 'text-[#5f6368] hover:bg-[#f1f3f4] dark:text-[#9aa0a6] dark:hover:bg-[#303134]'}`}
+                    className={`inline-flex h-7 items-center gap-1 rounded px-2.5 text-sm ${sortMode === 'relevance' ? 'bg-[#e8f0fe] text-[#1967d2] dark:bg-[#263850] dark:text-[#8ab4f8]' : 'text-[#5f6368] hover:bg-[#f1f3f4] dark:text-[#9aa0a6] dark:hover:bg-[#1c232b]'}`}
                 >
                     <ArrowDownWideNarrow size={14} aria-hidden="true" />
                     相关性
@@ -81,13 +81,13 @@ export function SearchControls({
                     type="button"
                     aria-pressed={sortMode === 'date_desc'}
                     onClick={() => onSortModeChange('date_desc')}
-                    className={`inline-flex h-7 items-center gap-1 rounded px-2.5 text-sm ${sortMode === 'date_desc' ? 'bg-[#e8f0fe] text-[#1967d2] dark:bg-[#263850] dark:text-[#8ab4f8]' : 'text-[#5f6368] hover:bg-[#f1f3f4] dark:text-[#9aa0a6] dark:hover:bg-[#303134]'}`}
+                    className={`inline-flex h-7 items-center gap-1 rounded px-2.5 text-sm ${sortMode === 'date_desc' ? 'bg-[#e8f0fe] text-[#1967d2] dark:bg-[#263850] dark:text-[#8ab4f8]' : 'text-[#5f6368] hover:bg-[#f1f3f4] dark:text-[#9aa0a6] dark:hover:bg-[#1c232b]'}`}
                 >
                     <CalendarDays size={14} aria-hidden="true" />
                     时间
                 </button> : null}
             </div>
-            <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#3c4043] bg-white dark:bg-[#202124] px-2 text-sm text-[#4d5156] dark:text-[#bdc1c6]">
+            <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#14181d] px-2 text-sm text-[#4d5156] dark:text-[#aeb8c5]">
                 <Filter size={14} aria-hidden="true" />
                 <span className="sr-only">具体来源</span>
                 <select
@@ -107,7 +107,7 @@ export function SearchControls({
                     )) : null}
                 </select>
             </label>
-            <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#3c4043] bg-white dark:bg-[#202124] px-2 text-sm text-[#4d5156] dark:text-[#bdc1c6]">
+            <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#14181d] px-2 text-sm text-[#4d5156] dark:text-[#aeb8c5]">
                 <ListFilter size={14} aria-hidden="true" />
                 <span className="sr-only">类型筛选</span>
                 <select
@@ -126,7 +126,7 @@ export function SearchControls({
                     ))}
                 </select>
             </label>
-            {supportsDates ? <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#3c4043] bg-white dark:bg-[#202124] px-2 text-sm text-[#4d5156] dark:text-[#bdc1c6]">
+            {supportsDates ? <label className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#14181d] px-2 text-sm text-[#4d5156] dark:text-[#aeb8c5]">
                 <CalendarDays size={14} aria-hidden="true" />
                 <span className="sr-only">时间筛选</span>
                 <select
@@ -153,7 +153,7 @@ export function SearchControls({
                         });
                         onDatePresetChange('all');
                     }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-[#1a73e8] hover:bg-[#f1f3f4] dark:text-[#8ab4f8] dark:hover:bg-[#303134]"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-[#1a73e8] hover:bg-[#f1f3f4] dark:text-[#8ab4f8] dark:hover:bg-[#1c232b]"
                 >
                     <RotateCcw size={14} aria-hidden="true" />
                     清除筛选

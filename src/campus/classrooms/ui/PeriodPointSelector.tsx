@@ -59,11 +59,11 @@ export function PeriodPointSelector({
 
   return (
     <div
-      className="rounded-xl border border-[#dadce0] bg-white p-3 dark:border-[#3c4043] dark:bg-[#292a2d]"
+      className="rounded-xl border border-[#dadce0] bg-white p-3 dark:border-[#323a44] dark:bg-[#1c232b]"
       aria-label={`${label}时间轴`}
       role="group"
     >
-      <div className="flex items-center justify-between gap-3 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+      <div className="flex items-center justify-between gap-3 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
         <span>{label}</span>
         <span>{summary}</span>
       </div>
@@ -83,7 +83,7 @@ export function PeriodPointSelector({
                 aria-pressed={active}
                 aria-label={`第 ${item.period} 节，${item.start_time}–${item.end_time}${stateLabel ? `，${stateLabel}` : ""}，${active ? "已选择" : "未选择"}`}
               >
-                <span className="h-4 w-full truncate text-[8px] text-[#5f6368] dark:text-[#bdc1c6] sm:text-[10px]">
+                <span className="h-4 w-full truncate text-[8px] text-[#5f6368] dark:text-[#aeb8c5] sm:text-[10px]">
                   {item.start_time}
                 </span>
                 <span

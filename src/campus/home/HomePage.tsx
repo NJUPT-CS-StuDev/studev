@@ -43,9 +43,13 @@ export function HomePage({
 }: HomePageProps) {
     return (
         <main className="flex-1 px-4">
-            <section className="max-w-[680px] mx-auto min-h-[calc(100vh-260px)] flex flex-col items-center justify-center py-12">
-                <img src="/assets/logo.png" alt="" className="w-16 h-16 rounded-2xl" />
-                <h1 className="mt-5 text-5xl sm:text-6xl font-normal text-[#202124] dark:text-[#e8eaed] leading-tight">校园查询</h1>
+            <section className="max-w-[680px] mx-auto min-h-[calc(100vh-145px)] flex flex-col items-center justify-center py-12">
+                <div className="flex flex-col items-center select-none text-center">
+                    <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#5f6368] dark:text-[#aeb8c5] mb-2">STUDEV · 零后端校园检索引擎</span>
+                    <h1 className="text-[42px] sm:text-[56px] font-medium tracking-[-0.06em] text-[#202124] dark:text-[#e8edf3] leading-none">
+                        studev<span className="text-[#1a73e8] dark:text-[#8ab4f8]">-search</span>
+                    </h1>
+                </div>
 
                 <div className="mt-7 w-full">
                     <SearchInput
@@ -62,9 +66,9 @@ export function HomePage({
                 <div className="mt-6 w-full space-y-4">
                     {(['教务查询', '网站搜索', '社区搜索', '资料搜索'] as const).map(group => (
                         <section key={group} aria-labelledby={`home-group-${group}`}>
-                            <h2 id={`home-group-${group}`} className="mb-2 text-center text-xs font-medium tracking-[0.12em] text-[#80868b] dark:text-[#9aa0a6]">
+                            <h2 id={`home-group-${group}`} className="mb-2 text-center text-xs font-medium tracking-[0.12em] text-[#5f6368] dark:text-[#aeb8c5]">
                                 {GROUP_ROUTES[group] ? (
-                                    <a className="transition-colors hover:text-[#1a73e8] focus-visible:text-[#1a73e8]" href={GROUP_ROUTES[group]}>{group}</a>
+                                    <a className="transition-colors hover:text-[#1a73e8] dark:hover:text-[#8ab4f8] focus-visible:text-[#1a73e8]" href={GROUP_ROUTES[group]}>{group}</a>
                                 ) : group}
                             </h2>
                             <div className="flex flex-wrap items-center justify-center gap-2">
@@ -81,9 +85,9 @@ export function HomePage({
                                             onPointerEnter={() => onIntentWarm(item.intent)}
                                             onPointerDown={() => onIntentWarm(item.intent)}
                                             onFocus={() => onIntentWarm(item.intent)}
-                                            className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[#dadce0] dark:border-[#3c4043] bg-white dark:bg-[#202124] text-sm text-[#3c4043] dark:text-[#e8eaed] hover:border-[#8ab4f8] transition-colors"
+                                            className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#1c232b] text-sm text-[#202124] dark:text-[#e8edf3] hover:border-[#1a73e8] dark:hover:border-[#8ab4f8] transition-colors"
                                         >
-                                            <Icon className="w-4 h-4" aria-hidden="true" />
+                                            <Icon className="w-4 h-4 text-[#1a73e8] dark:text-[#8ab4f8]" aria-hidden="true" />
                                             {item.label}
                                         </a>
                                     );

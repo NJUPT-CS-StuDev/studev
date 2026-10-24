@@ -53,15 +53,15 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
                             onChange={event => { setQuery(event.target.value); setError(null); }}
                             placeholder="输入班级号"
                             autoComplete="off"
-                            className="h-12 min-w-0 w-full rounded-lg border border-[#dadce0] bg-white px-3 text-[15px] outline-none transition focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/20 dark:border-[#3c4043] dark:bg-[#202124]"
+                            className="h-12 min-w-0 w-full rounded-lg border border-[#dadce0] bg-white px-3 text-[15px] outline-none transition focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/20 dark:border-[#323a44] dark:bg-[#14181d]"
                             aria-controls="timetable-suggestions"
                         />
                         <button type="submit" className="h-12 w-full rounded-lg bg-[#1a73e8] px-3 text-sm font-medium text-white transition hover:bg-[#1765cc] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1a73e8]">查询</button>
                     </div>
                     {visibleSuggestions.length ? (
-                        <div id="timetable-suggestions" className="mx-auto mt-2 max-w-[440px] overflow-hidden rounded-xl border border-[#dadce0] bg-white text-left dark:border-[#3c4043] dark:bg-[#202124]">
+                        <div id="timetable-suggestions" className="mx-auto mt-2 max-w-[440px] overflow-hidden rounded-xl border border-[#dadce0] bg-white text-left dark:border-[#323a44] dark:bg-[#14181d]">
                             {visibleSuggestions.slice(0, 6).map(item => (
-                                <button key={item} type="button" onClick={() => { setQuery(item); onOpenClass(item); }} className="block w-full px-4 py-2.5 text-sm hover:bg-[#f1f3f4] focus:bg-[#f1f3f4] dark:hover:bg-[#303134] dark:focus:bg-[#303134]">
+                                <button key={item} type="button" onClick={() => { setQuery(item); onOpenClass(item); }} className="block w-full px-4 py-2.5 text-sm hover:bg-[#f1f3f4] focus:bg-[#f1f3f4] dark:hover:bg-[#1c232b] dark:focus:bg-[#1c232b]">
                                     {item}
                                 </button>
                             ))}
@@ -71,11 +71,11 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
                 {error ? <p className="mt-3 text-sm text-[#b3261e] dark:text-[#f2b8b5]">{error}</p> : null}
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[13px]">
                     {savedClass ? (
-                        <button type="button" onClick={() => onOpenClass(savedClass)} className="inline-flex h-9 items-center rounded-full border border-[#d2e3fc] bg-white px-3 font-medium text-[#174ea6] hover:bg-[#e8f0fe] dark:border-[#394457] dark:bg-[#202124] dark:text-[#8ab4f8] dark:hover:bg-[#1f2430]">
+                        <button type="button" onClick={() => onOpenClass(savedClass)} className="inline-flex h-9 items-center rounded-full border border-[#d2e3fc] bg-white px-3 font-medium text-[#174ea6] hover:bg-[#e8f0fe] dark:border-[#394457] dark:bg-[#14181d] dark:text-[#8ab4f8] dark:hover:bg-[#1f2430]">
                             继续查看 {savedClass}
                         </button>
                     ) : null}
-                    <button type="button" onClick={() => onOpenClass('B240402')} className="inline-flex h-9 items-center rounded-full px-3 text-[#5f6368] hover:bg-white dark:text-[#bdc1c6] dark:hover:bg-[#202124]">
+                    <button type="button" onClick={() => onOpenClass('B240402')} className="inline-flex h-9 items-center rounded-full px-3 text-[#5f6368] hover:bg-white dark:text-[#aeb8c5] dark:hover:bg-[#202124]">
                         试一试&nbsp;<span className="font-mono text-[#1a73e8] dark:text-[#8ab4f8]">B240402</span>
                     </button>
                 </div>

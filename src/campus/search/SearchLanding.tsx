@@ -19,7 +19,7 @@ export function SearchLanding({ scope = SEARCH_SCOPES.search, onSearch }: Search
         <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-8 sm:py-12">
             <ProductLandingCard icon={iconForScope(scope)} title={scope.title} description={scope.description}>
                 <div className="mt-6">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[#5f6368] dark:text-[#bdc1c6]">快速搜索</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-[#5f6368] dark:text-[#aeb8c5]">快速搜索</p>
                     <div className="mt-3 flex flex-wrap justify-center gap-2">
                         {scope.quickQueries.map(query => (
                             <a
@@ -30,7 +30,7 @@ export function SearchLanding({ scope = SEARCH_SCOPES.search, onSearch }: Search
                                     event.preventDefault();
                                     onSearch(query);
                                 }}
-                                className="rounded-full border border-[#d2e3fc] bg-white px-4 py-2 text-sm font-medium text-[#174ea6] transition hover:bg-[#e8f0fe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:border-[#405985] dark:bg-[#202124] dark:text-[#8ab4f8] dark:hover:bg-[#23334d]"
+                                className="rounded-full border border-[#d2e3fc] bg-white px-4 py-2 text-sm font-medium text-[#174ea6] transition hover:bg-[#e8f0fe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:border-[#405985] dark:bg-[#14181d] dark:text-[#8ab4f8] dark:hover:bg-[#23334d]"
                             >
                                 {query}
                             </a>
@@ -48,7 +48,7 @@ export function SearchLanding({ scope = SEARCH_SCOPES.search, onSearch }: Search
                     </a>
                 ) : null}
                 <noscript>
-                    <p className="mt-4 text-[14px] text-[#5f6368] dark:text-[#bdc1c6]">启用 JavaScript 后即可搜索。</p>
+                    <p className="mt-4 text-[14px] text-[#5f6368] dark:text-[#aeb8c5]">启用 JavaScript 后即可搜索。</p>
                 </noscript>
             </ProductLandingCard>
         </main>

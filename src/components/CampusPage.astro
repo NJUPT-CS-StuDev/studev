@@ -11,6 +11,6 @@ interface Props {
 const { route } = Astro.props;
 const page = PAGE_IDENTITIES[route];
 ---
-<SiteLayout title={page.title} description={page.description} active="search">
+<SiteLayout title={`${page.title} — StuDev`} description={page.description} active="search">
   <CampusApp client:load route={route} />
 </SiteLayout>

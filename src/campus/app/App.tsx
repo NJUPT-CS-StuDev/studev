@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useAppRouter } from '@/app/routing/useAppRouter';
 import { HomePage } from '@/home/HomePage';
 import { useSiteHeaderSearch } from '@/app/shell/useSiteHeaderSearch';
+import { ModuleNav } from '@/app/shell/ModuleNav';
 import type { AppRoute } from '@/app/routing/useUrlState';
 import { SearchClient } from 'wasm-search';
 import { APP_CONFIG } from '@/app/config/constants';
@@ -28,7 +29,7 @@ const ClassroomsPage = lazy(loadClassroomsPage);
 function RouteLoading() {
     return (
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-6 pb-8">
-            <div className="rounded-xl border border-[#dadce0] bg-white px-4 py-6 text-[14px] text-[#5f6368] dark:border-[#3c4043] dark:bg-[#202124] dark:text-[#bdc1c6]">
+            <div className="rounded-xl border border-[#dadce0] bg-white px-4 py-6 text-[14px] text-[#5f6368] dark:border-[#323a44] dark:bg-[#14181d] dark:text-[#aeb8c5]">
                 正在打开页面…
             </div>
         </main>
@@ -46,7 +47,7 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
     }, [router.route, router.onSubmit]);
     useEffect(() => {
         const page = PAGE_IDENTITIES[router.route];
-        document.title = `${page.title} - 学生发展中心`;
+        document.title = `${page.title} — StuDev`;
     }, [router.route]);
     const searchClient = useMemo(() => new SearchClient({
         baseUrl: APP_CONFIG.DATA_URLS.SEARCH,
@@ -126,7 +127,8 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
     };
 
     return (
-        <div className="campus-app flex flex-col text-[#202124] dark:text-[#e8eaed]">
+        <div className="campus-app min-h-[calc(100vh-145px)] flex flex-col bg-white dark:bg-[#14181d] text-[#202124] dark:text-[#e8edf3] font-sans">
+            {router.route !== 'home' ? <ModuleNav route={router.route} onNavigate={router.onNavigateRoute} /> : null}
 
             {router.route === 'home' ? (
                 <HomePage

@@ -355,7 +355,7 @@ export function ClassroomsPage({
         </div>
       ) : null}
       {!index && !error ? (
-        <div className="mt-7 h-48 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#292a2d]" />
+        <div className="mt-7 h-48 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#1c232b]" />
       ) : null}
 
       {index && activeCampus && !activeBuilding ? (
@@ -365,7 +365,7 @@ export function ClassroomsPage({
               <h2 className="text-2xl font-semibold">
                 {activeCampus.name}校区
               </h2>
-              <p className="mt-1 text-sm text-[#5f6368] dark:text-[#bdc1c6]">
+              <p className="mt-1 text-sm text-[#5f6368] dark:text-[#aeb8c5]">
                 选择楼栋
               </p>
             </div>
@@ -385,7 +385,7 @@ export function ClassroomsPage({
                   onClick={() =>
                     update({ building: item.name, floor: null, room: null })
                   }
-                  className="group rounded-2xl border border-[#dadce0] bg-white p-5 text-left transition hover:border-[#8ab4f8] dark:border-[#3c4043] dark:bg-[#292a2d]"
+                  className="group rounded-2xl border border-[#dadce0] bg-white p-5 text-left transition hover:border-[#8ab4f8] dark:border-[#323a44] dark:bg-[#1c232b]"
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e8f0fe] text-[#1967d2] dark:bg-[#23334d] dark:text-[#8ab4f8]">
                     <Building2 className="h-5 w-5" />
@@ -394,7 +394,7 @@ export function ClassroomsPage({
                     <strong className="text-lg">{item.name}</strong>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </span>
-                  <small className="mt-1 block text-[#5f6368] dark:text-[#bdc1c6]">
+                  <small className="mt-1 block text-[#5f6368] dark:text-[#aeb8c5]">
                     {floorCount} 层
                   </small>
                 </button>
@@ -422,14 +422,14 @@ export function ClassroomsPage({
                   key={item.floor_id}
                   type="button"
                   onClick={() => update({ floor: item.level, room: null })}
-                  className="group rounded-2xl border border-[#dadce0] bg-white p-5 text-left transition hover:border-[#8ab4f8] dark:border-[#3c4043] dark:bg-[#292a2d]"
+                  className="group rounded-2xl border border-[#dadce0] bg-white p-5 text-left transition hover:border-[#8ab4f8] dark:border-[#323a44] dark:bg-[#1c232b]"
                 >
                   <Layers3 className="h-5 w-5 text-[#1967d2]" />
                   <span className="mt-4 flex items-center justify-between">
                     <strong className="text-lg">{item.level}楼</strong>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </span>
-                  <small className="mt-1 block text-[#5f6368] dark:text-[#bdc1c6]">
+                  <small className="mt-1 block text-[#5f6368] dark:text-[#aeb8c5]">
                     {roomCount} 间教室
                   </small>
                 </button>
@@ -441,9 +441,9 @@ export function ClassroomsPage({
 
       {activeFloor ? (
         <>
-          <section className="mt-7 rounded-2xl border border-[#dadce0] bg-[#f8f9fa] p-4 dark:border-[#3c4043] dark:bg-[#292a2d]">
+          <section className="mt-7 rounded-2xl border border-[#dadce0] bg-[#f8f9fa] p-4 dark:border-[#323a44] dark:bg-[#1c232b]">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <label className="grid gap-1 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+              <label className="grid gap-1 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
                 周次
                 <select
                   name="week"
@@ -455,7 +455,7 @@ export function ClassroomsPage({
                       weekday: String(effectiveWeekday),
                     })
                   }
-                  className="h-10 rounded-lg border border-[#bdc1c6] bg-white px-2 text-sm text-[#202124] dark:border-[#5f6368] dark:bg-[#202124] dark:text-[#e8eaed]"
+                  className="h-10 rounded-lg border border-[#bdc1c6] bg-white px-2 text-sm text-[#202124] dark:border-[#5f6368] dark:bg-[#14181d] dark:text-[#e8edf3]"
                 >
                   {index?.manifest.weeks.map((item) => (
                     <option key={item.week} value={item.week}>
@@ -464,7 +464,7 @@ export function ClassroomsPage({
                   ))}
                 </select>
               </label>
-              <label className="grid gap-1 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+              <label className="grid gap-1 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
                 星期
                 <select
                   name="weekday"
@@ -476,7 +476,7 @@ export function ClassroomsPage({
                       weekday: event.target.value,
                     })
                   }
-                  className="h-10 rounded-lg border border-[#bdc1c6] bg-white px-2 text-sm text-[#202124] dark:border-[#5f6368] dark:bg-[#202124] dark:text-[#e8eaed]"
+                  className="h-10 rounded-lg border border-[#bdc1c6] bg-white px-2 text-sm text-[#202124] dark:border-[#5f6368] dark:bg-[#14181d] dark:text-[#e8edf3]"
                 >
                   {"一二三四五六日".split("").map((item, indexValue) => (
                     <option key={item} value={indexValue + 1}>
@@ -485,14 +485,14 @@ export function ClassroomsPage({
                   ))}
                 </select>
               </label>
-              <div className="col-span-2 grid gap-1 text-xs text-[#5f6368] dark:text-[#bdc1c6] sm:col-span-1">
+              <div className="col-span-2 grid gap-1 text-xs text-[#5f6368] dark:text-[#aeb8c5] sm:col-span-1">
                 <span>当前时间</span>
-                <strong className="flex h-10 items-center text-sm text-[#202124] dark:text-[#e8eaed]">
+                <strong className="flex h-10 items-center text-sm text-[#202124] dark:text-[#e8edf3]">
                   第 {period} 节{result ? ` · ${result.date}` : ""}
                 </strong>
               </div>
             </div>
-            <div className="mt-4 border-t border-[#dadce0] pt-3 dark:border-[#3c4043]">
+            <div className="mt-4 border-t border-[#dadce0] pt-3 dark:border-[#323a44]">
               <PeriodPointSelector
                 label="选择时间"
                 mode="single"
@@ -506,7 +506,7 @@ export function ClassroomsPage({
             </div>
           </section>
           {!result && !error ? (
-            <div className="mt-6 h-96 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#292a2d]" />
+            <div className="mt-6 h-96 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#1c232b]" />
           ) : null}
           {result && activeCampus && activeBuilding ? (
             <>
@@ -539,7 +539,7 @@ export function ClassroomsPage({
                         <div className="flex items-end justify-between gap-3">
                           <div>
                             <h3 className="font-semibold">{room} 课程安排</h3>
-                            <p className="mt-1 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+                            <p className="mt-1 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
                               {result.date} ·{" "}
                               {allDetailPeriods
                                 ? "全部时间"
@@ -555,7 +555,7 @@ export function ClassroomsPage({
                           </span>
                         </div>
                         {!roomDay && !roomDayError ? (
-                          <div className="mt-4 h-24 animate-pulse rounded-xl bg-[#f1f3f4] dark:bg-[#292a2d]" />
+                          <div className="mt-4 h-24 animate-pulse rounded-xl bg-[#f1f3f4] dark:bg-[#1c232b]" />
                         ) : null}
                         {roomDayError ? (
                           <p className="mt-4 rounded-xl bg-[#fce8e6] p-3 text-sm text-[#8c1d18] dark:bg-[#3c2020] dark:text-[#f2b8b5]">
@@ -588,13 +588,13 @@ export function ClassroomsPage({
                                 return (
                                   <article
                                     key={item.meeting_id}
-                                    className={`rounded-xl border p-3 ${active ? "border-[#34a853] bg-[#e6f4ea] dark:border-[#5bb974] dark:bg-[#173b27]" : "border-[#dadce0] dark:border-[#3c4043]"}`}
+                                    className={`rounded-xl border p-3 ${active ? "border-[#34a853] bg-[#e6f4ea] dark:border-[#5bb974] dark:bg-[#173b27]" : "border-[#dadce0] dark:border-[#323a44]"}`}
                                   >
                                     <p className="flex items-start gap-2 text-sm font-medium">
                                       <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-[#137333] dark:text-[#81c995]" />
                                       {item.course_name}
                                     </p>
-                                    <p className="mt-1 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+                                    <p className="mt-1 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
                                       第 {item.start_period}–{item.end_period}{" "}
                                       节
                                       {startTime && endTime
@@ -603,7 +603,7 @@ export function ClassroomsPage({
                                       {item.teacher ? ` · ${item.teacher}` : ""}
                                     </p>
                                     {item.class_ids.length ? (
-                                      <p className="mt-1 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+                                      <p className="mt-1 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
                                         {item.class_ids.join("、")}
                                       </p>
                                     ) : null}
@@ -619,13 +619,13 @@ export function ClassroomsPage({
                                 return (
                                   <article
                                     key={item.exam_id}
-                                    className={`rounded-xl border p-3 ${active ? "border-[#f9ab00] bg-[#fef7e0] dark:border-[#f6c453] dark:bg-[#493a14]" : "border-[#dadce0] dark:border-[#3c4043]"}`}
+                                    className={`rounded-xl border p-3 ${active ? "border-[#f9ab00] bg-[#fef7e0] dark:border-[#f6c453] dark:bg-[#493a14]" : "border-[#dadce0] dark:border-[#323a44]"}`}
                                   >
                                     <p className="flex items-start gap-2 text-sm font-medium">
                                       <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-[#8d5b00] dark:text-[#fdd663]" />
                                       {item.course_name}
                                     </p>
-                                    <p className="mt-1 text-xs text-[#5f6368] dark:text-[#bdc1c6]">
+                                    <p className="mt-1 text-xs text-[#5f6368] dark:text-[#aeb8c5]">
                                       {formatTimestampTime(
                                         item.start_timestamp,
                                       )}
@@ -637,7 +637,7 @@ export function ClassroomsPage({
                               })}
                               {!visibleTeaching.length &&
                               !visibleExams.length ? (
-                                <p className="rounded-xl bg-[#f1f3f4] p-4 text-sm dark:bg-[#292a2d]">
+                                <p className="rounded-xl bg-[#f1f3f4] p-4 text-sm dark:bg-[#1c232b]">
                                   {detailPeriods.length
                                     ? "所选时间点空闲。"
                                     : "请选择至少一个时间点。"}
@@ -671,7 +671,7 @@ export function ClassroomsPage({
                         onClick={() =>
                           update({ room: roomView.family.space_family_id })
                         }
-                        className="rounded-xl border border-[#dadce0] bg-white p-4 text-left transition hover:border-[#8ab4f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:border-[#3c4043] dark:bg-[#292a2d]"
+                        className="rounded-xl border border-[#dadce0] bg-white p-4 text-left transition hover:border-[#8ab4f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:border-[#323a44] dark:bg-[#1c232b]"
                         aria-label={`${roomView.family.room_number}，${PERIOD_STATE_LABEL[state]}，打开详情`}
                       >
                         <span className="flex items-center justify-between gap-2">
