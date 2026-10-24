@@ -1,7 +1,7 @@
 ---
 import PlatformShell from '../components/PlatformShell.astro';
 ---
-<PlatformShell title="填写表单" active="forms" narrow={true}>
+<PlatformShell title="填写表单" active="forms" narrow={true} allowGuest={true}>
   <header class="p-heading"><div><h1 data-fill-title>填写表单</h1><p class="p-description" data-fill-description>正在加载表单内容……</p></div><a class="p-link" href="/forms/">返回表单列表</a></header>
   <div class="p-message" role="status" aria-live="polite" data-fill-status>正在加载……</div>
   <section class="p-card" data-fill-card hidden>

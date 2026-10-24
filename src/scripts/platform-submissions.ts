@@ -1,8 +1,10 @@
-import { api, button, el, empty, errorText, formatTime, message, pill, q, renderFields, renderSubmission, session, type FormDefinition, type Session, type Submission } from './platform-client';
+import { api, busy, button, el, empty, errorText, formatTime, message, pill, q, readAnswers, renderFields, renderSubmission, session, type FormDefinition, type Session, type Submission } from './platform-client';
 
 const status = q<HTMLElement>('[data-submissions-status]');
 let items: Submission[] = [];
 let identity: Session | null = null;
+let activeSubmission: Submission | null = null;
+let activeForm: FormDefinition | null = null;
 const CACHE_KEY = 'studev_submissions_cache';
 
 function render() {
@@ -52,6 +54,8 @@ async function show(id: string) {
       form: FormDefinition;
       canEdit?: boolean;
     }>(`/submissions/${encodeURIComponent(id)}`);
+    activeSubmission = result.submission;
+    activeForm = result.form;
     const content = q('[data-submission-content]');
     content.replaceChildren();
     renderSubmission(content, result.submission, result.form, (e) => message(status, errorText(e), 'error'));
@@ -66,6 +70,33 @@ async function show(id: string) {
     message(status, errorText(e), 'error');
   }
 }
+
+q<HTMLFormElement>('[data-submission-edit-form]').addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!activeSubmission || !activeForm) return;
+  const formNode = event.currentTarget as HTMLFormElement;
+  const submitBtn = formNode.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const run = async () => {
+    try {
+      const answers = readAnswers(formNode, activeForm!.fields);
+      const updated = await api<{ submission: Submission }>(`/submissions/${encodeURIComponent(activeSubmission!.id)}/edit`, {
+        answers,
+        revision: activeSubmission!.revision,
+      });
+      items = items.map((item) => (item.id === updated.submission.id ? { ...item, ...updated.submission } : item));
+      render();
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(items));
+      } catch {}
+      await show(updated.submission.id);
+      message(status, '修改已保存。', 'success');
+    } catch (e) {
+      message(status, errorText(e), 'error');
+    }
+  };
+  if (submitBtn) void busy(submitBtn, run);
+  else void run();
+});
 
 q('[data-submissions-search]').addEventListener('input', render);
 q<HTMLButtonElement>('[data-submission-close]').addEventListener('click', () => {

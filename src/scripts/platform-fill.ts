@@ -225,12 +225,15 @@ void (async () => {
             canSubmit: boolean;
             reason?: string;
         }>(`/forms/${encodeURIComponent(id)}`);
-        identity = await session(true);
-        if (!identity) return;
+        identity = await session(false);
         pending = receipts().filter(value => value.formId === id && !value.completed && !value.abandoned).at(-1) || null;
         let result:{form:FormDefinition;canSubmit:boolean;reason?:string};
         try {result = await formRequest;}
         catch(error){
+            if (!identity && error instanceof PlatformError && error.status === 401) {
+                location.replace(`/login/?next=${encodeURIComponent(location.pathname + location.search)}`);
+                return;
+            }
             if(!pending)throw error;
             const previous=await api<{submission:Submission;form:FormDefinition}>(`/submissions/${encodeURIComponent(pending.id)}`,undefined,{headers:{'X-Receipt-Token':pending.token}});
             result={form:previous.form,canSubmit:false,reason:'此表目前无法新填写。你仍可重试确认此前已申请的提交，或明确放弃。'};

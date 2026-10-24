@@ -60,6 +60,16 @@ a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-ra
 ::selection { color: var(--selection-ink); background: var(--blue); }
 
 .site-header { border-bottom: 1px solid var(--line); }
+@media (min-width: 681px) {
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(12px);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+  }
+}
 .header-inner, .footer-inner, .home, .listing {
   width: min(var(--max), calc(100% - 64px));
   margin-inline: auto;
@@ -501,6 +511,14 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
   min-height: 120px;
   padding: 22px 0 20px;
   border-bottom: 1px solid var(--line);
+  scroll-margin-top: 96px;
+  transition: background-color 0.35s ease, border-radius 0.35s ease, padding-inline 0.25s ease;
+}
+.member:target,
+.member.member-highlight {
+  background: var(--mark);
+  border-radius: 10px;
+  padding-inline: 14px;
 }
 .member-avatar { display: block; flex: none; width: 58px; height: 58px; border: 1px solid var(--avatar-line); border-radius: 50%; object-fit: cover; }
 .member-featured .member-avatar { width: 68px; height: 68px; }
@@ -510,8 +528,12 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .member-role { margin: 4px 0 0; color: var(--muted); font-size: .79rem; line-height: 1.45; }
 .member-signature { margin: 10px 0 0; color: var(--signature); font-size: .88rem; line-height: 1.55; overflow-wrap: anywhere; }
 .member-role + .member-signature { margin-top: 7px; }
-.skeleton-circle { background: var(--kbd); border-color: var(--line); }
-.skeleton-line { border-radius: 4px; background: var(--kbd); }
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.skeleton-circle { background: var(--kbd); border-color: var(--line); animation: skeleton-pulse 1.6s ease-in-out infinite; }
+.skeleton-line { border-radius: 4px; background: var(--kbd); animation: skeleton-pulse 1.6s ease-in-out infinite; }
 .skeleton-name { width: 84px; height: 18px; margin-top: 4px; }
 .skeleton-sig { width: 180px; max-width: 100%; height: 14px; margin-top: 12px; }
 
@@ -680,5 +702,6 @@ html[data-theme='dark'] .filter-tag-btn.active {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .entry-arrow { transition: none; }
-  .home-terminal, .terminal-link-pill, .project-btn { transition: none; }
+  .home-terminal, .terminal-link-pill, .project-btn, .member { transition: none; }
+  .skeleton-circle, .skeleton-line { animation: none; }
 }

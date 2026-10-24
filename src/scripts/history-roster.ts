@@ -22,6 +22,7 @@ interface RosterSnapshot {
 function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement {
   const article = document.createElement('article');
   article.className = featured ? 'member member-featured' : 'member';
+  article.id = `member-${person.name}`;
 
   const img = document.createElement('img');
   img.className = 'member-avatar';
@@ -92,6 +93,18 @@ function renderRoster(container: HTMLElement, countNode: HTMLElement | null, dat
   });
 }
 
+function scrollToHashTarget() {
+  if (!location.hash || location.hash === '#people') return;
+  try {
+    const rawId = decodeURIComponent(location.hash.slice(1));
+    const target = document.getElementById(rawId);
+    if (target) {
+      target.classList.add('member-highlight');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  } catch {}
+}
+
 async function initRoster() {
   const section = document.querySelector<HTMLElement>('[data-roster-term]');
   const container = document.querySelector<HTMLElement>('[data-roster-container]');
@@ -110,6 +123,7 @@ async function initRoster() {
       if (parsed && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
         cachedRaw = JSON.stringify(parsed.groups);
         renderRoster(container, countNode, parsed);
+        scrollToHashTarget();
       }
     }
   } catch {}
@@ -126,10 +140,7 @@ async function initRoster() {
     } catch {}
     if (freshRaw !== cachedRaw) {
       renderRoster(container, countNode, data);
-      if (location.hash && location.hash !== '#people') {
-        const target = document.querySelector(location.hash);
-        target?.scrollIntoView();
-      }
+      scrollToHashTarget();
     }
   } catch {
     if (!cachedRaw) {

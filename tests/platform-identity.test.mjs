@@ -573,6 +573,14 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   assert.equal(cleared.user.nickname, '李雅婷');
   assert.equal((await f.call('/public/roster?term=2026-2027', 'GET')).groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
 
+  // Owner can also set and clear a member's nickname via /admin/users/:id.
+  const ownerSetNick = await f.call(`/admin/users/${login.user.id}`, 'POST', { nickname: 'YatingAdmin', revision: cleared.user.revision }, owner);
+  assert.equal(ownerSetNick.user.nickname, 'YatingAdmin');
+  assert.equal((await f.call('/public/roster?term=2026-2027', 'GET')).groups[0].people.find((p) => p.name === '李雅婷').nickname, 'YatingAdmin');
+  const ownerClearedNick = await f.call(`/admin/users/${login.user.id}`, 'POST', { nickname: '', revision: ownerSetNick.user.revision }, owner);
+  assert.equal(ownerClearedNick.user.nickname, '李雅婷');
+  assert.equal((await f.call('/public/roster?term=2026-2027', 'GET')).groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
+
   // A stored snapshot from an older schema is rebuilt on read.
   const stale = await f.repo.get('roster/2026-2027.json');
   delete stale.schema;

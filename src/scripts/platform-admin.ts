@@ -1,4 +1,4 @@
-import { api, avatarUrl, busy, button, bytes, copy, el, empty, errorText, formatTime, labels, message, nameNode, pill, q, renderFields, renderSubmission, saveBlob, session, type Field, type FormDefinition, type Session, type Submission, type User, type SubmitterContact } from './platform-client';
+import { api, avatarUrl, busy, button, bytes, copy, el, empty, errorText, formatTime, labels, message, nameNode, nicknameOf, pill, q, renderFields, renderSubmission, saveBlob, session, type Field, type FormDefinition, type Session, type Submission, type User, type SubmitterContact } from './platform-client';
 const status = q<HTMLElement>('[data-admin-platform-status]');
 let identity: Session | null = null;
 let forms: FormDefinition[] = [];
@@ -25,18 +25,20 @@ async function confirmAction(title:string,description:string,password=false,name
  const student=q<HTMLInputElement>('#confirm-user-student-id');q('[data-confirm-student-field]').hidden=studentValue===undefined;student.value=studentValue||'';student.required=studentValue!==undefined;student.readOnly=!!studentValue;
  dialog.returnValue='';dialog.showModal();return new Promise(resolve=>dialog.addEventListener('close',()=>{const result=studentValue!==undefined?JSON.stringify({studentId:student.value.trim().toUpperCase(),realName:name.value.trim()}):password?input.value:nameValue!==undefined?name.value.trim():'';input.value='';name.value='';student.value='';resolve(dialog.returnValue==='confirm'?result:null);},{once:true}));
 }
-async function editRosterModal(user: User): Promise<{ term: string; department: string; title: string; signature: string; order: number } | null> {
+async function editRosterModal(user: User): Promise<{ nickname: string; term: string; department: string; title: string; signature: string; order: number } | null> {
     const dialog = q<HTMLDialogElement>('[data-roster-edit-modal]');
     q('[data-roster-edit-title]').textContent = `编辑档案 · ${user.realName || user.nickname}`;
     const termInput = q<HTMLInputElement>('#roster-edit-term');
     const orderInput = q<HTMLInputElement>('#roster-edit-order');
     const deptInput = q<HTMLInputElement>('#roster-edit-department');
     const titleInput = q<HTMLInputElement>('#roster-edit-role-title');
+    const nickInput = q<HTMLInputElement>('#roster-edit-nickname');
     const sigInput = q<HTMLInputElement>('#roster-edit-signature');
     termInput.value = user.term || '';
     orderInput.value = String(user.order ?? 999);
     deptInput.value = user.department || '';
     titleInput.value = user.title || '';
+    nickInput.value = nicknameOf(user);
     sigInput.value = user.signature || '';
     dialog.returnValue = '';
     dialog.showModal();
@@ -48,6 +50,7 @@ async function editRosterModal(user: User): Promise<{ term: string; department: 
             }
             const parsedOrder = Number.parseInt(orderInput.value, 10);
             resolve({
+                nickname: nickInput.value.trim(),
                 term: termInput.value.trim(),
                 department: deptInput.value.trim(),
                 title: titleInput.value.trim(),
@@ -203,7 +206,7 @@ async function showRecord(id: string) { const data = await api<{
     submission: Submission;
     form: FormDefinition;
     submitterContact?: SubmitterContact;
-}>(`/submissions/${encodeURIComponent(id)}`); selected = data.submission; const content = q('[data-records-content]'); content.replaceChildren(); renderSubmission(content, data.submission, data.form, e => message(status, errorText(e), 'error')); if(data.submitterContact){const contact=el('section',undefined,'p-message');contact.append(el('strong','当前账号与联系方式'));const meta=el('dl',undefined,'p-meta');meta.append(el('dt','学号'),el('dd',data.submitterContact.studentId||'待补充'),el('dt','姓名'),el('dd',data.submitterContact.realName||'待补充'),el('dt','昵称'),el('dd',data.submitterContact.nickname),el('dt','QQ 号'),el('dd',data.submitterContact.qq),el('dt','邮箱'),el('dd',data.submitterContact.email));contact.append(meta,button('复制联系方式',()=>copy(`${data.submitterContact!.studentId||''} · ${data.submitterContact!.realName||data.submitterContact!.nickname} · QQ ${data.submitterContact!.qq} · ${data.submitterContact!.email}`,status)));content.append(contact);} q('[data-records-review]').hidden = !data.form.requireReview || data.submission.status === 'uploading'; q<HTMLTextAreaElement>('#record-review-comment').value = data.submission.review?.comment || ''; q('[data-records-detail]').hidden = false; q('[data-records-detail]').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}>(`/submissions/${encodeURIComponent(id)}`); selected = data.submission; const content = q('[data-records-content]'); content.replaceChildren(); renderSubmission(content, data.submission, data.form, e => message(status, errorText(e), 'error')); if(data.submitterContact){const contact=el('section',undefined,'p-message');contact.append(el('strong','当前账号与联系方式'));const meta=el('dl',undefined,'p-meta');meta.append(el('dt','学号'),el('dd',data.submitterContact.studentId||'待补充'),el('dt','姓名'),el('dd',data.submitterContact.realName||'待补充'),el('dt','昵称'),el('dd',nicknameOf(data.submitterContact)||'未设置'),el('dt','QQ 号'),el('dd',data.submitterContact.qq),el('dt','邮箱'),el('dd',data.submitterContact.email));contact.append(meta,button('复制联系方式',()=>copy(`${data.submitterContact!.studentId||''} · ${data.submitterContact!.realName||data.submitterContact!.nickname} · QQ ${data.submitterContact!.qq} · ${data.submitterContact!.email}`,status)));content.append(contact);} q('[data-records-review]').hidden = !data.form.requireReview || data.submission.status === 'uploading'; q<HTMLTextAreaElement>('#record-review-comment').value = data.submission.review?.comment || ''; q('[data-records-detail]').hidden = false; q('[data-records-detail]').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 q<HTMLFormElement>('[data-records-review]').addEventListener('submit', event => { event.preventDefault(); const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null; if (!selected || !submitter)
     return; void guard(async () => { await busy(submitter, async () => { const id = selected!.id; await api(`/submissions/${encodeURIComponent(id)}/review`, { status: submitter.value, comment: q<HTMLTextAreaElement>('#record-review-comment').value, revision: selected!.revision }); await openRecords(activeForm!); await showRecord(id); message(status, '审核结果已保存，填写者可查看。', 'success'); }); }); });
 q('[data-records-export]').addEventListener('click', () => { void guard(async () => { if (!activeForm)
@@ -367,20 +370,62 @@ function renderUsers() {
     wrap.append(table);
     root.append(wrap);
 }
-const auditLabels: Record<string, string> = { 'identity.owner.initialized': '初始化所有者', 'identity.registered': '注册账号', 'identity.profile.updated': '修改资料', 'identity.password.changed': '修改密码', 'identity.totp.enabled': '绑定验证器', 'identity.totp.disabled': '停用验证器', 'identity.password.reset': '重置密码', 'identity.totp.reset': '重置验证器', 'identity.user.updated': '调整账号与档案', 'identity.user.seeded': '预录在编成员', 'identity.roster.synced': '同步历届名录', 'auth.register': '注册账号', 'auth.login': '登录', 'auth.logout': '退出登录', 'auth.password': '修改密码', 'auth.profile': '修改资料', 'auth.totp.confirm': '绑定验证器', 'user.update': '调整账号', 'user.reset-password': '重置密码', 'user.reset-totp': '重置验证器', 'form.create': '新建表单', 'form.update': '修改表单', 'form.duplicate': '复制表单', 'form.delete': '删除表单', 'submission.review': '审核提交', 'submission.edit': '修改提交' };
-async function refreshAudit() { const result = await api<{
-    items: Record<string, unknown>[];
-}>('/admin/audit'); const root = q('[data-audit-list]'); root.replaceChildren(); if (!result.items.length) {
-    root.append(empty('暂无操作记录', '关键账号和表单操作会在这里留下记录。'));
-    return;
-} const wrap = el('div', undefined, 'p-table-wrap'); const table = el('table', undefined, 'p-table'); const head = el('thead'); const titles = el('tr'); for (const label of ['时间', '操作', '操作者', '对象', '详情'])
-    titles.append(el('th', label)); head.append(titles); const body = el('tbody'); for (const item of result.items) {
-    const row = el('tr');
-    const actor = typeof item.actor === 'object' && item.actor !== null ? item.actor as Record<string, unknown> : null;
-    const actorName = actor ? String(actor.nickname || actor.qq || actor.id || '系统') : users.find(u => u.id === item.actorId)?.nickname || (item.actorId === identity?.user.id ? identity?.user.nickname || '当前用户' : String(item.actorId || '系统'));
-    row.append(el('td', formatTime(String(item.createdAt || item.time || ''))), el('td', auditLabels[String(item.action)] || String(item.action || '—')), el('td', actorName), el('td', String(item.target || '—')), el('td', item.details ? JSON.stringify(item.details) : '—'));
-    body.append(row);
-} table.append(head, body); wrap.append(table); root.append(wrap); }
+const auditLabels: Record<string, string> = { 'identity.owner.initialized': '初始化所有者', 'identity.registered': '注册账号', 'identity.profile.bound': '绑定实名身份', 'identity.profile.updated': '修改资料', 'identity.profile.corrected': '更正实名信息', 'identity.verification.updated': '核验身份状态', 'identity.password.changed': '修改密码', 'identity.totp.enabled': '绑定验证器', 'identity.totp.disabled': '停用验证器', 'identity.password.reset': '重置密码', 'identity.totp.reset': '重置验证器', 'identity.user.updated': '调整账号与档案', 'identity.user.deleted': '删除账号', 'identity.user.seeded': '预录在编成员', 'identity.roster.synced': '同步历届名录', 'auth.register': '注册账号', 'auth.login': '登录', 'auth.logout': '退出登录', 'auth.password': '修改密码', 'auth.profile': '修改资料', 'auth.totp.confirm': '绑定验证器', 'user.update': '调整账号', 'user.reset-password': '重置密码', 'user.reset-totp': '重置验证器', 'form.create': '新建表单', 'form.update': '修改表单', 'form.duplicate': '复制表单', 'form.delete': '删除表单', 'submission.review': '审核提交', 'submission.edit': '修改提交' };
+function resolveAuditEntity(idOrTarget: unknown): string {
+    const raw = String(idOrTarget || '').trim();
+    if (!raw) return '—';
+    const u = users.find((item) => item.id === raw);
+    if (u) return `${u.realName || u.nickname}${u.studentId ? `（${u.studentId}）` : ''}`;
+    if (identity?.user.id === raw) return `${identity.user.realName || identity.user.nickname}${identity.user.studentId ? `（${identity.user.studentId}）` : ''}`;
+    const f = forms.find((item) => item.id === raw);
+    if (f) return `表单《${f.title}》`;
+    return raw;
+}
+function formatAuditDetails(details: unknown): string {
+    if (!details || typeof details !== 'object') return '—';
+    const d = details as Record<string, unknown>;
+    const parts: string[] = [];
+    if (d.department) parts.push(`部门：${d.department}`);
+    if (d.role) parts.push(`角色：${labels[String(d.role)] || d.role}`);
+    if (d.status) parts.push(`状态：${labels[String(d.status)] || d.status}`);
+    if (typeof d.seeded === 'number' || typeof d.totalRoster === 'number') parts.push(`新增预录 ${d.seeded ?? 0} 人 / 在编 ${d.totalRoster ?? 0} 人`);
+    return parts.length ? parts.join(' · ') : JSON.stringify(details);
+}
+async function refreshAudit() {
+    const [result] = await Promise.all([
+        api<{ items: Record<string, unknown>[] }>('/admin/audit'),
+        !users.length && identity?.user.role === 'owner' ? refreshUsers().catch(() => {}) : Promise.resolve(),
+    ]);
+    const root = q('[data-audit-list]');
+    root.replaceChildren();
+    if (!result.items.length) {
+        root.append(empty('暂无操作记录', '关键账号和表单操作会在这里留下记录。'));
+        return;
+    }
+    const wrap = el('div', undefined, 'p-table-wrap');
+    const table = el('table', undefined, 'p-table');
+    const head = el('thead');
+    const titles = el('tr');
+    for (const label of ['时间', '操作', '操作者', '对象', '详情']) titles.append(el('th', label));
+    head.append(titles);
+    const body = el('tbody');
+    for (const item of result.items) {
+        const row = el('tr');
+        const actor = typeof item.actor === 'object' && item.actor !== null ? item.actor as Record<string, unknown> : null;
+        const actorName = actor ? String(actor.realName || actor.nickname || actor.qq || actor.id || '系统') : resolveAuditEntity(item.actorId || '系统');
+        row.append(
+            el('td', formatTime(String(item.createdAt || item.time || ''))),
+            el('td', auditLabels[String(item.action)] || String(item.action || '—')),
+            el('td', actorName),
+            el('td', resolveAuditEntity(item.target)),
+            el('td', formatAuditDetails(item.details))
+        );
+        body.append(row);
+    }
+    table.append(head, body);
+    wrap.append(table);
+    root.append(wrap);
+}
 q('[data-admin-new]').addEventListener('click', () => openEditor(null));
 q('[data-admin-refresh]').addEventListener('click', () => { void guard(refreshForms); });
 q('[data-admin-form-search]').addEventListener('input', renderForms);
@@ -413,6 +458,14 @@ document.querySelectorAll<HTMLButtonElement>('[data-admin-tab]').forEach(b => b.
 window.addEventListener('beforeunload', event => { if (dirty) {
     event.preventDefault();
 } });
-void guard(async () => { identity = await session(true, true); if (!identity)
-    return; if (identity.user.role === 'owner')
-    document.querySelectorAll<HTMLElement>('[data-owner-only]').forEach(n => n.hidden = false); q('[data-admin-platform]').hidden = false; await refreshForms(); message(status); });
+void guard(async () => {
+    identity = await session(true, true);
+    if (!identity) return;
+    if (identity.user.role === 'owner') {
+        document.querySelectorAll<HTMLElement>('[data-owner-only]').forEach(n => n.hidden = false);
+        void refreshUsers().catch(() => {});
+    }
+    q('[data-admin-platform]').hidden = false;
+    await refreshForms();
+    message(status);
+});

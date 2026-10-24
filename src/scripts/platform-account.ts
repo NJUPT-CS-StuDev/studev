@@ -45,7 +45,8 @@ function renderIdCard(user: User) {
 
     if (user.term && user.department) {
         const archiveLink = el('a', '在历届档案中查看我的名片 ↗', 'p-link');
-        archiveLink.href = `/history/${encodeURIComponent(user.term)}/#people`;
+        const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
+        archiveLink.href = `/history/${encodeURIComponent(user.term)}/${anchor}`;
         archiveLink.style.display = 'inline-block';
         archiveLink.style.marginTop = '8px';
         body.append(archiveLink);

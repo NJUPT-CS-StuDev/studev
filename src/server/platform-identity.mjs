@@ -591,10 +591,11 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (!['owner', 'admin', 'member'].includes(role) || !['active', 'disabled', 'pending'].includes(status)) fail(400, 'INVALID_ROLE', '账号角色或状态无效。');
       if (user.role === 'owner' && (role !== 'owner' || status !== 'active')) fail(403, 'LAST_OWNER_PROTECTED', '不能停用或降级平台所有者。');
       if (role === 'owner' && user.role !== 'owner') fail(403, 'OWNER_PROVISIONING_REQUIRED', '所有者由受控初始化配置管理。');
-      const nickname = body.nickname === undefined ? user.nickname : text(body.nickname, '昵称', 40, true);
       const studentId = body.studentId === undefined ? (user.studentId || '') : normalizeStudentId(body.studentId);
       if (user.studentId && studentId !== user.studentId) fail(403, 'STUDENT_ID_LOCKED', '学号由首次绑定锁定，更正需受控维护，不能在此直接修改。');
       const realName = body.realName === undefined ? (user.realName || '') : normalizeRealName(body.realName);
+      const rawNick = body.nickname === undefined ? undefined : String(body.nickname).trim();
+      const nickname = rawNick === undefined ? user.nickname : rawNick === '' ? (realName || user.realName || user.qq) : text(rawNick, '昵称', 40, true);
       const nameChanged = realName !== (user.realName || '');
       const identityChanged = studentId !== (user.studentId || '') || nameChanged;
       if (studentId && !user.studentId && !realName) fail(400, 'INVALID_REAL_NAME', '首次绑定学号时请同时填写真实姓名。');
