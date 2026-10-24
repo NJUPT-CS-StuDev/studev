@@ -1,6 +1,6 @@
 ---
-title: "五星联动与赛博新秩序：njupt-search 及其背后的南邮开源宇宙"
-shortTitle: "njupt-search 开源宇宙"
+title: "五星联动与赛博新秩序：studev-search（原 njupt-search）及其背后的南邮开源宇宙"
+shortTitle: "studev-search 开源宇宙"
 description: "从教务数据解析、网站图谱到 3D 地图与零后端 Rust 引擎：为整座大学构筑的数字化公共基建。"
 pubDate: "2026-10-12"
 tags: ["开源与代码", "校园基建", "Rust与离线搜索"]

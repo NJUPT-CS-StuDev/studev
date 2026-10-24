@@ -77,9 +77,9 @@ a:not(#root *):focus-visible { outline: 2px solid var(--blue); outline-offset: 4
 .header-inner {
   min-height: 76px;
   display: grid;
-  grid-template-columns: 56px 1fr auto 36px;
+  grid-template-columns: 56px minmax(190px, 310px) 1fr auto 36px;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
 }
 .brand {
   display: inline-flex;
@@ -92,7 +92,152 @@ a:not(#root *):focus-visible { outline: 2px solid var(--blue); outline-offset: 4
   border-radius: 10px;
 }
 .brand img { display: block; width: 56px; height: 56px; object-fit: contain; }
-.site-nav { display: flex; align-items: center; justify-self: end; gap: clamp(16px, 2.6vw, 32px); }
+.header-search {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.header-search-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--code-block);
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+.header-search.is-active .header-search-form,
+.header-search:focus-within .header-search-form {
+  border-color: var(--blue);
+  background: var(--paper);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 14%, transparent);
+}
+.header-search-icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.header-search-icon-link:hover,
+.header-search.is-active .header-search-icon-link,
+.header-search:focus-within .header-search-icon-link {
+  color: var(--blue);
+}
+.header-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+}
+.header-search-input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.header-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+.header-search-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1;
+  pointer-events: none;
+}
+.header-search:focus-within .header-search-kbd {
+  opacity: 0;
+}
+.header-search-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: max(100%, 312px);
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+  z-index: 60;
+}
+html[data-theme='dark'] .header-search-panel {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+}
+.header-search:focus-within .header-search-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.header-search-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.header-search-brand {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+.header-search-brand span {
+  color: var(--blue);
+}
+.header-search-home {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--blue);
+}
+.header-search-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.header-search-grid a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--code-block);
+  color: var(--ink);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.header-search-grid a:hover {
+  border-color: var(--blue);
+  background: var(--mark);
+  color: var(--blue);
+}
+.site-nav { display: flex; align-items: center; justify-self: end; gap: clamp(14px, 2.2vw, 28px); }
 .site-nav a {
   display: inline-flex;
   align-items: center;
@@ -943,14 +1088,31 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .text-copy:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
 .copy-fallback { width: 100%; min-width: 0; flex-basis: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: var(--paper); font-family: var(--font-mono); font-size: .75rem; }
 
+@media (max-width: 920px) and (min-width: 681px) {
+  .header-inner {
+    grid-template-columns: 48px minmax(145px, 210px) 1fr auto 36px;
+    gap: 12px;
+  }
+  .brand, .brand img { width: 48px; height: 48px; }
+  .header-search-kbd { display: none; }
+}
+
 @media (max-width: 680px) {
   .header-inner, .footer-inner, .home, .listing, .detail-wrap, .term-page { width: calc(100% - 40px); }
-  .header-inner { grid-template-columns: 1fr auto 36px; gap: 0; min-height: 0; }
-  .nav-account { min-height: 48px; font-size: clamp(.75rem, 2.8vw, .88rem); margin-right: 8px; }
-  .brand { width: 52px; height: 60px; }
-  .brand img { width: 52px; height: 52px; }
+  .header-inner { grid-template-columns: 46px 1fr auto 36px; gap: 0 8px; min-height: 0; padding-top: 6px; }
+  .nav-account { min-height: 44px; font-size: clamp(.75rem, 2.8vw, .88rem); margin-right: 2px; }
+  .brand { width: 46px; height: 48px; }
+  .brand img { width: 44px; height: 44px; }
+  .header-search-form { height: 34px; padding: 0 10px; }
+  .header-search-input { font-size: 0.8rem; }
+  .header-search-kbd { display: none; }
+  .header-search-panel {
+    left: -54px;
+    width: calc(100vw - 40px);
+    max-width: 360px;
+  }
   .site-nav { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; justify-content: space-between; gap: 10px; }
-  .site-nav a { min-height: 48px; font-size: clamp(.75rem, 2.8vw, .88rem); }
+  .site-nav a { min-height: 44px; font-size: clamp(.75rem, 2.8vw, .88rem); }
   main, .home { min-height: calc(100vh - 178px); }
   .home { padding-block: 64px; }
   .home h1 { font-size: clamp(3.7rem, 16vw, 5.7rem); }
