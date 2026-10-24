@@ -131,7 +131,7 @@ graph TD
 #### 步骤 2：源码物理溯源
 
 1. 打开 [StuDev 的官方 GitHub 仓库](https://github.com/NJUPT-CS-StuDev/studev)；
-2. 在文件列表中，顺着路径点开：`src` $\to$ `pages` $\to$ `index.astro`；
+2. 在文件列表中，顺着路径点开：`src` → `pages` → `index.astro`；
 3. 对照着你正在访问的 [StuDev 网站首页](https://studev.hicancan.top/)，仔细看一眼代码文件：找一找哪一行写出了网站的名字，哪一行定义了首页的介绍文字。
 
 > [!TIP]
