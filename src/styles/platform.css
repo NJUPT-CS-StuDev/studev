@@ -78,6 +78,7 @@
 .p-id-body { min-width:240px; flex:1; border-left:1px solid var(--line); padding-left:24px; }
 .p-id-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; margin-bottom:6px; }
 .p-id-head h2 { margin:0; font-size:1.32rem; font-weight:650; letter-spacing:-.02em; }
+.p-nick { margin-left:.45em; color:var(--muted); font-size:.78em; font-weight:400; letter-spacing:.01em; overflow-wrap:anywhere; }
 .p-id-sub { margin:0; color:var(--muted); font-size:.84rem; line-height:1.5; font-variant-numeric:tabular-nums; }
 .p-id-org { margin:0; color:var(--ink); font-size:.88rem; font-weight:550; line-height:1.55; }
 .p-id-sig { margin:6px 0 0; color:var(--signature,var(--muted)); font-size:.87rem; line-height:1.55; font-style:italic; }

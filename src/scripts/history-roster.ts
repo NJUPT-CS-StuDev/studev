@@ -1,5 +1,6 @@
 interface RosterPerson {
   name: string;
+  nickname?: string;
   role?: string;
   avatarUrl: string;
   signature?: string;
@@ -38,6 +39,12 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
 
   const h4 = document.createElement('h4');
   h4.textContent = person.name;
+  if (person.nickname && person.nickname !== person.name) {
+    const nick = document.createElement('span');
+    nick.className = 'member-nick';
+    nick.textContent = person.nickname;
+    h4.append(nick);
+  }
   copy.append(h4);
 
   if (person.role) {

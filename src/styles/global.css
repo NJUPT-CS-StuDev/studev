@@ -506,6 +506,7 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .member-featured .member-avatar { width: 68px; height: 68px; }
 .member-copy { min-width: 0; padding-top: 1px; }
 .member h4 { margin: 0; font-size: 1.1rem; font-weight: 500; line-height: 1.4; }
+.member-nick { margin-left: .45em; color: var(--muted); font-size: .8em; font-weight: 400; letter-spacing: .01em; overflow-wrap: anywhere; }
 .member-role { margin: 4px 0 0; color: var(--muted); font-size: .79rem; line-height: 1.45; }
 .member-signature { margin: 10px 0 0; color: var(--signature); font-size: .88rem; line-height: 1.55; overflow-wrap: anywhere; }
 .member-role + .member-signature { margin-top: 7px; }

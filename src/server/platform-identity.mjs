@@ -3,7 +3,7 @@ import { digest, hashPassword, mac, safeEqual, validPasswordHash, verifyPassword
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './platform-totp.mjs';
-import { ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, qqAvatarUrl } from './platform-roster.mjs';
+import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, qqAvatarUrl } from './platform-roster.mjs';
 
 const API = '/api/platform';
 const MAX_SESSION_SECONDS = 7200;
@@ -339,6 +339,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
       if (!snapshot) snapshot = await seedAndSyncRoster(term);
+      else if (snapshot.schema !== ROSTER_SCHEMA) snapshot = await rebuildRoster(term);
       return response(snapshot, 200, { 'Cache-Control': 'public, max-age=10, stale-while-revalidate=60' });
     }
     if (method === 'POST' && route === '/admin/roster/sync') {
@@ -455,7 +456,10 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const realName = body.realName === undefined && current.realName ? current.realName : normalizeRealName(body.realName);
       if ((current.studentId && studentId !== current.studentId) || (current.realName && realName !== current.realName)) fail(403, 'IDENTITY_LOCKED', '学号与真实姓名绑定后不可自行修改，请联系所有者核对。');
       const changedIdentity = studentId !== current.studentId || realName !== current.realName;
-      const nickname = body.nickname === undefined ? (current.nickname || realName) : text(body.nickname, '昵称', 40, true);
+      // Empty nickname clears it (falls back to realName, which display layers treat as "no nickname").
+      const nickname = body.nickname === undefined ? (current.nickname || realName)
+        : String(body.nickname).trim() === '' ? realName
+        : text(body.nickname, '昵称', 40, true);
       const signature = body.signature === undefined ? (current.signature || '') : text(body.signature, '个性签名', 120, false);
       await bindStudent(current, studentId, realName);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });

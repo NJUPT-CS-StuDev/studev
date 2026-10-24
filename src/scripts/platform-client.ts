@@ -102,6 +102,18 @@ export function q<T extends Element = HTMLElement>(selector: string, root: Paren
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] { const node = document.createElement(tag); if (text !== undefined)
     node.textContent = text; if (className)
     node.className = className; return node; }
+/** Nickname worth showing: non-empty and different from real name / student ID / QQ (legacy records default it to realName). */
+export function nicknameOf(user: { nickname?: string; realName?: string; studentId?: string; qq?: string }): string {
+    const nick = (user.nickname || '').trim();
+    return !nick || nick === user.realName || nick === user.studentId || nick === user.qq ? '' : nick;
+}
+/** Real name as the primary label, with a distinct nickname appended in a muted span: “吴双灿 hicancan”. */
+export function nameNode<K extends keyof HTMLElementTagNameMap>(tag: K, user: { nickname?: string; realName?: string; studentId?: string; qq?: string }, className?: string): HTMLElementTagNameMap[K] {
+    const node = el(tag, user.realName || user.nickname || user.studentId || user.qq || '', className);
+    const nick = user.realName ? nicknameOf(user) : '';
+    if (nick) node.append(el('span', nick, 'p-nick'));
+    return node;
+}
 export function button(text: string, fn: () => void | Promise<void>, style = 'secondary small'): HTMLButtonElement {
     const b = el('button', text, `p-button ${style}`);
     b.type = 'button';

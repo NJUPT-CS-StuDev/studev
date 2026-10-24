@@ -187,6 +187,16 @@ export function qqAvatarUrl(qq) {
     : '';
 }
 
+/** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
+export const ROSTER_SCHEMA = 2;
+
+/** A nickname is only meaningful when it differs from the real name (legacy records default nickname to realName). */
+export function distinctNickname(user) {
+  const nick = typeof user?.nickname === 'string' ? user.nickname.trim() : '';
+  if (!nick || nick === user.realName || nick === user.studentId || nick === user.qq) return '';
+  return nick;
+}
+
 export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new Date().toISOString()) {
   const rosterUsers = users
     .filter((u) => u && u.term === term && u.department && u.status !== 'disabled')
@@ -205,6 +215,7 @@ export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new D
         .filter((u) => u.department === deptName)
         .map((u) => ({
           name: u.realName || u.nickname,
+          nickname: u.realName ? distinctNickname(u) : '',
           role: u.title || '',
           avatarUrl: u.avatarUrl || qqAvatarUrl(u.qq),
           signature: u.signature || '',
@@ -215,6 +226,7 @@ export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new D
     .filter((g) => g.people.length > 0);
 
   return {
+    schema: ROSTER_SCHEMA,
     term,
     updatedAt,
     totalCount: rosterUsers.length,

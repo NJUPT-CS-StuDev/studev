@@ -1,4 +1,4 @@
-import { api, avatarUrl, busy, copy, el, errorText, initPasswordToggles, labels, message, pill, q, saveBlob, session, type Session, type User } from './platform-client';
+import { api, avatarUrl, busy, copy, el, errorText, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, saveBlob, session, type Session, type User } from './platform-client';
 const status = q<HTMLElement>('[data-account-status]');
 let current: Session | null = null;
 let secret = '';
@@ -18,7 +18,7 @@ function renderIdCard(user: User) {
 
     const titleWrap = el('div', undefined, 'p-id-title-wrap');
     const head = el('div', undefined, 'p-id-head');
-    head.append(el('h2', user.realName || user.nickname), pill(user.role));
+    head.append(nameNode('h2', user), pill(user.role));
     if (user.identityVerified) {
         const verified = el('span', '已实名入档', 'p-pill');
         verified.dataset.state = 'active';
@@ -26,7 +26,7 @@ function renderIdCard(user: User) {
     }
     titleWrap.append(head);
     if (user.studentId) {
-        titleWrap.append(el('p', `学号 ${user.studentId}${user.nickname && user.nickname !== user.realName ? ` · 昵称 ${user.nickname}` : ''}`, 'p-id-sub'));
+        titleWrap.append(el('p', `学号 ${user.studentId}`, 'p-id-sub'));
     }
     top.append(img, titleWrap);
 
@@ -65,6 +65,7 @@ function render() {
     const metaRows: [string, string][] = [
         ['学号', user.studentId || '待补充'],
         ['姓名', user.realName || '待补充'],
+        ['昵称', nicknameOf(user) || '未设置'],
         ['所属部门', user.department ? `${user.term ? user.term + ' · ' : ''}${user.department}${user.title ? '（' + user.title + '）' : ''}` : '普通成员'],
         ['QQ 号', user.qq],
         ['联系邮箱', user.email || `${user.qq}@qq.com`],
@@ -74,7 +75,7 @@ function render() {
     for (const [key, value] of metaRows) {
         info.append(el('dt', key), el('dd', value));
     }
-    q<HTMLInputElement>('#account-nickname').value = user.nickname;
+    q<HTMLInputElement>('#account-nickname').value = nicknameOf(user);
     q<HTMLInputElement>('#account-signature').value = user.signature || '';
     q('[data-profile-identity]').hidden = !incomplete;
     const studentId = q<HTMLInputElement>('#account-student-id');
@@ -118,7 +119,7 @@ q<HTMLFormElement>('[data-profile-form]').addEventListener('submit', async (e) =
     try {
         await busy(b, async () => {
             const result = await api<{ user: User }>('/auth/profile', {
-                nickname: q<HTMLInputElement>('#account-nickname').value.trim() || undefined,
+                nickname: q<HTMLInputElement>('#account-nickname').value.trim(),
                 signature: q<HTMLInputElement>('#account-signature').value.trim(),
                 ...(!current!.user.profileComplete ? {
                     studentId: q<HTMLInputElement>('#account-student-id').value.trim().toUpperCase(),

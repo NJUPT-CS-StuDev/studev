@@ -1,4 +1,4 @@
-import { api, avatarUrl, busy, button, bytes, copy, el, empty, errorText, formatTime, labels, message, pill, q, renderFields, renderSubmission, saveBlob, session, type Field, type FormDefinition, type Session, type Submission, type User, type SubmitterContact } from './platform-client';
+import { api, avatarUrl, busy, button, bytes, copy, el, empty, errorText, formatTime, labels, message, nameNode, pill, q, renderFields, renderSubmission, saveBlob, session, type Field, type FormDefinition, type Session, type Submission, type User, type SubmitterContact } from './platform-client';
 const status = q<HTMLElement>('[data-admin-platform-status]');
 let identity: Session | null = null;
 let forms: FormDefinition[] = [];
@@ -262,9 +262,8 @@ function renderUsers() {
         img.referrerPolicy = 'no-referrer';
 
         const infoBox = el('div', undefined, 'p-user-info');
-        infoBox.append(el('strong', display));
+        infoBox.append(nameNode('strong', user));
         infoBox.append(el('small', user.studentId ? `学号 ${user.studentId}` : '待补全学号'));
-        if (user.nickname && user.nickname !== user.realName) infoBox.append(el('small', `昵称 ${user.nickname}`));
         if (user.department) {
             const deptBadge = el('span', `${user.term ? user.term + ' · ' : ''}${user.department}${user.title ? ' · ' + user.title : ''}`, 'p-user-dept');
             infoBox.append(deptBadge);

@@ -557,4 +557,26 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   assert.equal(ownerEdited.user.title, '分管主席 · 媒体宣传部');
   const afterOwnerEdit = await f.call('/public/roster?term=2026-2027', 'GET');
   assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').role, '分管主席 · 媒体宣传部');
+
+  // Nickname equal to realName is treated as "no nickname"; a distinct one is projected publicly.
+  assert.equal(afterOwnerEdit.schema, 2);
+  assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
+  // Role change rotated the security version, so the member signs in again.
+  const relogin = await f.call('/auth/login', 'POST', { studentId: 'B24041902', password: MEMBER_PASSWORD });
+  const withNick = await f.call('/auth/profile', 'POST', { nickname: 'Yating', revision: relogin.user.revision }, relogin);
+  assert.equal(withNick.user.nickname, 'Yating');
+  const nickRoster = await f.call('/public/roster?term=2026-2027', 'GET');
+  assert.equal(nickRoster.groups[0].people.find((p) => p.name === '李雅婷').nickname, 'Yating');
+
+  // Sending an empty nickname clears it (stored as realName, displayed as nothing).
+  const cleared = await f.call('/auth/profile', 'POST', { nickname: '', revision: withNick.user.revision }, relogin);
+  assert.equal(cleared.user.nickname, '李雅婷');
+  assert.equal((await f.call('/public/roster?term=2026-2027', 'GET')).groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
+
+  // A stored snapshot from an older schema is rebuilt on read.
+  const stale = await f.repo.get('roster/2026-2027.json');
+  delete stale.schema;
+  await f.repo.put('roster/2026-2027.json', stale);
+  const healed = await f.call('/public/roster?term=2026-2027', 'GET');
+  assert.equal(healed.schema, 2);
 });
