@@ -1,7 +1,6 @@
 import { api, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, saveBlob, session, type Session, type User } from './platform-client';
 
 const status = q<HTMLElement>('[data-account-status]');
-const shell = q<HTMLElement>('[data-account-shell]');
 let current: Session | null = null;
 let members: User[] = [];
 let secret = '';
@@ -23,7 +22,6 @@ function switchTab(name: string) {
   document.querySelectorAll<HTMLButtonElement>('[data-account-tab]').forEach((b) => {
     b.setAttribute('aria-selected', String(b.dataset.accountTab === name));
   });
-  shell.classList.toggle('platform-narrow', name === 'profile');
 }
 
 async function confirmAction(title: string, description: string, password = false): Promise<string | null> {

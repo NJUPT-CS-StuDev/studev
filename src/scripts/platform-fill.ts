@@ -1,4 +1,4 @@
-import { api, bytes, busy, copy, el, errorText, formatTime, message, pill, PlatformError, q, readAnswers, renderFields, safeStorageUrl, session, type FormDefinition, type Session, type Submission } from './platform-client';
+import { api, bytes, busy, copy, el, errorText, formatTime, message, PlatformError, q, readAnswers, renderFields, safeStorageUrl, session, type FormDefinition, type Session, type Submission } from './platform-client';
 import { receipts, rememberReceipt, receiptStorageAvailable, type LocalReceipt } from './platform-receipts';
 import {saveBlob} from './platform-client';
 interface Upload {

@@ -1,8 +1,8 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
 import '../styles/platform.css';
-interface Props { title: string; description?: string; active?: string; narrow?: boolean; }
-const {title, description = 'StuDev 表单与信息登记', active = '', narrow = false} = Astro.props;
+interface Props { title: string; description?: string; active?: string; }
+const {title, description = 'StuDev 表单与信息登记', active = ''} = Astro.props;
 ---
 <SiteLayout title={`${title} — StuDev`} description={description} active="forms" noindex={true}>
   <script is:inline>
@@ -13,7 +13,7 @@ const {title, description = 'StuDev 表单与信息登记', active = '', narrow 
       }
     } catch {}
   </script>
-  <div class:list={['platform', { 'platform-narrow': narrow }]}>
+  <div class="platform">
     <nav class="p-nav" aria-label="表单导航">
       <div class="p-nav-group">
         <a href="/forms/" aria-current={active === 'forms' ? 'page' : undefined}>全部表单</a>

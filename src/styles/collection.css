@@ -87,8 +87,10 @@
 :root[data-theme=dark] .collection-pill[data-state=accepted] { color: #9bdfad; }
 :root[data-theme=dark] .collection-pill[data-state=rejected] { color: #ffd7b5; }
 .collection-nojs { color: var(--muted); font-size: .88rem; padding: 16px; background: var(--alert-warning); border-radius: 8px; }
+@media (max-width: 680px) {
+  .collection-page { width: calc(100% - 40px); padding-top: 36px; }
+}
 @media (max-width: 760px) {
-  .collection-page { width: calc(100% - 36px); padding-top: 36px; }
   .collection-grid { grid-template-columns: 1fr; }
   .collection-card { padding: 22px 18px; }
   .collection-count { width: 100%; margin-left: 0; }

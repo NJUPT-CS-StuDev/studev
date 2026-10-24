@@ -2,6 +2,7 @@
 import PlatformShell from '../components/PlatformShell.astro';
 ---
 <PlatformShell title="我的提交" active="submissions">
+  <header class="p-heading"><div><h1>我的提交</h1><p>查看你已提交的表单记录、审核进度与回执详情。</p></div></header>
   <div class="p-toolbar"><input class="p-input" id="submission-search" type="search" placeholder="搜索提交记录" data-submissions-search /><span class="p-count" data-submissions-count></span></div>
   <div class="p-message" role="status" aria-live="polite" data-submissions-status></div>
   <div data-submissions-list></div>
