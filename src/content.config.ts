@@ -28,7 +28,7 @@ export const collections = {
       shortTitle: z.string().optional(),
       kicker: z.string().optional(),
       repository: z.url(),
-      demo: z.url().optional(),
+      demo: z.string().regex(/^(https?:\/\/|\/)/).optional(),
     }),
   }),
   life: defineCollection({

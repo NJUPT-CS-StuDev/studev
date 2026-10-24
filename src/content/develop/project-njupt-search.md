@@ -7,7 +7,7 @@ tags: ["开源与代码", "校园基建", "Rust与离线搜索"]
 order: 2
 status: published
 repository: "https://github.com/hicancan/njupt-search"
-demo: "https://njupt.hicancan.top"
+demo: "/search/"
 ---
 
 
@@ -81,7 +81,7 @@ flowchart LR
 
 | 矩阵模块 | 核心技术栈 | 职责与数据流向 | 开源仓库与在线入口 |
 | :--- | :--- | :--- | :--- |
-| **`njupt-search`** | Rust (Wasm) + React + Kotlin | 核心零后端检索枢纽、内容寻址二进制切片分发、全平台搜索与空间拓扑呈现 | [github.com/hicancan/njupt-search ↗](https://github.com/hicancan/njupt-search)<br/>🌐 **[在线使用 njupt.hicancan.top ↗](https://njupt.hicancan.top)** |
+| **`njupt-search`** | Rust (Wasm) + React + Kotlin | 核心零后端检索枢纽、内容寻址二进制切片分发、全平台搜索与空间拓扑呈现 | [github.com/hicancan/njupt-search ↗](https://github.com/hicancan/njupt-search)<br/>🌐 **[站内直达 /search/ →](/search/)** |
 | **`njupt-jwxt`** | Python / 数据接口解析 | 规范化解析教务数据，自动化清洗班级课表、期末考场、教室占用并导出 ICS 日历 | [github.com/hicancan/njupt-jwxt ↗](https://github.com/hicancan/njupt-jwxt) |
 | **`njupt-site-graph`** | Rust / Node.js 爬虫引擎 | 遍历抓取全校通知、深入解构 Office/PDF 附件深层文本，并将学生社区手册图谱化 | [github.com/hicancan/njupt-site-graph ↗](https://github.com/hicancan/njupt-site-graph)<br/>[爬虫底层 static-site-graph ↗](https://github.com/hicancan/static-site-graph) |
 | **`njupt-map`** | QGIS 测绘 + Blender 3D | 仙林校区 129 栋建筑数字孪生、564 个教室拓扑空间建模，完成地理与教学物理映射 | [github.com/hicancan/njupt-map ↗](https://github.com/hicancan/njupt-map) |
@@ -116,12 +116,12 @@ flowchart LR
 
 ### 5. `njupt-search` 多端延伸：Web 极速即查与 Android 空间导航
 除了基于 [njupt.hicancan.top](https://njupt.hicancan.top) 的浏览器端极致秒开，针对移动端的原生 Android 客户端采用 Kotlin + Jetpack Compose 打造，承担起校园现实场景中的传感器融合、设备定位与室内导航职责：
-- 🔍 [校园搜索直达](https://njupt.hicancan.top/search) · 检索校方通知与红头文件附件
-- 📖 [社区经验搜索](https://njupt.hicancan.top/community) · 《南邮生存手册》办事与生活指南
-- 📚 [历年资料搜索](https://njupt.hicancan.top/materials) · 课程课件、试卷与笔记
-- 📅 [班级课表查询](https://njupt.hicancan.top/timetable) · 周次课表与 ICS 日历同步
-- 🏫 [教室占用拓扑](https://njupt.hicancan.top/classrooms) · 楼层地图、空间拓扑与课程考试占用
-- 📝 [期末考试安排](https://njupt.hicancan.top/exam) · 一键检索考场时间与座位安排
+- 🔍 [校园搜索直达](/search/) · 检索校方通知与红头文件附件
+- 📖 [社区经验搜索](/search/community/) · 《南邮生存手册》办事与生活指南
+- 📚 [历年资料搜索](/search/materials/) · 课程课件、试卷与笔记
+- 📅 [班级课表查询](/search/timetable/) · 周次课表与 ICS 日历同步
+- 🏫 [教室占用拓扑](/search/classrooms/) · 楼层地图、空间拓扑与课程考试占用
+- 📝 [期末考试安排](/search/exam/) · 一键检索考场时间与座位安排
 
 ---
 

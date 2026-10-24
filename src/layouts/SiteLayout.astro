@@ -9,6 +9,7 @@ const nav = [
   { href: '/study/', label: 'Study', key: 'study' },
   { href: '/develop/', label: 'Develop', key: 'develop' },
   { href: '/life/', label: 'Life', key: 'life' },
+  { href: '/search/', label: 'Search', key: 'search' },
   { href: '/history/', label: 'History', key: 'history' },
   { href: '/about/', label: 'About', key: 'about' },
   { href: '/forms/', label: 'Forms', key: 'forms' },
@@ -39,6 +40,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {(active === 'history' || active === 'account' || active === 'forms') && <link rel="preconnect" href="https://q1.qlogo.cn" crossorigin />}
     <link rel="canonical" href={canonical} />
     <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
+    <slot name="head" />
     <title>{title}</title>
   </head>
   <body>

@@ -54,9 +54,9 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scrollbar-gutter: stable; }
 body { margin: 0; min-width: 320px; line-height: 1.65; }
-a { color: inherit; text-decoration: none; }
-a:hover { color: var(--blue); }
-a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 2px; }
+a:not(#root *) { color: inherit; text-decoration: none; }
+a:not(#root *):hover { color: var(--blue); }
+a:not(#root *):focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 2px; }
 ::selection { color: var(--selection-ink); background: var(--blue); }
 
 .site-header { border-bottom: 1px solid var(--line); }

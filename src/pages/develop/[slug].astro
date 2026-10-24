@@ -33,7 +33,14 @@ const { Content } = await render(entry);
     <p class="article-description">{entry.data.description}</p>
     <div class="project-actions">
       {entry.data.demo && (
-        <a class="project-btn project-btn-primary" href={entry.data.demo} target="_blank" rel="noopener noreferrer">在线使用 ↗</a>
+        <a
+          class="project-btn project-btn-primary"
+          href={entry.data.demo}
+          target={entry.data.demo.startsWith('/') ? undefined : '_blank'}
+          rel={entry.data.demo.startsWith('/') ? undefined : 'noopener noreferrer'}
+        >
+          {entry.data.demo.startsWith('/') ? '站内直达 →' : '在线使用 ↗'}
+        </a>
       )}
       <a class="project-btn project-btn-secondary" href={entry.data.repository} target="_blank" rel="noopener noreferrer">GitHub 源码 ↗</a>
     </div>

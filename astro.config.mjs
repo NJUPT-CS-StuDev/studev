@@ -11,6 +11,7 @@ import remarkTyporaInline from './src/plugins/remark-typora-inline.mjs';
 import rehypeEditorialImages from './src/plugins/rehype-editorial-images.mjs';
 import rehypeStaticMermaid from './src/plugins/rehype-static-mermaid.mjs';
 import localFonts from './src/integrations/local-fonts.mjs';
+import searchData from './src/integrations/search-data.mjs';
 
 const excludedSitemapPaths = new Set([
   '/404',
@@ -32,7 +33,7 @@ export default defineConfig({
     prefetchAll: true,
     defaultStrategy: 'hover',
   },
-  integrations: [localFonts(), sitemap({
+  integrations: [localFonts(), searchData(), sitemap({
     filter: (page) => !excludedSitemapPaths.has(new URL(page).pathname.replace(/\/$/, '')),
   })],
   markdown: {

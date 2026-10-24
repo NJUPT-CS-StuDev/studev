@@ -8,6 +8,51 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/generated/search/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, stale-while-revalidate=300"
+        }
+      ]
+    },
+    {
+      "source": "/generated/search/bundles/**/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/generated/exam/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, stale-while-revalidate=300"
+        }
+      ]
+    },
+    {
+      "source": "/generated/exam/snapshots/**/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/generated/**/*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ]
 }

@@ -2,6 +2,7 @@
 dist/
 .edgeone/
 .collection-build/
+.search-data/
 # generated types
 .astro/
 
