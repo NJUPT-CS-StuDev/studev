@@ -47,7 +47,7 @@ export function ExamLanding({ savedClass, onSubmit, onOpenClass, client, history
                             onChange={event => setClassInput(event.target.value)}
                             placeholder="输入班级号"
                             autoComplete="off"
-                            className="h-12 min-w-0 w-full rounded-lg border border-[#dadce0] bg-white px-3 text-[15px] text-[#202124] outline-none focus:border-[#1a73e8] dark:border-[#3c4043] dark:bg-[#202124] dark:text-[#e8eaed] sm:h-11"
+                            className="h-12 min-w-0 w-full rounded-lg border border-[#dadce0] bg-white px-3 text-[15px] text-[#202124] outline-none focus:border-[#1a73e8] dark:border-[#323a44] dark:bg-[#14181d] dark:text-[#e8edf3] sm:h-11"
                         />
                         <button
                             type="submit"
@@ -60,7 +60,7 @@ export function ExamLanding({ savedClass, onSubmit, onOpenClass, client, history
                         <button
                             type="button"
                             onClick={() => onSubmit('B240402')}
-                            className="inline-flex h-9 items-center rounded-full px-3 text-[#5f6368] hover:bg-white dark:text-[#bdc1c6] dark:hover:bg-[#202124]"
+                            className="inline-flex h-9 items-center rounded-full px-3 text-[#5f6368] hover:bg-white dark:text-[#aeb8c5] dark:hover:bg-[#202124]"
                         >
                             试一试&nbsp;<span className="font-mono text-[#1a73e8] dark:text-[#8ab4f8]">B240402</span>
                         </button>
@@ -68,7 +68,7 @@ export function ExamLanding({ savedClass, onSubmit, onOpenClass, client, history
                             <button
                                 type="button"
                                 onClick={() => onOpenClass(savedClass)}
-                                className="inline-flex h-9 items-center rounded-full border border-[#d2e3fc] bg-white px-3 font-medium text-[#174ea6] hover:bg-[#e8f0fe] dark:border-[#394457] dark:bg-[#202124] dark:text-[#8ab4f8] dark:hover:bg-[#1f2430]"
+                                className="inline-flex h-9 items-center rounded-full border border-[#d2e3fc] bg-white px-3 font-medium text-[#174ea6] hover:bg-[#e8f0fe] dark:border-[#394457] dark:bg-[#14181d] dark:text-[#8ab4f8] dark:hover:bg-[#1f2430]"
                             >
                                 继续查看 {savedClass}
                             </button>

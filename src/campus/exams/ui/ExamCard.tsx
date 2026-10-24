@@ -44,7 +44,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:hover:shadow-none
                 ${isSelected 
                     ? 'bg-[#f8fafd] dark:bg-[#1a73e8]/10 shadow-[0_1px_3px_rgba(0,0,0,0.02)]'
-                    : 'opacity-70 grayscale-[0.5] hover:bg-[#f8f9fa] dark:hover:bg-[#303134]'
+                    : 'opacity-70 grayscale-[0.5] hover:bg-[#f8f9fa] dark:hover:bg-[#1c232b]'
                 }
                 ${borderClass}
             `}
@@ -62,7 +62,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                         peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-[var(--color-google-blue)]
                         ${isSelected 
                             ? 'bg-[var(--color-google-blue)] border-[var(--color-google-blue)] dark:bg-[var(--color-google-blue-dark)] dark:border-[var(--color-google-blue-dark)]' 
-                            : 'border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#202124] group-hover:border-[#9aa0a6] dark:group-hover:border-[#9aa0a6]'
+                            : 'border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#14181d] group-hover:border-[#9aa0a6] dark:group-hover:border-[#9aa0a6]'
                         }
                     `}>
                         {isSelected && (
@@ -73,7 +73,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                 
                 <div className="flex-1">
                     <div className="flex justify-between items-start mb-2 gap-3">
-                        <h3 className={`text-[18px] font-normal leading-snug ${isSelected ? 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)] group-hover:underline' : 'text-[#202124] dark:text-[#e8eaed]'}`}>
+                        <h3 className={`text-[18px] font-normal leading-snug ${isSelected ? 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)] group-hover:underline' : 'text-[#202124] dark:text-[#e8edf3]'}`}>
                             {exam.course_name}
                         </h3>
                         {exam.campus && (
@@ -92,12 +92,12 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                         ) : null}
                     </div>
                     
-                    <div className="text-[14px] text-[#4d5156] dark:text-[#bdc1c6] space-y-2.5 mt-1">
+                    <div className="text-[14px] text-[#4d5156] dark:text-[#aeb8c5] space-y-2.5 mt-1">
                         {isValidTime ? (
                             <div className="flex items-start gap-2">
                                 <Clock className="w-4 h-4 mt-0.5 shrink-0 text-[#4285f4] dark:text-[#8ab4f8]" aria-hidden="true" />
                                 <div>
-                                    <span className="font-medium text-[#202124] dark:text-[#e8eaed]">{formatExamDisplayDate(exam.start_timestamp)}</span>
+                                    <span className="font-medium text-[#202124] dark:text-[#e8edf3]">{formatExamDisplayDate(exam.start_timestamp)}</span>
                                     <span className="mx-1 text-[#70757a]">至</span> 
                                     <span>{formatExamDisplayDate(exam.end_timestamp)}</span>
                                     <span className="ml-2 text-[12px] px-1.5 py-0.5 bg-[#f1f3f4] dark:bg-[#3c4043] rounded text-[#5f6368] dark:text-[#9aa0a6]">
@@ -114,13 +114,13 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                         
                         <div className="flex items-start gap-2">
                             <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#ea4335] dark:text-[#f28b82]" aria-hidden="true" />
-                            <span className="font-medium text-[#202124] dark:text-[#e8eaed]">{exam.location || '待定'}</span>
+                            <span className="font-medium text-[#202124] dark:text-[#e8edf3]">{exam.location || '待定'}</span>
                         </div>
                         
                         <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-[13px] text-[#70757a] dark:text-[#9aa0a6]">
                             {exam.course_code && (
-                                <span className="flex items-center gap-1.5 bg-[#f8f9fa] dark:bg-[#303134] px-2 py-0.5 rounded border border-[#dadce0] dark:border-[#5f6368]">
-                                    <span className="text-[#3c4043] dark:text-[#e8eaed]">{exam.course_code}</span>
+                                <span className="flex items-center gap-1.5 bg-[#f8f9fa] dark:bg-[#1c232b] px-2 py-0.5 rounded border border-[#dadce0] dark:border-[#5f6368]">
+                                    <span className="text-[#3c4043] dark:text-[#e8edf3]">{exam.course_code}</span>
                                 </span>
                             )}
                             <span className="flex items-center gap-1.5">

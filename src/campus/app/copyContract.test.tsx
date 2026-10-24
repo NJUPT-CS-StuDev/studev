@@ -78,7 +78,7 @@ describe("product copy contract", () => {
         onIntentWarm={() => undefined}
       />,
     );
-    expect(html).toContain("校园查询");
+    expect(html).toContain("studev");
     expect(html).toContain("教务查询");
     expect(html).toContain("社区搜索");
     expect(html).toContain("资料搜索");

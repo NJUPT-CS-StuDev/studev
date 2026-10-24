@@ -100,7 +100,7 @@ export function SearchInput({
                 type="text"
                 autoComplete="off"
                 aria-label={ariaLabel}
-                className="w-full h-[52px] pl-12 pr-12 bg-white dark:bg-[#202124] border border-[#dfe1e5] dark:border-[#5f6368] rounded-full text-[16px] leading-normal outline-none hover:shadow-[0_1px_6px_rgba(32,33,36,0.18)] dark:hover:shadow-[0_1px_6px_rgba(23,23,23,0.8)] focus:shadow-[0_1px_6px_rgba(32,33,36,0.22)] dark:focus:shadow-[0_1px_6px_rgba(23,23,23,0.8)] hover:border-[#cfd4dc] focus:border-[#8ab4f8] transition-all text-[#202124] dark:text-[#e8eaed] placeholder:text-[#70757a] dark:placeholder:text-[#9aa0a6]"
+                className="w-full h-[52px] pl-12 pr-12 bg-white dark:bg-[#14181d] border border-[#dfe1e5] dark:border-[#5f6368] rounded-full text-[16px] leading-normal outline-none hover:shadow-[0_1px_6px_rgba(32,33,36,0.18)] dark:hover:shadow-[0_1px_6px_rgba(23,23,23,0.8)] focus:shadow-[0_1px_6px_rgba(32,33,36,0.22)] dark:focus:shadow-[0_1px_6px_rgba(23,23,23,0.8)] hover:border-[#cfd4dc] focus:border-[#8ab4f8] transition-all text-[#202124] dark:text-[#e8edf3] placeholder:text-[#70757a] dark:placeholder:text-[#9aa0a6]"
                 placeholder={placeholder || dynamicPlaceholder}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}

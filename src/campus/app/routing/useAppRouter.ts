@@ -118,6 +118,7 @@ export function useAppRouter(initialRoute: AppRoute) {
         onSubmit: submit,
         onQuickSearch: quickSearch,
         onGoHome: () => navigate({ route: 'home' }),
+        onNavigateRoute: (next: AppRoute) => navigate({ route: next }),
         search: { query: qParam || '' },
         exam: { query: qParam || '', className: classParam, savedClass },
         timetable: {

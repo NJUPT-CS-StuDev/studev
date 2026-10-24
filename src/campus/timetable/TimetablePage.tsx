@@ -67,7 +67,7 @@ export function TimetablePage({ className, week: requestedWeek, client, onChange
 
     const tones = useMemo(() => loaded ? allocateCourseTones(loaded.meetings) : new Map<string, number>(), [loaded]);
     if (error) return <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-10"><div className="rounded-xl border border-[#f2b8b5] bg-[#fce8e6] p-5 text-[#8c1d18] dark:border-[#8c1d18] dark:bg-[#3c2020] dark:text-[#f2b8b5]"><h1 className="text-xl font-semibold">班级课表暂时无法打开</h1><p className="mt-2 text-sm">{error}</p><button className="mt-4 rounded-full bg-[#1a73e8] px-4 py-2 text-sm text-white" onClick={() => window.location.reload()}>重新加载</button></div></main>;
-    if (!loaded) return <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8"><div className="h-28 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#303134]" /><div className="mt-4 h-[680px] animate-pulse rounded-2xl bg-[#f8f9fa] dark:bg-[#292a2d]" /></main>;
+    if (!loaded) return <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8"><div className="h-28 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#1c232b]" /><div className="mt-4 h-[680px] animate-pulse rounded-2xl bg-[#f8f9fa] dark:bg-[#1c232b]" /></main>;
     const weekNumber = requestedWeek && loaded.term.weeks.some(item => item.week === requestedWeek) ? requestedWeek : currentWeek(loaded);
     const week = loaded.term.weeks.find(item => item.week === weekNumber) ?? loaded.term.weeks[0];
     if (!week) return null;

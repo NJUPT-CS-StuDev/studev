@@ -184,7 +184,7 @@ export function ClassroomsLanding({
             <button
               type="button"
               onClick={() => enter(sampleQuery)}
-              className="inline-flex min-h-10 items-center rounded-full px-4 text-sm text-[#5f6368] transition hover:bg-[#f1f3f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:text-[#bdc1c6] dark:hover:bg-[#292a2d]"
+              className="inline-flex min-h-10 items-center rounded-full px-4 text-sm text-[#5f6368] transition hover:bg-[#f1f3f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:text-[#aeb8c5] dark:hover:bg-[#1c232b]"
             >
               试一试&nbsp;<span className="font-medium text-[#1967d2] dark:text-[#8ab4f8]">{queryLabel(sampleQuery)}</span>
             </button>
@@ -202,7 +202,7 @@ export function ClassroomsLanding({
           {Array.from({ length: 3 }, (_, indexValue) => (
             <div
               key={indexValue}
-              className="h-40 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#292a2d]"
+              className="h-40 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#1c232b]"
             />
           ))}
         </div>
@@ -214,7 +214,7 @@ export function ClassroomsLanding({
             <h2 id="campus-heading" className="text-2xl font-semibold">
               选择校区
             </h2>
-            <span className="text-sm text-[#5f6368] dark:text-[#bdc1c6]">
+            <span className="text-sm text-[#5f6368] dark:text-[#aeb8c5]">
               {campuses.length} 个校区
             </span>
           </div>
@@ -228,7 +228,7 @@ export function ClassroomsLanding({
                   key={campus.campus_id}
                   type="button"
                   onClick={() => enter(campusDestination(campus))}
-                  className="group min-h-40 rounded-2xl border border-[#dadce0] bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-[#8ab4f8] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:border-[#3c4043] dark:bg-[#292a2d]"
+                  className="group min-h-40 rounded-2xl border border-[#dadce0] bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-[#8ab4f8] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] dark:border-[#323a44] dark:bg-[#1c232b]"
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e8f0fe] text-[#1967d2] dark:bg-[#23334d] dark:text-[#8ab4f8]">
                     <MapPin className="h-5 w-5" aria-hidden="true" />
@@ -240,7 +240,7 @@ export function ClassroomsLanding({
                       aria-hidden="true"
                     />
                   </span>
-                  <span className="mt-2 block text-sm text-[#5f6368] dark:text-[#bdc1c6]">
+                  <span className="mt-2 block text-sm text-[#5f6368] dark:text-[#aeb8c5]">
                     {buildingCount} 栋楼
                   </span>
                 </button>
@@ -259,13 +259,13 @@ export function ClassroomsLanding({
             >
               <Search className="h-5 w-5" aria-hidden="true" />“{query.trim()}”
             </h2>
-            <span className="text-sm text-[#5f6368] dark:text-[#bdc1c6]">
+            <span className="text-sm text-[#5f6368] dark:text-[#aeb8c5]">
               {matches.length} 间教室匹配
             </span>
           </div>
           {matchingCampuses.length ? (
             <div className="mt-5">
-              <h3 className="text-sm font-medium text-[#5f6368] dark:text-[#bdc1c6]">
+              <h3 className="text-sm font-medium text-[#5f6368] dark:text-[#aeb8c5]">
                 校区
               </h3>
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
@@ -274,7 +274,7 @@ export function ClassroomsLanding({
                     key={campus.campus_id}
                     type="button"
                     onClick={() => enter(campusDestination(campus))}
-                    className="flex items-center justify-between rounded-xl border border-[#dadce0] p-4 text-left dark:border-[#3c4043]"
+                    className="flex items-center justify-between rounded-xl border border-[#dadce0] p-4 text-left dark:border-[#323a44]"
                   >
                     <span className="flex items-center gap-3">
                       <MapPin className="h-5 w-5 text-[#1967d2]" />
@@ -288,7 +288,7 @@ export function ClassroomsLanding({
           ) : null}
           {matchingBuildings.length ? (
             <div className="mt-6">
-              <h3 className="text-sm font-medium text-[#5f6368] dark:text-[#bdc1c6]">
+              <h3 className="text-sm font-medium text-[#5f6368] dark:text-[#aeb8c5]">
                 楼栋
               </h3>
               <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -303,14 +303,14 @@ export function ClassroomsLanding({
                         floor: null,
                       })
                     }
-                    className="flex items-center justify-between rounded-xl border border-[#dadce0] p-4 text-left dark:border-[#3c4043]"
+                    className="flex items-center justify-between rounded-xl border border-[#dadce0] p-4 text-left dark:border-[#323a44]"
                   >
                     <span>
                       <span className="flex items-center gap-2 font-medium">
                         <Building2 className="h-4 w-4 text-[#1967d2]" />
                         {building.name}
                       </span>
-                      <small className="mt-1 block text-[#5f6368] dark:text-[#bdc1c6]">
+                      <small className="mt-1 block text-[#5f6368] dark:text-[#aeb8c5]">
                         {campus?.name}
                       </small>
                     </span>
@@ -322,7 +322,7 @@ export function ClassroomsLanding({
           ) : null}
           {matches.length ? (
             <div className="mt-6">
-              <h3 className="text-sm font-medium text-[#5f6368] dark:text-[#bdc1c6]">
+              <h3 className="text-sm font-medium text-[#5f6368] dark:text-[#aeb8c5]">
                 教室
               </h3>
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -338,13 +338,13 @@ export function ClassroomsLanding({
                         room: room.family.space_family_id,
                       })
                     }
-                    className="rounded-xl border border-[#dadce0] bg-white p-4 text-left dark:border-[#3c4043] dark:bg-[#292a2d]"
+                    className="rounded-xl border border-[#dadce0] bg-white p-4 text-left dark:border-[#323a44] dark:bg-[#1c232b]"
                   >
                     <Layers3 className="h-4 w-4 text-[#5f6368]" />
                     <strong className="mt-3 block">
                       {room.family.room_number}
                     </strong>
-                    <small className="mt-1 block leading-5 text-[#5f6368] dark:text-[#bdc1c6]">
+                    <small className="mt-1 block leading-5 text-[#5f6368] dark:text-[#aeb8c5]">
                       {room.campus.name} · {room.building.name} ·{" "}
                       {room.floor.level}楼
                     </small>
@@ -361,9 +361,9 @@ export function ClassroomsLanding({
           {!matchingCampuses.length &&
           !matchingBuildings.length &&
           !matches.length ? (
-            <div className="mt-6 rounded-2xl bg-[#f8f9fa] p-8 text-center dark:bg-[#292a2d]">
+            <div className="mt-6 rounded-2xl bg-[#f8f9fa] p-8 text-center dark:bg-[#1c232b]">
               <p className="font-medium">没有找到对应教室</p>
-              <p className="mt-2 text-sm text-[#5f6368] dark:text-[#bdc1c6]">
+              <p className="mt-2 text-sm text-[#5f6368] dark:text-[#aeb8c5]">
                 可搜索校区、楼栋或完整教室号。
               </p>
             </div>

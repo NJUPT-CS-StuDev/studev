@@ -29,9 +29,9 @@ export function ExamHistorySummary({ manifest, events, loading, error }: ExamHis
     const latest = events?.events[events.events.length - 1];
     if (!manifest || !latest) return null;
     return (
-        <section className="mx-auto mt-4 max-w-[692px] rounded-xl border border-[#dadce0] bg-white px-4 py-4 text-left dark:border-[#3c4043] dark:bg-[#202124] sm:px-5" aria-label="考试安排更新摘要">
-            <h2 className="text-[16px] font-medium text-[#202124] dark:text-[#e8eaed]">考试安排更新记录</h2>
-            <p className="mt-1 text-[14px] text-[#4d5156] dark:text-[#bdc1c6]">
+        <section className="mx-auto mt-4 max-w-[692px] rounded-xl border border-[#dadce0] bg-white px-4 py-4 text-left dark:border-[#323a44] dark:bg-[#14181d] sm:px-5" aria-label="考试安排更新摘要">
+            <h2 className="text-[16px] font-medium text-[#202124] dark:text-[#e8edf3]">考试安排更新记录</h2>
+            <p className="mt-1 text-[14px] text-[#4d5156] dark:text-[#aeb8c5]">
                 考试安排更新于 {formatTime(latest.source_updated_at)}，已记录 {manifest.observed_snapshot_count} 次更新。
             </p>
             {latest.status === 'baseline' ? (
