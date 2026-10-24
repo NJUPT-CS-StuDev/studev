@@ -1,29 +1,32 @@
 const form = document.querySelector<HTMLFormElement>('[data-header-search-form]');
 const input = document.querySelector<HTMLInputElement>('[data-header-search-input]');
+const clearBtn = document.querySelector<HTMLButtonElement>('[data-header-search-clear]');
 
 if (form && input) {
-  const syncFromLocation = () => {
-    if (window.location.pathname.startsWith('/search')) {
-      const params = new URLSearchParams(window.location.search);
-      input.value = params.get('q') || params.get('class') || '';
+  const updateClearVisibility = () => {
+    if (clearBtn) {
+      clearBtn.hidden = !input.value;
     }
   };
-  syncFromLocation();
-  window.addEventListener('popstate', syncFromLocation);
+
+  input.addEventListener('input', updateClearVisibility);
+
+  clearBtn?.addEventListener('click', (event) => {
+    if (document.documentElement.dataset.searchRoute) return;
+    event.preventDefault();
+    input.value = '';
+    updateClearVisibility();
+    input.focus();
+  });
 
   form.addEventListener('submit', (event) => {
+    if (document.documentElement.dataset.searchRoute) {
+      return;
+    }
     const q = input.value.trim();
     if (!q) {
       event.preventDefault();
       window.location.href = '/search/';
-      return;
-    }
-    if (window.location.pathname.startsWith('/search')) {
-      event.preventDefault();
-      const target = `/search/?q=${encodeURIComponent(q)}`;
-      window.history.pushState(null, '', target);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-      input.blur();
     }
   });
 
@@ -32,6 +35,9 @@ if (form && input) {
       const active = document.activeElement as HTMLElement | null;
       const tag = active?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) {
+        return;
+      }
+      if (document.documentElement.dataset.searchRoute === 'home') {
         return;
       }
       event.preventDefault();

@@ -15,9 +15,29 @@ const nav = [
 ];
 const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
 const canonical = new URL(Astro.url.pathname, Astro.site);
+const normalizedPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const initialSearchRoute = normalizedPath === '/search'
+  ? 'home'
+  : active === 'search'
+    ? 'subpage'
+    : undefined;
+const initialSearchPlaceholder =
+  normalizedPath === '/search/classrooms' || normalizedPath === '/search/rooms'
+    ? '搜索校区、楼栋或教室'
+    : normalizedPath === '/search/timetable'
+      ? '搜索班级、课程或教师'
+      : normalizedPath === '/search/exam'
+        ? '搜索班级或考试课程'
+        : normalizedPath === '/search/community'
+          ? '搜索南邮生存手册'
+          : normalizedPath === '/search/materials'
+            ? '搜索历年课程资料'
+            : normalizedPath === '/search/web'
+              ? '搜索校内通知与公告'
+              : '搜通知、课表、考场、资料…';
 ---
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-search-route={initialSearchRoute}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
@@ -44,45 +64,44 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
   </head>
   <body>
     <header class="site-header">
-      <div class:list={['header-inner', { 'is-search-page': active === 'search' }]}>
+      <div class="header-inner">
         <a class="brand" href="/" aria-label="StuDev 首页"><Image src={logo} alt="" width={56} height={56} densities={[1, 2, 3]} loading="eager" decoding="async" /></a>
-        {active !== 'search' && (
-          <div class="header-search" data-header-search>
-            <form class="header-search-form" action="/search/" method="get" role="search" data-header-search-form>
-              <a class="header-search-icon-link" href="/search/" aria-label="前往 studev-search 首页" title="studev-search 首页">
-                <svg class="header-search-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <path d="m21 21-4.3-4.3"></path>
-                </svg>
-              </a>
-              <input
-                class="header-search-input"
-                type="search"
-                name="q"
-                placeholder="搜通知、课表、考场、资料…"
-                autocomplete="off"
-                spellcheck="false"
-                aria-label="studev-search 全站校园搜索"
-                data-header-search-input
-              />
-              <kbd class="header-search-kbd" aria-hidden="true">/</kbd>
-            </form>
-            <div class="header-search-panel" aria-label="studev-search 快捷入口">
-              <div class="header-search-panel-head">
-                <span class="header-search-brand">studev<span>-search</span></span>
-                <a class="header-search-home" href="/search/">聚合主页 →</a>
-              </div>
-              <div class="header-search-grid">
-                <a href="/search/timetable/">📅 班级课表</a>
-                <a href="/search/classrooms/">🏫 教室拓扑</a>
-                <a href="/search/exam/">📝 考试安排</a>
-                <a href="/search/web/">🌐 校内通知</a>
-                <a href="/search/community/">📖 生存手册</a>
-                <a href="/search/materials/">📚 历年资料</a>
-              </div>
+        <div class="header-search" data-header-search>
+          <form class="header-search-form" action="/search/" method="get" role="search" data-header-search-form>
+            <a class="header-search-icon-link" href="/search/" aria-label="前往 studev-search 首页" title="studev-search 首页">
+              <svg class="header-search-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.3-4.3"></path>
+              </svg>
+            </a>
+            <input
+              class="header-search-input"
+              type="text"
+              name="q"
+              placeholder={initialSearchPlaceholder}
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="studev-search 全站校园搜索"
+              data-header-search-input
+            />
+            <button class="header-search-clear" type="button" aria-label="清空搜索" hidden data-header-search-clear>×</button>
+            <kbd class="header-search-kbd" aria-hidden="true">/</kbd>
+          </form>
+          <div class="header-search-panel" aria-label="studev-search 快捷入口">
+            <div class="header-search-panel-head">
+              <span class="header-search-brand">studev<span>-search</span></span>
+              <a class="header-search-home" href="/search/">聚合主页 →</a>
+            </div>
+            <div class="header-search-grid">
+              <a href="/search/timetable/">📅 班级课表</a>
+              <a href="/search/classrooms/">🏫 教室拓扑</a>
+              <a href="/search/exam/">📝 考试安排</a>
+              <a href="/search/web/">🌐 校内通知</a>
+              <a href="/search/community/">📖 生存手册</a>
+              <a href="/search/materials/">📚 历年资料</a>
             </div>
           </div>
-        )}
+        </div>
         <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
         <a class:list={['nav-account', { active: active === 'account' || active === 'login' }]} href="/login/" data-global-account-link>Login</a>
         <ThemeToggle />
