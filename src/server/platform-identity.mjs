@@ -74,7 +74,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       profileComplete: profileComplete(user),
       term: user.term || '',
       department: normalizeDepartmentName(user.department || ''),
-      title: normalizeRoleTitle(user.title || ''),
+      title: normalizeRoleTitle(user.title || '', user.studentId || ''),
       order: Number.isSafeInteger(user.order) ? user.order : 999,
       signature: user.signature || '',
       role: user.role,
@@ -268,7 +268,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
           const nextRealName = existing.realName || seed.realName;
           const nextTerm = existing.term || seed.term;
           const nextDept = normalizeDepartmentName(existing.department || seed.department);
-          const nextTitle = normalizeRoleTitle(existing.title !== undefined && existing.title !== '' ? existing.title : seed.title);
+          const nextTitle = normalizeRoleTitle(existing.title !== undefined && existing.title !== '' ? existing.title : seed.title, nextStudentId);
           const nextOrder = Number.isSafeInteger(existing.order) && existing.order !== 999 ? existing.order : seed.order;
           const nextSig = existing.signature !== undefined && existing.signature !== '' ? existing.signature : seed.signature;
           const nextVerified = true;

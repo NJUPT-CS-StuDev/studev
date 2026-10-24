@@ -16,7 +16,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '吴双灿',
     studentId: 'B24040213',
     qq: '2366522877',
-    title: '学生发展中心主席 · StuDev 发起人',
+    title: '执行主席 · 运营支持部',
     signature: '在薛定谔的叠加态中保持自旋',
   },
   {
@@ -56,7 +56,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '赵润芊',
     studentId: 'B25042405',
     qq: '3604611804',
-    title: '',
+    title: '运营支持部部长',
     signature: '',
   },
   {
@@ -66,7 +66,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '白蕊',
     studentId: 'B25042201',
     qq: '2821600451',
-    title: '',
+    title: '运营支持部部长',
     signature: '安好',
   },
   {
@@ -76,7 +76,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '宋子龙',
     studentId: 'B25042314',
     qq: '2304741537',
-    title: '',
+    title: '运营支持部部长',
     signature: '',
   },
   {
@@ -86,7 +86,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '钱俞楠',
     studentId: 'B25040524',
     qq: '3905536819',
-    title: '',
+    title: '易班建设部部长',
     signature: '平淡些，三杯两盏就够了',
   },
   {
@@ -96,7 +96,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '王雨霏',
     studentId: 'B25040801',
     qq: '3980795045',
-    title: '',
+    title: '易班建设部部长',
     signature: '*^_^*\u0000'.slice(0, 5),
   },
   {
@@ -106,7 +106,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '沈冠旭',
     studentId: 'B25041218',
     qq: '3474934240',
-    title: '',
+    title: '易班建设部部长',
     signature: '无限月读',
   },
   {
@@ -116,7 +116,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '李文轩',
     studentId: 'B25040304',
     qq: '3916649535',
-    title: '',
+    title: '媒体宣传部部长',
     signature: '时间从不回答，生命从不喧哗',
   },
   {
@@ -126,7 +126,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '胡可',
     studentId: 'B25042404',
     qq: '3473792115',
-    title: '',
+    title: '媒体宣传部部长',
     signature: '🖤💙',
   },
   {
@@ -136,7 +136,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '沈一柏',
     studentId: 'B25042517',
     qq: '753563998',
-    title: '',
+    title: '媒体宣传部部长',
     signature: 'Still we clash against the sky',
   },
   {
@@ -146,7 +146,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '王丽妍',
     studentId: 'B25040701',
     qq: '3788969130',
-    title: '',
+    title: '心理工作部部长',
     signature: '这是只为了唯一一位读者所写的故事',
   },
   {
@@ -156,7 +156,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '冉可欣',
     studentId: 'B25042102',
     qq: '428126314',
-    title: '',
+    title: '心理工作部部长',
     signature: '在心理学上有个概念叫「浪漫友谊」',
   },
   {
@@ -166,7 +166,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '骆昕彤',
     studentId: 'B25040407',
     qq: '1956613258',
-    title: '',
+    title: '心理工作部部长',
     signature: '这不是强加于我的命运，而是我自己主动背负的命运',
   },
   {
@@ -176,7 +176,7 @@ export const ROSTER_SEED_2026_2027 = [
     realName: '孙欣妍',
     studentId: 'B25041304',
     qq: '3476855828',
-    title: '',
+    title: '心理工作部部长',
     signature: '美貌与意志并重，女孩不顽强就没办法生存。',
   },
 ];
@@ -188,7 +188,9 @@ export function qqAvatarUrl(qq) {
 }
 
 /** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
-export const ROSTER_SCHEMA = 3;
+export const ROSTER_SCHEMA = 4;
+
+const SEED_BY_STUDENT_ID = new Map(ROSTER_SEED_2026_2027.map((s) => [s.studentId, s]));
 
 export function normalizeDepartmentName(dept) {
   const raw = typeof dept === 'string' ? dept.trim() : '';
@@ -196,10 +198,15 @@ export function normalizeDepartmentName(dept) {
   return raw;
 }
 
-export function normalizeRoleTitle(title) {
+export function normalizeRoleTitle(title, studentId = '') {
   const raw = typeof title === 'string' ? title.trim() : '';
+  if (!raw && studentId && SEED_BY_STUDENT_ID.has(studentId)) {
+    return SEED_BY_STUDENT_ID.get(studentId).title;
+  }
+  if (raw === '学生发展中心主席 · StuDev 发起人' || raw.startsWith('执行统筹 · ')) {
+    return '执行主席 · 运营支持部';
+  }
   if (raw.startsWith('分管协调 · ')) return raw.replace(/^分管协调 · /, '分管主席 · ');
-  if (raw.startsWith('执行统筹 · ')) return raw.replace(/^执行统筹 · /, '执行主席 · ');
   return raw;
 }
 
@@ -216,7 +223,7 @@ export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new D
     .map((u) => ({
       ...u,
       department: normalizeDepartmentName(u.department),
-      title: normalizeRoleTitle(u.title),
+      title: normalizeRoleTitle(u.title, u.studentId),
     }))
     .sort((a, b) => ((a.order ?? 999) - (b.order ?? 999)) || String(a.studentId || '').localeCompare(String(b.studentId || '')));
 

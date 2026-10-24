@@ -207,7 +207,17 @@ import '../styles/platform.css';
       </div>
       <div class="p-field">
         <label for="roster-edit-role-title">职务 / 分管头衔</label>
-        <input id="roster-edit-role-title" maxlength="80" placeholder="如 分管主席 · 媒体宣传部（普通部员可留空）" />
+        <input id="roster-edit-role-title" list="roster-title-options" maxlength="80" placeholder="如 执行主席 · 运营支持部、运营支持部部长（部员可留空）" />
+        <datalist id="roster-title-options">
+          <option value="执行主席 · 运营支持部"></option>
+          <option value="分管主席 · 易班建设部"></option>
+          <option value="分管主席 · 媒体宣传部"></option>
+          <option value="分管主席 · 心理工作部"></option>
+          <option value="运营支持部部长"></option>
+          <option value="易班建设部部长"></option>
+          <option value="媒体宣传部部长"></option>
+          <option value="心理工作部部长"></option>
+        </datalist>
       </div>
       <div class="p-field">
         <label for="roster-edit-nickname">显示昵称（选填）</label>
