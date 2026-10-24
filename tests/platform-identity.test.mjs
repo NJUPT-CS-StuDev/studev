@@ -527,12 +527,17 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   });
   assert.equal(claimed.status, 201);
   assert.equal(claimed.user.status, 'active');
-  assert.equal(claimed.user.department, '主席团与统筹');
-  assert.equal(claimed.user.title, '分管协调 · 媒体宣传部');
+  assert.equal(claimed.user.department, '主席团');
+  assert.equal(claimed.user.title, '分管主席 · 媒体宣传部');
   assert.equal(claimed.user.term, '2026-2027');
 
   // Login and update personal signature via /auth/profile -> immediately updates public roster SSOT
   const login = await f.call('/auth/login', 'POST', { studentId: 'B24041902', password: MEMBER_PASSWORD });
+  // Any signed-in member can view the organization member directory (/members)
+  const memberDirectory = await f.call('/members', 'GET', undefined, login);
+  assert.equal(memberDirectory.status, 200);
+  assert.ok(memberDirectory.items.length >= 17);
+
   const updatedProfile = await f.call('/auth/profile', 'POST', {
     nickname: '李雅婷',
     signature: '追光而遇，沐光而行',
@@ -541,10 +546,10 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   assert.equal(updatedProfile.user.signature, '追光而遇，沐光而行');
 
   const updatedRoster = await f.call('/public/roster?term=2026-2027', 'GET');
-  const presGroup = updatedRoster.groups.find((g) => g.name === '主席团与统筹');
+  const presGroup = updatedRoster.groups.find((g) => g.name === '主席团');
   const yating = presGroup.people.find((p) => p.name === '李雅婷');
   assert.equal(yating.signature, '追光而遇，沐光而行');
-  assert.equal(yating.role, '分管协调 · 媒体宣传部');
+  assert.equal(yating.role, '分管主席 · 媒体宣传部');
   assert.ok(yating.avatarUrl.includes('1775706379'));
 
   // Owner can also edit department/title/signature in /admin/users/:id
@@ -559,17 +564,21 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').role, '分管主席 · 媒体宣传部');
 
   // Nickname equal to realName is treated as "no nickname"; a distinct one is projected publicly.
-  assert.equal(afterOwnerEdit.schema, 2);
+  assert.equal(afterOwnerEdit.schema, 3);
   assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
   // Role change rotated the security version, so the member signs in again.
   const relogin = await f.call('/auth/login', 'POST', { studentId: 'B24041902', password: MEMBER_PASSWORD });
-  const withNick = await f.call('/auth/profile', 'POST', { nickname: 'Yating', revision: relogin.user.revision }, relogin);
-  assert.equal(withNick.user.nickname, 'Yating');
+  // As an admin, can also edit roster profiles via /members/:id/profile
+  const adminProfileEdit = await f.call(`/members/${login.user.id}/profile`, 'POST', {
+    nickname: 'Yating',
+    revision: relogin.user.revision,
+  }, relogin);
+  assert.equal(adminProfileEdit.user.nickname, 'Yating');
   const nickRoster = await f.call('/public/roster?term=2026-2027', 'GET');
   assert.equal(nickRoster.groups[0].people.find((p) => p.name === '李雅婷').nickname, 'Yating');
 
   // Sending an empty nickname clears it (stored as realName, displayed as nothing).
-  const cleared = await f.call('/auth/profile', 'POST', { nickname: '', revision: withNick.user.revision }, relogin);
+  const cleared = await f.call('/auth/profile', 'POST', { nickname: '', revision: adminProfileEdit.user.revision }, relogin);
   assert.equal(cleared.user.nickname, '李雅婷');
   assert.equal((await f.call('/public/roster?term=2026-2027', 'GET')).groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
 
@@ -586,5 +595,5 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   delete stale.schema;
   await f.repo.put('roster/2026-2027.json', stale);
   const healed = await f.call('/public/roster?term=2026-2027', 'GET');
-  assert.equal(healed.schema, 2);
+  assert.equal(healed.schema, 3);
 });

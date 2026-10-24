@@ -1,4 +1,4 @@
-import { api, el, empty, errorText, formatTime, link, message, pill, q, type FormDefinition } from './platform-client';
+import { api, el, empty, errorText, formatTime, link, message, q, type FormDefinition } from './platform-client';
 
 const status = q<HTMLElement>('[data-forms-status]');
 let forms: FormDefinition[] = [];
@@ -20,10 +20,12 @@ function render() {
 
   for (const form of items) {
     const card = el('article', undefined, 'p-form-card');
-    const pills = el('div', undefined, 'p-pills');
-    pills.append(pill(form.access));
-    if (form.requireReview) pills.append(el('span', '审核', 'p-pill'));
-    card.append(pills, el('h2', form.title), el('p', form.description || ''));
+    if (form.requireReview) {
+      const pills = el('div', undefined, 'p-pills');
+      pills.append(el('span', '提交后审核', 'p-pill'));
+      card.append(pills);
+    }
+    card.append(el('h2', form.title), el('p', form.description || ''));
     if (form.deadline) card.append(el('p', `截止：${formatTime(form.deadline)}`, 'p-help'));
     const actions = el('div', undefined, 'p-actions');
     actions.append(link('填写表单', `/fill/?id=${encodeURIComponent(form.id)}`, ''));

@@ -1,7 +1,7 @@
 export const SUPPORTED_ROSTER_TERMS = new Set(['2026-2027']);
 
 export const DEPARTMENTS_2026_2027 = [
-  '主席团与统筹',
+  '主席团',
   '运营支持部',
   '易班建设部',
   '媒体宣传部',
@@ -12,7 +12,7 @@ export const ROSTER_SEED_2026_2027 = [
   {
     order: 1,
     term: '2026-2027',
-    department: '主席团与统筹',
+    department: '主席团',
     realName: '吴双灿',
     studentId: 'B24040213',
     qq: '2366522877',
@@ -22,31 +22,31 @@ export const ROSTER_SEED_2026_2027 = [
   {
     order: 2,
     term: '2026-2027',
-    department: '主席团与统筹',
+    department: '主席团',
     realName: '杨庭益',
     studentId: 'B24041216',
     qq: '3521551489',
-    title: '分管协调 · 易班建设部',
+    title: '分管主席 · 易班建设部',
     signature: '心平能愈三千疾，心静可通万事理',
   },
   {
     order: 3,
     term: '2026-2027',
-    department: '主席团与统筹',
+    department: '主席团',
     realName: '李雅婷',
     studentId: 'B24041902',
     qq: '1775706379',
-    title: '分管协调 · 媒体宣传部',
+    title: '分管主席 · 媒体宣传部',
     signature: '',
   },
   {
     order: 4,
     term: '2026-2027',
-    department: '主席团与统筹',
+    department: '主席团',
     realName: '杨婉露',
     studentId: 'B24041703',
     qq: '1694145617',
-    title: '分管协调 · 心理工作部',
+    title: '分管主席 · 心理工作部',
     signature: '得之我命，失之我幸。',
   },
   {
@@ -188,7 +188,20 @@ export function qqAvatarUrl(qq) {
 }
 
 /** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
-export const ROSTER_SCHEMA = 2;
+export const ROSTER_SCHEMA = 3;
+
+export function normalizeDepartmentName(dept) {
+  const raw = typeof dept === 'string' ? dept.trim() : '';
+  if (raw === '主席团与统筹' || raw === '统筹与协调') return '主席团';
+  return raw;
+}
+
+export function normalizeRoleTitle(title) {
+  const raw = typeof title === 'string' ? title.trim() : '';
+  if (raw.startsWith('分管协调 · ')) return raw.replace(/^分管协调 · /, '分管主席 · ');
+  if (raw.startsWith('执行统筹 · ')) return raw.replace(/^执行统筹 · /, '执行主席 · ');
+  return raw;
+}
 
 /** A nickname is only meaningful when it differs from the real name (legacy records default nickname to realName). */
 export function distinctNickname(user) {
@@ -200,6 +213,11 @@ export function distinctNickname(user) {
 export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new Date().toISOString()) {
   const rosterUsers = users
     .filter((u) => u && u.term === term && u.department && u.status !== 'disabled')
+    .map((u) => ({
+      ...u,
+      department: normalizeDepartmentName(u.department),
+      title: normalizeRoleTitle(u.title),
+    }))
     .sort((a, b) => ((a.order ?? 999) - (b.order ?? 999)) || String(a.studentId || '').localeCompare(String(b.studentId || '')));
 
   const departmentOrder = [...DEPARTMENTS_2026_2027];
@@ -219,7 +237,7 @@ export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new D
           role: u.title || '',
           avatarUrl: u.avatarUrl || qqAvatarUrl(u.qq),
           signature: u.signature || '',
-          featured: deptName === '主席团与统筹',
+          featured: deptName === '主席团',
         }));
       return { name: deptName, people };
     })

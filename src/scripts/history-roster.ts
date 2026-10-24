@@ -13,6 +13,7 @@ interface RosterGroup {
 }
 
 interface RosterSnapshot {
+  schema?: number;
   term: string;
   totalCount: number;
   activeCount: number;
@@ -84,7 +85,7 @@ function renderRoster(container: HTMLElement, countNode: HTMLElement | null, dat
 
     const grid = document.createElement('div');
     grid.className = 'member-grid';
-    const isFeatured = index === 0 || group.name === '主席团与统筹';
+    const isFeatured = index === 0 || group.name === '主席团';
     for (const person of group.people) {
       grid.append(createMemberNode(person, Boolean(person.featured ?? isFeatured)));
     }
@@ -120,7 +121,7 @@ async function initRoster() {
     const saved = localStorage.getItem(cacheKey);
     if (saved) {
       const parsed = JSON.parse(saved) as RosterSnapshot;
-      if (parsed && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
+      if (parsed && parsed.schema === 3 && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
         cachedRaw = JSON.stringify(parsed.groups);
         renderRoster(container, countNode, parsed);
         scrollToHashTarget();

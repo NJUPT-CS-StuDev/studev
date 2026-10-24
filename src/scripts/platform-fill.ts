@@ -225,15 +225,12 @@ void (async () => {
             canSubmit: boolean;
             reason?: string;
         }>(`/forms/${encodeURIComponent(id)}`);
-        identity = await session(false);
+        identity = await session(true);
+        if (!identity) return;
         pending = receipts().filter(value => value.formId === id && !value.completed && !value.abandoned).at(-1) || null;
         let result:{form:FormDefinition;canSubmit:boolean;reason?:string};
         try {result = await formRequest;}
         catch(error){
-            if (!identity && error instanceof PlatformError && error.status === 401) {
-                location.replace(`/login/?next=${encodeURIComponent(location.pathname + location.search)}`);
-                return;
-            }
             if(!pending)throw error;
             const previous=await api<{submission:Submission;form:FormDefinition}>(`/submissions/${encodeURIComponent(pending.id)}`,undefined,{headers:{'X-Receipt-Token':pending.token}});
             result={form:previous.form,canSubmit:false,reason:'此表目前无法新填写。你仍可重试确认此前已申请的提交，或明确放弃。'};
@@ -246,11 +243,15 @@ void (async () => {
         renderFields(q('[data-fill-fields]'), definition.fields);
         q('[data-guest-name]').hidden = !!identity;
         q<HTMLInputElement>('#guest-name').required = !identity;
-        q('[data-fill-identity]').textContent = identity ? `以 ${identity.user.realName||identity.user.nickname}${identity.user.studentId?`（${identity.user.studentId}）`:""} 的身份提交；学号和姓名由账号自动关联，无需重复填写` : '访客填写';
+        q('[data-fill-identity]').textContent = identity ? `以 ${identity.user.realName||identity.user.nickname}${identity.user.studentId?`（${identity.user.studentId}）`:""} 的身份提交；学号和姓名由账号自动关联，无需重复填写` : '';
         const rules = q('[data-fill-rules]');
-        rules.append(pill(definition.access));
         if (definition.requireReview)
             rules.append(el('span', '提交后审核', 'p-pill'));
+        if (definition.allowEdit)
+            rules.append(el('span', '提交后可修改', 'p-pill'));
+        if (definition.deadline)
+            rules.append(el('span', `截止 ${formatTime(definition.deadline)}`, 'p-pill'));
+        rules.hidden = !rules.childElementCount;
         if (definition.allowEdit)
             rules.append(el('span', '允许修改文字信息', 'p-pill'));
         if (definition.deadline)

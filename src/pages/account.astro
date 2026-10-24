@@ -2,116 +2,243 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import '../styles/platform.css';
 ---
-<SiteLayout title="我的账号 — StuDev" active="account" noindex={true}>
-  <div class="platform platform-narrow">
-    <header class="p-heading">
-      <div>
-        <h1>我的账号</h1>
+<SiteLayout title="账号与组织成员 — StuDev" active="account" noindex={true}>
+  <script is:inline>
+    try {
+      if (!localStorage.getItem('studev_auth_user')) {
+        location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
+      }
+    } catch {}
+  </script>
+  <div class="platform platform-narrow" data-account-shell>
+    <nav class="p-nav" aria-label="账号与组织导航">
+      <div class="p-nav-group" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-account-tab="profile">我的账号</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="members">组织成员</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="audit" data-owner-only hidden>操作记录</button>
       </div>
-      <div class="p-actions">
-        <a class="p-button secondary" href="/admin/" data-account-admin hidden>进入管理后台</a>
-        <button class="p-button secondary" type="button" data-account-logout hidden>退出登录</button>
-      </div>
-    </header>
+    </nav>
     <div class="p-message" role="status" aria-live="polite" data-account-status>正在读取账号……</div>
     <div data-account-content hidden>
       <div class="p-message" data-account-required hidden></div>
-      <section class="p-id-card" data-account-id-card aria-label="数字身份名片"></section>
-      <div class="p-grid">
-        <section class="p-card">
-          <h2>个人资料</h2>
-          <dl class="p-meta" data-account-info></dl>
-          <hr class="p-divider" />
-          <form data-profile-form>
-            <div data-profile-identity hidden>
-              <div class="p-field">
-                <label for="account-student-id">学号</label>
-                <input id="account-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+
+      <div data-account-panel="profile">
+        <header class="p-heading">
+          <div>
+            <h1>我的账号</h1>
+            <p class="p-muted">管理个人实名档案、个性签名与登录安全。</p>
+          </div>
+          <div class="p-actions">
+            <button class="p-button secondary" type="button" data-account-logout hidden>退出登录</button>
+          </div>
+        </header>
+        <section class="p-id-card" data-account-id-card aria-label="数字身份名片"></section>
+        <div class="p-grid">
+          <section class="p-card">
+            <h2>个人资料</h2>
+            <dl class="p-meta" data-account-info></dl>
+            <hr class="p-divider" />
+            <form data-profile-form>
+              <div data-profile-identity hidden>
+                <div class="p-field">
+                  <label for="account-student-id">学号</label>
+                  <input id="account-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+                </div>
+                <div class="p-field">
+                  <label for="account-real-name">姓名</label>
+                  <input id="account-real-name" name="realName" maxlength="40" autocomplete="name" />
+                </div>
               </div>
               <div class="p-field">
-                <label for="account-real-name">姓名</label>
-                <input id="account-real-name" name="realName" maxlength="40" autocomplete="name" />
+                <label for="account-nickname">显示昵称（选填）</label>
+                <input id="account-nickname" name="nickname" maxlength="40" autocomplete="nickname" placeholder="显示在真实姓名之后（如 hicancan）；留空则仅显示真实姓名" />
               </div>
-            </div>
+              <div class="p-field">
+                <label for="account-signature">个人签名</label>
+                <input id="account-signature" name="signature" maxlength="120" autocomplete="off" placeholder="显示在历届档案与个人名片上的一句话（选填）" />
+                <p class="p-help">保存后将实时更新公开历届档案与组织成员名录。</p>
+              </div>
+              <button class="p-button" type="submit" data-profile-save>保存个人资料</button>
+            </form>
+          </section>
+          <section class="p-card">
+            <h2>修改密码</h2>
+            <form data-password-form>
+              <div class="p-field">
+                <label for="current-password">当前密码</label>
+                <div class="p-password-wrap">
+                  <input id="current-password" name="currentPassword" type="password" maxlength="256" autocomplete="current-password" required />
+                  <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+                </div>
+              </div>
+              <div class="p-field">
+                <label for="new-password">新密码</label>
+                <div class="p-password-wrap">
+                  <input id="new-password" name="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位" required />
+                  <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+                </div>
+              </div>
+              <div class="p-field" data-password-totp hidden>
+                <label for="password-totp">双重验证码</label>
+                <input id="password-totp" name="totp" maxlength="64" autocomplete="one-time-code" placeholder="6 位动态码或恢复码" />
+              </div>
+              <button class="p-button secondary" type="submit">修改密码</button>
+            </form>
+          </section>
+        </div>
+        <section class="p-card" data-account-mfa hidden style="margin-top:20px">
+          <h2>双重验证（TOTP 动态码）</h2>
+          <p class="p-muted" data-mfa-state></p>
+          <form data-totp-setup style="margin-top:16px">
             <div class="p-field">
-              <label for="account-nickname">昵称</label>
-              <input id="account-nickname" name="nickname" maxlength="40" autocomplete="nickname" placeholder="选填，显示在姓名之后（如 hicancan）；留空即不显示" />
+              <label for="setup-password">确认当前密码</label>
+              <input id="setup-password" name="password" type="password" maxlength="256" autocomplete="current-password" required />
             </div>
-            <div class="p-field">
-              <label for="account-signature">个人签名</label>
-              <input id="account-signature" name="signature" maxlength="120" autocomplete="off" placeholder="显示在历届档案与个人名片上的一句话（选填）" />
-              <p class="p-help">保存后将实时同步至中心历届档案名录。</p>
-            </div>
-            <button class="p-button" type="submit" data-profile-save>保存资料</button>
+            <button class="p-button" type="submit">设置验证器</button>
           </form>
-        </section>
-        <section class="p-card">
-          <h2>修改密码</h2>
-          <form data-password-form>
+          <div data-totp-enrollment hidden>
+            <hr class="p-divider" />
+            <p class="p-muted">使用身份验证器应用扫描下方二维码：</p>
+            <canvas data-totp-qr aria-label="验证器绑定二维码" style="max-width:100%;margin:16px 0"></canvas>
             <div class="p-field">
-              <label for="current-password">当前密码</label>
-              <div class="p-password-wrap">
-                <input id="current-password" name="currentPassword" type="password" maxlength="256" autocomplete="current-password" required />
-                <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+              <label>手动输入密钥</label>
+              <div class="p-actions">
+                <code class="p-secret" data-totp-secret></code>
+                <button class="p-button secondary small" type="button" data-copy-secret>复制密钥</button>
               </div>
             </div>
-            <div class="p-field">
-              <label for="new-password">新密码</label>
-              <div class="p-password-wrap">
-                <input id="new-password" name="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" placeholder="至少 12 位" required />
-                <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+            <form data-totp-confirm style="margin-top:16px">
+              <div class="p-field">
+                <label for="confirm-totp">验证码</label>
+                <input id="confirm-totp" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="输入 6 位动态码" required />
               </div>
+              <button class="p-button" type="submit">确认绑定</button>
+            </form>
+          </div>
+          <div data-totp-recovery hidden>
+            <hr class="p-divider" />
+            <h3>恢复码</h3>
+            <p class="p-muted">请妥善保存一次性恢复码：</p>
+            <pre class="p-secret" data-recovery-codes></pre>
+            <div class="p-actions">
+              <button class="p-button secondary" type="button" data-copy-recovery>复制</button>
+              <button class="p-button secondary" type="button" data-save-recovery>下载</button>
+              <button class="p-button" type="button" data-recovery-done>完成</button>
             </div>
-            <div class="p-field" data-password-totp hidden>
-              <label for="password-totp">双重验证码</label>
-              <input id="password-totp" name="totp" maxlength="64" autocomplete="one-time-code" placeholder="6 位动态码或恢复码" />
-            </div>
-            <button class="p-button secondary" type="submit">修改密码</button>
-          </form>
+          </div>
         </section>
       </div>
-      <section class="p-card" data-account-mfa hidden style="margin-top:20px">
-        <h2>双重验证（TOTP 动态码）</h2>
-        <p class="p-muted" data-mfa-state></p>
-        <form data-totp-setup style="margin-top:16px">
-          <div class="p-field">
-            <label for="setup-password">确认当前密码</label>
-            <input id="setup-password" name="password" type="password" maxlength="256" autocomplete="current-password" required />
+
+      <section data-account-panel="members" hidden>
+        <header class="p-heading">
+          <div>
+            <h1>组织成员</h1>
+            <p class="p-muted" data-members-summary>查看中心全体成员名录、所属部门、职务分工与联系方式。</p>
           </div>
-          <button class="p-button" type="submit">设置验证器</button>
-        </form>
-        <div data-totp-enrollment hidden>
-          <hr class="p-divider" />
-          <p class="p-muted">使用身份验证器应用扫描下方二维码：</p>
-          <canvas data-totp-qr aria-label="验证器绑定二维码" style="max-width:100%;margin:16px 0"></canvas>
-          <div class="p-field">
-            <label>手动输入密钥</label>
-            <div class="p-actions">
-              <code class="p-secret" data-totp-secret></code>
-              <button class="p-button secondary small" type="button" data-copy-secret>复制密钥</button>
-            </div>
-          </div>
-          <form data-totp-confirm style="margin-top:16px">
-            <div class="p-field">
-              <label for="confirm-totp">验证码</label>
-              <input id="confirm-totp" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="输入 6 位动态码" required />
-            </div>
-            <button class="p-button" type="submit">确认绑定</button>
-          </form>
-        </div>
-        <div data-totp-recovery hidden>
-          <hr class="p-divider" />
-          <h3>恢复码</h3>
-          <p class="p-muted">请妥善保存一次性恢复码：</p>
-          <pre class="p-secret" data-recovery-codes></pre>
           <div class="p-actions">
-            <button class="p-button secondary" type="button" data-copy-recovery>复制</button>
-            <button class="p-button secondary" type="button" data-save-recovery>下载</button>
-            <button class="p-button" type="button" data-recovery-done>完成</button>
+            <a class="p-button secondary small" href="/history/2026-2027/#people">查看公开历届档案 ↗</a>
+            <button class="p-button secondary small" type="button" data-members-refresh>刷新</button>
           </div>
+        </header>
+        <div class="p-toolbar">
+          <input class="p-input" type="search" aria-label="搜索成员" placeholder="搜索姓名、昵称、学号、部门、职务或 QQ 号" data-members-search />
+          <select class="p-input" style="flex:0 0 auto;min-width:160px" aria-label="按部门筛选" data-members-dept-filter>
+            <option value="">全部部门</option>
+            <option value="主席团">主席团</option>
+            <option value="运营支持部">运营支持部</option>
+            <option value="易班建设部">易班建设部</option>
+            <option value="媒体宣传部">媒体宣传部</option>
+            <option value="心理工作部">心理工作部</option>
+            <option value="__other__">未分配部门</option>
+          </select>
+          <span class="p-count" data-members-count></span>
         </div>
+        <div data-members-list></div>
+      </section>
+
+      <section data-account-panel="audit" hidden>
+        <header class="p-heading">
+          <div>
+            <h1>关键操作记录</h1>
+            <p class="p-muted">平台账号权限、档案与表单关键操作审计日志。</p>
+          </div>
+          <div class="p-actions">
+            <button class="p-button secondary small" type="button" data-audit-refresh>刷新</button>
+          </div>
+        </header>
+        <div data-audit-list></div>
       </section>
     </div>
   </div>
+
+  <dialog class="p-modal" data-member-card-modal>
+    <form method="dialog">
+      <div data-member-card-body></div>
+      <div class="p-actions" style="margin-top:18px;justify-content:flex-end">
+        <button class="p-button secondary" value="close" type="submit">关闭</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="p-modal" data-roster-edit-modal>
+    <form method="dialog" data-roster-edit-form>
+      <h2 data-roster-edit-title>编辑成员档案</h2>
+      <p class="p-help" style="margin-bottom:14px">保存后将实时更新组织成员名录与公开历届档案页面。</p>
+      <div class="p-inline-grid">
+        <div class="p-field">
+          <label for="roster-edit-term">所属届别</label>
+          <input id="roster-edit-term" maxlength="32" placeholder="如 2026-2027" />
+        </div>
+        <div class="p-field">
+          <label for="roster-edit-order">名册排序序号</label>
+          <input id="roster-edit-order" type="number" min="0" max="9999" step="1" />
+        </div>
+      </div>
+      <div class="p-field">
+        <label for="roster-edit-department">所属部门</label>
+        <input id="roster-edit-department" list="roster-department-options" maxlength="60" placeholder="如 主席团、运营支持部、易班建设部…" />
+        <datalist id="roster-department-options">
+          <option value="主席团"></option>
+          <option value="运营支持部"></option>
+          <option value="易班建设部"></option>
+          <option value="媒体宣传部"></option>
+          <option value="心理工作部"></option>
+        </datalist>
+      </div>
+      <div class="p-field">
+        <label for="roster-edit-role-title">职务 / 分管头衔</label>
+        <input id="roster-edit-role-title" maxlength="80" placeholder="如 分管主席 · 媒体宣传部（普通部员可留空）" />
+      </div>
+      <div class="p-field">
+        <label for="roster-edit-nickname">显示昵称（选填）</label>
+        <input id="roster-edit-nickname" maxlength="40" placeholder="展示在真实姓名后；留空则仅显示真实姓名" />
+      </div>
+      <div class="p-field">
+        <label for="roster-edit-signature">个人签名</label>
+        <input id="roster-edit-signature" maxlength="120" placeholder="显示在历届档案与成员名片中的个人签名" />
+      </div>
+      <div class="p-actions">
+        <button class="p-button secondary" value="cancel" formnovalidate type="submit">取消</button>
+        <button class="p-button" value="confirm" type="submit">保存档案</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="p-modal" data-platform-confirm>
+    <form method="dialog">
+      <h2 data-confirm-title>确认操作</h2>
+      <p data-confirm-description></p>
+      <div class="p-field" data-confirm-password-field hidden>
+        <label for="confirm-user-password">临时密码</label>
+        <input id="confirm-user-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" />
+        <p class="p-help">至少 12 位。请通过安全渠道告知本人，首次登录须修改密码。</p>
+      </div>
+      <div class="p-actions">
+        <button class="p-button secondary" value="cancel" formnovalidate>取消</button>
+        <button class="p-button" value="confirm" data-confirm-submit>确认</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>import '../scripts/platform-account';</script>
 </SiteLayout>

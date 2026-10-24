@@ -3,7 +3,7 @@ import { digest, hashPassword, mac, safeEqual, validPasswordHash, verifyPassword
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './platform-totp.mjs';
-import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, qqAvatarUrl } from './platform-roster.mjs';
+import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl } from './platform-roster.mjs';
 
 const API = '/api/platform';
 const MAX_SESSION_SECONDS = 7200;
@@ -73,8 +73,8 @@ export function createIdentity({ repo, env, now = Date.now }) {
       identityVerified: user.identityVerified === true,
       profileComplete: profileComplete(user),
       term: user.term || '',
-      department: user.department || '',
-      title: user.title || '',
+      department: normalizeDepartmentName(user.department || ''),
+      title: normalizeRoleTitle(user.title || ''),
       order: Number.isSafeInteger(user.order) ? user.order : 999,
       signature: user.signature || '',
       role: user.role,
@@ -267,8 +267,8 @@ export function createIdentity({ repo, env, now = Date.now }) {
           const nextStudentId = existing.studentId || seed.studentId;
           const nextRealName = existing.realName || seed.realName;
           const nextTerm = existing.term || seed.term;
-          const nextDept = existing.department || seed.department;
-          const nextTitle = existing.title !== undefined && existing.title !== '' ? existing.title : seed.title;
+          const nextDept = normalizeDepartmentName(existing.department || seed.department);
+          const nextTitle = normalizeRoleTitle(existing.title !== undefined && existing.title !== '' ? existing.title : seed.title);
           const nextOrder = Number.isSafeInteger(existing.order) && existing.order !== 999 ? existing.order : seed.order;
           const nextSig = existing.signature !== undefined && existing.signature !== '' ? existing.signature : seed.signature;
           const nextVerified = true;
@@ -326,7 +326,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
 
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
-    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
+    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && !path.startsWith(`${API}/members`) && path !== `${API}/admin/audit`) return null;
     await bootstrap();
     const request = context.request;
     const route = path.slice(API.length);
@@ -338,9 +338,36 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (!/^[0-9]{4}-[0-9]{4}$/.test(term)) fail(400, 'INVALID_TERM', '届别格式无效。');
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
-      if (!snapshot) snapshot = await seedAndSyncRoster(term);
-      else if (snapshot.schema !== ROSTER_SCHEMA) snapshot = await rebuildRoster(term);
+      if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) snapshot = await seedAndSyncRoster(term);
       return response(snapshot, 200, { 'Cache-Control': 'public, max-age=10, stale-while-revalidate=60' });
+    }
+    if (method === 'GET' && route === '/members') {
+      const auth = await authenticate(request, { required: true });
+      const currentRoster = await repo.get('roster/2026-2027.json');
+      if (!currentRoster || currentRoster.schema !== ROSTER_SCHEMA) {
+        await seedAndSyncRoster('2026-2027');
+      }
+      const users = await loadAllUsers();
+      const visible = auth.user.role === 'owner' ? users : users.filter((u) => u.status !== 'disabled');
+      return response({ items: visible.map(publicUser) });
+    }
+    const memberProfile = route.match(/^\/members\/([a-f0-9-]{36})\/profile$/);
+    if (method === 'POST' && memberProfile) {
+      const auth = await authenticate(request, { staff: true, csrf: true });
+      const user = await loadUser(memberProfile[1]);
+      const body = await readJson(request, 8192);
+      if (body.revision !== user.revision) fail(409, 'REVISION_CONFLICT', '档案已更新，请刷新后重试。');
+      const rawNick = body.nickname === undefined ? undefined : String(body.nickname).trim();
+      const nickname = rawNick === undefined ? user.nickname : rawNick === '' ? (user.realName || user.qq) : text(rawNick, '昵称', 40, true);
+      const term = body.term === undefined ? (user.term || '') : text(body.term, '届别', 32, false);
+      const department = body.department === undefined ? (user.department || '') : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
+      const title = body.title === undefined ? (user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
+      const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
+      const order = body.order === undefined ? (user.order ?? 999) : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
+      const updated = await saveUser(user, { nickname, term, department, title, signature, order });
+      if (user.term || updated.term) await rebuildRoster(updated.term || user.term);
+      await repo.audit(auth.user.id, 'identity.user.updated', user.id, { department, term });
+      return response({ user: publicUser(updated) });
     }
     if (method === 'POST' && route === '/admin/roster/sync') {
       const auth = await authenticate(request, { owner: true, csrf: true });
@@ -603,8 +630,8 @@ export function createIdentity({ repo, env, now = Date.now }) {
       let identityVerified = identityChanged ? false : (body.identityVerified ?? (user.identityVerified === true));
       if (identityVerified && !profileComplete({ ...user, studentId, realName })) fail(409, 'PROFILE_REQUIRED', '账号需先补齐学号与真实姓名，再核验身份。');
       const term = body.term === undefined ? (user.term || '') : text(body.term, '届别', 32, false);
-      const department = body.department === undefined ? (user.department || '') : text(body.department, '所属部门', 60, false);
-      const title = body.title === undefined ? (user.title || '') : text(body.title, '职务头衔', 80, false);
+      const department = body.department === undefined ? (user.department || '') : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
+      const title = body.title === undefined ? (user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const order = body.order === undefined ? (user.order ?? 999) : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
       const changedSecurity = role !== user.role || status !== user.status;

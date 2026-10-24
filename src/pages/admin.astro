@@ -1,86 +1,14 @@
 ---
 import PlatformShell from '../components/PlatformShell.astro';
 ---
-<PlatformShell title="管理后台" active="admin">
-  <header class="p-heading"><div><h1>管理后台</h1><p>创建和管理表单，查看填写结果，统筹历届成员档案与权限。</p></div></header>
+<PlatformShell title="表单管理" active="admin">
+  <header class="p-heading"><div><h1>表单管理</h1><p>创建和管理社团内部表单，查看、审核与导出成员填写记录。</p></div></header>
   <div class="p-message" role="status" aria-live="polite" data-admin-platform-status></div>
   <div data-admin-platform hidden>
-    <div class="p-tabs" role="tablist" aria-label="后台功能"><button class="p-tab" type="button" role="tab" aria-selected="true" data-admin-tab="forms">表单管理</button><button class="p-tab" type="button" role="tab" aria-selected="false" data-admin-tab="users" data-owner-only hidden>成员与权限</button><button class="p-tab" type="button" role="tab" aria-selected="false" data-admin-tab="audit" data-owner-only hidden>操作记录</button></div>
     <section data-admin-panel="forms"><div class="p-toolbar"><input class="p-input" type="search" aria-label="搜索表单" placeholder="搜索表单" data-admin-form-search /><select class="p-input" aria-label="筛选表单状态" data-admin-form-filter><option value="">所有状态</option><option value="draft">草稿</option><option value="published">收集中</option><option value="closed">已停止</option><option value="archived">已归档</option></select><div class="p-actions"><button class="p-button secondary" type="button" data-admin-refresh>刷新</button><button class="p-button" type="button" data-admin-new>新建表单</button></div></div><div class="p-list" data-admin-forms-list></div></section>
-    <section data-admin-panel="editor" hidden><div class="p-toolbar"><h2 data-editor-heading>新建表单</h2><div class="p-actions"><button class="p-button secondary small" type="button" data-editor-back>返回列表</button></div></div><form data-editor-form><div class="p-card"><div class="p-field"><label for="editor-title">表单名称</label><input id="editor-title" maxlength="100" required placeholder="例如：资料提交、信息登记、意见反馈" /></div><div class="p-field"><label for="editor-description">填写说明</label><textarea id="editor-description" maxlength="4000" rows="3" placeholder="向填写者说明用途、要求和注意事项"></textarea></div><div class="p-actions" data-editor-templates><span class="p-help">快速开始：</span><button class="p-button secondary small" type="button" data-template="information">信息登记</button><button class="p-button secondary small" type="button" data-template="files">文件收集</button><button class="p-button secondary small" type="button" data-template="mixed">信息＋附件</button><button class="p-button secondary small" type="button" data-template="feedback">意见反馈</button></div></div><section class="p-card"><div class="p-toolbar"><h2>填写字段</h2><span class="p-count" data-editor-field-count></span></div><div data-editor-fields></div><div class="p-actions"><select class="p-input" style="width:auto" aria-label="新增字段类型" data-editor-add-type><option value="text">短文本</option><option value="textarea">长文本</option><option value="select">单选</option><option value="checkbox">多选</option><option value="number">数字</option><option value="date">日期</option><option value="file">附件</option></select><button class="p-button secondary" type="button" data-editor-add>添加字段</button></div></section><section class="p-card"><h2>收集规则</h2><div class="p-inline-grid"><div class="p-field"><label for="editor-access">谁可以填写</label><select id="editor-access"><option value="members">登录成员</option><option value="public">访客和成员</option></select></div><div class="p-field"><label for="editor-deadline">截止时间（选填）</label><input id="editor-deadline" type="datetime-local" /><p class="p-help">使用当前设备的本地时间，留空表示不限日期。</p></div><div class="p-field"><label for="editor-per-user">每个登录账号最多提交</label><input id="editor-per-user" type="number" min="1" max="20" value="1" required /><p class="p-help">1–20 次；访客没有验证身份，无法按人可靠计数。</p></div><div class="p-field"><label for="editor-total">此表总提交名额</label><input id="editor-total" type="number" min="1" max="1000" value="100" required /><p class="p-help">1–1000 次。每次申请提交即占名额，失败或放弃也计入，不自动返还。</p></div></div><div class="p-stack" style="gap:12px"><label class="p-checkbox"><input id="editor-review" type="checkbox" /><span>提交后需要管理员审核</span></label><label class="p-checkbox"><input id="editor-edit" type="checkbox" /><span>允许成员修改已提交的信息（附件原件保持不变）</span></label></div></section><section class="p-card"><div class="p-field"><label for="editor-status">表单状态</label><select id="editor-status"><option value="draft">草稿 · 仅管理员预览</option><option value="published">发布 · 开始收集</option><option value="closed">停止 · 不再接受新提交</option><option value="archived">归档 · 保留记录</option></select></div><p class="p-help" style="margin-bottom:18px">历史提交按原字段保存，修改表单不会改动旧记录。需要独立统计时，可以复制为新表单。</p><div class="p-actions"><button class="p-button" type="submit">保存表单</button><button class="p-button secondary" type="button" data-editor-preview>预览填写效果</button><button class="p-button secondary" type="button" data-editor-copy hidden>复制填写链接</button></div><div class="p-preview" data-editor-preview-content hidden></div></section></form></section>
+    <section data-admin-panel="editor" hidden><div class="p-toolbar"><h2 data-editor-heading>新建表单</h2><div class="p-actions"><button class="p-button secondary small" type="button" data-editor-back>返回列表</button></div></div><form data-editor-form><div class="p-card"><div class="p-field"><label for="editor-title">表单名称</label><input id="editor-title" maxlength="100" required placeholder="例如：资料提交、信息登记、意见反馈" /></div><div class="p-field"><label for="editor-description">填写说明</label><textarea id="editor-description" maxlength="4000" rows="3" placeholder="向填写者说明用途、要求和注意事项"></textarea></div><div class="p-actions" data-editor-templates><span class="p-help">快速开始：</span><button class="p-button secondary small" type="button" data-template="information">信息登记</button><button class="p-button secondary small" type="button" data-template="files">文件收集</button><button class="p-button secondary small" type="button" data-template="mixed">信息＋附件</button><button class="p-button secondary small" type="button" data-template="feedback">意见反馈</button></div></div><section class="p-card"><div class="p-toolbar"><h2>填写字段</h2><span class="p-count" data-editor-field-count></span></div><div data-editor-fields></div><div class="p-actions"><select class="p-input" style="width:auto" aria-label="新增字段类型" data-editor-add-type><option value="text">短文本</option><option value="textarea">长文本</option><option value="select">单选</option><option value="checkbox">多选</option><option value="number">数字</option><option value="date">日期</option><option value="file">附件</option></select><button class="p-button secondary" type="button" data-editor-add>添加字段</button></div></section><section class="p-card"><h2>收集规则</h2><div class="p-inline-grid"><div class="p-field"><label for="editor-deadline">截止时间（选填）</label><input id="editor-deadline" type="datetime-local" /><p class="p-help">使用当前设备的本地时间，留空表示不限日期。</p></div><div class="p-field"><label for="editor-per-user">每位成员最多提交次数</label><input id="editor-per-user" type="number" min="1" max="20" value="1" required /><p class="p-help">1–20 次，限制单个成员账号可提交的上限。</p></div><div class="p-field"><label for="editor-total">此表总提交名额</label><input id="editor-total" type="number" min="1" max="1000" value="100" required /><p class="p-help">1–1000 次。每次申请提交即占名额。</p></div></div><div class="p-stack" style="gap:12px"><label class="p-checkbox"><input id="editor-review" type="checkbox" /><span>提交后需要管理员审核</span></label><label class="p-checkbox"><input id="editor-edit" type="checkbox" /><span>允许成员修改已提交的信息（附件原件保持不变）</span></label></div></section><section class="p-card"><div class="p-field"><label for="editor-status">表单状态</label><select id="editor-status"><option value="draft">草稿 · 仅管理员预览</option><option value="published">发布 · 开始收集</option><option value="closed">停止 · 不再接受新提交</option><option value="archived">归档 · 保留记录</option></select></div><p class="p-help" style="margin-bottom:18px">历史提交按原字段保存，修改表单不会改动旧记录。需要独立统计时，可以复制为新表单。</p><div class="p-actions"><button class="p-button" type="submit">保存表单</button><button class="p-button secondary" type="button" data-editor-preview>预览填写效果</button><button class="p-button secondary" type="button" data-editor-copy hidden>复制填写链接</button></div><div class="p-preview" data-editor-preview-content hidden></div></section></form></section>
     <section data-admin-panel="records" hidden><div class="p-toolbar"><h2 data-records-title>填写记录</h2><div class="p-actions"><button class="p-button secondary small" type="button" data-records-back>返回列表</button><button class="p-button secondary small" type="button" data-records-refresh>刷新</button><button class="p-button" type="button" data-records-export>导出 CSV</button></div></div><div class="p-stats" data-records-usage></div><div class="p-toolbar"><input class="p-input" type="search" aria-label="搜索填写记录" placeholder="搜索填写者、回执或填写内容" data-records-search /><select class="p-input" aria-label="筛选提交状态" data-records-filter><option value="">所有状态</option><option value="uploading">待完成</option><option value="submitted">已提交</option><option value="pending_review">待审核</option><option value="accepted">已通过</option><option value="rejected">已退回</option></select><span class="p-count" data-records-count></span></div><div data-records-list></div><section class="p-card p-record-detail" data-records-detail hidden><div class="p-toolbar"><h2>填写详情</h2><div class="p-actions"><button class="p-button secondary small" type="button" data-records-close>收起</button></div></div><div data-records-content></div><form data-records-review hidden><hr class="p-divider" /><div class="p-field"><label for="record-review-comment">审核备注</label><textarea id="record-review-comment" maxlength="1000" rows="3" placeholder="说明审核结果，或需要补充的内容"></textarea></div><div class="p-actions"><button class="p-button" type="submit" name="decision" value="accepted">通过</button><button class="p-button danger" type="submit" name="decision" value="rejected">退回</button></div></form></section></section>
-    <section data-admin-panel="users" hidden>
-      <div class="p-roster-bar" data-users-roster-bar>
-        <div>
-          <strong data-roster-summary-title>2026—2027 学年在编骨干名录</strong>
-          <div style="margin-top:4px"><span data-roster-summary-detail>正在统计注册进度…</span></div>
-        </div>
-        <div class="p-actions">
-          <a class="p-button secondary small" href="/history/2026-2027/#people" target="_blank" rel="noopener">查看公开档案名录 ↗</a>
-          <button class="p-button small" type="button" data-users-sync-roster>同步并刷新名录快照</button>
-        </div>
-      </div>
-      <div class="p-toolbar">
-        <h2>成员与权限</h2>
-        <input class="p-input" type="search" aria-label="搜索成员" placeholder="搜索学号、姓名、部门、头衔、QQ 号或签名" data-users-search />
-        <select class="p-input" style="flex:0 0 auto;min-width:160px" aria-label="按部门筛选" data-users-dept-filter>
-          <option value="">全部成员</option>
-          <option value="主席团与统筹">主席团与统筹</option>
-          <option value="运营支持部">运营支持部</option>
-          <option value="易班建设部">易班建设部</option>
-          <option value="媒体宣传部">媒体宣传部</option>
-          <option value="心理工作部">心理工作部</option>
-          <option value="__other__">非在编 / 其他账号</option>
-        </select>
-        <button class="p-button secondary small" type="button" data-users-refresh>刷新</button>
-      </div>
-      <div data-users-list></div>
-    </section>
-    <section data-admin-panel="audit" hidden><div class="p-toolbar"><h2>关键操作记录</h2><div class="p-actions"><button class="p-button secondary small" type="button" data-audit-refresh>刷新</button></div></div><div data-audit-list></div></section>
   </div>
-  <dialog class="p-modal" data-platform-confirm><form method="dialog"><h2 data-confirm-title>确认操作</h2><p data-confirm-description></p><div class="p-field" data-confirm-password-field hidden><label for="confirm-user-password">临时密码</label><input id="confirm-user-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" /><p class="p-help">至少 12 位。请通过安全渠道告诉本人，首次登录必须修改。</p></div><div class="p-field" data-confirm-student-field hidden><label for="confirm-user-student-id">学号</label><input id="confirm-user-student-id" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" /><p class="p-help">请与本人核对；已有学号不能在此更改。</p></div><div class="p-field" data-confirm-name-field hidden><label for="confirm-user-real-name">正确姓名</label><input id="confirm-user-real-name" maxlength="40" autocomplete="off" /><p class="p-help">请输入更正后的真实姓名。</p></div><div class="p-actions"><button class="p-button secondary" value="cancel" formnovalidate>取消</button><button class="p-button" value="confirm" data-confirm-submit>确认</button></div></form></dialog>
-  <dialog class="p-modal" data-roster-edit-modal>
-    <form method="dialog" data-roster-edit-form>
-      <h2 data-roster-edit-title>编辑成员档案</h2>
-      <p class="p-help" style="margin-bottom:14px">修改后将实时更新统一用户表并同步至公开历届档案页面。</p>
-      <div class="p-inline-grid">
-        <div class="p-field">
-          <label for="roster-edit-term">所属届别</label>
-          <input id="roster-edit-term" maxlength="32" placeholder="如 2026-2027（非在编可留空）" />
-        </div>
-        <div class="p-field">
-          <label for="roster-edit-order">名册排序序号</label>
-          <input id="roster-edit-order" type="number" min="0" max="9999" step="1" />
-        </div>
-      </div>
-      <div class="p-field">
-        <label for="roster-edit-department">所属部门</label>
-        <input id="roster-edit-department" list="roster-department-options" maxlength="60" placeholder="如 主席团与统筹、运营支持部、易班建设部…" />
-        <datalist id="roster-department-options">
-          <option value="主席团与统筹"></option>
-          <option value="运营支持部"></option>
-          <option value="易班建设部"></option>
-          <option value="媒体宣传部"></option>
-          <option value="心理工作部"></option>
-        </datalist>
-      </div>
-      <div class="p-field">
-        <label for="roster-edit-role-title">职务 / 分管头衔</label>
-        <input id="roster-edit-role-title" maxlength="80" placeholder="如 分管协调 · 媒体宣传部（普通部员可留空）" />
-      </div>
-      <div class="p-field">
-        <label for="roster-edit-nickname">显示昵称（选填）</label>
-        <input id="roster-edit-nickname" maxlength="40" placeholder="展示在真实姓名后；留空则仅显示真实姓名" />
-      </div>
-      <div class="p-field">
-        <label for="roster-edit-signature">个人签名</label>
-        <input id="roster-edit-signature" maxlength="120" placeholder="显示在历届档案中的个人签名" />
-      </div>
-      <div class="p-actions">
-        <button class="p-button secondary" value="cancel" formnovalidate type="submit">取消</button>
-        <button class="p-button" value="confirm" type="submit">保存并同步档案</button>
-      </div>
-    </form>
-  </dialog>
+  <dialog class="p-modal" data-platform-confirm><form method="dialog"><h2 data-confirm-title>确认操作</h2><p data-confirm-description></p><div class="p-actions"><button class="p-button secondary" value="cancel" formnovalidate>取消</button><button class="p-button" value="confirm" data-confirm-submit>确认</button></div></form></dialog>
   <script>import '../scripts/platform-admin';</script>
 </PlatformShell>

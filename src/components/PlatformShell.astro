@@ -1,26 +1,24 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
 import '../styles/platform.css';
-interface Props { title: string; description?: string; active?: string; narrow?: boolean; allowGuest?: boolean; }
-const {title, description = 'StuDev 表单与信息登记', active = '', narrow = false, allowGuest = false} = Astro.props;
+interface Props { title: string; description?: string; active?: string; narrow?: boolean; }
+const {title, description = 'StuDev 表单与信息登记', active = '', narrow = false} = Astro.props;
 ---
 <SiteLayout title={`${title} — StuDev`} description={description} active="forms" noindex={true}>
-  {!allowGuest && (
-    <script is:inline>
-      // 0ms 瞬间拦截：若客户端本地无登录态，在首帧 DOM 渲染前直接重定向至登录页，杜绝加载延迟
-      try {
-        if (!localStorage.getItem('studev_auth_user')) {
-          location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
-        }
-      } catch {}
-    </script>
-  )}
+  <script is:inline>
+    // 0ms 瞬间拦截：若客户端本地无登录态，在首帧 DOM 渲染前直接重定向至登录页，杜绝加载延迟
+    try {
+      if (!localStorage.getItem('studev_auth_user')) {
+        location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
+      }
+    } catch {}
+  </script>
   <div class:list={['platform', { 'platform-narrow': narrow }]}>
     <nav class="p-nav" aria-label="表单导航">
       <div class="p-nav-group">
         <a href="/forms/" aria-current={active === 'forms' ? 'page' : undefined}>全部表单</a>
         <a href="/submissions/" aria-current={active === 'submissions' ? 'page' : undefined}>我的提交</a>
-        <a href="/admin/" data-platform-staff hidden aria-current={active === 'admin' ? 'page' : undefined}>管理后台</a>
+        <a href="/admin/" data-platform-staff hidden aria-current={active === 'admin' ? 'page' : undefined}>表单管理</a>
       </div>
     </nav>
     <noscript><p class="p-message" data-kind="error">此功能需要启用 JavaScript。</p></noscript>
