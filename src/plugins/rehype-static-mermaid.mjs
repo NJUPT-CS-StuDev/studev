@@ -202,8 +202,10 @@ export default function rehypeStaticMermaid({ cacheDir = '.astro/static-mermaid'
       let browser;
       const browserFor = async () => {
         browser ??= await modules.puppeteer.launch({
-          headless: true,
-          args: process.platform === 'linux' ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
+          headless: 'shell',
+          args: process.platform === 'linux'
+            ? ['--no-sandbox', '--disable-setuid-sandbox']
+            : ['--no-sandbox', '--disable-gpu'],
           ...puppeteerOptions,
         });
         return browser;
