@@ -94,8 +94,73 @@ export class PlatformError extends Error {
 let currentSession: Session | null = null;
 let sessionRequest: Promise<Session | null> | null = null;
 export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '成员填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
-export function avatarUrl(user: { qq?: string; avatarUrl?: string }): string {
-    return user.avatarUrl || (user.qq ? `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(user.qq)}&s=640` : '');
+function extractQq(user: { qq?: string; avatarUrl?: string }): string {
+    if (user.qq && /^[1-9]\d{4,11}$/.test(user.qq.trim())) return user.qq.trim();
+    const match = user.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
+    return match ? match[1] : '';
+}
+export function avatarUrl(user: { qq?: string; avatarUrl?: string }, size: 0 | 100 | 140 | 640 = 640, cacheBust = ''): string {
+    const qq = extractQq(user);
+    if (qq) {
+        const suffix = cacheBust ? `&t=${encodeURIComponent(cacheBust)}` : '';
+        return `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=${size}${suffix}`;
+    }
+    return user.avatarUrl || '';
+}
+export function avatarFallbackDataUri(label: string): string {
+    const ch = (label.trim().charAt(0) || 'S').toUpperCase().replace(/[<>&"']/g, '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e8f0fe"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#1a73e8" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+export function avatarImg(
+    user: { qq?: string; realName?: string; nickname?: string; studentId?: string; avatarUrl?: string },
+    opts: { size?: 0 | 100 | 140 | 640; width?: number; height?: number; className?: string; lazy?: boolean; cacheBust?: string } = {}
+): HTMLImageElement {
+    const { size = 140, width = 42, height = width, className = '', lazy = false, cacheBust = '' } = opts;
+    const img = document.createElement('img');
+    if (className) img.className = className;
+    const label = user.realName || user.nickname || user.studentId || user.qq || 'StuDev';
+    img.alt = `${label}的头像`;
+    img.width = width;
+    img.height = height;
+    if (lazy) img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    const qq = extractQq(user);
+    if (qq) {
+        const suffix = cacheBust ? `&t=${encodeURIComponent(cacheBust)}` : '';
+        if (size === 0) {
+            img.src = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=0${suffix}`;
+            img.srcset = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=640${suffix} 1x, https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=0${suffix} 2x`;
+        } else if (size === 140 || size === 100) {
+            img.src = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=${size}${suffix}`;
+            img.srcset = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=${size}${suffix} 1x, https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=640${suffix} 2x`;
+        } else {
+            img.src = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=640${suffix}`;
+        }
+        let step = 0;
+        img.addEventListener('error', () => {
+            step++;
+            img.removeAttribute('srcset');
+            if (step === 1) {
+                img.src = `https://q2.qlogo.cn/headimg_dl?dst_uin=${encodeURIComponent(qq)}&spec=${size === 0 ? 640 : size}`;
+            } else if (step === 2) {
+                img.src = `https://qlogo4.store.qq.com/qzone/${encodeURIComponent(qq)}/${encodeURIComponent(qq)}/640`;
+            } else {
+                img.src = avatarFallbackDataUri(label);
+            }
+        });
+    } else {
+        img.src = user.avatarUrl || avatarFallbackDataUri(label);
+    }
+    return img;
+}
+export function qqChatUrl(qq: string): string {
+    const clean = qq.trim();
+    const isMobile = typeof navigator !== 'undefined' && /(Android|iPhone|iPad|iPod|Mobile)/i.test(navigator.userAgent);
+    return isMobile
+        ? `mqqwpa://im/chat?chat_type=wpa&uin=${encodeURIComponent(clean)}&version=1&src_type=web`
+        : `tencent://message/?uin=${encodeURIComponent(clean)}&Site=StuDev&Menu=yes`;
 }
 export function q<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T { const value = root.querySelector<T>(selector); if (!value)
     throw new Error(`页面组件缺失：${selector}`); return value; }

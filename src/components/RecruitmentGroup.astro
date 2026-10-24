@@ -3,13 +3,30 @@ import { Image, getImage } from 'astro:assets';
 import qrCode from '../assets/recruitment/qq-2026.png';
 
 const groupNumber = '1097757336';
+const groupAvatar100 = `https://p.qlogo.cn/gh/${groupNumber}/${groupNumber}/100/`;
+const groupAvatar640 = `https://p.qlogo.cn/gh/${groupNumber}/${groupNumber}/640/`;
 const fullQr = await getImage({ src: qrCode, format: 'png' });
 ---
 
 <section class="recruitment" aria-labelledby="recruitment-title">
   <div class="recruitment-info">
-    <h2 id="recruitment-title">2026 招新群</h2>
-    <p class="recruitment-number"><span>QQ</span> <span data-group-number>{groupNumber}</span></p>
+    <div class="recruitment-head">
+      <img
+        class="recruitment-group-avatar"
+        src={groupAvatar100}
+        srcset={`${groupAvatar100} 1x, ${groupAvatar640} 2x`}
+        width="40"
+        height="40"
+        alt="StuDev 官方 QQ 群头像"
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+      />
+      <div>
+        <h2 id="recruitment-title">2026 招新群</h2>
+        <p class="recruitment-number"><span>QQ</span> <span data-group-number>{groupNumber}</span></p>
+      </div>
+    </div>
     <div class="recruitment-actions">
       <button class="text-copy" type="button" data-copy-group data-copy-text={groupNumber}>
         <span aria-live="polite" data-copy-label>复制群号</span>
@@ -27,9 +44,22 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
 
 <dialog id="recruitment-dialog" class="recruitment-dialog" aria-labelledby="qr-dialog-title">
   <div class="qr-dialog-header">
-    <div>
-      <h2 id="qr-dialog-title">2026 招新群</h2>
-      <p>QQ {groupNumber}</p>
+    <div class="recruitment-head">
+      <img
+        class="recruitment-group-avatar"
+        src={groupAvatar100}
+        srcset={`${groupAvatar100} 1x, ${groupAvatar640} 2x`}
+        width="44"
+        height="44"
+        alt="StuDev 官方 QQ 群头像"
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+      />
+      <div>
+        <h2 id="qr-dialog-title">2026 招新群</h2>
+        <p>QQ {groupNumber}</p>
+      </div>
     </div>
     <form method="dialog">
       <button class="qr-close" aria-label="关闭二维码" autofocus>
@@ -68,11 +98,13 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
     font-family: var(--font-sans);
   }
   .recruitment-info { flex: 1; min-width: 0; }
-  .recruitment h2 { margin: 0; font-size: 1rem; font-weight: 500; }
-  .recruitment-number { margin: 14px 0 8px; font-size: 1.15rem; line-height: 1.5; }
+  .recruitment-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .recruitment-group-avatar { display: block; flex: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--avatar-line, var(--line)); background: var(--kbd); }
+  .recruitment h2 { margin: 0; font-size: 1rem; font-weight: 500; line-height: 1.3; }
+  .recruitment-number { margin: 4px 0 0; font-size: 1.12rem; line-height: 1.35; }
   .recruitment-number > span:first-child { color: var(--muted); font-size: .75rem; }
   [data-group-number] { font-variant-numeric: tabular-nums; user-select: all; }
-  .recruitment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; max-width: 140px; }
+  .recruitment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; }
   .recruitment-actions .text-copy { color: var(--blue); }
   .recruitment-qr { flex: none; display: grid; justify-items: center; gap: 7px; text-decoration: none; color: var(--muted); font-size: .75rem; }
   .recruitment-qr img { display: block; width: 196px; height: 196px; border-radius: 10px; background: #fff; }
@@ -90,9 +122,11 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
     font-family: var(--font-sans);
   }
   .recruitment-dialog::backdrop { background: rgb(0 0 0 / .58); }
-  .qr-dialog-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
-  .qr-dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 500; }
-  .qr-dialog-header p { margin: 8px 0 0; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+  .qr-dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .qr-dialog-header .recruitment-head { margin-bottom: 0; }
+  .qr-dialog-header .recruitment-group-avatar { width: 44px; height: 44px; }
+  .qr-dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 500; line-height: 1.3; }
+  .qr-dialog-header p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; line-height: 1.3; }
   .qr-close { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
   .qr-close:hover { color: var(--ink); background: var(--code-block); }
   .recruitment-dialog > img { display: block; width: min(100%, calc(100dvh - 160px)); height: auto; margin-inline: auto; border-radius: 10px; background: #fff; }

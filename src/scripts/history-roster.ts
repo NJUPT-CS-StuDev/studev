@@ -20,6 +20,12 @@ interface RosterSnapshot {
   groups: RosterGroup[];
 }
 
+function fallbackAvatarSvg(label: string): string {
+  const ch = (label.trim().charAt(0) || 'S').toUpperCase().replace(/[<>&"']/g, '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e8f0fe"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#1a73e8" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement {
   const article = document.createElement('article');
   article.className = featured ? 'member member-featured' : 'member';
@@ -27,7 +33,31 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
 
   const img = document.createElement('img');
   img.className = 'member-avatar';
-  img.src = person.avatarUrl;
+  const qqMatch = person.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
+  const qq = qqMatch ? qqMatch[1] : '';
+  if (qq) {
+    img.src = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=140`;
+    img.srcset = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=140 1x, https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=640 2x`;
+    img.style.cursor = 'zoom-in';
+    img.title = '点击查看 1080×1080 原图头像';
+    img.addEventListener('click', () => {
+      window.open(`https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=0`, '_blank', 'noopener');
+    });
+    let step = 0;
+    img.addEventListener('error', () => {
+      step++;
+      img.removeAttribute('srcset');
+      if (step === 1) {
+        img.src = `https://q2.qlogo.cn/headimg_dl?dst_uin=${encodeURIComponent(qq)}&spec=140`;
+      } else if (step === 2) {
+        img.src = `https://qlogo4.store.qq.com/qzone/${encodeURIComponent(qq)}/${encodeURIComponent(qq)}/640`;
+      } else {
+        img.src = fallbackAvatarSvg(person.name);
+      }
+    });
+  } else {
+    img.src = person.avatarUrl || fallbackAvatarSvg(person.name);
+  }
   img.alt = `${person.name}的头像`;
   img.width = featured ? 68 : 58;
   img.height = featured ? 68 : 58;

@@ -1,10 +1,11 @@
-import { api, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, saveBlob, session, type Session, type User } from './platform-client';
+import { api, avatarImg, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, qqChatUrl, saveBlob, session, type Session, type User } from './platform-client';
 
 const status = q<HTMLElement>('[data-account-status]');
 let current: Session | null = null;
 let members: User[] = [];
 let secret = '';
 let recoveryCodes: string[] = [];
+let avatarCacheBust = '';
 
 async function guard(fn: () => Promise<void>) {
   try {
@@ -94,12 +95,12 @@ function openMemberCardModal(user: User) {
 
   const top = el('div', undefined, 'p-id-top');
   top.style.marginBottom = '16px';
-  const img = el('img', undefined, 'p-id-avatar');
-  img.src = avatarUrl(user);
-  img.alt = `${user.realName || user.nickname}的头像`;
-  img.width = 68;
-  img.height = 68;
-  img.referrerPolicy = 'no-referrer';
+  const img = avatarImg(user, { size: 0, width: 68, height: 68, className: 'p-id-avatar', cacheBust: avatarCacheBust });
+  if (user.qq) {
+    img.style.cursor = 'zoom-in';
+    img.title = '点击查看 1080×1080 原图头像';
+    img.addEventListener('click', () => window.open(avatarUrl(user, 0, avatarCacheBust), '_blank', 'noopener'));
+  }
 
   const titleWrap = el('div', undefined, 'p-id-title-wrap');
   const head = el('div', undefined, 'p-id-head');
@@ -137,10 +138,18 @@ function openMemberCardModal(user: User) {
 
   const quickActions = el('div', undefined, 'p-actions');
   quickActions.style.marginTop = '18px';
+  if (user.qq) {
+    const chatLink = el('a', '发起 QQ 会话', 'p-button small');
+    chatLink.href = qqChatUrl(user.qq);
+    quickActions.append(chatLink);
+  }
   quickActions.append(
     button('复制 QQ 号', () => copy(user.qq, status)),
     button('复制邮箱', () => copy(user.email || `${user.qq}@qq.com`, status))
   );
+  const mailLink = el('a', '发送邮件', 'p-button secondary small');
+  mailLink.href = `mailto:${encodeURIComponent(user.email || `${user.qq}@qq.com`)}`;
+  quickActions.append(mailLink);
   if (user.term && user.department) {
     const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
     const archiveLink = el('a', '在历届档案中定位名片 ↗', 'p-button secondary small');
@@ -157,12 +166,12 @@ function renderIdCard(user: User) {
   card.replaceChildren();
 
   const top = el('div', undefined, 'p-id-top');
-  const img = el('img', undefined, 'p-id-avatar');
-  img.src = avatarUrl(user);
-  img.alt = `${user.realName || user.nickname}的头像`;
-  img.width = 72;
-  img.height = 72;
-  img.referrerPolicy = 'no-referrer';
+  const img = avatarImg(user, { size: 0, width: 72, height: 72, className: 'p-id-avatar', cacheBust: avatarCacheBust });
+  if (user.qq) {
+    img.style.cursor = 'zoom-in';
+    img.title = '点击查看 1080×1080 原图头像';
+    img.addEventListener('click', () => window.open(avatarUrl(user, 0, avatarCacheBust), '_blank', 'noopener'));
+  }
 
   const titleWrap = el('div', undefined, 'p-id-title-wrap');
   const head = el('div', undefined, 'p-id-head');
@@ -195,13 +204,34 @@ function renderIdCard(user: User) {
     body.append(el('p', `“${user.signature}”`, 'p-id-sig'));
   }
 
+  const linksRow = el('div', undefined, 'p-actions');
+  linksRow.style.gap = '14px';
+  linksRow.style.marginTop = '8px';
   if (user.term && user.department) {
     const archiveLink = el('a', '在历届档案中查看我的名片 ↗', 'p-link');
     const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
     archiveLink.href = `/history/${encodeURIComponent(user.term)}/${anchor}`;
-    archiveLink.style.display = 'inline-block';
-    archiveLink.style.marginTop = '8px';
-    body.append(archiveLink);
+    linksRow.append(archiveLink);
+  }
+  if (user.qq) {
+    const refreshAvatarBtn = el('button', '刷新 QQ 头像', 'p-link');
+    refreshAvatarBtn.type = 'button';
+    refreshAvatarBtn.style.background = 'none';
+    refreshAvatarBtn.style.border = '0';
+    refreshAvatarBtn.style.padding = '0';
+    refreshAvatarBtn.style.cursor = 'pointer';
+    refreshAvatarBtn.style.fontFamily = 'inherit';
+    refreshAvatarBtn.title = '刚在手机 QQ 换过头像？点击穿透缓存立即同步最新高清原图';
+    refreshAvatarBtn.addEventListener('click', () => {
+      avatarCacheBust = String(Date.now());
+      renderIdCard(user);
+      if (members.length) renderMembers();
+      message(status, '已从腾讯官方 CDN 同步最新 1080P 高清头像。', 'success');
+    });
+    linksRow.append(refreshAvatarBtn);
+  }
+  if (linksRow.childNodes.length) {
+    body.append(linksRow);
   }
 
   card.append(top, body);
@@ -325,13 +355,7 @@ function renderMembers() {
     // 1. 成员与签名
     const nameCell = el('td');
     const userBox = el('div', undefined, 'p-user-cell');
-    const img = el('img', undefined, 'p-user-avatar');
-    img.src = avatarUrl(user);
-    img.alt = `${display}的头像`;
-    img.width = 42;
-    img.height = 42;
-    img.loading = 'lazy';
-    img.referrerPolicy = 'no-referrer';
+    const img = avatarImg(user, { size: 140, width: 42, height: 42, className: 'p-user-avatar', lazy: true, cacheBust: avatarCacheBust });
     img.style.cursor = 'pointer';
     img.addEventListener('click', () => openMemberCardModal(user));
 

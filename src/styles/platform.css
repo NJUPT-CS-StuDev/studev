@@ -26,6 +26,10 @@
 .p-input-suffix-wrap { position:relative; display:flex; align-items:center; }
 .p-input-suffix-wrap input { padding-right:84px; }
 .p-input-suffix { position:absolute; right:12px; color:var(--muted); font-size:.88rem; font-family:var(--font-sans); pointer-events:none; user-select:none; }
+.p-qq-preview { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--kbd); font-size:.8rem; color:var(--ink); }
+.p-qq-preview-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid var(--avatar-line,var(--line)); flex:none; background:var(--paper); }
+.p-qq-preview-text { min-width:0; line-height:1.45; }
+.p-qq-preview-text small { display:block; color:var(--muted); font-size:.74rem; }
 .p-password-wrap { position:relative; display:flex; align-items:center; width:100%; }
 .p-password-wrap input { padding-right:42px; width:100%; }
 .p-password-toggle { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:0; padding:6px; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; transition:color .15s ease, background-color .15s ease; }

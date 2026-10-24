@@ -10,7 +10,7 @@ const { entry } = Astro.props;
 const { Content } = await render(entry);
 const term = entry.data.term || entry.id;
 const skeletonGroups = [
-  { name: '主席团与统筹', count: 4, featured: true },
+  { name: '主席团', count: 4, featured: true },
   { name: '运营支持部', count: 3, featured: false },
   { name: '易班建设部', count: 3, featured: false },
   { name: '媒体宣传部', count: 3, featured: false },

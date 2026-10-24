@@ -1,4 +1,4 @@
-import { api, busy, errorText, initPasswordToggles, message, q, safeNext, type Session } from './platform-client';
+import { api, avatarImg, busy, el, errorText, initPasswordToggles, message, q, safeNext, type Session } from './platform-client';
 const status = q<HTMLElement>('[data-auth-status]');
 const login = q<HTMLFormElement>('[data-login-form]');
 const register = q<HTMLFormElement>('[data-register-form]');
@@ -16,11 +16,33 @@ function showTab(name: string) { resetLoginFactor(); login.hidden = name !== 'lo
 document.querySelectorAll<HTMLButtonElement>('[data-auth-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.authTab || 'login')));
 q<HTMLInputElement>('#login-student-id').addEventListener('input', resetLoginFactor);
 q<HTMLInputElement>('#login-student-id').addEventListener('change', resetLoginFactor);
+let qqPreviewTimer = 0;
 q<HTMLInputElement>('#register-qq').addEventListener('input', () => {
   const qq = q<HTMLInputElement>('#register-qq').value.trim();
-  q('[data-qq-email]').textContent = /^[1-9]\d{4,11}$/.test(qq)
-    ? `联系邮箱：${qq}@qq.com`
-    : '用于重要通知联系';
+  const realName = q<HTMLInputElement>('#register-real-name').value.trim();
+  const valid = /^[1-9]\d{4,11}$/.test(qq);
+  const preview = q<HTMLElement>('[data-qq-preview]');
+  const help = q<HTMLElement>('[data-qq-email]');
+  window.clearTimeout(qqPreviewTimer);
+  if (!valid) {
+    preview.hidden = true;
+    preview.replaceChildren();
+    help.hidden = false;
+    help.textContent = '用于重要通知联系与自动匹配官方 QQ 头像';
+    return;
+  }
+  qqPreviewTimer = window.setTimeout(() => {
+    preview.replaceChildren();
+    const img = avatarImg({ qq, realName }, { size: 140, width: 32, height: 32, className: 'p-qq-preview-avatar' });
+    const textWrap = el('div', undefined, 'p-qq-preview-text');
+    textWrap.append(
+      el('div', `联系邮箱：${qq}@qq.com`),
+      el('small', '已实时匹配该 QQ 号对应的腾讯官方头像，请核对是否为本人')
+    );
+    preview.append(img, textWrap);
+    preview.hidden = false;
+    help.hidden = true;
+  }, 160);
 });
 login.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<HTMLButtonElement>('button[type=submit]', login); const studentId = q<HTMLInputElement>('#login-student-id').value.trim().toUpperCase(); if (mfaStudentId !== studentId) resetLoginFactor(); const revision = authRevision; try {
     await busy(b, async () => { const data = await api<Session & {
