@@ -155,13 +155,6 @@ export function avatarImg(
     }
     return img;
 }
-export function qqChatUrl(qq: string): string {
-    const clean = qq.trim();
-    const isMobile = typeof navigator !== 'undefined' && /(Android|iPhone|iPad|iPod|Mobile)/i.test(navigator.userAgent);
-    return isMobile
-        ? `mqqwpa://im/chat?chat_type=wpa&uin=${encodeURIComponent(clean)}&version=1&src_type=web`
-        : `tencent://message/?uin=${encodeURIComponent(clean)}&Site=StuDev&Menu=yes`;
-}
 export function q<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T { const value = root.querySelector<T>(selector); if (!value)
     throw new Error(`页面组件缺失：${selector}`); return value; }
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] { const node = document.createElement(tag); if (text !== undefined)

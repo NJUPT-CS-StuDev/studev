@@ -1,4 +1,4 @@
-import { api, avatarImg, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, qqChatUrl, saveBlob, session, type Session, type User } from './platform-client';
+import { api, avatarImg, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, saveBlob, session, type Session, type User } from './platform-client';
 
 const status = q<HTMLElement>('[data-account-status]');
 let current: Session | null = null;
@@ -138,11 +138,6 @@ function openMemberCardModal(user: User) {
 
   const quickActions = el('div', undefined, 'p-actions');
   quickActions.style.marginTop = '18px';
-  if (user.qq) {
-    const chatLink = el('a', '发起 QQ 会话', 'p-button small');
-    chatLink.href = qqChatUrl(user.qq);
-    quickActions.append(chatLink);
-  }
   quickActions.append(
     button('复制 QQ 号', () => copy(user.qq, status)),
     button('复制邮箱', () => copy(user.email || `${user.qq}@qq.com`, status))
