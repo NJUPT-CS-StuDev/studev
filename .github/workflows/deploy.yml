@@ -1,0 +1,39 @@
+name: Deploy
+
+# Daily after campus-data's release (06:30 Asia/Shanghai), and on demand.
+on:
+  schedule:
+    - cron: "30 23 * * *"   # 07:30 Asia/Shanghai
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Require the EdgeOne token
+        run: |
+          if [ -z "$EDGEONE_API_TOKEN" ]; then
+            echo "::error::Add the EDGEONE_API_TOKEN repository secret to deploy from CI."
+            exit 1
+          fi
+      - run: npx -y edgeone@1.6.44 makers env pull -e production -t "$EDGEONE_API_TOKEN"
+      - run: npm run typecheck
+      - run: npm run test:campus
+      - run: npm run test:platform
+      - run: npm run build
+      - run: npx -y edgeone@1.6.44 makers deploy -n studev -t "$EDGEONE_API_TOKEN" --json

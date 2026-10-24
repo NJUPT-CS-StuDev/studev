@@ -1,6 +1,8 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import react from '@astrojs/react';
+import tailwindcss from '@tailwindcss/vite';
 import { unified } from '@astrojs/markdown-remark';
 import remarkMath from 'remark-math-extended';
 import remarkGfm from 'remark-gfm';
@@ -11,7 +13,6 @@ import remarkTyporaInline from './src/plugins/remark-typora-inline.mjs';
 import rehypeEditorialImages from './src/plugins/rehype-editorial-images.mjs';
 import rehypeStaticMermaid from './src/plugins/rehype-static-mermaid.mjs';
 import localFonts from './src/integrations/local-fonts.mjs';
-import searchData from './src/integrations/search-data.mjs';
 
 const excludedSitemapPaths = new Set([
   '/404',
@@ -33,7 +34,10 @@ export default defineConfig({
     prefetchAll: true,
     defaultStrategy: 'hover',
   },
-  integrations: [localFonts(), searchData(), sitemap({
+  vite: {
+    plugins: [tailwindcss()],
+  },
+  integrations: [react(), localFonts(), sitemap({
     filter: (page) => !excludedSitemapPaths.has(new URL(page).pathname.replace(/\/$/, '')),
   })],
   markdown: {

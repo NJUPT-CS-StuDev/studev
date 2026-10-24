@@ -564,7 +564,7 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').role, '分管主席 · 媒体宣传部');
 
   // Nickname equal to realName is treated as "no nickname"; a distinct one is projected publicly.
-  assert.equal(afterOwnerEdit.schema, 3);
+  assert.equal(afterOwnerEdit.schema, 4);
   assert.equal(afterOwnerEdit.groups[0].people.find((p) => p.name === '李雅婷').nickname, '');
   // Role change rotated the security version, so the member signs in again.
   const relogin = await f.call('/auth/login', 'POST', { studentId: 'B24041902', password: MEMBER_PASSWORD });
@@ -595,5 +595,5 @@ test('unified roster SSOT seeds pending members, claims pending records on regis
   delete stale.schema;
   await f.repo.put('roster/2026-2027.json', stale);
   const healed = await f.call('/public/roster?term=2026-2027', 'GET');
-  assert.equal(healed.schema, 3);
+  assert.equal(healed.schema, 4);
 });

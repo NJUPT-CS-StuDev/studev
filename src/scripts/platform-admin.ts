@@ -150,13 +150,13 @@ function renderFieldEditors() {
     head.append(el('strong', `${index + 1}. ${fieldNames[field.type]}`));
     const actions = el('div', undefined, 'p-actions');
     const up = button('上移', () => {
-      [fields[index - 1], fields[index]] = [fields[index], fields[index - 1]];
+      [fields[index - 1], fields[index]] = [fields[index] as Field, fields[index - 1] as Field];
       dirty = true;
       renderFieldEditors();
     });
     up.disabled = index === 0;
     const down = button('下移', () => {
-      [fields[index + 1], fields[index]] = [fields[index], fields[index + 1]];
+      [fields[index + 1], fields[index]] = [fields[index] as Field, fields[index + 1] as Field];
       dirty = true;
       renderFieldEditors();
     });
@@ -343,7 +343,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-template]').forEach((b) =>
           : type === 'feedback'
             ? [newField('textarea', '你的意见或建议')]
             : [newField('text', '登记内容'), newField('textarea', '补充说明')];
-    fields[0].required = true;
+    if (fields[0]) fields[0].required = true;
     dirty = true;
     renderFieldEditors();
   })

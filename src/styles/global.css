@@ -54,9 +54,9 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scrollbar-gutter: stable; }
 body { margin: 0; min-width: 320px; line-height: 1.65; }
-a:not(#root *) { color: inherit; text-decoration: none; }
-a:not(#root *):hover { color: var(--blue); }
-a:not(#root *):focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 2px; }
+a:not(.campus-app *) { color: inherit; text-decoration: none; }
+a:not(.campus-app *):hover { color: var(--blue); }
+a:not(.campus-app *):focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 2px; }
 ::selection { color: var(--selection-ink); background: var(--blue); }
 
 .site-header { border-bottom: 1px solid var(--line); }
@@ -308,15 +308,6 @@ html[data-theme] .theme-toggle { display: inline-flex; }
 html[data-theme='dark'] .theme-icon-sun { display: block; }
 html[data-theme='dark'] .theme-icon-moon { display: none; }
 
-html[data-search-route='subpage'] #root > div > header > div,
-html[data-search-route='subpage'] #root > div > main > div {
-  max-width: none;
-  width: min(var(--max), calc(100% - 64px));
-  padding-left: 0;
-  padding-right: 0;
-  margin-left: auto;
-  margin-right: auto;
-}
 
 main { min-height: calc(100vh - 145px); }
 .home {
@@ -1168,15 +1159,6 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
   nav[aria-label='studev-search 模块切换'] > a {
     padding: 4px 6px;
     font-size: 0.75rem;
-  }
-  html[data-search-route='subpage'] #root > div > header > div,
-  html[data-search-route='subpage'] #root > div > main > div {
-    max-width: none !important;
-    width: calc(100% - 32px) !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
   }
   .site-nav { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; justify-content: space-between; gap: 10px; }
   .site-nav a { min-height: 44px; font-size: clamp(.75rem, 2.8vw, .88rem); }

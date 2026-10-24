@@ -165,7 +165,7 @@ formElement.addEventListener('submit', async (event) => {
                 while (true) {
                     const index = next++;
                     if (index >= files.length) return;
-                    await upload(files[index], result.uploads[index], index, total, progress);
+                    await upload(files[index] as File, result.uploads[index] as Upload, index, total, progress);
                 }
             }
             // A small bounded pool improves multi-file submissions while

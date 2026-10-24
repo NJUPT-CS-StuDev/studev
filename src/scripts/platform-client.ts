@@ -97,7 +97,7 @@ export const labels: Record<string, string> = { owner: '所有者', admin: '管�
 function extractQq(user: { qq?: string; avatarUrl?: string }): string {
     if (user.qq && /^[1-9]\d{4,11}$/.test(user.qq.trim())) return user.qq.trim();
     const match = user.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
-    return match ? match[1] : '';
+    return match?.[1] ?? '';
 }
 export function avatarUrl(user: { qq?: string; avatarUrl?: string }, size: 0 | 100 | 140 | 640 = 640, cacheBust = ''): string {
     const qq = extractQq(user);

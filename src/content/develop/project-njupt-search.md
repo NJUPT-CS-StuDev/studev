@@ -73,7 +73,6 @@ flowchart LR
     MAP["njupt-map<br/>(QGIS地理 + Blender 3D空间)"] -->|129栋建筑实体 / 教室拓扑| SEARCH
     
     SEARCH --> WEB["Web 端 (React / 极速即查)"]
-    SEARCH --> ANDROID["Android 原生端 (Jetpack Compose 空间导航)"]
     NET["njupt-net<br/>(CLI 校园网状态自愈)"] -.->|底层网络保障| SEARCH
 ```
 
@@ -81,7 +80,7 @@ flowchart LR
 
 | 矩阵模块 | 核心技术栈 | 职责与数据流向 | 开源仓库与在线入口 |
 | :--- | :--- | :--- | :--- |
-| **`njupt-search`** | Rust (Wasm) + React + Kotlin | 核心零后端检索枢纽、内容寻址二进制切片分发、全平台搜索与空间拓扑呈现 | [github.com/hicancan/njupt-search ↗](https://github.com/hicancan/njupt-search)<br/>🌐 **[站内直达 /search/ →](/search/)** |
+| **`njupt-search`** | Rust (Wasm) + React | 本地检索核心、内容寻址二进制切片分发、Web 搜索与教务查询 | [github.com/hicancan/njupt-search ↗](https://github.com/hicancan/njupt-search)<br/>🌐 **[站内直达 /search/ →](/search/)** |
 | **`njupt-jwxt`** | Python / 数据接口解析 | 规范化解析教务数据，自动化清洗班级课表、期末考场、教室占用并导出 ICS 日历 | [github.com/hicancan/njupt-jwxt ↗](https://github.com/hicancan/njupt-jwxt) |
 | **`njupt-site-graph`** | Rust / Node.js 爬虫引擎 | 遍历抓取全校通知、深入解构 Office/PDF 附件深层文本，并将学生社区手册图谱化 | [github.com/hicancan/njupt-site-graph ↗](https://github.com/hicancan/njupt-site-graph)<br/>[爬虫底层 static-site-graph ↗](https://github.com/hicancan/static-site-graph) |
 | **`njupt-map`** | QGIS 测绘 + Blender 3D | 仙林校区 129 栋建筑数字孪生、564 个教室拓扑空间建模，完成地理与教学物理映射 | [github.com/hicancan/njupt-map ↗](https://github.com/hicancan/njupt-map) |
@@ -114,8 +113,8 @@ flowchart LR
 ### 4. [`njupt-net`](https://github.com/hicancan/njupt-net)：极简纯粹的底层网络守护
 校园网认证失败往往是一切数字体验的终结点。[`njupt-net`](https://github.com/hicancan/njupt-net) 用轻巧的 CLI 命令行工具，彻底替代了笨重的前端认证网页，支持自动化拨号、心跳保持与网络状态自愈。
 
-### 5. `njupt-search` 多端延伸：Web 极速即查与 Android 空间导航
-除了基于 [njupt.hicancan.top](https://njupt.hicancan.top) 的浏览器端极致秒开，针对移动端的原生 Android 客户端采用 Kotlin + Jetpack Compose 打造，承担起校园现实场景中的传感器融合、设备定位与室内导航职责：
+### 5. `njupt-search`：Web 搜索与教务查询
+通过浏览器访问 [njupt.hicancan.top](https://njupt.hicancan.top)，或直接使用本站的各项查询入口：
 - 🔍 [校园搜索直达](/search/) · 检索校方通知与红头文件附件
 - 📖 [社区经验搜索](/search/community/) · 《南邮生存手册》办事与生活指南
 - 📚 [历年资料搜索](/search/materials/) · 课程课件、试卷与笔记
@@ -132,7 +131,7 @@ flowchart LR
 > [!NOTE]
 > **njupt-search 的架构铁律**
 > 
-> 1. **严格的单向依赖**：领域代码绝不依赖任何 UI 框架或特定操作系统脚本；Web 与 Android 共享产品领域事实，但严禁共享脆弱的平台 UI 胶水代码；
+> 1. **严格的单向依赖**：领域代码绝不依赖任何 UI 框架或特定操作系统脚本；Web 通过明确的数据契约使用领域事实；
 > 2. **事实绝不二次污染**：源码中坚决不硬编码任何抓取到的真实语料或未经授权的平面图；部署物完全依赖内容寻址的哈希校验，杜绝任何“脏数据”入库；
 > 3. **视觉拒绝跳动**：为了达成极致的速度，搜索结果瞬时渲染标题和来源，正文切片到达后异步补充高亮摘要，且严禁导致列表重排，保护用户的视觉锚点。
 

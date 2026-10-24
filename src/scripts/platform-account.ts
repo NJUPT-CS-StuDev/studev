@@ -248,8 +248,8 @@ function render() {
     ['职务分工', user.title || (user.department ? '部门成员' : '—')],
     ['QQ 号', user.qq],
     ['联系邮箱', user.email || `${user.qq}@qq.com`],
-    ['群内角色', labels[user.role]],
-    ['账号状态', labels[user.status]],
+    ['群内角色', labels[user.role] ?? user.role],
+    ['账号状态', labels[user.status] ?? user.status],
   ];
   for (const [key, value] of metaRows) {
     info.append(el('dt', key), el('dd', value));
