@@ -38,7 +38,7 @@
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
     "remark-math-extended": "^6.1.1",
-    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v1.0.0/wasm-search-1.0.0.tgz"
+    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v1.0.2/wasm-search-1.0.2.tgz"
   },
   "overrides": {
     "@xmldom/xmldom": "^0.9.12"

@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useUrlState } from './useUrlState';
+import type { AppRoute } from './useUrlState';
 import type { ProductIntent } from './intents';
 import {
     parseSavedClass,
@@ -31,8 +32,19 @@ export const parseSavedClassroomQuery = (raw: string | null): SavedClassroomQuer
     }
 };
 
-export function useAppRouter() {
-    const url = useUrlState();
+const readStorage = (key: string): string | null => {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+};
+
+export function useAppRouter(initialRoute: AppRoute) {
+    const url = useUrlState(initialRoute);
+    // Saved choices live in the browser; they are read after mount so server and client renders agree.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const {
         route,
         qParam,
@@ -59,9 +71,9 @@ export function useAppRouter() {
     const onInputChange = useCallback((value: string) => {
         setInputDraft({ routeInput, value });
     }, [routeInput]);
-    const savedClass = parseSavedClass(localStorage.getItem(SAVED_CLASS_KEY));
-    const savedTimetableClass = parseSavedClass(localStorage.getItem(SAVED_TIMETABLE_CLASS_KEY));
-    const savedClassroomQuery = parseSavedClassroomQuery(localStorage.getItem(SAVED_CLASSROOM_QUERY_KEY));
+    const savedClass = mounted ? parseSavedClass(readStorage(SAVED_CLASS_KEY)) : null;
+    const savedTimetableClass = mounted ? parseSavedClass(readStorage(SAVED_TIMETABLE_CLASS_KEY)) : null;
+    const savedClassroomQuery = mounted ? parseSavedClassroomQuery(readStorage(SAVED_CLASSROOM_QUERY_KEY)) : null;
 
     const submit = useCallback((value: string, replace = false) => {
         const destination = route === 'home' ? resolveSubmission(value) : resolveRouteSubmission(route, value);

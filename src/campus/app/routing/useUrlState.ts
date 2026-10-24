@@ -70,11 +70,17 @@ export const buildPath = ({ route, params = {} }: NavigateOptions): string => {
     return `${pathname}${query ? `?${query}` : ''}`;
 };
 
-export function useUrlState() {
-    const [state, setState] = useState<UrlState>(() => readUrlState());
+/**
+ * The first render uses only the page's own route, so the server-rendered HTML
+ * and the first client render agree; the real URL (with its query) is read
+ * once mounted.
+ */
+export function useUrlState(initialRoute: AppRoute) {
+    const [state, setState] = useState<UrlState>(() => parseUrlState(ROUTE_PATHS[initialRoute], ''));
 
     useEffect(() => {
         const handleLocationChange = () => setState(readUrlState());
+        handleLocationChange();
         window.addEventListener('popstate', handleLocationChange);
         return () => window.removeEventListener('popstate', handleLocationChange);
     }, []);
