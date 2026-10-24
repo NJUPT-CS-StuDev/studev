@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useAppRouter } from '@/app/routing/useAppRouter';
 import { HomePage } from '@/home/HomePage';
 import { useSiteHeaderSearch } from '@/app/shell/useSiteHeaderSearch';
+import type { AppRoute } from '@/app/routing/useUrlState';
 import { SearchClient } from 'wasm-search';
 import { APP_CONFIG } from '@/app/config/constants';
 import { ExamSnapshotClient } from '@/exams/model/ExamSnapshotClient';
@@ -34,14 +35,15 @@ function RouteLoading() {
     );
 }
 
-function App() {
-    const router = useAppRouter();
+function App({ initialRoute }: { initialRoute: AppRoute }) {
+    const router = useAppRouter(initialRoute);
     useSiteHeaderSearch(router.route, router.inputValue, router.onInputChange, router.onSubmit);
     // A search typed into the site header on any other page arrives as /search/?q=…
-    const homeQuery = router.route === 'home' ? new URLSearchParams(window.location.search).get('q') : null;
     useEffect(() => {
+        if (router.route !== 'home') return;
+        const homeQuery = new URLSearchParams(window.location.search).get('q');
         if (homeQuery?.trim()) router.onSubmit(homeQuery, true);
-    }, [homeQuery, router.onSubmit]);
+    }, [router.route, router.onSubmit]);
     useEffect(() => {
         const page = PAGE_IDENTITIES[router.route];
         document.title = `${page.title} - 学生发展中心`;
