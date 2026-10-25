@@ -4,11 +4,12 @@ import { parseEnv } from 'node:util';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { privateFile } from './private-file.mjs';
 const root = new URL('../', import.meta.url);
 const rootPath = fileURLToPath(root);
 const privateValues = new Set();
 let ownerProfile;
-try { ownerProfile = JSON.parse(await readFile(new URL('.env.platform-owner-profile.local.json', root), 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+try { ownerProfile = JSON.parse(await readFile(privateFile('.env.platform-owner-profile.local.json'), 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 let unchangedPublicNameFiles = 0;
 function hasPrivateValue(contents, path) {
   const key = relative(rootPath, path).replaceAll('\\', '/');
@@ -20,14 +21,14 @@ function hasPrivateValue(contents, path) {
 }
 for (const file of ['.env', '.env.collection.local', '.env.platform.local']) {
   try {
-    for (const [key, value] of Object.entries(parseEnv(await readFile(new URL(file, root), 'utf8')))) {
+    for (const [key, value] of Object.entries(parseEnv(await readFile(file === '.env' ? new URL(file, root) : privateFile(file), 'utf8')))) {
       if (/SECRET|KEY|PASSWORD|SESSION|REGISTRATION_HASH|OWNER_QQ/.test(key) && value.length >= 5) privateValues.add(value);
     }
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
 for (const file of ['.env.platform-access.local.json', '.env.platform-owner-recovery.local.json', '.env.platform-owner-profile.local.json', '.env.collection-access.local.json']) {
   try {
-    const values = JSON.parse(await readFile(new URL(file, root), 'utf8'));
+    const values = JSON.parse(await readFile(privateFile(file), 'utf8'));
     for (const [key, value] of Object.entries(values)) {
       if (/password|code|secret|ownerqq|owneremail|otpauth|studentid|realname/i.test(key)) {
         for (const candidate of Array.isArray(value) ? value : [value]) if (typeof candidate === 'string' && candidate.length >= (/realname/i.test(key) ? 1 : 5)) privateValues.add(candidate);

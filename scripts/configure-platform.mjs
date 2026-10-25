@@ -4,9 +4,10 @@ import { parseEnv } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { hashPassword } from '../src/server/collection-auth.mjs';
+import { privateFile } from './private-file.mjs';
 
-const envPath = new URL('../.env.platform.local', import.meta.url);
-const accessPath = new URL('../.env.platform-access.local.json', import.meta.url);
+const envPath = privateFile('.env.platform.local');
+const accessPath = privateFile('.env.platform-access.local.json');
 let config = {}, access;
 try { config = parseEnv(await readFile(envPath, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 try { access = JSON.parse(await readFile(accessPath, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }

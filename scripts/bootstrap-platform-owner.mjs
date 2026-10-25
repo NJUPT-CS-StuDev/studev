@@ -7,11 +7,12 @@ import { resolve } from 'node:path';
 import QRCode from 'qrcode';
 import { totpCode } from '../src/server/platform-totp.mjs';
 import { LiveClient } from './platform-live-client.mjs';
+import { privateFile } from './private-file.mjs';
 
-const accessPath = new URL('../.env.platform-access.local.json', import.meta.url);
-const recoveryPath = new URL('../.env.platform-owner-recovery.local.json', import.meta.url);
-const setupPath = new URL('../.env.platform-owner-setup.local.html', import.meta.url);
-const profilePath = new URL('../.env.platform-owner-profile.local.json', import.meta.url);
+const accessPath = privateFile('.env.platform-access.local.json');
+const recoveryPath = privateFile('.env.platform-owner-recovery.local.json');
+const setupPath = privateFile('.env.platform-owner-setup.local.html');
+const profilePath = privateFile('.env.platform-owner-profile.local.json');
 export async function writePrivate(path, text) {
   try { await writeFile(path, '', { flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
   if (process.platform === 'win32') {

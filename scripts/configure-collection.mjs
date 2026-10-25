@@ -4,9 +4,10 @@ import { parseEnv } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { hashPassword } from '../src/server/collection-auth.mjs';
+import { privateFile } from './private-file.mjs';
 
-const configPath = new URL('../.env.collection.local', import.meta.url);
-const accessPath = new URL('../.env.collection-access.local.json', import.meta.url);
+const configPath = privateFile('.env.collection.local');
+const accessPath = privateFile('.env.collection-access.local.json');
 const original = parseEnv(await readFile(configPath, 'utf8'));
 if (!original.OSCA_ACCESS_KEY_ID || !original.OSCA_SECRET_ACCESS_KEY) throw new Error('Approved OSCA credentials are missing.');
 let access;

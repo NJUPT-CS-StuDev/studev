@@ -5,9 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { initializeOwner, writePrivate } from './bootstrap-platform-owner.mjs';
 import { LiveClient, recordCheck } from './platform-live-client.mjs';
+import { privateFile } from './private-file.mjs';
 
 const origin = 'https://studev.hicancan.top';
-const statePath = new URL('../.env.platform-test.local.json', import.meta.url);
+const statePath = privateFile('.env.platform-test.local.json');
 const reportPath = new URL('../docs/platform-operations.assets/live-verification.json', import.meta.url);
 const fixturePath = new URL('../tests/fixtures/collection-probe.txt', import.meta.url);
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');

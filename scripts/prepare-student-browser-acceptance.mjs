@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeOwner, writePrivate } from './bootstrap-platform-owner.mjs';
+import { privateFile } from './private-file.mjs';
 
 async function prepare() {
-  const path = new URL('../.env.platform-test.local.json', import.meta.url);
+  const path = privateFile('.env.platform-test.local.json');
   const state = JSON.parse(await readFile(path, 'utf8'));
   const run = state.runs.at(-1);
   if (run?.status !== 'api_verified' || !run.members[0]?.studentId) throw new Error('A completed student-identity API run is required.');

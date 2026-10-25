@@ -3,7 +3,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeOwner, writePrivate } from './bootstrap-platform-owner.mjs';
-const statePath = new URL('../.env.platform-test.local.json', import.meta.url);
+import { privateFile } from './private-file.mjs';
+const statePath = privateFile('.env.platform-test.local.json');
 async function finalize() {
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   const { client } = await initializeOwner();

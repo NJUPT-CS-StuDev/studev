@@ -1,7 +1,8 @@
 // Explicit live smoke check for the deployed API. Does not upload files or modify submissions.
 // Reads only the locally provisioned admin secret, never prints cookies, hashes or signed URLs.
 import { readFile } from 'node:fs/promises';
-const access = JSON.parse(await readFile(new URL('../.env.collection-access.local.json', import.meta.url), 'utf8'));
+import { privateFile } from './private-file.mjs';
+const access = JSON.parse(await readFile(privateFile('.env.collection-access.local.json'), 'utf8'));
 const origin = 'https://studev.hicancan.top';
 const base = `${origin}/api/collection`;
 async function check(name, path, init, expected) {
