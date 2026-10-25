@@ -26,6 +26,10 @@ interface ExamDetailProps {
     sourceUrl?: string | null;
     sourceTitle?: string | null;
     sourceUpdatedAt?: string | null;
+    /** Course codes of the visitor's own timetable this term; null shows the class list as it is. */
+    ownCodes?: Set<string> | null;
+    /** Exams of courses the visitor added (retakes, electives), from other classes' lists. */
+    addedIds?: Set<string>;
 }
 
 export function ExamDetail({
@@ -42,17 +46,19 @@ export function ExamDetail({
     sourceUrl,
     sourceTitle,
     sourceUpdatedAt,
+    ownCodes = null,
+    addedIds = new Set(),
 }: ExamDetailProps) {
     const [copyState, setCopyState] = useState<boolean>(false);
     const [notice, setNotice] = useState<Notice>(null);
     const allSelected = exams.length > 0 && selectedIds.size === exams.length;
     const noneSelected = selectedIds.size === 0;
     const sourceTime = sourceUpdatedAt;
-    // Exams taken by only a few of the class (retakes and makeups) are listed apart.
-    const largest = Math.max(0, ...exams.map(exam => exam.count || 0));
-    const isMinority = (exam: Exam) => largest >= 6 && (exam.count || 0) * 2 < largest;
-    const classExams = exams.filter(exam => !isMinority(exam));
-    const fewExams = exams.filter(isMinority);
+    // With the visitor's timetable known, the class list splits into their own
+    // exams and the ones other classmates sit (retakes, electives, language levels).
+    const isOwn = (exam: Exam) => !ownCodes || addedIds.has(exam.id) || ownCodes.has(exam.course_code);
+    const classExams = exams.filter(isOwn);
+    const fewExams = exams.filter(exam => !isOwn(exam));
     const now = new Date().toISOString();
     const allPast = exams.length > 0 && exams.every(exam => exam.end_timestamp && new Date(exam.end_timestamp).toISOString() < now);
     const card = (exam: Exam, idx: number, list: Exam[]) => (
@@ -200,7 +206,7 @@ export function ExamDetail({
             {fewExams.length ? (
                 <details className="mt-5 group">
                     <summary className="cursor-pointer select-none text-[14px] font-medium text-[#1a73e8] dark:text-[#8ab4f8]">
-                        只有少数同学参加的考试（重修、补考等）· {fewExams.length} 门
+                        不在你课表里的考试（本班其他同学的重修、选修等）· {fewExams.length} 门
                     </summary>
                     <div className="mt-3 space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
                         {fewExams.map((exam, idx) => card(exam, idx, fewExams))}

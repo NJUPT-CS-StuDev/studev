@@ -177,6 +177,7 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
                             onOpenClass={(className) => router.onSubmit(className)}
                             client={examClient}
                             historyClient={examHistoryClient}
+                            teachingClient={teachingClient}
                         />
                     )
                 ) : null}

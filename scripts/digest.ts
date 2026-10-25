@@ -322,10 +322,14 @@ async function main() {
         console.log('exams', examTerm, examFacts.length, 'records');
     }
 
-    // Classrooms: rooms, plus course and exam bookings per date of the teaching term.
-    const rooms = await read<Room[]>(join(dir, 'places', 'rooms.json'));
+    // Classrooms: the rooms this term's timetable schedules (so all their bookings
+    // are known), plus course and exam bookings per date of the teaching term.
+    const scheduled = new Set(meetings.flatMap(m => m.room ? [m.room] : []));
+    const rooms = (await read<Room[]>(join(dir, 'places', 'rooms.json'))).filter(r => scheduled.has(r.id));
     const campuses = await read<{ id: string }[]>(join(dir, 'places', 'campuses.json'));
-    const buildings = await read<{ id: string; campus: string; floors: string[] }[]>(join(dir, 'places', 'buildings.json'));
+    const buildings = (await read<{ id: string; campus: string; floors: string[] }[]>(join(dir, 'places', 'buildings.json')))
+        .map(b => ({ ...b, floors: b.floors.filter(level => rooms.some(r => r.building === b.id && r.floor === level)) }))
+        .filter(b => b.floors.length);
     const floorId = (building: string, level: string) => `${building}/${level}`;
     const eligible = (kinds: string[]) => kinds.some(kind => campusConfig.classrooms.eligibleKinds.some(word => kind.includes(word)));
     await write(join(out, 'classrooms', 'index.json'), {
@@ -333,7 +337,7 @@ async function main() {
         weeks,
         periods,
         space: {
-            campuses: campuses.map(c => ({ campus_id: c.id, name: c.id })),
+            campuses: campuses.filter(c => buildings.some(b => b.campus === c.id)).map(c => ({ campus_id: c.id, name: c.id })),
             buildings: buildings.map(b => ({ building_id: b.id, campus_id: b.campus, name: b.id, aliases: [] })),
             floors: buildings.flatMap(b => b.floors.map(level => ({ floor_id: floorId(b.id, level), building_id: b.id, level }))),
             families: rooms.map(r => ({

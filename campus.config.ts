@@ -37,7 +37,12 @@ export const campusConfig = {
     },
 
     classrooms: {
-        /** Room kinds that count as bookable classrooms in the free-room finder. */
-        eligibleKinds: ['多媒体', '非多媒体', '翻转课堂', '考场'],
+        /**
+         * Room kinds (the timetable's 场地类别) that count as classrooms in the
+         * free-room finder. Only rooms the term's timetable schedules are
+         * listed, so every room shown has all its bookings known; labs and
+         * language rooms are left out.
+         */
+        eligibleKinds: ['多媒体', '非多媒体', '翻转课堂'],
     },
 } as const;

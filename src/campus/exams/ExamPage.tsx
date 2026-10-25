@@ -8,6 +8,8 @@ import { useSelectedExamIds } from './model/useSelectedExamIds';
 import { InlineErrorBanner } from '@/shared/ui/InlineErrorBanner';
 import type { ExamSnapshotClient } from './model/ExamSnapshotClient';
 import type { ExamHistoryClient } from './model/ExamHistoryClient';
+import type { TeachingScheduleClient } from '@/timetable/model/TeachingScheduleClient';
+import { useMyExams } from './model/useMyExams';
 
 const ExamClassHistory = lazy(() => import('./ExamClassHistory').then(module => ({
     default: module.ExamClassHistory,
@@ -19,9 +21,10 @@ interface ExamPageProps {
     onOpenClass: (className: string) => void;
     client: ExamSnapshotClient;
     historyClient: ExamHistoryClient | null;
+    teachingClient: TeachingScheduleClient;
 }
 
-export function ExamPage({ query, className, onOpenClass, client, historyClient }: ExamPageProps) {
+export function ExamPage({ query, className, onOpenClass, client, historyClient, teachingClient }: ExamPageProps) {
     const [reminders, setReminders] = useState<number[]>([30, 60]);
     const {
         classMode,
@@ -34,6 +37,8 @@ export function ExamPage({ query, className, onOpenClass, client, historyClient 
         examPeriodId,
     } = useExamData(client, true, className || query, className);
     const currentClass = classMode.mode === 'DETAIL' ? classMode.classes[0] || null : null;
+    const { ownCodes, addedExams } = useMyExams(currentClass, examPeriodId, classMode.exams, teachingClient, client);
+    const exams = addedExams.length ? [...classMode.exams, ...addedExams] : classMode.exams;
     const {
         selectedIds,
         toggleExamSelection,
@@ -41,7 +46,7 @@ export function ExamPage({ query, className, onOpenClass, client, historyClient 
         clearExamSelection,
         markExamsExported,
         getExamStatus,
-    } = useSelectedExamIds(currentClass, classMode.exams, snapshotId, examPeriodId, sourceUpdatedAt);
+    } = useSelectedExamIds(currentClass, exams, snapshotId, examPeriodId, sourceUpdatedAt);
 
     if (loading) {
         return (
@@ -67,7 +72,9 @@ export function ExamPage({ query, className, onOpenClass, client, historyClient 
                 <section className="mt-6">
                     <ExamDetail
                         className={classMode.classes[0] || ''}
-                        exams={classMode.exams}
+                        exams={exams}
+                        ownCodes={ownCodes}
+                        addedIds={new Set(addedExams.map(exam => exam.id))}
                         selectedIds={selectedIds}
                         onToggleSelection={toggleExamSelection}
                         onSelectAll={selectAllExamIds}
