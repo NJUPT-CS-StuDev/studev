@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TeachingPeriod } from '@/academics/timetable';
 import type { SpaceFamily } from '@/academics/space';
-import { clampToTerm, freeRun, isFree, nowInShanghai, occupancyOf, periodAt, roomMatches, weekOf } from './campusDay';
+import { clampToTerm, dayStatus, freeRun, isFree, nowInShanghai, occupantsAt, periodAt, roomMatches, weekOf } from './campusDay';
 import type { ClassroomDayFile } from './ClassroomAvailabilityClient';
 
 const periods: TeachingPeriod[] = [
@@ -38,14 +38,23 @@ describe('campus day', () => {
                 2: [{ meeting_id: 'm', course_name: '高数', course_code: null, class_ids: [], teacher: null, location: null, space_family_id: '教4-306', floor_id: '教4/3', start_period: 1, end_period: 2 }] },
             exams: [{ exam_id: 'e', stable_key: 'e', class_name: 'B1', course_name: '物理', course_code: '', teacher: '', count: 30, date: '2026-10-26', start_timestamp: '2026-10-26T09:00:00+08:00', end_timestamp: '2026-10-26T10:00:00+08:00', duration_minutes: 60, location: '', campus: '', space_family_id: '教4-308', floor_id: '教4/3' }],
         } as ClassroomDayFile;
-        const occupancy = occupancyOf(day, periods);
-        expect(isFree(occupancy, '教4-306', 1)).toBe(false);
-        expect(isFree(occupancy, '教4-306', 3)).toBe(true);
-        expect(isFree(occupancy, '教4-308', 1)).toBe(true);
-        expect(isFree(occupancy, '教4-308', 2)).toBe(false);
-        expect(isFree(occupancy, '教4-308', 3)).toBe(false);
-        expect(freeRun(occupancy, '教4-310', 1, 3)).toBe(3);
-        expect(isFree(occupancyOf(null, periods), '教4-306', 1, 3)).toBe(true);
+        const status = dayStatus(day, periods);
+        expect(isFree(status, '教4-306', 1)).toBe(false);
+        expect(isFree(status, '教4-306', 3)).toBe(true);
+        expect(isFree(status, '教4-308', 1)).toBe(true);
+        expect(isFree(status, '教4-308', 2)).toBe(false);
+        expect(isFree(status, '教4-308', 3)).toBe(false);
+        expect(freeRun(status, '教4-310', 1, 3)).toBe(3);
+        expect(isFree(dayStatus(null, periods), '教4-306', 1, 3)).toBe(true);
+
+        // Checked free periods decide; a taken room without a booking is held by something else.
+        const checked = dayStatus({ ...day, free: { 1: ['教4-308'], 2: ['教4-306'], 3: ['教4-306', '教4-310'] }, checked_at: '2026-10-25T06:00:00Z' }, periods);
+        expect(checked.checkedAt).toBe('2026-10-25T06:00:00Z');
+        expect(isFree(checked, '教4-310', 1)).toBe(false);
+        expect(occupantsAt(checked, '教4-310', 1)).toBe('other');
+        expect(isFree(checked, '教4-306', 2)).toBe(true);
+        expect(occupantsAt(checked, '教4-306', 1)).toHaveLength(1);
+        expect(freeRun(checked, '教4-306', 2, 3)).toBe(2);
     });
 
     it('matches rooms by number, id, building and alias', () => {

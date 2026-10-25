@@ -74,6 +74,7 @@
 [data-theme=dark] .classrooms-summary select { border-color: #323a44; }
 .classrooms-summary p strong { color: #137333; font-size: 15px; font-weight: 750; }
 [data-theme=dark] .classrooms-summary p strong { color: #81c995; }
+.classrooms-checked { flex-basis: 100%; color: var(--muted); font-size: 12px; }
 .classrooms-legend { display: flex; gap: 12px; margin-left: auto; }
 .classrooms-legend li { display: inline-flex; align-items: center; gap: 5px; }
 .classrooms-legend li::before { content: ''; width: 12px; height: 12px; border: 1px solid; border-radius: 4px; }

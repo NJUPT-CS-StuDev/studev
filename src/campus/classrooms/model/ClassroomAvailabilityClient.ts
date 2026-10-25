@@ -18,6 +18,9 @@ export interface ClassroomDayFile extends TeachingRoomDay {
     week: number;
     weekday: number;
     exams: RoomBooking[];
+    /** Rooms free in each period as last checked; absent when only the timetable is known. */
+    free?: Record<string, string[]>;
+    checked_at?: string;
 }
 
 /** The rooms of every campus and, one file per date, what occupies them. */

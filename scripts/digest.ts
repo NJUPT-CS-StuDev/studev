@@ -25,7 +25,7 @@ const write = async (path: string, value: unknown) => {
 };
 
 // ---- campus-data facts -------------------------------------------------------
-interface Index { built_at: string; content: string[]; teaching: string[]; exams: string[] }
+interface Index { built_at: string; content: string[]; teaching: string[]; exams: string[]; rooms?: string[] }
 interface Source { id: string; name: string; url: string; kind: string }
 interface Doc { id: string; url: string; title: string; text: string; published: string | null; updated: string | null; section: string | null; kind: 'page' | 'file' | 'link'; tags: string[]; files: { name: string; url: string; ext: string | null }[] }
 interface Term { term: string; year: number; number: number; weeks: { week: number; start: string; end: string }[]; observed_at: string }
@@ -41,7 +41,8 @@ interface ExamFact { id: string; class: string; course: { code: string | null; n
 type Slot = { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null };
 interface ChangeFact { observed: string; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: Slot[] | null; after: Slot[] | null }
 interface ExamSource { file: string; url: string; notice: string; title: string }
-interface Room { id: string; building: string; floor: string; number: string; campus: string; kinds: string[]; names: string[] }
+interface Room { id: string; building: string; floor: string; number: string; campus: string; kinds: string[]; names: string[]; listed?: boolean; seats?: number }
+interface FreeDay { date: string; observed_at: string; free: Record<string, string[]> }
 
 async function locateData(): Promise<{ dir: string; version: string }> {
     const local = process.env.DATA_DIR;
@@ -322,10 +323,14 @@ async function main() {
         console.log('exams', examTerm, examFacts.length, 'records');
     }
 
-    // Classrooms: the rooms this term's timetable schedules (so all their bookings
-    // are known), plus course and exam bookings per date of the teaching term.
+    // Classrooms. When campus-data has the free-room page for the term, its room
+    // list and its free periods decide; course and exam bookings then only say
+    // what occupies a room. Without it, the rooms the timetable schedules and
+    // their bookings are all there is.
+    const freeDir = join(dir, 'rooms', teachingTerm);
+    const measured = index.rooms?.includes(teachingTerm) ?? false;
     const scheduled = new Set(meetings.flatMap(m => m.room ? [m.room] : []));
-    const rooms = (await read<Room[]>(join(dir, 'places', 'rooms.json'))).filter(r => scheduled.has(r.id));
+    const rooms = (await read<Room[]>(join(dir, 'places', 'rooms.json'))).filter(r => measured ? r.listed : scheduled.has(r.id));
     const campuses = await read<{ id: string }[]>(join(dir, 'places', 'campuses.json'));
     const buildings = (await read<{ id: string; campus: string; floors: string[] }[]>(join(dir, 'places', 'buildings.json')))
         .map(b => ({ ...b, floors: b.floors.filter(level => rooms.some(r => r.building === b.id && r.floor === level)) }))
@@ -343,6 +348,7 @@ async function main() {
             families: rooms.map(r => ({
                 space_family_id: r.id, building_id: r.building, floor_id: floorId(r.building, r.floor), room_number: r.number,
                 aliases: r.names, kinds: r.kinds, availability_eligible: eligible(r.kinds) ? 'eligible' : 'ineligible',
+                ...(r.seats ? { seats: r.seats } : {}),
             })),
         },
     });
@@ -372,12 +378,18 @@ async function main() {
                     space_family_id: room.id, floor_id: floorId(room.building, room.floor),
                 };
             });
-            if (!Object.keys(byPeriod).length && !exams.length) continue;
-            await write(join(out, 'classrooms', 'days', `${date}.json`), { date, week: week.week, weekday, periods: byPeriod, exams });
+            const freeFile = join(freeDir, `${date}.json`);
+            const measuredDay = measured && existsSync(freeFile) ? await read<FreeDay>(freeFile) : null;
+            const free = measuredDay ? Object.fromEntries(Object.entries(measuredDay.free).map(([p, ids]) => [p, ids.filter(id => roomById.has(id))])) : undefined;
+            if (!Object.keys(byPeriod).length && !exams.length && !free) continue;
+            await write(join(out, 'classrooms', 'days', `${date}.json`), {
+                date, week: week.week, weekday, periods: byPeriod, exams,
+                ...(measuredDay ? { free, checked_at: measuredDay.observed_at } : {}),
+            });
             dayFiles++;
         }
     }
-    console.log('classrooms', rooms.length, 'rooms', dayFiles, 'days');
+    console.log('classrooms', rooms.length, 'rooms', dayFiles, 'days', measured ? 'with free periods' : 'from the timetable only');
 
     await write(join(root, 'src', 'data', 'campus-release.json'), { version, base: `/data/${version}`, built_at: index.built_at });
 }

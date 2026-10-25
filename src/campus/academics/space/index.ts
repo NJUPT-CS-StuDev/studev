@@ -27,6 +27,8 @@ export interface SpaceFamily {
     aliases: string[];
     kinds: string[];
     availability_eligible: 'eligible' | 'ineligible';
+    /** Seats, when the free-room page lists the room. */
+    seats?: number;
 }
 
 export interface SpaceIndex {

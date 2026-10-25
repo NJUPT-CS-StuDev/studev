@@ -77,18 +77,44 @@ export const occupancyOf = (day: ClassroomDayFile | null, periods: TeachingPerio
     return result;
 };
 
-export const isFree = (occupancy: DayOccupancy, room: string, from: number, to = from): boolean => {
-    const byPeriod = occupancy.get(room);
-    if (!byPeriod) return true;
-    for (let period = from; period <= to; period++) if (byPeriod.get(period)?.length) return false;
+/**
+ * One day of every room: what the timetable and exams put in it, and, when the
+ * free periods were checked, which rooms were free. The checked free periods
+ * decide; bookings then only explain an occupied room.
+ */
+export interface DayStatus {
+    occupancy: DayOccupancy;
+    free: Map<number, Set<string>> | null;
+    checkedAt: string | null;
+}
+
+export const dayStatus = (day: ClassroomDayFile | null, periods: TeachingPeriod[]): DayStatus => ({
+    occupancy: occupancyOf(day, periods),
+    free: day?.free ? new Map(Object.entries(day.free).map(([period, ids]) => [Number(period), new Set(ids)])) : null,
+    checkedAt: day?.checked_at ?? null,
+});
+
+const freeAt = (status: DayStatus, room: string, period: number): boolean => status.free
+    ? status.free.get(period)?.has(room) ?? false
+    : !status.occupancy.get(room)?.get(period)?.length;
+
+export const isFree = (status: DayStatus, room: string, from: number, to = from): boolean => {
+    for (let period = from; period <= to; period++) if (!freeAt(status, room, period)) return false;
     return true;
 };
 
 /** How many periods in a row the room stays free from `from` (0 when taken). */
-export const freeRun = (occupancy: DayOccupancy, room: string, from: number, last: number): number => {
+export const freeRun = (status: DayStatus, room: string, from: number, last: number): number => {
     let count = 0;
-    for (let period = from; period <= last && isFree(occupancy, room, period); period++) count++;
+    for (let period = from; period <= last && isFree(status, room, period); period++) count++;
     return count;
+};
+
+/** What holds a room in a period: its bookings, or an unexplained booking when the check says taken. */
+export const occupantsAt = (status: DayStatus, room: string, period: number): Occupant[] | 'other' => {
+    if (freeAt(status, room, period)) return [];
+    const known = status.occupancy.get(room)?.get(period) ?? [];
+    return known.length ? known : 'other';
 };
 
 export interface BuildingView {

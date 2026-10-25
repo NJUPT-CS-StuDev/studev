@@ -6,8 +6,8 @@ import { writePreferences } from '@/shared/lib/preferences';
 import { usePreferences } from '@/shared/lib/usePreferences';
 import type { ClassroomAvailabilityClient, ClassroomDayFile, ClassroomIndexFile } from './model/ClassroomAvailabilityClient';
 import {
-    addDays, campusBuildings, clampToTerm, freeRun, isFree, nowInShanghai, occupancyOf, periodAt, roomMatches, termRange, weekOf,
-    type DayOccupancy, type Occupant,
+    addDays, campusBuildings, clampToTerm, dayStatus, freeRun, isFree, nowInShanghai, occupantsAt, periodAt, roomMatches, termRange, weekOf,
+    type DayStatus, type Occupant,
 } from './model/campusDay';
 import './classrooms.css';
 
@@ -47,21 +47,30 @@ const dayLabel = (date: string, today: string): string => {
     return `${relative ? `${relative} · ` : ''}${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日 周${weekday}`;
 };
 
+/** "10月25日 14:58" in Nanjing time. */
+const checkedText = (iso: string): string => new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+}).format(new Date(iso)).replace(/\//, '月').replace(' ', '日 ');
+
 const occupantText = (occupant: Occupant): string => occupant.kind === 'exam'
     ? `考试：${occupant.booking.course_name}`
     : occupant.booking.course_name;
 
-type Segment = { from: number; to: number; occupants: Occupant[] };
+const OTHER = '已占用（借用、调课等）';
+const SEAT_STEPS = [30, 60, 100, 150];
+
+type Held = Occupant[] | 'other';
+type Segment = { from: number; to: number; held: Held };
 
 /** A room's day as runs of periods with the same occupants. */
-const segments = (occupancy: DayOccupancy, room: string, periods: TeachingPeriod[]): Segment[] => {
+const segments = (status: DayStatus, room: string, periods: TeachingPeriod[]): Segment[] => {
     const result: Segment[] = [];
-    const key = (list: Occupant[]) => list.map(item => item.kind === 'exam' ? `e:${item.booking.exam_id}` : `c:${item.booking.meeting_id}`).join('|');
+    const key = (held: Held) => held === 'other' ? 'other' : held.map(item => item.kind === 'exam' ? `e:${item.booking.exam_id}` : `c:${item.booking.meeting_id}`).join('|');
     for (const { period } of periods) {
-        const occupants = occupancy.get(room)?.get(period) ?? [];
+        const held = occupantsAt(status, room, period);
         const last = result[result.length - 1];
-        if (last && last.to === period - 1 && key(last.occupants) === key(occupants)) last.to = period;
-        else result.push({ from: period, to: period, occupants });
+        if (last && last.to === period - 1 && key(last.held) === key(held)) last.to = period;
+        else result.push({ from: period, to: period, held });
     }
     return result;
 };
@@ -105,7 +114,8 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
         return () => controller.abort();
     }, [client, date, index]);
 
-    const occupancy = useMemo(() => day?.date === date ? occupancyOf(day.file, periods) : null, [date, day, periods]);
+    const status = useMemo(() => day?.date === date ? dayStatus(day.file, periods) : null, [date, day, periods]);
+    const [minSeats, setMinSeats] = useState(0);
     const buildings = useMemo(() => index ? campusBuildings(index.space, campus) : [], [campus, index]);
     const roomById = useMemo(() => new Map(index?.space.families.map(room => [room.space_family_id, room]) ?? []), [index]);
     const selectedRoom = roomParam ? roomById.get(roomParam) ?? null : null;
@@ -132,8 +142,10 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
 
     const { first, last } = termRange(weeks);
     const position = weekOf(weeks, date);
-    const visibleRooms = buildings.flatMap(item => item.rooms).filter(room => roomMatches(room, query));
-    const freeCount = occupancy ? visibleRooms.filter(room => isFree(occupancy, room.space_family_id, period, until ?? period)).length : null;
+    const shown = (room: SpaceFamily) => roomMatches(room, query) && (!minSeats || (room.seats ?? 0) >= minSeats);
+    const visibleRooms = buildings.flatMap(item => item.rooms).filter(shown);
+    const freeCount = status ? visibleRooms.filter(room => isFree(status, room.space_family_id, period, until ?? period)).length : null;
+    const hasSeats = visibleRooms.some(room => room.seats);
     const periodInfo = periods.find(item => item.period === period);
     const untilInfo = until ? periods.find(item => item.period === until) : null;
     const quickDays = [0, 1, 2].map(offset => addDays(today, offset)).filter(value => value <= last);
@@ -186,32 +198,43 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                         {freeCount !== null ? <> · <strong>{freeCount}</strong> / {visibleRooms.length} 间空闲</> : ' · 正在加载…'}
                         {query ? <> · 筛选「{query}」</> : null}
                     </p>
+                    {hasSeats || minSeats ? (
+                        <label>
+                            座位
+                            <select value={minSeats} onChange={event => setMinSeats(Number(event.target.value))}>
+                                <option value={0}>不限</option>
+                                {SEAT_STEPS.map(step => <option key={step} value={step}>至少 {step} 座</option>)}
+                            </select>
+                        </label>
+                    ) : null}
+                    <p className="classrooms-checked">{status?.checkedAt ? `空闲情况 ${checkedText(status.checkedAt)} 更新` : status ? '按课表推算，未计入借用和调课' : ''}</p>
                     <ul className="classrooms-legend" aria-hidden="true"><li className="is-free">空闲</li><li className="is-busy">上课</li><li className="is-exam">考试</li></ul>
                 </div>
             </section>
 
             <div className="classrooms-buildings">
                 {buildings.map(item => {
-                    const rooms = item.rooms.filter(room => roomMatches(room, query));
+                    const rooms = item.rooms.filter(shown);
                     if (!rooms.length) return null;
-                    const free = occupancy ? rooms.filter(room => isFree(occupancy, room.space_family_id, period, until ?? period)).length : null;
+                    const free = status ? rooms.filter(room => isFree(status, room.space_family_id, period, until ?? period)).length : null;
                     return (
                         <section key={item.id} className="classrooms-building" aria-labelledby={`building-${item.id}`}>
                             <header><h2 id={`building-${item.id}`}>{item.id}</h2>{free !== null ? <span><strong>{free}</strong> / {rooms.length} 空闲</span> : null}</header>
                             <div className="classrooms-floors">
                                 {item.floors.map(floor => {
-                                    const floorRooms = floor.rooms.filter(room => roomMatches(room, query));
+                                    const floorRooms = floor.rooms.filter(shown);
                                     if (!floorRooms.length) return null;
                                     return (
                                         <div key={floor.level} className="classrooms-floor">
                                             <span className="classrooms-level">{floor.level}F</span>
                                             <div className="classrooms-rooms">
                                                 {floorRooms.map(room => {
-                                                    const occupants = occupancy?.get(room.space_family_id)?.get(period) ?? [];
-                                                    const free = occupancy ? isFree(occupancy, room.space_family_id, period, until ?? period) : null;
-                                                    const state = free === null ? 'is-loading' : free ? 'is-free' : occupants.some(o => o.kind === 'exam') ? 'is-exam' : 'is-busy';
-                                                    const run = occupancy && free ? freeRun(occupancy, room.space_family_id, period, lastPeriod) : 0;
-                                                    const label = `${room.space_family_id}，${free === null ? '加载中' : free ? `空闲${run > 1 ? `，连续 ${run} 节` : ''}` : occupants.length ? occupants.map(occupantText).join('、') : `第${period}到${until}节之间有课`}`;
+                                                    const held = status ? occupantsAt(status, room.space_family_id, period) : [];
+                                                    const free = status ? isFree(status, room.space_family_id, period, until ?? period) : null;
+                                                    const state = free === null ? 'is-loading' : free ? 'is-free' : held !== 'other' && held.some(o => o.kind === 'exam') ? 'is-exam' : 'is-busy';
+                                                    const run = status && free ? freeRun(status, room.space_family_id, period, lastPeriod) : 0;
+                                                    const why = held === 'other' ? OTHER : held.length ? held.map(occupantText).join('、') : `第${period}到${until}节之间有占用`;
+                                                    const label = `${room.space_family_id}${room.seats ? `，${room.seats} 座` : ''}，${free === null ? '加载中' : free ? `空闲${run > 1 ? `，连续 ${run} 节` : ''}` : why}`;
                                                     return (
                                                         <button key={room.space_family_id} type="button" className={`classrooms-room ${state} ${room.space_family_id === roomParam ? 'is-selected' : ''}`} onClick={event => openRoom(room, event.currentTarget)} aria-label={label} title={label}>
                                                             {room.room_number}
@@ -229,13 +252,13 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                 {!visibleRooms.length ? <p className="classrooms-empty">{campus}没有与「{query}」匹配的教室。</p> : null}
             </div>
 
-            {selectedRoom && occupancy ? (
+            {selectedRoom && status ? (
                 <RoomDrawer
                     room={selectedRoom}
                     campus={campus}
                     dateText={dayLabel(date, now.date)}
                     periods={periods}
-                    occupancy={occupancy}
+                    status={status}
                     selected={period}
                     nowPeriod={nowPeriod}
                     onClose={closeRoom}
@@ -250,13 +273,13 @@ interface RoomDrawerProps {
     campus: string;
     dateText: string;
     periods: TeachingPeriod[];
-    occupancy: DayOccupancy;
+    status: DayStatus;
     selected: number;
     nowPeriod: number | null;
     onClose: () => void;
 }
 
-function RoomDrawer({ room, campus, dateText, periods, occupancy, selected, nowPeriod, onClose }: RoomDrawerProps) {
+function RoomDrawer({ room, campus, dateText, periods, status, selected, nowPeriod, onClose }: RoomDrawerProps) {
     const panel = useRef<HTMLElement>(null);
     useEffect(() => {
         const previous = document.body.style.overflow;
@@ -277,28 +300,29 @@ function RoomDrawer({ room, campus, dateText, periods, occupancy, selected, nowP
                 <div className="room-handle" aria-hidden="true" />
                 <header>
                     <div>
-                        <p>{campus} · {room.building_id} · {room.floor_id.split('/')[1]}楼{kinds ? ` · ${kinds}` : ''}</p>
+                        <p>{campus} · {room.building_id} · {room.floor_id.split('/')[1]}楼{kinds ? ` · ${kinds}` : ''}{room.seats ? ` · ${room.seats} 座` : ''}</p>
                         <h2 id="room-title">{room.space_family_id}</h2>
                         <span>{dateText}</span>
                     </div>
                     <button type="button" onClick={onClose} aria-label="关闭教室详情"><X aria-hidden="true" /></button>
                 </header>
                 <ol className="room-day">
-                    {segments(occupancy, room.space_family_id, periods).map(segment => {
+                    {segments(status, room.space_family_id, periods).map(segment => {
                         const start = byPeriod.get(segment.from);
                         const end = byPeriod.get(segment.to);
-                        const free = !segment.occupants.length;
+                        const free = segment.held !== 'other' && !segment.held.length;
+                        const exam = segment.held !== 'other' && segment.held.some(o => o.kind === 'exam');
                         const current = selected >= segment.from && selected <= segment.to;
                         const live = nowPeriod !== null && nowPeriod >= segment.from && nowPeriod <= segment.to;
                         return (
-                            <li key={segment.from} className={`${free ? 'is-free' : segment.occupants.some(o => o.kind === 'exam') ? 'is-exam' : 'is-busy'} ${current ? 'is-current' : ''}`}>
+                            <li key={segment.from} className={`${free ? 'is-free' : exam ? 'is-exam' : 'is-busy'} ${current ? 'is-current' : ''}`}>
                                 <div className="room-day-time">
                                     <strong>{segment.from === segment.to ? `第${segment.from}节` : `第${segment.from}–${segment.to}节`}</strong>
                                     <span>{start?.start_time}–{end?.end_time}</span>
                                     {live ? <em>现在</em> : null}
                                 </div>
                                 <div className="room-day-what">
-                                    {free ? <strong>空闲</strong> : segment.occupants.map(occupant => (
+                                    {free ? <strong>空闲</strong> : segment.held === 'other' ? <strong>{OTHER}</strong> : segment.held.map(occupant => (
                                         <div key={occupant.kind === 'exam' ? occupant.booking.exam_id : occupant.booking.meeting_id}>
                                             <strong>{occupantText(occupant)}</strong>
                                             <span>{[occupant.booking.teacher, occupant.kind === 'course' ? occupant.booking.class_ids.slice(0, 4).join('、') + (occupant.booking.class_ids.length > 4 ? ' 等' : '') : occupant.booking.class_name].filter(Boolean).join(' · ')}</span>
@@ -309,7 +333,7 @@ function RoomDrawer({ room, campus, dateText, periods, occupancy, selected, nowP
                         );
                     })}
                 </ol>
-                <p className="room-note">占用来自教务系统的课表与考试安排；临时借用、调课和活动不在其中。</p>
+                <p className="room-note">{status.checkedAt ? `空闲情况 ${checkedText(status.checkedAt)} 更新；占用原因来自课表和考试安排。` : '按课表和考试安排推算，未计入借用和调课。'}</p>
             </aside>
         </div>
     );
