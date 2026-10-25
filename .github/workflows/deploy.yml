@@ -31,6 +31,7 @@ jobs:
             exit 1
           fi
       - run: npx -y edgeone@1.6.44 makers env pull -e production -t "$EDGEONE_API_TOKEN"
+      - run: npm run digest
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform
