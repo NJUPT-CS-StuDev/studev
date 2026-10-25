@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { ExamDetailSkeleton } from './ui/ExamDetailSkeleton';
 import { ExamListSkeleton } from './ui/ExamListSkeleton';
 import { ExamDetail } from './ui/ExamDetail';
@@ -42,12 +42,6 @@ export function ExamPage({ query, className, onOpenClass, client, historyClient 
         markExamsExported,
         getExamStatus,
     } = useSelectedExamIds(currentClass, classMode.exams, snapshotId, examPeriodId, sourceUpdatedAt);
-
-    useEffect(() => {
-        if (currentClass) {
-            localStorage.setItem('SAVED_CLASS', currentClass);
-        }
-    }, [currentClass]);
 
     if (loading) {
         return (

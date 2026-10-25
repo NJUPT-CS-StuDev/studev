@@ -1,22 +1,12 @@
 const CACHE_KEY = 'studev_auth_user';
 
 function updateNavLinks(isLoggedIn: boolean) {
-  const accountLink = document.querySelector<HTMLAnchorElement>('[data-global-account-link]');
-  if (accountLink) {
-    if (isLoggedIn) {
-      accountLink.textContent = 'Account';
-      accountLink.href = '/account/';
-    } else {
-      accountLink.textContent = 'Login';
-      accountLink.href = '/login/';
-    }
-  }
-
-  // 访客点击 Forms 直达登录页，已登录直达表单，杜绝中间重定向延迟
-  const formsLink = document.querySelector<HTMLAnchorElement>('.site-nav a[href="/forms/"], .site-nav a[href*="/login/?next="]');
-  if (formsLink) {
-    formsLink.href = isLoggedIn ? '/forms/' : '/login/?next=%2Fforms%2F';
-  }
+  // Forms are for people with an account; everyone else never sees the link.
+  document.querySelectorAll<HTMLElement>('[data-member-link]').forEach((link) => {
+    link.hidden = !isLoggedIn;
+  });
+  if (isLoggedIn) document.documentElement.dataset.member = '';
+  else delete document.documentElement.dataset.member;
 }
 
 // 0ms 瞬间从本地状态初始化

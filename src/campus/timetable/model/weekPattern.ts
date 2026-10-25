@@ -8,6 +8,31 @@ export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双�
     return meeting.week_numbers.every(week => week % 2 === parity) ? (parity === 1 ? '单周' : '双周') : null;
 };
 
+/**
+ * Weeks a regular course skips: a weekly or alternate-week run with one or two
+ * holes inside it means the class was called off those weeks (停课). Irregular
+ * schedules (blocks of weeks, two-week labs) are not guessed at.
+ */
+export const suspendedWeeks = (weeks: number[]): number[] => {
+    const sorted = [...new Set(weeks)].sort((left, right) => left - right);
+    if (sorted.length < 4) return [];
+    const first = sorted[0] as number;
+    const last = sorted[sorted.length - 1] as number;
+    const present = new Set(sorted);
+    for (const step of [1, 2]) {
+        if (step === 2 && sorted.some(week => (week - first) % 2 !== 0)) continue;
+        const expected: number[] = [];
+        for (let week = first; week <= last; week += step) expected.push(week);
+        const missing = expected.filter(week => !present.has(week));
+        if (step === 1 && missing.length > 2) continue;
+        if (missing.length >= 1 && missing.length <= 2 && expected.length - missing.length >= 3) return missing;
+        if (!missing.length) return [];
+    }
+    return [];
+};
+
+export const showAsSuspended = (meeting: TeachingMeeting, week: number): boolean => suspendedWeeks(meeting.week_numbers).includes(week);
+
 export const showAsInactiveAlternating = (meeting: TeachingMeeting, week: number): boolean => {
     if (meeting.week_numbers.includes(week) || !alternatingWeekLabel(meeting)) return false;
     const first = Math.min(...meeting.week_numbers);

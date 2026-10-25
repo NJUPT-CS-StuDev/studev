@@ -749,21 +749,35 @@ window.addEventListener('pagehide', () => {
 });
 
 void (async () => {
+  // Visitors without an account only get the settings tab; nothing to ask the server.
+  let cached = false;
   try {
-    current = await session(true);
-    if (current) {
-      render();
-      initPasswordToggles();
-      message(status);
-      const setupBlocked = !!current.passwordChangeRequired || !!current.enrollmentRequired || !!current.mfaRequired || !!current.profileRequired || !current.user.profileComplete;
-      if (!setupBlocked) {
-        void refreshMembers().catch(() => {});
-        const tabParam = new URLSearchParams(location.search).get('tab');
-        if (tabParam === 'members' || (tabParam === 'audit' && current.user.role === 'owner')) {
-          switchTab(tabParam);
-          if (tabParam === 'audit') void guard(refreshAudit);
-        }
-      }
+    cached = !!localStorage.getItem('studev_auth_user');
+  } catch {}
+  if (!cached) return;
+  status.hidden = false;
+  message(status, '正在读取账号……');
+  try {
+    current = await session(false);
+    if (!current) {
+      try {
+        localStorage.removeItem('studev_auth_user');
+      } catch {}
+      status.hidden = true;
+      return;
+    }
+    document.querySelectorAll<HTMLElement>('[data-member-only]').forEach((n) => (n.hidden = false));
+    document.dispatchEvent(new CustomEvent('studev:account', { detail: { nickname: nicknameOf(current.user), role: current.user.role } }));
+    render();
+    initPasswordToggles();
+    message(status);
+    status.hidden = true;
+    const tabParam = new URLSearchParams(location.search).get('tab');
+    const setupBlocked = !!current.passwordChangeRequired || !!current.enrollmentRequired || !!current.mfaRequired || !!current.profileRequired || !current.user.profileComplete;
+    switchTab(setupBlocked || !tabParam ? 'profile' : tabParam === 'settings' ? 'settings' : tabParam === 'members' || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile');
+    if (!setupBlocked) {
+      void refreshMembers().catch(() => {});
+      if (tabParam === 'audit' && current.user.role === 'owner') void guard(refreshAudit);
     }
   } catch (e) {
     message(status, errorText(e), 'error');

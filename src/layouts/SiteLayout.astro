@@ -11,7 +11,6 @@ const nav = [
   { href: '/life/', label: 'Life', key: 'life' },
   { href: '/history/', label: 'History', key: 'history' },
   { href: '/about/', label: 'About', key: 'about' },
-  { href: '/forms/', label: 'Forms', key: 'forms' },
 ];
 const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -43,6 +42,8 @@ const initialSearchPlaceholder =
     <meta name="viewport" content="width=device-width" />
     <meta name="theme-color" content="#ffffff" />
     <script is:inline>
+      // Signed-in people see their member links from the first frame.
+      try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.member = ''; } catch { /* Storage may be unavailable. */ }
       let preference;
       try { preference = localStorage.getItem('site-theme'); } catch { /* Storage may be unavailable. */ }
       const theme = preference === 'light' || preference === 'dark'
@@ -93,8 +94,8 @@ const initialSearchPlaceholder =
               <a class="header-search-home" href="/search/">聚合主页 →</a>
             </div>
             <div class="header-search-grid">
-              <a href="/search/timetable/">📅 班级课表</a>
-              <a href="/search/classrooms/">🏫 教室拓扑</a>
+              <a href="/search/timetable/">📅 课表</a>
+              <a href="/search/classrooms/">🏫 空教室</a>
               <a href="/search/exam/">📝 考试安排</a>
               <a href="/search/web/">🌐 校内通知</a>
               <a href="/search/community/">📖 生存手册</a>
@@ -102,8 +103,11 @@ const initialSearchPlaceholder =
             </div>
           </div>
         </div>
-        <nav class="site-nav" aria-label="主导航">{nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>
-        <a class:list={['nav-account', { active: active === 'account' || active === 'login' }]} href="/login/" data-global-account-link>Login</a>
+        <nav class="site-nav" aria-label="主导航">
+          {nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
+          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-member-link hidden>Forms</a>
+        </nav>
+        <a class:list={['nav-account', { active: active === 'account' || active === 'login' }]} href="/account/" data-global-account-link>Account</a>
         <ThemeToggle />
       </div>
     </header>

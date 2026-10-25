@@ -49,8 +49,6 @@ const renderGrid = (meetings: TeachingMeeting[]) => renderToStaticMarkup(
         week={week}
         periods={periods}
         tones={new Map(meetings.map(meeting => [meeting.course_code ?? meeting.course_name, 0]))}
-        view="week"
-        day={1}
         onOpen={() => undefined}
     />,
 );

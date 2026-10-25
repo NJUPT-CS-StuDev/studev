@@ -135,3 +135,6 @@
         }
     }
 }
+
+/* Set before hydration when the URL or saved settings change what this page shows. */
+html[data-campus-pending] .campus-app > main { visibility: hidden; }

@@ -21,10 +21,8 @@ export type RoomIntent = { kind: 'entry' } | { kind: 'candidate'; input: string 
 const ENTRY_TERMS = new Set(['考试占用教室', '考试教室', '教室']);
 
 export const uniqueValues = (items: string[]): string[] => Array.from(new Set(items)).sort((a, b) => a.localeCompare(b, 'zh-CN'));
-const minutesOfDay = (timestamp: string): number => {
-    const date = new Date(timestamp);
-    return date.getHours() * 60 + date.getMinutes();
-};
+// Timestamps are written in Nanjing time ("…T09:50:00+08:00"); read the wall clock in them, not the browser's zone.
+const minutesOfDay = (timestamp: string): number => Number(timestamp.slice(11, 13)) * 60 + Number(timestamp.slice(14, 16));
 
 const parseClock = (value: string | null, fallback: number): number => {
     if (!value) return fallback;

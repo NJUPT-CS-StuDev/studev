@@ -9,6 +9,7 @@ import type {
 } from '@/academics/timetable';
 import { forwardAbort, waitForAbort } from '@/shared/lib/abort';
 import { fetchJson } from '@/shared/lib/fetch';
+import { expandCatalogEntry, type CatalogCourse, type CourseCatalogFile } from './courseCatalog';
 
 export interface LoadedTeachingIndex {
     manifest: { observed_at: string };
@@ -29,6 +30,7 @@ export class TeachingScheduleClient {
     #indexPromise: Promise<LoadedTeachingIndex> | null = null;
     #activeClassController: AbortController | null = null;
     #classCache = new Map<string, LoadedClassSchedule>();
+    #catalogPromise: Promise<CatalogCourse[]> | null = null;
 
     constructor(baseUrl: string) {
         this.#baseUrl = baseUrl.replace(/\/+$/, '');
@@ -82,6 +84,17 @@ export class TeachingScheduleClient {
             detach();
             if (this.#activeClassController === controller) this.#activeClassController = null;
         }
+    }
+
+    /** Every teaching class of the term (timetable/courses.json), loaded on first use. */
+    loadCatalog(signal?: AbortSignal): Promise<CatalogCourse[]> {
+        this.#catalogPromise ??= fetchJson<CourseCatalogFile>(`${this.#baseUrl}/courses.json`)
+            .then(file => file.courses.map(expandCatalogEntry))
+            .catch(error => {
+                this.#catalogPromise = null;
+                throw error;
+            });
+        return waitForAbort(this.#catalogPromise, signal);
     }
 
     dispose(): void {

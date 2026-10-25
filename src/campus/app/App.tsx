@@ -14,30 +14,35 @@ import { PAGE_IDENTITIES } from '@/app/seo/pageSeo';
 import { TeachingScheduleClient } from '@/timetable/model/TeachingScheduleClient';
 import { ClassroomAvailabilityClient } from '@/classrooms/model/ClassroomAvailabilityClient';
 import { TimetableLanding } from '@/timetable/TimetableLanding';
-import { ClassroomsLanding } from '@/classrooms/ClassroomsLanding';
 import { searchScopeForRoute } from '@/search/searchScopes';
+import { usePreferences } from '@/shared/lib/usePreferences';
 
 const loadSearchPage = () => import('@/search/SearchPage').then(module => ({ default: module.SearchPage }));
 const loadExamPage = () => import('@/exams/ExamPage').then(module => ({ default: module.ExamPage }));
 const loadTimetablePage = () => import('@/timetable/TimetablePage').then(module => ({ default: module.TimetablePage }));
-const loadClassroomsPage = () => import('@/classrooms/ClassroomsPage').then(module => ({ default: module.ClassroomsPage }));
+const loadClassroomsPage = () => import('@/classrooms/ClassroomsView').then(module => ({ default: module.ClassroomsView }));
 const SearchPage = lazy(loadSearchPage);
 const ExamPage = lazy(loadExamPage);
 const TimetablePage = lazy(loadTimetablePage);
-const ClassroomsPage = lazy(loadClassroomsPage);
+const ClassroomsView = lazy(loadClassroomsPage);
 
 function RouteLoading() {
     return (
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-6 pb-8">
-            <div className="rounded-xl border border-[#dadce0] bg-white px-4 py-6 text-[14px] text-[#5f6368] dark:border-[#323a44] dark:bg-[#14181d] dark:text-[#aeb8c5]">
-                正在打开页面…
-            </div>
+            <div className="h-24 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#1c232b]" aria-busy="true" aria-label="正在打开页面" />
+            <div className="mt-4 h-[420px] animate-pulse rounded-2xl bg-[#f8f9fa] dark:bg-[#1c232b]" />
         </main>
     );
 }
 
 function App({ initialRoute }: { initialRoute: AppRoute }) {
     const router = useAppRouter(initialRoute);
+    const { prefs, ready } = usePreferences();
+    const myClass = prefs.class ?? null;
+    // The address and saved settings are applied now; show the page.
+    useEffect(() => {
+        if (ready) delete document.documentElement.dataset.campusPending;
+    }, [ready]);
     useSiteHeaderSearch(router.route, router.inputValue, router.onInputChange, router.onSubmit);
     // A search typed into the site header on any other page arrives as /search/?q=…
     useEffect(() => {
@@ -157,9 +162,9 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
                 ) : null}
 
                 {router.route === 'exam' ? (
-                    !router.exam.query && !router.exam.className ? (
+                    !router.exam.query && !router.exam.className && !myClass ? (
                         <ExamLanding
-                            savedClass={router.exam.savedClass}
+                            savedClass={myClass}
                             onSubmit={router.onSubmit}
                             onOpenClass={(className) => router.onSubmit(className)}
                             client={examClient}
@@ -168,7 +173,7 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
                     ) : (
                         <ExamPage
                             query={router.exam.query}
-                            className={router.exam.className}
+                            className={router.exam.className ?? (router.exam.query ? null : myClass)}
                             onOpenClass={(className) => router.onSubmit(className)}
                             client={examClient}
                             historyClient={examHistoryClient}
@@ -177,17 +182,18 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
                 ) : null}
 
                 {router.route === 'timetable' ? (
-                    !router.timetable.className ? (
+                    !router.timetable.className && !myClass ? (
                         <TimetableLanding
                             client={teachingClient}
-                            savedClass={router.timetable.savedClass}
+                            savedClass={myClass}
                             initialQuery={router.timetable.query}
                             onOpenClass={(className) => router.navigateTimetable({ class: className, week: null })}
                         />
                     ) : (
                         <TimetablePage
-                            className={router.timetable.className}
+                            className={router.timetable.className ?? myClass ?? ''}
                             week={router.timetable.week}
+                            courseQuery={router.timetable.query}
                             client={teachingClient}
                             onChange={router.navigateTimetable}
                         />
@@ -195,23 +201,12 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
                 ) : null}
 
                 {router.route === 'classrooms' ? (
-                    (!router.classrooms.date && (!router.classrooms.week || !router.classrooms.weekday)) || !router.classrooms.period ? (
-                        <ClassroomsLanding client={classroomClient} onChange={router.navigateClassrooms} query={router.classrooms.query} recentQuery={router.classrooms.savedQuery} />
-                    ) : (
-                        <ClassroomsPage
-                            date={router.classrooms.date}
-                            week={router.classrooms.week}
-                            weekday={router.classrooms.weekday}
-                            period={router.classrooms.period}
-                            campus={router.classrooms.campus}
-                            building={router.classrooms.building}
-                            floor={router.classrooms.floor}
-                            room={router.classrooms.room}
-                            query={router.classrooms.query}
-                            client={classroomClient}
-                            onChange={router.navigateClassrooms}
-                        />
-                    )
+                    <ClassroomsView
+                        {...router.classrooms}
+                        filter={router.inputValue}
+                        client={classroomClient}
+                        onChange={router.navigateClassrooms}
+                    />
                 ) : null}
             </Suspense>
 

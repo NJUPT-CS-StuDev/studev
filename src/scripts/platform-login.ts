@@ -14,6 +14,7 @@ function resetLoginFactor() {
 }
 function showTab(name: string) { resetLoginFactor(); login.hidden = name !== 'login'; register.hidden = name !== 'register'; document.querySelectorAll<HTMLButtonElement>('[data-auth-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.authTab === name))); message(status); }
 document.querySelectorAll<HTMLButtonElement>('[data-auth-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.authTab || 'login')));
+if (new URLSearchParams(location.search).get('tab') === 'register') showTab('register');
 q<HTMLInputElement>('#login-student-id').addEventListener('input', resetLoginFactor);
 q<HTMLInputElement>('#login-student-id').addEventListener('change', resetLoginFactor);
 let qqPreviewTimer = 0;

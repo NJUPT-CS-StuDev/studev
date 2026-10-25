@@ -1296,3 +1296,7 @@ html[data-theme='dark'] .filter-tag-btn.active {
   .home-terminal, .terminal-link-pill, .project-btn, .member { transition: none; }
   .skeleton-circle, .skeleton-line { animation: none; }
 }
+
+/* Member links appear in the first frame for people signed in on this browser. */
+.site-nav [data-member-link][hidden] { display: none; }
+html[data-member] .site-nav [data-member-link][hidden] { display: inline-flex; }

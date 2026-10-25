@@ -214,10 +214,10 @@ test('homepage exposes the Baidu and Bing ownership verifications in its head', 
 });
 
 test('stable sitemap files revalidate without changing other asset headers', async () => {
-  assert.ok(existsSync('public/edgeone.json'), 'deployment configuration must live with static deployment inputs');
+  assert.ok(existsSync('edgeone.json'), 'EdgeOne reads its configuration from the project root');
   assert.ok(existsSync(join(output, 'edgeone.json')), 'raw dist deployment must include the cache policy');
-  assert.ok(!existsSync('edgeone.json'), 'keep a single source for deployment configuration');
-  const sourceConfig = await readFile('public/edgeone.json', 'utf8');
+  assert.ok(!existsSync('public/edgeone.json'), 'keep a single source for deployment configuration');
+  const sourceConfig = await readFile('edgeone.json', 'utf8');
   const builtConfig = await readFile(join(output, 'edgeone.json'), 'utf8');
   assert.equal(builtConfig, sourceConfig, 'Astro must copy the deployment configuration unchanged');
   const config = JSON.parse(builtConfig);
@@ -228,5 +228,5 @@ test('stable sitemap files revalidate without changing other asset headers', asy
   assert.match(cache, /(?:^|,\s*)must-revalidate(?:,|$)/);
   assert.doesNotMatch(cache, /immutable/);
   const cacheRules = config.headers.filter((rule) => rule.headers.some((header) => header.key.toLowerCase() === 'cache-control'));
-  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/**/*'].includes(rule.source)), 'only sitemaps and versioned data/build assets may receive a cache override');
+  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/*'].includes(rule.source)), 'only sitemaps and versioned data/build assets may receive a cache override');
 });

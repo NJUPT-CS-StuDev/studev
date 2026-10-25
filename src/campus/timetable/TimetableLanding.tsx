@@ -1,7 +1,12 @@
 import { CalendarRange } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProductLandingCard } from '@/shared/ui/ProductLandingCard';
+import { termKey, timetableEdits, updateTimetableEdits } from '@/shared/lib/preferences';
+import { usePreferences } from '@/shared/lib/usePreferences';
 import type { TeachingScheduleClient } from './model/TeachingScheduleClient';
+import { searchCatalog, type CatalogCourse } from './model/courseCatalog';
+import { CourseResults } from './ui/CourseResults';
+import './timetable.css';
 
 interface TimetableLandingProps {
     client: TeachingScheduleClient;
@@ -12,9 +17,25 @@ interface TimetableLandingProps {
 
 export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery = '' }: TimetableLandingProps) {
     const [query, setQuery] = useState(initialQuery);
+    useEffect(() => setQuery(initialQuery), [initialQuery]);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     const visibleSuggestions = query.trim().length >= 2 ? suggestions : [];
+    const [catalog, setCatalog] = useState<{ term: string; courses: CatalogCourse[] } | null>(null);
+    const { prefs } = usePreferences();
+    // Anything that is not a class number searches courses as well.
+    const courseQuery = query.trim().length >= 2 && !/^[A-Za-z]\d{2,}/.test(query.trim()) ? query.trim() : '';
+
+    useEffect(() => {
+        if (!courseQuery || catalog) return;
+        const controller = new AbortController();
+        Promise.all([client.initialize(controller.signal), client.loadCatalog(controller.signal)])
+            .then(([index, courses]) => setCatalog({ term: termKey(index.term.academic_year, index.term.term_number), courses }))
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, [catalog, client, courseQuery]);
+    const courses = useMemo(() => catalog && courseQuery ? searchCatalog(catalog.courses, courseQuery, 30) : [], [catalog, courseQuery]);
+    const added = useMemo(() => new Set(catalog ? timetableEdits(prefs, catalog.term).added : []), [catalog, prefs]);
 
     useEffect(() => {
         if (query.trim().length < 2) return;
@@ -80,6 +101,19 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
                     </button>
                 </div>
             </ProductLandingCard>
+            {courseQuery ? (
+                <section className="mx-auto mt-8 max-w-[760px]" aria-label="课程搜索结果">
+                    <h2 className="mb-3 text-[15px] font-semibold">课程「{courseQuery}」{catalog ? `· ${courses.length} 个教学班` : ' · 正在加载全校课程…'}</h2>
+                    {catalog && !courses.length ? <p className="text-sm text-[#5f6368] dark:text-[#aeb8c5]">没有匹配的课程。</p> : null}
+                    {catalog ? <p className="mb-3 text-[13px] text-[#5f6368] dark:text-[#aeb8c5]">加入的课程会出现在你的课表里{prefs.class ? `（${prefs.class}）` : '；先打开你的班级课表，它就会成为你的课表'}。</p> : null}
+                    <CourseResults
+                        courses={courses}
+                        inTimetable={added}
+                        onAdd={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: [...edits.added, course.id] }))}
+                        onRemove={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: edits.added.filter(id => id !== course.id) }))}
+                    />
+                </section>
+            ) : null}
         </main>
     );
 }

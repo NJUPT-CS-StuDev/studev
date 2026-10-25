@@ -48,6 +48,18 @@ export function ExamDetail({
     const allSelected = exams.length > 0 && selectedIds.size === exams.length;
     const noneSelected = selectedIds.size === 0;
     const sourceTime = sourceUpdatedAt;
+    // Exams taken by only a few of the class (retakes and makeups) are listed apart.
+    const largest = Math.max(0, ...exams.map(exam => exam.count || 0));
+    const isMinority = (exam: Exam) => largest >= 6 && (exam.count || 0) * 2 < largest;
+    const classExams = exams.filter(exam => !isMinority(exam));
+    const fewExams = exams.filter(isMinority);
+    const now = new Date().toISOString();
+    const allPast = exams.length > 0 && exams.every(exam => exam.end_timestamp && new Date(exam.end_timestamp).toISOString() < now);
+    const card = (exam: Exam, idx: number, list: Exam[]) => (
+        <div key={exam.id || idx} className={idx !== list.length - 1 ? 'border-b border-[#dadce0] dark:border-[#323a44]' : ''}>
+            <ExamCard exam={exam} isSelected={selectedIds.has(exam.id)} exportStatus={getExamStatus(exam)} onToggle={() => onToggleSelection(exam.id)} />
+        </div>
+    );
 
     const showErrorNotice = (nextNotice: NonNullable<Notice>) => {
         setNotice(nextNotice);
@@ -165,6 +177,12 @@ export function ExamDetail({
                 </button>
             </div>
 
+            {allPast ? (
+                <div className="mb-4 rounded-xl border border-[#fde293] bg-[#fef7e0] px-4 py-3 text-[14px] leading-relaxed text-[#7a4f01] dark:border-[#5c4a14] dark:bg-[#2b2410] dark:text-[#fdd663]">
+                    这些考试都已结束{sourceTitle ? `（${sourceTitle.replace(/^【[^】]*】/, '')}）` : ''}。本学期的考试安排公布后，这里会自动更新。
+                </div>
+            ) : null}
+
             {notice ? (
                 <div className="mb-4 rounded-md border border-[#f4c7c3] bg-[#fce8e6] px-4 py-2 text-sm text-[#b3261e] dark:border-[#5f2b26] dark:bg-[#2b1715] dark:text-[#f28b82]">
                     {notice.message}
@@ -176,17 +194,19 @@ export function ExamDetail({
             </Suspense>
 
             <div className="space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
-                {exams.map((exam, idx) => (
-                    <div key={exam.id || idx} className={idx !== exams.length - 1 ? "border-b border-[#dadce0] dark:border-[#323a44]" : ""}>
-                        <ExamCard
-                            exam={exam}
-                            isSelected={selectedIds.has(exam.id)}
-                            exportStatus={getExamStatus(exam)}
-                            onToggle={() => onToggleSelection(exam.id)}
-                        />
-                    </div>
-                ))}
+                {classExams.map((exam, idx) => card(exam, idx, classExams))}
             </div>
+
+            {fewExams.length ? (
+                <details className="mt-5 group">
+                    <summary className="cursor-pointer select-none text-[14px] font-medium text-[#1a73e8] dark:text-[#8ab4f8]">
+                        只有少数同学参加的考试（重修、补考等）· {fewExams.length} 门
+                    </summary>
+                    <div className="mt-3 space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
+                        {fewExams.map((exam, idx) => card(exam, idx, fewExams))}
+                    </div>
+                </details>
+            ) : null}
 
         </div>
     );

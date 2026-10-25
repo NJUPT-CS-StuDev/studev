@@ -19,8 +19,8 @@ export interface QuickSearchPreset {
 }
 
 export const QUICK_SEARCHES: QuickSearchPreset[] = [
-    { label: '班级课表', icon: 'timetable', intent: { kind: 'timetable' }, group: '教务查询' },
-    { label: '教室', icon: 'classrooms', intent: { kind: 'classrooms' }, group: '教务查询' },
+    { label: '课表', icon: 'timetable', intent: { kind: 'timetable' }, group: '教务查询' },
+    { label: '空教室', icon: 'classrooms', intent: { kind: 'classrooms' }, group: '教务查询' },
     { label: '考试安排', icon: 'calendar', intent: { kind: 'exam' }, group: '教务查询' },
     { label: '校历', icon: 'calendar', intent: { kind: 'search', query: '校历' }, group: '网站搜索' },
     { label: '四六级', icon: 'file-text', intent: { kind: 'search', query: '四六级' }, group: '网站搜索' },

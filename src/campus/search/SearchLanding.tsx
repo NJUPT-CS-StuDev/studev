@@ -1,3 +1,4 @@
+import { buildPath } from '@/app/routing/useUrlState';
 import { Globe2, LibraryBig, MessagesSquare } from 'lucide-react';
 import { ProductLandingCard } from '@/shared/ui/ProductLandingCard';
 import type { SearchScope } from './searchScopes';
@@ -24,7 +25,7 @@ export function SearchLanding({ scope = SEARCH_SCOPES.search, onSearch }: Search
                         {scope.quickQueries.map(query => (
                             <a
                                 key={query}
-                                href={`/${scope.route}?q=${encodeURIComponent(query)}`}
+                                href={buildPath({ route: scope.route, params: { q: query } })}
                                 onClick={event => {
                                     if (!onSearch) return;
                                     event.preventDefault();

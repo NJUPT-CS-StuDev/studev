@@ -12,5 +12,18 @@ const { route } = Astro.props;
 const page = PAGE_IDENTITIES[route];
 ---
 <SiteLayout title={`${page.title} — StuDev`} description={page.description} active="search">
+  <script is:inline define:vars={{ route }}>
+    // The page was rendered for the bare route. When the address or the visitor's
+    // saved class asks for something else, hide that render until the app has
+    // read them, instead of flashing the wrong page (the app clears this; the
+    // timer is a fallback if scripts fail).
+    try {
+      const saved = JSON.parse(localStorage.getItem('studev_prefs') || '{}');
+      if (location.search.length > 1 || ((route === 'timetable' || route === 'exam') && saved.class)) {
+        document.documentElement.dataset.campusPending = '';
+        setTimeout(() => delete document.documentElement.dataset.campusPending, 4000);
+      }
+    } catch { /* Storage may be unavailable. */ }
+  </script>
   <CampusApp client:load route={route} />
 </SiteLayout>

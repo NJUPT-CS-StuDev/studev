@@ -5,7 +5,7 @@ import type { ExamSnapshotClient } from '@/exams/model/ExamSnapshotClient';
 import type { ExamHistoryClient } from '@/exams/model/ExamHistoryClient';
 import { TimetableLanding } from '@/timetable/TimetableLanding';
 import type { TeachingScheduleClient } from '@/timetable/model/TeachingScheduleClient';
-import { ClassroomsLanding } from '@/classrooms/ClassroomsLanding';
+import { ClassroomsView } from '@/classrooms/ClassroomsView';
 import type { ClassroomAvailabilityClient } from '@/classrooms/model/ClassroomAvailabilityClient';
 import { SearchLanding } from '@/search/SearchLanding';
 import { SEARCH_SCOPES } from '@/search/searchScopes';
@@ -38,12 +38,16 @@ describe('product landing shells', () => {
         expect(html).toContain('试一试');
     });
 
-    it('renders the classroom hierarchy shell without waiting for occupancy data', () => {
-        const html = renderToStaticMarkup(<ClassroomsLanding client={{ initialize: () => new Promise<never>(() => undefined) } as unknown as ClassroomAvailabilityClient} onChange={() => undefined} />);
-        expect(html).toContain('>教室<');
-        expect(html).not.toContain('不提前加载');
-        expect(html).not.toContain('逐级浏览');
-        expect(html).not.toContain('一定空闲');
+    it('renders the classroom view as a loading state before the room index arrives', () => {
+        const html = renderToStaticMarkup(
+            <ClassroomsView
+                client={{ initialize: () => new Promise<never>(() => undefined) } as unknown as ClassroomAvailabilityClient}
+                campus={null} date={null} week={null} weekday={null} period={null} until={null} room={null} building={null}
+                filter=""
+                onChange={() => undefined}
+            />,
+        );
+        expect(html).toContain('aria-busy="true"');
     });
 
     it('renders distinct community and materials search landings', () => {
@@ -52,12 +56,12 @@ describe('product landing shells', () => {
         expect(community).toContain('南邮社区搜索');
         expect(community).toContain('南邮生存手册');
         expect(community).toContain('NJUPT-NAVI/NJUPT-Survival-Guide');
-        expect(community).toContain('/community?q=%E6%A0%A1%E5%9B%AD%E7%BD%91');
+        expect(community).toContain('/search/community/?q=%E6%A0%A1%E5%9B%AD%E7%BD%91');
         expect(community).toContain('开发环境');
         expect(materials).toContain('南邮资料搜索');
         expect(materials).toContain('历年试卷');
         expect(materials).toContain('NJUPTFreeExams/NJUPT-General-Free-Exams');
-        expect(materials).toContain('/materials?q=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6');
+        expect(materials).toContain('/search/materials/?q=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6');
         expect(materials).toContain('数据结构');
     });
 });

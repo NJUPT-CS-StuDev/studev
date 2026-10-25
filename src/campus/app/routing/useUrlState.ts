@@ -15,6 +15,7 @@ export interface UrlState {
     weekParam: string | null;
     weekdayParam: string | null;
     periodParam: string | null;
+    untilParam: string | null;
 }
 
 export interface NavigateOptions {
@@ -55,6 +56,7 @@ export const parseUrlState = (pathname: string, search: string): UrlState => {
         weekParam: params.get('week') || null,
         weekdayParam: params.get('weekday') || null,
         periodParam: params.get('period') || null,
+        untilParam: params.get('until') || null,
     };
 };
 

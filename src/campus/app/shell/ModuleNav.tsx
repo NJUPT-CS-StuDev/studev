@@ -5,8 +5,8 @@ const MODULES: Array<{ route: Exclude<AppRoute, 'home'>; label: string }> = [
     { route: 'search', label: '校内通知' },
     { route: 'community', label: '生存手册' },
     { route: 'materials', label: '历年资料' },
-    { route: 'timetable', label: '班级课表' },
-    { route: 'classrooms', label: '教室拓扑' },
+    { route: 'timetable', label: '课表' },
+    { route: 'classrooms', label: '空教室' },
     { route: 'exam', label: '考试安排' },
 ];
 

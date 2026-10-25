@@ -219,7 +219,28 @@ async function main() {
             meetings: own.map(meetingView),
         });
     }
-    console.log('timetable', teachingTerm, classes.length, 'classes');
+    // Every teaching class of the term, for course search: retakes and electives a
+    // class timetable does not list. Fields shared by a teaching class are written
+    // once; each meeting is [id, weekday, first period, last period, weeks, location, room, teacher, title, role].
+    const byTeachingClass = new Map<string, Meeting[]>();
+    for (const m of meetings) {
+        const key = m.teaching_class.id ?? m.id;
+        byTeachingClass.set(key, [...(byTeachingClass.get(key) ?? []), m]);
+    }
+    await write(join(out, 'timetable', 'courses.json'), {
+        observed_at: term.observed_at,
+        courses: [...byTeachingClass].map(([id, list]) => {
+            const { meeting_id: _id, teacher: _teacher, teacher_title: _title, instructor_role: _role, room_id: _room, location: _location,
+                weekday: _weekday, start_period: _start, end_period: _end, week_numbers: _weeks,
+                course_total_hours: _total, ...shared } = meetingView(list[0] as Meeting);
+            return {
+                ...Object.fromEntries(Object.entries(shared).filter(([, value]) => value !== null)),
+                teaching_class_id: id,
+                meetings: list.map(m => [m.id, m.weekday, m.periods[0], m.periods[1], m.weeks, m.location, m.room, m.teacher, m.teacher_title, m.role]),
+            };
+        }),
+    });
+    console.log('timetable', teachingTerm, classes.length, 'classes', byTeachingClass.size, 'teaching classes');
 
     // Exams of the latest published term.
     const examTerm = index.exams.at(-1);

@@ -2,27 +2,86 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import '../styles/platform.css';
 ---
-<SiteLayout title="账号与组织成员 — StuDev" active="account" noindex={true}>
-  <script is:inline>
-    try {
-      if (!localStorage.getItem('studev_auth_user')) {
-        location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
-      }
-    } catch {}
-  </script>
+<SiteLayout title="Account — StuDev" active="account" noindex={true}>
   <div class="platform" data-account-shell>
-    <nav class="p-nav" aria-label="账号与组织导航">
+    <nav class="p-nav" aria-label="账号与组织导航" data-member-only hidden>
       <div class="p-nav-group" role="tablist">
-        <button type="button" role="tab" aria-selected="true" data-account-tab="profile">我的账号</button>
-        <button type="button" role="tab" aria-selected="false" data-account-tab="members">组织成员</button>
+        <button type="button" role="tab" aria-selected="true" data-account-tab="settings">设置</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="profile" data-member-only hidden>我的账号</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="members" data-member-only hidden>组织成员</button>
         <button type="button" role="tab" aria-selected="false" data-account-tab="audit" data-owner-only hidden>操作记录</button>
       </div>
     </nav>
-    <div class="p-message" role="status" aria-live="polite" data-account-status>正在读取账号……</div>
+    <section data-account-panel="settings">
+      <header class="p-heading">
+        <div>
+          <h1>设置</h1>
+          <p class="p-muted">只保存在这台设备的浏览器里，不需要登录。</p>
+        </div>
+      </header>
+      <div class="p-grid">
+        <section class="p-card">
+          <h2>我的课表与考试</h2>
+          <form data-settings-form>
+            <div class="p-field">
+              <label for="settings-class">我的班级</label>
+              <input id="settings-class" name="class" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="例如 B240402" pattern="[A-Za-z][0-9]{6}(\([A-Za-z]{2}\))?" />
+              <p class="p-help">打开「课表」「考试安排」时直接显示这个班级。</p>
+            </div>
+            <div class="p-field">
+              <label for="settings-campus">常用校区</label>
+              <select id="settings-campus" name="campus">
+                <option value="">自动（仙林）</option>
+                <option value="仙林">仙林</option>
+                <option value="三牌楼">三牌楼</option>
+                <option value="锁金">锁金</option>
+              </select>
+              <p class="p-help">「空教室」默认显示这个校区。</p>
+            </div>
+            <button class="p-button" type="submit">保存</button>
+          </form>
+          <div data-settings-edits hidden>
+            <hr class="p-divider" />
+            <h3>课表调整</h3>
+            <ul class="p-settings-edits" data-settings-edit-list></ul>
+          </div>
+        </section>
+        <section class="p-card">
+          <h2>外观</h2>
+          <fieldset class="p-field p-settings-theme">
+            <legend>主题</legend>
+            <label><input type="radio" name="theme" value="system" /> 跟随系统</label>
+            <label><input type="radio" name="theme" value="light" /> 浅色</label>
+            <label><input type="radio" name="theme" value="dark" /> 深色</label>
+          </fieldset>
+          <hr class="p-divider" />
+          <h2>账号</h2>
+          <div data-settings-guest>
+            <p class="p-muted">登录后可以填写中心表单、查看自己的提交；中心成员还可以管理表单与成员名录。</p>
+            <div class="p-actions" style="margin-top:16px">
+              <a class="p-button" href="/login/?next=%2Faccount%2F%3Ftab%3Dprofile">登录</a>
+              <a class="p-button secondary" href="/login/?tab=register&amp;next=%2Faccount%2F%3Ftab%3Dprofile">注册账号</a>
+            </div>
+          </div>
+          <div data-settings-member hidden>
+            <p class="p-muted" data-settings-member-text></p>
+            <div class="p-actions" style="margin-top:16px">
+              <a class="p-button secondary" href="/forms/">表单</a>
+              <a class="p-button secondary" href="/submissions/">我的提交</a>
+            </div>
+          </div>
+          <hr class="p-divider" />
+          <button class="p-button secondary small" type="button" data-settings-clear>清除本机设置</button>
+        </section>
+      </div>
+      <p class="p-message" role="status" aria-live="polite" data-settings-status></p>
+    </section>
+
+    <div class="p-message" role="status" aria-live="polite" data-account-status hidden></div>
     <div data-account-content hidden>
       <div class="p-message" data-account-required hidden></div>
 
-      <div data-account-panel="profile">
+      <div data-account-panel="profile" hidden>
         <header class="p-heading">
           <div>
             <h1>我的账号</h1>
@@ -251,4 +310,5 @@ import '../styles/platform.css';
   </dialog>
 
   <script>import '../scripts/platform-account';</script>
+  <script>import '../scripts/account-settings';</script>
 </SiteLayout>

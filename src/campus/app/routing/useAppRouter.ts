@@ -1,50 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { readPreferences, writePreferences } from '@/shared/lib/preferences';
 import { useUrlState } from './useUrlState';
 import type { AppRoute } from './useUrlState';
 import type { ProductIntent } from './intents';
 import {
-    parseSavedClass,
     resolveQuickIntent,
     resolveRouteSubmission,
     resolveSubmission,
 } from './routeContract';
 
-const SAVED_CLASS_KEY = 'SAVED_CLASS';
-const SAVED_TIMETABLE_CLASS_KEY = 'SAVED_TIMETABLE_CLASS';
-const SAVED_CLASSROOM_QUERY_KEY = 'SAVED_CLASSROOM_QUERY';
-
-const CLASSROOM_QUERY_KEYS = ['date', 'week', 'weekday', 'period', 'campus', 'building', 'floor', 'room'] as const;
-export type SavedClassroomQuery = Partial<Record<(typeof CLASSROOM_QUERY_KEYS)[number], string>>;
-
-export const parseSavedClassroomQuery = (raw: string | null): SavedClassroomQuery | null => {
-    if (!raw) return null;
-    try {
-        const value = JSON.parse(raw) as unknown;
-        if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-        const record = value as Record<string, unknown>;
-        if (Object.keys(record).some(key => !CLASSROOM_QUERY_KEYS.includes(key as (typeof CLASSROOM_QUERY_KEYS)[number]))) return null;
-        const result = Object.fromEntries(
-            CLASSROOM_QUERY_KEYS.flatMap(key => typeof record[key] === 'string' && record[key] ? [[key, record[key]]] : []),
-        ) as SavedClassroomQuery;
-        return result.campus ? result : null;
-    } catch {
-        return null;
-    }
-};
-
-const readStorage = (key: string): string | null => {
-    try {
-        return localStorage.getItem(key);
-    } catch {
-        return null;
-    }
-};
+const number = (value: string | null, pattern = /^\d+$/): number | null => value && pattern.test(value) ? Number(value) : null;
 
 export function useAppRouter(initialRoute: AppRoute) {
     const url = useUrlState(initialRoute);
-    // Saved choices live in the browser; they are read after mount so server and client renders agree.
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
     const {
         route,
         qParam,
@@ -52,58 +20,47 @@ export function useAppRouter(initialRoute: AppRoute) {
         dateParam,
         campusParam,
         buildingParam,
-        floorParam,
         roomParam,
         weekParam,
         weekdayParam,
         periodParam,
+        untilParam,
         navigate,
     } = url;
     const routeInput = useMemo(() => {
         if (route === 'exam') return classParam || qParam || '';
-        if (route === 'timetable') return classParam || qParam || '';
-        if (route === 'search' || route === 'community' || route === 'materials') return qParam || '';
-        if (route === 'classrooms') return qParam || buildingParam || floorParam || '';
+        if (route === 'timetable') return qParam || classParam || '';
+        if (route === 'search' || route === 'community' || route === 'materials' || route === 'classrooms') return qParam || '';
         return '';
-    }, [buildingParam, classParam, floorParam, qParam, route]);
+    }, [classParam, qParam, route]);
     const [inputDraft, setInputDraft] = useState(() => ({ routeInput, value: routeInput }));
     const inputValue = inputDraft.routeInput === routeInput ? inputDraft.value : routeInput;
     const onInputChange = useCallback((value: string) => {
         setInputDraft({ routeInput, value });
     }, [routeInput]);
-    const savedClass = mounted ? parseSavedClass(readStorage(SAVED_CLASS_KEY)) : null;
-    const savedTimetableClass = mounted ? parseSavedClass(readStorage(SAVED_TIMETABLE_CLASS_KEY)) : null;
-    const savedClassroomQuery = mounted ? parseSavedClassroomQuery(readStorage(SAVED_CLASSROOM_QUERY_KEY)) : null;
 
     const submit = useCallback((value: string, replace = false) => {
-        const destination = route === 'home' ? resolveSubmission(value) : resolveRouteSubmission(route, value);
-        const className = destination.route === 'exam' || destination.route === 'timetable'
-            ? destination.params?.class
-            : null;
-        if (className) {
-            localStorage.setItem(
-                destination.route === 'timetable' ? SAVED_TIMETABLE_CLASS_KEY : SAVED_CLASS_KEY,
-                className,
-            );
+        const resolved = route === 'home' ? resolveSubmission(value) : resolveRouteSubmission(route, value);
+        // A course typed while a timetable is open searches courses for that timetable.
+        const destination = route === 'timetable' && classParam && resolved.params?.q
+            ? { ...resolved, params: { class: classParam, week: weekParam, q: resolved.params.q } }
+            : resolved;
+        // The first class someone looks up becomes their class.
+        const className = destination.params?.class;
+        if (className && (destination.route === 'exam' || destination.route === 'timetable') && !readPreferences().class) {
+            writePreferences(current => ({ ...current, class: className }));
         }
         navigate(destination, replace);
-    }, [navigate, route]);
+    }, [classParam, navigate, route, weekParam]);
 
     const quickSearch = useCallback((intent: ProductIntent) => {
         navigate(resolveQuickIntent(intent));
     }, [navigate]);
 
     const navigateTimetable = useCallback((params: Record<string, string | null>, replace = false) => {
-        if (params.class) localStorage.setItem(SAVED_TIMETABLE_CLASS_KEY, params.class);
         navigate({ route: 'timetable', params }, replace);
     }, [navigate]);
     const navigateClassrooms = useCallback((params: Record<string, string | null>, replace = false) => {
-        if (params.campus) {
-            const saved = Object.fromEntries(
-                CLASSROOM_QUERY_KEYS.flatMap(key => typeof params[key] === 'string' && params[key] ? [[key, params[key]]] : []),
-            );
-            localStorage.setItem(SAVED_CLASSROOM_QUERY_KEY, JSON.stringify(saved));
-        }
         navigate({ route: 'classrooms', params }, replace);
     }, [navigate]);
     const navigateSearchScope = useCallback((nextRoute: 'search' | 'community' | 'materials') => {
@@ -120,24 +77,21 @@ export function useAppRouter(initialRoute: AppRoute) {
         onGoHome: () => navigate({ route: 'home' }),
         onNavigateRoute: (next: AppRoute) => navigate({ route: next }),
         search: { query: qParam || '' },
-        exam: { query: qParam || '', className: classParam, savedClass },
+        exam: { query: qParam || '', className: classParam },
         timetable: {
             query: qParam || '',
             className: classParam,
-            week: weekParam && /^\d+$/.test(weekParam) ? Number(weekParam) : null,
-            savedClass: savedTimetableClass,
+            week: number(weekParam),
         },
         classrooms: {
-            query: qParam || '',
-            date: dateParam,
-            week: weekParam && /^\d+$/.test(weekParam) ? Number(weekParam) : null,
-            weekday: weekdayParam && /^[1-7]$/.test(weekdayParam) ? Number(weekdayParam) : null,
-            period: periodParam && /^\d+$/.test(periodParam) ? Number(periodParam) : null,
             campus: campusParam,
-            building: buildingParam,
-            floor: floorParam,
+            date: dateParam,
+            week: number(weekParam),
+            weekday: number(weekdayParam, /^[1-7]$/),
+            period: number(periodParam),
+            until: number(untilParam),
             room: roomParam,
-            savedQuery: savedClassroomQuery,
+            building: buildingParam,
         },
         navigateTimetable,
         navigateClassrooms,
