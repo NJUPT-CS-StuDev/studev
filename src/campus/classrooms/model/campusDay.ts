@@ -124,20 +124,26 @@ export interface BuildingView {
 }
 
 const naturalCompare = (left: string, right: string) => left.localeCompare(right, 'zh-CN', { numeric: true });
+const buildingRank = (name: string) => /其他场地$/.test(name) ? 2 : /^教/.test(name) ? 0 : 1;
 
-/** The rooms of a campus that can be borrowed for study, building by building, top floor first. */
-export const campusBuildings = (space: SpaceIndex, campus: string): BuildingView[] => space.buildings
+/**
+ * The rooms of a campus building by building, top floor first: classrooms, or
+ * with everything every place (labs, studios, sports grounds…). Rooms without a
+ * known floor come last.
+ */
+export const campusBuildings = (space: SpaceIndex, campus: string, everything = false): BuildingView[] => space.buildings
     .filter(building => building.campus_id === campus)
-    .sort((left, right) => naturalCompare(left.building_id, right.building_id))
+    // Teaching buildings first, then the rest, the campus's unplaced rooms last.
+    .sort((left, right) => buildingRank(left.building_id) - buildingRank(right.building_id) || naturalCompare(left.building_id, right.building_id))
     .map(building => {
         const rooms = space.families
-            .filter(room => room.building_id === building.building_id && room.availability_eligible === 'eligible')
+            .filter(room => room.building_id === building.building_id && (everything || room.availability_eligible === 'eligible'))
             .sort((left, right) => naturalCompare(left.room_number, right.room_number));
         const floors = space.floors
             .filter(floor => floor.building_id === building.building_id)
             .map(floor => ({ level: floor.level, rooms: rooms.filter(room => room.floor_id === floor.floor_id) }))
             .filter(floor => floor.rooms.length)
-            .sort((left, right) => naturalCompare(right.level, left.level));
+            .sort((left, right) => (left.level ? 0 : 1) - (right.level ? 0 : 1) || naturalCompare(right.level, left.level));
         return { id: building.building_id, floors, rooms };
     })
     .filter(building => building.rooms.length);

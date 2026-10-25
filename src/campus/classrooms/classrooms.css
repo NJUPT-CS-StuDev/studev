@@ -99,6 +99,7 @@
 .classrooms-room.is-free { border-color: var(--room-free-border); background: var(--room-free-bg); color: var(--room-free-fg); }
 .classrooms-room.is-exam { border-color: var(--room-exam-border); background: var(--room-exam-bg); color: var(--room-exam-fg); }
 .classrooms-room.is-loading { opacity: .5; }
+.classrooms-room.is-named { padding: 0 10px; font-size: 12px; white-space: nowrap; }
 .classrooms-empty, .classrooms-error { grid-column: 1 / -1; border: 1px dashed var(--line); border-radius: 16px; padding: 28px; color: var(--muted); text-align: center; }
 .classrooms-skeleton { height: 520px; border-radius: 18px; background: var(--surface-2); animation: classrooms-pulse 1.4s ease-in-out infinite; }
 @keyframes classrooms-pulse { 50% { opacity: .55; } }
@@ -158,6 +159,7 @@
     .classrooms-building { border-radius: 16px; padding: 12px 10px 10px; }
     .classrooms-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); }
     .classrooms-room { min-width: 0; height: 36px; }
+    .classrooms-room.is-named { grid-column: span 2; }
     .room-overlay { align-items: flex-end; }
     .room-drawer { width: 100%; height: min(78dvh, 680px); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 28px rgb(32 33 36 / 18%); animation: room-sheet-in 180ms ease-out; }
     @keyframes room-sheet-in { from { transform: translateY(100%); } }

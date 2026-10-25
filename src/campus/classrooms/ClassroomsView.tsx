@@ -116,7 +116,8 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
 
     const status = useMemo(() => day?.date === date ? dayStatus(day.file, periods) : null, [date, day, periods]);
     const [minSeats, setMinSeats] = useState(0);
-    const buildings = useMemo(() => index ? campusBuildings(index.space, campus) : [], [campus, index]);
+    const [everything, setEverything] = useState(false);
+    const buildings = useMemo(() => index ? campusBuildings(index.space, campus, everything) : [], [campus, everything, index]);
     const roomById = useMemo(() => new Map(index?.space.families.map(room => [room.space_family_id, room]) ?? []), [index]);
     const selectedRoom = roomParam ? roomById.get(roomParam) ?? null : null;
 
@@ -198,6 +199,13 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                         {freeCount !== null ? <> · <strong>{freeCount}</strong> / {visibleRooms.length} 间空闲</> : ' · 正在加载…'}
                         {query ? <> · 筛选「{query}」</> : null}
                     </p>
+                    <label>
+                        场地
+                        <select value={everything ? 'all' : 'classrooms'} onChange={event => setEverything(event.target.value === 'all')}>
+                            <option value="classrooms">教室</option>
+                            <option value="all">全部场地（含机房、实验室、运动场）</option>
+                        </select>
+                    </label>
                     {hasSeats || minSeats ? (
                         <label>
                             座位
@@ -226,7 +234,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                                     if (!floorRooms.length) return null;
                                     return (
                                         <div key={floor.level} className="classrooms-floor">
-                                            <span className="classrooms-level">{floor.level}F</span>
+                                            <span className="classrooms-level">{floor.level ? `${floor.level}F` : '其他'}</span>
                                             <div className="classrooms-rooms">
                                                 {floorRooms.map(room => {
                                                     const held = status ? occupantsAt(status, room.space_family_id, period) : [];
@@ -236,7 +244,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                                                     const why = held === 'other' ? OTHER : held.length ? held.map(occupantText).join('、') : `第${period}到${until}节之间有占用`;
                                                     const label = `${room.space_family_id}${room.seats ? `，${room.seats} 座` : ''}，${free === null ? '加载中' : free ? `空闲${run > 1 ? `，连续 ${run} 节` : ''}` : why}`;
                                                     return (
-                                                        <button key={room.space_family_id} type="button" className={`classrooms-room ${state} ${room.space_family_id === roomParam ? 'is-selected' : ''}`} onClick={event => openRoom(room, event.currentTarget)} aria-label={label} title={label}>
+                                                        <button key={room.space_family_id} type="button" className={`classrooms-room ${state} ${room.room_number.length > 5 ? 'is-named' : ''} ${room.space_family_id === roomParam ? 'is-selected' : ''}`} onClick={event => openRoom(room, event.currentTarget)} aria-label={label} title={label}>
                                                             {room.room_number}
                                                         </button>
                                                     );
@@ -300,7 +308,7 @@ function RoomDrawer({ room, campus, dateText, periods, status, selected, nowPeri
                 <div className="room-handle" aria-hidden="true" />
                 <header>
                     <div>
-                        <p>{campus} · {room.building_id} · {room.floor_id.split('/')[1]}楼{kinds ? ` · ${kinds}` : ''}{room.seats ? ` · ${room.seats} 座` : ''}</p>
+                        <p>{campus} · {room.building_id}{room.floor_id.split('/')[1] ? ` · ${room.floor_id.split('/')[1]}楼` : ''}{kinds ? ` · ${kinds}` : ''}{room.seats ? ` · ${room.seats} 座` : ''}</p>
                         <h2 id="room-title">{room.space_family_id}</h2>
                         <span>{dateText}</span>
                     </div>
