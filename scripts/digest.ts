@@ -45,15 +45,20 @@ interface ExamSource { file: string; url: string; notice: string; title: string 
 interface Room { id: string; building: string; floor: string; number: string; campus: string; kinds: string[]; names: string[]; listed?: boolean; seats?: number }
 interface FreeDay { date: string; observed_at: string; free: Record<string, string[]> }
 
+// campus-data is private: its latest release is read through the API with a token
+// that may read the repository (DATA_TOKEN in CI, the gh login locally).
+function dataToken(): string | undefined {
+    const gh = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' });
+    return process.env.DATA_TOKEN?.trim() || (gh.status === 0 ? gh.stdout.trim() : undefined);
+}
+
 async function locateData(): Promise<{ dir: string; version: string }> {
     const local = process.env.DATA_DIR;
     if (local) {
         const index = await read<Index>(join(local, 'index.json'));
         return { dir: local, version: `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}` };
     }
-    // campus-data is private: its latest release is read through the API with a token
-    // that may read the repository (DATA_TOKEN in CI, the gh login locally).
-    const token = process.env.DATA_TOKEN || spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' }).stdout?.trim();
+    const token = dataToken();
     if (!token) throw new Error('set DATA_TOKEN (or log in with gh) to read the campus-data releases');
     const api = (path: string, accept = 'application/vnd.github+json') =>
         fetch(`https://api.github.com/repos/${campusConfig.dataRepository}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: accept } });
@@ -190,6 +195,16 @@ function changeView(change: ChangeFact) {
 
 // ---- main -------------------------------------------------------------------
 async function main() {
+    // A build without access to campus-data (EdgeOne's builder rebuilds after the CI
+    // build) keeps the data this checkout already digested.
+    const releaseFile = join(root, 'src', 'data', 'campus-release.json');
+    if (!process.env.DATA_DIR && !dataToken() && existsSync(releaseFile)) {
+        const { version: digested } = await read<{ version: string }>(releaseFile);
+        if (existsSync(join(root, 'public', 'data', digested, 'timetable', 'index.json'))) {
+            console.log(`no access to campus-data; keeping the digested ${digested}`);
+            return;
+        }
+    }
     const { dir, version } = await locateData();
     const index = await read<Index>(join(dir, 'index.json'));
     const outRoot = join(root, 'public', 'data');
