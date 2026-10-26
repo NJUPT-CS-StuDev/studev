@@ -12,6 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
+      DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
     steps:
       - uses: actions/checkout@v6

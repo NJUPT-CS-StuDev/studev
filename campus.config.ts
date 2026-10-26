@@ -1,10 +1,8 @@
 // How studev digests NJUPT campus data. Acquisition and the meaning of the
-// data belong to campus-data; what the site builds from it is decided here.
+// data come from the data release; what the site builds from it is decided here.
 import type { Profile } from 'wasm-search';
 
 export const campusConfig = {
-    /** The campus-data repository whose latest release is digested. */
-    dataRepository: '<data-repository>',
 
     search: {
         /** Query knowledge shipped inside the search bundle. */

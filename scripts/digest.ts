@@ -1,4 +1,4 @@
-// Digest an campus-data release into what the site serves:
+// Digest a data release into what the site serves:
 //
 //   public/data/<version>/search/        wasm-search bundle
 //   public/data/<version>/timetable/     index.json + classes/<class>.json
@@ -6,9 +6,8 @@
 //   public/data/<version>/classrooms/    index.json + days/<date>.json
 //   src/data/campus-release.json         which version the pages use
 //
-// Input is the latest campus-data release (a private repository: DATA_TOKEN,
-// or the gh login, must be able to read it), or a local campus-data out/ directory
-// given as DATA_DIR.
+// Input is the latest release of the private repository named by DATA_REPOSITORY,
+// read with DATA_TOKEN (or the gh login), or a local data directory given as DATA_DIR.
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -25,7 +24,7 @@ const write = async (path: string, value: unknown) => {
     await writeFile(path, JSON.stringify(value));
 };
 
-// ---- campus-data facts -------------------------------------------------------
+// ---- facts of the data release -------------------------------------------------
 interface Index { built_at: string; content: string[]; teaching: string[]; exams: string[]; rooms?: string[] }
 interface Source { id: string; name: string; url: string; kind: string }
 interface Doc { id: string; url: string; title: string; text: string; published: string | null; updated: string | null; section: string | null; kind: 'page' | 'file' | 'link'; tags: string[]; files: { name: string; url: string; ext: string | null }[] }
@@ -45,11 +44,12 @@ interface ExamSource { file: string; url: string; notice: string; title: string 
 interface Room { id: string; building: string; floor: string; number: string; campus: string; kinds: string[]; names: string[]; listed?: boolean; seats?: number }
 interface FreeDay { date: string; observed_at: string; free: Record<string, string[]> }
 
-// campus-data is private: its latest release is read through the API with a token
-// that may read the repository (DATA_TOKEN in CI, the gh login locally).
+// The data repository is private: its latest release is read through the API with a
+// token that may read it (DATA_TOKEN in CI, the gh login locally).
 function dataToken(): string | undefined {
+    if (process.env.DATA_TOKEN?.trim()) return process.env.DATA_TOKEN.trim();
     const gh = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' });
-    return process.env.DATA_TOKEN?.trim() || (gh.status === 0 ? gh.stdout.trim() : undefined);
+    return gh.status === 0 ? gh.stdout.trim() : undefined;
 }
 
 async function locateData(): Promise<{ dir: string; version: string }> {
@@ -59,14 +59,16 @@ async function locateData(): Promise<{ dir: string; version: string }> {
         return { dir: local, version: `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}` };
     }
     const token = dataToken();
-    if (!token) throw new Error('set DATA_TOKEN (or log in with gh) to read the campus-data releases');
+    const repository = process.env.DATA_REPOSITORY?.trim();
+    if (!repository || !token) throw new Error('set DATA_REPOSITORY and DATA_TOKEN (or log in with gh) to read the data release');
     const api = (path: string, accept = 'application/vnd.github+json') =>
-        fetch(`https://api.github.com/repos/${campusConfig.dataRepository}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: accept } });
+        fetch(`https://api.github.com/repos/${repository}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: accept } });
     const latestResponse = await api('/releases/latest');
-    if (!latestResponse.ok) throw new Error(`reading the latest ${campusConfig.dataRepository} release: HTTP ${latestResponse.status}`);
+    if (!latestResponse.ok) throw new Error(`reading the latest data release: HTTP ${latestResponse.status}`);
     const latest = await latestResponse.json() as { tag_name: string; assets: { id: number; name: string }[] };
-    const asset = latest.assets.find(a => a.name === 'campus-data.tar.gz');
-    if (!asset) throw new Error(`no campus-data.tar.gz in the latest ${campusConfig.dataRepository} release`);
+    // The release carries the facts archive and an evidence archive; the facts are wanted.
+    const asset = latest.assets.find(a => a.name.endsWith('.tar.gz') && !a.name.startsWith('evidence'));
+    if (!asset) throw new Error('the latest data release has no facts archive');
     const version = latest.tag_name;
     const dir = join(root, '.data', version);
     if (!existsSync(join(dir, 'index.json'))) {
@@ -76,7 +78,7 @@ async function locateData(): Promise<{ dir: string; version: string }> {
         if (!download.ok) throw new Error(`downloading ${version}: HTTP ${download.status}`);
         await writeFile(archive, Buffer.from(await download.arrayBuffer()));
         const result = spawnSync('tar', ['-xzf', archive, '-C', dir], { stdio: 'inherit' });
-        if (result.status !== 0) throw new Error('could not extract the campus-data archive');
+        if (result.status !== 0) throw new Error('could not extract the data archive');
         await rm(archive);
     }
     return { dir, version };
@@ -195,13 +197,13 @@ function changeView(change: ChangeFact) {
 
 // ---- main -------------------------------------------------------------------
 async function main() {
-    // A build without access to campus-data (EdgeOne's builder rebuilds after the CI
+    // A build without access to the data release (EdgeOne's builder rebuilds after the CI
     // build) keeps the data this checkout already digested.
     const releaseFile = join(root, 'src', 'data', 'campus-release.json');
-    if (!process.env.DATA_DIR && !dataToken() && existsSync(releaseFile)) {
+    if (!process.env.DATA_DIR && !(process.env.DATA_REPOSITORY && dataToken()) && existsSync(releaseFile)) {
         const { version: digested } = await read<{ version: string }>(releaseFile);
         if (existsSync(join(root, 'public', 'data', digested, 'timetable', 'index.json'))) {
-            console.log(`no access to campus-data; keeping the digested ${digested}`);
+            console.log(`no access to the data release; keeping the digested ${digested}`);
             return;
         }
     }
@@ -220,7 +222,7 @@ async function main() {
 
     // Timetable of the latest captured term.
     const teachingTerm = index.teaching.at(-1);
-    if (!teachingTerm) throw new Error('campus-data has no teaching term');
+    if (!teachingTerm) throw new Error('the data release has no teaching term');
     const tdir = join(dir, 'teaching', teachingTerm);
     const term = await read<Term>(join(tdir, 'term.json'));
     const periods = (await read<Period[]>(join(tdir, 'periods.json')))
@@ -347,7 +349,7 @@ async function main() {
         console.log('exams', examTerm, examFacts.length, 'records');
     }
 
-    // Classrooms. When campus-data has the free-room page for the term, its room
+    // Classrooms. When the data release has the free-room page for the term, its room
     // list and its free periods decide; course and exam bookings then only say
     // what occupies a room. Without it, the rooms the timetable schedules and
     // their bookings are all there is.
