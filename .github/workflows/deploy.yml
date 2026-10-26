@@ -1,12 +1,12 @@
 name: Deploy
 
-# Deploys on every push to main, and hourly whenever campus-data has published
-# a release the site is not serving yet.
+# Deploys on every push to main, and within a quarter of an hour of campus-data
+# publishing a release the site is not serving yet.
 on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 permissions:
