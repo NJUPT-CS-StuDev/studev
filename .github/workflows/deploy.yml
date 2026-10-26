@@ -22,10 +22,11 @@ jobs:
       deploy: ${{ steps.data.outputs.deploy }}
     steps:
       - id: data
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" != "schedule" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          location=$(curl -s -o /dev/null -w '%{redirect_url}' https://github.com/<data-repository>/releases/latest)
-          version="${location##*/}"
+          version=$(curl -sf -H "Authorization: Bearer $DATA_TOKEN" https://api.github.com/repos/<data-repository>/releases/latest | jq -r .tag_name)
           status=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top/data/$version/timetable/index.json")
           echo "latest data $version, served: $status"
           if [ "$status" = "200" ]; then echo "deploy=false" >> "$GITHUB_OUTPUT"; else echo "deploy=true" >> "$GITHUB_OUTPUT"; fi
@@ -36,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

@@ -6,7 +6,8 @@
 //   public/data/<version>/classrooms/    index.json + days/<date>.json
 //   src/data/campus-release.json         which version the pages use
 //
-// Input is the latest campus-data release, or a local campus-data out/ directory
+// Input is the latest campus-data release (a private repository: DATA_TOKEN,
+// or the gh login, must be able to read it), or a local campus-data out/ directory
 // given as DATA_DIR.
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -50,17 +51,25 @@ async function locateData(): Promise<{ dir: string; version: string }> {
         const index = await read<Index>(join(local, 'index.json'));
         return { dir: local, version: `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}` };
     }
-    // The latest-release download link redirects to the tagged asset; reading the
-    // redirect names the version without calling the (rate-limited) API.
-    const latest = `https://github.com/${campusConfig.dataRepository}/releases/latest/download/campus-data.tar.gz`;
-    const location = (await fetch(latest, { redirect: 'manual' })).headers.get('location') ?? '';
-    const version = /\/releases\/download\/([^/]+)\//.exec(location)?.[1];
-    if (!version) throw new Error(`no campus-data.tar.gz in the latest ${campusConfig.dataRepository} release`);
+    // campus-data is private: its latest release is read through the API with a token
+    // that may read the repository (DATA_TOKEN in CI, the gh login locally).
+    const token = process.env.DATA_TOKEN || spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' }).stdout?.trim();
+    if (!token) throw new Error('set DATA_TOKEN (or log in with gh) to read the campus-data releases');
+    const api = (path: string, accept = 'application/vnd.github+json') =>
+        fetch(`https://api.github.com/repos/${campusConfig.dataRepository}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: accept } });
+    const latestResponse = await api('/releases/latest');
+    if (!latestResponse.ok) throw new Error(`reading the latest ${campusConfig.dataRepository} release: HTTP ${latestResponse.status}`);
+    const latest = await latestResponse.json() as { tag_name: string; assets: { id: number; name: string }[] };
+    const asset = latest.assets.find(a => a.name === 'campus-data.tar.gz');
+    if (!asset) throw new Error(`no campus-data.tar.gz in the latest ${campusConfig.dataRepository} release`);
+    const version = latest.tag_name;
     const dir = join(root, '.data', version);
     if (!existsSync(join(dir, 'index.json'))) {
         await mkdir(dir, { recursive: true });
         const archive = join(root, '.data', `${version}.tar.gz`);
-        await writeFile(archive, Buffer.from(await (await fetch(new URL(location, latest))).arrayBuffer()));
+        const download = await api(`/releases/assets/${asset.id}`, 'application/octet-stream');
+        if (!download.ok) throw new Error(`downloading ${version}: HTTP ${download.status}`);
+        await writeFile(archive, Buffer.from(await download.arrayBuffer()));
         const result = spawnSync('tar', ['-xzf', archive, '-C', dir], { stdio: 'inherit' });
         if (result.status !== 0) throw new Error('could not extract the campus-data archive');
         await rm(archive);

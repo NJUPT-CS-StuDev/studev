@@ -14,6 +14,9 @@ campus-data release ──scripts/digest.ts──► public/data/<版本>/{searc
                         campus.config.ts（搜索同义词、分类规则、教室判定）
 ```
 
+campus-data 是私有仓库：CI 用仓库密钥 `DATA_TOKEN`（只读该仓库内容的细粒度令牌）读取，
+本地运行 `npm run digest` 时用 `gh` 的登录凭证。
+
 - 全文检索由 [wasm-search](https://github.com/hicancan/wasm-search) 完成：构建时在 Node 中编译索引，浏览器里由同一个 WASM 查询。
 - 界面是 `src/campus/` 下的 React 应用，作为 Astro island 挂在 `src/pages/search/*`；站点页头的搜索框就是它的搜索框。
 
