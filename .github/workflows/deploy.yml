@@ -49,4 +49,22 @@ jobs:
       - run: npm run test:campus
       - run: npm run test:platform
       - run: npm run build
-      - run: npx -y edgeone@1.6.44 makers deploy -n studev -t "$EDGEONE_API_TOKEN" --json
+      # The CLI can report failure from calls it makes after the deployment is
+      # live (a 522 from DescribePagesEncipherToken, 2026-10-26). Such a run
+      # counts as deployed when the CLI said "Deploy Success" and the site
+      # serves this build's data and home-page script.
+      - name: Deploy
+        run: |
+          set -o pipefail
+          if npx -y edgeone@1.6.44 makers deploy -n studev -t "$EDGEONE_API_TOKEN" --json 2>&1 | tee deploy.log; then exit 0; fi
+          grep -q "Deploy Success" deploy.log || { echo "the deployment itself failed"; exit 1; }
+          echo "the CLI failed after the deployment went live; checking the site"
+          base=$(node -p "require('./src/data/campus-release.json').base")
+          script=$(grep -o '/_astro/[^"]*\.js' dist/index.html | head -1)
+          for attempt in $(seq 1 20); do
+            data=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$base/timetable/index.json")
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$script")
+            if [ "$data" = "200" ] && [ "$code" = "200" ]; then echo "serving $base and $script"; exit 0; fi
+            sleep 15
+          done
+          echo "the site does not serve $base and $script after five minutes"; exit 1
