@@ -1125,7 +1125,47 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .footer-badge-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .visitor-badge { display: block; height: 20px; width: auto; border-radius: 10px; vertical-align: middle; opacity: .92; transition: opacity .2s ease, transform .2s ease; }
 .footer-badge-link:hover .visitor-badge { opacity: 1; transform: translateY(-1px); }
-.footer-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 20px; }
+.footer-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.footer-github-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 10px;
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  background: #24292f;
+  color: #fff;
+  opacity: .92;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.footer-github-badge:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  color: #fff;
+}
+.footer-github-badge:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.footer-github-badge .github-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+}
+.footer-github-badge .github-arrow {
+  font-size: .7rem;
+  opacity: .8;
+  margin-left: 1px;
+}
+html[data-theme='dark'] .footer-github-badge {
+  background: #272d36;
+  color: #e8edf3;
+  border: 1px solid #3c4654;
+}
 .text-copy { padding: 6px 0; min-height: 44px; border: 0; background: transparent; color: inherit; font-family: var(--font-sans); font-size: .8rem; cursor: pointer; }
 .text-copy:hover { color: var(--blue); }
 .text-copy:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }

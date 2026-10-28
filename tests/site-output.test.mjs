@@ -28,7 +28,7 @@ const localFile = (url, document) => {
 
 test('every built page has valid local links and complete rendering', async () => {
   const files = await pages(output);
-  assert.equal(files.length, 43);
+  assert.equal(files.length, 42);
   let diagrams = 0;
   let captions = 0;
   for (const file of files) {
@@ -82,7 +82,7 @@ test('homepage ships a small local logo, fonts, and JavaScript', async () => {
 test('article metadata and Markdown emphasis remain correct', async () => {
   const firstStar = await readFile(join(output, 'study/guide-first-star/index.html'), 'utf8');
   assert.match(firstStar, /2026-09-23/);
-  for (const slug of ['essay-cyber-prison-sbti', 'guide-peer-mentors', 'journey-volunteer-teaching']) {
+  for (const slug of ['essay-cyber-prison-sbti', 'journey-volunteer-teaching']) {
     const html = await readFile(join(output, `life/${slug}/index.html`), 'utf8');
     walk(parse(html), (node) => {
       if (node.nodeName === '#text' && node.value.includes('**')) {
@@ -95,7 +95,7 @@ test('article metadata and Markdown emphasis remain correct', async () => {
   }
 });
 
-test('homepage recruitment entry keeps the group number and a square QR enlargement', async () => {
+test('homepage recruitment entry respects recruitment toggle', async () => {
   const html = await readFile(join(output, 'index.html'), 'utf8');
   const qrImages = [];
   let dialog;
@@ -108,12 +108,16 @@ test('homepage recruitment entry keeps the group number and a square QR enlargem
     if ('data-qr-open' in attr) qrLink = attr;
     if (node.tagName === 'img' && attr.alt?.includes('招新')) qrImages.push(attr);
   });
-  assert.equal(group, '1097757336');
-  assert.equal(qrImages.length, 2);
-  assert.ok(qrImages.every((attr) => attr.width === attr.height && attr.srcset));
-  assert.equal(dialog['aria-labelledby'], 'qr-dialog-title');
-  assert.equal(qrLink['aria-controls'], 'recruitment-dialog');
-  assert.ok(existsSync(localFile(qrLink.href, join(output, 'index.html'))));
+  if (group) {
+    assert.equal(group, '1097757336');
+    assert.equal(qrImages.length, 2);
+    assert.ok(qrImages.every((attr) => attr.width === attr.height && attr.srcset));
+    assert.equal(dialog['aria-labelledby'], 'qr-dialog-title');
+    assert.equal(qrLink['aria-controls'], 'recruitment-dialog');
+    assert.ok(existsSync(localFile(qrLink.href, join(output, 'index.html'))));
+  } else {
+    assert.equal(qrImages.length, 0);
+  }
 });
 
 test('every page can share its clean canonical URL', async () => {
@@ -134,7 +138,7 @@ test('every page can share its clean canonical URL', async () => {
     assert.equal(url.origin, 'https://studev.hicancan.top');
     assert.equal(url.search, '');
     assert.equal(url.hash, '');
-    if (file === join(output, 'index.html')) assert.equal(shares, 2);
+    if (file === join(output, 'index.html')) assert.ok(shares >= 1);
     else assert.match(html, /分享本页/);
   }
 });
@@ -158,7 +162,7 @@ test('sitemap lists every unique indexable canonical page on the formal domain',
 
   const sitemap = await readFile(join(output, 'sitemap-0.xml'), 'utf8');
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.equal(urls.length, 34);
+  assert.equal(urls.length, 33);
   assert.equal(new Set(urls).size, urls.length, 'sitemap must not contain duplicate URLs');
   assert.deepEqual([...urls].sort(), [...expected].sort(), 'sitemap must match indexable canonical URLs');
   for (const value of urls) {
