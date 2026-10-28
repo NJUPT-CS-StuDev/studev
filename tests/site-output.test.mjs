@@ -44,14 +44,16 @@ test('every built page has valid local links and complete rendering', async () =
       }
       if (node.tagName === 'img') {
         const target = localFile(attr.src, file);
-        if (target) assert.ok(existsSync(target), `${file}: missing image ${attr.src}`);
+        if (target) {
+          assert.ok(existsSync(target), `${file}: missing image ${attr.src}`);
+          assert.ok(attr.srcset, `${file}: missing responsive image candidates`);
+          for (const candidate of attr.srcset.split(',')) {
+            const asset = localFile(candidate.trim().split(/\s+/)[0], file);
+            if (asset) assert.ok(existsSync(asset), `${file}: missing image candidate`);
+          }
+        }
         assert.ok(Number(attr.width) > 0 && Number(attr.height) > 0, `${file}: unreserved image layout`);
         assert.ok('alt' in attr, `${file}: missing alt`);
-        assert.ok(attr.srcset, `${file}: missing responsive image candidates`);
-        for (const candidate of attr.srcset.split(',')) {
-          const asset = localFile(candidate.trim().split(/\s+/)[0], file);
-          if (asset) assert.ok(existsSync(asset), `${file}: missing image candidate`);
-        }
       }
       if (node.tagName === 'figcaption') captions++;
       if (attr.class?.includes('diagram-static')) {

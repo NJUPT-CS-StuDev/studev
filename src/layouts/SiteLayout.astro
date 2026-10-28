@@ -3,6 +3,7 @@ import '../styles/global.css';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import { Image, getImage } from 'astro:assets';
 import logo from '../assets/logo.png';
+import { PRODUCT_CONFIG } from '../campus/app/config/product';
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; }
 const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false } = Astro.props;
 const nav = [
@@ -114,10 +115,25 @@ const initialSearchPlaceholder =
     <main><slot /></main>
     <footer class="site-footer">
       <div class="footer-inner">
-        <span>© {new Date().getFullYear()} StuDev</span>
+        <div class="footer-meta">
+          <span>© {new Date().getFullYear()} StuDev</span>
+          <span class="footer-dot" aria-hidden="true">·</span>
+          <a class="footer-badge-link" href="https://visitor-badge.laobi.icu" target="_blank" rel="noopener noreferrer" title="全站访问量统计（visitor-badge）">
+            <img
+              class="visitor-badge"
+              src={PRODUCT_CONFIG.VISITOR_BADGE_URL}
+              srcset={`${PRODUCT_CONFIG.VISITOR_BADGE_URL} 1x`}
+              alt="全站访问量"
+              width="86"
+              height="20"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
+        </div>
         <div class="footer-actions">
           <button class="text-copy" type="button" data-copy-link title="复制当前页面网址，便于转发"><span aria-live="polite" data-copy-label>{Astro.url.pathname === '/' ? '分享网站' : '分享本页'}</span></button>
-          <a href="https://github.com/NJUPT-CS-StuDev/studev" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          <a href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub ↗</a>
         </div>
       </div>
     </footer>
