@@ -1161,8 +1161,11 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
   opacity: .8;
   margin-left: 1px;
 }
+html[data-theme='dark'] .visitor-badge {
+  box-shadow: 0 0 0 1px #3c4654;
+}
 html[data-theme='dark'] .footer-github-badge {
-  background: #272d36;
+  background: #24292f;
   color: #e8edf3;
   border: 1px solid #3c4654;
 }

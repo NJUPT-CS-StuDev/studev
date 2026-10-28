@@ -116,8 +116,6 @@ const initialSearchPlaceholder =
     <footer class="site-footer">
       <div class="footer-inner">
         <div class="footer-meta">
-          <span>© {new Date().getFullYear()} StuDev</span>
-          <span class="footer-dot" aria-hidden="true">·</span>
           <a class="footer-badge-link" href="https://visitor-badge.laobi.icu" target="_blank" rel="noopener noreferrer" title="全站访问量统计（visitor-badge）">
             <img
               class="visitor-badge"
@@ -130,6 +128,8 @@ const initialSearchPlaceholder =
               decoding="async"
             />
           </a>
+          <span class="footer-dot" aria-hidden="true">·</span>
+          <span>© {new Date().getFullYear()} StuDev</span>
         </div>
         <div class="footer-actions">
           <button class="text-copy" type="button" data-copy-link title="复制当前页面网址，便于转发"><span aria-live="polite" data-copy-label>{Astro.url.pathname === '/' ? '分享网站' : '分享本页'}</span></button>
