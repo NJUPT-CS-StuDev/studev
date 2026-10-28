@@ -1131,22 +1131,22 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
   align-items: center;
   gap: 5px;
   height: 20px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: 10px;
   font-size: .72rem;
   font-weight: 500;
   line-height: 1;
   text-decoration: none;
-  background: #1a73e8;
-  color: #fff;
-  opacity: .92;
-  transition: opacity .2s ease, transform .2s ease, background-color .2s ease;
+  background: var(--code-block);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  transition: all .15s ease;
 }
 .footer-github-badge:hover {
-  opacity: 1;
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--mark);
   transform: translateY(-1px);
-  background: #174ea6;
-  color: #fff;
 }
 .footer-github-badge:focus-visible {
   outline: 2px solid var(--blue);
@@ -1159,12 +1159,8 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 }
 .footer-github-badge .github-arrow {
   font-size: .7rem;
-  opacity: .85;
+  opacity: .7;
   margin-left: 1px;
-}
-html[data-theme='dark'] .footer-github-badge {
-  background: #1a73e8;
-  color: #fff;
 }
 .text-copy { padding: 6px 0; min-height: 44px; border: 0; background: transparent; color: inherit; font-family: var(--font-sans); font-size: .8rem; cursor: pointer; }
 .text-copy:hover { color: var(--blue); }
