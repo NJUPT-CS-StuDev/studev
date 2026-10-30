@@ -14,6 +14,7 @@ import top.hicancan.studev.data.Place
 
 @Composable
 fun PlaceHours(place: Place) {
+    if (place.hours == null) return
     val now = CampusClock.now()
     val status = openingStatus(place.hours, now)
     var expanded by rememberSaveable(place.id) { mutableStateOf(false) }
