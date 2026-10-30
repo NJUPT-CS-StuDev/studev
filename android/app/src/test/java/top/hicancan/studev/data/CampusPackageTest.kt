@@ -22,7 +22,7 @@ class CampusPackageTest {
         assertTrue(room.sources.isNotEmpty())
     }
     @Test fun allContractFieldsRoundTrip() {
-        val json = """{"id":"教3-101","kind":"room","parent":"教3","names":["101"],"centre":[118.9,32.1],"levels":6,"houses":["服务"],"entrances":[{"at":[118.9,32.1],"source":"osm"}],"floor":"1","seats":40,"room_kinds":["教室"],"sources":["jwxt"]}"""
+        val json = """{"id":"教3-101","kind":"room","parent":"教3","names":["101"],"centre":[118.9,32.1],"levels":6,"houses":["服务"],"entrances":[{"at":[118.9,32.1],"source":"osm"}],"floor":"1","seats":40,"room_kinds":["教室"],"sources":["jwxt"],"use":"多媒体教室","routing":{"type":"target","id":"教3"}}"""
         val place = Json.decodeFromString<Place>(json)
         assertEquals(Json.parseToJsonElement(json), Json.parseToJsonElement(Json.encodeToString(place)))
     }

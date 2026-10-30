@@ -11,7 +11,7 @@ class NavigationTest {
     private val route = CampusRoute("walk", listOf(listOf(118.9, 32.1), listOf(118.901, 32.1)),
         listOf(0.0, 100.0), 100.0, 80.0,
         listOf(RouteSegment(0, 1, 100.0, 80.0, 1, "校园路", false)),
-        listOf(maneuver("depart", 0.0), maneuver("arrive", 100.0)))
+        listOf(maneuver("depart", 0.0), maneuver("arrive", 100.0)), viaName = "校园路")
     private fun update(arrived: Boolean = false, off: Boolean = false) = NavigationUpdate(
         20.0, 80.0, 64.0, listOf(118.9002, 32.1), 2.0,
         ManeuverDistance(route.maneuvers[0], 0.0), ManeuverDistance(route.maneuvers[1], 80.0),
@@ -65,7 +65,7 @@ class NavigationTest {
         assertTrue(message.contains("100 米")); assertTrue(message.contains("选择"))
     }
     @Test fun swappingMyPositionIsReversible() {
-        val place = top.hicancan.studev.data.Place("教3", "building", "仙林", listOf("教3"), sources = listOf("test"))
+        val place = top.hicancan.studev.data.Place("教3", "building", "仙林", listOf("教3"), sources = listOf("test"), use = "教学楼", routing = Endpoint.Target("教3"))
         val initial = PlannerState(open = true, destination = place)
         val reversed = initial.swapped()
         assertEquals(place, reversed.origin)
