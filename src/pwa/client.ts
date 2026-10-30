@@ -66,6 +66,11 @@ function watchWorker(worker: ServiceWorker | null) {
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    // Cache readiness is available without a network round trip. Registering or
+    // updating a worker can fail offline even when its active worker serves the app.
+    void caches.open(`studev-data-${release.version}`).then(cache => cache.match('/__studev_offline_ready__')).then(marker => {
+        ready = Boolean(marker); connectionStatus();
+    }).catch(() => connectionStatus());
     navigator.serviceWorker.addEventListener('message', event => {
         const message = event.data;
         if (message?.type === 'DATA_UPDATE') showUpdate();
@@ -79,18 +84,22 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
         if (message?.type === 'OFFLINE_PARTIAL') { if (status) status.textContent = '部分内容未保存，联网后可重试。'; if (save) save.disabled = false; }
     });
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (applying) location.reload(); });
-    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(async registered => {
+    navigator.serviceWorker.getRegistration('/').then(existing => !navigator.onLine && existing
+        ? existing
+        : navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })).then(registered => {
         registration = registered;
-        ready = Boolean(await (await caches.open(`studev-data-${release.version}`)).match('/__studev_offline_ready__'));
-        connectionStatus();
         if (registered.waiting) showUpdate();
         watchWorker(registered.installing);
         registered.addEventListener('updatefound', () => watchWorker(registered.installing));
-        const check = () => { void registered.update(); void fetch('/pwa-release.json', { cache: 'no-cache' }).catch(() => undefined); };
+        const check = () => {
+            if (!navigator.onLine) return;
+            void registered.update().catch(() => undefined);
+            void fetch('/pwa-release.json', { cache: 'no-cache' }).catch(() => undefined);
+        };
         setInterval(check, 15 * 60_000);
         window.addEventListener('focus', check);
         check();
-    }).catch(() => { if (status) status.textContent = '暂时无法保存离线数据，请稍后重试。'; });
+    }).catch(() => { if (ready || !navigator.onLine) connectionStatus(); else if (status) status.textContent = '暂时无法保存离线数据，请稍后重试。'; });
 } else if (status) status.textContent = '联网时可以查看全部校园数据。';
 
 save?.addEventListener('click', () => {
