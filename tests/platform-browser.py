@@ -136,6 +136,21 @@ def run(base: str, output: Path, browser_path: str):
         page.get_by_role("button", name="确认退出", exact=True).click()
         expect(page.get_by_text("目前没有已登录的 App 设备。", exact=True)).to_be_visible()
         assert writes[-1]["path"].endswith("/revoke")
+        # Stored activity fields remain plain text on both web surfaces, even
+        # when activity data comes from an authenticated malicious organiser.
+        payload = '<img src=x onerror="window.activityXss=1">'
+        description = '<svg onload="window.activityXss=2"></svg>'
+        place_name = '<script>window.activityXss=3</script>'
+        activity.update(title=payload, description=description,
+                        place=dict(kind="point", name=place_name, position=[118.926, 32.114]),
+                        organiser=dict(id=user["id"], name=payload))
+        for path in ("/activities/?id=" + activity["id"], "/map/?activity=" + activity["id"]):
+            page.goto(base + path)
+            expect(page.get_by_role("heading", name=payload, exact=True)).to_be_visible()
+            expect(page.get_by_text(description, exact=True)).to_be_visible()
+            expect(page.get_by_text(place_name, exact=True)).to_be_visible()
+            assert page.locator('img[src="x"], svg[onload]').count() == 0
+            assert page.evaluate("window.activityXss === undefined")
         if console_errors:
             raise AssertionError(console_errors)
         (output / "result.json").write_text(json.dumps({"result": "passed", "synthetic": True, "writes": writes, "pageErrors": console_errors}, ensure_ascii=False, indent=2), encoding="utf-8")
