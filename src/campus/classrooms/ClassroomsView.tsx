@@ -9,6 +9,9 @@ import {
     addDays, campusBuildings, clampToTerm, freeRun, isFree, nowInShanghai, occupantsAt, periodAt, roomMatches, termRange, weekOf,
     type DayStatus, type Occupant,
 } from './model/campusDay';
+import { matchingRooms } from './model/roomSelection';
+import { BuildingFilter } from './BuildingFilter';
+import { selectedBuilding, readBuildings, saveBuildings } from './model/buildingSelection';
 import './classrooms.css';
 
 export interface ClassroomsParams {
@@ -118,6 +121,10 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
     const [minSeats, setMinSeats] = useState(0);
     const [everything, setEverything] = useState(false);
     const buildings = useMemo(() => index ? campusBuildings(index, campus, everything) : [], [campus, everything, index]);
+    const [buildingIds, setBuildingIds] = useState<string[] | null>(null);
+    useEffect(() => { setBuildingIds(readBuildings(campus)); }, [campus]);
+    const chooseBuildings = (ids: string[] | null) => { setBuildingIds(ids); saveBuildings(campus, ids); };
+    const selectedBuildings = buildings.filter(item => selectedBuilding(buildingIds, item.id));
     const roomById = useMemo(() => new Map(index?.rooms.map(room => [room.id, room]) ?? []), [index]);
     const selectedRoom = roomParam ? roomById.get(roomParam) ?? null : null;
 
@@ -144,7 +151,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
     const { first, last } = termRange(weeks);
     const position = weekOf(weeks, date);
     const shown = (room: Room) => roomMatches(room, query) && (!minSeats || (room.seats ?? 0) >= minSeats);
-    const visibleRooms = buildings.flatMap(item => item.rooms).filter(shown);
+    const visibleRooms = matchingRooms(index, {campus, buildings:buildingIds, everything, query, minSeats, from:period, until:until ?? period});
     const freeCount = status ? visibleRooms.filter(room => isFree(status, room.id, period, until ?? period)).length : null;
     const hasSeats = visibleRooms.some(room => room.seats);
     const periodInfo = periods.find(item => item.period === period);
@@ -186,6 +193,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                         </button>
                     ))}
                 </div>
+                <BuildingFilter buildings={buildings.map(item => item.id)} allBuildings={campusBuildings(index, campus, true).map(item => item.id)} selected={buildingIds} onChange={chooseBuildings} />
                 <div className="classrooms-summary">
                     <label>
                         连续空闲到
@@ -221,7 +229,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
             </section>
 
             <div className="classrooms-buildings">
-                {buildings.map(item => {
+                {selectedBuildings.map(item => {
                     const rooms = item.rooms.filter(shown);
                     if (!rooms.length) return null;
                     const free = status ? rooms.filter(room => isFree(status, room.id, period, until ?? period)).length : null;
@@ -257,7 +265,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
                         </section>
                     );
                 })}
-                {!visibleRooms.length ? <p className="classrooms-empty">{campus}没有与「{query}」匹配的教室。</p> : null}
+                {!visibleRooms.length ? <p className="classrooms-empty">{buildingIds?.length === 0 ? '尚未选择楼栋，请在楼栋筛选中选择。' : query ? `${campus}没有与「${query}」匹配的教室。` : '当前条件下没有匹配的教室。'}</p> : null}
             </div>
 
             {selectedRoom && status ? (

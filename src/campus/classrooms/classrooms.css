@@ -168,3 +168,21 @@
 @media (prefers-reduced-motion: reduce) {
     .room-drawer, .classrooms-room, .classrooms-skeleton { animation: none; transition: none; }
 }
+
+.building-filter { position:relative; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:12px 0 0; }
+.building-filter details { position:relative; }
+.building-filter summary { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:12px; list-style:none; cursor:pointer; border:1px solid var(--line); border-radius:999px; padding:0 14px; background:var(--paper); color:var(--ink); font-size:14px; }
+.building-filter summary::-webkit-details-marker { display:none; }
+.building-filter details[open] summary { border-color:var(--brand); }
+.building-filter summary:focus-visible, .building-filter button:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+.building-filter-menu { position:absolute; z-index:20; top:calc(100% + 6px); left:0; width:min(320px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 8px 30px var(--shadow-medium); padding:8px; }
+.building-filter-actions { display:flex; border-bottom:1px solid var(--line); gap:4px; padding-bottom:6px; }
+.building-filter-actions button { color:var(--brand); border-radius:999px; min-height:44px; padding:0 12px; font-size:13px; }
+.building-filter-actions button:last-child { margin-left:auto; }
+.building-filter-options { max-height:280px; overflow:auto; overscroll-behavior:contain; }
+.building-filter-options label { display:flex; align-items:center; gap:12px; min-height:48px; padding:0 12px; cursor:pointer; color:var(--ink); font-size:14px; }
+.building-filter-options label:hover { background:var(--surface); border-radius:8px; }
+.building-filter-options input { width:18px; height:18px; accent-color:var(--brand); }
+.building-filter-chips { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.building-filter-chips button { display:flex; align-items:center; gap:6px; min-height:32px; border-radius:999px; padding:0 10px; font-size:12px; background:var(--brand-container); color:var(--on-brand-container); }
+.building-filter-chips > span { font-size:12px; color:var(--muted); }

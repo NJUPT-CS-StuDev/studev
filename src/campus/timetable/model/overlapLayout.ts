@@ -43,7 +43,7 @@ export const groupOverlappingMeetings = (meetings: TeachingMeeting[]): MeetingGr
     for (const weekday of [1, 2, 3, 4, 5, 6, 7]) {
         const sorted = meetings
             .filter(meeting => meeting.weekday === weekday)
-            .sort((left, right) => left.periods[0] - right.periods[0] || left.periods[1] - right.periods[1] || left.id.localeCompare(right.id));
+            .sort((left, right) => left.periods[0] - right.periods[0] || left.periods[1] - right.periods[1] || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
         let component: TeachingMeeting[] = [];
         let componentEnd = 0;
         const flush = () => {

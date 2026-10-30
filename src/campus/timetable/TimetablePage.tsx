@@ -7,7 +7,7 @@ import { usePreferences } from '@/shared/lib/usePreferences';
 import type { LoadedClassSchedule, TeachingScheduleClient } from './model/TeachingScheduleClient';
 import type { CatalogCourse } from './model/courseCatalog';
 import { allocateCourseTones, courseIdentity } from './model/courseColors';
-import { buildClassCalendar, downloadCalendar, todayInShanghai } from './model/calendar';
+import { buildClassCalendar, downloadCalendar, todayInShanghai, weekdayInShanghai, meetingDate } from './model/calendar';
 import { TimetableGrid } from './ui/TimetableGrid';
 import { CourseDetailPanel } from './ui/CourseDetailPanel';
 import { CourseManager, type TimetableCourse } from './ui/CourseManager';
@@ -43,6 +43,8 @@ export function TimetablePage({ className, week: requestedWeek, courseQuery, cli
     const [loadState, setLoadState] = useState<{ className: string; loaded: LoadedClassSchedule | null; error: string | null }>({ className: '', loaded: null, error: null });
     const loaded = loadState.className === className ? loadState.loaded : null;
     const error = loadState.className === className ? loadState.error : null;
+    const [dayView, setDayView] = useState(false);
+    const [day, setDay] = useState(weekdayInShanghai);
     const [selected, setSelected] = useState<TeachingMeeting | null>(null);
     const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
     const [managing, setManaging] = useState(false);
@@ -153,7 +155,9 @@ export function TimetablePage({ className, week: requestedWeek, courseQuery, cli
                     <button type="button" className="timetable-export" onClick={exportAll} aria-label="导出到日历"><Download /><span>导出</span></button>
                 </div>
             </header>
-            <TimetableGrid meetings={meetings} week={week} periods={loaded.periods} tones={tones} onOpen={openMeeting} />
+            <div className="timetable-view-switcher" aria-label="课表视图"><button type="button" aria-pressed={!dayView} onClick={()=>setDayView(false)}>周视图</button><button type="button" aria-pressed={dayView} onClick={()=>setDayView(true)}>日视图</button></div>
+            {dayView ? <div className="timetable-day-picker" aria-label="选择星期">{[1,2,3,4,5,6,7].map(d=><button key={d} type="button" aria-pressed={day===d} onClick={()=>setDay(d)}>周{'一二三四五六日'[d-1]}<br />{Number(meetingDate(week,d).slice(8))}</button>)}</div> : null}
+            <TimetableGrid day={dayView ? day : undefined} meetings={meetings} week={week} periods={loaded.periods} tones={tones} onOpen={openMeeting} />
             {selected ? (
                 <CourseDetailPanel
                     className={name}
