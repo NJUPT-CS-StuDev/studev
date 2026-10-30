@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.sp
 
 private val light = Tokens.Color.Light
 private val dark = Tokens.Color.Dark
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     primary = light.brand, onPrimary = light.onBrand,
     primaryContainer = light.brandContainer, onPrimaryContainer = light.onBrandContainer,
     secondary = light.muted, onSecondary = light.paper,
@@ -33,7 +33,7 @@ private val LightColors = lightColorScheme(
     inverseSurface = dark.paper, inverseOnSurface = dark.ink, inversePrimary = dark.brand,
     scrim = light.scrim,
 )
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = dark.brand, onPrimary = dark.onBrand,
     primaryContainer = dark.brandContainer, onPrimaryContainer = dark.onBrandContainer,
     secondary = dark.muted, onSecondary = dark.paper,
