@@ -17,6 +17,11 @@ export function createNativeTokens({ repo, now, loadUser }) {
   const sessionKey = (id) => `identity/native/sessions/${id}.json`;
   const revokedKey = (id) => `identity/native/revoked/${id}.json`;
   const tokenKey = (kind, token) => `identity/native/${kind}/${digest(token)}.json`;
+  const loginPrefix = (userId) => `identity/native/logins/${userId}/`;
+  async function loginTip(userId) {
+    const keys = await repo.list(loginPrefix(userId));
+    return keys.length ? repo.get(keys.at(-1)) : null;
+  }
   function device(value) {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) fail(400, 'INVALID_DEVICE', '设备标识无效，请重新安装后重试。');
     return digest(value);
@@ -27,8 +32,13 @@ export function createNativeTokens({ repo, now, loadUser }) {
     catch (error) { if (!isConflict(error)) throw error; }
   }
   async function validSession(id) {
-    const session = await repo.get(sessionKey(id));
-    if (!session || session.expiresAt <= now() || await repo.get(revokedKey(id))) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const original = await repo.get(sessionKey(id));
+    if (!original || original.expiresAt <= now() || await repo.get(revokedKey(id))) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const tip = await loginTip(original.userId);
+    if (tip && tip.devices[original.deviceHash] !== id) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    // TOTP confirmation elevates this session's security version, just as it
+    // does for web sessions. Revocation and absolute expiry remain immutable.
+    const session = { ...original, ...await repo.latest(`identity/native/state/${id}`) };
     const user = await loadUser(session.userId);
     if (!user || user.status !== 'active' || user.securityVersion !== session.securityVersion) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     return { user, session };
@@ -43,19 +53,33 @@ export function createNativeTokens({ repo, now, loadUser }) {
   async function start(user, body) {
     const deviceHash = device(body.deviceId);
     const deviceName = text(body.deviceName, '设备名称', 80, true);
+    const tip = await loginTip(user.id), devices = {};
     const existing = await repo.list(`identity/native/by-user/${user.id}/`);
-    let active = 0;
     for (const key of existing) {
       const ref = await repo.get(key), record = ref?.id ? await repo.get(sessionKey(ref.id)) : null;
       if (!record || record.expiresAt <= now() || await repo.get(revokedKey(record.id))) continue;
+      if (tip ? tip.devices[record.deviceHash] !== record.id : record.loginGeneration !== undefined) continue;
       if (record.deviceHash === deviceHash) await revoke(record.id);
-      else if (record.securityVersion === user.securityVersion) active++;
+      else {
+        const state = await repo.latest(`identity/native/state/${record.id}`);
+        if ((state?.securityVersion ?? record.securityVersion) === user.securityVersion) devices[record.deviceHash] = record.id;
+      }
     }
-    if (active >= 20) fail(429, 'DEVICE_LIMIT', '已登录设备过多，请先在网页账号中心退出不再使用的设备。');
-    const session = { id: randomUUID(), userId: user.id, securityVersion: user.securityVersion, deviceHash, deviceName,
+    if (Object.keys(devices).length >= 20) fail(429, 'DEVICE_LIMIT', '已登录设备过多，请先在网页账号中心退出不再使用的设备。');
+    const generation = (tip?.generation ?? 0) + 1;
+    const session = { id: randomUUID(), loginGeneration: generation, userId: user.id, securityVersion: user.securityVersion, deviceHash, deviceName,
       mfaVerified: Boolean(user.totp), createdAt: new Date(now()).toISOString(), expiresAt: now() + REFRESH_SECONDS * 1000 };
+    // Publish metadata before the head so a following login on another device
+    // can retain this family even while its credentials are still being issued.
     await repo.putNew(sessionKey(session.id), session);
     await repo.putNew(`identity/native/by-user/${user.id}/${session.id}.json`, { id: session.id });
+    // Reserve an immutable generation before publishing credentials. Concurrent
+    // logins conflict rather than bypass replacement or the device ceiling; a
+    // late write cannot restore an old head. Never use a mutable snapshot here.
+    devices[deviceHash] = session.id;
+    await repo.putNew(`${loginPrefix(user.id)}${String(generation).padStart(12, '0')}.json`, {
+      devices, generation, expiresAt: session.expiresAt,
+    });
     return issue(session);
   }
   async function refresh(body) {
@@ -79,8 +103,7 @@ export function createNativeTokens({ repo, now, loadUser }) {
     const ticket = await repo.get(tokenKey('access', match[1]));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const { user, session } = await validSession(ticket.sessionId);
-    const state = await repo.latest(`identity/native/state/${session.id}`);
-    return { user, session: { ...session, ...state }, sessionId: session.id, kind: 'bearer', mfaVerified: session.mfaVerified };
+    return { user, session, sessionId: session.id, kind: 'bearer', mfaVerified: session.mfaVerified };
   }
   async function list(userId) {
     const keys = await repo.list(`identity/native/by-user/${userId}/`);

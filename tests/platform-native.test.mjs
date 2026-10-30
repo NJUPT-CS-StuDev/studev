@@ -193,3 +193,104 @@ test('refresh endpoint rate limit ignores spoofed forwarding headers', async () 
   for (let i = 0; i < 60; i++) assert.equal((await f.call('/auth/token/refresh', {}, undefined, { 'X-Forwarded-For': `192.0.2.${i}` })).status, 400);
   assert.equal((await f.call('/auth/token/refresh', {}, undefined, { 'X-Forwarded-For': '192.0.2.99' })).status, 429);
 });
+
+test('overlapping logins from one installation cannot leave two usable device families', async () => {
+  const f = await fixture();
+  // Both login requests observe the same device list before either publishes.
+  const list = f.store.list;
+  let arrivals = 0, release;
+  const ready = new Promise(resolve => { release = resolve; });
+  f.store.list = async (options) => {
+    const result = await list(options);
+    if (options.prefix === `platform-v1/identity/native/by-user/${f.user.id}/`) {
+      if (++arrivals === 2) release();
+      await ready;
+    }
+    return result;
+  };
+  const attempts = await Promise.all([f.login(), f.login()]);
+  f.store.list = list;
+  const issued = attempts.filter(r => r.status === 200);
+  assert.ok(issued.length >= 1);
+  const usable = await Promise.all(issued.map(r => f.call('/auth/session', undefined, r.body.accessToken)));
+  assert.equal(usable.filter(r => r.status === 200).length, 1);
+  assert.equal((await f.browser.call('/auth/devices')).body.items.length, 1);
+  for (let i = 0; i < issued.length; i++) {
+    if (usable[i].status !== 200) assert.equal((await f.call('/auth/token/refresh', { deviceId, refreshToken: issued[i].body.refreshToken })).status, 401);
+  }
+});
+
+test('native TOTP enrollment preserves only its own family and subsequent security changes invalidate it', async () => {
+  const f = await fixture(), { body: auth } = await f.login();
+  const other = await f.login({ deviceId: 'other-installation-000001' });
+  const setup = await f.call('/auth/totp/setup', { password: f.password }, auth.accessToken);
+  assert.equal(setup.status, 200);
+  const confirmed = await f.call('/auth/totp/confirm', { code: totpCode(setup.body.secret, Math.floor(f.now() / 30000)) }, auth.accessToken);
+  assert.equal(confirmed.status, 200);
+  const current = await f.call('/auth/session', undefined, auth.accessToken);
+  assert.equal(current.status, 200);
+  assert.equal(current.body.mfaVerified, true);
+  assert.equal((await f.call('/auth/session', undefined, other.body.accessToken)).status, 401);
+  assert.equal((await f.call('/auth/token/refresh', { deviceId, refreshToken: auth.refreshToken })).status, 200);
+  const key = `identity/users/${f.user.id}`, user = await f.repo.latest(key);
+  await f.repo.append(key, { ...user, securityVersion: 'later-password-reset' }, user.revision);
+  assert.equal((await f.call('/auth/session', undefined, auth.accessToken)).status, 401);
+});
+
+test('concurrent logins cannot bypass the per-account active-device ceiling', async () => {
+  const f = await fixture();
+  for (let i = 0; i < 19; i++) {
+    if (i % 8 === 0) f.advance(61000);
+    assert.equal((await f.login({ deviceId: `installation-number-${String(i).padStart(4, '0')}` })).status, 200);
+  }
+  const list = f.store.list;
+  let arrivals = 0, release;
+  const ready = new Promise(resolve => { release = resolve; });
+  f.store.list = async (options) => {
+    const result = await list(options);
+    if (options.prefix === `platform-v1/identity/native/by-user/${f.user.id}/`) {
+      if (++arrivals === 2) release();
+      await ready;
+    }
+    return result;
+  };
+  await Promise.all([f.login({ deviceId: 'installation-number-0020' }), f.login({ deviceId: 'installation-number-0021' })]);
+  f.store.list = list;
+  assert.equal((await f.browser.call('/auth/devices')).body.items.length, 20);
+});
+
+test('a published login head retains its device during delayed token issuance on another installation', async () => {
+  const f = await fixture(), write = f.store.setJSON;
+  let entered, release;
+  const paused = new Promise(resolve => { entered = resolve; });
+  const resume = new Promise(resolve => { release = resolve; });
+  let delayed = false;
+  f.store.setJSON = async (key, ...args) => {
+    if (!delayed && key.startsWith('platform-v1/identity/native/access/')) {
+      delayed = true; entered(); await resume;
+    }
+    return write(key, ...args);
+  };
+  const first = f.login();
+  await paused;
+  const second = await f.login({ deviceId: 'another-installation-000001' });
+  release();
+  const original = await first;
+  assert.equal(original.status, 200); assert.equal(second.status, 200);
+  for (const r of [original, second]) assert.equal((await f.call('/auth/session', undefined, r.body.accessToken)).status, 200);
+});
+
+test('empty, malformed, combined and mixed-case authorization never authenticates the cookie user', async () => {
+  const f = await fixture();
+  for (const value of ['', 'Bearer', 'Bearer ', 'Bearer invalid', 'Basic anything', 'Bearer ' + 'A'.repeat(43), `Bearer ${'A'.repeat(43)}, Bearer ${'B'.repeat(43)}`]) {
+    for (const name of ['Authorization', 'authorization', 'aUtHoRiZaTiOn']) {
+      assert.equal((await f.browser.call('/auth/session', { headers: { [name]: value } })).status, 401);
+      assert.equal((await f.browser.call('/activities', { method: 'POST', body: f.activity(), headers: { Origin: 'https://evil.invalid', [name]: value } })).status, 401);
+    }
+  }
+  const own = await f.login();
+  const key = `identity/users/${f.user.id}`, user = await f.repo.latest(key);
+  await f.repo.append(key, { ...user, status: 'disabled' }, user.revision);
+  assert.equal((await f.call('/auth/session', undefined, own.body.accessToken)).status, 401);
+  assert.equal((await f.call('/auth/token/refresh', { deviceId, refreshToken: own.body.refreshToken })).status, 401);
+});

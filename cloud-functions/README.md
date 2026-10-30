@@ -21,7 +21,10 @@ It spends the old ticket atomically, returning a new access/refresh pair with th
 same absolute 30-day device-session expiry. Replay revokes the entire family.
 Serialize refreshes and persist the replacement before using it. Never retry an
 ambiguous refresh: require sign-in again. Re-login from the same installation
-revokes its previous families. Native requests send `Authorization: Bearer ...`;
+revokes its previous families. Concurrent logins reserve an immutable account
+generation; a conflicting login returns 409 and may be retried with a fresh MFA
+code if required. The generation also enforces the 20-device account limit.
+Native requests send `Authorization: Bearer ...`;
 an invalid header never falls back to cookies. Cookie mutations retain Origin
 and CSRF validation. Origin-free token bootstrap accepts neither cookies nor
 browser fetch metadata. No cross-origin browser access is enabled.
@@ -33,10 +36,13 @@ disabled/deleted accounts invalidate access and refresh credentials.
 
 New keys below `platform-v1/identity/native/`: `sessions/<id>.json`,
 `by-user/<user>/<id>.json`, `access/<sha256>.json`, `refresh/<sha256>.json`,
-`spent/<sha256>.json`, `revoked/<id>.json`, and versioned `state/<id>/` for existing
-security-setting operations. No raw token or device ID is stored. Access,
+`spent/<sha256>.json`, `revoked/<id>.json`, immutable `logins/<user>/<generation>.json`
+device-family heads, and versioned `state/<id>/` for existing security-setting
+operations. No raw token or device ID is stored. Access,
 refresh, spent and revoked records include `expiresAt`; maintenance may purge
-them **after** expiry. Keep revocation/spent markers until that expiry. Session
+them **after** expiry. Login generations also carry `expiresAt`; preserve them
+until that expiry so an older family can never become current again. Keep
+revocation/spent markers until that expiry. Session
 and by-user records may be removed together after their 30-day expiry.
 
 ## Activities
