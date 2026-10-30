@@ -139,7 +139,7 @@ android {
 
     // Target 36 is the product contract; dependency upgrades are reviewed separately.
     lint { disable += setOf("OldTargetApi", "GradleDependency", "NewerVersionAvailable") }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     androidResources { noCompress += "pmtiles" }
     sourceSets {
         getByName("main") {

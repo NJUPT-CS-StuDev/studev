@@ -3,6 +3,11 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <application
         android:allowBackup="false"
@@ -12,6 +17,8 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.StuDev">
+        <service android:name=".navigation.NavigationService" android:exported="false" android:foregroundServiceType="location" />
+        <service android:name=".navigation.NavigationStopService" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -32,6 +32,8 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
     val error by model.error.collectAsStateWithLifecycle()
     val id by model.selectedId.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val runtime = remember(context) { NavigationRuntime.get(context) }
+    val route by runtime.state.collectAsStateWithLifecycle()
     val controller = rememberSaveable(saver = listSaver(
         save = { listOf(it.threeD.toString(), it.follow.name) },
         restore = { CampusMapController(it[0].toBoolean(), FollowMode.valueOf(it[1])) },
@@ -59,23 +61,35 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
         return
     }
     val selected = loaded.byId[id]
+    var pickingOrigin by rememberSaveable { mutableStateOf(true) }
     Box(Modifier.fillMaxSize()) {
-        CampusMap(controller, loaded, selected, isSystemInDarkTheme(), access.granted,
-            onPlace = { model.select(it.id) }, onLocationStatus = { status = it }, onMapError = { mapError = it }, modifier = Modifier.fillMaxSize())
+        CampusMap(controller, loaded, if (route.open) null else selected, isSystemInDarkTheme(), access.granted,
+            onPlace = { model.select(it.id) }, onLocationStatus = { status = it }, onMapError = { mapError = it },
+            routeState = route, onRoute = runtime::choose, modifier = Modifier.fillMaxSize())
         NavHost(nav, startDestination = "map", enterTransition = { fadeIn(tween(Tokens.Motion.quick)) },
             exitTransition = { fadeOut(tween(Tokens.Motion.quick)) }) {
             composable("map") {
-                MapControls(controller, status, access.granted, mapError, selected != null,
-                    onSearch = { nav.navigate("search") { launchSingleTop = true } }, onLocate = {
-                        if (access.granted && status == LocationStatus.Disabled) context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                        else requestLocation()
-                    })
-                if (selected != null) PlaceSheet(selected, loaded, model.preferences,
-                    onClose = { model.select(null) }, onPlace = { model.select(it.id) })
+                if (route.open) {
+                    NavigationScreen(route, runtime, controller, access.granted, requestLocation,
+                        pick = { origin -> pickingOrigin = origin; nav.navigate("route-search") })
+                } else {
+                    MapControls(controller, status, access.granted, mapError, selected != null,
+                        onSearch = { nav.navigate("search") { launchSingleTop = true } }, onLocate = {
+                            if (access.granted && status == LocationStatus.Disabled) context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            else requestLocation()
+                        })
+                    if (selected != null) PlaceSheet(selected, loaded, model.preferences,
+                        onClose = { model.select(null) }, onPlace = { model.select(it.id) }, onRoute = { runtime.open(selected) })
+                }
             }
             composable("search") {
                 SearchScreen(loaded, model.search, model.preferences, onBack = { nav.popBackStack() },
                     onPlace = { model.select(it.id); nav.popBackStack() })
+            }
+            composable("route-search") {
+                SearchScreen(loaded, model.search, model.preferences, onBack = { nav.popBackStack() },
+                    onPlace = { if (pickingOrigin) runtime.origin(it) else runtime.destination(it); nav.popBackStack() },
+                    onMyPosition = if (pickingOrigin) ({ runtime.origin(null); nav.popBackStack() }) else null)
             }
         }
     }

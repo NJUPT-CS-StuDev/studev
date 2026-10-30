@@ -47,7 +47,7 @@ private val categories = listOf(
 
 @Composable
 internal fun SearchScreen(campus: CampusPackage, search: CampusSearch, preferences: PlacePreferences,
-                          onBack: () -> Unit, onPlace: (Place) -> Unit) {
+                          onBack: () -> Unit, onPlace: (Place) -> Unit, onMyPosition: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf<List<Place>>(emptyList()) }
@@ -92,6 +92,9 @@ internal fun SearchScreen(campus: CampusPackage, search: CampusSearch, preferenc
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow))
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth()) else HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            if (onMyPosition != null) TextButton(onClick = { keyboard?.hide(); onMyPosition() }, Modifier.fillMaxWidth().height(48.dp)) {
+                Icon(Icons.Outlined.MyLocation, null); Spacer(Modifier.width(12.dp)); Text("使用我的位置作为起点")
+            }
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = Tokens.Space.xl.dp)) {
                 if (query.isEmpty() && category == null) {
                     item {

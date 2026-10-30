@@ -111,7 +111,7 @@ private fun MapButton(description: String, icon: ImageVector, onClick: () -> Uni
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlacePreferences,
-                        onClose: () -> Unit, onPlace: (Place) -> Unit) {
+                        onClose: () -> Unit, onPlace: (Place) -> Unit, onRoute: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val saved by preferences.saved.collectAsStateWithLifecycle(emptySet())
@@ -142,7 +142,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     IconButton(onClick = onClose, Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "关闭地点") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
-                    FilledTonalButton(onClick = {}, enabled = false, modifier = Modifier.weight(1f)) {
+                    FilledTonalButton(onClick = onRoute, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Outlined.Directions, null, Modifier.size(18.dp)); Spacer(Modifier.width(Tokens.Space.xs.dp)); Text("路线")
                     }
                     OutlinedButton(onClick = { scope.launch { preferences.toggleSaved(place.id) } }, modifier = Modifier.weight(1f)) {
