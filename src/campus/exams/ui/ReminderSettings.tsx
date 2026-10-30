@@ -24,10 +24,10 @@ export function ReminderSettings({ selected, onChange }: ReminderSettingsProps) 
     };
 
     return (
-        <div className="mb-6 rounded-lg border border-[#dadce0] dark:border-[#323a44] bg-[#f8f9fa] dark:bg-[#14181d] p-4">
+        <div className="mb-6 rounded-lg border border-[var(--line)] dark:border-[var(--line)] bg-[var(--surface)] dark:bg-[var(--paper)] p-4">
             <div className="flex items-center gap-2 mb-3">
-                <Bell className="w-5 h-5 text-[#fbbc05]" aria-hidden="true" />
-                <h3 className="font-medium text-[#202124] dark:text-[#e8edf3] text-[14px]">考前提醒</h3>
+                <Bell className="w-5 h-5 text-[var(--warning)]" aria-hidden="true" />
+                <h3 className="font-medium text-[var(--ink)] dark:text-[var(--ink)] text-[14px]">考前提醒</h3>
             </div>
             <div className="flex flex-wrap gap-2">
                 {options.map(opt => {
@@ -39,8 +39,8 @@ export function ReminderSettings({ selected, onChange }: ReminderSettingsProps) 
                             onClick={() => toggleOption(opt.value)}
                             className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-all border
                                 ${isActive
-                                    ? 'bg-[#e8f0fe] dark:bg-[#8ab4f8]/20 text-[var(--color-google-blue)] dark:text-[#8ab4f8] border-transparent'
-                                    : 'bg-white dark:bg-[#1c232b] text-[#5f6368] dark:text-[#aeb8c5] border-[#dadce0] dark:border-[#5f6368] hover:bg-[#f8f9fa] dark:hover:bg-[#3c4043]'
+                                    ? 'bg-[var(--mark)] dark:bg-[var(--brand)]/20 text-[var(--color-google-blue)] dark:text-[var(--brand)] border-transparent'
+                                    : 'bg-[var(--paper)] dark:bg-[var(--surface)] text-[var(--muted)] dark:text-[var(--muted)] border-[var(--line)] dark:border-[var(--line)] hover:bg-[var(--surface)] dark:hover:bg-[var(--surface-raised)]'
                                 }`}
                         >
                             {opt.label}

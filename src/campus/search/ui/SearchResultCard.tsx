@@ -66,7 +66,7 @@ function HighlightedText({ text, terms }: { text: string; terms: string[] }) {
                 <mark
                     key={`${segment.text}-${index}`}
                     data-testid="collection-result-highlight"
-                    className="rounded bg-[#fff3bf] px-0.5 text-inherit dark:bg-[#5f4b18]"
+                    className="rounded bg-[var(--highlight)] px-0.5 text-inherit dark:bg-[var(--highlight)]"
                 >
                     {segment.text}
                 </mark>
@@ -90,29 +90,29 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
     };
 
     return (
-        <a {...wrapperProps} className="block w-full text-left py-3 group border-b border-[#e8eaed] dark:border-[#323a44] last:border-b-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[#70757a] dark:text-[#9aa0a6]">
-                <span className="font-medium text-[#3c4043] dark:text-[#aeb8c5]">{CATEGORY_LABELS[(document.category ?? 'notice_article') as SearchCategory]}</span>
+        <a {...wrapperProps} className="block w-full text-left py-3 group border-b border-[var(--line)] dark:border-[var(--line)] last:border-b-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--muted)] dark:text-[var(--muted)]">
+                <span className="font-medium text-[var(--ink)] dark:text-[var(--muted)]">{CATEGORY_LABELS[(document.category ?? 'notice_article') as SearchCategory]}</span>
                 <span>{document.sourceName}</span>
                 <span>›</span>
                 <span>{document.section || '其他'}</span>
                 {date ? <><span>›</span><span>{date.slice(0, 10)}</span></> : null}
             </div>
 
-            <h3 className="mt-1 text-[20px] leading-snug font-medium text-[#1a0dab] dark:text-[#8ab4f8] group-hover:underline break-words">
+            <h3 className="mt-1 text-[20px] leading-snug font-medium text-[var(--brand)] dark:text-[var(--brand)] group-hover:underline break-words">
                 {document.title}
             </h3>
 
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#0b8043] dark:text-[#81c995]">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--success)] dark:text-[var(--success)]">
                 <span className="truncate max-w-full">{document.url}</span>
                 {document.kind === 'link' ? (
-                    <span className="inline-flex items-center gap-1 text-[#5f6368] dark:text-[#9aa0a6]">
+                    <span className="inline-flex items-center gap-1 text-[var(--muted)] dark:text-[var(--muted)]">
                         <ExternalLink size={13} />
                         站外页面
                     </span>
                 ) : null}
                 {document.kind === 'file' ? (
-                    <span className="inline-flex items-center gap-1 text-[#5f6368] dark:text-[#9aa0a6]">
+                    <span className="inline-flex items-center gap-1 text-[var(--muted)] dark:text-[var(--muted)]">
                         <Download size={13} />
                         附件
                     </span>
@@ -122,7 +122,7 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
             {document.snippet ? (
                 <p
                     data-testid="search-result-snippet"
-                    className="mt-2 text-[14px] text-[#4d5156] dark:text-[#aeb8c5] line-clamp-3 sm:line-clamp-2 break-words"
+                    className="mt-2 text-[14px] text-[var(--muted)] dark:text-[var(--muted)] line-clamp-3 sm:line-clamp-2 break-words"
                 >
                     <HighlightedText
                         text={document.snippet}
@@ -132,24 +132,24 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
             ) : (
                 <div
                     data-testid="search-result-snippet-loading"
-                    className="mt-2 h-4 w-4/5 animate-pulse rounded bg-[#f1f3f4] dark:bg-[#1c232b]"
+                    className="mt-2 h-4 w-4/5 animate-pulse rounded bg-[var(--surface-sunken)] dark:bg-[var(--surface)]"
                 />
             )}
 
             {document.attachments.length > 0 ? (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex h-6 items-center gap-1 rounded bg-[#e8f0fe] px-2 text-[12px] text-[#1967d2] dark:bg-[#263850] dark:text-[#8ab4f8]">
+                    <span className="inline-flex h-6 items-center gap-1 rounded bg-[var(--mark)] px-2 text-[12px] text-[var(--brand)] dark:bg-[var(--mark)] dark:text-[var(--brand)]">
                         <FileText size={12} />
                         {document.attachments.length} 个附件
                     </span>
                     {document.attachments.slice(0, 4).map(attachment => (
                         <span
                             key={attachment.url}
-                            className="inline-flex items-center gap-1 max-w-full h-6 px-2 rounded bg-[#f8fafd] dark:bg-[#2d2f33] text-[12px] text-[#3c4043] dark:text-[#d2d5da]"
+                            className="inline-flex items-center gap-1 max-w-full h-6 px-2 rounded bg-[var(--alert-note)] dark:bg-[var(--surface)] text-[12px] text-[var(--ink)] dark:text-[var(--ink)]"
                         >
                             <FileText size={12} className="shrink-0" />
                             <span className="truncate">{attachment.name}</span>
-                            {attachment.extension ? <span className="uppercase text-[#70757a] dark:text-[#9aa0a6]">{attachment.extension}</span> : null}
+                            {attachment.extension ? <span className="uppercase text-[var(--muted)] dark:text-[var(--muted)]">{attachment.extension}</span> : null}
                         </span>
                     ))}
                 </div>

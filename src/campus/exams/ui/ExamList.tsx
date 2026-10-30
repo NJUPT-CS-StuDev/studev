@@ -13,7 +13,7 @@ export function ExamList({ classes, onClassClick }: ExamListProps) {
 
     return (
         <div className="w-full mt-2 fade-in">
-            <div className="text-[14px] text-[#70757a] dark:text-[#9aa0a6] mb-6">
+            <div className="text-[14px] text-[var(--muted)] dark:text-[var(--muted)] mb-6">
                 找到 {classes.length} 个班级
             </div>
             
@@ -22,7 +22,7 @@ export function ExamList({ classes, onClassClick }: ExamListProps) {
                     <button 
                         key={index} 
                         onClick={() => onClassClick(cls)}
-                        className="px-5 py-2.5 bg-white dark:bg-[#14181d] border border-[#dadce0] dark:border-[#5f6368] rounded-full text-[15px] text-[#1a0dab] dark:text-[#8ab4f8] hover:bg-[#f8f9fa] dark:hover:bg-[#1c232b] hover:border-[#d2e3fc] dark:hover:border-[#8ab4f8]/30 transition-all shadow-sm hover:shadow active:scale-95 flex items-center gap-2"
+                        className="px-5 py-2.5 bg-[var(--paper)] dark:bg-[var(--paper)] border border-[var(--line)] dark:border-[var(--line)] rounded-full text-[15px] text-[var(--brand)] dark:text-[var(--brand)] hover:bg-[var(--surface)] dark:hover:bg-[var(--surface)] hover:border-[var(--brand-container)] dark:hover:border-[var(--brand)]/30 transition-all shadow-sm hover:shadow active:scale-95 flex items-center gap-2"
                     >
                         <span>{cls}</span>
                         <ChevronRight className="w-3.5 h-3.5 opacity-60" aria-hidden="true" />

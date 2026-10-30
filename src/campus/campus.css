@@ -4,13 +4,13 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 @theme {
-  --color-google-blue: #1a0dab;
-  --color-google-blue-dark: #8ab4f8;
-  --color-google-green: #006621;
-  --color-google-green-dark: #81c995;
-  --color-google-grey: #4d5156;
-  --color-google-grey-dark: #bdc1c6;
-  --color-google-bg-dark: #202124;
+  --color-google-blue: var(--brand);
+  --color-google-blue-dark: var(--brand);
+  --color-google-green: var(--success);
+  --color-google-green-dark: var(--success);
+  --color-google-grey: var(--muted);
+  --color-google-grey-dark: var(--muted);
+  --color-google-bg-dark: var(--surface);
 }
 
 /* 自定义滚动条样式 (跨浏览器现代方案) */
@@ -20,7 +20,7 @@
     }
     * {
         scrollbar-width: thin;
-        scrollbar-color: #cbd5e1 transparent;
+        scrollbar-color: var(--line) transparent;
     }
 }
 
@@ -32,7 +32,7 @@
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: var(--line);
     border-radius: 3px;
 }
 
@@ -71,11 +71,11 @@
     .skeleton-block {
         position: relative;
         overflow: hidden;
-        background: #f1f3f4;
+        background: var(--surface-sunken);
     }
 
     [data-theme=dark] .skeleton-block {
-        background: #303134;
+        background: var(--surface-sunken);
     }
 
     .skeleton-block::after {
@@ -83,11 +83,11 @@
         position: absolute;
         inset: 0;
         transform: translateX(-120%);
-        background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.42), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper) 42%, transparent), transparent);
     }
 
     [data-theme=dark] .skeleton-block::after {
-        background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.12), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper) 12%, transparent), transparent);
     }
 }
 

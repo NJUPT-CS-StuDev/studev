@@ -19,7 +19,9 @@
     const label = theme === 'dark' ? '切换到浅色模式' : '切换到深色模式';
     button?.setAttribute('aria-label', label);
     button?.setAttribute('title', label);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
+    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    const themeColor = themeMeta?.dataset[theme];
+    if (themeColor) themeMeta?.setAttribute('content', themeColor);
     if (previous !== theme) document.dispatchEvent(new CustomEvent('site:theme-change', { detail: { theme } }));
   }
 

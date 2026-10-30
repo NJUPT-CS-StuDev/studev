@@ -63,7 +63,7 @@ export function ExamDetail({
     const now = new Date().toISOString();
     const allPast = exams.length > 0 && exams.every(exam => examTimestamp(exam, 'end') && new Date(examTimestamp(exam, 'end')).toISOString() < now);
     const card = (exam: Exam, idx: number, list: Exam[]) => (
-        <div key={exam.id || idx} className={idx !== list.length - 1 ? 'border-b border-[#dadce0] dark:border-[#323a44]' : ''}>
+        <div key={exam.id || idx} className={idx !== list.length - 1 ? 'border-b border-[var(--line)] dark:border-[var(--line)]' : ''}>
             <ExamCard exam={exam} isSelected={selectedIds.has(exam.id)} exportStatus={getExamStatus(exam)} onToggle={() => onToggleSelection(exam.id)} />
         </div>
     );
@@ -123,17 +123,17 @@ export function ExamDetail({
         <div className="fade-in w-full">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
                 <div>
-                    <h2 className="text-[28px] font-normal text-[#202124] dark:text-[#e8edf3] leading-tight mb-2">
+                    <h2 className="text-[28px] font-normal text-[var(--ink)] dark:text-[var(--ink)] leading-tight mb-2">
                         {className} 考试安排
                     </h2>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-[#70757a] dark:text-[#9aa0a6]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-[var(--muted)] dark:text-[var(--muted)]">
                         <span>已选 {selectedIds.size} 门，共 {exams.length} 门</span>
                         <span>•</span>
                         <button
                             onClick={onSelectAll}
                             type="button"
                             disabled={allSelected}
-                            className={`hover:underline transition-colors ${allSelected ? 'text-[#9aa0a6] cursor-not-allowed no-underline' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
+                            className={`hover:underline transition-colors ${allSelected ? 'text-[var(--muted)] cursor-not-allowed no-underline' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
                         >
                             全选
                         </button>
@@ -141,7 +141,7 @@ export function ExamDetail({
                             onClick={onClearSelection}
                             type="button"
                             disabled={noneSelected}
-                            className={`hover:underline transition-colors ${noneSelected ? 'text-[#9aa0a6] cursor-not-allowed no-underline' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
+                            className={`hover:underline transition-colors ${noneSelected ? 'text-[var(--muted)] cursor-not-allowed no-underline' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
                         >
                             取消全选
                         </button>
@@ -149,16 +149,16 @@ export function ExamDetail({
                         <button
                             onClick={copyShareLink}
                             type="button"
-                            className={`flex items-center gap-1 hover:underline transition-colors ${copyState ? 'text-[#34A853]' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
+                            className={`flex items-center gap-1 hover:underline transition-colors ${copyState ? 'text-[var(--success)]' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
                         >
                             <Share2 className="w-4 h-4" aria-hidden="true" />
                             {copyState ? '链接已复制' : '复制分享链接'}
                         </button>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#70757a] dark:text-[#9aa0a6]">
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--muted)] dark:text-[var(--muted)]">
                         {sourceTitle ? (
                             sourceUrl ? (
-                                <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[#1a73e8] dark:text-[#8ab4f8] hover:underline">
+                                <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--brand)] dark:text-[var(--brand)] hover:underline">
                                     来源：{sourceTitle}
                                 </a>
                             ) : (
@@ -175,8 +175,8 @@ export function ExamDetail({
                     className={`
                         inline-flex items-center justify-center gap-2 px-6 py-2 rounded-full text-[14px] font-medium transition-all shrink-0
                         ${selectedIds.size > 0
-                            ? 'bg-[var(--color-google-blue)] hover:bg-[#3b78e7] text-white shadow-sm'
-                            : 'bg-[#f8f9fa] dark:bg-[#1c232b] text-[#9aa0a6] cursor-not-allowed border border-[#dadce0] dark:border-[#323a44]'}
+                            ? 'bg-[var(--color-google-blue)] hover:bg-[var(--brand)] text-[var(--on-brand)] shadow-sm'
+                            : 'bg-[var(--surface)] dark:bg-[var(--surface)] text-[var(--muted)] cursor-not-allowed border border-[var(--line)] dark:border-[var(--line)]'}
                     `}
                 >
                     <Download className="w-4 h-4" aria-hidden="true" />
@@ -185,13 +185,13 @@ export function ExamDetail({
             </div>
 
             {allPast ? (
-                <div className="mb-4 rounded-xl border border-[#fde293] bg-[#fef7e0] px-4 py-3 text-[14px] leading-relaxed text-[#7a4f01] dark:border-[#5c4a14] dark:bg-[#2b2410] dark:text-[#fdd663]">
+                <div className="mb-4 rounded-xl border border-[var(--warning-line)] bg-[var(--warning-bg)] px-4 py-3 text-[14px] leading-relaxed text-[var(--warning)] dark:border-[var(--warning-line)] dark:bg-[var(--warning-bg)] dark:text-[var(--warning)]">
                     这些考试都已结束{sourceTitle ? `（${sourceTitle.replace(/^【[^】]*】/, '')}）` : ''}。本学期的考试安排公布后，这里会自动更新。
                 </div>
             ) : null}
 
             {notice ? (
-                <div className="mb-4 rounded-md border border-[#f4c7c3] bg-[#fce8e6] px-4 py-2 text-sm text-[#b3261e] dark:border-[#5f2b26] dark:bg-[#2b1715] dark:text-[#f28b82]">
+                <div className="mb-4 rounded-md border border-[var(--danger-line)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)] dark:border-[var(--danger-line)] dark:bg-[var(--danger-bg)] dark:text-[var(--danger)]">
                     {notice.message}
                 </div>
             ) : null}
@@ -200,16 +200,16 @@ export function ExamDetail({
                 <ReminderSettings selected={reminders} onChange={onRemindersChange} />
             </Suspense>
 
-            <div className="space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
+            <div className="space-y-0 border border-[var(--line)] dark:border-[var(--line)] rounded-lg overflow-hidden bg-[var(--paper)] dark:bg-[var(--paper)]">
                 {classExams.map((exam, idx) => card(exam, idx, classExams))}
             </div>
 
             {fewExams.length ? (
                 <details className="mt-5 group">
-                    <summary className="cursor-pointer select-none text-[14px] font-medium text-[#1a73e8] dark:text-[#8ab4f8]">
+                    <summary className="cursor-pointer select-none text-[14px] font-medium text-[var(--brand)] dark:text-[var(--brand)]">
                         不在你课表里的考试（本班其他同学的重修、选修等）· {fewExams.length} 门
                     </summary>
-                    <div className="mt-3 space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
+                    <div className="mt-3 space-y-0 border border-[var(--line)] dark:border-[var(--line)] rounded-lg overflow-hidden bg-[var(--paper)] dark:bg-[var(--paper)]">
                         {fewExams.map((exam, idx) => card(exam, idx, fewExams))}
                     </div>
                 </details>

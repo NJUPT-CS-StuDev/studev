@@ -96,9 +96,9 @@ export function ExamPage({ query, className, onOpenClass, client, historyClient,
             ) : null}
 
             {classMode.mode === 'NOT_FOUND' && !error ? (
-                <section className="mt-6 rounded-xl border border-[#dadce0] bg-[#f8fbff] px-4 py-6 text-center dark:border-[#323a44] dark:bg-[#14181d]">
-                    <h2 className="text-[20px] font-medium text-[#202124] dark:text-[#e8edf3]">没有找到这个班级</h2>
-                    <p className="mt-2 text-[14px] text-[#5f6368] dark:text-[#aeb8c5]">检查班级号后再试。</p>
+                <section className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-6 text-center dark:border-[var(--line)] dark:bg-[var(--paper)]">
+                    <h2 className="text-[20px] font-medium text-[var(--ink)] dark:text-[var(--ink)]">没有找到这个班级</h2>
+                    <p className="mt-2 text-[14px] text-[var(--muted)] dark:text-[var(--muted)]">检查班级号后再试。</p>
                 </section>
             ) : null}
         </main>

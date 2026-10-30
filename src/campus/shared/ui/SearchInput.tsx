@@ -90,7 +90,7 @@ export function SearchInput({
             <button
                 type="submit"
                 aria-label="提交搜索"
-                className="absolute inset-y-0 left-0 z-10 flex items-center px-4 text-[#9aa0a6] transition-all duration-300 hover:text-[var(--color-google-blue)] focus-visible:rounded-l-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1a73e8] group-focus-within:text-[var(--color-google-blue)] dark:group-focus-within:text-[var(--color-google-blue-dark)]"
+                className="absolute inset-y-0 left-0 z-10 flex items-center px-4 text-[var(--muted)] transition-all duration-300 hover:text-[var(--color-google-blue)] focus-visible:rounded-l-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)] group-focus-within:text-[var(--color-google-blue)] dark:group-focus-within:text-[var(--color-google-blue-dark)]"
             >
                 <Search className="w-5 h-5" aria-hidden="true" />
             </button>
@@ -100,7 +100,7 @@ export function SearchInput({
                 type="text"
                 autoComplete="off"
                 aria-label={ariaLabel}
-                className="w-full h-[52px] pl-12 pr-12 bg-white dark:bg-[#14181d] border border-[#dfe1e5] dark:border-[#5f6368] rounded-full text-[16px] leading-normal outline-none hover:shadow-[0_1px_6px_rgba(32,33,36,0.18)] dark:hover:shadow-[0_1px_6px_rgba(23,23,23,0.8)] focus:shadow-[0_1px_6px_rgba(32,33,36,0.22)] dark:focus:shadow-[0_1px_6px_rgba(23,23,23,0.8)] hover:border-[#cfd4dc] focus:border-[#8ab4f8] transition-all text-[#202124] dark:text-[#e8edf3] placeholder:text-[#70757a] dark:placeholder:text-[#9aa0a6]"
+                className="w-full h-[52px] pl-12 pr-12 bg-[var(--paper)] dark:bg-[var(--paper)] border border-[var(--line)] dark:border-[var(--line)] rounded-full text-[16px] leading-normal outline-none hover:shadow-[0_1px_6px_var(--shadow-medium)] dark:hover:shadow-[0_1px_6px_var(--scrim)] focus:shadow-[0_1px_6px_var(--shadow-medium)] dark:focus:shadow-[0_1px_6px_var(--scrim)] hover:border-[var(--line)] focus:border-[var(--brand)] transition-all text-[var(--ink)] dark:text-[var(--ink)] placeholder:text-[var(--muted)] dark:placeholder:text-[var(--muted)]"
                 placeholder={placeholder || dynamicPlaceholder}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
@@ -118,7 +118,7 @@ export function SearchInput({
                     type="button" 
                     onClick={clearInput}
                     aria-label="清空搜索"
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#70757a] hover:text-[#202124] dark:text-[#9aa0a6] dark:hover:text-white"
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--muted)] hover:text-[var(--ink)] dark:text-[var(--muted)] dark:hover:text-[var(--ink)]"
                 >
                     <X className="w-5 h-5" aria-hidden="true" />
                 </button>
