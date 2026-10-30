@@ -187,6 +187,8 @@ class PresentationTest {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("demo") == "true")
         try {
             prepare(); time(7)
+            compose.onNodeWithText("早安，开启校园的一天").assertIsDisplayed()
+            buildingsReady(); Thread.sleep(2000); compose.waitForIdle()
             val start = SystemClock.elapsedRealtime()
             val timeline = mutableListOf<String>()
             fun mark(text: String) { timeline += "${(SystemClock.elapsedRealtime() - start) / 1000}s $text" }
