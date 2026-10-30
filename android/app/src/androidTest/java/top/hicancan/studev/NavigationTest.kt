@@ -83,6 +83,8 @@ class NavigationTest {
     }
     private fun main(action: () -> Unit) { instrumentation.runOnMainSync(action) }
     private fun ready() {
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("tab-map").fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isNotEmpty() }
+        if (compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isEmpty()) compose.onNodeWithTag("tab-map").performClick()
         compose.waitUntil(20_000) { compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isNotEmpty() }
     }
     private fun search(query: String) {

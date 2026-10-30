@@ -1,8 +1,105 @@
 # studev Android
 
-The Android client currently ships the map destination. Search is a full-screen
-route above the same live map; a bottom bar will appear when another product
-destination exists. No sample data or placeholder destinations ship.
+The Android client has four destinations: 首页 / 课表 / 地图 / 我的. The campus
+home brings together the next lesson, today's remaining lessons and upcoming
+exams. Exams live beside the timetable; free rooms and full-text search open
+from home. The map keeps its own time-of-day place home sheet, place search, planning and live navigation. Account and campus activities open from 我的 through the single root ActivityHost.
+
+## Native campus queries and device features
+
+`campus/` contains the product shell and query screens. `data/AcademicFacts.kt`
+reads the same raw teaching, exam and room shards as the web. Teaching weeks and
+all displayed dates use Asia/Shanghai, including on phones set to other time zones.
+The persisted class is shared by home, timetable, exams, calendar and reminders.
+The week grid and day list open the same course detail; a published room opens
+the existing planner through `NavigationRuntime.open(Place)`. Home uses the
+public wayfind binding for walking minutes; it never estimates straight-line time.
+
+`AcademicRepository` reads an immutable release per reader. The APK includes the
+digested release, including content-search shards, plus `data/release.json`.
+Academic files are opened only when needed: class shards, the selected room day,
+and wasm-search's requested posting/content chunks. Remote shards are cached in
+`files/campus/<version>/` with atomic file replacement. Remote readers never mix
+in a different version's assets. Startup opens local data first, then checks the
+web campus island's module and its constants module for the embedded release
+contract. There is no published standalone `latest.json` endpoint in this repo.
+A release is activated only after its indexes and selected class can be read.
+An older deployed schema is rejected; the packaged current schema stays usable.
+The existing map, style and route graph remain the APK's bundled release.
+
+`calendar/` creates a dedicated local **studev 课表与考试** calendar using
+CalendarContract. Event IDs contain the published meeting ID, term and week;
+re-sync updates rows in place and removes obsolete rows. Disabling sync deletes
+only this calendar. Both calendar permissions are requested at the point of use.
+
+`reminders/` schedules a rolling seven-day window, replenished by a persisted
+12-hour maintenance worker and after boot, app replacement and exact-alarm grant.
+Where allowed, AlarmManager delivers the exact reminder. WorkManager is also
+scheduled as a fallback if that access is later revoked; stable IDs prevent double
+notification delivery. Notification permission is requested when enabling reminders.
+The navigation action carries the room's published canonical ID. Opting out cancels
+scheduled work and alarms. No server push or Google Play Services is involved.
+
+`widget/` is a Glance next-lesson widget using the same generated design palette.
+It displays the next class and room, with walking time explicitly labelled as
+coming from the last known position; that value expires after 30 minutes. Without
+a recent position it asks the user to open the app. It never starts background GPS.
+Add it from 我的 or the launcher's widget picker.
+
+`me/AppUpdates.kt` finds the latest stable GitHub release containing an APK, downloads
+through DownloadManager, reads the APK manifest, and compares its actual versionCode
+and package name before handing it to the system installer. Signing is verified
+by Android. Unknown-source access is requested only from the explicit continue
+button. An empty release list and unavailable checks produce no startup prompts.
+
+Deep links cover `/map/`, `/search/`, `/search/timetable/`, `/search/exam/`,
+`/search/classrooms/` and `/search/web/` (including community/materials search).
+Class, timetable week, search query, room building/date/period and campus parameters
+open the corresponding native screen. The map's existing `place` link still works;
+`route=true` also opens its planner, used by reminders and widgets.
+
+Campus validation uses **studev-2**, serial **emulator-5556**; do not operate on
+another agent's emulator. After preparing inputs and building, from the repository root:
+
+```powershell
+$adb = 'D:\Dev\Android\Sdk\platform-tools\adb.exe'
+& $adb -s emulator-5556 install -r android/app/build/outputs/apk/debug/app-debug.apk
+& $adb -s emulator-5556 install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+& $adb -s emulator-5556 emu geo fix 118.9255 32.1150
+& $adb -s emulator-5556 shell am instrument -w -e class top.hicancan.studev.CampusTabsTest top.hicancan.studev.test/androidx.test.runner.AndroidJUnitRunner
+& $adb -s emulator-5556 pull /sdcard/Android/data/top.hicancan.studev/files/campus-shots D:\Temp\claude-wsl\agents\app-campus\shots\
+```
+
+The tests cover both themes and all tabs, actual content-search and routing
+bindings, idempotent provider writes and removal, a scheduled reminder with a real
+navigation PendingIntent, class persistence, one-tap departure, offline shard
+cache isolation, and widget placement on the actual launcher. The room
+availability unit tests port the web's `campusDay.test.ts`, including authoritative
+checked free lists, class/exam occupancy and unknown borrowed-room status. The
+notification scheduling test uses a short-lived test event; production data has
+no injected lessons or exams.
+
+Verified on 2026-10-30: `assembleDebug testDebugUnitTest assembleDebugAndroidTest lint`
+passes, including 20 unit tests; `CampusTabsTest` passes all 8 instrumented cases
+(96.719 seconds), and `MapSmokeTest` passes all 3 original map cases (54.049 seconds).
+Run the map suite before the widget placement case when capturing a fresh test
+device. The campus suite orders widget placement last and reuses an existing
+instance, so repeated runs do not fill the launcher with duplicate widgets.
+
+Shared integration files changed by `app-campus` are `MainActivity.kt` (product
+shell and full URL delivery), `AndroidManifest.xml` (device integrations and
+search deep links), the app build/version catalog (the full shared package,
+WorkManager and Glance), `data/CampusPackage.kt` (the current space contract),
+`ui/theme/Theme.kt` (share the generated schemes with Glance), and
+`navigation/Wayfind.kt` (decode the kernel's `via` field). The existing map and
+navigation smoke-test entry helpers select the map tab before running their
+original assertions. Map package internals and navigation runtime logic are
+unchanged; cross-feature actions use the existing public planner/session methods.
+
+The live site currently exposes an older release schema, so a live current-format
+data upgrade cannot yet be exercised. APK upgrade installation also awaits the
+first release with an APK asset. Neither condition blocks the bundled offline
+query features, local calendar, reminders or widget.
 
 ## Build
 
@@ -36,9 +133,9 @@ $env:ANDROID_HOME = 'D:\Dev\Android\Sdk'
 
 Gradle generates Kotlin tokens and Android launch colors from `design/tokens.json`.
 The Compose theme uses the generated palette, system typography, shapes and motion
-values; dynamic color is disabled. It also copies the latest shared campus release
-from `public/data/<version>/space/仙林/` into generated APK assets at
-`data/space/仙林/`, with the release name in `data/version.txt`. No generated data,
+values; dynamic color is disabled. It also copies the release named in
+`src/data/campus-release.json` from `public/data/<version>/` into generated APK
+assets at `data/`, with the release name in `data/version.txt`. No generated data,
 map assets or native binaries belong in Git. Missing fonts/sprites or kernels
 produce actionable build errors.
 
@@ -214,7 +311,7 @@ strict field handling, field round trips and native style URL binding.
 The source build rejects duplicate place IDs. Parking and amenity names are
 stable curated campus identities shared by search, map features and share URLs.
 Place sheets show purpose, today's opening state and an expandable full week;
-unpublished hours remain explicitly unknown. Internal release IDs are not shown.
+unpublished hours are hidden. Internal release IDs are not shown.
 Rooms navigate to the packaged building endpoint, and standalone services use
 their packaged position endpoint with the same native 100 m snap limit.
 The native search currently returns the exact building for `教3`; a room is found

@@ -52,12 +52,16 @@ abstract class DesignTokensTask : DefaultTask() {
 }
 abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOperations) : DefaultTask() {
     @get:InputDirectory abstract val releases: DirectoryProperty
+    @get:InputFile abstract val releaseManifest: RegularFileProperty
     @get:OutputDirectory abstract val assetDir: DirectoryProperty
     @TaskAction fun copyPackage() {
-        val release = releases.get().asFile.listFiles()?.filter { it.isDirectory && it.resolve("space/仙林").isDirectory }
-            ?.maxByOrNull { it.name }
-            ?: error("Campus package missing. Run npm run digest in the repository root.")
-        fs.sync { from(release.resolve("space/仙林")); into(assetDir.dir("data/space/仙林")) }
+        val metadata = JsonSlurper().parse(releaseManifest.get().asFile) as Map<*, *>
+        val version = metadata["version"] as String
+        check(version.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid campus release version" }
+        val release = releases.get().asFile.resolve(version)
+        check(release.resolve("space/仙林").isDirectory) { "Campus package missing. Run npm run digest in the repository root." }
+        fs.sync { from(release); into(assetDir.dir("data")) }
+        releaseManifest.get().asFile.copyTo(assetDir.file("data/release.json").get().asFile, overwrite = true)
         assetDir.file("data/version.txt").get().asFile.writeText(release.name)
     }
 }
@@ -87,6 +91,7 @@ val generateDesignTokens = tasks.register<DesignTokensTask>("generateDesignToken
 }
 val packageCampusData = tasks.register<CampusDataTask>("packageCampusData") {
     releases.set(rootProject.layout.projectDirectory.dir("../public/data"))
+    releaseManifest.set(rootProject.layout.projectDirectory.file("../src/data/campus-release.json"))
     assetDir.set(layout.buildDirectory.dir("generated/campus/assets"))
 }
 val verifyMapInputs = tasks.register<VerifyMapInputsTask>("verifyMapInputs") {
@@ -172,6 +177,9 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.material.icons)
     implementation(libs.jna) { artifact { type = "aar" } }
+    implementation(libs.work.runtime)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
