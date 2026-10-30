@@ -16,6 +16,7 @@ export function ModuleNav({ route, onNavigate }: { route: AppRoute; onNavigate: 
         <div className="sticky top-0 z-30 border-b border-[var(--line)] dark:border-[var(--line)] bg-[var(--paper)]/95 dark:bg-[var(--paper)]/95 backdrop-blur">
             <div className="max-w-[1080px] mx-auto px-3 sm:px-6">
                 <nav aria-label="studev-search 模块切换" className="flex items-center justify-between gap-0.5 sm:justify-start sm:gap-1.5 overflow-x-auto py-2 text-[12px] sm:text-[13px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                    <a href="/map/" className="shrink-0 rounded-full px-2 py-1 sm:px-3.5 sm:py-1.5 text-[var(--muted)] hover:bg-[var(--surface-sunken)] hover:text-[var(--ink)]">校园地图</a>
                     {MODULES.map(item => (
                         <a
                             key={item.route}

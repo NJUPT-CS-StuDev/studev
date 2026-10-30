@@ -1,5 +1,5 @@
 import { ROUTE_PATHS } from '@/app/routing/useUrlState';
-import { BookOpen, Building2, CalendarDays, Download, FileText, GraduationCap, Library, Shuffle, Trophy } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, Download, FileText, GraduationCap, Library, MapPinned, Shuffle, Trophy } from 'lucide-react';
 import type { ProductIntent } from '@/app/routing/intents';
 import { QUICK_SEARCHES, type QuickSearchIcon, type QuickSearchGroup } from './searchPresets';
 import { SearchInput } from '@/shared/ui/SearchInput';
@@ -72,6 +72,7 @@ export function HomePage({
                                 ) : group}
                             </h2>
                             <div className="flex flex-wrap items-center justify-center gap-2">
+                                {group === '教务查询' && <a href="/map/" className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[var(--line)] bg-[var(--paper)] text-sm text-[var(--ink)] hover:border-[var(--brand)] transition-colors"><MapPinned className="w-4 h-4 text-[var(--brand)]" aria-hidden="true" />校园地图</a>}
                                 {QUICK_SEARCHES.filter(item => item.group === group).map(item => {
                                     const Icon = QUICK_SEARCH_ICONS[item.icon];
                                     return (
