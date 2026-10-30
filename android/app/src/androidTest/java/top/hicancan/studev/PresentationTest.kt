@@ -36,7 +36,10 @@ class PresentationTest {
     private fun shell(command: String): String = instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
         android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes().toString(Charsets.UTF_8) }
     }
-    private fun ready() { compose.waitUntil(30_000) { runCatching { compose.onAllNodesWithTag("home-search").fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false) } }
+    private fun ready() {
+        compose.onNodeWithTag("tab-map").performClick()
+        compose.waitUntil(30_000) { runCatching { compose.onAllNodesWithTag("home-search").fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false) }
+    }
     private fun buildingsReady() {
         compose.waitUntil(30_000) {
             var rendered = false
@@ -76,9 +79,11 @@ class PresentationTest {
     }
     private fun search(query: String, capture: Boolean = false) {
         compose.onNodeWithText("搜索地点、楼栋或教室").performClick()
-        compose.onNode(hasSetTextAction()).performTextInput(query)
-        compose.waitUntil(20_000) { compose.onAllNodesWithTag("place:$query").fetchSemanticsNodes().isNotEmpty() }
+        // A reopened search can restore its previous edit state. Each capture
+        // asks for this exact query and submits it before waiting on results.
+        compose.onNode(hasSetTextAction()).performTextReplacement(query)
         compose.onNode(hasSetTextAction()).performImeAction()
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("place:$query").fetchSemanticsNodes().isNotEmpty() }
         if (capture) shot("search")
         compose.onNodeWithTag("place:$query").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("关闭地点").fetchSemanticsNodes().isNotEmpty() }
@@ -101,7 +106,10 @@ class PresentationTest {
             compose.onNodeWithContentDescription("切换三维地图").performClick(); shot("map-3d")
             compose.onNodeWithContentDescription("切换二维地图").performClick()
             if (Build.VERSION.SDK_INT >= 31) {
-                main { context.getSystemService(UiModeManager::class.java).setApplicationNightMode(UiModeManager.MODE_NIGHT_YES) }; ready(); buildingsReady(); shot("map-dark")
+                val beforeTheme = compose.activity
+                main { context.getSystemService(UiModeManager::class.java).setApplicationNightMode(UiModeManager.MODE_NIGHT_YES) }
+                compose.waitUntil(10_000) { beforeTheme.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES }
+                ready(); assertSame(beforeTheme, compose.activity); buildingsReady(); shot("map-dark")
             }
         } finally { restore() }
     }

@@ -7,12 +7,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.hicancan.studev.account.AccountScreen
 import top.hicancan.studev.account.Accounts
 
 /** One root registration. Map modules can call ActivityEntryPoints.createAt. */
-@Composable fun ActivityHost(link: String?, onLinkHandled: () -> Unit, onPlace: (String) -> Unit, content: @Composable (onActivities: () -> Unit, onAccount: () -> Unit) -> Unit) {
+@Composable fun ActivityHost(link: String?, campusLink: String?, onLinkHandled: () -> Unit, onPlace: (String) -> Unit, content: @Composable (onActivities: () -> Unit, onAccount: () -> Unit) -> Unit) {
     val context = LocalContext.current
     val client = remember { Accounts.get(context) }
     val service = remember { Activities(client) }
@@ -21,13 +22,14 @@ import top.hicancan.studev.account.Accounts
     var draftPlace by rememberSaveable { mutableStateOf<String?>(null) }
     val pending by ActivityEntryPoints.pendingPlace.collectAsStateWithLifecycle()
     LaunchedEffect(link) { ActivityLinks.parse(link)?.let { selected = it; screen = "activities"; onLinkHandled() } }
+    LaunchedEffect(campusLink) { if (campusLink != null) screen = "map" }
     LaunchedEffect(pending) { pending?.let { draftPlace = activityJson.encodeToString<ActivityPlace>(it); selected = null; screen = "create"; ActivityEntryPoints.pendingPlace.value = null } }
     var accountReturn by rememberSaveable { mutableStateOf("map") }
     Box(Modifier.fillMaxSize()) {
         content({ screen = "activities" }, { accountReturn = "map"; screen = "account" })
-        if (screen != "map") Surface(Modifier.fillMaxSize()) {
+        if (screen != "map") Surface(Modifier.fillMaxSize().testTag("activity-host-$screen")) {
             when (screen) {
-                "account" -> AccountScreen(client, onBack = { screen = accountReturn }, onSignedIn = { screen = if (draftPlace != null) "create" else accountReturn })
+                "account" -> AccountScreen(client, onBack = { screen = accountReturn }, onSignedIn = { screen = accountReturn })
                 "create" -> ActivityEditor(service, client, draftPlace?.let { activityJson.decodeFromString<ActivityPlace>(it) },
                     onBack = { screen = "activities" }, onSignIn = { accountReturn = "create"; screen = "account" }, onSaved = { selected = it.id; draftPlace = null; screen = "activities" })
                 else -> ActivitiesScreen(service, client, selected, onSelect = { selected = it }, onBack = { if (selected != null) selected = null else screen = "map" },

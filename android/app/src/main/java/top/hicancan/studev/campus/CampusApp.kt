@@ -150,7 +150,7 @@ import top.hicancan.studev.widget.NextLessonWidget
         }
     }
     val tab = when (screen) { "timetable", "exams" -> "timetable"; "map" -> "map"; "me", "calendar" -> "me"; else -> "home" }
-    BackHandler(screen != "home" && screen != "map") { screen = when (screen) { "calendar" -> "me"; "exams" -> "timetable"; else -> "home" } }
+    BackHandler(screen != "home") { screen = when (screen) { "calendar" -> "me"; "exams" -> "timetable"; else -> "home" } }
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), snackbarHost = { SnackbarHost(snackbar) }, topBar = {
         if (screen != "map") TopAppBar(title = { Text(when (screen) { "home" -> "studev"; "timetable", "exams" -> "课表"; "rooms" -> "空教室"; "search" -> "校园搜索"; "calendar" -> "日历同步"; else -> "我的" }) },
             navigationIcon = { if (screen in listOf("rooms", "search", "calendar")) IconButton({ screen = if (screen == "calendar") "me" else "home" }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },

@@ -3,7 +3,11 @@
 The Android client has four destinations: 首页 / 课表 / 地图 / 我的. The campus
 home brings together the next lesson, today's remaining lessons and upcoming
 exams. Exams live beside the timetable; free rooms and full-text search open
-from home. The map keeps its own time-of-day place home sheet, place search, planning and live navigation. Account and campus activities open from 我的 through the single root ActivityHost.
+from home. The map keeps its own time-of-day place home sheet, place search,
+planning and live navigation. Account and campus activities open from 我的
+through the single root ActivityHost. Back closes an account/activity overlay
+before changing the campus tab; from the map it dismisses search, routes and
+place details before returning to 首页.
 
 ## Native campus queries and device features
 
@@ -58,16 +62,17 @@ Class, timetable week, search query, room building/date/period and campus parame
 open the corresponding native screen. The map's existing `place` link still works;
 `route=true` also opens its planner, used by reminders and widgets.
 
-Campus validation uses **studev-2**, serial **emulator-5556**; do not operate on
-another agent's emulator. After preparing inputs and building, from the repository root:
+The original app-campus validation used **studev-2**, serial **emulator-5556**.
+Integrated validation uses **njupt-nav**, serial **emulator-5554**. After
+preparing inputs and building, from the repository root:
 
 ```powershell
 $adb = 'D:\Dev\Android\Sdk\platform-tools\adb.exe'
-& $adb -s emulator-5556 install -r android/app/build/outputs/apk/debug/app-debug.apk
-& $adb -s emulator-5556 install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-& $adb -s emulator-5556 emu geo fix 118.9255 32.1150
-& $adb -s emulator-5556 shell am instrument -w -e class top.hicancan.studev.CampusTabsTest top.hicancan.studev.test/androidx.test.runner.AndroidJUnitRunner
-& $adb -s emulator-5556 pull /sdcard/Android/data/top.hicancan.studev/files/campus-shots D:\Temp\claude-wsl\agents\app-campus\shots\
+& $adb -s emulator-5554 install -r android/app/build/outputs/apk/debug/app-debug.apk
+& $adb -s emulator-5554 install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+& $adb -s emulator-5554 emu geo fix 118.9255 32.1150
+& $adb -s emulator-5554 shell am instrument -w -e class top.hicancan.studev.CampusTabsTest top.hicancan.studev.test/androidx.test.runner.AndroidJUnitRunner
+& $adb -s emulator-5554 pull /sdcard/Android/data/top.hicancan.studev/files/campus-shots D:\Temp\claude-wsl\agents\integrate\shots\
 ```
 
 The tests cover both themes and all tabs, actual content-search and routing
@@ -101,11 +106,27 @@ data upgrade cannot yet be exercised. APK upgrade installation also awaits the
 first release with an APK asset. Neither condition blocks the bundled offline
 query features, local calendar, reminders or widget.
 
+`IntegrationSmokeTest` checks the combined shell on both the phone and emulator:
+tab/back behavior, account and activities across recreation, campus deep links
+while an account overlay is open, published/unknown hours, and real native route
+rendering. It captures home, timetable, map home, hours, planning and the account/
+activity entry screens in the app's external `files/integration-shots/`. Run it
+with the same instrumentation command above, replacing `CampusTabsTest` with
+`IntegrationSmokeTest`; it never supplies fake GPS to the phone.
+
 ## Build
 
 Use PowerShell 7, JDK 21 and the Windows SDK. All environment overrides below
 apply only to this process. Compile platform is `android-37.0`, target SDK 36,
 minimum SDK 26. MapLibre is `android-sdk-opengl:13.7.1` on every device.
+Both devices use SurfaceView. Theme changes update Compose, the map style and
+system bars in place; they do not recreate the Activity or its native surface.
+For headless validation, cold boot without changing AVD data or snapshots:
+
+```powershell
+& 'D:\Dev\Android\Sdk\emulator\emulator.exe' -avd njupt-nav -port 5554 -no-window -no-snapshot-load -no-snapshot-save -gpu swiftshader
+```
+
 The native kernels currently ship `arm64-v8a` and `x86_64`.
 
 Prepare the shared inputs from the repository root:

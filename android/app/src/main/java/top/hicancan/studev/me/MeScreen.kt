@@ -60,7 +60,7 @@ import top.hicancan.studev.widget.NextLessonWidgetReceiver
                 ListItem(headlineContent = { Text("账号与安全") }, supportingContent = { Text("登录、设备与账号设置") }, leadingContent = { Icon(Icons.Outlined.PersonOutline, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })
             } }
             item { OutlinedCard(onActivities, Modifier.fillMaxWidth().testTag("open-activities")) {
-                ListItem(headlineContent = { Text("校园活动") }, supportingContent = { Text("发现活动、报名与发布") }, leadingContent = { Icon(Icons.Outlined.Event, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })
+                ListItem(headlineContent = { Text("校园活动") }, supportingContent = { Text("发现、分享与发布校园活动") }, leadingContent = { Icon(Icons.Outlined.Event, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })
             } }
             item { OutlinedCard(onClass, Modifier.fillMaxWidth()) {
                 ListItem(headlineContent = { Text(preferences.klass ?: "选择你的班级") }, supportingContent = { Text(state.classes.find { it.id == preferences.klass }?.major ?: "课表、考试与提醒将跟随这个班级") }, leadingContent = { Icon(Icons.Outlined.Groups, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })

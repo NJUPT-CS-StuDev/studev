@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (savedInstanceState == null) readLink(intent) else { place = savedInstanceState.getString("pendingPlace"); activityLink = savedInstanceState.getString("pendingActivity") }
         setContent { StuDevTheme {
-            ActivityHost(activityLink, onLinkHandled = { activityLink = null }, onPlace = {
+            ActivityHost(activityLink, campusLink = place, onLinkHandled = { activityLink = null }, onPlace = {
                 place = android.net.Uri.Builder().scheme("https").authority("studev.hicancan.top").path("/map/").appendQueryParameter("place", it).build().toString()
             }) { onActivities, onAccount ->
                 CampusApp(place, onDeepLinkHandled = { place = null }, onActivities = onActivities, onAccount = onAccount)
@@ -35,11 +35,18 @@ class MainActivity : ComponentActivity() {
         } }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); readLink(intent) }
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Compose and the map restyle from LocalConfiguration. Keep the native
+        // surface attached, and update the system bars for the new palette too.
+        enableEdgeToEdge()
+    }
     override fun onSaveInstanceState(outState: Bundle) { outState.putString("pendingPlace", place); outState.putString("pendingActivity", activityLink); super.onSaveInstanceState(outState) }
     private fun readLink(intent: Intent) {
         val uri = intent.data ?: return
-        if (ActivityLinks.parse(uri.toString()) != null) { activityLink = uri.toString(); return }
+        if (ActivityLinks.parse(uri.toString()) != null) { place = null; activityLink = uri.toString(); return }
         if (uri.scheme == "https" && uri.host == "studev.hicancan.top") {
+            activityLink = null
             place = uri.toString()
         }
     }

@@ -202,7 +202,8 @@ class CampusTabsTest {
             return
         }
         compose.onNodeWithTag("tab-me").performClick(); wait("me")
-        compose.onNodeWithText("添加到桌面").performScrollTo().performClick()
+        compose.onNodeWithTag("me").performScrollToNode(hasText("添加到桌面"))
+        compose.onNodeWithText("添加到桌面").performClick()
         Thread.sleep(1200); shot("widget-pin-dialog")
         var accepted = false
         val deadline = System.currentTimeMillis() + 15000

@@ -279,7 +279,8 @@ class NavigationTest {
                 find(activity.window.decorView)?.let { view -> view.getMapAsync { map ->
                     tap = runtime.state.value.routes[1].geometry.map { map.projection.toScreenLocation(LatLng(it[1], it[0])) }
                         .firstOrNull { point -> point.x in 60f..(view.width - 60f) && point.y in (view.height * .28f)..(view.height * .65f) &&
-                            map.queryRenderedFeatures(android.graphics.RectF(point.x-4, point.y-4, point.x+4, point.y+4), "route-alternatives", "route-chosen")
+                            // Use a clear segment, away from the chosen route's tap area.
+                            map.queryRenderedFeatures(android.graphics.RectF(point.x-48, point.y-48, point.x+48, point.y+48), "route-alternatives", "route-chosen")
                                 .firstOrNull()?.getNumberProperty("route")?.toInt() == 1 }
                 } }
             }
