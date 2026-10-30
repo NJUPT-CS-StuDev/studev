@@ -66,11 +66,13 @@ entry declares 4×1 and keeps an 80dp visible card even when an OEM launcher
 allocates a larger host. The Huawei EMUI pin flow currently reserves two rows
 for it despite the 4×1 declaration; other launcher items are never moved.
 
-`me/AppUpdates.kt` finds the latest stable GitHub release containing an APK, downloads
-through DownloadManager, reads the APK manifest, and compares its actual versionCode
-and package name before handing it to the system installer. Signing is verified
-by Android. Unknown-source access is requested only from the explicit continue
-button. An empty release list and unavailable checks produce no startup prompts.
+`me/AppUpdates.kt` reads the same GitHub release as the web's 下载 App link: the
+latest stable release (`/releases/latest`) and its `studev.apk` asset. The release
+body declares `versionCode: N`; an equal or older code reports 当前已是最新版本.
+The APK downloads through DownloadManager; its manifest's actual versionCode and
+package name are compared before handing it to the system installer. Signing is
+verified by Android. Unknown-source access is requested only from the explicit
+continue button. Checks run only from 我的; an unreachable release says so.
 
 Deep links cover `/map/`, `/search/`, `/search/timetable/`, `/search/exam/`,
 `/search/classrooms/` and `/search/web/` (including community/materials search).
@@ -117,10 +119,9 @@ navigation smoke-test entry helpers select the map tab before running their
 original assertions. Map package internals and navigation runtime logic are
 unchanged; cross-feature actions use the existing public planner/session methods.
 
-The live site currently exposes an older release schema, so a live current-format
-data upgrade cannot yet be exercised. APK upgrade installation also awaits the
-first release with an APK asset. Neither condition blocks the bundled offline
-query features, local calendar, reminders or widget.
+Release 1.0.0 uses the current shared campus-space contract. Its stable GitHub
+release carries `studev.apk` and declares `versionCode: 1`; future APK updates
+must increase versionCode and use the same signing certificate.
 
 `IntegrationSmokeTest` checks the combined shell on both the phone and emulator:
 tab/back behavior, account and activities across recreation, campus deep links

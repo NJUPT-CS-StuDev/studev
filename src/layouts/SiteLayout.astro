@@ -141,7 +141,7 @@ const initialSearchPlaceholder =
           <span>© {new Date().getFullYear()} StuDev</span>
         </div>
         <div class="footer-actions">
-          <button class="text-copy pwa-footer-entry" type="button" data-pwa-open aria-haspopup="dialog">安装与离线</button>
+          <a class="text-copy pwa-footer-entry" href={PRODUCT_CONFIG.ANDROID_APP.APK_URL} data-pwa-open aria-haspopup="dialog" title={`studev Android ${PRODUCT_CONFIG.ANDROID_APP.VERSION}：${PRODUCT_CONFIG.ANDROID_APP.SUMMARY}`}>下载 App</a>
           <span class="footer-dot" aria-hidden="true">·</span>
           <button class="text-copy" type="button" data-copy-link title="复制当前页面网址，便于转发"><span aria-live="polite" data-copy-label>{Astro.url.pathname === '/' ? '分享网站' : '分享本页'}</span></button>
           <span class="footer-dot" aria-hidden="true">·</span>

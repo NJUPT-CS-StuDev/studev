@@ -25,7 +25,7 @@ with sync_playwright() as p:
             version=current['version']
             page.wait_for_function("navigator.serviceWorker.controller !== null",timeout=120000)
             page.wait_for_function("async v=>Boolean(await(await caches.open('studev-data-'+v)).match('/__studev_offline_ready__'))",arg=version,timeout=120000)
-            page.get_by_role('button',name='安装与离线',exact=True).click()
+            page.get_by_role('link',name='下载 App',exact=True).click()
             page.wait_for_function("document.querySelector('[data-pwa-status]').textContent.includes('已保存')")
             page.wait_for_function("document.querySelector('[data-pwa-size]').textContent.includes('MB')")
             page.screenshot(path=str(shots/f'{device}-{theme}-pwa-install.png'))
@@ -42,7 +42,7 @@ with sync_playwright() as p:
             context.set_offline(True)
             page.reload(wait_until='networkidle')
             page.wait_for_selector('.campus-map-home',timeout=30000)
-            page.get_by_role('button',name='安装与离线',exact=True).click()
+            page.get_by_role('link',name='下载 App',exact=True).click()
             page.wait_for_function("document.querySelector('[data-pwa-status]').textContent.includes('可以使用已保存')",timeout=30000)
             page.screenshot(path=str(shots/f'{device}-{theme}-pwa-offline-reload.png'))
             offline=page.locator('[data-pwa-status]').inner_text()
@@ -56,7 +56,7 @@ with sync_playwright() as p:
             context.set_offline(False)
             full_data=False
             if device=='desktop' and theme=='light':
-                page.get_by_role('button',name='安装与离线',exact=True).click()
+                page.get_by_role('link',name='下载 App',exact=True).click()
                 page.get_by_role('button',name='保存完整离线数据',exact=True).click()
                 deadline=time.monotonic()+120
                 while not page.evaluate("async v=>{const marker=await(await caches.open('studev-data-'+v)).match('/__studev_offline_ready__');return marker?(await marker.json()).all:false}",version):

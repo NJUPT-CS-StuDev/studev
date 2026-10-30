@@ -14,28 +14,33 @@ import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.data.AcademicRepository
 import java.io.File
 
-data class AppRelease(val name: String, val asset: String, val url: String)
+data class AppRelease(val name: String, val asset: String, val url: String, val versionCode: Long?)
+sealed interface UpdateCheck {
+    data class Available(val release: AppRelease) : UpdateCheck
+    data object Current : UpdateCheck
+    data object Unavailable : UpdateCheck
+}
 object AppUpdates {
-    suspend fun check(): AppRelease? = withContext(Dispatchers.IO) {
-        // No releases is an ordinary state for the first public version.
-        runCatching<AppRelease?> {
-            var page = 1
-            while (true) {
-                val releases = Json.parseToJsonElement(AcademicRepository.download("https://api.github.com/repos/NJUPT-CS-StuDev/studev/releases?per_page=100&page=$page").decodeToString()).jsonArray
-                val found = releases.firstNotNullOfOrNull { release ->
-                    val data = release.jsonObject
-                    if (data["draft"]?.jsonPrimitive?.boolean == true || data["prerelease"]?.jsonPrimitive?.boolean == true) return@firstNotNullOfOrNull null
-                    data["assets"]?.jsonArray?.firstOrNull { it.jsonObject["name"]?.jsonPrimitive?.content?.endsWith(".apk") == true }?.jsonObject?.let { asset ->
-                        AppRelease(data["name"]?.jsonPrimitive?.content ?: data.getValue("tag_name").jsonPrimitive.content,
-                            asset.getValue("name").jsonPrimitive.content, asset.getValue("browser_download_url").jsonPrimitive.content)
-                    }
-                }
-                if (found != null) return@runCatching found
-                if (releases.size < 100) return@runCatching null
-                page++
-            }
-            @Suppress("UNREACHABLE_CODE") null
-        }.getOrNull()
+    /** The same release the web's download link resolves: GitHub's latest stable release
+     * (drafts and prereleases are excluded by the endpoint) and its `studev.apk` asset. */
+    const val LATEST = "https://api.github.com/repos/NJUPT-CS-StuDev/studev/releases/latest"
+    const val ASSET = "studev.apk"
+
+    suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
+        runCatching { parse(AcademicRepository.download(LATEST).decodeToString(), BuildConfig.VERSION_CODE.toLong()) }
+            .getOrDefault(UpdateCheck.Unavailable)
+    }
+
+    /** The release body declares `versionCode: N`. A release that does not is still offered;
+     * the downloaded APK's actual versionCode is compared before installation. */
+    fun parse(json: String, current: Long): UpdateCheck {
+        val data = Json.parseToJsonElement(json).jsonObject
+        val asset = data["assets"]?.jsonArray?.map { it.jsonObject }?.firstOrNull { it["name"]?.jsonPrimitive?.content == ASSET }
+            ?: return UpdateCheck.Current
+        val code = Regex("""versionCode\D{0,3}(\d+)""").find(data["body"]?.jsonPrimitive?.contentOrNull.orEmpty())?.groupValues?.get(1)?.toLongOrNull()
+        if (code != null && code <= current) return UpdateCheck.Current
+        val name = data["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: data.getValue("tag_name").jsonPrimitive.content
+        return UpdateCheck.Available(AppRelease(name, ASSET, asset.getValue("browser_download_url").jsonPrimitive.content, code))
     }
     fun download(context: Context, release: AppRelease) {
         val url = Uri.parse(release.url)

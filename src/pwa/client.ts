@@ -17,7 +17,20 @@ let registration: ServiceWorkerRegistration | undefined;
 let applying = false;
 let ready = false;
 
-document.querySelector('[data-pwa-open]')?.addEventListener('click', () => {
+const iPhone = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// The entries link straight to the APK; with the script loaded they open the panel, which
+// adds the version and description. iPhone cannot install an APK: it gets the PWA guidance.
+for (const entry of document.querySelectorAll<HTMLElement>('[data-pwa-open]')) {
+    if (iPhone) entry.textContent = '添加到主屏幕';
+    entry.addEventListener('click', event => { event.preventDefault(); openPanel(); });
+}
+if (iPhone) {
+    for (const element of document.querySelectorAll<HTMLElement>('[data-app-android]')) element.hidden = true;
+    const title = document.querySelector<HTMLElement>('[data-pwa-web-title]');
+    if (title) title.textContent = '添加到主屏幕';
+}
+
+function openPanel() {
     panel?.showModal();
     void fetch('/pwa-release.json', { cache: 'no-cache' }).then(response => response.ok ? response.json() : null).then((data: { bytes?: number } | null) => {
         const copy = document.querySelector<HTMLElement>('[data-pwa-size]');
@@ -26,14 +39,14 @@ document.querySelector('[data-pwa-open]')?.addEventListener('click', () => {
             copy.textContent = `地图和地点搜索会自动保存。完整数据还包括课表、考试、教室和通知，约 ${megabytes} MB。`;
         }
     }).catch(() => undefined);
-});
+}
 document.querySelector('[data-pwa-close]')?.addEventListener('click', () => panel?.close());
 document.querySelector('[data-pwa-dismiss]')?.addEventListener('click', () => { if (update) update.hidden = true; });
 panel?.addEventListener('click', event => { if (event.target === panel) { const box = panel.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) panel.close(); } });
 
 const standalone = matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 if (help && standalone) help.textContent = '已添加到主屏幕。';
-else if (help && /iPhone|iPad|iPod/.test(navigator.userAgent)) help.textContent = '在 Safari 中点「分享」，选择「添加到主屏幕」，即可像应用一样打开。';
+else if (help && iPhone) help.textContent = '在 Safari 中点「分享」，选择「添加到主屏幕」，即可像应用一样打开。';
 window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault(); installEvent = event as InstallEvent;
     if (install) install.hidden = false;

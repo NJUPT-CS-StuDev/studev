@@ -1,9 +1,9 @@
 <resources>
     <string name="widget_description">下一节课、教室与步行时间</string>
-  <string name="app_name">StuDev</string>
+  <string name="app_name">studev</string>
   <string name="location_title">在校园里找到自己</string>
-  <string name="location_rationale">允许 StuDev 在使用期间访问位置，以显示你在地图上的位置和朝向。精确位置能帮助你找到所在的楼宇；也可以选择大致位置。位置仅在设备上使用，不会上传。</string>
-  <string name="location_settings_rationale">位置权限已关闭。请在系统设置中允许 StuDev 在使用期间访问位置。你仍然可以浏览离线校园地图。</string>
+  <string name="location_rationale">允许 studev 在使用期间访问位置，以显示你在地图上的位置和朝向。精确位置能帮助你找到所在的楼宇；也可以选择大致位置。位置仅在设备上使用，不会上传。</string>
+  <string name="location_settings_rationale">位置权限已关闭。请在系统设置中允许 studev 在使用期间访问位置。你仍然可以浏览离线校园地图。</string>
   <string name="continue_label">继续</string>
   <string name="not_now">暂不</string>
   <string name="open_settings">打开设置</string>

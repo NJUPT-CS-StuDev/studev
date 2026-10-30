@@ -148,7 +148,15 @@ import androidx.compose.foundation.lazy.items
                         HorizontalDivider()
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("studev ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
-                            TextButton({ scope.launch { checking = true; release = AppUpdates.check(); checking = false; if (release == null) model.tell("当前暂无可用更新") } }, enabled = !checking) { Text(if (checking) "正在检查…" else "检查应用更新") }
+                            TextButton({ scope.launch {
+                                checking = true
+                                when (val result = AppUpdates.check()) {
+                                    is UpdateCheck.Available -> release = result.release
+                                    UpdateCheck.Current -> model.tell("当前已是最新版本")
+                                    UpdateCheck.Unavailable -> model.tell("暂时无法检查更新，请稍后联网重试")
+                                }
+                                checking = false
+                            } }, enabled = !checking) { Text(if (checking) "正在检查…" else "检查应用更新") }
                         }
                         if (AppUpdates.pending(context)) FilledTonalButton({ AppUpdates.installDownloaded(context, requestPermission = true)?.let(model::tell) }, Modifier.fillMaxWidth()) { Text("继续安装下载的更新") }
                     }
