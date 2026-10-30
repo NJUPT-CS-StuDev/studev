@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { digest, hashPassword, mac, safeEqual, validPasswordHash, verifyPassword } from './collection-auth.mjs';
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
+import { createNativeTokens, hasAuthorization, nativeBootstrap } from './platform-tokens.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './platform-totp.mjs';
 import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl } from './platform-roster.mjs';
 
@@ -60,6 +61,13 @@ export function createIdentity({ repo, env, now = Date.now }) {
     fail(503, 'NOT_CONFIGURED', '平台身份配置尚未完成。');
   }
   let bootstrapPromise;
+  const native = createNativeTokens({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
+  const bearerRequests = new WeakMap();
+  function bearerFor(request) {
+    if (!bearerRequests.has(request)) bearerRequests.set(request, native.authenticate(request));
+    return bearerRequests.get(request);
+  }
+  const authSessionKey = (auth) => auth.kind === 'bearer' ? `identity/native/state/${auth.sessionId}` : sessionKey(auth.sessionId);
   function publicUser(user) {
     return {
       id: user.id,
@@ -138,8 +146,9 @@ export function createIdentity({ repo, env, now = Date.now }) {
   }
   async function authenticate(request, { required = false, staff = false, owner = false, csrf = false, allowEnrollment = false } = {}) {
     await bootstrap();
-    const payload = open(cookieValue(request, cookieName));
-    let session, user;
+    const bearer = hasAuthorization(request) ? await bearerFor(request) : null;
+    const payload = bearer ? null : open(cookieValue(request, cookieName));
+    let session = bearer?.session, user = bearer?.user;
     if (payload) {
       session = await repo.latest(sessionKey(payload.sid));
       if (session && !session.revoked && session.expiresAt > now() && ID.test(session.userId)) {
@@ -156,11 +165,11 @@ export function createIdentity({ repo, env, now = Date.now }) {
     const state = setupStatus(user, session);
     if (!allowEnrollment && (state.passwordChangeRequired || state.enrollmentRequired || state.mfaRequired || state.profileRequired)) fail(403, 'AUTH_SETUP_REQUIRED', '请先完成身份资料、密码修改与安全验证。');
     if ((owner || user.role === 'owner' || user.totp) && !allowEnrollment && !session.mfaVerified) fail(403, 'MFA_REQUIRED', '请完成动态验证码验证。');
-    if (csrf) {
+    if (csrf && !bearer) {
       requireOrigin(request, env);
       if (!safeEqual(request.headers.get('x-csrf-token') || '', session.csrfToken)) fail(403, 'CSRF_REJECTED', '页面已失效，请刷新后重试。');
     }
-    return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session };
+    return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind: bearer ? 'bearer' : 'cookie' };
   }
   async function startSession(user, mfaVerified) {
     const id = randomBytes(24).toString('hex');
@@ -331,6 +340,40 @@ export function createIdentity({ repo, env, now = Date.now }) {
     const request = context.request;
     const route = path.slice(API.length);
     const method = request.method;
+    if (method === 'POST' && ['/auth/token', '/auth/token/refresh'].includes(route)) {
+      if (!nativeBootstrap(request, path)) requireOrigin(request, env);
+      const body = await readJson(request, 8192);
+      if (route === '/auth/token/refresh') {
+        await repo.throttle('token-refresh-client', clientId(context), 60, 60);
+        return response(await native.refresh(body));
+      }
+      // Share both password rate-limit buckets with the browser login.
+      await repo.throttle('login-client', clientId(context), 60, 60);
+      const identifier = normalizeStudentId(body.studentId);
+      await repo.throttle('login-account', identifier, 10, 60);
+      const index = await repo.get(studentKey(identifier));
+      const user = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
+      const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
+      if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
+      if (user.totp) {
+        if (!body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
+        await consumeFactor(user, body.totp);
+      }
+      const state = setupStatus(user, { mfaVerified: Boolean(user.totp) });
+      if (state.enrollmentRequired || state.passwordChangeRequired || state.profileRequired) fail(403, 'AUTH_SETUP_REQUIRED', '请先在网页账号中心完成身份资料、密码修改与安全设置。');
+      return response({ ...await native.start(user, body), user: publicUser(user) });
+    }
+    if (method === 'GET' && route === '/auth/devices') {
+      const auth = await authenticate(request, { required: true });
+      return response({ items: await native.list(auth.user.id) });
+    }
+    const device = route.match(/^\/auth\/devices\/([a-f0-9-]{36})\/revoke$/);
+    if (method === 'POST' && device) {
+      const auth = await authenticate(request, { required: true, csrf: true });
+      await native.revokeOwned(auth.user.id, device[1]);
+      await repo.audit(auth.user.id, 'identity.device.revoked', device[1]);
+      return response({ ok: true });
+    }
     if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: validPasswordHash(env.PLATFORM_REGISTRATION_HASH), emailDeliveryEnabled: false });
     if (method === 'GET' && route === '/public/roster') {
       const url = new URL(request.url);
@@ -469,7 +512,11 @@ export function createIdentity({ repo, env, now = Date.now }) {
     }
     if (method === 'POST' && route === '/auth/logout') {
       const auth = await authenticate(request, { required: true, csrf: true, allowEnrollment: true });
-      await repo.append(sessionKey(auth.sessionId), { ...auth.session, revoked: true, pendingTotp: null }, auth.session.revision);
+      if (auth.kind === 'bearer') {
+        await native.revokeOwned(auth.user.id, auth.sessionId);
+        return response({ ok: true });
+      }
+      await repo.append(authSessionKey(auth), { ...auth.session, revoked: true, pendingTotp: null }, auth.session.revision || 0);
       return response({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
     }
     if (method === 'POST' && route === '/auth/profile') {
@@ -514,7 +561,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (!await verifyPassword(body.password, auth.user.passwordHash)) fail(401, 'PASSWORD_INVALID', '当前密码不正确。');
       const secret = newTotpSecret();
       const pendingTotp = { encrypted: encryptTotp(secret, env.PLATFORM_ENCRYPTION_KEY, auth.user.id), epoch: randomBytes(16).toString('hex'), expiresAt: now() + 10 * 60_000 };
-      await repo.append(sessionKey(auth.sessionId), { ...auth.session, pendingTotp }, auth.session.revision);
+      await repo.append(authSessionKey(auth), { ...auth.session, pendingTotp }, auth.session.revision || 0);
       const label = encodeURIComponent(`StuDev:${auth.user.qq}`);
       return response({ secret, otpauthUrl: `otpauth://totp/${label}?secret=${secret}&issuer=StuDev&algorithm=SHA1&digits=6&period=30` });
     }
@@ -532,7 +579,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       // Both atomic writes are deliberately before session elevation. Losing requests cannot gain access.
       await repo.putNew(`identity/totp-used/${auth.user.id}/${totp.epoch}/${counter}.json`, { usedAt: iso(now) });
       const user = await saveUser(auth.user, { totp, securityVersion: secretToken() });
-      await repo.append(sessionKey(auth.sessionId), { ...auth.session, securityVersion: user.securityVersion, mfaVerified: true, pendingTotp: null }, auth.session.revision);
+      await repo.append(authSessionKey(auth), { ...auth.session, securityVersion: user.securityVersion, mfaVerified: true, pendingTotp: null }, auth.session.revision || 0);
       await repo.audit(user.id, 'identity.totp.enabled', user.id);
       return response({ recoveryCodes });
     }

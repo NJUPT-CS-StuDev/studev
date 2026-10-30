@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { fail, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
+import { hasAuthorization } from './platform-tokens.mjs';
 
 const API = '/api/platform';
 const ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -231,7 +232,10 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
     async handle(context, path) {
       const request = context.request; const method = request.method;
       if (!path.startsWith(`${API}/`)) return null;
-      if (['POST', 'DELETE'].includes(method)) requireOrigin(request, env);
+      if (['POST', 'DELETE'].includes(method)) {
+        if (hasAuthorization(request)) await identity.authenticate(request, { required: true });
+        else requireOrigin(request, env);
+      }
       if (path === `${API}/admin/forms` && ['GET', 'POST'].includes(method)) {
         const session = await identity.authenticate(request, { staff: true, csrf: method === 'POST' });
         if (method === 'POST') return response({ form: publicForm(await addForm(formInput(await readJson(request)), session.user)) }, 201);
