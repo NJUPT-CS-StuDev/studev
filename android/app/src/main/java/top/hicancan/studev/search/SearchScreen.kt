@@ -33,22 +33,15 @@ import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.data.PlacePreferences
 import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.home.categoryIcon
 
-private data class Category(val label: String, val icon: ImageVector, val pattern: Regex)
-private val categories = listOf(
-    Category("教学楼", Icons.Outlined.School, Regex("教学楼|^教[一二三四五六七八九0-9]")),
-    Category("宿舍", Icons.Outlined.Bed, Regex("宿舍|苑.*[栋舍]|[栋舍].*苑")),
-    Category("食堂", Icons.Outlined.Restaurant, Regex("食堂")),
-    Category("图书馆", Icons.Outlined.LocalLibrary, Regex("图书馆")),
-    Category("体育", Icons.Outlined.SportsBasketball, Regex("体育|运动|球场|操场|健身")),
-    Category("超市", Icons.Outlined.Storefront, Regex("超市|便利店|便民商店")),
-    Category("快递", Icons.Outlined.Inventory2, Regex("快递|速递|驿站")),
-)
+private data class Category(val label: String, val icon: ImageVector)
 
 @Composable
 internal fun SearchScreen(campus: CampusPackage, search: CampusSearch, preferences: PlacePreferences,
                           onBack: () -> Unit, onPlace: (Place) -> Unit, onMyPosition: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
+    val categories = remember(campus) { campus.places.mapNotNull { it.category }.distinct().map { Category(it, categoryIcon(it)) } }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf<List<Place>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
@@ -64,7 +57,7 @@ internal fun SearchScreen(campus: CampusPackage, search: CampusSearch, preferenc
         error = false
         val chosen = categories.find { it.label == category }
         if (chosen != null) {
-            results = campus.places.filter { it.kind != "room" && chosen.pattern.containsMatchIn((it.names + it.id + it.kind).joinToString(" ")) }
+            results = campus.places.filter { it.kind != "room" && it.category == chosen.label }
             busy = false
         } else if (query.trim().length >= 2) {
             results = emptyList(); busy = true

@@ -126,7 +126,8 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         val ready = map ?: return
         ready.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
             .target(LatLng(at[1], at[0])).zoom(maxOf(17.0, ready.cameraPosition.zoom))
-            .padding(0.0, 96.0 * density, 0.0, 280.0 * density).build()), Tokens.Motion.camera)
+            .tilt(if (threeD) 55.0 else 0.0)
+            .padding(0.0, 96.0 * density, 0.0, 420.0 * density).build()), Tokens.Motion.camera)
     }
 }
 
@@ -144,6 +145,7 @@ internal fun CampusMap(
     routeState: PlannerState,
     onRoute: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    homeBottom: Double = 0.0,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -225,14 +227,16 @@ internal fun CampusMap(
             if (!holder.destroyed) { loadedStyle = style; controller.applyLayers() }
         }
     }
-    LaunchedEffect(map, loadedStyle, selected) {
+    LaunchedEffect(map, loadedStyle, selected, routeState.open, homeBottom) {
         if (loadedStyle != null) {
             controller.highlight(selected)
             if (selected != null) controller.select(selected, campus, density)
-            else map?.let { ready ->
-                if (ready.cameraPosition.padding?.any { it != 0.0 } == true) {
+            else if (!routeState.open) map?.let { ready ->
+                val bottom = homeBottom * density
+                if (ready.cameraPosition.padding?.getOrNull(3) != bottom) {
                     ready.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
-                        .padding(0.0, 0.0, 0.0, 0.0).build()))
+                        .tilt(if (controller.threeD) 55.0 else 0.0)
+                        .padding(0.0, 80.0 * density, 0.0, bottom).build()))
                 }
             }
         }

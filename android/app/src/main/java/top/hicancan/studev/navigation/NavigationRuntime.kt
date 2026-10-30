@@ -14,9 +14,6 @@ import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.location.CampusLocation
 
-/** Rooms inherit the packaged building's entrances; this is the shared place-parent relation. */
-val Place.routingTargetId get() = if (kind == "room") parent else id
-
 data class PlannerState(
     val open: Boolean = false, val origin: Place? = null, val destination: Place? = null,
     val destinationIsMyPosition: Boolean = false,
@@ -100,13 +97,13 @@ class NavigationRuntime private constructor(private val context: Context) {
             _state.update { it.copy(routes = emptyList(), busy = false,
                 error = "尚未获得当前位置。请开启定位，或选择${if (current.destinationIsMyPosition) "终点" else "起点"}。") }; return
         }
-        val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else Endpoint.Target(destination!!.routingTargetId)
+        val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else destination!!.routing
         goal = null
         _state.update { it.copy(busy = true, error = null, routes = emptyList(), selected = 0, trip = TripState()) }
         planning = scope.launch {
             try {
                 val result = native { engine().route(RouteRequest(
-                    current.origin?.let { Endpoint.Target(it.routingTargetId) } ?: Endpoint.Position(at!!.position),
+                    current.origin?.routing ?: Endpoint.Position(at!!.position),
                     endpoint, current.mode, current.mode == "walk" && current.avoidSteps)) }
                 if (version == generation) {
                     goal = endpoint // Freeze a position destination for the whole trip, including reroutes.

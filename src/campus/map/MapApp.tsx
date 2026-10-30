@@ -11,7 +11,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import './map.css';
 import tokens from '../../../design/tokens.json';
-import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, routingTarget, spaceBase, type Place, type Space } from './model/space';
+import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
 const ROUTE_SOURCE = 'routes';
@@ -150,14 +150,13 @@ export default function MapApp() {
     // Plan routes whenever the request changes.
     useEffect(() => {
         if (!planning || !router || !space || !selected) return;
-        const target = routingTarget(space, selected);
-        if (!target) { setError('这个地点还没有接入路网。'); return; }
+        const target = selected.routing;
         const from = origin.kind === 'me'
             ? (me ? { type: 'position' as const, position: me } : null)
-            : (routingTarget(space, space.byId.get(origin.id) as Place) ? { type: 'target' as const, id: routingTarget(space, space.byId.get(origin.id) as Place) as string } : null);
+            : space.byId.get(origin.id)?.routing;
         if (!from) { if (origin.kind === 'me') locate(); return; }
         try {
-            const answer = router.route({ origin: from, destination: { type: 'target', id: target }, mode, avoid_steps: avoidSteps, max_snap_distance_m: 300, alternatives: 3 });
+            const answer = router.route({ origin: from, destination: target, mode, avoid_steps: avoidSteps, max_snap_distance_m: 100, alternatives: 3 });
             setRoutes(answer.routes);
             setChosen(0);
             setError(answer.routes.length ? null : '没有找到路线。');
@@ -219,10 +218,16 @@ export default function MapApp() {
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
                         </header>
+                        <p className="campus-map-houses">用途 · {selected.use}</p>
+                        {selected.hours ? <details className="campus-map-hours">
+                            <summary>开放时间 · 今日 {selected.hours.week[String((new Date().getDay() + 6) % 7 + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</summary>
+                            <dl>{Array.from({ length: 7 }, (_, i) => <div key={i}><dt>周{'一二三四五六日'[i]}</dt><dd>{selected.hours!.week[String(i + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</dd></div>)}</dl>
+                            {selected.hours.note && <p>{selected.hours.note}</p>}
+                        </details> : <p className="campus-map-houses">开放时间待确认</p>}
                         {selected.houses && selected.houses.length > 0 && <p className="campus-map-houses">{selected.houses.slice(0, 6).join('、')}</p>}
                         {!planning ? (
-                            <button type="button" className="campus-map-primary" onClick={() => setPlanning(true)} disabled={!routingTarget(space, selected)}>
-                                {routingTarget(space, selected) ? '路线' : '暂未接入路网'}
+                            <button type="button" className="campus-map-primary" onClick={() => setPlanning(true)}>
+                                路线
                             </button>
                         ) : (
                             <div className="campus-map-plan">
@@ -242,7 +247,7 @@ export default function MapApp() {
                                     <div className="campus-map-routes">
                                         {routes.map((r, i) => (
                                             <button key={i} type="button" className={i === chosen ? 'on' : ''} onClick={() => setChosen(i)}>
-                                                <strong>{minutes(r.duration_s)} 分钟</strong><span>{metres(r.distance_m)}</span>
+                                                <strong>{minutes(r.duration_s)} 分钟</strong><span>{metres(r.distance_m)}</span><small>经{r.via}</small>
                                             </button>
                                         ))}
                                     </div>

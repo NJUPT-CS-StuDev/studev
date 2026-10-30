@@ -51,8 +51,14 @@ intact; CJK labels use the system font. No tile server or Google services are ne
 ## Structure and behavior
 
 - `data/`: strict kotlinx.serialization models for the actual shared package,
-  including optional source identifier `amap`; release loading and DataStore
+  including sourced `use`, structured weekday `hours`, categories, featured
+  candidates and precomputed routing endpoints; release loading and DataStore
   recent places / favorites.
+- `home/`: draggable map home, data-backed category shortcuts and time-of-day
+  recommendations. A small pure Kotlin policy tests distance, diversity and
+  opening state (including closing boundaries, overnight hours and 24-hour
+  service). Missing hours remain unknown. Only debug builds expose the demo
+  time menu; it changes presentation time, never GPS or the system clock.
 - `ui/theme/`: Material 3 light/dark schemes and system-font typography, generated
   tokens, shared shapes. Status/navigation bars and overlays respect insets.
 - `navigation/`: Compose routes, place selection, typed wayfind protocol,
@@ -95,8 +101,9 @@ locally optimal alternatives from wayfind; the kernel may legitimately return
 fewer. Kotlin explicitly serializes request defaults because Rust defaults to one
 alternative. The UI does not manufacture or rank alternatives. Cards and map
 lines select the same route; details render the native Chinese maneuvers.
-The via label is the longest named road by accumulated segment length, falling
-back to a supplied landmark. Camera bounds use the measured header/sheet insets.
+The via label comes directly from wayfind, including the dominant unnamed
+stretch's landmark. The data graph names park paths from actual OSM park
+boundaries. Camera bounds use the measured header/sheet insets.
 Rooms use their packaged parent building target and retain their room name/floor
 in the arrival card. Position endpoints use a 100 m snap limit; a failed snap
 explains the limit and offers choosing a campus origin.
@@ -204,9 +211,12 @@ Screenshots: `map-light`, `map-dark`, `map-3d`, `search-jiao3`, `search-library`
 `location-heading` (PNG). Unit tests decode the actual bundled release and verify
 strict field handling, field round trips and native style URL binding.
 
-The current data release contains repeated IDs for some parking/amenity places.
-Those IDs are also used by the web contract, search and share URLs. Unique stable
-IDs must be fixed in njupt-data; the Android client does not invent replacements.
+The source build rejects duplicate place IDs. Parking and amenity names are
+stable curated campus identities shared by search, map features and share URLs.
+Place sheets show purpose, today's opening state and an expandable full week;
+unpublished hours remain explicitly unknown. Internal release IDs are not shown.
+Rooms navigate to the packaged building endpoint, and standalone services use
+their packaged position endpoint with the same native 100 m snap limit.
 The native search currently returns the exact building for `教3`; a room is found
 by its room name, for example `教3-101`. Both result groups are rendered when the
 kernel returns both kinds.
@@ -215,3 +225,13 @@ Release signing stays outside the repository. Pass
 `-Pstudev.keystore=<external-path> -Pstudev.keyAlias=<alias>
 -Pstudev.storePassword=<password>` to `assembleRelease`; debug uses Android's
 default debug signing. Never put signing material or credentials here.
+
+`PresentationTest#homeAndFacts` captures morning/lunch home, canteen category,
+search, teaching/library details, the full week, 3D and dark mode.
+`PresentationTest#phoneHomeAndPlanner` keeps the phone's real provider position
+and captures the same home states plus walk/bike planning. Only the app's theme
+override changes, and tests restore its system-theme behavior in `finally`.
+`PresentationTest#continuousDemo` is opt-in (`-e demo true`); it runs one
+continuous home/search/planner/simulated-walk/detour/reroute/arrival flow and
+writes `demo-ready.txt`, `demo-timeline.txt`, `demo-done.txt` for external recording.
+Simulation is labelled in the app and is not evidence of real GPS accuracy.

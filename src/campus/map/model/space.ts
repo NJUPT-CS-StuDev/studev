@@ -1,7 +1,7 @@
 // The campus space as the data package serves it (njupt-data out/space/<campus>/,
 // packaged by scripts/digest.ts), and the map style bound to it.
 import type { StyleSpecification } from 'maplibre-gl';
-import type { GraphData, Position } from 'wayfind';
+import type { GraphData, Position, Endpoint } from 'wayfind';
 import { DATA_RELEASE } from '@/app/config/constants';
 import { fetchJson } from '@/shared/lib/fetch';
 
@@ -22,6 +22,11 @@ export interface Place {
     seats?: number | null;
     room_kinds?: string[];
     sources: string[];
+    use: string;
+    routing: Endpoint;
+    hours?: { week: Record<string, [string, string][]>; note?: string };
+    category?: string;
+    featured?: boolean;
 }
 
 export interface Space {
@@ -52,13 +57,6 @@ export async function loadStyle(theme: 'light' | 'dark', campus = CAMPUS): Promi
 /** Where to draw a place: its centre, or its building's for a room. */
 export function placePosition(space: Space, place: Place): Position | undefined {
     return place.centre ?? (place.parent ? space.byId.get(place.parent)?.centre : undefined);
-}
-
-/** The routing target of a place: its own entrances, or its building's for a room. */
-export function routingTarget(space: Space, place: Place): string | undefined {
-    if (space.network.targets[place.id]?.length) return place.id;
-    const parent = place.parent ? space.byId.get(place.parent) : undefined;
-    return parent && space.network.targets[parent.id]?.length ? parent.id : undefined;
 }
 
 const KIND_LABELS: Record<string, string> = { building: '楼栋', room: '教室' };

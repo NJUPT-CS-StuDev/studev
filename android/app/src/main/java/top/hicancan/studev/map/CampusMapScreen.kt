@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import top.hicancan.studev.data.CampusPackage
@@ -29,12 +30,13 @@ import top.hicancan.studev.data.Place
 import top.hicancan.studev.data.PlacePreferences
 import top.hicancan.studev.location.LocationStatus
 import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.home.*
 
 @Composable
 internal fun MapControls(controller: CampusMapController, status: LocationStatus, locationGranted: Boolean,
-                         mapError: Boolean, selected: Boolean, onSearch: () -> Unit, onLocate: () -> Unit) {
+                         mapError: Boolean, selected: Boolean, onSearch: () -> Unit, onLocate: () -> Unit, homePeek: Dp = 0.dp) {
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(Tokens.Space.l.dp)) {
-        Surface(onClick = onSearch, Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+        if (selected) Surface(onClick = onSearch, Modifier.align(Alignment.TopCenter).fillMaxWidth(),
             shape = RoundedCornerShape(Tokens.Radius.sheet.dp), shadowElevation = Tokens.Elevation.search.dp,
             color = MaterialTheme.colorScheme.surface) {
             Row(Modifier.heightIn(min = 56.dp).padding(horizontal = Tokens.Space.l.dp),
@@ -43,7 +45,13 @@ internal fun MapControls(controller: CampusMapController, status: LocationStatus
                 Text("搜索地点、楼栋或教室", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Column(Modifier.align(Alignment.TopEnd).padding(top = 72.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp),
+        if (!selected) Surface(Modifier.align(Alignment.TopStart).padding(end = 72.dp), shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("南邮 · 仙林校区", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(DayMoment.at(CampusClock.now().hour).title, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        Column(Modifier.align(Alignment.TopEnd).padding(top = if (selected) 72.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp),
             horizontalAlignment = Alignment.End) {
             MapButton(if (controller.threeD) "切换二维地图" else "切换三维地图", Icons.Outlined.Layers, controller::toggle3d,
                 selected = controller.threeD, label = if (controller.threeD) "2D" else "3D")
@@ -56,7 +64,7 @@ internal fun MapControls(controller: CampusMapController, status: LocationStatus
             }
         }
         if (!selected) {
-            Column(Modifier.align(Alignment.BottomEnd).padding(bottom = 64.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp)) {
+            Column(Modifier.align(Alignment.BottomEnd).padding(bottom = homePeek + 16.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp)) {
                 Surface(shape = RoundedCornerShape(Tokens.Radius.control.dp), shadowElevation = Tokens.Elevation.control.dp) {
                     Column {
                         IconButton(onClick = controller::zoomIn, Modifier.size(48.dp)) { Icon(Icons.Outlined.Add, "放大地图") }
@@ -68,12 +76,12 @@ internal fun MapControls(controller: CampusMapController, status: LocationStatus
                     when (controller.follow) { FollowMode.None -> Icons.Outlined.LocationSearching; FollowMode.Follow -> Icons.Outlined.MyLocation; FollowMode.Heading -> Icons.Outlined.Navigation },
                     onLocate, selected = controller.follow != FollowMode.None)
             }
-            Column(Modifier.align(Alignment.BottomStart).padding(bottom = Tokens.Space.xl.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
+            Column(Modifier.align(Alignment.BottomStart).padding(bottom = homePeek + 16.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
                 Surface(shape = RoundedCornerShape(Tokens.Radius.control.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = .96f)) {
                     Row(Modifier.padding(horizontal = Tokens.Space.m.dp, vertical = Tokens.Space.s.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
                         Icon(Icons.Outlined.School, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                        Text("南邮 · 仙林校区", style = MaterialTheme.typography.labelLarge)
+                        Text(if (locationGranted && status == LocationStatus.Available) "定位已就绪" else "探索校园", style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 val message = when {
@@ -87,7 +95,7 @@ internal fun MapControls(controller: CampusMapController, status: LocationStatus
                     Text(message, Modifier.padding(Tokens.Space.m.dp), style = MaterialTheme.typography.labelMedium)
                 }
             }
-            Surface(Modifier.align(Alignment.BottomStart), color = MaterialTheme.colorScheme.surface.copy(alpha = .9f), shape = MaterialTheme.shapes.small) {
+            Surface(Modifier.align(Alignment.BottomStart).padding(bottom = homePeek), color = MaterialTheme.colorScheme.surface.copy(alpha = .9f), shape = MaterialTheme.shapes.small) {
                 Text("© OpenStreetMap · Protomaps · njupt-data", Modifier.padding(horizontal = Tokens.Space.s.dp, vertical = Tokens.Space.xs.dp),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -125,7 +133,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
         else if (half) half = false else onClose()
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
-        sheetPeekHeight = if (half) height * .48f else 280.dp,
+        sheetPeekHeight = if (half) height * .62f else 368.dp,
         sheetShape = RoundedCornerShape(topStart = Tokens.Radius.sheet.dp, topEnd = Tokens.Radius.sheet.dp),
         sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShadowElevation = Tokens.Elevation.sheet.dp,
@@ -141,6 +149,8 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     }
                     IconButton(onClick = onClose, Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "关闭地点") }
                 }
+                Text("用途 · ${place.use}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                PlaceHours(place)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
                     FilledTonalButton(onClick = onRoute, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Outlined.Directions, null, Modifier.size(18.dp)); Spacer(Modifier.width(Tokens.Space.xs.dp)); Text("路线")
@@ -194,7 +204,6 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     Text(place.names.filter { it != place.id }.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(Tokens.Space.l.dp))
-                Text("校园数据 · ${campus.version}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }) { }
 }

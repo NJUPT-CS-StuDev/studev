@@ -6,9 +6,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import top.hicancan.studev.navigation.Endpoint
 
 @Serializable
 data class Entrance(val at: List<Double>, val source: String)
+
+@Serializable
+data class OpeningHours(val week: Map<String, List<List<String>>>, val note: String? = null)
 
 /** The shared package contract. Absent optional fields stay absent on serialization. */
 @Serializable
@@ -26,6 +30,11 @@ data class Place(
     @SerialName("room_kinds") val roomKinds: List<String> = emptyList(),
     val sources: List<String>,
     val amap: String? = null,
+    val use: String,
+    val routing: Endpoint,
+    val hours: OpeningHours? = null,
+    val category: String? = null,
+    val featured: Boolean = false,
 ) {
     val kindLabel get() = when (kind) { "building" -> "楼栋"; "room" -> "教室"; else -> kind }
 }

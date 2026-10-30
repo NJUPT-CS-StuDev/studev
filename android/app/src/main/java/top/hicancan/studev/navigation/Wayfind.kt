@@ -36,11 +36,8 @@ data class RouteRequest(
 @Serializable data class CampusRoute(
     val mode: String, val geometry: List<List<Double>>, val geometry_offsets_m: List<Double>,
     val distance_m: Double, val duration_s: Double, val segments: List<RouteSegment>, val maneuvers: List<Maneuver>,
-) {
-    val via: String get() = segments.filter { !it.name.isNullOrBlank() }.groupBy { it.name!! }
-        .maxByOrNull { (_, parts) -> parts.sumOf { it.distance_m } }?.key
-        ?: maneuvers.firstNotNullOfOrNull { it.landmark?.name } ?: "校园道路"
-}
+    val via: String,
+)
 @Serializable data class ManeuverDistance(val maneuver: Maneuver, val distance_m: Double)
 @Serializable data class VoicePrompt(val maneuver_index: Int, val stage: String, val text: String)
 @Serializable data class NavigationUpdate(

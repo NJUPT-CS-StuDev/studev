@@ -89,3 +89,8 @@
 @media (max-width: 680px) {
   .campus-map-panel { top: 10px; left: 10px; width: calc(100% - 20px); max-height: 62%; }
 }
+.campus-map-hours { margin: 12px 0; padding: 12px; border-radius: 12px; background: var(--mark); color: var(--ink); font-size: .88rem; }
+.campus-map-hours summary { cursor: pointer; font-weight: 600; }
+.campus-map-hours dl > div { display: flex; gap: 1rem; margin: 5px 0; }
+.campus-map-hours dd { margin: 0; }
+.campus-map-hours p { font-size: .8rem; opacity: .75; line-height: 1.6; }
