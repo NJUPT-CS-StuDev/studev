@@ -1,6 +1,7 @@
 package top.hicancan.studev.account
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -54,7 +55,7 @@ class HttpsPlatformTransport : PlatformTransport {
 
 class AccountClient(private val storage: AccountStorage, private val transport: PlatformTransport, private val now: () -> Long = System::currentTimeMillis) {
     private val lock = Mutex()
-    suspend fun current(): AccountUser? = storage.read().session?.user
+    suspend fun current(): AccountUser? = lock.withLock { storage.read().session?.user }
     private fun checked(reply: PlatformReply): JsonObject {
         if (reply.status !in 200..299) {
             val error = reply.body["error"]?.jsonObject
@@ -77,29 +78,41 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         storage.write(stored.copy(session = tokens(value, user)))
         user
     }
-    private suspend fun access(forceFor: String? = null): String = lock.withLock {
+    private suspend fun access(forceFor: AccountSession? = null): AccountSession = lock.withLock {
         val stored = storage.read()
         val session = stored.session ?: throw PlatformFailure(401, "AUTH_REQUIRED", "请先登录。")
-        if (session.expiresAt > now() + 30_000 && (forceFor == null || session.accessToken != forceFor)) return@withLock session.accessToken
+        if (forceFor != null && session.deviceSessionId != forceFor.deviceSessionId) throw PlatformFailure(401, "ACCOUNT_CHANGED", "登录账号已更改，请重新操作。")
+        if (session.expiresAt > now() + 30_000 && (forceFor == null || session.accessToken != forceFor.accessToken)) return@withLock session
         try {
             // Never retry a refresh after an ambiguous network result: rotation
-            // might have committed. The next attempt requires a fresh sign-in.
+            // might have committed. Persist the spent intent BEFORE sending,
+            // so even process death requires sign-in rather than token replay.
+            storage.write(stored.copy(session = null))
             val value = checked(transport.send("/auth/token/refresh", buildJsonObject { put("refreshToken", session.refreshToken); put("deviceId", stored.deviceId) }, null))
             val fresh = tokens(value, session.user)
-            storage.write(stored.copy(session = fresh)); fresh.accessToken
+            storage.write(stored.copy(session = fresh)); fresh
         } catch (failure: Exception) {
-            storage.write(stored.copy(session = null)); throw failure
+            // UI/navigation cancellation may arrive after the server spent the
+            // ticket. Finish the durable cleanup before releasing the mutex.
+            withContext(NonCancellable) { storage.write(stored.copy(session = null)) }
+            throw failure
         }
+    }
+    private suspend fun authenticatedRequest(path: String, body: JsonObject?, credential: AccountSession): JsonObject {
+        var reply = transport.send(path, body, credential.accessToken)
+        if (reply.status == 401) reply = transport.send(path, body, access(forceFor = credential).accessToken)
+        return checked(reply)
     }
     suspend fun request(path: String, body: JsonObject? = null, authenticated: Boolean = false): JsonObject {
         if (!authenticated) return checked(transport.send(path, body, null))
-        val token = access()
-        var reply = transport.send(path, body, token)
-        if (reply.status == 401) reply = transport.send(path, body, access(forceFor = token))
-        return checked(reply)
+        return authenticatedRequest(path, body, access())
     }
     suspend fun signOut() {
-        request("/auth/logout", buildJsonObject {}, authenticated = true)
-        lock.withLock { storage.write(storage.read().copy(session = null)) }
+        val credential = access()
+        authenticatedRequest("/auth/logout", buildJsonObject {}, credential)
+        lock.withLock {
+            val stored = storage.read()
+            if (stored.session?.deviceSessionId == credential.deviceSessionId) storage.write(stored.copy(session = null))
+        }
     }
 }
