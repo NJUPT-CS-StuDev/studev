@@ -34,6 +34,7 @@ export default function MapApp() {
     const marker = useRef<maplibregl.Marker | null>(null);
     const meMarker = useRef<maplibregl.Marker | null>(null);
     const [space, setSpace] = useState<Space | null>(null);
+    const [mapReady, setMapReady] = useState(false);
     const [router, setRouter] = useState<Router | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [query, setQuery] = useState('');
@@ -80,6 +81,7 @@ export default function MapApp() {
                 instance.addLayer({ id: 'route', type: 'line', source: ROUTE_SOURCE, filter: ['get', 'chosen'],
                     layout: { 'line-cap': 'round', 'line-join': 'round' },
                     paint: { 'line-color': colors.route, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 4, 19, 12] } }, before);
+                setMapReady(true);
             });
             instance.on('click', event => {
                 const hit = instance.queryRenderedFeatures(event.point, { layers: ['campus-building', 'campus-building-3d', 'campus-place'].filter(id => instance.getLayer(id)) })
@@ -111,7 +113,7 @@ export default function MapApp() {
     // The selected place: highlighted, centred, in the address.
     useEffect(() => {
         const instance = map.current;
-        if (!instance || !space) return;
+        if (!instance || !space || !mapReady) return;
         instance.removeFeatureState({ source: 'places' });
         marker.current?.remove();
         setRoutes([]);
@@ -134,7 +136,7 @@ export default function MapApp() {
             marker.current = new maplibregl.Marker({ color: tokens.color[theme()].brand }).setLngLat(at).addTo(instance);
             instance.easeTo({ center: at, zoom: Math.max(instance.getZoom(), 17), duration: 650 });
         }
-    }, [selected, space]);
+    }, [selected, space, mapReady]);
 
     useEffect(() => {
         if (!me || !map.current) return;
@@ -185,7 +187,7 @@ export default function MapApp() {
             const bounds = route.geometry.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(route.geometry[0], route.geometry[0]));
             instance.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: window.innerWidth > 720 ? 440 : 40, right: 60 }, duration: 650, maxZoom: 18 });
         }
-    }, [routes, chosen]);
+    }, [routes, chosen, mapReady]);
 
     const route = routes[chosen];
     const pick = (result: SearchResult) => {
@@ -225,12 +227,12 @@ export default function MapApp() {
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
                         </header>
-                        <p className="campus-map-houses">用途 · {selected.use}</p>
+                        {selected.kind !== 'activity-point' && <><p className="campus-map-houses">用途 · {selected.use}</p>
                         {selected.hours ? <details className="campus-map-hours">
                             <summary>开放时间 · 今日 {selected.hours.week[String((new Date().getDay() + 6) % 7 + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</summary>
                             <dl>{Array.from({ length: 7 }, (_, i) => <div key={i}><dt>周{'一二三四五六日'[i]}</dt><dd>{selected.hours!.week[String(i + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</dd></div>)}</dl>
                             {selected.hours.note && <p>{selected.hours.note}</p>}
-                        </details> : <p className="campus-map-houses">开放时间待确认</p>}
+                        </details> : <p className="campus-map-houses">开放时间待确认</p>}</>}
                         {selected.houses && selected.houses.length > 0 && <p className="campus-map-houses">{selected.houses.slice(0, 6).join('、')}</p>}
                         {!planning ? (
                             <button type="button" className="campus-map-primary" onClick={() => setPlanning(true)}>

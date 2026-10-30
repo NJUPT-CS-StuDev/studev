@@ -126,6 +126,7 @@ def run(base: str, output: Path, browser_path: str):
         page.get_by_role("button", name="去这里", exact=True).click()
         page.locator(".campus-map-from select").select_option("教1")
         expect(page.locator(".campus-map-routes button").first).to_be_visible(timeout=30000)
+        page.wait_for_timeout(1500)
         shot("activity-point-route-desktop")
         page.goto(base + "/account/?tab=profile")
         expect(page.get_by_role("heading", name="已登录的设备")).to_be_visible()
