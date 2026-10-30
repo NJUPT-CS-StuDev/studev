@@ -15,8 +15,10 @@ The week grid and day list open the same course detail; a published room opens
 the existing planner through `NavigationRuntime.open(Place)`. Home uses the
 public wayfind binding for walking minutes; it never estimates straight-line time.
 
-`AcademicRepository` reads an immutable release per reader. The APK includes the
-digested release, including content-search shards, plus `data/release.json`.
+`AcademicRepository` reads an immutable release per reader. The APK includes campus
+space (map, places, route graph and place search), small academic indexes, and
+`data/release.json`. Class schedules, class exams, room days and content-search
+shards are downloaded only when requested, including for the bundled version.
 Academic files are opened only when needed: class shards, the selected room day,
 and wasm-search's requested posting/content chunks. Remote shards are cached in
 `files/campus/<version>/` with atomic file replacement. Remote readers never mix
@@ -24,7 +26,11 @@ in a different version's assets. Startup opens local data first, then checks the
 web campus island's module and its constants module for the embedded release
 contract. There is no published standalone `latest.json` endpoint in this repo.
 A release is activated only after its indexes and selected class can be read.
-An older deployed schema is rejected; the packaged current schema stays usable.
+An older deployed schema is rejected; the bundled map and indexes stay usable.
+Missing undeployed shards explain that a network download or published version is
+needed. Already downloaded shards survive app restarts and APK upgrades. Readers
+share a per-version lock, validate JSON and paths, and atomically replace cache
+files. A network/battery-constrained 12-hour worker checks for data updates.
 The existing map, style and route graph remain the APK's bundled release.
 
 `calendar/` creates a dedicated local **studev 课表与考试** calendar using
@@ -40,11 +46,21 @@ notification delivery. Notification permission is requested when enabling remind
 The navigation action carries the room's published canonical ID. Opting out cancels
 scheduled work and alarms. No server push or Google Play Services is involved.
 
-`widget/` is a Glance next-lesson widget using the same generated design palette.
-It displays the next class and room, with walking time explicitly labelled as
-coming from the last known position; that value expires after 30 minutes. Without
-a recent position it asks the user to open the app. It never starts background GPS.
-Add it from 我的 or the launcher's widget picker.
+`widget/` is a responsive 4×2 / 4×1 Glance widget using the generated design palette,
+launcher corner radius and explicit clickable text instead of OEM-sensitive Buttons.
+Choose a home dorm in 我的 from the package's dorm buildings. The widget routes
+from that dorm to the published room endpoint with wayfind; departure is class
+start minus rounded-up walking minutes minus a three-minute buffer. Until a dorm
+is selected, it gently explains how to enable departure times. Today, tomorrow,
+ongoing lessons, exams and no-lesson states use Shanghai time. It follows the
+system theme by default and respects studev's explicit light/dark preference.
+One boundary worker refreshes at the next class start/end or midnight; a 12-hour
+safety worker and data/settings changes refresh it too. WorkManager may defer
+refresh under device battery restrictions. No exact alarms or background GPS.
+Add it from 我的 or the launcher's widget picker. The separate 「下一节课 · 紧凑」
+entry declares 4×1 and keeps an 80dp visible card even when an OEM launcher
+allocates a larger host. The Huawei EMUI pin flow currently reserves two rows
+for it despite the 4×1 declaration; other launcher items are never moved.
 
 `me/AppUpdates.kt` finds the latest stable GitHub release containing an APK, downloads
 through DownloadManager, reads the APK manifest, and compares its actual versionCode
@@ -321,7 +337,48 @@ kernel returns both kinds.
 Release signing stays outside the repository. Pass
 `-Pstudev.keystore=<external-path> -Pstudev.keyAlias=<alias>
 -Pstudev.storePassword=<password>` to `assembleRelease`; debug uses Android's
-default debug signing. Never put signing material or credentials here.
+default debug signing. With no keystore property, `assembleRelease` produces a
+debug-signed, R8-minified verification APK. Never publish that verification build
+as a signed production update. Never put signing material or credentials here.
+
+For local data testing, run `node android/tools/data-fixture.mjs` from the root.
+It serves the digested `public/data/<version>/` plus the
+unchanged `src/data/campus-release.json` at `/data/release.json`. Build debug with
+`'-Pstudev.dataHost=http://127.0.0.1:18764'` and use
+`adb -s <serial> reverse tcp:18764 tcp:18764`. Only the debug manifest permits HTTP;
+release always uses `https://studev.hicancan.top`. The standalone manifest is
+optional; production discovery still reads the site's embedded release contract.
+Remove the reverse forwarding after testing. `-Pstudev.bundleAllData=true` is a
+diagnostic size baseline; normal builds always use the minimal bundle.
+
+`WidgetDataTest` checks current-version missing-asset downloads, cross-reader
+offline use, release isolation, unsafe paths, invalid download rejection, the
+dorm picker, real native walking time and the existing launcher widget in both
+themes. Add `-e localData true` for actual HTTP/activation against the fixture server,
+including an update with separate caches and a rejected incomplete release.
+The launcher case requires an existing widget, uses published events with a fixed
+display clock for state screenshots, and restores preferences.
+It never changes the phone's system theme or GPS. Shots go to the app's external
+`files/widget-shots/`. The compact case pins one instance when missing and reuses
+it thereafter. It captures `launcher-4x1-light` and `launcher-4x1-dark`; the EMUI
+host can reserve two rows around the compact card, as noted above.
+
+Verified for widget/APK work on 2026-10-30: `testDebugUnitTest` passes 43 tests;
+`WidgetDataTest` passes all 7 cases on Huawei `26QUT24227005105`, including local
+HTTP update/rollback checks. The compact pin/render case also passes on
+`emulator-5554`, where the launcher allocates one row. `lint` and
+`assembleRelease` pass. The debug-signed release cold-launches on the Huawei,
+reads the cached class, renders the native map and routes, and refreshes both
+widgets through WorkManager after a theme change. The phone returns to the
+system theme; no device theme or GPS settings are changed.
+
+With the rebuilt space data, the full-data debug baseline is 160,845,182 bytes
+(153.39 MiB), the minimal debug APK 56,830,109 bytes (54.20 MiB), and the minified
+release 35,203,943 bytes (33.57 MiB). The APK contains 19 data entries, about
+3.5 MiB compressed, rather than class, room-day or content-search shards.
+The selected published route from 荷苑48栋 to 教4-208 is 1,318.6 m / 1,054.88 s,
+displayed as 18 minutes; an 08:00 lesson therefore gives 07:39 departure with
+the three-minute buffer.
 
 `PresentationTest#homeAndFacts` captures morning/lunch home, canteen category,
 search, teaching/library details, the full week, 3D and dark mode.

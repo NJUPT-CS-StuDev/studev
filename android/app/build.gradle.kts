@@ -54,13 +54,25 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
     @get:InputDirectory abstract val releases: DirectoryProperty
     @get:InputFile abstract val releaseManifest: RegularFileProperty
     @get:OutputDirectory abstract val assetDir: DirectoryProperty
+    @get:Input abstract val bundleAllData: Property<Boolean>
     @TaskAction fun copyPackage() {
         val metadata = JsonSlurper().parse(releaseManifest.get().asFile) as Map<*, *>
         val version = metadata["version"] as String
         check(version.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid campus release version" }
         val release = releases.get().asFile.resolve(version)
         check(release.resolve("space/仙林").isDirectory) { "Campus package missing. Run npm run digest in the repository root." }
-        fs.sync { from(release); into(assetDir.dir("data")) }
+        fs.sync {
+            from(release)
+            into(assetDir.dir("data"))
+            // The map is usable on first launch. Large class, room-day and search
+            // shards are fetched by AcademicRepository and retained in files/.
+            if (!bundleAllData.get()) {
+                include("space/**")
+                include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
+                    "teaching/${metadata["teaching"]}/classes.json", "rooms/index.json")
+                metadata["exams"]?.let { include("exams/$it/index.json") }
+            }
+        }
         releaseManifest.get().asFile.copyTo(assetDir.file("data/release.json").get().asFile, overwrite = true)
         assetDir.file("data/version.txt").get().asFile.writeText(release.name)
     }
@@ -90,16 +102,30 @@ val generateDesignTokens = tasks.register<DesignTokensTask>("generateDesignToken
     resourceDir.set(layout.buildDirectory.dir("generated/design/res"))
 }
 val packageCampusData = tasks.register<CampusDataTask>("packageCampusData") {
+    bundleAllData.set(providers.gradleProperty("studev.bundleAllData").map(String::toBoolean).orElse(false))
     releases.set(rootProject.layout.projectDirectory.dir("../public/data"))
     releaseManifest.set(rootProject.layout.projectDirectory.file("../src/data/campus-release.json"))
     assetDir.set(layout.buildDirectory.dir("generated/campus/assets"))
+}
+val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtures") {
+    val manifest = rootProject.layout.projectDirectory.file("../src/data/campus-release.json")
+    inputs.file(manifest)
+    from(provider {
+        val metadata = JsonSlurper().parse(manifest.asFile) as Map<*, *>
+        rootProject.file("../public/data/${metadata["version"]}")
+    }) {
+        include("teaching/*/classes/B240402.json", "exams/*/classes/B240402.json")
+    }
+    into(layout.buildDirectory.dir("generated/academic-test/data"))
 }
 val verifyMapInputs = tasks.register<VerifyMapInputsTask>("verifyMapInputs") {
     mapDir.set(layout.projectDirectory.dir("src/main/assets/map"))
     kernelDir.set(rootProject.layout.projectDirectory.dir("kernels"))
 }
 tasks.named("preBuild") { dependsOn(verifyMapInputs) }
-tasks.matching { it.name.contains("UnitTest") && it.name.contains("JavaRes") }.configureEach { dependsOn(packageCampusData) }
+tasks.matching { it.name in setOf("mergeDebugAndroidTestAssets", "lintAnalyzeDebugAndroidTest", "generateDebugAndroidTestLintModel") }
+    .configureEach { dependsOn(packageAcademicTestFixtures) }
+tasks.matching { it.name.contains("UnitTest") && it.name.contains("JavaRes") }.configureEach { dependsOn(packageCampusData, packageAcademicTestFixtures) }
 androidComponents.onVariants { variant ->
     variant.sources.kotlin?.addGeneratedSourceDirectory(generateDesignTokens, DesignTokensTask::kotlinDir)
     variant.sources.res?.addGeneratedSourceDirectory(generateDesignTokens, DesignTokensTask::resourceDir)
@@ -134,10 +160,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse("https://studev.hicancan.top").trimEnd('/')}\"")
+        }
         release {
+            buildConfigField("String", "DATA_HOST", "\"https://studev.hicancan.top\"")
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (providers.gradleProperty("studev.keystore").isPresent) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -152,6 +182,8 @@ android {
             jniLibs.directories.add(rootProject.file("kernels/jniLibs").absolutePath)
         }
         getByName("test").resources.directories.add(layout.buildDirectory.dir("generated/campus/assets").get().asFile.absolutePath)
+        getByName("test").resources.directories.add(layout.buildDirectory.dir("generated/academic-test").get().asFile.absolutePath)
+        getByName("androidTest").assets.directories.add(layout.buildDirectory.dir("generated/academic-test").get().asFile.absolutePath)
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

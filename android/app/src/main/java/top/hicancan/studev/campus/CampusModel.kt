@@ -85,7 +85,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                 events = CampusEvents.build(checkNotNull(it.term), it.periods, schedule, exams)) }
             syncPhone()
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { _state.update { it.copy(classBusy = false, error = "班级数据暂时无法打开，请重试") } }
+        catch (e: Exception) { _state.update { it.copy(classBusy = false, error = if (e is DataUnavailableException) e.message else "班级数据暂时无法打开，请重试") } }
     }
     fun refresh() { viewModelScope.launch {
         tell("正在检查校园数据")
@@ -100,7 +100,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             val expectedClass = settings.state.value.klass
             try {
                 DeviceSchedule.update(getApplication(), state.value.events, expectedClass)?.let { tell("已同步 $it 项课程与考试") }
-                NextLessonWidget().updateAll(getApplication())
+                NextLessonWidget().refreshAll(getApplication())
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { tell("同步未完成，请检查权限后重试") }
         }
