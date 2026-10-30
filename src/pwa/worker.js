@@ -22,10 +22,11 @@ async function remember(url, cache, recursive = false) {
         const type = response.headers.get('Content-Type') || '';
         if (!recursive || !/(javascript|text\/css|text\/html)/.test(type)) return;
         const text = await response.text();
-        const references = [...text.matchAll(/["'(]((?:\.?\.\/|\/_astro\/)[^"'()\s<>]+)["')]/g)].map(match => match[1]);
+        // Vite emits template-literal asset URLs; HTML srcset includes space-separated descriptors.
+        const references = [...text.matchAll(/["'`(,\s]((?:\.?\.\/|\/_astro\/)[^"'`()\s<>,]+)(?=["'`()\s,])/g)].map(match => match[1]);
         await Promise.all(references.map(reference => {
             const asset = new URL(reference, absolute);
-            if (asset.origin !== self.location.origin || !asset.pathname.startsWith('/_astro/')) return;
+            if (reference.includes('${') || asset.origin !== self.location.origin || !asset.pathname.startsWith('/_astro/')) return;
             return remember(asset.href, cache, true);
         }));
     } catch (error) { saved.delete(absolute); throw error; }
