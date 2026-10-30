@@ -37,8 +37,6 @@ import top.hicancan.studev.navigation.*
 import top.hicancan.studev.rooms.RoomsScreen
 import top.hicancan.studev.search.AcademicSearchScreen
 import top.hicancan.studev.timetable.*
-import androidx.glance.appwidget.updateAll
-import top.hicancan.studev.widget.NextLessonWidget
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onActivities: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
@@ -144,10 +142,6 @@ import top.hicancan.studev.widget.NextLessonWidget
             val place = campus.byId[room] ?: return@runCatching null
             Wayfind.load(context.assets).use { engine -> engine.route(RouteRequest(Endpoint.Position(position.position), place.routing, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) } }
         }.getOrNull() }
-        walk?.let { duration ->
-            context.getSharedPreferences("next-lesson-walk", android.content.Context.MODE_PRIVATE).edit().putString("id", next.id).putInt("minutes", duration).putLong("at", System.currentTimeMillis()).apply()
-            NextLessonWidget().updateAll(context)
-        }
     }
     val tab = when (screen) { "timetable", "exams" -> "timetable"; "map" -> "map"; "me", "calendar" -> "me"; else -> "home" }
     BackHandler(screen != "home") { screen = when (screen) { "calendar" -> "me"; "exams" -> "timetable"; else -> "home" } }

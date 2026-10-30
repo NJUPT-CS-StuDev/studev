@@ -31,6 +31,10 @@ import top.hicancan.studev.calendar.TimetableCalendar
 import top.hicancan.studev.campus.*
 import top.hicancan.studev.reminders.LessonReminders
 import top.hicancan.studev.widget.NextLessonWidgetReceiver
+import top.hicancan.studev.widget.CompactLessonWidgetReceiver
+import top.hicancan.studev.data.CampusPackage
+import top.hicancan.studev.data.Place
+import androidx.compose.foundation.lazy.items
 
 @Composable fun MeScreen(model: CampusModel, state: AcademicState, preferences: PersonalSettings, calendarPage: Boolean, onClass: () -> Unit, onCalendar: () -> Unit, onActivities: () -> Unit, onAccount: () -> Unit) {
     val context = LocalContext.current
@@ -38,6 +42,12 @@ import top.hicancan.studev.widget.NextLessonWidgetReceiver
     var release by remember { mutableStateOf<AppRelease?>(null) }
     var checking by remember { mutableStateOf(false) }
     var removal by remember { mutableStateOf(false) }
+    var dormPicker by remember { mutableStateOf(false) }
+    var dormQuery by remember { mutableStateOf("") }
+    var dorms by remember { mutableStateOf<List<Place>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        dorms = CampusPackage.load(context.assets).places.filter { it.kind == "building" && it.category == "宿舍" }
+    }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (TimetableCalendar.permitted(context)) model.calendar(!removal) else model.tell("需要日历权限才能同步或移除 studev 日历")
     }
@@ -64,6 +74,11 @@ import top.hicancan.studev.widget.NextLessonWidgetReceiver
             } }
             item { OutlinedCard(onClass, Modifier.fillMaxWidth()) {
                 ListItem(headlineContent = { Text(preferences.klass ?: "选择你的班级") }, supportingContent = { Text(state.classes.find { it.id == preferences.klass }?.major ?: "课表、考试与提醒将跟随这个班级") }, leadingContent = { Icon(Icons.Outlined.Groups, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })
+            } }
+            item { OutlinedCard({ dormQuery = ""; dormPicker = true }, Modifier.fillMaxWidth().testTag("home-dorm")) {
+                ListItem(headlineContent = { Text(preferences.homeDorm ?: "选择你的宿舍") },
+                    supportingContent = { Text("小组件从这里计算步行和出门时间 · 预留 3 分钟") },
+                    leadingContent = { Icon(Icons.Outlined.Home, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })
             } }
             item {
                 SectionLabel("常用校区")
@@ -109,12 +124,18 @@ import top.hicancan.studev.widget.NextLessonWidgetReceiver
             }
             item {
                 SectionLabel("桌面小组件")
-                EmptyCard("抬眼就是下一节课", "显示课程、教室，以及从上次位置出发的步行时间。", "添加到桌面") {
+                EmptyCard("抬眼就是下一节课", "从宿舍走到教室要多久，几点出门，桌面上一眼可见。", "添加到桌面") {
                     val manager = context.getSystemService(AppWidgetManager::class.java)
                     if (manager.isRequestPinAppWidgetSupported)
                         manager.requestPinAppWidget(ComponentName(context, NextLessonWidgetReceiver::class.java), null, null)
                     else model.tell("请在桌面长按空白处，选择小组件并找到 studev")
                 }
+                TextButton({
+                    val manager = context.getSystemService(AppWidgetManager::class.java)
+                    if (manager.isRequestPinAppWidgetSupported)
+                        manager.requestPinAppWidget(ComponentName(context, CompactLessonWidgetReceiver::class.java), null, null)
+                    else model.tell("请在桌面的小组件列表中选择「下一节课 · 紧凑」")
+                }) { Text("添加紧凑版（4×1）") }
             }
             item {
                 SectionLabel("数据与版本")
@@ -122,7 +143,7 @@ import top.hicancan.studev.widget.NextLessonWidgetReceiver
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("校园数据 · 离线可用", style = MaterialTheme.typography.titleSmall)
                         Supporting(state.repository?.release?.version.orEmpty())
-                        Supporting("已读取的数据会保存在设备上；网络不可用时，仍可使用缓存和内置数据。")
+                        Supporting("校园地图与地点搜索已内置。课表、考试和其他数据按需下载，下载后可离线使用。新版本尚未发布时，请稍后联网重试。")
                         TextButton(model::refresh) { Text("检查数据更新") }
                         HorizontalDivider()
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -136,6 +157,21 @@ import top.hicancan.studev.widget.NextLessonWidgetReceiver
         }
         item { Spacer(Modifier.height(12.dp)) }
     }
+    if (dormPicker) AlertDialog(onDismissRequest = { dormPicker = false }, title = { Text("从哪栋宿舍出发") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(dormQuery, { dormQuery = it }, Modifier.fillMaxWidth().testTag("dorm-query"), singleLine = true,
+                placeholder = { Text("搜索宿舍，如荷苑48栋") }, leadingIcon = { Icon(Icons.Outlined.Search, null) })
+            LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                items(dorms.filter { place -> (listOf(place.id) + place.names).any { it.contains(dormQuery, true) } }, key = { it.id }) { dorm ->
+                    TextButton({ model.settings.update { it.copy(homeDorm = dorm.id) }; dormPicker = false }, Modifier.fillMaxWidth().testTag("dorm-${dorm.id}")) {
+                        Text(dorm.id, Modifier.weight(1f))
+                        if (dorm.id == preferences.homeDorm) Icon(Icons.Outlined.Check, "已选择")
+                    }
+                }
+            }
+        }
+    }, confirmButton = { TextButton({ dormPicker = false }) { Text("完成") } },
+        dismissButton = { if (preferences.homeDorm != null) TextButton({ model.settings.update { it.copy(homeDorm = null) }; dormPicker = false }) { Text("清除选择") } })
     release?.let { latest -> AlertDialog(onDismissRequest = { release = null }, title = { Text("下载 ${latest.name}") }, text = { Text("下载完成后会校验应用与版本，并交给系统安装。返回此页可继续安装。") },
         confirmButton = { TextButton({ runCatching { AppUpdates.download(context, latest); model.tell("正在下载，完成后返回此页继续安装") }.onFailure { model.tell("下载暂时无法开始，请稍后重试") }; release = null }) { Text("下载") } }, dismissButton = { TextButton({ release = null }) { Text("稍后") } }) }
 }
