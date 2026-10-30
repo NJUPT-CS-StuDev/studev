@@ -16,6 +16,7 @@ async def main():
                 page=await ctx.new_page()
                 errors=[]
                 page.on('pageerror',lambda error: errors.append(str(error)))
+                page.on('console', lambda message: errors.append(message.text) if 'Map cannot fit' in message.text else None)
                 await page.clock.set_fixed_time('2026-10-30T04:00:00Z')
                 async def shot(name):
                     await page.wait_for_timeout(900)
@@ -58,6 +59,7 @@ async def main():
                 await page.locator('.timetable-grid, .tt-grid, [data-course-id]').first.wait_for(timeout=10000) if await page.locator('.timetable-grid, .tt-grid, [data-course-id]').count() else await page.wait_for_timeout(1500)
                 await shot('timetable')
                 report.append({'device':device,'theme':theme,'search':titles,'walkRoutes':routes,'pageErrors':errors,'overflow':await page.evaluate('document.documentElement.scrollWidth>innerWidth')})
+                assert not errors, errors
                 print(device,theme,json.dumps(report[-1],ensure_ascii=False),flush=True)
                 await ctx.close()
         await browser.close()

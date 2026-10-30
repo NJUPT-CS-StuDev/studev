@@ -218,7 +218,10 @@ export default function MapApp() {
             const bounds = route.geometry.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(route.geometry[0], route.geometry[0]));
             const phone = window.innerWidth <= 680;
             const cardHeight = panel.current?.querySelector('.campus-map-card')?.getBoundingClientRect().height ?? 260;
-            instance.fitBounds(bounds, { padding: { top: phone ? 76 : 60, bottom: phone ? Math.min(cardHeight + 24, instance.getContainer().clientHeight * .52) : 60, left: phone ? 28 : 440, right: phone ? 28 : 60 }, duration: 650, maxZoom: 18 });
+            // fitBounds adds its padding to the current camera padding. Clear
+            // the place-sheet inset first, otherwise a phone has no space left.
+            instance.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+            instance.fitBounds(bounds, { padding: { top: phone ? 120 : 60, bottom: phone ? Math.min(cardHeight + 24, instance.getContainer().clientHeight * .52) : 60, left: phone ? 28 : 440, right: phone ? 28 : 60 }, duration: tokens.motion.camera, maxZoom: 18 });
         }
     }, [routes, chosen, loaded]);
 

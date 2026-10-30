@@ -8,6 +8,8 @@
 - `hicancan/wasm-search`：`pinyin` 的内核改动，标签 `v1.0.3`。
 
 等待两个 release 工作流成功产生附件后，studev 才能在干净环境中执行 `npm ci`。
+拼音索引改变了打包产物，部署时也应选用一个新的 njupt-data release 标签，
+不要覆盖当前已上线的 `/data/<version>/`；旧 URL 的浏览器/CDN 缓存是永久的。
 已发布附件不替换；后续修改递增版本。当前 lockfile 不给尚未发布的附件预填本机构建的
 integrity；发布后可用 `npm install --package-lock-only` 记录实际附件校验值。
 
