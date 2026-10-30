@@ -50,7 +50,7 @@ export function ExamDetailSkeleton() {
                 <SkeletonBlock className="h-10 w-36 rounded-full shrink-0" />
             </div>
 
-            <div className="mb-6 rounded-lg border border-[#dadce0] dark:border-[#323a44] bg-[#f8f9fa] dark:bg-[#14181d] p-4">
+            <div className="mb-6 rounded-lg border border-[var(--line)] dark:border-[var(--line)] bg-[var(--surface)] dark:bg-[var(--paper)] p-4">
                 <div className="flex items-center gap-2 mb-3">
                     <SkeletonBlock className="h-5 w-5 rounded-full" />
                     <SkeletonBlock className="h-4 w-24 rounded" />
@@ -62,9 +62,9 @@ export function ExamDetailSkeleton() {
                 </div>
             </div>
 
-            <div className="space-y-0 border border-[#dadce0] dark:border-[#323a44] rounded-lg overflow-hidden bg-white dark:bg-[#14181d]">
+            <div className="space-y-0 border border-[var(--line)] dark:border-[var(--line)] rounded-lg overflow-hidden bg-[var(--paper)] dark:bg-[var(--paper)]">
                 {[0, 1, 2].map(item => (
-                    <div key={item} className={item !== 2 ? 'border-b border-[#dadce0] dark:border-[#323a44]' : ''}>
+                    <div key={item} className={item !== 2 ? 'border-b border-[var(--line)] dark:border-[var(--line)]' : ''}>
                         <ExamCardSkeleton />
                     </div>
                 ))}

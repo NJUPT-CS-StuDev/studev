@@ -108,7 +108,7 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Text(item.place.id, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(item.status.state.label, style = MaterialTheme.typography.labelMedium,
+                                    if (item.status.state != OpenState.Unknown) Text(item.status.state.label, style = MaterialTheme.typography.labelMedium,
                                         color = if (item.status.state in listOf(OpenState.Open, OpenState.Closing)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(metres(item.distance), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }

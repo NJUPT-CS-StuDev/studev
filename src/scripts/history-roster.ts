@@ -1,3 +1,5 @@
+import tokens from '../../design/tokens.json';
+
 interface RosterPerson {
   name: string;
   nickname?: string;
@@ -22,7 +24,8 @@ interface RosterSnapshot {
 
 function fallbackAvatarSvg(label: string): string {
   const ch = (label.trim().charAt(0) || 'S').toUpperCase().replace(/[<>&"']/g, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e8f0fe"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#1a73e8" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
+  const colors = tokens.color[document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="${colors.brandContainer}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="${colors.brand}" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 

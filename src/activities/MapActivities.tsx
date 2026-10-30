@@ -6,12 +6,13 @@ import { activityPlaceName, activityPosition, activityTime, activityUrl, getActi
 import { errorText } from '../scripts/platform-client';
 import './map-activities.css';
 
-export default function MapActivities({ map, space, onPick, onRoute, routeOpen, placeSelected }: {
-  map: maplibregl.Map | null; space: Space | null; onPick: () => void; onRoute: (place: Place) => void; routeOpen: boolean; placeSelected: boolean;
+export default function MapActivities({ map, space, onPick, onRoute, routeOpen, placeSelected, onSelectionChange }: {
+  map: maplibregl.Map | null; space: Space | null; onPick: () => void; onRoute: (place: Place) => void; routeOpen: boolean; placeSelected: boolean; onSelectionChange: (selected: boolean) => void;
 }) {
   const [visible, setVisible] = useState(true), [items, setItems] = useState<Activity[]>([]), [selected, setSelected] = useState<Activity | null>(null);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [reload, setReload] = useState(0);
   const picking = new URLSearchParams(location.search).has('pickActivity');
+  useEffect(() => { onSelectionChange(picking || (visible && selected !== null)); }, [picking, visible, selected, onSelectionChange]);
   useEffect(() => { if (placeSelected) setSelected(null); }, [placeSelected]);
   useEffect(() => {
     if (picking) return;

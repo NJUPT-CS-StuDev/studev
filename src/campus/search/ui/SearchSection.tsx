@@ -119,7 +119,7 @@ export function SearchSection({
                                 type="button"
                                 onClick={onLoadMore}
                                 disabled={searching}
-                                className="px-6 py-2 rounded-full border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#14181d] text-sm font-medium text-[#1a73e8] hover:bg-[#f8f9fa] dark:hover:bg-[#1c232b] transition-colors"
+                                className="px-6 py-2 rounded-full border border-[var(--line)] dark:border-[var(--line)] bg-[var(--paper)] dark:bg-[var(--paper)] text-sm font-medium text-[var(--brand)] hover:bg-[var(--surface)] dark:hover:bg-[var(--surface)] transition-colors"
                             >
                                 查看更多
                             </button>
@@ -127,11 +127,11 @@ export function SearchSection({
                     ) : null}
                 </div>
             ) : showSearchingEmptyState ? (
-                <div className="min-h-32 max-w-[692px] rounded-md border border-[#dadce0] bg-white p-6 text-[#4d5156] dark:border-[#323a44] dark:bg-[#14181d] dark:text-[#aeb8c5]">
+                <div className="min-h-32 max-w-[692px] rounded-md border border-[var(--line)] bg-[var(--paper)] p-6 text-[var(--muted)] dark:border-[var(--line)] dark:bg-[var(--paper)] dark:text-[var(--muted)]">
                     <p>正在搜索…</p>
                 </div>
             ) : (
-                <div className="border border-[#dadce0] dark:border-[#323a44] rounded-md bg-white dark:bg-[#14181d] p-6 text-[#4d5156] dark:text-[#aeb8c5] max-w-[692px]">
+                <div className="border border-[var(--line)] dark:border-[var(--line)] rounded-md bg-[var(--paper)] dark:bg-[var(--paper)] p-6 text-[var(--muted)] dark:text-[var(--muted)] max-w-[692px]">
                     <p>{activeFilters ? '没有符合筛选条件的结果。' : '没有找到相关结果。'}</p>
                     <p className="mt-2 text-sm">{activeFilters ? '减少筛选条件后再试。' : '换个关键词试试。'}</p>
                 </div>

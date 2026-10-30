@@ -8,7 +8,7 @@ export function SearchStatus({
     statusText,
 }: SearchStatusProps) {
     return (
-        <div className="mt-1 flex max-w-[880px] flex-col gap-1 text-sm text-[#70757a] dark:text-[#9aa0a6] sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-1 flex max-w-[880px] flex-col gap-1 text-sm text-[var(--muted)] dark:text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
             <p>{statusText}</p>
             {documentCount > 0 ? (
                 <p className="shrink-0 text-[12px]">
