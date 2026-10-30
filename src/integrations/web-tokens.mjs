@@ -37,7 +37,9 @@ export function renderWebTokens(tokens) {
   for (let index = 0; index < 24; index++) {
     const base = `var(--${hues[index % hues.length]})`;
     const companion = `var(--${hues[(index + 1 + Math.floor(index / hues.length)) % hues.length]})`;
-    const hue = index < hues.length ? base : `color-mix(in oklab, ${base} ${70 - Math.floor(index / hues.length) * 10}%, ${companion})`;
+    // Different weights also distinguish a pair when its order is reversed.
+    const weight = [100, 65, 52, 28][Math.floor(index / hues.length)];
+    const hue = index < hues.length ? base : `color-mix(in oklab, ${base} ${weight}%, ${companion})`;
     aliases[`course-tone-${index}-bg`] = `color-mix(in srgb, ${hue} 12%, var(--paper))`;
     aliases[`course-tone-${index}-border`] = `color-mix(in srgb, ${hue} 36%, var(--paper))`;
     aliases[`course-tone-${index}-fg`] = `color-mix(in srgb, ${hue} 70%, var(--ink))`;

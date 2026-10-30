@@ -28,4 +28,14 @@ describe('web design tokens', () => {
     expect(css).toContain('--motion-standard: 220ms');
     expect(css).toContain('--radius-sheet: 24px');
   });
+  it('keeps 24 mathematically distinct course mixtures, including reversed pairs', () => {
+    const mixtures = [...css.matchAll(/--course-tone-\d+-bg: color-mix\(in srgb, (.*?) 12%,/g)].map(match => {
+      const mixed = match[1]!.match(/color-mix\(in oklab, var\(--(\w+)\) (\d+)%, var\(--(\w+)\)\)/);
+      if (!mixed) return `${match[1]}:100`;
+      const weights = [[mixed[1], Number(mixed[2])], [mixed[3], 100 - Number(mixed[2])]];
+      return weights.sort(([left], [right]) => String(left).localeCompare(String(right))).map(([name, weight]) => `${name}:${weight}`).join(',');
+    });
+    expect(mixtures).toHaveLength(24);
+    expect(new Set(mixtures).size).toBe(24);
+  });
 });
