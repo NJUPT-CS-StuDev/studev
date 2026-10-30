@@ -33,6 +33,9 @@ with sync_playwright() as p:
             manifest=page.evaluate("fetch('/manifest.webmanifest').then(r=>r.json())")
             session=context.new_cdp_session(page)
             installability=session.send('Page.getInstallabilityErrors')
+            # An extra attached CDP session interferes with Chrome's network
+            # emulation; release it before Playwright switches the context offline.
+            session.detach()
             assert not installability['installabilityErrors'], installability
             print('installability passed',device,theme,flush=True)
             page.get_by_role('button',name='关闭',exact=True).click()
@@ -51,13 +54,29 @@ with sync_playwright() as p:
             archive=page.evaluate("base=>fetch(base+'/space/%E4%BB%99%E6%9E%97/basemap.pmtiles',{headers:{Range:'bytes=0-15'}}).then(async r=>({status:r.status,range:r.headers.get('Content-Range'),bytes:(await r.arrayBuffer()).byteLength}))",current['base'])
             assert archive['status']==206 and archive['bytes']==16, archive
             context.set_offline(False)
+            full_data=False
+            if device=='desktop' and theme=='light':
+                page.get_by_role('button',name='安装与离线',exact=True).click()
+                page.get_by_role('button',name='保存完整离线数据',exact=True).click()
+                deadline=time.monotonic()+120
+                while not page.evaluate("async v=>{const marker=await(await caches.open('studev-data-'+v)).match('/__studev_offline_ready__');return marker?(await marker.json()).all:false}",version):
+                    assert time.monotonic()<deadline, page.locator('[data-pwa-status]').inner_text()
+                    page.wait_for_timeout(200)
+                page.get_by_role('button',name='关闭',exact=True).click()
+                context.set_offline(True)
+                page.goto(base+'/search/timetable/?class=B240402&week=5',wait_until='networkidle')
+                page.wait_for_selector('.timetable-course',timeout=30000)
+                full_data=True
+                page.screenshot(path=str(shots/'desktop-light-pwa-offline-timetable.png'))
+                context.set_offline(False)
+                page.goto(base+'/map/',wait_until='networkidle')
             updated={**current,'version':'acceptance-new-version'}
             context.route('**/pwa-release.json',lambda route:route.fulfill(status=200,content_type='application/json',body=json.dumps(updated)))
             page.evaluate("fetch('/pwa-release.json',{cache:'no-cache'}).then(r=>r.json())")
             page.wait_for_selector('[data-pwa-update]:not([hidden])',timeout=30000)
             page.screenshot(path=str(shots/f'{device}-{theme}-pwa-update.png'))
             assert not errors, errors
-            row={'device':device,'theme':theme,'manifest':manifest,'offlineStatus':offline,'downloadSize':size,'range':archive,'offlineSearch':results,'updatePrompt':page.locator('[data-pwa-update]').is_visible(),'pageErrors':errors,'cached':page.evaluate('caches.keys()'),'installability':installability}
+            row={'device':device,'theme':theme,'manifest':manifest,'offlineStatus':offline,'downloadSize':size,'range':archive,'offlineSearch':results,'fullDataTimetable':full_data,'updatePrompt':page.locator('[data-pwa-update]').is_visible(),'pageErrors':errors,'cached':page.evaluate('caches.keys()'),'installability':installability}
             proof.append(row)
             print(json.dumps(row,ensure_ascii=False),flush=True)
             context.close()

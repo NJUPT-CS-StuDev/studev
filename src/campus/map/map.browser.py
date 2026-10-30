@@ -3,7 +3,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 BASE=os.environ.get('WEB_URL','http://127.0.0.1:4342')
-OUT=Path('D:/Temp/claude-wsl/agents/web-parity/shots')
+OUT=Path(os.environ.get('WEB_SHOTS_DIR','D:/Temp/claude-wsl/agents/web-parity/shots'))
 
 async def main():
     report=[]

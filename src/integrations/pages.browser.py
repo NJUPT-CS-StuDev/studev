@@ -34,6 +34,9 @@ def compare_evidence(shots):
             continue
         if result['errors'] or result['metrics']['scroll'] > result['metrics']['width']:
             failures.append({'page': key(result), 'reason': 'script error or horizontal page overflow', 'evidence': result})
+        missing_headings = [heading for heading in previous['metrics']['headings'] if heading not in result['metrics']['headings']]
+        if missing_headings:
+            failures.append({'page': key(result), 'reason': 'visible content headings removed', 'headings': missing_headings})
         differences = {field: {'before': previous['metrics'][field], 'after': result['metrics'][field]}
                        for field in ['title', 'path', 'height', 'headings']
                        if previous['metrics'][field] != result['metrics'][field]}
@@ -112,7 +115,7 @@ async def capture(options):
                 "excluded": sorted(EXCLUDED), "routes": routes, "results": results}
     (folder / "evidence.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf8")
     failures = [result for result in results if result["errors"] or result["metrics"]["scroll"] > result["metrics"]["width"]
-                or result["status"] != (404 if result["route"] == "/404.html" else 200)]
+                or result["status"] not in ([200, 404] if result["route"] == "/404.html" else [200])]
     print(json.dumps({"screenshots": len(results), "routes": len(routes), "failures": failures}, ensure_ascii=False, indent=2))
     return failures
 
