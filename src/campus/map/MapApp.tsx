@@ -173,7 +173,7 @@ export default function MapApp() {
         const source = instance?.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined;
         if (!instance || !source) return;
         source.setData({ type: 'FeatureCollection', features: routes.map((route, i) => ({
-            type: 'Feature', properties: { chosen: i === chosen }, geometry: { type: 'LineString', coordinates: route.geometry },
+            type: 'Feature' as const, properties: { chosen: i === chosen }, geometry: { type: 'LineString' as const, coordinates: route.geometry },
         })).sort((a, b) => Number(a.properties.chosen) - Number(b.properties.chosen)) });
         const route = routes[chosen];
         if (route) {
