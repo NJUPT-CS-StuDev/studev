@@ -1,0 +1,12 @@
+.pwa-entry { position: fixed; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; z-index: 45; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font: 500 12px var(--font-sans); padding: 7px 12px; cursor: pointer; box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 8%, transparent); }
+.pwa-panel { width: min(420px, calc(100% - 32px)); max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid var(--line); border-radius: 24px; padding: 24px; color: var(--ink); background: var(--paper); font-family: var(--font-sans); }
+.pwa-panel::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
+.pwa-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pwa-panel h2 { font-size: 20px; margin: 0; }.pwa-panel h3 { font-size: 16px; margin: 16px 0 8px; }
+.pwa-panel header button,.pwa-dismiss { border: 0; background: transparent; color: var(--muted); font-size: 24px; cursor: pointer; min-width: 40px; min-height: 40px; }
+.pwa-panel p { font-size: 14px; line-height: 1.7; }.pwa-panel .pwa-hint { color: var(--muted); font-size: 13px; }.pwa-panel hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+.pwa-primary,.pwa-secondary { min-height: 44px; padding: 10px 18px; border-radius: 999px; cursor: pointer; font: 500 14px var(--font-sans); }
+.pwa-primary { background: var(--blue); color: var(--on-brand); border: 0; }.pwa-secondary { background: var(--paper); border: 1px solid var(--line); color: var(--blue); }.pwa-secondary:disabled { opacity: .6; cursor: wait; }
+.pwa-update { position: fixed; z-index: 80; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; width: min(520px, calc(100% - 24px)); padding: 12px 12px 12px 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink); box-shadow: 0 4px 24px color-mix(in srgb, var(--ink) 16%, transparent); font-size: 14px; }
+.pwa-update[hidden],.pwa-panel [hidden] { display: none; }.pwa-update p { color: var(--muted); margin: 2px 0 0; font-size: 12px; }.pwa-update div { flex: 1; }.pwa-update button { flex-shrink: 0; }
+@media (max-width: 480px) { .pwa-update { gap: 8px; padding-left: 14px; }.pwa-update .pwa-primary { padding-inline: 12px; } }

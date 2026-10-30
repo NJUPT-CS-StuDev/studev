@@ -3,6 +3,8 @@ import '../styles/global.css';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import { Image, getImage } from 'astro:assets';
 import logo from '../assets/logo.png';
+import tokens from '../../design/tokens.json';
+import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/app/config/product';
 // fill: the page is one full-height application (the map) with no footer.
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; }
@@ -42,7 +44,12 @@ const initialSearchPlaceholder =
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content={tokens.color.light.paper} data-light={tokens.color.light.paper} data-dark={tokens.color.dark.paper} />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/pwa-icons/180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="studev" />
     <script is:inline>
       // Signed-in people see their member links from the first frame.
       try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.member = ''; } catch { /* Storage may be unavailable. */ }
@@ -52,7 +59,8 @@ const initialSearchPlaceholder =
         ? preference
         : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       document.documentElement.dataset.theme = theme;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      themeMeta?.setAttribute('content', themeMeta.getAttribute(`data-${theme}`));
     </script>
     <meta name="description" content={description} />
     {Astro.url.pathname === '/' && <meta name="baidu-site-verification" content="codeva-J4MgSBcNRe" />}
@@ -143,6 +151,7 @@ const initialSearchPlaceholder =
         </div>
       </div>
     </footer>}
+    <PwaPanel />
     <script>import '../scripts/copy-text';</script>
     <script>import '../scripts/diagrams';</script>
     <script>import '../scripts/auth-status';</script>

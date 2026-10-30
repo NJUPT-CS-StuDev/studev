@@ -1,0 +1,22 @@
+---
+import './pwa.css';
+---
+<button class="pwa-entry" type="button" data-pwa-open aria-haspopup="dialog">安装与离线</button>
+<dialog class="pwa-panel" data-pwa-panel aria-labelledby="pwa-title">
+  <header><h2 id="pwa-title">随时打开 studev</h2><button type="button" data-pwa-close aria-label="关闭">×</button></header>
+  <p>添加到主屏幕，查地图和课表更方便。</p>
+  <button class="pwa-primary" type="button" data-pwa-install hidden>安装 studev</button>
+  <p class="pwa-hint" data-pwa-install-help>在浏览器菜单中选择「安装应用」或「添加到主屏幕」。</p>
+  <hr />
+  <h3>离线使用</h3>
+  <p data-pwa-status role="status">校园地图正在准备离线使用…</p>
+  <p class="pwa-hint">地图和地点搜索会自动保存。完整数据还包括课表、考试、教室和通知，约 90 MB。</p>
+  <button class="pwa-secondary" type="button" data-pwa-save>保存完整离线数据</button>
+  <p class="pwa-hint">离线时可查看已保存的数据；联网后会提示更新。</p>
+</dialog>
+<aside class="pwa-update" data-pwa-update hidden aria-label="数据更新">
+  <div><strong>校园数据已更新</strong><p>刷新后使用最新数据。</p></div>
+  <button class="pwa-primary" type="button" data-pwa-refresh>刷新更新</button>
+  <button type="button" class="pwa-dismiss" data-pwa-dismiss aria-label="稍后更新">×</button>
+</aside>
+<script>import './client';</script>
