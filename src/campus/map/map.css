@@ -1,0 +1,91 @@
+/* /map/: the map fills the page below the site header; one floating panel holds
+   search, the selected place and its routes. On phones the panel sits at the top
+   and the map stays the subject. */
+.campus-map { position: relative; height: 100%; min-height: 360px; overflow: hidden; }
+.campus-map-canvas { position: absolute; inset: 0; }
+
+.campus-map-panel {
+  position: absolute; top: 16px; left: 16px; z-index: 2;
+  width: min(392px, calc(100% - 32px)); max-height: calc(100% - 32px);
+  display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+  pointer-events: none;
+}
+.campus-map-panel > * { pointer-events: auto; }
+
+.campus-map-search {
+  display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px;
+  background: var(--paper); color: var(--muted); border-radius: 24px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 4px 16px rgb(0 0 0 / 8%);
+}
+.campus-map-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 15px; }
+.campus-map-clear, .campus-map-close {
+  border: 0; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px;
+}
+
+.campus-map-results, .campus-map-card, .campus-map-error {
+  background: var(--paper); border-radius: 16px; box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 4px 16px rgb(0 0 0 / 8%);
+}
+.campus-map-results { list-style: none; margin: 0; padding: 6px 0; }
+.campus-map-results button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: 9px 16px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--ink);
+}
+.campus-map-results button:hover, .campus-map-results button:focus-visible { background: var(--mark); outline: 0; }
+.campus-map-result-title { font-size: 15px; }
+.campus-map-result-meta { font-size: 12px; color: var(--muted); }
+
+.campus-map-error { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 12px 14px; color: var(--ink); font-size: 14px; }
+.campus-map-error button { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+
+.campus-map-card { padding: 16px; }
+.campus-map-card header { display: flex; align-items: flex-start; gap: 8px; }
+.campus-map-card h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--ink); }
+.campus-map-card header p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.campus-map-close { margin-left: auto; }
+.campus-map-houses { margin: 10px 0 0; font-size: 13px; line-height: 20px; color: var(--muted); }
+
+.campus-map-primary {
+  margin-top: 14px; width: 100%; height: 40px; border: 0; border-radius: 20px;
+  background: var(--blue); color: var(--paper); font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.campus-map-primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
+
+.campus-map-plan { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.campus-map-from { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.campus-map-from select {
+  flex: 1; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--paper); color: var(--ink); font-size: 14px;
+}
+.campus-map-modes { display: flex; align-items: center; gap: 8px; }
+.campus-map-modes button {
+  height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 16px;
+  background: transparent; color: var(--ink); font-size: 14px; cursor: pointer;
+}
+.campus-map-modes button.on { background: var(--mark); border-color: transparent; color: var(--blue); font-weight: 500; }
+.campus-map-steps { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+
+.campus-map-routes { display: flex; gap: 8px; }
+.campus-map-routes button {
+  flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ink); cursor: pointer;
+}
+.campus-map-routes button.on { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.campus-map-routes strong { font-size: 16px; font-weight: 600; }
+.campus-map-routes span { font-size: 12px; color: var(--muted); }
+
+.campus-map-steps-list { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 20px; color: var(--ink); }
+.campus-map-steps-list li::marker { color: var(--muted); font-size: 12px; }
+
+.campus-map-locate {
+  position: absolute; right: 10px; bottom: 132px; z-index: 2; width: 40px; height: 40px;
+  display: grid; place-items: center; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--paper); color: var(--blue); box-shadow: 0 0 0 2px rgb(0 0 0 / 10%);
+}
+.campus-map-me {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--blue);
+  border: 3px solid var(--paper); box-shadow: 0 0 0 8px color-mix(in srgb, var(--blue) 22%, transparent);
+}
+
+@media (max-width: 680px) {
+  .campus-map-panel { top: 10px; left: 10px; width: calc(100% - 20px); max-height: 62%; }
+}

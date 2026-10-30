@@ -4,8 +4,9 @@ import ThemeToggle from '../components/ThemeToggle.astro';
 import { Image, getImage } from 'astro:assets';
 import logo from '../assets/logo.png';
 import { PRODUCT_CONFIG } from '../campus/app/config/product';
-interface Props { title?: string; description?: string; active?: string; noindex?: boolean; }
-const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false } = Astro.props;
+// fill: the page is one full-height application (the map) with no footer.
+interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; }
+const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false } = Astro.props;
 const nav = [
   { href: '/study/', label: 'Study', key: 'study' },
   { href: '/develop/', label: 'Develop', key: 'develop' },
@@ -112,8 +113,8 @@ const initialSearchPlaceholder =
         <ThemeToggle />
       </div>
     </header>
-    <main><slot /></main>
-    <footer class="site-footer">
+    <main class:list={[fill && 'main-fill']}><slot /></main>
+    {!fill && <footer class="site-footer">
       <div class="footer-inner">
         <div class="footer-meta">
           <a class="footer-badge-link" href="https://visitor-badge.laobi.icu" target="_blank" rel="noopener noreferrer" title="全站访问量统计（visitor-badge）">
@@ -141,7 +142,7 @@ const initialSearchPlaceholder =
           </a>
         </div>
       </div>
-    </footer>
+    </footer>}
     <script>import '../scripts/copy-text';</script>
     <script>import '../scripts/diagrams';</script>
     <script>import '../scripts/auth-status';</script>

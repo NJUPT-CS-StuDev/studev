@@ -428,6 +428,17 @@ async function main() {
         for (const file of ['places.json', 'places.geojson', 'ways.geojson', 'network.json', 'basemap.pmtiles']) {
             if (existsSync(join(from, file))) await copyFile(join(from, file), join(to, file));
         }
+        // Places and rooms as their own small search bundle, so finding a place works offline
+        // in the app and gives the same answer on the web.
+        const places = await read<{ id: string; kind: string; names: string[]; houses?: string[]; parent?: string; floor?: string | null }[]>(join(from, 'places.json'));
+        const placeDocs: SearchDocument[] = places.map(p => ({
+            id: p.id, source: p.kind === 'room' ? 'rooms' : 'places', source_name: p.kind === 'room' ? '教室' : '地点',
+            url: `/map/?place=${encodeURIComponent(p.id)}`, title: p.id,
+            text: [...p.names, ...(p.houses ?? []), p.kind === 'room' ? `${p.parent ?? ''} ${p.floor ?? ''}楼` : ''].join(' '),
+            published: null, updated: null, section: p.parent ?? null, kind: 'page', category: p.kind, tags: [], files: [],
+        }));
+        console.log('space search', await compileBundle(placeDocs, { aliases: [] }, join(to, 'search')));
+
         const shapes = await read<{ features: { properties: { kind: string }; geometry: unknown }[] }>(join(from, 'places.geojson'));
         const area = shapes.features.find(f => f.properties.kind === 'campus')?.geometry;
         for (const theme of ['light', 'dark']) {
