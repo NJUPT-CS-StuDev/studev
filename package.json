@@ -48,7 +48,8 @@
     "@xmldom/xmldom": "^0.9.12"
   },
   "allowScripts": {
-    "esbuild": true
+    "esbuild": true,
+    "puppeteer": true
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
