@@ -10,5 +10,5 @@
 .pwa-update { position: fixed; z-index: 80; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; width: min(520px, calc(100% - 24px)); padding: 12px 12px 12px 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink); box-shadow: 0 4px 24px color-mix(in srgb, var(--ink) 16%, transparent); font-size: 14px; }
 .pwa-update[hidden],.pwa-panel [hidden] { display: none; }.pwa-update p { color: var(--muted); margin: 2px 0 0; font-size: 12px; }.pwa-update div { flex: 1; }.pwa-update button { flex-shrink: 0; }
 body:has(> main.main-fill) .pwa-entry { left: auto; right: 64px; }
-@media (max-width: 680px) { body:has(> main.main-fill) .pwa-entry { top: 160px; right: 12px; bottom: auto; } }
+@media (max-width: 680px) { body:has(> main.main-fill) .pwa-entry { top: 172px; right: 12px; bottom: auto; } }
 @media (max-width: 480px) { .pwa-update { gap: 8px; padding-left: 14px; }.pwa-update .pwa-primary { padding-inline: 12px; } }

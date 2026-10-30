@@ -22,8 +22,14 @@ async function remember(url, cache, recursive = false) {
         const type = response.headers.get('Content-Type') || '';
         if (!recursive || !/(javascript|text\/css|text\/html)/.test(type)) return;
         const text = await response.text();
-        // Vite emits template-literal asset URLs; HTML srcset includes space-separated descriptors.
-        const references = [...text.matchAll(/["'`(,\s]((?:\.?\.\/|\/_astro\/)[^"'`()\s<>,]+)(?=["'`()\s,])/g)].map(match => match[1]);
+        // Vite emits absolute template-literal asset URLs. Relative strings are only
+        // dependencies when imported or passed to new URL; WASM glue also contains
+        // synthetic module identifiers such as "./kernel_bg.js" that are never fetched.
+        const references = [
+            ...text.matchAll(/["'`(,\s](\/_astro\/[^"'`()\s<>,]+)(?=["'`()\s,])/g),
+            ...text.matchAll(/\b(?:from|import)\s*(?:\(\s*)?["'`]((?:\.\.?\/)[^"'`]+)["'`]/g),
+            ...text.matchAll(/\bnew\s+URL\(\s*["'`]((?:\.\.?\/)[^"'`]+)["'`]/g),
+        ].map(match => match[1]);
         await Promise.all(references.map(reference => {
             const asset = new URL(reference, absolute);
             if (reference.includes('${') || asset.origin !== self.location.origin || !asset.pathname.startsWith('/_astro/')) return;

@@ -21,7 +21,7 @@ function harness() {
         if (path === '/pwa-release.json') return new Response(JSON.stringify({ version: 'fixture', core: ['/data/fixture/space/test/basemap.pmtiles'], all: [] }), { headers: { 'Content-Type': 'application/json' } });
         if (path.endsWith('.pmtiles')) return new Response(new Uint8Array([0, 1, 2, 3, 4, 5]), { headers: { 'Content-Type': 'application/octet-stream' } });
         if (path === '/_astro/app.js') return new Response('import "./chunk.js";', { headers: { 'Content-Type': 'application/javascript' } });
-        if (path === '/_astro/chunk.js') return new Response('const wasm=`/_astro/kernel.wasm`;', { headers: { 'Content-Type': 'application/javascript' } });
+        if (path === '/_astro/chunk.js') return new Response('const wasm=`/_astro/kernel.wasm`; const imports={"./kernel_bg.js":{}};', { headers: { 'Content-Type': 'application/javascript' } });
         if (path.startsWith('/_astro/')) return new Response('asset');
         return new Response('<script src="/_astro/app.js"></script>', { headers: { 'Content-Type': 'text/html' } });
     });
@@ -47,6 +47,7 @@ describe('offline worker', () => {
         expect(shell.has(`${origin}/map/`)).toBe(true);
         expect(shell.has(`${origin}/_astro/chunk.js`)).toBe(true);
         expect(shell.has(`${origin}/_astro/kernel.wasm`)).toBe(true);
+        expect(shell.has(`${origin}/_astro/kernel_bg.js`)).toBe(false);
         expect(app.stores.get('studev-data-fixture')?.has(`${origin}/data/fixture/space/test/basemap.pmtiles`)).toBe(true);
         expect(app.messages).toContainEqual({ type: 'OFFLINE_READY', version: 'fixture', all: false, failed: 0 });
     });
