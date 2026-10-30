@@ -34,7 +34,7 @@ interface Period { period: number; start: string; end: string; part: string | nu
 interface Klass { id: string; name: string; grade: string | null; college: string | null; major: string | null; campus: string | null; students: number | null; practice: string[] }
 interface Meeting {
     id: string; course: { code: string | null; name: string; category: string | null; nature: string | null; credits: number | null; hours: number | null; hours_composition: string | null; assessment: string | null; exam: string | null };
-    teacher: string | null; teacher_title: string | null; role: string | null;
+    teachers: { name: string; title: string | null; role: string | null; weeks: number[] }[];
     teaching_class: { id: string | null; name: string | null; size: number | null; enrolled: number | null; capacity: number | null };
     campus: string | null; location: string | null; room: string | null; weekday: number; periods: [number, number]; weeks: number[]; method: string | null; classes: string[];
 }
@@ -105,6 +105,11 @@ async function* searchDocuments(dir: string): AsyncGenerator<SearchDocument> {
 }
 
 // ---- timetable --------------------------------------------------------------
+// The timetable views show a meeting's teachers as one line each for names, titles and roles.
+const joined = (values: (string | null)[]) => values.filter(Boolean).join(',') || null;
+const teacherNames = (m: Meeting) => joined(m.teachers.map(t => t.name));
+const teacherTitles = (m: Meeting) => joined(m.teachers.map(t => t.title));
+const teacherRoles = (m: Meeting) => joined(m.teachers.map(t => t.role));
 const termLabel = (n: number) => `第${'一二三'[n - 1] ?? n}学期`;
 
 function meetingView(m: Meeting) {
@@ -116,9 +121,9 @@ function meetingView(m: Meeting) {
         course_name: m.course.name,
         course_category: m.course.category,
         course_nature: m.course.nature,
-        teacher: m.teacher,
-        teacher_title: m.teacher_title,
-        instructor_role: m.role,
+        teacher: teacherNames(m),
+        teacher_title: teacherTitles(m),
+        instructor_role: teacherRoles(m),
         campus: m.campus,
         room_id: m.room,
         location: m.location,
@@ -264,7 +269,7 @@ async function main() {
             return {
                 ...Object.fromEntries(Object.entries(shared).filter(([, value]) => value !== null)),
                 teaching_class_id: id,
-                meetings: list.map(m => [m.id, m.weekday, m.periods[0], m.periods[1], m.weeks, m.location, m.room, m.teacher, m.teacher_title, m.role]),
+                meetings: list.map(m => [m.id, m.weekday, m.periods[0], m.periods[1], m.weeks, m.location, m.room, teacherNames(m), teacherTitles(m), teacherRoles(m)]),
             };
         }),
     });
@@ -389,7 +394,7 @@ async function main() {
                 const room = m.room ? roomById.get(m.room) : undefined;
                 if (!room || m.weekday !== weekday || !m.weeks.includes(week.week)) continue;
                 const booking = {
-                    meeting_id: m.id, course_name: m.course.name, course_code: m.course.code, class_ids: m.classes, teacher: m.teacher,
+                    meeting_id: m.id, course_name: m.course.name, course_code: m.course.code, class_ids: m.classes, teacher: teacherNames(m),
                     location: m.location, space_family_id: room.id, floor_id: floorId(room.building, room.floor),
                     start_period: m.periods[0], end_period: m.periods[1],
                 };
