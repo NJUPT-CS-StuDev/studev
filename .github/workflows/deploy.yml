@@ -28,7 +28,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "schedule" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           version=$(curl -sf -H "Authorization: Bearer $DATA_TOKEN" "https://api.github.com/repos/$DATA_REPOSITORY/releases/latest" | jq -r .tag_name)
-          status=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top/data/$version/timetable/index.json")
+          status=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top/data/$version-facts/rooms/index.json")
           echo "latest data $version, served: $status"
           if [ "$status" = "200" ]; then echo "deploy=false" >> "$GITHUB_OUTPUT"; else echo "deploy=true" >> "$GITHUB_OUTPUT"; fi
 
@@ -66,7 +66,7 @@ jobs:
           base=$(node -p "require('./src/data/campus-release.json').base")
           script=$(grep -o '/_astro/[^"]*\.js' dist/index.html | head -1)
           for attempt in $(seq 1 20); do
-            data=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$base/timetable/index.json")
+            data=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$base/rooms/index.json")
             code=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$script")
             if [ "$data" = "200" ] && [ "$code" = "200" ]; then echo "serving $base and $script"; exit 0; fi
             sleep 15

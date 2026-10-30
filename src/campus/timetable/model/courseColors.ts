@@ -11,8 +11,8 @@ const hash = (value: string): number => {
     return result >>> 0;
 };
 
-export const courseIdentity = (meeting: Pick<TeachingMeeting, 'course_code' | 'course_name'>): string => (
-    meeting.course_code?.trim().toUpperCase() || meeting.course_name.trim().replace(/\s+/g, ' ')
+export const courseIdentity = (meeting: Pick<TeachingMeeting, 'course'>): string => (
+    meeting.course.code?.trim().toUpperCase() || meeting.course.name.trim().replace(/\s+/g, ' ')
 );
 
 export const allocateCourseTones = (meetings: TeachingMeeting[]): Map<string, number> => {

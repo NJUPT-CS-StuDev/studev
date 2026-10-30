@@ -1,3 +1,4 @@
+import { examTimestamp } from '@/exams/ui/examDateTime';
 import { lazy, Suspense, useState } from 'react';
 import { Download, Share2 } from 'lucide-react';
 import { buildExamCalendarFilename } from '../downloadFilename';
@@ -56,11 +57,11 @@ export function ExamDetail({
     const sourceTime = sourceUpdatedAt;
     // With the visitor's timetable known, the class list splits into their own
     // exams and the ones other classmates sit (retakes, electives, language levels).
-    const isOwn = (exam: Exam) => !ownCodes || addedIds.has(exam.id) || ownCodes.has(exam.course_code);
+    const isOwn = (exam: Exam) => !ownCodes || addedIds.has(exam.id) || ownCodes.has(exam.course.code ?? '');
     const classExams = exams.filter(isOwn);
     const fewExams = exams.filter(exam => !isOwn(exam));
     const now = new Date().toISOString();
-    const allPast = exams.length > 0 && exams.every(exam => exam.end_timestamp && new Date(exam.end_timestamp).toISOString() < now);
+    const allPast = exams.length > 0 && exams.every(exam => examTimestamp(exam, 'end') && new Date(examTimestamp(exam, 'end')).toISOString() < now);
     const card = (exam: Exam, idx: number, list: Exam[]) => (
         <div key={exam.id || idx} className={idx !== list.length - 1 ? 'border-b border-[#dadce0] dark:border-[#323a44]' : ''}>
             <ExamCard exam={exam} isSelected={selectedIds.has(exam.id)} exportStatus={getExamStatus(exam)} onToggle={() => onToggleSelection(exam.id)} />
@@ -93,7 +94,7 @@ export function ExamDetail({
 
     const downloadICS = () => {
         const selectedExams = exams.filter(e => selectedIds.has(e.id));
-        const validExams = selectedExams.filter(e => e.start_timestamp && e.end_timestamp);
+        const validExams = selectedExams.filter(e => examTimestamp(e, 'start') && examTimestamp(e, 'end'));
 
         if (validExams.length === 0) {
             showErrorNotice({ message: '至少选择一门有考试时间的课程。' });

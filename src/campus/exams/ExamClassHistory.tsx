@@ -11,7 +11,8 @@ export function ExamClassHistory({ client, className }: ExamClassHistoryProps) {
     const history = useExamHistory(client, className);
     return (
         <ExamHistoryPanel
-            history={history.classHistory}
+            changes={history.classChanges}
+            sources={history.sources}
             className={className}
             loading={history.loading}
             error={history.error}

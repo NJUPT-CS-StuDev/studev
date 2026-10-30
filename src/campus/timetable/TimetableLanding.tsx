@@ -1,7 +1,8 @@
+import { catalogId } from '@/timetable/model/courseCatalog';
 import { CalendarRange } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ProductLandingCard } from '@/shared/ui/ProductLandingCard';
-import { termKey, timetableEdits, updateTimetableEdits } from '@/shared/lib/preferences';
+import { timetableEdits, updateTimetableEdits } from '@/shared/lib/preferences';
 import { usePreferences } from '@/shared/lib/usePreferences';
 import type { TeachingScheduleClient } from './model/TeachingScheduleClient';
 import { searchCatalog, type CatalogCourse } from './model/courseCatalog';
@@ -30,7 +31,7 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
         if (!courseQuery || catalog) return;
         const controller = new AbortController();
         Promise.all([client.initialize(controller.signal), client.loadCatalog(controller.signal)])
-            .then(([index, courses]) => setCatalog({ term: termKey(index.term.academic_year, index.term.term_number), courses }))
+            .then(([index, courses]) => setCatalog({ term: index.term.term, courses }))
             .catch(() => undefined);
         return () => controller.abort();
     }, [catalog, client, courseQuery]);
@@ -109,8 +110,8 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
                     <CourseResults
                         courses={courses}
                         inTimetable={added}
-                        onAdd={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: [...edits.added, course.id] }))}
-                        onRemove={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: edits.added.filter(id => id !== course.id) }))}
+                        onAdd={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: [...edits.added, catalogId(course)] }))}
+                        onRemove={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: edits.added.filter(id => id !== catalogId(course)) }))}
                     />
                 </section>
             ) : null}

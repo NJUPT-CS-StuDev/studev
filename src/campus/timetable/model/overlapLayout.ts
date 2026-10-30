@@ -21,8 +21,8 @@ export interface MeetingOverlap {
 
 const intersects = (left: TeachingMeeting, right: TeachingMeeting): boolean => (
     left.weekday === right.weekday
-    && left.start_period <= right.end_period
-    && left.end_period >= right.start_period
+    && left.periods[0] <= right.periods[1]
+    && left.periods[1] >= right.periods[0]
 );
 
 export const describeMeetingOverlap = (
@@ -43,22 +43,22 @@ export const groupOverlappingMeetings = (meetings: TeachingMeeting[]): MeetingGr
     for (const weekday of [1, 2, 3, 4, 5, 6, 7]) {
         const sorted = meetings
             .filter(meeting => meeting.weekday === weekday)
-            .sort((left, right) => left.start_period - right.start_period || left.end_period - right.end_period || left.meeting_id.localeCompare(right.meeting_id));
+            .sort((left, right) => left.periods[0] - right.periods[0] || left.periods[1] - right.periods[1] || left.id.localeCompare(right.id));
         let component: TeachingMeeting[] = [];
         let componentEnd = 0;
         const flush = () => {
             if (!component.length) return;
             const slotEnds: number[] = [];
             const positioned = component.map(meeting => {
-                const available = slotEnds.findIndex(end => end < meeting.start_period);
+                const available = slotEnds.findIndex(end => end < meeting.periods[0]);
                 const slot = available === -1 ? slotEnds.length : available;
-                slotEnds[slot] = meeting.end_period;
+                slotEnds[slot] = meeting.periods[1];
                 return { meeting, slot };
             });
             groups.push({
                 weekday,
-                startPeriod: Math.min(...component.map(meeting => meeting.start_period)),
-                endPeriod: Math.max(...component.map(meeting => meeting.end_period)),
+                startPeriod: Math.min(...component.map(meeting => meeting.periods[0])),
+                endPeriod: Math.max(...component.map(meeting => meeting.periods[1])),
                 slotCount: slotEnds.length,
                 positioned,
             });
@@ -66,9 +66,9 @@ export const groupOverlappingMeetings = (meetings: TeachingMeeting[]): MeetingGr
             componentEnd = 0;
         };
         for (const meeting of sorted) {
-            if (component.length && meeting.start_period > componentEnd) flush();
+            if (component.length && meeting.periods[0] > componentEnd) flush();
             component.push(meeting);
-            componentEnd = Math.max(componentEnd, meeting.end_period);
+            componentEnd = Math.max(componentEnd, meeting.periods[1]);
         }
         flush();
     }

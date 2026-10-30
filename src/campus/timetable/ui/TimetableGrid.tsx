@@ -36,14 +36,14 @@ const courseButton = (
             : '';
     return (
         <button
-            key={meeting.meeting_id}
+            key={meeting.id}
             type="button"
             className={`timetable-course course-tone-${tone} ${activeThisWeek ? '' : 'is-inactive'} ${suspended ? 'is-suspended' : ''} ${overlap ? 'has-overlap' : ''}`}
             style={style}
             onClick={event => onOpen(meeting, event.currentTarget)}
-            aria-label={`${meeting.course_name}，${meeting.location ?? '地点未注明'}，第${meeting.start_period}至${meeting.end_period}节${activeThisWeek ? overlapDescription : `，${suspended ? '本周停课' : `${alternating ?? ''}课程，本周不上课`}`}`}
+            aria-label={`${meeting.course.name}，${meeting.location ?? '地点未注明'}，第${meeting.periods[0]}至${meeting.periods[1]}节${activeThisWeek ? overlapDescription : `，${suspended ? '本周停课' : `${alternating ?? ''}课程，本周不上课`}`}`}
         >
-            <strong>{meeting.course_name}</strong>
+            <strong>{meeting.course.name}</strong>
             {meeting.location ? <span>{meeting.location}</span> : null}
             {!activeThisWeek ? <em>{inactiveLabel}</em> : overlapLabel ? <em>{overlapLabel}</em> : null}
         </button>
@@ -53,14 +53,14 @@ const courseButton = (
 const visibleDays = [1, 2, 3, 4, 5, 6, 7];
 
 export function TimetableGrid({ meetings, week, periods, tones, onOpen }: TimetableGridProps) {
-    const active = meetings.filter(meeting => meeting.week_numbers.includes(week.week));
-    const suspendedIds = new Set(meetings.filter(meeting => showAsSuspended(meeting, week.week)).map(meeting => meeting.meeting_id));
-    const visible = meetings.filter(meeting => meeting.week_numbers.includes(week.week) || suspendedIds.has(meeting.meeting_id) || showAsInactiveAlternating(meeting, week.week));
-    const activeIds = new Set(active.map(meeting => meeting.meeting_id));
+    const active = meetings.filter(meeting => meeting.weeks.includes(week.week));
+    const suspendedIds = new Set(meetings.filter(meeting => showAsSuspended(meeting, week.week)).map(meeting => meeting.id));
+    const visible = meetings.filter(meeting => meeting.weeks.includes(week.week) || suspendedIds.has(meeting.id) || showAsInactiveAlternating(meeting, week.week));
+    const activeIds = new Set(active.map(meeting => meeting.id));
     const today = todayInShanghai();
     const columns = 7;
     const groups = groupOverlappingMeetings(visible);
-    const overlapFor = (meeting: TeachingMeeting): MeetingOverlap | null => activeIds.has(meeting.meeting_id)
+    const overlapFor = (meeting: TeachingMeeting): MeetingOverlap | null => activeIds.has(meeting.id)
         ? describeMeetingOverlap(meeting, active)
         : null;
     return (
@@ -75,17 +75,17 @@ export function TimetableGrid({ meetings, week, periods, tones, onOpen }: Timeta
                     <div key={`line-${period.period}`} className={`timetable-period-line ${[6, 10].includes(period.period) ? 'day-part-start' : ''}`} style={{ gridColumn: '1 / -1', gridRow: period.period + 1 }} aria-hidden="true" />
                 ))}
                 {periods.map(period => (
-                    <div key={period.period} className="timetable-period-label" style={{ gridColumn: 1, gridRow: period.period + 1 }}><strong>{period.period}</strong><span>{period.start_time}</span><span>{period.end_time}</span></div>
+                    <div key={period.period} className="timetable-period-label" style={{ gridColumn: 1, gridRow: period.period + 1 }}><strong>{period.period}</strong><span>{period.start}</span><span>{period.end}</span></div>
                 ))}
                 {groups.map(group => {
                     const column = group.weekday + 1;
                     if (group.positioned.length === 1) {
                         const meeting = group.positioned[0]?.meeting;
-                        return meeting ? courseButton(meeting, tones, overlapFor(meeting), activeIds.has(meeting.meeting_id), suspendedIds.has(meeting.meeting_id), onOpen, { gridColumn: column, gridRow: `${meeting.start_period + 1} / ${meeting.end_period + 2}` }) : null;
+                        return meeting ? courseButton(meeting, tones, overlapFor(meeting), activeIds.has(meeting.id), suspendedIds.has(meeting.id), onOpen, { gridColumn: column, gridRow: `${meeting.periods[0] + 1} / ${meeting.periods[1] + 2}` }) : null;
                     }
                     return (
                         <div
-                            key={`${group.weekday}:${group.startPeriod}:${group.positioned.map(item => item.meeting.meeting_id).join(':')}`}
+                            key={`${group.weekday}:${group.startPeriod}:${group.positioned.map(item => item.meeting.id).join(':')}`}
                             className="timetable-overlap-group"
                             style={{
                                 '--overlap-columns': group.slotCount,
@@ -95,9 +95,9 @@ export function TimetableGrid({ meetings, week, periods, tones, onOpen }: Timeta
                             } as CSSProperties}
                             aria-label={`${group.positioned.length}项同时段安排`}
                         >
-                            {group.positioned.map(({ meeting, slot }) => courseButton(meeting, tones, overlapFor(meeting), activeIds.has(meeting.meeting_id), suspendedIds.has(meeting.meeting_id), onOpen, {
+                            {group.positioned.map(({ meeting, slot }) => courseButton(meeting, tones, overlapFor(meeting), activeIds.has(meeting.id), suspendedIds.has(meeting.id), onOpen, {
                                 gridColumn: slot + 1,
-                                gridRow: `${meeting.start_period - group.startPeriod + 1} / ${meeting.end_period - group.startPeriod + 2}`,
+                                gridRow: `${meeting.periods[0] - group.startPeriod + 1} / ${meeting.periods[1] - group.startPeriod + 2}`,
                             }))}
                         </div>
                     );

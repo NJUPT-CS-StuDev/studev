@@ -68,7 +68,7 @@ export const getClassSearchResult = (
     }
 
     if (manualSelection) {
-        const selectedExams = exams.filter(exam => exam.class_name === manualSelection);
+        const selectedExams = exams.filter(exam => exam.class === manualSelection);
         if (selectedExams.length === 0) {
             return { mode: 'NOT_FOUND', classes: [], exams: [] };
         }
@@ -81,9 +81,9 @@ export const getClassSearchResult = (
 
     const term = trimmed;
     const matchedExams = exams.filter(exam =>
-        exam.class_name.includes(term)
+        exam.class.includes(term)
     );
-    const uniqueClasses = Array.from(new Set(matchedExams.map(exam => exam.class_name))).sort();
+    const uniqueClasses = Array.from(new Set(matchedExams.map(exam => exam.class))).sort();
 
     if (uniqueClasses.length === 0) {
         return { mode: 'NOT_FOUND', classes: [], exams: [] };

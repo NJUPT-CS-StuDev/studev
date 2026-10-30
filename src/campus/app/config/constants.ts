@@ -9,9 +9,9 @@ export const APP_CONFIG = {
     PAGE_TITLE: '校园查询',
     DATA_URLS: {
         SEARCH: `${release.base}/search`,
-        TIMETABLE: `${release.base}/timetable`,
-        EXAMS: `${release.base}/exams`,
-        CLASSROOMS: `${release.base}/classrooms`,
+        TIMETABLE: `${release.base}/teaching/${release.teaching}`,
+        EXAMS: `${release.base}/exams/${release.exams}`,
+        CLASSROOMS: `${release.base}/rooms`,
     },
     MAX_CLASS_DISPLAY_COUNT: 50,
     SEARCH_RESULT_LIMIT: 10,

@@ -1,14 +1,11 @@
+import { catalogId } from '../model/courseCatalog';
 import { Eye, EyeOff, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TeachingMeeting } from '@/academics/timetable';
 import { searchCatalog, type CatalogCourse } from '../model/courseCatalog';
 import { CourseResults, meetingLine, suspensionNote } from './CourseResults';
 
-export interface TimetableCourse {
-    id: string;
-    name: string;
-    teachers: string;
-    meetings: TeachingMeeting[];
+export interface TimetableCourse extends CatalogCourse {
     source: 'class' | 'added';
     hidden: boolean;
 }
@@ -54,17 +51,17 @@ export function CourseManager({ className, courses, loadCatalog, initialQuery, o
     }, [onClose]);
 
     const results = useMemo(() => catalog && query.trim() ? searchCatalog(catalog, query) : [], [catalog, query]);
-    const present = useMemo(() => new Set(courses.filter(course => !course.hidden).map(course => course.id)), [courses]);
+    const present = useMemo(() => new Set(courses.filter(course => !course.hidden).map(course => catalogId(course))), [courses]);
     const classCourses = courses.filter(course => course.source === 'class');
     const added = courses.filter(course => course.source === 'added');
     const remove = (course: CatalogCourse) => {
-        const existing = courses.find(item => item.id === course.id);
-        if (existing?.source === 'added') onRemoveAdded(course.id);
-        else onHide(course.id);
+        const existing = courses.find(item => catalogId(item) === catalogId(course));
+        if (existing?.source === 'added') onRemoveAdded(catalogId(course));
+        else onHide(catalogId(course));
     };
     const add = (course: CatalogCourse) => {
-        const existing = courses.find(item => item.id === course.id);
-        if (existing?.source === 'class') onShow(course.id);
+        const existing = courses.find(item => catalogId(item) === catalogId(course));
+        if (existing?.source === 'class') onShow(catalogId(course));
         else onAdd(course);
     };
 
@@ -101,9 +98,9 @@ export function CourseManager({ className, courses, loadCatalog, initialQuery, o
                             <h3>自己加入的课程</h3>
                             <ul className="course-manager-list">
                                 {added.map(course => (
-                                    <li key={course.id}>
-                                        <div><strong>{course.name}</strong><span>{course.teachers}</span>{course.meetings.map(meeting => <small key={meeting.meeting_id}>{meetingLine(meeting)}</small>)}{suspensionNote(course.meetings) ? <em>{suspensionNote(course.meetings)}</em> : null}</div>
-                                        <button type="button" onClick={() => onRemoveAdded(course.id)} aria-label={`移出 ${course.name}`}><Trash2 aria-hidden="true" />移出</button>
+                                    <li key={catalogId(course)}>
+                                        <div><strong>{course.meetings[0]!.course.name}</strong><span>{[...new Set(course.meetings.map(m => m.teachers.map(t => t.name).join(',')).filter(Boolean))].join('、')}</span>{course.meetings.map(meeting => <small key={meeting.id}>{meetingLine(meeting)}</small>)}{suspensionNote(course.meetings) ? <em>{suspensionNote(course.meetings)}</em> : null}</div>
+                                        <button type="button" onClick={() => onRemoveAdded(catalogId(course))} aria-label={`移出 ${course.meetings[0]!.course.name}`}><Trash2 aria-hidden="true" />移出</button>
                                     </li>
                                 ))}
                             </ul>
@@ -114,11 +111,11 @@ export function CourseManager({ className, courses, loadCatalog, initialQuery, o
                         <p className="course-manager-hint">没有选的课点「不上」，它就不再出现在你的课表里；随时可以恢复。</p>
                         <ul className="course-manager-list">
                             {classCourses.map(course => (
-                                <li key={course.id} className={course.hidden ? 'is-hidden' : ''}>
-                                    <div><strong>{course.name}</strong><span>{course.teachers}</span>{course.meetings.map(meeting => <small key={meeting.meeting_id}>{meetingLine(meeting)}</small>)}{suspensionNote(course.meetings) ? <em>{suspensionNote(course.meetings)}</em> : null}</div>
+                                <li key={catalogId(course)} className={course.hidden ? 'is-hidden' : ''}>
+                                    <div><strong>{course.meetings[0]!.course.name}</strong><span>{[...new Set(course.meetings.map(m => m.teachers.map(t => t.name).join(',')).filter(Boolean))].join('、')}</span>{course.meetings.map(meeting => <small key={meeting.id}>{meetingLine(meeting)}</small>)}{suspensionNote(course.meetings) ? <em>{suspensionNote(course.meetings)}</em> : null}</div>
                                     {course.hidden
-                                        ? <button type="button" onClick={() => onShow(course.id)} aria-label={`恢复 ${course.name}`}><Eye aria-hidden="true" />恢复</button>
-                                        : <button type="button" onClick={() => onHide(course.id)} aria-label={`不上 ${course.name}`}><EyeOff aria-hidden="true" />不上</button>}
+                                        ? <button type="button" onClick={() => onShow(catalogId(course))} aria-label={`恢复 ${course.meetings[0]!.course.name}`}><Eye aria-hidden="true" />恢复</button>
+                                        : <button type="button" onClick={() => onHide(catalogId(course))} aria-label={`不上 ${course.meetings[0]!.course.name}`}><EyeOff aria-hidden="true" />不上</button>}
                                 </li>
                             ))}
                         </ul>

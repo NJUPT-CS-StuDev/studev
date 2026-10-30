@@ -1,3 +1,4 @@
+import { examTimestamp, examDuration } from '@/exams/ui/examDateTime';
 import { Check, Clock, MapPin, User, Users } from 'lucide-react';
 import type { Exam } from '@/academics/exam/records';
 import type { ExamExportStatus } from '../model/examSelection';
@@ -29,7 +30,7 @@ const statusBadge = (status: ExamExportStatus): { text: string; description: str
 };
 
 export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardProps) {
-    const isValidTime = !!exam.start_timestamp;
+    const isValidTime = Boolean(exam.date && exam.start && exam.end);
     const badge = statusBadge(exportStatus);
     const borderClass = exportStatus === 2
         ? 'border-[#fbbc04]'
@@ -74,7 +75,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                 <div className="flex-1">
                     <div className="flex justify-between items-start mb-2 gap-3">
                         <h3 className={`text-[18px] font-normal leading-snug ${isSelected ? 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)] group-hover:underline' : 'text-[#202124] dark:text-[#e8edf3]'}`}>
-                            {exam.course_name}
+                            {exam.course.name}
                         </h3>
                         {exam.campus && (
                             <span className="shrink-0 text-[12px] text-[#006621] dark:text-[#81c995] bg-[#e6f4ea] dark:bg-[#1e8e3e]/20 px-2.5 py-0.5 rounded">
@@ -97,18 +98,18 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                             <div className="flex items-start gap-2">
                                 <Clock className="w-4 h-4 mt-0.5 shrink-0 text-[#4285f4] dark:text-[#8ab4f8]" aria-hidden="true" />
                                 <div>
-                                    <span className="font-medium text-[#202124] dark:text-[#e8edf3]">{formatExamDisplayDate(exam.start_timestamp)}</span>
+                                    <span className="font-medium text-[#202124] dark:text-[#e8edf3]">{formatExamDisplayDate(examTimestamp(exam, 'start'))}</span>
                                     <span className="mx-1 text-[#70757a]">至</span> 
-                                    <span>{formatExamDisplayDate(exam.end_timestamp)}</span>
+                                    <span>{formatExamDisplayDate(examTimestamp(exam, 'end'))}</span>
                                     <span className="ml-2 text-[12px] px-1.5 py-0.5 bg-[#f1f3f4] dark:bg-[#3c4043] rounded text-[#5f6368] dark:text-[#9aa0a6]">
-                                        {exam.duration_minutes} 分钟
+                                        {examDuration(exam)} 分钟
                                     </span>
                                 </div>
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 text-[#d93025] dark:text-[#f28b82]">
                                 <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
-                                <span><span className="font-medium">时间待定：</span> {exam.raw_time || '未发布'}</span>
+                                <span><span className="font-medium">时间待定：</span> {[exam.date, exam.start + '-' + exam.end].join(' ') || '未发布'}</span>
                             </div>
                         )}
                         
@@ -118,9 +119,9 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                         </div>
                         
                         <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-[13px] text-[#70757a] dark:text-[#9aa0a6]">
-                            {exam.course_code && (
+                            {exam.course.code && (
                                 <span className="flex items-center gap-1.5 bg-[#f8f9fa] dark:bg-[#1c232b] px-2 py-0.5 rounded border border-[#dadce0] dark:border-[#5f6368]">
-                                    <span className="text-[#3c4043] dark:text-[#e8edf3]">{exam.course_code}</span>
+                                    <span className="text-[#3c4043] dark:text-[#e8edf3]">{exam.course.code}</span>
                                 </span>
                             )}
                             <span className="flex items-center gap-1.5">
@@ -129,9 +130,9 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                             </span>
                             <span className="flex items-center gap-1.5">
                                 <Users className="w-4 h-4 text-[#fbbc04] dark:text-[#fdd663]" aria-hidden="true" />
-                                {exam.count == null ? '人数未公布' : `${exam.count} 人`}
+                                {exam.students == null ? '人数未公布' : `${exam.students} 人`}
                             </span>
-                            {exam.notes && <span className="italic">备注：{exam.notes}</span>}
+                            {exam.note && <span className="italic">备注：{exam.note}</span>}
                         </div>
                     </div>
                 </div>
@@ -139,4 +140,3 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
         </label>
     );
 }
-

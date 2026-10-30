@@ -17,7 +17,7 @@ export const weekdayInShanghai = (): number => {
 };
 
 export const meetingDate = (week: TeachingWeek, weekday: number): string => {
-    const date = new Date(`${week.start_date}T00:00:00Z`);
+    const date = new Date(`${week.start}T00:00:00Z`);
     date.setUTCDate(date.getUTCDate() + weekday - 1);
     return date.toISOString().slice(0, 10);
 };
@@ -30,23 +30,23 @@ export const buildClassCalendar = (
 ): string => {
     const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//studev//Teaching Schedule//ZH-CN', 'CALSCALE:GREGORIAN'];
     for (const meeting of meetings) {
-        const startPeriod = periods.find(item => item.period === meeting.start_period);
-        const endPeriod = periods.find(item => item.period === meeting.end_period);
+        const startPeriod = periods.find(item => item.period === meeting.periods[0]);
+        const endPeriod = periods.find(item => item.period === meeting.periods[1]);
         if (!startPeriod || !endPeriod) continue;
-        for (const weekNumber of meeting.week_numbers) {
+        for (const weekNumber of meeting.weeks) {
             const week = weeks.find(item => item.week === weekNumber);
             if (!week) continue;
             const date = meetingDate(week, meeting.weekday);
-            const uid = `${meeting.meeting_id}-${weekNumber}@studev.hicancan.top`;
+            const uid = `${meeting.id}-${weekNumber}@studev.hicancan.top`;
             lines.push(
                 'BEGIN:VEVENT',
                 `UID:${uid}`,
                 `DTSTAMP:${compact(new Date().toISOString().slice(0, 19))}Z`,
-                `DTSTART;TZID=Asia/Shanghai:${compact(date)}T${compact(startPeriod.start_time)}00`,
-                `DTEND;TZID=Asia/Shanghai:${compact(date)}T${compact(endPeriod.end_time)}00`,
-                `SUMMARY:${escape(meeting.course_name)}`,
+                `DTSTART;TZID=Asia/Shanghai:${compact(date)}T${compact(startPeriod.start)}00`,
+                `DTEND;TZID=Asia/Shanghai:${compact(date)}T${compact(endPeriod.end)}00`,
+                `SUMMARY:${escape(meeting.course.name)}`,
                 `LOCATION:${escape(meeting.location ?? '')}`,
-                `DESCRIPTION:${escape([className, meeting.teacher].filter(Boolean).join(' · '))}`,
+                `DESCRIPTION:${escape([className, meeting.teachers.map(t => t.name).join(',')].filter(Boolean).join(' · '))}`,
                 'END:VEVENT',
             );
         }
