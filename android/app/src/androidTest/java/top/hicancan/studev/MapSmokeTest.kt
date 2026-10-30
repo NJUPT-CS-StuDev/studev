@@ -50,6 +50,8 @@ class MapSmokeTest {
         }
     }
     private fun waitForMap() {
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("tab-map").fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isNotEmpty() }
+        if (compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isEmpty()) compose.onNodeWithTag("tab-map").performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
     }
@@ -64,7 +66,7 @@ class MapSmokeTest {
         }
     }
     @Test fun mapSearchAndPlaceSheet() {
-        compose.waitUntil(15000) { compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isNotEmpty() }
+        waitForMap()
         compose.onNodeWithText("搜索地点、楼栋或教室").performClick()
         compose.onNode(hasSetTextAction()).performTextInput("教3")
         compose.mainClock.advanceTimeBy(500)
