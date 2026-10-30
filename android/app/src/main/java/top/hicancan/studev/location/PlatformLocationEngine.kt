@@ -56,13 +56,21 @@ class PlatformLocationEngine(
             val latest = providers.filter(manager::isProviderEnabled)
                 .mapNotNull(manager::getLastKnownLocation)
                 .filter { SystemClock.elapsedRealtimeNanos() - it.elapsedRealtimeNanos < MAX_AGE_NANOS }
-                .maxByOrNull { it.elapsedRealtimeNanos }
+                                .reduceOrNull { best, fix ->
+                    val difference = fix.elapsedRealtimeNanos - best.elapsedRealtimeNanos
+                    when {
+                        difference > TimeUnit.SECONDS.toNanos(10) -> fix
+                        difference < -TimeUnit.SECONDS.toNanos(10) -> best
+                        fix.accuracy < best.accuracy -> fix
+                        else -> best
+                    }
+                }
             if (latest != null) {
                 callback.onSuccess(LocationEngineResult.create(latest))
                 onStatus(LocationStatus.Available)
             } else {
                 reportProviders(providers)
-                callback.onFailure(IllegalStateException("Waiting for a fresh location"))
+                callback.onSuccess(LocationEngineResult.create(null as Location?))
             }
         } catch (error: SecurityException) {
             callback.onFailure(error)
