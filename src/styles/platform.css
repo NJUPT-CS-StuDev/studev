@@ -54,7 +54,7 @@
 .p-actions.spread { justify-content:space-between; }
 .p-message { border-radius:8px; background:var(--kbd); padding:12px 15px; margin:18px 0; color:var(--muted); font-size:.86rem; line-height:1.75; overflow-wrap:anywhere; }
 .p-message:empty { display:none; }
-.p-message[data-kind=error] { background:var(--alert-warning); color:var(--warning); }
+.p-message[data-kind=error] { background:var(--alert-warning); color: var(--warning-ink); }
 .p-message[data-kind=success] { background:var(--alert-tip); color:var(--success); }
 .p-tabs { display:flex; flex-wrap:wrap; gap:6px; padding-bottom:16px; margin-bottom:20px; border-bottom:1px solid var(--line); }
 .p-tab { border:0; border-radius:6px; background:none; color:var(--muted); padding:9px 13px; font:inherit; font-size:.85rem; cursor:pointer; }
@@ -73,7 +73,7 @@
 .p-pill { border-radius:99px; background:var(--kbd); color:var(--muted); padding:3px 9px; font-size:.73rem; white-space:nowrap; display:inline-flex; align-items:center; }
 .p-pill[data-state=published],.p-pill[data-state=accepted],.p-pill[data-state=active] { background:var(--alert-tip); color:var(--success); }
 .p-pill[data-state=pending_review],.p-pill[data-state=draft],.p-pill[data-state=pending] { background:var(--mark); color:var(--blue); }
-.p-pill[data-state=rejected],.p-pill[data-state=disabled] { background:var(--alert-warning); color:var(--warning); }
+.p-pill[data-state=rejected],.p-pill[data-state=disabled] { background:var(--alert-warning); color: var(--warning-ink); }
 .p-id-card { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:18px 28px; padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--paper); margin-bottom:20px; box-shadow:0 2px 12px var(--shadow-soft); }
 .p-id-top { display:flex; align-items:center; gap:18px; min-width:0; }
 .p-id-avatar { width:72px; height:72px; border-radius:50%; object-fit:cover; border:1px solid var(--avatar-line,var(--line)); flex:none; background:var(--kbd); }
@@ -140,7 +140,7 @@
 .p-modal h2 { font-size:1.1rem; margin:0 0 12px; }
 .p-modal p { font-size:.86rem; line-height:1.8; color:var(--muted); }
 :root[data-theme=dark] .p-button:not(.secondary):not(.danger) { color:var(--on-brand); }
-:root[data-theme=dark] .p-message[data-kind=error],:root[data-theme=dark] .p-pill[data-state=rejected],:root[data-theme=dark] .p-pill[data-state=disabled] { color:var(--warning); }
+:root[data-theme=dark] .p-message[data-kind=error],:root[data-theme=dark] .p-pill[data-state=rejected],:root[data-theme=dark] .p-pill[data-state=disabled] { color: var(--warning-ink); }
 :root[data-theme=dark] .p-message[data-kind=success],:root[data-theme=dark] .p-pill[data-state=published],:root[data-theme=dark] .p-pill[data-state=accepted],:root[data-theme=dark] .p-pill[data-state=active] { color:var(--success); }
 :root[data-theme=dark] .p-button.danger,:root[data-theme=dark] .p-required { color:var(--danger); border-color:var(--danger); }
 @media(max-width:680px) { .platform { width:calc(100% - 40px); padding-top:18px; } }

@@ -280,8 +280,8 @@
 .course-manager-list strong { font-size: 14px; font-weight: 650; }
 .course-manager-list span, .course-manager-list small { color: var(--muted); font-size: 12px; line-height: 1.45; }
 [data-theme=dark] .course-manager-list span, [data-theme=dark] .course-manager-list small { color: var(--muted); }
-.course-manager-list em, .course-result-flag { color: var(--warning); font-size: 12px; font-style: normal; font-weight: 600; }
-[data-theme=dark] .course-manager-list em, [data-theme=dark] .course-result-flag { color: var(--warning); }
+.course-manager-list em, .course-result-flag { color: var(--warning-ink); font-size: 12px; font-style: normal; font-weight: 600; }
+[data-theme=dark] .course-manager-list em, [data-theme=dark] .course-result-flag { color: var(--warning-ink); }
 .course-manager-list button, .course-result > button { display: inline-flex; flex: 0 0 auto; min-height: 36px; align-items: center; gap: 5px; border: 1px solid var(--brand-container); border-radius: 999px; padding: 0 12px; color: var(--brand); font-size: 13px; font-weight: 600; }
 .course-manager-list button:hover, .course-result > button:hover { background: var(--alert-note); }
 [data-theme=dark] .course-manager-list button, [data-theme=dark] .course-result > button { border-color: var(--brand-container); color: var(--brand); }

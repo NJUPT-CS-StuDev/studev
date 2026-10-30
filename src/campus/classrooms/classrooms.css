@@ -1,6 +1,6 @@
 .classrooms {
     --room-free-bg: var(--success-bg);
-    --room-free-border: var(--success);
+    --room-free-border: var(--success-line);
     --room-free-fg: var(--success);
     --room-busy-bg: var(--surface-sunken);
     --room-busy-border: var(--line);

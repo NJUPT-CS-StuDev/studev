@@ -185,7 +185,7 @@ export function ExamDetail({
             </div>
 
             {allPast ? (
-                <div className="mb-4 rounded-xl border border-[var(--warning-line)] bg-[var(--warning-bg)] px-4 py-3 text-[14px] leading-relaxed text-[var(--warning)] dark:border-[var(--warning-line)] dark:bg-[var(--warning-bg)] dark:text-[var(--warning)]">
+                <div className="mb-4 rounded-xl border border-[var(--warning-line)] bg-[var(--warning-bg)] px-4 py-3 text-[14px] leading-relaxed text-[var(--warning-ink)] dark:border-[var(--warning-line)] dark:bg-[var(--warning-bg)] dark:text-[var(--warning-ink)]">
                     这些考试都已结束{sourceTitle ? `（${sourceTitle.replace(/^【[^】]*】/, '')}）` : ''}。本学期的考试安排公布后，这里会自动更新。
                 </div>
             ) : null}

@@ -83,11 +83,11 @@
         position: absolute;
         inset: 0;
         transform: translateX(-120%);
-        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper) 42%, transparent), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--asset-paper) 42%, transparent), transparent);
     }
 
     [data-theme=dark] .skeleton-block::after {
-        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper) 12%, transparent), transparent);
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--asset-paper) 12%, transparent), transparent);
     }
 }
 

@@ -20,6 +20,7 @@ export function renderWebTokens(tokens) {
     'success-line': 'color-mix(in srgb, var(--success) 30%, var(--paper))',
     'warning-bg': 'color-mix(in srgb, var(--warning) 12%, var(--paper))',
     'warning-line': 'color-mix(in srgb, var(--warning) 35%, var(--paper))',
+    'warning-ink': 'color-mix(in srgb, var(--warning) 75%, var(--ink))',
     'highlight': 'color-mix(in srgb, var(--warning) 25%, var(--paper))',
     'shadow-soft': 'color-mix(in srgb, var(--scrim) 16%, transparent)',
     'shadow-medium': 'color-mix(in srgb, var(--scrim) 38%, transparent)',

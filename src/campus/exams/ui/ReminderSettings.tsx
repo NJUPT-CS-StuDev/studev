@@ -26,7 +26,7 @@ export function ReminderSettings({ selected, onChange }: ReminderSettingsProps) 
     return (
         <div className="mb-6 rounded-lg border border-[var(--line)] dark:border-[var(--line)] bg-[var(--surface)] dark:bg-[var(--paper)] p-4">
             <div className="flex items-center gap-2 mb-3">
-                <Bell className="w-5 h-5 text-[var(--warning)]" aria-hidden="true" />
+                <Bell className="w-5 h-5 text-[var(--warning-ink)]" aria-hidden="true" />
                 <h3 className="font-medium text-[var(--ink)] dark:text-[var(--ink)] text-[14px]">考前提醒</h3>
             </div>
             <div className="flex flex-wrap gap-2">

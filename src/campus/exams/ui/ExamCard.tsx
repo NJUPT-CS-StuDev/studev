@@ -16,7 +16,7 @@ const statusBadge = (status: ExamExportStatus): { text: string; description: str
         return {
             text: '有更新',
             description: '相对本浏览器上次导出的日历有更新',
-            className: 'bg-[var(--warning-bg)] text-[var(--warning)] border-[var(--warning)] dark:bg-[var(--warning-bg)] dark:text-[var(--warning)] dark:border-[var(--warning)]',
+            className: 'bg-[var(--warning-bg)] text-[var(--warning-ink)] border-[var(--warning)] dark:bg-[var(--warning-bg)] dark:text-[var(--warning-ink)] dark:border-[var(--warning)]',
         };
     }
     if (status === 1) {
@@ -129,7 +129,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                                 {exam.teacher || '教师待定'}
                             </span>
                             <span className="flex items-center gap-1.5">
-                                <Users className="w-4 h-4 text-[var(--warning)] dark:text-[var(--warning)]" aria-hidden="true" />
+                                <Users className="w-4 h-4 text-[var(--warning-ink)] dark:text-[var(--warning-ink)]" aria-hidden="true" />
                                 {exam.students == null ? '人数未公布' : `${exam.students} 人`}
                             </span>
                             {exam.note && <span className="italic">备注：{exam.note}</span>}
