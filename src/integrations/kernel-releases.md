@@ -23,13 +23,24 @@ npm install --no-save --package-lock=false D:/Temp/codex/web-parity/wasm-search-
 `npm ci --prefix js`、`npm run build --prefix js`，再从 `js/` 执行
 `npm pack --ignore-scripts --pack-destination <临时目录>` 重建。
 
+集成验收在 `D:/Temp/codex/integrate/` 从 wayfind `main` 和 wasm-search
+`android-core` 重建两个包。若 npm 的 `--package-lock=false` 安装重新解析整棵
+依赖树而阻塞，可在已有其余依赖的检出中将这两个无运行时依赖的包直接解压：
+
+```powershell
+tar -xzf D:/Temp/codex/integrate/wasm-search-1.0.3.tgz --strip-components=1 -C node_modules/wasm-search
+tar -xzf D:/Temp/codex/integrate/wayfind-0.1.0.tgz --strip-components=1 -C node_modules/wayfind
+```
+
+这只替换 ignored 的本地内核安装，不修改 package.json 或锁文件。发布附件后移除此
+发布前回退说明，使用干净的 `npm ci` 并记录真实附件 integrity，再完成发布切换。
+
 `npm run digest` 先生成地图样式、字体与图标，再打包校园数据与拼音搜索索引。
 `npm run build` 也走同一路径，因此全新 CI 检出不会缺少 ignored 的地图资源。
 npm 的 `allowScripts` 同时批准 Puppeteer 的浏览器安装脚本，内容页的静态 Mermaid
 在干净 CI 中也有可用的渲染器。本机浏览器缓存不完整时，可以仅在当前进程设置
 `PUPPETEER_EXECUTABLE_PATH` 指向已安装的 Chrome，再执行检查与构建。
 
-部署配置的 `Permissions-Policy` 目前包含 `geolocation=()`，协调者需要将其改为
-`geolocation=(self)` 才能在生产网页使用浏览器定位。此配置不在 web-parity 所有权内。
-同时建议为 `/sw.js` 和 `/pwa-release.json` 显式配置 `Cache-Control: no-cache`，
-让边缘节点及时重新验证更新入口；版本化的 `/data/*` 继续永久缓存。
+集成分支已将部署配置的 `Permissions-Policy` 改为 `geolocation=(self)`，并为
+`/sw.js` 和 `/pwa-release.json` 配置 `Cache-Control: no-cache`，让边缘节点及时
+重新验证更新入口；版本化的 `/data/*` 继续永久缓存。配置待协调者发布后生效。

@@ -1,7 +1,5 @@
 .activities-page { max-width: 1040px; }
-.activities-page { --activity-brand:var(--activity-light-brand); --activity-on-brand:var(--activity-light-onBrand); }
-[data-theme=dark] .activities-page { --activity-brand:var(--activity-dark-brand); --activity-on-brand:var(--activity-dark-onBrand); }
-.activities-page .p-button:not(.secondary) { background:var(--activity-brand); color:var(--activity-on-brand); border-color:var(--activity-brand); }
+.activities-page .p-button:not(.secondary):not(.danger) { background:var(--brand); color:var(--on-brand); border-color:var(--brand); }
 .activity-eyebrow { color:var(--blue)!important; font-size:13px!important; margin-bottom:8px!important; }
 .activity-back { display:flex; align-items:center; gap:8px; border:0; color:var(--muted); background:transparent; padding:8px 0; margin-bottom:16px; font:inherit; cursor:pointer; }
 .activity-editor,.activity-detail { max-width:760px; margin-inline:auto; }

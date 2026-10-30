@@ -4,7 +4,6 @@ import { api, errorText, session, type Session } from '../scripts/platform-clien
 import { loadSpace, type Space } from '../campus/map/model/space';
 import { activityPlaceName, activityTime, activityUrl, getActivities, getActivity, type Activity, type ActivityInput } from './api';
 import './activities.css';
-import { activityTokens } from './theme';
 
 const localTime = (value: string) => { const d = new Date(value); return new Date(d.valueOf() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 export default function ActivityPage() {
@@ -46,7 +45,7 @@ export default function ActivityPage() {
     try { if (navigator.share) await navigator.share({ title: a.title, url: activityUrl(a.id) }); else { await navigator.clipboard.writeText(activityUrl(a.id)); setNotice('活动链接已复制。'); } } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) setNotice('复制未完成，请使用下方的活动链接。'); }
   }
   const owner = selected && auth?.user.id === selected.organiser.id;
-  return <main className="platform activities-page" style={activityTokens}>
+  return <main className="platform activities-page">
     <header className="p-heading"><div><p className="activity-eyebrow">在校园，一起出发</p><h1>校园活动</h1><p>把时间与地点，分享给同行的人。</p></div>{!editing && <button className="p-button" onClick={() => { setSelected(null); setEditing(true); setPoint(false); setDraft(null); }}><Plus size={17} />发起活动</button>}</header>
     {notice && <p className="p-message" role="status">{notice}</p>}
     {(editing || selected) && <button className="activity-back" onClick={() => { setEditing(false); setSelected(null); setDeleting(false); history.replaceState(null, '', '/activities/'); }}><ArrowLeft size={16} />全部活动</button>}

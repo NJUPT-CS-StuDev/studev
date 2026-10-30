@@ -12,7 +12,6 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import './map.css';
 import tokens from '../../../design/tokens.json';
 import MapActivities from '../../activities/MapActivities';
-import { activityTokens } from '../../activities/theme';
 import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
@@ -241,7 +240,7 @@ export default function MapApp() {
     };
 
     return (
-        <div className="campus-map" style={activityTokens}>
+        <div className="campus-map">
             <div ref={container} className="campus-map-canvas" />
             <aside ref={panel} className={`campus-map-panel${query ? ' is-searching' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="校园地图">
                 <div className="campus-map-search">

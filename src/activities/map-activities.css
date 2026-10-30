@@ -1,7 +1,7 @@
 .activity-map-tools { display:flex; gap:8px; align-items:center; }
 .activity-map-tools button,.activity-map-tools a,.activity-map-create { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:24px; padding:9px 14px; font:inherit; font-size:13px; color:var(--ink); background:var(--paper); cursor:pointer; text-decoration:none; }
 .activity-map-tools button[aria-pressed=true] { color:var(--blue); background:var(--mark); border-color:var(--blue); }
-.activity-map-marker { border:2px solid var(--paper); border-radius:16px; background:var(--blue); color:var(--paper); padding:5px 9px; font-size:12px; cursor:pointer; }
+.activity-map-marker { border:2px solid var(--paper); border-radius:16px; background:var(--brand); color:var(--on-brand); padding:5px 9px; font-size:12px; cursor:pointer; }
 .activity-map-marker:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
 .activity-map-label { color:var(--blue); font-size:12px; display:block; margin-bottom:6px; }
 .activity-map-sheet>p { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; line-height:1.7; }
@@ -11,9 +11,6 @@
 .activity-map-actions button,.activity-map-actions a { display:flex; align-items:center; gap:6px; font:inherit; font-size:13px; border:0; padding:8px; background:transparent; color:var(--blue); cursor:pointer; text-decoration:none; }
 .activity-map-create { align-self:flex-start; }
 .campus-map-error .activity-retry { font-size:13px; color:var(--blue); white-space:nowrap; }
-.campus-map { --activity-brand:var(--activity-light-brand); --activity-on-brand:var(--activity-light-onBrand); }
-[data-theme=dark] .campus-map { --activity-brand:var(--activity-dark-brand); --activity-on-brand:var(--activity-dark-onBrand); }
-.activity-map-marker,.activity-map-sheet .campus-map-primary { background:var(--activity-brand); color:var(--activity-on-brand); }
 @media(max-width:720px) { .activity-map-sheet { position:fixed; left:16px; bottom:max(16px,env(safe-area-inset-bottom)); width:calc(100% - 32px); max-height:49dvh; overflow:auto; } }
 .campus-map-panel:has(.activity-map-sheet) { z-index:3; }
 .campus-map-panel:has(.activity-map-tools)>* { flex-shrink:0; }
