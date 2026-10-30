@@ -92,6 +92,12 @@ import '../styles/platform.css';
           </div>
         </header>
         <section class="p-id-card" data-account-id-card aria-label="数字身份名片"></section>
+        <section class="p-card" aria-labelledby="devices-title" style="margin-bottom:20px">
+          <h2 id="devices-title">已登录的设备</h2>
+          <p class="p-muted">查看使用此账号的 App。退出设备后，该设备需要重新登录。</p>
+          <div data-account-devices style="margin-top:16px"></div>
+          <p class="p-message" data-devices-status role="status"></p>
+        </section>
         <div class="p-grid">
           <section class="p-card">
             <h2>个人资料</h2>
@@ -311,4 +317,5 @@ import '../styles/platform.css';
 
   <script>import '../scripts/platform-account';</script>
   <script>import '../scripts/account-settings';</script>
+  <script>import '../scripts/platform-devices';</script>
 </SiteLayout>

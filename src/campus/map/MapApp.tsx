@@ -11,6 +11,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import './map.css';
 import tokens from '../../../design/tokens.json';
+import MapActivities from '../../activities/MapActivities';
+import { activityTokens } from '../../activities/theme';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
@@ -32,6 +34,7 @@ export default function MapApp() {
     const marker = useRef<maplibregl.Marker | null>(null);
     const meMarker = useRef<maplibregl.Marker | null>(null);
     const [space, setSpace] = useState<Space | null>(null);
+    const [mapReady, setMapReady] = useState(false);
     const [router, setRouter] = useState<Router | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [query, setQuery] = useState('');
@@ -44,6 +47,7 @@ export default function MapApp() {
     const [routes, setRoutes] = useState<Route[]>([]);
     const [chosen, setChosen] = useState(0);
     const [planning, setPlanning] = useState(false);
+    const activityRouting = useRef(false);
     const search = useMemo(() => new SearchClient({ baseUrl: `${spaceBase()}/search` }), []);
 
     // Data, routing kernel and the map.
@@ -77,6 +81,7 @@ export default function MapApp() {
                 instance.addLayer({ id: 'route', type: 'line', source: ROUTE_SOURCE, filter: ['get', 'chosen'],
                     layout: { 'line-cap': 'round', 'line-join': 'round' },
                     paint: { 'line-color': colors.route, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 4, 19, 12] } }, before);
+                setMapReady(true);
             });
             instance.on('click', event => {
                 const hit = instance.queryRenderedFeatures(event.point, { layers: ['campus-building', 'campus-building-3d', 'campus-place'].filter(id => instance.getLayer(id)) })
@@ -108,18 +113,21 @@ export default function MapApp() {
     // The selected place: highlighted, centred, in the address.
     useEffect(() => {
         const instance = map.current;
-        if (!instance || !space) return;
+        if (!instance || !space || !mapReady) return;
         instance.removeFeatureState({ source: 'places' });
         marker.current?.remove();
         setRoutes([]);
-        setPlanning(false);
+        const planActivity = activityRouting.current;
+        setPlanning(planActivity);
+        activityRouting.current = false;
         const url = new URL(location.href);
+        if (selected && !planActivity) url.searchParams.delete('activity');
         if (!selected) {
             url.searchParams.delete('place');
             history.replaceState(null, '', url);
             return;
         }
-        url.searchParams.set('place', selected.id);
+        if (selected.kind !== 'activity-point') url.searchParams.set('place', selected.id);
         history.replaceState(null, '', url);
         const building = selected.kind === 'room' ? selected.parent : selected.id;
         if (space.byId.get(building)?.kind === 'building') instance.setFeatureState({ source: 'places', id: building }, { selected: true });
@@ -128,7 +136,7 @@ export default function MapApp() {
             marker.current = new maplibregl.Marker({ color: tokens.color[theme()].brand }).setLngLat(at).addTo(instance);
             instance.easeTo({ center: at, zoom: Math.max(instance.getZoom(), 17), duration: 650 });
         }
-    }, [selected, space]);
+    }, [selected, space, mapReady]);
 
     useEffect(() => {
         if (!me || !map.current) return;
@@ -179,7 +187,7 @@ export default function MapApp() {
             const bounds = route.geometry.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(route.geometry[0], route.geometry[0]));
             instance.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: window.innerWidth > 720 ? 440 : 40, right: 60 }, duration: 650, maxZoom: 18 });
         }
-    }, [routes, chosen]);
+    }, [routes, chosen, mapReady]);
 
     const route = routes[chosen];
     const pick = (result: SearchResult) => {
@@ -188,7 +196,7 @@ export default function MapApp() {
     };
 
     return (
-        <div className="campus-map">
+        <div className="campus-map" style={activityTokens}>
             <div ref={container} className="campus-map-canvas" />
             <aside className="campus-map-panel" aria-label="校园地图">
                 <div className="campus-map-search">
@@ -208,22 +216,23 @@ export default function MapApp() {
                     </ul>
                 )}
                 {error && <p className="campus-map-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="关闭">×</button></p>}
+                <MapActivities map={map.current} space={space} routeOpen={planning} placeSelected={selected !== null} onPick={() => setSelected(null)} onRoute={place => { activityRouting.current = true; setSelected(place); }} />
                 {selected && space && (
                     <section className="campus-map-card">
                         <header>
                             <div>
                                 <h2>{selected.id}</h2>
-                                <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
+                                <p>{selected.kind === 'activity-point' ? '活动集合点' : kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
                                     {selected.levels ? ` · ${selected.levels} 层` : ''}</p>
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
                         </header>
-                        <p className="campus-map-houses">用途 · {selected.use}</p>
+                        {selected.kind !== 'activity-point' && <><p className="campus-map-houses">用途 · {selected.use}</p>
                         {selected.hours ? <details className="campus-map-hours">
                             <summary>开放时间 · 今日 {selected.hours.week[String((new Date().getDay() + 6) % 7 + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</summary>
                             <dl>{Array.from({ length: 7 }, (_, i) => <div key={i}><dt>周{'一二三四五六日'[i]}</dt><dd>{selected.hours!.week[String(i + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</dd></div>)}</dl>
                             {selected.hours.note && <p>{selected.hours.note}</p>}
-                        </details> : <p className="campus-map-houses">开放时间待确认</p>}
+                        </details> : <p className="campus-map-houses">开放时间待确认</p>}</>}
                         {selected.houses && selected.houses.length > 0 && <p className="campus-map-houses">{selected.houses.slice(0, 6).join('、')}</p>}
                         {!planning ? (
                             <button type="button" className="campus-map-primary" onClick={() => setPlanning(true)}>
@@ -259,6 +268,7 @@ export default function MapApp() {
                                 )}
                             </div>
                         )}
+                        <a className="activity-map-create" href={selected.kind === 'activity-point' && selected.centre ? `/activities/?new=1&lon=${selected.centre[0]}&lat=${selected.centre[1]}` : `/activities/?place=${encodeURIComponent(selected.id)}`}>在这里发起活动</a>
                     </section>
                 )}
             </aside>
