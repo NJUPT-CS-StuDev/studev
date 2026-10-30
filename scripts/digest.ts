@@ -4,13 +4,14 @@
 //   public/data/<version>/timetable/     index.json + classes/<class>.json
 //   public/data/<version>/exams/         index.json + classes/<class>.json
 //   public/data/<version>/classrooms/    index.json + days/<date>.json
+//   public/data/<version>/space/<campus>/ places, ways, routing network, basemap, map styles
 //   src/data/campus-release.json         which version the pages use
 //
 // Input is the latest release of the private repository named by DATA_REPOSITORY,
 // read with DATA_TOKEN (or the gh login), or a local data directory given as DATA_DIR.
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { compileBundle } from 'wasm-search/compile';
@@ -25,7 +26,7 @@ const write = async (path: string, value: unknown) => {
 };
 
 // ---- facts of the data release -------------------------------------------------
-interface Index { built_at: string; content: string[]; teaching: string[]; exams: string[]; rooms?: string[] }
+interface Index { built_at: string; content: string[]; teaching: string[]; exams: string[]; rooms?: string[]; space?: string[] }
 interface Source { id: string; name: string; url: string; kind: string }
 interface Doc { id: string; url: string; title: string; text: string; published: string | null; updated: string | null; section: string | null; kind: 'page' | 'file' | 'link'; tags: string[]; files: { name: string; url: string; ext: string | null }[] }
 interface Term { term: string; year: number; number: number; weeks: { week: number; start: string; end: string }[]; observed_at: string }
@@ -416,6 +417,37 @@ async function main() {
         }
     }
     console.log('classrooms', rooms.length, 'rooms', dayFiles, 'days', measured ? 'with free periods' : 'from the timetable only');
+
+    // Campus space: the data as released, and the map styles bound to it. A style keeps two
+    // tokens each client fills with its own base URLs: {data} (this campus's directory in
+    // the data package) and {assets} (fonts and sprites, public/map/).
+    for (const campus of index.space ?? []) {
+        const from = join(dir, 'space', campus);
+        const to = join(out, 'space', campus);
+        await mkdir(to, { recursive: true });
+        for (const file of ['places.json', 'places.geojson', 'ways.geojson', 'network.json', 'basemap.pmtiles']) {
+            if (existsSync(join(from, file))) await copyFile(join(from, file), join(to, file));
+        }
+        const shapes = await read<{ features: { properties: { kind: string }; geometry: unknown }[] }>(join(from, 'places.geojson'));
+        const area = shapes.features.find(f => f.properties.kind === 'campus')?.geometry;
+        for (const theme of ['light', 'dark']) {
+            const template = await readFile(join(root, 'public', 'map', `style-${theme}.json`), 'utf8');
+            const style = JSON.parse(template
+                .replaceAll('{basemap}', '{data}/basemap.pmtiles')
+                .replaceAll('{places}', '{data}/places.geojson')
+                .replaceAll('{ways}', '{data}/ways.geojson')) as { layers: { id: string; source?: string; filter?: unknown }[] };
+            // The campus speaks for itself: the basemap's own points of interest stop at its boundary.
+            if (area) {
+                for (const layer of style.layers) {
+                    if (layer.source === 'basemap' && layer.id === 'pois') {
+                        layer.filter = ['all', layer.filter ?? true, ['!', ['within', area]]];
+                    }
+                }
+            }
+            await write(join(to, `style-${theme}.json`), style);
+        }
+        console.log('space', campus);
+    }
 
     await write(join(root, 'src', 'data', 'campus-release.json'), { version, base: `/data/${version}`, built_at: index.built_at });
 }

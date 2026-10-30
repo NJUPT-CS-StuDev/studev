@@ -41,3 +41,12 @@ CLAUDE.md
 /.data/
 /public/data/
 /src/data/campus-release.json
+
+# Android build output
+/android/.gradle/
+/android/.kotlin/
+/android/**/build/
+
+# Generated map styles and assets (design/map/generate.mjs)
+/public/map/
+/android/app/src/main/assets/map/
