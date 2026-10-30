@@ -43,7 +43,7 @@ const initialSearchPlaceholder =
 <html lang="zh-CN" data-search-route={initialSearchRoute}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content={tokens.color.light.paper} data-light={tokens.color.light.paper} data-dark={tokens.color.dark.paper} />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="/pwa-icons/180.png" />
@@ -141,6 +141,8 @@ const initialSearchPlaceholder =
           <span>© {new Date().getFullYear()} StuDev</span>
         </div>
         <div class="footer-actions">
+          <button class="text-copy pwa-footer-entry" type="button" data-pwa-open aria-haspopup="dialog">安装与离线</button>
+          <span class="footer-dot" aria-hidden="true">·</span>
           <button class="text-copy" type="button" data-copy-link title="复制当前页面网址，便于转发"><span aria-live="polite" data-copy-label>{Astro.url.pathname === '/' ? '分享网站' : '分享本页'}</span></button>
           <span class="footer-dot" aria-hidden="true">·</span>
           <a class="footer-github-badge" href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer" title="访问 GitHub 开源仓库">
@@ -151,7 +153,7 @@ const initialSearchPlaceholder =
         </div>
       </div>
     </footer>}
-    <PwaPanel />
+    <PwaPanel floating={fill} />
     <script>import '../scripts/copy-text';</script>
     <script>import '../scripts/diagrams';</script>
     <script>import '../scripts/auth-status';</script>

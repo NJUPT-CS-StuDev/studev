@@ -1,7 +1,9 @@
 ---
 import './pwa.css';
+interface Props { floating?: boolean }
+const { floating = true } = Astro.props;
 ---
-<button class="pwa-entry" type="button" data-pwa-open aria-haspopup="dialog">安装与离线</button>
+{floating && <button class="pwa-entry" type="button" data-pwa-open aria-haspopup="dialog">安装与离线</button>}
 <dialog class="pwa-panel" data-pwa-panel aria-labelledby="pwa-title">
   <header><h2 id="pwa-title">随时打开 studev</h2><button type="button" data-pwa-close aria-label="关闭">×</button></header>
   <p>添加到主屏幕，查地图和课表更方便。</p>
