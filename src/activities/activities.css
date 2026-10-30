@@ -1,0 +1,26 @@
+.activities-page { max-width: 1040px; }
+.activities-page { --activity-brand:var(--activity-light-brand); --activity-on-brand:var(--activity-light-onBrand); }
+[data-theme=dark] .activities-page { --activity-brand:var(--activity-dark-brand); --activity-on-brand:var(--activity-dark-onBrand); }
+.activities-page .p-button:not(.secondary) { background:var(--activity-brand); color:var(--activity-on-brand); border-color:var(--activity-brand); }
+.activity-eyebrow { color:var(--blue)!important; font-size:13px!important; margin-bottom:8px!important; }
+.activity-back { display:flex; align-items:center; gap:8px; border:0; color:var(--muted); background:transparent; padding:8px 0; margin-bottom:16px; font:inherit; cursor:pointer; }
+.activity-editor,.activity-detail { max-width:760px; margin-inline:auto; }
+.activity-detail h2 { font-size:28px; line-height:1.4; margin:16px 0 24px; overflow-wrap:anywhere; }
+.activity-detail>p,.activity-item p { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:14px; line-height:1.8; }
+.activity-detail svg { flex-shrink:0; }
+.activity-badge,.activity-date { display:inline-flex; gap:8px; align-items:center; color:var(--blue); background:var(--mark); border-radius:12px; padding:8px 12px; font-size:13px; }
+.activity-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.9; margin:24px 0; padding-top:20px; border-top:1px solid var(--line); }
+.activity-share-url { display:block; color:var(--muted); font-size:12px; overflow-wrap:anywhere; margin-top:20px; }
+.activity-place-choice { border:0; margin:0 0 16px; padding:0; display:flex; gap:20px; font-size:14px; }
+.activity-place-choice legend { margin-bottom:10px; font-weight:600; }
+.activity-place-choice input { accent-color:var(--blue); }
+.activity-item { font:inherit; cursor:pointer; text-align:left; color:var(--ink); display:grid; gap:12px; transition:border-color .2s; }
+.activity-item:hover,.activity-item:focus-visible { border-color:var(--blue); }
+.activity-item h2,.activity-item p { margin:0; }
+.activity-date { justify-self:start; }
+.activity-map-link { margin-left:auto; display:flex; align-items:center; gap:4px; color:var(--muted); font-size:14px; }
+.activities-page .p-tab[aria-pressed=true] { color:var(--blue); background:var(--mark); }
+.activity-signin { display:grid; gap:16px; justify-items:center; text-align:center; padding:48px 24px; }
+.activity-signin h2 { margin:0; }
+.activity-signin>svg { color:var(--blue); }
+@media(max-width:600px) { .activities-page .p-heading { align-items:center; } .activity-editor .p-grid { grid-template-columns:1fr; gap:0; } .activity-detail h2 { font-size:24px; } }

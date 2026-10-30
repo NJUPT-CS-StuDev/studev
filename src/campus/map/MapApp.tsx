@@ -11,6 +11,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import './map.css';
 import tokens from '../../../design/tokens.json';
+import MapActivities from '../../activities/MapActivities';
+import { activityTokens } from '../../activities/theme';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
@@ -44,6 +46,7 @@ export default function MapApp() {
     const [routes, setRoutes] = useState<Route[]>([]);
     const [chosen, setChosen] = useState(0);
     const [planning, setPlanning] = useState(false);
+    const activityRouting = useRef(false);
     const search = useMemo(() => new SearchClient({ baseUrl: `${spaceBase()}/search` }), []);
 
     // Data, routing kernel and the map.
@@ -112,14 +115,17 @@ export default function MapApp() {
         instance.removeFeatureState({ source: 'places' });
         marker.current?.remove();
         setRoutes([]);
-        setPlanning(false);
+        const planActivity = activityRouting.current;
+        setPlanning(planActivity);
+        activityRouting.current = false;
         const url = new URL(location.href);
+        if (selected && !planActivity) url.searchParams.delete('activity');
         if (!selected) {
             url.searchParams.delete('place');
             history.replaceState(null, '', url);
             return;
         }
-        url.searchParams.set('place', selected.id);
+        if (selected.kind !== 'activity-point') url.searchParams.set('place', selected.id);
         history.replaceState(null, '', url);
         const building = selected.kind === 'room' ? selected.parent : selected.id;
         if (space.byId.get(building)?.kind === 'building') instance.setFeatureState({ source: 'places', id: building }, { selected: true });
@@ -188,7 +194,7 @@ export default function MapApp() {
     };
 
     return (
-        <div className="campus-map">
+        <div className="campus-map" style={activityTokens}>
             <div ref={container} className="campus-map-canvas" />
             <aside className="campus-map-panel" aria-label="校园地图">
                 <div className="campus-map-search">
@@ -208,12 +214,13 @@ export default function MapApp() {
                     </ul>
                 )}
                 {error && <p className="campus-map-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="关闭">×</button></p>}
+                <MapActivities map={map.current} space={space} routeOpen={planning} placeSelected={selected !== null} onPick={() => setSelected(null)} onRoute={place => { activityRouting.current = true; setSelected(place); }} />
                 {selected && space && (
                     <section className="campus-map-card">
                         <header>
                             <div>
                                 <h2>{selected.id}</h2>
-                                <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
+                                <p>{selected.kind === 'activity-point' ? '活动集合点' : kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
                                     {selected.levels ? ` · ${selected.levels} 层` : ''}</p>
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
@@ -259,6 +266,7 @@ export default function MapApp() {
                                 )}
                             </div>
                         )}
+                        <a className="activity-map-create" href={selected.kind === 'activity-point' && selected.centre ? `/activities/?new=1&lon=${selected.centre[0]}&lat=${selected.centre[1]}` : `/activities/?place=${encodeURIComponent(selected.id)}`}>在这里发起活动</a>
                     </section>
                 )}
             </aside>
