@@ -33,6 +33,8 @@ with sync_playwright() as p:
             manifest=page.evaluate("fetch('/manifest.webmanifest').then(r=>r.json())")
             session=context.new_cdp_session(page)
             installability=session.send('Page.getInstallabilityErrors')
+            assert not installability['installabilityErrors'], installability
+            print('installability passed',device,theme,flush=True)
             page.get_by_role('button',name='关闭',exact=True).click()
             context.set_offline(True)
             page.reload(wait_until='networkidle')
@@ -47,12 +49,14 @@ with sync_playwright() as p:
             results=page.locator('.campus-map-result-title').all_text_contents()
             page.screenshot(path=str(shots/f'{device}-{theme}-pwa-offline-tsg.png'))
             archive=page.evaluate("base=>fetch(base+'/space/%E4%BB%99%E6%9E%97/basemap.pmtiles',{headers:{Range:'bytes=0-15'}}).then(async r=>({status:r.status,range:r.headers.get('Content-Range'),bytes:(await r.arrayBuffer()).byteLength}))",current['base'])
+            assert archive['status']==206 and archive['bytes']==16, archive
             context.set_offline(False)
             updated={**current,'version':'acceptance-new-version'}
             context.route('**/pwa-release.json',lambda route:route.fulfill(status=200,content_type='application/json',body=json.dumps(updated)))
             page.evaluate("fetch('/pwa-release.json',{cache:'no-cache'}).then(r=>r.json())")
             page.wait_for_selector('[data-pwa-update]:not([hidden])',timeout=30000)
             page.screenshot(path=str(shots/f'{device}-{theme}-pwa-update.png'))
+            assert not errors, errors
             row={'device':device,'theme':theme,'manifest':manifest,'offlineStatus':offline,'downloadSize':size,'range':archive,'offlineSearch':results,'updatePrompt':page.locator('[data-pwa-update]').is_visible(),'pageErrors':errors,'cached':page.evaluate('caches.keys()'),'installability':installability}
             proof.append(row)
             print(json.dumps(row,ensure_ascii=False),flush=True)
