@@ -105,6 +105,12 @@ async function main() {
     }
     const { dir, version } = await locateData();
     const index = await read<Index>(join(dir, 'index.json'));
+    if (!index.space?.length) throw new Error(`${version} has no campus space; publish a complete data release before deploying`);
+    for (const campus of index.space) {
+        for (const file of ['places.json', 'places.geojson', 'ways.geojson', 'network.json', 'basemap.pmtiles']) {
+            if (!existsSync(join(dir, 'space', campus, file))) throw new Error(`${version} is missing space/${campus}/${file}`);
+        }
+    }
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     if (existsSync(outRoot)) {
