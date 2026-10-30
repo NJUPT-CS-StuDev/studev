@@ -1,6 +1,7 @@
 package top.hicancan.studev.rooms
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,12 +13,17 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import top.hicancan.studev.campus.*
 import top.hicancan.studev.data.*
 import top.hicancan.studev.timetable.CampusDay
+import top.hicancan.studev.ui.theme.Tokens
 import java.time.*
 import java.time.format.DateTimeFormatter
 
@@ -25,6 +31,14 @@ import java.time.format.DateTimeFormatter
 @Composable fun RoomsScreen(repo: AcademicRepository, index: RoomIndex, campus: String, initialQuery: String = "", initialDate: String? = null, initialPeriod: Int? = null,
     onCampus: (String) -> Unit, onRoute: (String, Boolean) -> Unit) {
     val now = CampusDay.now()
+    val context = LocalContext.current
+    val store = remember(context) { context.getSharedPreferences("room-building-selection", android.content.Context.MODE_PRIVATE) }
+    var selectedBuildings by remember(campus) { mutableStateOf<Set<String>?>(if (store.contains(campus)) store.getStringSet(campus, emptySet())?.toSet() else null) }
+    fun chooseBuildings(ids: Set<String>?) {
+        selectedBuildings = ids
+        if (ids == null) store.edit().remove(campus).apply() else store.edit().putStringSet(campus, ids).apply()
+    }
+    var buildingMenu by remember { mutableStateOf(false) }
     var dateText by rememberSaveable(initialDate) { mutableStateOf(runCatching { CampusDay.clamp(index.weeks, LocalDate.parse(initialDate)).toString() }.getOrElse { CampusDay.clamp(index.weeks, now.toLocalDate()).toString() }) }
     var period by rememberSaveable(initialPeriod) { mutableIntStateOf(initialPeriod?.takeIf { p -> index.periods.any { it.period == p } } ?: CampusDay.periodAt(index.periods, now.toLocalTime())) }
     var until by rememberSaveable { mutableIntStateOf(period) }
@@ -44,8 +58,20 @@ import java.time.format.DateTimeFormatter
         catch (_: Exception) { error = "这天的数据暂时无法读取，请更换日期或稍后重试" }
         finally { loading = false }
     }
-    val eligible = index.rooms.filter { it.campus == campus && CampusDay.eligible(it, everything) && CampusDay.roomMatches(it, query) && (it.seats ?: 0) >= minSeats }
+    val eligible = RoomSelection.filter(index.rooms, campus, selectedBuildings, everything, query, minSeats)
     val buildings = index.buildings.filter { it.campus == campus }.sortedWith(compareBy<Building> { if (it.id.startsWith("教")) 0 else if (it.id.endsWith("其他场地")) 2 else 1 }.thenBy { it.id })
+    val buildingChoices = buildings.filter { building -> index.rooms.any { it.building == building.id && CampusDay.eligible(it, everything) } }.map { it.id }
+    val chosen = buildingChoices.filter { selectedBuildings == null || it in selectedBuildings.orEmpty() }
+    val allBuildingChoices = buildings.filter { building -> index.rooms.any { it.building == building.id && CampusDay.eligible(it, true) } }.map { it.id }.toSet()
+    fun toggleBuilding(id: String) {
+        chooseBuildings(RoomSelection.toggle(selectedBuildings, allBuildingChoices, id))
+    }
+    val dark = MaterialTheme.colorScheme.background == Tokens.Color.Dark.paper
+    val success = if (dark) Tokens.Color.Dark.success else Tokens.Color.Light.success
+    val warning = if (dark) Tokens.Color.Dark.warning else Tokens.Color.Light.warning
+    val paper = MaterialTheme.colorScheme.background
+    val busy = if (dark) Tokens.Color.Dark.surface else Tokens.Color.Light.surfaceSunken
+    val faint = if (dark) Tokens.Color.Dark.faint else Tokens.Color.Light.faint
     val free = day?.let { status -> eligible.count { CampusDay.isFree(status, it.id, period, until) } }
     LazyColumn(Modifier.fillMaxSize().testTag("rooms"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -65,11 +91,32 @@ import java.time.format.DateTimeFormatter
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("楼栋或教室，如 教3、图409") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true,
                 trailingIcon = if (query.isNotEmpty()) ({ IconButton({ query = "" }) { Icon(Icons.Outlined.Close, "清除") } }) else null)
         }
+        item {
+            Box {
+                AssistChip({ buildingMenu = true }, { Text("楼栋 · " + if (selectedBuildings == null) "全部" else if (chosen.isEmpty()) "未选择" else "已选 "+chosen.size) },
+                    modifier = Modifier.testTag("building-filter"), trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(16.dp)) })
+                DropdownMenu(buildingMenu, { buildingMenu = false }, modifier = Modifier.heightIn(max = 360.dp).widthIn(min = 240.dp, max = 320.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton({ chooseBuildings(null) }, modifier = Modifier.testTag("buildings-all")) { Text("全选") }
+                        TextButton({ chooseBuildings(emptySet()) }, modifier = Modifier.testTag("buildings-none")) { Text("全不选") }
+                        TextButton({ buildingMenu = false }) { Text("完成") }
+                    }
+                    HorizontalDivider()
+                    buildingChoices.forEach { id -> DropdownMenuItem(text = { Text(id) }, leadingIcon = { Checkbox(id in chosen, onCheckedChange = null) },
+                        onClick = { toggleBuilding(id) }, modifier = Modifier.testTag("building-$id")) }
+                }
+            }
+            if (selectedBuildings != null && chosen.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                chosen.take(3).forEach { id -> InputChip(true, { toggleBuilding(id) }, { Text(id) }, trailingIcon = { Icon(Icons.Outlined.Close, "取消选择$id", Modifier.size(14.dp)) },
+                    colors = InputChipDefaults.inputChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer, selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer, selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimaryContainer)) }
+                if (chosen.size > 3) Supporting("+"+(chosen.size-3), Modifier.padding(12.dp))
+            }
+        }
         item { Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             index.periods.forEach { p -> FilterChip(period == p.period, { period = p.period; until = period }, { Text("${p.period} 节\n${p.start}", style = MaterialTheme.typography.labelSmall) }) }
         } }
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box { AssistChip({ periodMenu = true }, { Text(if (until == period) "只看第 $period 节" else "连续到第 $until 节") }, trailingIcon = { Icon(Icons.Outlined.ExpandMore, null, Modifier.size(16.dp)) })
                     DropdownMenu(periodMenu, { periodMenu = false }) { index.periods.filter { it.period >= period }.forEach { p -> DropdownMenuItem({ Text(if (p.period == period) "只看第 $period 节" else "到第 ${p.period} 节 · ${p.end}") }, { until = p.period; periodMenu = false }) } }
                 }
@@ -78,7 +125,7 @@ import java.time.format.DateTimeFormatter
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(everything, { everything = it }); Supporting("全部场地（含机房、实验室）") }
-            Text(if (free == null) { if (loading) "正在读取空闲情况…" else "这天没有已发布的空闲数据" } else "$free / ${eligible.size} 间空闲", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text(if (free == null) { if (loading) "正在读取空闲情况…" else "这天没有已发布的空闲数据" } else "$free / ${eligible.size} 间空闲", style = MaterialTheme.typography.titleMedium, color = success, modifier = Modifier.testTag("room-summary"))
             Supporting(day?.let { it.observed_at?.let { stamp -> "空闲情况 ${OffsetDateTime.parse(stamp).atZoneSameInstant(CampusDay.zone).format(DateTimeFormatter.ofPattern("M月d日 HH:mm"))} 更新" } ?: "按课表推算，未计入借用和调课" } ?: error ?: "请勿将没有数据的教室视为空闲。", Modifier.padding(top = 6.dp))
         }
         if (!loading && day == null) item { EmptyCard("暂无这天的空闲数据", error ?: "换一天试试，以学校实际安排为准。") }
@@ -86,7 +133,7 @@ import java.time.format.DateTimeFormatter
             val rooms = eligible.filter { it.building == building.id }
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(building.id, style = MaterialTheme.typography.titleMedium); Supporting(day?.let { status -> "${rooms.count { CampusDay.isFree(status, it.id, period, until) }} 间空闲" } ?: "暂无数据") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(building.id, style = MaterialTheme.typography.titleMedium); Supporting(day?.let { status -> "${rooms.count { CampusDay.isFree(status, it.id, period, until) }} / ${rooms.size} 空闲" } ?: "暂无数据") }
                     building.floors.sortedByDescending { it.toIntOrNull() ?: -1 }.forEach { floor ->
                         val floorRooms = rooms.filter { it.floor == floor }.sortedBy { it.number }
                         if (floorRooms.isNotEmpty()) {
@@ -94,9 +141,15 @@ import java.time.format.DateTimeFormatter
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 floorRooms.forEach { item ->
                                     val available = day?.let { CampusDay.isFree(it, item.id, period, until) }
+                                    val occupants = day?.let { CampusDay.occupants(it, item.id, period) }
+                                    val exam = available == false && occupants?.any { it.kind == "exam" } == true
+                                    val tint = if (exam) warning else success
+                                    val label = when { available == null -> "加载中"; available -> "空闲"; occupants == null -> "已占用（借用、调课等）"; occupants.isNotEmpty() -> occupants.joinToString("、") { (if (it.kind == "exam") "考试：" else "") + it.course }; else -> "所选节次内有占用" }
                                     Surface(onClick = { room = item }, shape = MaterialTheme.shapes.small,
-                                        color = if (available == true) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                        modifier = Modifier.heightIn(min = 44.dp)) {
+                                        color = if (available == true || exam) tint.copy(alpha = if (exam) .12f else .10f).compositeOver(paper) else busy,
+                                        contentColor = if (available == true || exam) tint else faint,
+                                        border = BorderStroke(1.dp, if (available == true || exam) tint.copy(alpha = if (exam) .35f else .30f).compositeOver(paper) else MaterialTheme.colorScheme.outlineVariant),
+                                        modifier = Modifier.heightIn(min = 44.dp).testTag("room-${item.id}").semantics { contentDescription = "${item.id}，$label" }) {
                                         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             if (available == true) Icon(Icons.Outlined.Check, "空闲", Modifier.size(14.dp))
                                             Text(item.number, style = MaterialTheme.typography.labelMedium)
@@ -109,7 +162,7 @@ import java.time.format.DateTimeFormatter
                 }
             }
         }
-        if (eligible.isEmpty()) item { EmptyCard("没有匹配的教室", "试试其他楼栋、校区或座位数。") }
+        if (eligible.isEmpty()) item { EmptyCard(if (selectedBuildings?.isEmpty() == true) "尚未选择楼栋" else "没有匹配的教室", if (selectedBuildings?.isEmpty() == true) "请在楼栋筛选中选择。" else "试试其他楼栋、校区或座位数。") }
     }
     if (datePicker) {
         val picker = rememberDatePickerState(initialSelectedDateMillis = LocalDate.parse(dateText).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),

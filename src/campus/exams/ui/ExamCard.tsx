@@ -1,4 +1,5 @@
 import { examTimestamp, examDuration } from '@/exams/ui/examDateTime';
+import { examPresentation } from '../model/presentation';
 import { Check, Clock, MapPin, User, Users } from 'lucide-react';
 import type { Exam } from '@/academics/exam/records';
 import type { ExamExportStatus } from '../model/examSelection';
@@ -32,6 +33,7 @@ const statusBadge = (status: ExamExportStatus): { text: string; description: str
 export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardProps) {
     const isValidTime = Boolean(exam.date && exam.start && exam.end);
     const badge = statusBadge(exportStatus);
+    const presentation = examPresentation(exam);
     const borderClass = exportStatus === 2
         ? 'border-[var(--warning)]'
         : isSelected
@@ -40,6 +42,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
 
     return (
         <label
+            data-exam={exam.id}
             className={`
                 block p-5 pl-4 transition-all duration-300 cursor-pointer group border-l-4
                 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_var(--shadow-soft)] dark:hover:shadow-none
@@ -77,6 +80,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                         <h3 className={`text-[18px] font-normal leading-snug ${isSelected ? 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)] group-hover:underline' : 'text-[var(--ink)] dark:text-[var(--ink)]'}`}>
                             {exam.course.name}
                         </h3>
+                        <span className="shrink-0 text-[12px] text-[var(--muted)]" aria-label="考试状态">{presentation.countdown}</span>
                         {exam.campus && (
                             <span className="shrink-0 text-[12px] text-[var(--success)] dark:text-[var(--success)] bg-[var(--success-bg)] dark:bg-[var(--success-bg)]/20 px-2.5 py-0.5 rounded">
                                 {exam.campus}
@@ -115,7 +119,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                         
                         <div className="flex items-start gap-2">
                             <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[var(--danger)] dark:text-[var(--danger)]" aria-hidden="true" />
-                            <span className="font-medium text-[var(--ink)] dark:text-[var(--ink)]">{exam.location || '待定'}</span>
+                            <span className="font-medium text-[var(--ink)] dark:text-[var(--ink)]">{presentation.room}</span>
                         </div>
                         
                         <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-[13px] text-[var(--muted)] dark:text-[var(--muted)]">

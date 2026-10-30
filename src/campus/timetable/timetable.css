@@ -371,28 +371,15 @@
     .course-detail-panel, .timetable-course, .timetable-toolbar button { animation: none; transition: none; }
 }
 
-/* The generated palette follows the shared light and dark design tokens. */
-.course-tone-0 { --course-bg:var(--course-tone-0-bg); --course-border:var(--course-tone-0-border); --course-fg:var(--course-tone-0-fg); }
-.course-tone-1 { --course-bg:var(--course-tone-1-bg); --course-border:var(--course-tone-1-border); --course-fg:var(--course-tone-1-fg); }
-.course-tone-2 { --course-bg:var(--course-tone-2-bg); --course-border:var(--course-tone-2-border); --course-fg:var(--course-tone-2-fg); }
-.course-tone-3 { --course-bg:var(--course-tone-3-bg); --course-border:var(--course-tone-3-border); --course-fg:var(--course-tone-3-fg); }
-.course-tone-4 { --course-bg:var(--course-tone-4-bg); --course-border:var(--course-tone-4-border); --course-fg:var(--course-tone-4-fg); }
-.course-tone-5 { --course-bg:var(--course-tone-5-bg); --course-border:var(--course-tone-5-border); --course-fg:var(--course-tone-5-fg); }
-.course-tone-6 { --course-bg:var(--course-tone-6-bg); --course-border:var(--course-tone-6-border); --course-fg:var(--course-tone-6-fg); }
-.course-tone-7 { --course-bg:var(--course-tone-7-bg); --course-border:var(--course-tone-7-border); --course-fg:var(--course-tone-7-fg); }
-.course-tone-8 { --course-bg:var(--course-tone-8-bg); --course-border:var(--course-tone-8-border); --course-fg:var(--course-tone-8-fg); }
-.course-tone-9 { --course-bg:var(--course-tone-9-bg); --course-border:var(--course-tone-9-border); --course-fg:var(--course-tone-9-fg); }
-.course-tone-10 { --course-bg:var(--course-tone-10-bg); --course-border:var(--course-tone-10-border); --course-fg:var(--course-tone-10-fg); }
-.course-tone-11 { --course-bg:var(--course-tone-11-bg); --course-border:var(--course-tone-11-border); --course-fg:var(--course-tone-11-fg); }
-.course-tone-12 { --course-bg:var(--course-tone-12-bg); --course-border:var(--course-tone-12-border); --course-fg:var(--course-tone-12-fg); }
-.course-tone-13 { --course-bg:var(--course-tone-13-bg); --course-border:var(--course-tone-13-border); --course-fg:var(--course-tone-13-fg); }
-.course-tone-14 { --course-bg:var(--course-tone-14-bg); --course-border:var(--course-tone-14-border); --course-fg:var(--course-tone-14-fg); }
-.course-tone-15 { --course-bg:var(--course-tone-15-bg); --course-border:var(--course-tone-15-border); --course-fg:var(--course-tone-15-fg); }
-.course-tone-16 { --course-bg:var(--course-tone-16-bg); --course-border:var(--course-tone-16-border); --course-fg:var(--course-tone-16-fg); }
-.course-tone-17 { --course-bg:var(--course-tone-17-bg); --course-border:var(--course-tone-17-border); --course-fg:var(--course-tone-17-fg); }
-.course-tone-18 { --course-bg:var(--course-tone-18-bg); --course-border:var(--course-tone-18-border); --course-fg:var(--course-tone-18-fg); }
-.course-tone-19 { --course-bg:var(--course-tone-19-bg); --course-border:var(--course-tone-19-border); --course-fg:var(--course-tone-19-fg); }
-.course-tone-20 { --course-bg:var(--course-tone-20-bg); --course-border:var(--course-tone-20-border); --course-fg:var(--course-tone-20-fg); }
-.course-tone-21 { --course-bg:var(--course-tone-21-bg); --course-border:var(--course-tone-21-border); --course-fg:var(--course-tone-21-fg); }
-.course-tone-22 { --course-bg:var(--course-tone-22-bg); --course-border:var(--course-tone-22-border); --course-fg:var(--course-tone-22-fg); }
-.course-tone-23 { --course-bg:var(--course-tone-23-bg); --course-border:var(--course-tone-23-border); --course-fg:var(--course-tone-23-fg); }
+/* Both schemes come directly from design/tokens.json. */
+.course-palette { --course-bg: var(--course-light-bg); --course-border: var(--course-light-border); --course-fg: var(--course-light-fg); }
+[data-theme=dark] .course-palette { --course-bg: var(--course-dark-bg); --course-border: var(--course-dark-border); --course-fg: var(--course-dark-fg); }
+.timetable-course.is-inactive { --course-bg: var(--surface-sunken); --course-border: var(--line); --course-fg: var(--muted); }
+.timetable-view-switcher, .timetable-day-picker { display:flex; gap:8px; padding:0 15px 12px; }
+.timetable-view-switcher button, .timetable-day-picker button { min-height:44px; border-radius:999px; padding:0 14px; border:1px solid var(--line); font-size:13px; }
+.timetable-view-switcher button[aria-pressed=true], .timetable-day-picker button[aria-pressed=true] { color:var(--on-brand-container); background:var(--brand-container); border-color:var(--brand-container); }
+.timetable-day-picker { justify-content:space-between; gap:4px; }
+.timetable-day-picker button { flex:1; padding:0 4px; }
+.is-day-view .timetable-course { padding:10px; gap:5px; }
+.is-day-view .timetable-course strong { font-size:15px; -webkit-line-clamp:2; }
+.is-day-view .timetable-course span, .is-day-view .timetable-course small, .is-day-view .timetable-course em { font-size:12px; }

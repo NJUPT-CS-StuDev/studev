@@ -2,6 +2,7 @@ import { CalendarPlus, Clipboard, EyeOff, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/timetable';
 import { buildClassCalendar, downloadCalendar, meetingDate } from '../model/calendar';
+import { courseToneStyle } from '../model/courseColors';
 import { alternatingWeekLabel, formatWeekNumbers, suspendedWeeks } from '../model/weekPattern';
 
 interface CourseDetailPanelProps {
@@ -69,7 +70,7 @@ export function CourseDetailPanel({ className, meeting, week, weeks, periods, to
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="course-detail-title"
-                className={`course-detail-panel course-tone-${tone}`}
+                className="course-detail-panel course-palette" style={courseToneStyle(tone)}
                 onPointerDown={event => { if ((event.target as HTMLElement).closest('[data-drag-handle]')) dragStart.current = event.clientY; }}
                 onPointerUp={event => { if (dragStart.current !== null && event.clientY - dragStart.current > 80) onClose(); dragStart.current = null; }}
             >
