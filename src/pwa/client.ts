@@ -17,7 +17,16 @@ let registration: ServiceWorkerRegistration | undefined;
 let applying = false;
 let ready = false;
 
-document.querySelector('[data-pwa-open]')?.addEventListener('click', () => panel?.showModal());
+document.querySelector('[data-pwa-open]')?.addEventListener('click', () => {
+    panel?.showModal();
+    void fetch('/pwa-release.json', { cache: 'no-cache' }).then(response => response.ok ? response.json() : null).then((data: { bytes?: number } | null) => {
+        const copy = document.querySelector<HTMLElement>('[data-pwa-size]');
+        if (copy && data?.bytes && Number.isFinite(data.bytes)) {
+            const megabytes = Math.ceil(data.bytes / 1_000_000);
+            copy.textContent = `地图和地点搜索会自动保存。完整数据还包括课表、考试、教室和通知，约 ${megabytes} MB。`;
+        }
+    }).catch(() => undefined);
+});
 document.querySelector('[data-pwa-close]')?.addEventListener('click', () => panel?.close());
 document.querySelector('[data-pwa-dismiss]')?.addEventListener('click', () => { if (update) update.hidden = true; });
 panel?.addEventListener('click', event => { if (event.target === panel) { const box = panel.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) panel.close(); } });
