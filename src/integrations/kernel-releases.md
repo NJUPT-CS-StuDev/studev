@@ -31,3 +31,5 @@ npm 的 `allowScripts` 同时批准 Puppeteer 的浏览器安装脚本，内容�
 
 部署配置的 `Permissions-Policy` 目前包含 `geolocation=()`，协调者需要将其改为
 `geolocation=(self)` 才能在生产网页使用浏览器定位。此配置不在 web-parity 所有权内。
+同时建议为 `/sw.js` 和 `/pwa-release.json` 显式配置 `Cache-Control: no-cache`，
+让边缘节点及时重新验证更新入口；版本化的 `/data/*` 继续永久缓存。
