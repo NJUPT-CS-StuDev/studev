@@ -20,6 +20,32 @@ EXCLUDED = {"/login/", "/account/", "/admin/", "/submissions/"}
 VIEWPORTS = {"desktop": {"width": 1920, "height": 1080}, "phone": {"width": 412, "height": 915}}
 
 
+def compare_evidence(shots):
+    before = json.loads((shots / 'all-routes-before/evidence.json').read_text(encoding='utf8'))
+    after = json.loads((shots / 'all-routes-after/evidence.json').read_text(encoding='utf8'))
+    key = lambda result: (result['device'], result['theme'], result['route'])
+    baseline = {key(result): result for result in before['results']}
+    changes = []
+    failures = []
+    for result in after['results']:
+        previous = baseline.get(key(result))
+        if not previous:
+            failures.append({'page': key(result), 'reason': 'missing baseline'})
+            continue
+        if result['errors'] or result['metrics']['scroll'] > result['metrics']['width']:
+            failures.append({'page': key(result), 'reason': 'script error or horizontal page overflow', 'evidence': result})
+        differences = {field: {'before': previous['metrics'][field], 'after': result['metrics'][field]}
+                       for field in ['title', 'path', 'height', 'headings']
+                       if previous['metrics'][field] != result['metrics'][field]}
+        if differences:
+            changes.append({'page': key(result), 'differences': differences})
+    report = {'pages': len(after['results']), 'routes': len(after['routes']), 'failures': failures,
+              'structural_changes': changes, 'baseline_source': before.get('source_ref', before.get('baseline_source'))}
+    (shots / 'all-routes-comparison.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf8')
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return failures
+
+
 def static_routes(build):
     routes = []
     for html in build.rglob("*.html"):
@@ -98,4 +124,7 @@ if __name__ == "__main__":
     parser.add_argument("--build-dir", type=Path, default=REPOSITORY / "dist")
     parser.add_argument("--source-ref", default="working tree")
     parser.add_argument("--channel", default="chrome")
-    raise SystemExit(1 if asyncio.run(capture(parser.parse_args())) else 0)
+    parser.add_argument("--compare-only", action="store_true", help="Compare previously captured evidence without launching Chrome")
+    options = parser.parse_args()
+    failures = compare_evidence(options.shots) if options.compare_only else asyncio.run(capture(options))
+    raise SystemExit(1 if failures else 0)
