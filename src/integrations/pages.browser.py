@@ -42,7 +42,8 @@ def compare_evidence(shots):
     report = {'pages': len(after['results']), 'routes': len(after['routes']), 'failures': failures,
               'structural_changes': changes, 'baseline_source': before.get('source_ref', before.get('baseline_source'))}
     (shots / 'all-routes-comparison.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf8')
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print(json.dumps({**report, 'structural_changes': [{'page': change['page'], 'fields': list(change['differences'])}
+                                                     for change in changes]}, ensure_ascii=False, indent=2))
     return failures
 
 
@@ -95,7 +96,7 @@ async def capture(options):
                 metrics = await page.evaluate("""() => ({
                     title: document.title, path: location.pathname, width: innerWidth,
                     scroll: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
-                    headings: [...document.querySelectorAll('h1,h2')].map(element => element.textContent),
+                    headings: [...document.querySelectorAll('h1,h2')].filter(element => element.getClientRects().length).map(element => element.textContent),
                     background: getComputedStyle(document.documentElement).backgroundColor,
                     color: getComputedStyle(document.documentElement).color
                 })""")
