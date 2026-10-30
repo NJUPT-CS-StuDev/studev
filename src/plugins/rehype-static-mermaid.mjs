@@ -6,10 +6,10 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 const CACHE_VERSION = 1;
 const FONT_FAMILY = 'Segoe UI, Arial, Microsoft YaHei, sans-serif';
-const palettes = {
-  light: { ink: '#202124', muted: '#5f6368', line: '#dadce0', background: '#ffffff' },
-  dark: { ink: '#e8edf3', muted: '#aeb8c5', line: '#323a44', background: '#1b232d' },
-};
+const tokens = JSON.parse(readFileSync(new URL('../../design/tokens.json', import.meta.url), 'utf8'));
+const palettes = Object.fromEntries(Object.entries(tokens.color).map(([theme, colors]) => [theme, {
+  ink: colors.ink, muted: colors.muted, line: colors.line, background: colors.paper,
+}]));
 
 let documentQueue = Promise.resolve();
 let rendererModules;

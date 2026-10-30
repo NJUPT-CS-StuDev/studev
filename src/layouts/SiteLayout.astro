@@ -3,9 +3,12 @@ import '../styles/global.css';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import { Image, getImage } from 'astro:assets';
 import logo from '../assets/logo.png';
+import tokens from '../../design/tokens.json';
+import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/app/config/product';
-interface Props { title?: string; description?: string; active?: string; noindex?: boolean; }
-const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false } = Astro.props;
+// fill: the page is one full-height application (the map) with no footer.
+interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; }
+const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false } = Astro.props;
 const nav = [
   { href: '/study/', label: 'Study', key: 'study' },
   { href: '/develop/', label: 'Develop', key: 'develop' },
@@ -40,8 +43,13 @@ const initialSearchPlaceholder =
 <html lang="zh-CN" data-search-route={initialSearchRoute}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content={tokens.color.light.paper} data-light={tokens.color.light.paper} data-dark={tokens.color.dark.paper} />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/pwa-icons/180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="studev" />
     <script is:inline>
       // Signed-in people see their member links from the first frame.
       try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.member = ''; } catch { /* Storage may be unavailable. */ }
@@ -51,7 +59,8 @@ const initialSearchPlaceholder =
         ? preference
         : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       document.documentElement.dataset.theme = theme;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#14181d' : '#ffffff');
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      themeMeta?.setAttribute('content', themeMeta.getAttribute(`data-${theme}`));
     </script>
     <meta name="description" content={description} />
     {Astro.url.pathname === '/' && <meta name="baidu-site-verification" content="codeva-J4MgSBcNRe" />}
@@ -112,8 +121,8 @@ const initialSearchPlaceholder =
         <ThemeToggle />
       </div>
     </header>
-    <main><slot /></main>
-    <footer class="site-footer">
+    <main class:list={[fill && 'main-fill']}><slot /></main>
+    {!fill && <footer class="site-footer">
       <div class="footer-inner">
         <div class="footer-meta">
           <a class="footer-badge-link" href="https://visitor-badge.laobi.icu" target="_blank" rel="noopener noreferrer" title="全站访问量统计（visitor-badge）">
@@ -132,6 +141,8 @@ const initialSearchPlaceholder =
           <span>© {new Date().getFullYear()} StuDev</span>
         </div>
         <div class="footer-actions">
+          <a class="text-copy pwa-footer-entry" href={PRODUCT_CONFIG.ANDROID_APP.APK_URL} data-pwa-open aria-haspopup="dialog" title={`studev Android ${PRODUCT_CONFIG.ANDROID_APP.VERSION}：${PRODUCT_CONFIG.ANDROID_APP.SUMMARY}`}>下载 App</a>
+          <span class="footer-dot" aria-hidden="true">·</span>
           <button class="text-copy" type="button" data-copy-link title="复制当前页面网址，便于转发"><span aria-live="polite" data-copy-label>{Astro.url.pathname === '/' ? '分享网站' : '分享本页'}</span></button>
           <span class="footer-dot" aria-hidden="true">·</span>
           <a class="footer-github-badge" href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer" title="访问 GitHub 开源仓库">
@@ -141,7 +152,8 @@ const initialSearchPlaceholder =
           </a>
         </div>
       </div>
-    </footer>
+    </footer>}
+    <PwaPanel floating={fill} />
     <script>import '../scripts/copy-text';</script>
     <script>import '../scripts/diagrams';</script>
     <script>import '../scripts/auth-status';</script>

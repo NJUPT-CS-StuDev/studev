@@ -107,7 +107,7 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
   .recruitment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; }
   .recruitment-actions .text-copy { color: var(--blue); }
   .recruitment-qr { flex: none; display: grid; justify-items: center; gap: 7px; text-decoration: none; color: var(--muted); font-size: .75rem; }
-  .recruitment-qr img { display: block; width: 196px; height: 196px; border-radius: 10px; background: #fff; }
+  .recruitment-qr img { display: block; width: 196px; height: 196px; border-radius: 10px; background: var(--asset-paper); }
   .recruitment-qr:hover { color: var(--blue); }
   .recruitment-qr:focus-visible, .qr-close:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
   .recruitment-dialog {
@@ -121,7 +121,7 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
     color: var(--ink);
     font-family: var(--font-sans);
   }
-  .recruitment-dialog::backdrop { background: rgb(0 0 0 / .58); }
+  .recruitment-dialog::backdrop { background: var(--scrim); }
   .qr-dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
   .qr-dialog-header .recruitment-head { margin-bottom: 0; }
   .qr-dialog-header .recruitment-group-avatar { width: 44px; height: 44px; }
@@ -129,7 +129,7 @@ const fullQr = await getImage({ src: qrCode, format: 'png' });
   .qr-dialog-header p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; line-height: 1.3; }
   .qr-close { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
   .qr-close:hover { color: var(--ink); background: var(--code-block); }
-  .recruitment-dialog > img { display: block; width: min(100%, calc(100dvh - 160px)); height: auto; margin-inline: auto; border-radius: 10px; background: #fff; }
+  .recruitment-dialog > img { display: block; width: min(100%, calc(100dvh - 160px)); height: auto; margin-inline: auto; border-radius: 10px; background: var(--asset-paper); }
   @media (min-width: 861px) and (max-width: 940px) {
     .recruitment-qr img { width: 180px; height: 180px; }
   }

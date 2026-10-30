@@ -1,3 +1,5 @@
+import type { ExamChange } from '@/academics/facts';
+import { sourceDays } from './sourceDays';
 import type { ExamClassFile, ExamIndexFile } from '@/academics/exam';
 import { getClassNameSearchResult } from '@/academics/exam/query';
 import type { ClassLookupResult } from '@/academics/exam/query';
@@ -21,6 +23,7 @@ export interface LoadedExamIndex {
 /** Reads the exam timetable: one index plus one file per class. */
 export class ExamSnapshotClient {
     readonly #baseUrl: string;
+    #changesPromise: Promise<ExamChange[]> | null = null;
     #indexPromise: Promise<LoadedExamIndex> | null = null;
     #activeSearchController: AbortController | null = null;
     #classFiles = new Map<string, Promise<ExamClassFile>>();
@@ -61,7 +64,7 @@ export class ExamSnapshotClient {
         const detach = forwardAbort(signal, controller);
         try {
             const { index } = await this.initialize(controller.signal);
-            let classMode = getClassNameSearchResult(index.classes.map(item => item.class_name), inputValue, manualSelection);
+            let classMode = getClassNameSearchResult(index.classes, inputValue, manualSelection);
             if (classMode.mode === 'DETAIL') {
                 const className = classMode.classes[0] as string;
                 const file = await this.classFile(className, controller.signal);
@@ -69,11 +72,11 @@ export class ExamSnapshotClient {
             }
             return {
                 classMode,
-                sourceUrl: index.source_url,
-                sourceTitle: index.source_title,
-                sourceUpdatedAt: index.source_updated_at,
+                sourceUrl: index.sources.at(-1)?.notice ?? null,
+                sourceTitle: index.sources.at(-1)?.title ?? null,
+                sourceUpdatedAt: index.sources.length ? sourceDays(index.sources).at(-1)! + 'T00:00:00+08:00' : null,
                 snapshotId: this.snapshotId,
-                examPeriodId: index.exam_period.id,
+                examPeriodId: DATA_RELEASE.exams ?? '',
             };
         } finally {
             detach();
@@ -81,6 +84,12 @@ export class ExamSnapshotClient {
         }
     }
 
+    changes(signal?: AbortSignal): Promise<ExamChange[]> {
+        this.#changesPromise ??= fetchJson<ExamChange[]>(this.#baseUrl + '/changes.json').catch(error => {
+            this.#changesPromise = null; throw error;
+        });
+        return waitForAbort(this.#changesPromise, signal);
+    }
     dispose(): void {
         this.#activeSearchController?.abort();
         this.#classFiles.clear();

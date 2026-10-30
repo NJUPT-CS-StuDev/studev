@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "node scripts/digest.ts && node scripts/build-collection.mjs && astro build",
+    "build": "npm run digest && node scripts/build-collection.mjs && astro build",
     "test:collection": "node --test tests/upload-collection.test.mjs tests/verify-osca-upload.test.mjs",
     "test:platform": "node --test tests/platform-*.test.mjs",
     "check": "astro check",
@@ -15,6 +15,7 @@
     "test:render": "node --test tests/static-mermaid.test.mjs tests/site-output.test.mjs",
     "preview": "astro preview",
     "astro": "astro",
+    "predigest": "node design/map/generate.mjs",
     "digest": "node scripts/digest.ts",
     "test:campus": "vitest run",
     "typecheck": "astro sync && tsc --noEmit"
@@ -30,7 +31,9 @@
     "astro": "^7.3.3",
     "flowchart.js": "^1.18.0",
     "lucide-react": "^1.61.0",
+    "maplibre-gl": "^6.16.0",
     "mathjax-full": "^3.2.1",
+    "pmtiles": "^4.5.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -38,17 +41,20 @@
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
     "remark-math-extended": "^6.1.1",
-    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v1.0.2/wasm-search-1.0.2.tgz"
+    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v1.0.3/wasm-search-1.0.3.tgz",
+    "wayfind": "https://github.com/hicancan/wayfind/releases/download/v0.1.0/wayfind-0.1.0.tgz"
   },
   "overrides": {
     "@xmldom/xmldom": "^0.9.12"
   },
   "allowScripts": {
-    "esbuild": true
+    "esbuild": true,
+    "puppeteer": true
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@mermaid-js/mermaid-cli": "12.0.0",
+    "@protomaps/basemaps": "^5.7.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.5",
     "@types/qrcode": "^1.5.6",

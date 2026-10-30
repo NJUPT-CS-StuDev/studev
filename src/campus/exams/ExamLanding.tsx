@@ -47,11 +47,11 @@ export function ExamLanding({ savedClass, onSubmit, onOpenClass, client, history
                             onChange={event => setClassInput(event.target.value)}
                             placeholder="输入班级号"
                             autoComplete="off"
-                            className="h-12 min-w-0 w-full rounded-lg border border-[#dadce0] bg-white px-3 text-[15px] text-[#202124] outline-none focus:border-[#1a73e8] dark:border-[#323a44] dark:bg-[#14181d] dark:text-[#e8edf3] sm:h-11"
+                            className="h-12 min-w-0 w-full rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-[15px] text-[var(--ink)] outline-none focus:border-[var(--brand)] dark:border-[var(--line)] dark:bg-[var(--paper)] dark:text-[var(--ink)] sm:h-11"
                         />
                         <button
                             type="submit"
-                            className="h-12 w-full rounded-lg bg-[#1a73e8] px-3 text-[14px] font-medium text-white hover:bg-[#1765cc] sm:h-11"
+                            className="h-12 w-full rounded-lg bg-[var(--brand)] px-3 text-[14px] font-medium text-[var(--on-brand)] hover:bg-[var(--brand)] sm:h-11"
                         >
                             查询
                         </button>
@@ -60,15 +60,15 @@ export function ExamLanding({ savedClass, onSubmit, onOpenClass, client, history
                         <button
                             type="button"
                             onClick={() => onSubmit('B240402')}
-                            className="inline-flex h-9 items-center rounded-full px-3 text-[#5f6368] hover:bg-white dark:text-[#aeb8c5] dark:hover:bg-[#202124]"
+                            className="inline-flex h-9 items-center rounded-full px-3 text-[var(--muted)] hover:bg-[var(--paper)] dark:text-[var(--muted)] dark:hover:bg-[var(--surface-sunken)]"
                         >
-                            试一试&nbsp;<span className="font-mono text-[#1a73e8] dark:text-[#8ab4f8]">B240402</span>
+                            试一试&nbsp;<span className="font-mono text-[var(--brand)] dark:text-[var(--brand)]">B240402</span>
                         </button>
                         {savedClass ? (
                             <button
                                 type="button"
                                 onClick={() => onOpenClass(savedClass)}
-                                className="inline-flex h-9 items-center rounded-full border border-[#d2e3fc] bg-white px-3 font-medium text-[#174ea6] hover:bg-[#e8f0fe] dark:border-[#394457] dark:bg-[#14181d] dark:text-[#8ab4f8] dark:hover:bg-[#1f2430]"
+                                className="inline-flex h-9 items-center rounded-full border border-[var(--brand-container)] bg-[var(--paper)] px-3 font-medium text-[var(--brand)] hover:bg-[var(--mark)] dark:border-[var(--brand-container)] dark:bg-[var(--paper)] dark:text-[var(--brand)] dark:hover:bg-[var(--mark)]"
                             >
                                 继续查看 {savedClass}
                             </button>

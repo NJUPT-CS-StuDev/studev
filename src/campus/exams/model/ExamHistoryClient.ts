@@ -1,33 +1,17 @@
-import type { ExamClassHistory, ExamHistoryEvents, ExamHistoryManifest } from '@/academics/exam/history';
+import type { ExamChange, ExamSource } from '@/academics/facts';
 import type { ExamSnapshotClient } from './ExamSnapshotClient';
-
-export interface LoadedExamHistoryIndex {
-    manifest: ExamHistoryManifest;
-    events: ExamHistoryEvents;
-}
-
-/** Exam timetable changes; the data travels inside the exam index and class files. */
 export class ExamHistoryClient {
     readonly #examClient: ExamSnapshotClient;
-
-    constructor(examClient: ExamSnapshotClient) {
-        this.#examClient = examClient;
+    constructor(examClient: ExamSnapshotClient) { this.#examClient = examClient; }
+    async initialize(signal?: AbortSignal): Promise<{sources: ExamSource[]; changes: ExamChange[]}> {
+        const [{index}, changes] = await Promise.all([this.#examClient.initialize(signal), this.#examClient.changes(signal)]);
+        return {sources: index.sources, changes};
     }
-
-    get historyId(): string {
-        return this.#examClient.snapshotId;
+    async sources(signal?: AbortSignal): Promise<ExamSource[]> { return (await this.#examClient.initialize(signal)).index.sources; }
+    async loadClass(className: string, signal?: AbortSignal): Promise<ExamChange[] | null> {
+        const {index} = await this.#examClient.initialize(signal);
+        if (!index.classes.includes(className)) return null;
+        return (await this.#examClient.classFile(className, signal)).changes;
     }
-
-    async initialize(signal?: AbortSignal): Promise<LoadedExamHistoryIndex> {
-        const { index } = await this.#examClient.initialize(signal);
-        return index.history;
-    }
-
-    async loadClass(className: string, signal?: AbortSignal): Promise<ExamClassHistory | null> {
-        const { index } = await this.#examClient.initialize(signal);
-        if (!index.classes.some(item => item.class_name === className)) return null;
-        return (await this.#examClient.classFile(className, signal)).history;
-    }
-
     dispose(): void {}
 }

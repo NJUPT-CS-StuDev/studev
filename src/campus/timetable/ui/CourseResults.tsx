@@ -1,3 +1,4 @@
+import { catalogId } from '@/timetable/model/courseCatalog';
 import { Check, Plus } from 'lucide-react';
 import type { TeachingMeeting } from '@/academics/timetable';
 import type { CatalogCourse } from '../model/courseCatalog';
@@ -6,13 +7,13 @@ import { formatWeekNumbers, suspendedWeeks } from '../model/weekPattern';
 const weekday = (day: number) => `周${'一二三四五六日'[day - 1] ?? day}`;
 
 export const meetingLine = (meeting: TeachingMeeting): string => [
-    `${weekday(meeting.weekday)} ${meeting.start_period}–${meeting.end_period}节`,
+    `${weekday(meeting.weekday)} ${meeting.periods[0]}–${meeting.periods[1]}节`,
     meeting.location?.replace(/－/g, '-') ?? '地点未定',
-    formatWeekNumbers(meeting.week_numbers),
+    formatWeekNumbers(meeting.weeks),
 ].join(' · ');
 
 export const suspensionNote = (meetings: TeachingMeeting[]): string | null => {
-    const weeks = [...new Set(meetings.flatMap(meeting => suspendedWeeks(meeting.week_numbers)))].sort((left, right) => left - right);
+    const weeks = [...new Set(meetings.flatMap(meeting => suspendedWeeks(meeting.weeks)))].sort((left, right) => left - right);
     return weeks.length ? `第${weeks.join('、')}周停课` : null;
 };
 
@@ -29,28 +30,28 @@ export function CourseResults({ courses, inTimetable, onAdd, onRemove }: CourseR
     return (
         <ul className="course-results">
             {courses.map(course => {
-                const added = inTimetable.has(course.id);
+                const added = inTimetable.has(catalogId(course));
                 const suspended = suspensionNote(course.meetings);
                 return (
-                    <li key={course.id} className="course-result">
+                    <li key={catalogId(course)} className="course-result">
                         <div className="course-result-main">
                             <p className="course-result-title">
-                                <strong>{course.name}</strong>
-                                {course.code ? <span>{course.code}</span> : null}
-                                {course.credits !== null ? <span>{course.credits} 学分</span> : null}
+                                <strong>{course.meetings[0]!.course.name}</strong>
+                                {course.meetings[0]!.course.code ? <span>{course.meetings[0]!.course.code}</span> : null}
+                                {course.meetings[0]!.course.credits !== null ? <span>{course.meetings[0]!.course.credits} 学分</span> : null}
                             </p>
-                            <p className="course-result-teacher">{course.teachers.join('、') || '教师未定'}{course.campus ? ` · ${course.campus}` : ''}</p>
+                            <p className="course-result-teacher">{[...new Set(course.meetings.flatMap(m => m.teachers.map(t => t.name)))].join('、') || '教师未定'}{course.meetings[0]!.campus ? ` · ${course.meetings[0]!.campus}` : ''}</p>
                             <ul className="course-result-meetings">
-                                {course.meetings.map(meeting => <li key={meeting.meeting_id}>{meetingLine(meeting)}</li>)}
+                                {course.meetings.map(meeting => <li key={meeting.id}>{meetingLine(meeting)}</li>)}
                             </ul>
                             {suspended ? <p className="course-result-flag">{suspended}</p> : null}
-                            {course.classIds.length ? <p className="course-result-classes">教学班：{course.classIds.slice(0, 6).join('、')}{course.classIds.length > 6 ? ` 等 ${course.classIds.length} 个班` : ''}</p> : null}
+                            {course.meetings[0]!.classes.length ? <p className="course-result-classes">教学班：{course.meetings[0]!.classes.slice(0, 6).join('、')}{course.meetings[0]!.classes.length > 6 ? ` 等 ${course.meetings[0]!.classes.length} 个班` : ''}</p> : null}
                         </div>
                         <button
                             type="button"
                             className={added ? 'is-added' : ''}
                             onClick={() => added ? onRemove(course) : onAdd(course)}
-                            aria-label={`${added ? '移出' : '加入'}我的课表：${course.name} ${course.teachers.join('、')}`}
+                            aria-label={`${added ? '移出' : '加入'}我的课表：${course.meetings[0]!.course.name} ${[...new Set(course.meetings.flatMap(m => m.teachers.map(t => t.name)))].join('、')}`}
                         >
                             {added ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
                             {added ? '已加入' : '加入'}

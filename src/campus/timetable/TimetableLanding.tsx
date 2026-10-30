@@ -1,7 +1,8 @@
+import { catalogId } from '@/timetable/model/courseCatalog';
 import { CalendarRange } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ProductLandingCard } from '@/shared/ui/ProductLandingCard';
-import { termKey, timetableEdits, updateTimetableEdits } from '@/shared/lib/preferences';
+import { timetableEdits, updateTimetableEdits } from '@/shared/lib/preferences';
 import { usePreferences } from '@/shared/lib/usePreferences';
 import type { TeachingScheduleClient } from './model/TeachingScheduleClient';
 import { searchCatalog, type CatalogCourse } from './model/courseCatalog';
@@ -30,7 +31,7 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
         if (!courseQuery || catalog) return;
         const controller = new AbortController();
         Promise.all([client.initialize(controller.signal), client.loadCatalog(controller.signal)])
-            .then(([index, courses]) => setCatalog({ term: termKey(index.term.academic_year, index.term.term_number), courses }))
+            .then(([index, courses]) => setCatalog({ term: index.term.term, courses }))
             .catch(() => undefined);
         return () => controller.abort();
     }, [catalog, client, courseQuery]);
@@ -74,43 +75,43 @@ export function TimetableLanding({ client, savedClass, onOpenClass, initialQuery
                             onChange={event => { setQuery(event.target.value); setError(null); }}
                             placeholder="输入班级号"
                             autoComplete="off"
-                            className="h-12 min-w-0 w-full rounded-lg border border-[#dadce0] bg-white px-3 text-[15px] outline-none transition focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/20 dark:border-[#323a44] dark:bg-[#14181d]"
+                            className="h-12 min-w-0 w-full rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-[15px] outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20 dark:border-[var(--line)] dark:bg-[var(--paper)]"
                             aria-controls="timetable-suggestions"
                         />
-                        <button type="submit" className="h-12 w-full rounded-lg bg-[#1a73e8] px-3 text-sm font-medium text-white transition hover:bg-[#1765cc] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1a73e8]">查询</button>
+                        <button type="submit" className="h-12 w-full rounded-lg bg-[var(--brand)] px-3 text-sm font-medium text-[var(--on-brand)] transition hover:bg-[var(--brand)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]">查询</button>
                     </div>
                     {visibleSuggestions.length ? (
-                        <div id="timetable-suggestions" className="mx-auto mt-2 max-w-[440px] overflow-hidden rounded-xl border border-[#dadce0] bg-white text-left dark:border-[#323a44] dark:bg-[#14181d]">
+                        <div id="timetable-suggestions" className="mx-auto mt-2 max-w-[440px] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] text-left dark:border-[var(--line)] dark:bg-[var(--paper)]">
                             {visibleSuggestions.slice(0, 6).map(item => (
-                                <button key={item} type="button" onClick={() => { setQuery(item); onOpenClass(item); }} className="block w-full px-4 py-2.5 text-sm hover:bg-[#f1f3f4] focus:bg-[#f1f3f4] dark:hover:bg-[#1c232b] dark:focus:bg-[#1c232b]">
+                                <button key={item} type="button" onClick={() => { setQuery(item); onOpenClass(item); }} className="block w-full px-4 py-2.5 text-sm hover:bg-[var(--surface-sunken)] focus:bg-[var(--surface-sunken)] dark:hover:bg-[var(--surface)] dark:focus:bg-[var(--surface)]">
                                     {item}
                                 </button>
                             ))}
                         </div>
                     ) : null}
                 </form>
-                {error ? <p className="mt-3 text-sm text-[#b3261e] dark:text-[#f2b8b5]">{error}</p> : null}
+                {error ? <p className="mt-3 text-sm text-[var(--danger)] dark:text-[var(--danger)]">{error}</p> : null}
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[13px]">
                     {savedClass ? (
-                        <button type="button" onClick={() => onOpenClass(savedClass)} className="inline-flex h-9 items-center rounded-full border border-[#d2e3fc] bg-white px-3 font-medium text-[#174ea6] hover:bg-[#e8f0fe] dark:border-[#394457] dark:bg-[#14181d] dark:text-[#8ab4f8] dark:hover:bg-[#1f2430]">
+                        <button type="button" onClick={() => onOpenClass(savedClass)} className="inline-flex h-9 items-center rounded-full border border-[var(--brand-container)] bg-[var(--paper)] px-3 font-medium text-[var(--brand)] hover:bg-[var(--mark)] dark:border-[var(--brand-container)] dark:bg-[var(--paper)] dark:text-[var(--brand)] dark:hover:bg-[var(--mark)]">
                             继续查看 {savedClass}
                         </button>
                     ) : null}
-                    <button type="button" onClick={() => onOpenClass('B240402')} className="inline-flex h-9 items-center rounded-full px-3 text-[#5f6368] hover:bg-white dark:text-[#aeb8c5] dark:hover:bg-[#202124]">
-                        试一试&nbsp;<span className="font-mono text-[#1a73e8] dark:text-[#8ab4f8]">B240402</span>
+                    <button type="button" onClick={() => onOpenClass('B240402')} className="inline-flex h-9 items-center rounded-full px-3 text-[var(--muted)] hover:bg-[var(--paper)] dark:text-[var(--muted)] dark:hover:bg-[var(--surface-sunken)]">
+                        试一试&nbsp;<span className="font-mono text-[var(--brand)] dark:text-[var(--brand)]">B240402</span>
                     </button>
                 </div>
             </ProductLandingCard>
             {courseQuery ? (
                 <section className="mx-auto mt-8 max-w-[760px]" aria-label="课程搜索结果">
                     <h2 className="mb-3 text-[15px] font-semibold">课程「{courseQuery}」{catalog ? `· ${courses.length} 个教学班` : ' · 正在加载全校课程…'}</h2>
-                    {catalog && !courses.length ? <p className="text-sm text-[#5f6368] dark:text-[#aeb8c5]">没有匹配的课程。</p> : null}
-                    {catalog ? <p className="mb-3 text-[13px] text-[#5f6368] dark:text-[#aeb8c5]">加入的课程会出现在你的课表里{prefs.class ? `（${prefs.class}）` : '；先打开你的班级课表，它就会成为你的课表'}。</p> : null}
+                    {catalog && !courses.length ? <p className="text-sm text-[var(--muted)] dark:text-[var(--muted)]">没有匹配的课程。</p> : null}
+                    {catalog ? <p className="mb-3 text-[13px] text-[var(--muted)] dark:text-[var(--muted)]">加入的课程会出现在你的课表里{prefs.class ? `（${prefs.class}）` : '；先打开你的班级课表，它就会成为你的课表'}。</p> : null}
                     <CourseResults
                         courses={courses}
                         inTimetable={added}
-                        onAdd={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: [...edits.added, course.id] }))}
-                        onRemove={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: edits.added.filter(id => id !== course.id) }))}
+                        onAdd={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: [...edits.added, catalogId(course)] }))}
+                        onRemove={course => catalog && updateTimetableEdits(catalog.term, edits => ({ ...edits, added: edits.added.filter(id => id !== catalogId(course)) }))}
                     />
                 </section>
             ) : null}

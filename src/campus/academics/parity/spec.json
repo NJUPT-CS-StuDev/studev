@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "timezone": "Asia/Shanghai",
+  "timetable": {
+    "statePriority": [
+      "active",
+      "suspended",
+      "inactive",
+      "hidden"
+    ],
+    "active": "The selected week is present in the published meeting.weeks.",
+    "suspended": {
+      "minimumPublishedWeeks": 4,
+      "candidateSteps": [
+        1,
+        2
+      ],
+      "minimumHoles": 1,
+      "maximumHoles": 2,
+      "rule": "Sort unique weeks. Try weekly, then same-parity fortnightly runs from first to last. A run with 1–2 internal holes and at least 3 present weeks marks those holes suspended. A complete run ends the search. This retains the proven web display heuristic; it is not a source-confirmed cancellation or a replacement lesson. Irregular blocks are not filled in."
+    },
+    "inactive": {
+      "minimumPublishedWeeks": 2,
+      "edgePaddingWeeks": 1,
+      "rule": "All published weeks have the same parity, the selected week is absent and lies in [minimum week − 1, maximum week + 1]. Evaluated after suspended."
+    },
+    "hidden": "Every other meeting is absent from the selected week; no grey out-of-term cards.",
+    "style": {
+      "active": "course palette",
+      "inactive": "neutral, 单周/双周 · 本周不上课",
+      "suspended": "neutral, dashed outline, struck course title, 本周停课"
+    },
+    "room": "Published location, falling back to room, then empty. A location exactly 翻转课堂线上自学 is displayed as a teaching note instead of a physical room.",
+    "note": "Display 翻转课堂线上自学 as 翻转课堂 · 线上自学. Append a nonempty trimmed method other than the ordinary 面授讲课, joined with ·. Never assign a map location to online self-study.",
+    "layout": {
+      "days": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "interval": "inclusive period endpoints",
+      "order": [
+        "day",
+        "start period",
+        "end period",
+        "id (Unicode ordinal)"
+      ],
+      "columns": "For each day, form connected components of intersecting visible intervals (including inactive/suspended). Assign each interval to the first column whose end < start, else append a column. All intervals in the component use its total column count; preserve each start/end and height.",
+      "badge": "Count direct intersections among active meetings only (including self). More than one is parallel when all share the same course identity, otherwise overlap. Inactive cards do not create active conflict badges.",
+      "dayView": "Filter the week cells by day, preserving state, note, colour and column allocation."
+    },
+    "calendar": "Only published occurrence weeks create real events; display-only inactive/suspended cells do not create calendar events or reminders."
+  },
+  "colour": {
+    "identity": "Trimmed upper-case course code when nonempty, else trimmed course name with whitespace collapsed to one ASCII space. No locale-dependent ordering or collision probing.",
+    "hash": "FNV-1a: initial 2166136261; for each Unicode scalar value XOR, then multiply by 16777619 with unsigned 32-bit wrap; unsigned result modulo 12.",
+    "palette": "design/tokens.json course.light/dark tone0…tone11 (bg/border/fg); text contrast at least 4.5:1.",
+    "stability": "Independent of week, classmates, client, input order, hidden courses and electives. Hash collisions are allowed."
+  },
+  "exams": {
+    "time": "Interpret published date/start/end in Asia/Shanghai. At start inclusive ongoing, at end inclusive ended; before start upcoming. Missing/invalid interval unknown.",
+    "countdown": {
+      "ended": "已结束",
+      "ongoing": "正在考试",
+      "unknown": "时间待定",
+      "upcoming": "Today 今天; next Shanghai calendar date 明天; later 还有 N 天. N counts calendar dates, not elapsed 24-hour intervals."
+    },
+    "room": "Nonempty published location, then nonempty room, then 待定.",
+    "note": "Preserve the published exam note.",
+    "exportBadges": "Web 新增/有更新 is local calendar-export history, independent of academic countdown/state; it must never be inferred from timetable changes or assumed to be server-side state.",
+    "order": "Preserve the published class-file order, as on the reference web. The native upcoming segment is a stable filter of this list."
+  },
+  "rooms": {
+    "eligibility": "listed AND (all venues OR a kind contains 多媒体, 非多媒体, 翻转课堂). Then campus, selected buildings, room query and minimum seats.",
+    "buildingSelection": {
+      "null": "all, including new buildings",
+      "emptyArray": "none",
+      "array": "exact building IDs; OR within selection, AND with other filters",
+      "persistence": "Per campus, across visits; select all/none; retain choices for buildings hidden by the venue-type filter."
+    },
+    "query": "NFKC, lower-case, remove full-width dash/em dash/en dash/whitespace. Match ID, number, building, aliases or building+number by substring.",
+    "free": "If the day has free lists, they are authoritative: a missing room/period is unavailable even without a known occupant. Otherwise use the published occupied intervals. Every period from start to until inclusive must be free.",
+    "occupied": "If unavailable, show published occupants at the selected period. Unknown occupant remains 已占用（借用、调课等）, never free.",
+    "orderForGoldens": "Room IDs sorted by Unicode ordinal; compare full matching and free lists, not just counts."
+  },
+  "goldens": {
+    "file": "golden.json",
+    "generator": "generate.ts imports the production web presentation functions and snapshots current packaged real inputs and expected outputs. Both test suites read this exact file. Review regenerated output changes; never regenerate in tests.",
+    "edgeCases": "Supplemental synthetic strings exercise Unicode/whitespace identity, retaining hidden-building choices and invalid times. They never enter packaged campus facts."
+  }
+}

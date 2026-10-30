@@ -1,5 +1,5 @@
 import { ROUTE_PATHS } from '@/app/routing/useUrlState';
-import { BookOpen, Building2, CalendarDays, Download, FileText, GraduationCap, Library, Shuffle, Trophy } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, Download, FileText, GraduationCap, Library, MapPinned, Shuffle, Trophy } from 'lucide-react';
 import type { ProductIntent } from '@/app/routing/intents';
 import { QUICK_SEARCHES, type QuickSearchIcon, type QuickSearchGroup } from './searchPresets';
 import { SearchInput } from '@/shared/ui/SearchInput';
@@ -45,9 +45,9 @@ export function HomePage({
         <main className="flex-1 px-4">
             <section className="max-w-[680px] mx-auto min-h-[calc(100vh-145px)] flex flex-col items-center justify-center py-12">
                 <div className="flex flex-col items-center select-none text-center">
-                    <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#5f6368] dark:text-[#aeb8c5] mb-2">STUDEV · 零后端校园检索引擎</span>
-                    <h1 className="text-[42px] sm:text-[56px] font-medium tracking-[-0.06em] text-[#202124] dark:text-[#e8edf3] leading-none">
-                        studev<span className="text-[#1a73e8] dark:text-[#8ab4f8]">-search</span>
+                    <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[var(--muted)] dark:text-[var(--muted)] mb-2">STUDEV · 零后端校园检索引擎</span>
+                    <h1 className="text-[42px] sm:text-[56px] font-medium tracking-[-0.06em] text-[var(--ink)] dark:text-[var(--ink)] leading-none">
+                        studev<span className="text-[var(--brand)] dark:text-[var(--brand)]">-search</span>
                     </h1>
                 </div>
 
@@ -66,12 +66,13 @@ export function HomePage({
                 <div className="mt-6 w-full space-y-4">
                     {(['教务查询', '网站搜索', '社区搜索', '资料搜索'] as const).map(group => (
                         <section key={group} aria-labelledby={`home-group-${group}`}>
-                            <h2 id={`home-group-${group}`} className="mb-2 text-center text-xs font-medium tracking-[0.12em] text-[#5f6368] dark:text-[#aeb8c5]">
+                            <h2 id={`home-group-${group}`} className="mb-2 text-center text-xs font-medium tracking-[0.12em] text-[var(--muted)] dark:text-[var(--muted)]">
                                 {GROUP_ROUTES[group] ? (
-                                    <a className="transition-colors hover:text-[#1a73e8] dark:hover:text-[#8ab4f8] focus-visible:text-[#1a73e8]" href={GROUP_ROUTES[group]}>{group}</a>
+                                    <a className="transition-colors hover:text-[var(--brand)] dark:hover:text-[var(--brand)] focus-visible:text-[var(--brand)]" href={GROUP_ROUTES[group]}>{group}</a>
                                 ) : group}
                             </h2>
                             <div className="flex flex-wrap items-center justify-center gap-2">
+                                {group === '教务查询' && <a href="/map/" className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[var(--line)] bg-[var(--paper)] text-sm text-[var(--ink)] hover:border-[var(--brand)] transition-colors"><MapPinned className="w-4 h-4 text-[var(--brand)]" aria-hidden="true" />校园地图</a>}
                                 {QUICK_SEARCHES.filter(item => item.group === group).map(item => {
                                     const Icon = QUICK_SEARCH_ICONS[item.icon];
                                     return (
@@ -85,9 +86,9 @@ export function HomePage({
                                             onPointerEnter={() => onIntentWarm(item.intent)}
                                             onPointerDown={() => onIntentWarm(item.intent)}
                                             onFocus={() => onIntentWarm(item.intent)}
-                                            className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[#dadce0] dark:border-[#323a44] bg-white dark:bg-[#1c232b] text-sm text-[#202124] dark:text-[#e8edf3] hover:border-[#1a73e8] dark:hover:border-[#8ab4f8] transition-colors"
+                                            className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[var(--line)] dark:border-[var(--line)] bg-[var(--paper)] dark:bg-[var(--surface)] text-sm text-[var(--ink)] dark:text-[var(--ink)] hover:border-[var(--brand)] dark:hover:border-[var(--brand)] transition-colors"
                                         >
-                                            <Icon className="w-4 h-4 text-[#1a73e8] dark:text-[#8ab4f8]" aria-hidden="true" />
+                                            <Icon className="w-4 h-4 text-[var(--brand)] dark:text-[var(--brand)]" aria-hidden="true" />
                                             {item.label}
                                         </a>
                                     );

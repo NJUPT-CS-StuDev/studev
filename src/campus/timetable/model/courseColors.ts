@@ -1,8 +1,10 @@
+import type { CSSProperties } from 'react';
 import type { TeachingMeeting } from '@/academics/timetable';
+import tokens from '../../../../design/tokens.json';
 
-export const COURSE_TONE_COUNT = 24;
-
-const hash = (value: string): number => {
+export const COURSE_TONE_COUNT = Object.keys(tokens.course.light).length;
+/** FNV-1a over Unicode scalar values, unsigned 32-bit wrap after each multiply. */
+export const courseHash = (value: string): number => {
     let result = 2166136261;
     for (const character of value) {
         result ^= character.codePointAt(0) ?? 0;
@@ -10,24 +12,14 @@ const hash = (value: string): number => {
     }
     return result >>> 0;
 };
-
-export const courseIdentity = (meeting: Pick<TeachingMeeting, 'course_code' | 'course_name'>): string => (
-    meeting.course_code?.trim().toUpperCase() || meeting.course_name.trim().replace(/\s+/g, ' ')
+type CourseIdentityInput = { course: Pick<TeachingMeeting['course'], 'code' | 'name'> };
+export const courseIdentity = (meeting: CourseIdentityInput): string => (
+    meeting.course.code?.trim().toUpperCase() || meeting.course.name.trim().replace(/\s+/g, ' ')
 );
-
-export const allocateCourseTones = (meetings: TeachingMeeting[]): Map<string, number> => {
-    const identities = [...new Set(meetings.map(courseIdentity))].sort((left, right) => left.localeCompare(right, 'zh-CN'));
-    if (identities.length > COURSE_TONE_COUNT) {
-        throw new Error(`当前班级有 ${identities.length} 门不同课程，超过 ${COURSE_TONE_COUNT} 个无碰撞颜色槽`);
-    }
-    const used = new Set<number>();
-    const result = new Map<string, number>();
-    for (const identity of identities) {
-        const start = hash(identity) % COURSE_TONE_COUNT;
-        let tone = start;
-        while (used.has(tone)) tone = (tone + 1) % COURSE_TONE_COUNT;
-        used.add(tone);
-        result.set(identity, tone);
-    }
-    return result;
+/** Independent of classmates, electives, ordering and the chosen week. Collisions are allowed. */
+export const courseToneIndex = (meeting: CourseIdentityInput): number => courseHash(courseIdentity(meeting)) % COURSE_TONE_COUNT;
+export const allocateCourseTones = (meetings: TeachingMeeting[]): Map<string, number> => new Map(meetings.map(meeting => [courseIdentity(meeting), courseToneIndex(meeting)]));
+export const courseToneStyle = (index: number): CSSProperties => {
+    const key = `tone${index % COURSE_TONE_COUNT}` as keyof typeof tokens.course.light;
+    return Object.fromEntries(['light', 'dark'].flatMap(theme => Object.entries(tokens.course[theme as 'light' | 'dark'][key]).map(([part, value]) => [`--course-${theme}-${part}`, value]))) as CSSProperties;
 };

@@ -3,6 +3,8 @@ import { createRepository } from './platform-store.mjs';
 import { createIdentity } from './platform-identity.mjs';
 import { createFormsService } from './platform-forms.mjs';
 import { metadataStore, oscaGateway } from './collection-adapters.mjs';
+import { hasAuthorization, nativeBootstrap } from './platform-tokens.mjs';
+import { createActivitiesService } from './platform-activities.mjs';
 
 function storageConfig(env) {
   let endpoint;
@@ -13,7 +15,8 @@ function storageConfig(env) {
   return { endpoint: endpoint.origin, bucket: env.OSCA_BUCKET, accessKeyId: env.OSCA_ACCESS_KEY_ID, secretAccessKey: env.OSCA_SECRET_ACCESS_KEY, region: env.OSCA_REGION || 'us-east-1', objectPrefix: prefix };
 }
 
-export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now } = {}) {
+export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now,
+  loadPlaces = async () => fail(503, 'CAMPUS_UNAVAILABLE', '校园地点暂时无法验证，请稍后重试。') } = {}) {
   return async function handle(context) {
     try {
       const env = context.env || {};
@@ -23,12 +26,18 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       const path = new URL(request.url).pathname.replace(/\/+$/, '');
       if (!path.startsWith('/api/platform/')) fail(404, 'NOT_FOUND', '接口不存在。');
       if (!['GET', 'POST', 'DELETE'].includes(request.method)) fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
-      if (['POST', 'DELETE'].includes(request.method)) requireOrigin(request, env);
+      if (['POST', 'DELETE'].includes(request.method) && !hasAuthorization(request) && !nativeBootstrap(request, path)) requireOrigin(request, env);
       const store = getStore(env);
       const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET });
       const identity = createIdentity({ repo, env, now });
+      // Never fall back to cookies when an Authorization header is present.
+      // Validate it before exempting any endpoint from the browser boundary.
+      if (hasAuthorization(request)) await identity.authenticate(request, { required: true, allowEnrollment: true });
       const identityResponse = await identity.handle(context, path);
       if (identityResponse) return identityResponse;
+      const activities = createActivitiesService({ repo, identity, now, loadPlaces });
+      const activityResponse = await activities.handle(context, path);
+      if (activityResponse) return activityResponse;
       if (path.startsWith('/api/platform/admin/legacy/')) {
         await identity.authenticate(request, { required: true, staff: true, csrf: request.method === 'POST' });
         const collectionId = env.COLLECTION_ID || 'club-2026';

@@ -13,6 +13,7 @@ import remarkTyporaInline from './src/plugins/remark-typora-inline.mjs';
 import rehypeEditorialImages from './src/plugins/rehype-editorial-images.mjs';
 import rehypeStaticMermaid from './src/plugins/rehype-static-mermaid.mjs';
 import localFonts from './src/integrations/local-fonts.mjs';
+import webTokens from './src/integrations/web-tokens.mjs';
 import { copyFile } from 'node:fs/promises';
 
 const excludedSitemapPaths = new Set([
@@ -38,7 +39,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
   },
-  integrations: [react(), localFonts(), {
+  integrations: [react(), webTokens(), localFonts(), {
     // EdgeOne reads edgeone.json from the project root; a copy beside the built
     // files covers deployments of the output directory alone.
     name: 'studev-edgeone-config',

@@ -1,7 +1,9 @@
+import { catalogId } from '@/timetable/model/courseCatalog';
+import { examTimestamp } from '@/exams/ui/examDateTime';
 import { useEffect, useState } from 'react';
 import type { Exam } from '@/academics/exam/records';
 import type { TeachingMeeting } from '@/academics/timetable';
-import { termKey, timetableEdits } from '@/shared/lib/preferences';
+import { timetableEdits } from '@/shared/lib/preferences';
 import { usePreferences } from '@/shared/lib/usePreferences';
 import type { TeachingScheduleClient } from '@/timetable/model/TeachingScheduleClient';
 import type { ExamSnapshotClient } from './ExamSnapshotClient';
@@ -14,7 +16,7 @@ export interface MyExams {
 }
 
 const NONE: MyExams = { ownCodes: null, addedExams: [] };
-const teachingClassOf = (meeting: TeachingMeeting) => meeting.teaching_class_id ?? meeting.meeting_id;
+const teachingClassOf = (meeting: TeachingMeeting) => meeting.teaching_class.id ?? meeting.id;
 
 /**
  * Which exams of a class are the visitor's own. A class exam list also holds the
@@ -38,22 +40,22 @@ export function useMyExams(
         const controller = new AbortController();
         void (async () => {
             const loaded = await teaching.loadClass(className, controller.signal);
-            const term = termKey(loaded.term.academic_year, loaded.term.term_number);
+            const term = loaded.term.term;
             if (term !== examPeriodId) return setResult({ key, value: NONE });
             const edits = timetableEdits(prefs, term);
             const hidden = new Set(edits.hidden);
-            const ownCodes = new Set(loaded.meetings.filter(meeting => !hidden.has(teachingClassOf(meeting))).map(meeting => meeting.course_code ?? ''));
+            const ownCodes = new Set(loaded.meetings.filter(meeting => !hidden.has(teachingClassOf(meeting))).map(meeting => meeting.course.code ?? ''));
             const addedExams: Exam[] = [];
             if (edits.added.length) {
                 const catalog = await teaching.loadCatalog(controller.signal);
-                const seen = new Set(exams.map(exam => `${exam.course_code}|${exam.start_timestamp}`));
-                for (const course of catalog.filter(item => edits.added.includes(item.id))) {
-                    if (course.code) ownCodes.add(course.code);
-                    for (const other of course.classIds.slice(0, 3)) {
+                const seen = new Set(exams.map(exam => `${exam.course.code}|${examTimestamp(exam, 'start')}`));
+                for (const course of catalog.filter(item => edits.added.includes(catalogId(item)))) {
+                    if (course.meetings[0]!.course.code) ownCodes.add(course.meetings[0]!.course.code);
+                    for (const other of course.meetings[0]!.classes.slice(0, 3)) {
                         const file = await examClient.classFile(other, controller.signal).catch(() => null);
                         for (const exam of file?.exams ?? []) {
-                            const id = `${exam.course_code}|${exam.start_timestamp}`;
-                            if (exam.course_code === course.code && !seen.has(id)) {
+                            const id = `${exam.course.code}|${examTimestamp(exam, 'start')}`;
+                            if (exam.course.code === course.meetings[0]!.course.code && !seen.has(id)) {
                                 seen.add(id);
                                 addedExams.push(exam);
                             }

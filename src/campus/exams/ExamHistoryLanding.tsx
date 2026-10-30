@@ -6,8 +6,8 @@ export function ExamHistoryLanding({ client }: { client: ExamHistoryClient }) {
     const history = useExamHistory(client);
     return (
         <ExamHistorySummary
-            manifest={history.manifest}
-            events={history.events}
+            sources={history.sources}
+            changes={history.changes}
             loading={history.loading}
             error={history.error}
         />

@@ -1,11 +1,11 @@
 import type { TeachingMeeting } from '@/academics/timetable';
 
 export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双周' | null => {
-    if (meeting.week_numbers.length < 2) return null;
-    const first = meeting.week_numbers[0];
+    if (meeting.weeks.length < 2) return null;
+    const first = meeting.weeks[0];
     if (first === undefined) return null;
     const parity = first % 2;
-    return meeting.week_numbers.every(week => week % 2 === parity) ? (parity === 1 ? '单周' : '双周') : null;
+    return meeting.weeks.every(week => week % 2 === parity) ? (parity === 1 ? '单周' : '双周') : null;
 };
 
 /**
@@ -31,12 +31,12 @@ export const suspendedWeeks = (weeks: number[]): number[] => {
     return [];
 };
 
-export const showAsSuspended = (meeting: TeachingMeeting, week: number): boolean => suspendedWeeks(meeting.week_numbers).includes(week);
+export const showAsSuspended = (meeting: TeachingMeeting, week: number): boolean => suspendedWeeks(meeting.weeks).includes(week);
 
 export const showAsInactiveAlternating = (meeting: TeachingMeeting, week: number): boolean => {
-    if (meeting.week_numbers.includes(week) || !alternatingWeekLabel(meeting)) return false;
-    const first = Math.min(...meeting.week_numbers);
-    const last = Math.max(...meeting.week_numbers);
+    if (meeting.weeks.includes(week) || !alternatingWeekLabel(meeting)) return false;
+    const first = Math.min(...meeting.weeks);
+    const last = Math.max(...meeting.weeks);
     return week >= first - 1 && week <= last + 1;
 };
 

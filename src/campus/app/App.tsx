@@ -29,8 +29,8 @@ const ClassroomsView = lazy(loadClassroomsPage);
 function RouteLoading() {
     return (
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-6 pb-8">
-            <div className="h-24 animate-pulse rounded-2xl bg-[#f1f3f4] dark:bg-[#1c232b]" aria-busy="true" aria-label="正在打开页面" />
-            <div className="mt-4 h-[420px] animate-pulse rounded-2xl bg-[#f8f9fa] dark:bg-[#1c232b]" />
+            <div className="h-24 animate-pulse rounded-2xl bg-[var(--surface-sunken)] dark:bg-[var(--surface)]" aria-busy="true" aria-label="正在打开页面" />
+            <div className="mt-4 h-[420px] animate-pulse rounded-2xl bg-[var(--surface)] dark:bg-[var(--surface)]" />
         </main>
     );
 }
@@ -132,7 +132,7 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
     };
 
     return (
-        <div className="campus-app min-h-[calc(100vh-145px)] flex flex-col bg-white dark:bg-[#14181d] text-[#202124] dark:text-[#e8edf3] font-sans">
+        <div className="campus-app min-h-[calc(100vh-145px)] flex flex-col bg-[var(--paper)] dark:bg-[var(--paper)] text-[var(--ink)] dark:text-[var(--ink)] font-sans">
             {router.route !== 'home' ? <ModuleNav route={router.route} onNavigate={router.onNavigateRoute} /> : null}
 
             {router.route === 'home' ? (

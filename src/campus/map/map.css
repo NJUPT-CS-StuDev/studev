@@ -1,0 +1,165 @@
+/* /map/: the map fills the page below the site header; one floating panel holds
+   search, the selected place and its routes. On phones the panel sits at the top
+   and the map stays the subject. */
+.campus-map { position: relative; height: 100%; min-height: 360px; overflow: hidden; }
+.campus-map-canvas { position: absolute; inset: 0; }
+
+.campus-map-panel {
+  position: absolute; top: 16px; left: 16px; z-index: 2;
+  width: min(392px, calc(100% - 32px)); max-height: calc(100% - 32px);
+  display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+  pointer-events: none;
+}
+.campus-map-panel > * { pointer-events: auto; }
+
+.campus-map-search {
+  display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px;
+  background: var(--paper); color: var(--muted); border-radius: 24px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--scrim) 38%, transparent), 0 4px 16px color-mix(in srgb, var(--scrim) 25%, transparent);
+}
+.campus-map-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 15px; }
+.campus-map-clear, .campus-map-close {
+  border: 0; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px;
+}
+
+.campus-map-results, .campus-map-card, .campus-map-error {
+  background: var(--paper); border-radius: 16px; box-shadow: 0 1px 2px color-mix(in srgb, var(--scrim) 38%, transparent), 0 4px 16px color-mix(in srgb, var(--scrim) 25%, transparent);
+}
+.campus-map-results { list-style: none; margin: 0; padding: 6px 0; }
+.campus-map-results button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: 9px 16px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--ink);
+}
+.campus-map-results button:hover, .campus-map-results button:focus-visible { background: var(--mark); outline: 0; }
+.campus-map-result-title { font-size: 15px; }
+.campus-map-result-meta { font-size: 12px; color: var(--muted); }
+
+.campus-map-error { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 12px 14px; color: var(--ink); font-size: 14px; }
+.campus-map-error button { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+
+.campus-map-card { padding: 16px; }
+.campus-map-card header { display: flex; align-items: flex-start; gap: 8px; }
+.campus-map-card h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; color: var(--ink); }
+.campus-map-card header p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.campus-map-close { margin-left: auto; }
+.campus-map-houses { margin: 10px 0 0; font-size: 13px; line-height: 20px; color: var(--muted); }
+
+.campus-map-primary {
+  margin-top: 14px; width: 100%; height: 40px; border: 0; border-radius: 20px;
+  background: var(--blue); color: var(--on-brand); font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.campus-map-primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
+
+.campus-map-plan { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.campus-map-from { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.campus-map-from select {
+  flex: 1; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--paper); color: var(--ink); font-size: 14px;
+}
+.campus-map-modes { display: flex; align-items: center; gap: 8px; }
+.campus-map-modes button {
+  height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 16px;
+  background: transparent; color: var(--ink); font-size: 14px; cursor: pointer;
+}
+.campus-map-modes button.on { background: var(--mark); border-color: transparent; color: var(--blue); font-weight: 500; }
+.campus-map-steps { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+
+.campus-map-routes { display: flex; gap: 8px; }
+.campus-map-routes button {
+  flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ink); cursor: pointer;
+}
+.campus-map-routes button.on { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.campus-map-routes strong { font-size: 16px; font-weight: 600; }
+.campus-map-routes span { font-size: 12px; color: var(--muted); }
+
+.campus-map-steps-list { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 20px; color: var(--ink); }
+.campus-map-steps-list li::marker { color: var(--muted); font-size: 12px; }
+
+.campus-map-locate {
+  position: absolute; right: 10px; bottom: 132px; z-index: 2; width: 40px; height: 40px;
+  display: grid; place-items: center; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--paper); color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--scrim) 32%, transparent);
+}
+.campus-map-me {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--blue);
+  border: 3px solid var(--paper); box-shadow: 0 0 0 8px color-mix(in srgb, var(--blue) 22%, transparent);
+}
+
+@media (max-width: 680px) {
+  .campus-map-panel { top: 12px; bottom: 0; left: 0; width: 100%; max-height: none; overflow: visible; gap: 10px; }
+  .campus-map-search { margin-inline: 12px; flex-shrink: 0; border: 1px solid var(--line); }
+  .campus-map-card { margin-top: auto; max-height: 50%; overflow-y: auto; overscroll-behavior: contain; border-radius: 24px 24px 0 0; padding: 18px 20px max(20px, env(safe-area-inset-bottom)); }
+  .campus-map-panel.is-expanded .campus-map-card { max-height: 82%; }
+  .campus-map-results, .campus-map-error { margin-inline: 12px; flex-shrink: 0; }
+  .campus-map-results { max-height: calc(100% - 70px); overflow: auto; }
+  .campus-map-locate { bottom: 54%; right: 12px; }
+  .campus-map .maplibregl-ctrl-bottom-right { bottom: 54%; }
+  .campus-map .maplibregl-ctrl-bottom-left { bottom: 51%; }
+}
+.campus-map-hours { margin: 12px 0; padding: 12px; border-radius: 12px; background: var(--mark); color: var(--ink); font-size: .88rem; }
+.campus-map-hours summary { cursor: pointer; font-weight: 600; }
+.campus-map-hours dl > div { display: flex; gap: 1rem; margin: 5px 0; }
+.campus-map-hours dd { margin: 0; }
+.campus-map-hours p { font-size: .8rem; opacity: .75; line-height: 1.6; }
+
+.campus-map button, .campus-map select, .campus-map input { font-family: inherit; }
+.campus-map-sheet-handle { display: none; }
+.campus-map-modules { display: flex; width: max-content; max-width: 100%; gap: 4px; padding: 4px; border-radius: 999px; background: var(--paper); box-shadow: 0 2px 8px var(--shadow-soft); }
+.campus-map-modules a { padding: 4px 10px; border-radius: 999px; color: var(--muted); font-size: 12px; text-decoration: none; white-space: nowrap; }
+.campus-map-modules a:hover { background: var(--mark); color: var(--blue); }
+.campus-map button:focus-visible, .campus-map summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.campus-map-panel { scrollbar-width: thin; }
+.campus-map-search { min-height: 52px; flex-shrink: 0; }
+.campus-map-card { color: var(--ink); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.campus-map-categories { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px; padding: 4px 0 20px; border-bottom: 1px solid var(--line); }
+.campus-map-categories button { display: flex; align-items: center; flex-direction: column; gap: 7px; background: transparent; color: var(--ink); border: 0; border-radius: 12px; font-size: 12px; cursor: pointer; padding: 0; }
+.campus-map-categories button > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--brand-container); color: var(--blue); transition: background .15s; }
+.campus-map-categories button[aria-pressed='true'] > span { background: var(--blue); color: var(--on-brand); }
+.campus-map-home-heading { padding-top: 18px; align-items: center !important; }
+.campus-map-home-heading h2 { font-size: 21px; margin-block: 2px; }
+.campus-map-home-heading p { font-size: 12px !important; line-height: 20px; }
+.campus-map-back { width: 36px; height: 40px; border: 0; border-radius: 12px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.campus-map-recommendations { list-style: none; padding: 0; margin: 12px -4px 0; }
+.campus-map-recommendations li { display: flex; border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent); align-items: center; }
+.campus-map-recommendations li > button:first-child { display: flex; gap: 12px; align-items: center; min-width: 0; flex: 1; text-align: left; padding: 13px 4px; border: 0; background: transparent; cursor: pointer; color: var(--ink); border-radius: 12px; }
+.campus-map-recommendations li > button:first-child:hover { background: var(--surface); }
+.campus-map-place-icon { display: grid; place-items: center; width: 46px; height: 50px; flex-shrink: 0; border-radius: 14px; background: var(--surface); color: var(--blue); }
+.campus-map-place-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.campus-map-place-copy strong { font-weight: 600; font-size: 15px; }
+.campus-map-place-copy > span { font-size: 12px; color: var(--muted); display: flex; gap: 10px; }
+.campus-map-place-copy small { font-size: 12px; color: var(--muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.campus-map-place-copy em { font-style: normal; }
+.campus-map [data-state='open'] { color: var(--success); }
+.campus-map [data-state='closing'] { color: var(--warning); }
+.campus-map [data-state='closed'] { color: var(--muted); }
+.campus-map-go { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 44px; color: var(--blue); background: transparent; border: 0; border-radius: 12px; cursor: pointer; }
+.campus-map-go:hover { background: var(--mark); }
+.campus-map-distance-note { font-size: 11px; line-height: 18px; color: var(--muted); margin: 14px 0 0; }
+.campus-map-hours { background: var(--surface); }
+.campus-map-hours summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-weight: 400; }
+.campus-map-hours summary > span:first-child { font-weight: 600; }
+.campus-map-hours summary small { font-size: 11px; color: var(--blue); margin-left: auto; white-space: nowrap; }
+.campus-map-hours dt { min-width: 30px; color: var(--muted); }
+.campus-map-directions { padding-top: 8px; border-top: 1px solid var(--line); font-size: 14px; }
+.campus-map-directions summary { cursor: pointer; color: var(--blue); padding-block: 4px; }
+.campus-map-steps-list { padding-left: 24px; display: flex; flex-direction: column; gap: 12px; line-height: 1.6; }
+.campus-map-steps-list small { display: block; color: var(--muted); font-size: 12px; }
+.campus-map-routes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.campus-map-routes button { min-width: 0; padding: 10px 8px; color: var(--ink); cursor: pointer; border-radius: 12px; }
+.campus-map-routes strong { font-size: 16px; white-space: nowrap; }
+.campus-map-routes span { font-size: 12px; }
+.campus-map-routes small { font-size: 11px; text-align: left; overflow-wrap: anywhere; line-height: 1.5; margin-top: 3px; }
+.campus-map-routes button.on { border-color: var(--blue); background: var(--mark); }
+.campus-map-plan input { accent-color: var(--blue); }
+.campus-map-close, .campus-map-clear { min-width: 32px; min-height: 32px; }
+@media (min-width: 681px) { .campus-map-panel { width: 392px; } }
+@media (max-width: 680px) {
+  .campus-map-modules { margin-inline: 12px; }
+  .campus-map-sheet-handle { display: grid; place-items: center; width: 100%; height: 28px; margin: -16px 0 6px; border: 0; background: transparent; cursor: pointer; }
+  .campus-map-sheet-handle > span { width: 32px; height: 4px; border-radius: 4px; background: var(--line); }
+  .campus-map-categories { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 57px; justify-content: space-between; overflow-x: auto; gap: 8px; padding: 0 0 14px; scrollbar-width: none; }
+  .campus-map-home-heading { padding-top: 12px; }
+  .campus-map .maplibregl-ctrl-attrib { font-size: 10px; max-width: 230px; }
+}
+@media (prefers-reduced-motion: reduce) { .campus-map * { scroll-behavior: auto; transition: none !important; } }
