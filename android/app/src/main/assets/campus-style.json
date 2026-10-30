@@ -1,0 +1,55 @@
+{
+  "version": 8,
+  "name": "StuDev campus",
+  "glyphs": "asset://fonts/{fontstack}/{range}.pbf",
+  "sources": {
+    "campus": { "type": "geojson", "data": "asset://campus-sample.geojson" }
+  },
+  "layers": [
+    { "id": "campus-background", "type": "background", "paint": { "background-color": "#F3F6EF" } },
+    {
+      "id": "building-fill", "type": "fill", "source": "campus",
+      "filter": ["==", ["get", "kind"], "building"],
+      "paint": { "fill-color": "#D4DFCE", "fill-opacity": 0.95 }
+    },
+    {
+      "id": "building-outline", "type": "line", "source": "campus",
+      "filter": ["==", ["get", "kind"], "building"],
+      "paint": { "line-color": "#A7BBA2", "line-width": ["interpolate", ["linear"], ["zoom"], 14, 0.5, 19, 1.5] }
+    },
+    {
+      "id": "way-casing", "type": "line", "source": "campus",
+      "filter": ["==", ["get", "kind"], "way"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#DADFD0",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, ["match", ["get", "highway"], ["footway", "path", "pedestrian", "steps"], 1.5, ["service", "secondary"], 4, 3], 19, ["match", ["get", "highway"], ["footway", "path", "pedestrian", "steps"], 5, ["service", "secondary"], 18, 12]]
+      }
+    },
+    {
+      "id": "ways", "type": "line", "source": "campus",
+      "filter": ["==", ["get", "kind"], "way"],
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": {
+        "line-color": "#FFFFFF",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, ["match", ["get", "highway"], ["footway", "path", "pedestrian", "steps"], 0.7, ["service", "secondary"], 2.5, 1.8], 19, ["match", ["get", "highway"], ["footway", "path", "pedestrian", "steps"], 3, ["service", "secondary"], 14, 9]]
+      }
+    },
+    {
+      "id": "building-labels", "type": "symbol", "source": "campus", "minzoom": 15,
+      "filter": ["all", ["==", ["get", "kind"], "building"], ["!=", ["get", "name"], null]],
+      "layout": {
+        "text-field": ["get", "name"], "text-font": ["Open Sans Semibold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 15, 11, 18, 15],
+        "text-max-width": 8, "text-padding": 4
+      },
+      "paint": { "text-color": "#304D40", "text-halo-color": "#F3F6EF", "text-halo-width": 1.5 }
+    },
+    {
+      "id": "way-labels", "type": "symbol", "source": "campus", "minzoom": 16,
+      "filter": ["all", ["==", ["get", "kind"], "way"], ["!=", ["get", "name"], null]],
+      "layout": { "symbol-placement": "line", "text-field": ["get", "name"], "text-font": ["Open Sans Semibold"], "text-size": 11, "symbol-spacing": 250 },
+      "paint": { "text-color": "#64765F", "text-halo-color": "#F3F6EF", "text-halo-width": 1.5 }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[versions]
+agp = "9.5.0"
+kotlin = "2.4.21"
+compose-bom = "2026.09.00"
+activity = "1.13.0"
+lifecycle = "2.10.0"
+core = "1.18.0"
+maplibre = "13.7.1"
+
+[libraries]
+androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+maplibre = { module = "org.maplibre.gl:android-sdk-opengl", version.ref = "maplibre" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
