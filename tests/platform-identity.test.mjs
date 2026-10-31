@@ -226,7 +226,9 @@ test('logout revokes server-side session and expired or forged sessions cannot a
   await f.call('/auth/logout', 'POST', {}, member);
   await rejects(f.call('/auth/session', 'GET', undefined, member), 'TOKEN_INVALID', 401);
   const relogin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
-  const forged = { ...relogin, cookie: relogin.cookie.slice(0, -1) + (relogin.cookie.endsWith('a') ? 'b' : 'a') };
+  const [accessToken, refreshToken] = relogin.cookie.slice(relogin.cookie.indexOf('=') + 1).split('.');
+  const forgedAccess = accessToken.slice(0, -1) + (accessToken.endsWith('a') ? 'b' : 'a');
+  const forged = { ...relogin, cookie: `__Host-studev_platform=${forgedAccess}.${refreshToken}` };
   await rejects(f.call('/auth/session', 'GET', undefined, forged), 'TOKEN_INVALID', 401);
   f.advance(7200001);
   await rejects(f.call('/auth/session', 'GET', undefined, relogin), 'TOKEN_INVALID', 401);

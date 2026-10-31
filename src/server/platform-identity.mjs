@@ -8,6 +8,7 @@ import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRost
 
 const API = '/api/platform';
 const ID = /^[a-f0-9-]{36}$/;
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const QQ = /^[1-9]\d{4,11}$/;
 const userKey = (id) => `identity/users/${id}`;
 const staffRole = (role) => role === 'admin' || role === 'owner';
@@ -54,7 +55,6 @@ export function createIdentity({ repo, env, now = Date.now }) {
   const origin = platformOrigin(env);
   const local = origin.startsWith('http://');
   const cookieName = local ? 'studev_platform_dev' : '__Host-studev_platform';
-  const refreshCookieName = local ? 'studev_refresh_dev' : '__Host-studev_refresh';
   const sessionSecret = env.PLATFORM_SESSION_SECRET;
   if (typeof sessionSecret !== 'string' || sessionSecret.length < 32 || !validPasswordHash(env.PLATFORM_OWNER_PASSWORD_HASH) || !QQ.test(String(env.PLATFORM_OWNER_QQ || '')) || !/^[A-Za-z0-9+/]{43}=$/.test(String(env.PLATFORM_ENCRYPTION_KEY || ''))) {
     fail(503, 'NOT_CONFIGURED', '平台身份配置尚未完成。');
@@ -116,18 +116,21 @@ export function createIdentity({ repo, env, now = Date.now }) {
   function sessionCookie(name, token, seconds) {
     return `${name}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${seconds}${local ? '' : '; Secure'}`;
   }
+  function cookieCredentials(value) {
+    const parts = String(value || '').split('.');
+    return parts.length === 2 && TOKEN.test(parts[0]) && TOKEN.test(parts[1]) ? { accessToken: parts[0], refreshToken: parts[1] } : null;
+  }
   function credentialResponse({ credentials, session }, body = {}) {
     const payload = { ...body, deviceSessionId: session.id, csrfToken: session.csrfToken };
     if (session.kind === 'bearer') return response({ ...payload, ...credentials });
     const result = response(payload);
-    result.headers.append('Set-Cookie', sessionCookie(cookieName, credentials.accessToken, credentials.expiresIn));
-    result.headers.append('Set-Cookie', sessionCookie(refreshCookieName, credentials.refreshToken, Math.max(0, Math.floor((session.expiresAt - now()) / 1000))));
+    result.headers.set('Set-Cookie', sessionCookie(cookieName, `${credentials.accessToken}.${credentials.refreshToken}`, Math.max(0, Math.floor((session.expiresAt - now()) / 1000))));
     return result;
   }
   function signedOutResponse(kind) {
     if (kind === 'bearer') return response({ ok: true });
     const result = response({ ok: true });
-    for (const name of [cookieName, refreshCookieName]) result.headers.append('Set-Cookie', sessionCookie(name, '', 0));
+    result.headers.set('Set-Cookie', sessionCookie(cookieName, '', 0));
     return result;
   }
   function setupStatus(user, session) {
@@ -143,7 +146,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
     await bootstrap();
     const kind = hasAuthorization(request) ? 'bearer' : 'cookie';
     const header = request.headers.get('authorization') || '';
-    const token = kind === 'bearer' ? /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header)?.[1] : cookieValue(request, cookieName);
+    const token = kind === 'bearer' ? /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header)?.[1] : cookieCredentials(cookieValue(request, cookieName))?.accessToken;
     if (!authRequests.has(request)) authRequests.set(request,
       kind === 'cookie' && !token ? Promise.resolve(null) : sessions.authenticate(token, kind));
     const auth = await authRequests.get(request);
@@ -330,7 +333,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (kind === 'cookie') requireOrigin(request, env);
       const body = await readJson(request, 8192);
       await repo.throttle('token-refresh-client', clientId(context), 60, 60);
-      if (kind === 'cookie') body.refreshToken = cookieValue(request, refreshCookieName);
+      if (kind === 'cookie') body.refreshToken = cookieCredentials(cookieValue(request, cookieName))?.refreshToken;
       return credentialResponse(await sessions.refresh(body, kind));
     }
     if (method === 'GET' && route === '/auth/devices') {

@@ -33,8 +33,9 @@ test('both carriers use one protocol, expiry, device list and revocation in both
   assert.equal(native.status, 200); assert.equal(native.headers.getSetCookie().length, 0);
   assert.equal(f.login.body.accessToken, undefined); assert.equal(f.login.body.refreshToken, undefined);
   const cookies = f.browser.cookie;
-  assert.equal(cookies.split('; ').length, 2);
+  assert.equal(cookies.split('; ').length, 1);
   const cookieToken = cookies.split('; ').find(c => c.startsWith('__Host-studev_platform=')).split('=')[1];
+  assert.match(cookieToken, /^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/);
   assert.equal((await f.app('/auth/session', undefined, cookieToken)).status, 401);
   assert.equal((await f.browser.call('/auth/session', { headers: { Cookie: `__Host-studev_platform=${native.body.accessToken}` } })).status, 401);
   const webDevices = await f.browser.call('/auth/devices');
