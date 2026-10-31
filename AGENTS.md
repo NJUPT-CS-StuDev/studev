@@ -10,9 +10,14 @@ The shared campus model has five kinds: **space**, **time**, **event**,
 **agent**, and **information**. It has six relations: **contains**,
 **connects**, **occurs-in**, **participates**, **prescribes**, and **refers-to**.
 Validity describes when an entity, relation, or fact applies, including the
-difference between unknown and absent. `njupt-data` computes campus facts; clients
-render and interact with them. Generic search and routing belong in `wasm-search`
-and `wayfind`.
+difference between unknown and absent. `njupt-map` (public) is the single source
+of truth for campus space: an authored map we build ourselves, kept separate from
+its references and from the bindings that relate them. `njupt-data` (private)
+holds all non-spatial campus facts (teaching, exams, rooms in use, school content,
+the calendar rule) and references njupt-map space ids. The digest merges one
+njupt-map release and one njupt-data release. Clients render and interact. The
+only generic kernels are `wayfind` (routing, guidance) and `wasm-search` (search);
+institutional time is campus data plus interpreting code here, not a kernel.
 
 The logical model is complete while physical encoding stays minimal: encode
 rules rather than enumerations, fields rather than edge tables, and defaults
@@ -24,12 +29,22 @@ history. Migrate stored data before deleting its reader. Branches contain code;
 tests exercise real released data through the same mechanisms used in production.
 Do not create application branches or alternate implementations for test fixtures.
 Clients read one current contract; contract changes update both clients together.
-Shared answers belong in data or generic kernels, never in two client implementations.
+Shared answers belong in data or generic kernels. The small amount of rule code
+both clients need (calendar weeks, periods, opening state, timetable views) has
+one reference: the TypeScript implementation generates golden vectors
+(`src/campus/academics/parity/`) and the Kotlin implementation must pass them.
+
+Platform state (community accounts, form submissions) lives behind cloud
+functions; the public campus world is read only from releases. One account
+system serves web and app (student-ID registration). Roles: owner > admin (club
+members, shown on the public roster; manage forms, review contributions) > user
+(any student). Ordinary users are only ever shown to others by nickname; only
+admins and the owner can list or look up users.
 
 ## Directories
 
 - `src/campus/` is the web campus client. Campus services live under their
-  service directory, including `src/campus/activities/`.
+  service directory.
 - `src/client/` contains browser code grouped by owner: `site/`, `platform/`,
   and the legacy `collection/` surface.
 - `src/markdown/` contains Markdown/HTML transforms; `src/astro/` contains
