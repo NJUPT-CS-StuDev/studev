@@ -114,13 +114,27 @@ try {
     corrupt = true; requests.length = 0;
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
+    const failedDownloadDir = join(root, 'rejected'); await mkdir(failedDownloadDir, { recursive: true });
+    await cdp.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: failedDownloadDir, eventsEnabled: true, browserContextId: context.id });
     await page.goto(`${origin}/download/`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-download-apk]:not([aria-disabled])', { timeout: 60_000 });
-    const rejected = await page.evaluate(async () => {
-        try { const response = await fetch(document.querySelector('[data-download-apk]').href); await response.arrayBuffer(); return false; } catch { return true; }
+    let failedGuid;
+    const began = event => { if (event.url.startsWith(origin)) failedGuid = event.guid; };
+    cdp.on('Browser.downloadWillBegin', began);
+    let finished;
+    const rejected = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('corrupted browser download timed out')), 60_000);
+        finished = event => {
+            if (event.guid !== failedGuid || event.state === 'inProgress') return;
+            clearTimeout(timer); resolve(event);
+        };
+        cdp.on('Browser.downloadProgress', finished);
     });
-    assert(rejected); assert(!requests.some(path => path.endsWith('part-002')));
-    evidence.push({ corruptionRejected: true, requests: [...requests] });
+    await page.click('[data-download-apk]');
+    const failed = await rejected;
+    assert.equal(failed.state, 'canceled'); assert(!requests.some(path => path.endsWith('part-002')));
+    evidence.push({ corruptionRejected: true, browserFailure: failed, requests: [...requests] });
+    cdp.off('Browser.downloadWillBegin', began); cdp.off('Browser.downloadProgress', finished);
     await context.close();
     for (const agent of ['MicroMessenger/8.0', 'QQ/9.0']) {
         const page = await browser.newPage(); await page.setUserAgent(agent);

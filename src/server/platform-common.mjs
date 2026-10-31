@@ -40,7 +40,7 @@ export async function readJson(request, maxBytes = 65536) {
 }
 export function platformOrigin(env) {
   let url;
-  try { url = new URL(env.PLATFORM_ORIGIN || env.COLLECTION_ORIGIN); } catch { fail(503, 'NOT_CONFIGURED', '平台配置尚未完成。'); }
+  try { url = new URL(env.PLATFORM_ORIGIN); } catch { fail(503, 'NOT_CONFIGURED', '平台配置尚未完成。'); }
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) fail(503, 'NOT_CONFIGURED', '平台配置无效。');
   return url.origin;

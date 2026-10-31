@@ -48,6 +48,12 @@ test('canceling a download stops fetching subsequent parts', async () => {
     await reader.read(); await reader.cancel();
     assert.equal(f.fetched.length, 2);
 });
+test('a whole-APK hash mismatch with valid part hashes still aborts the final response', async () => {
+    const f = fixture(1);
+    f.manifest.sha256 = '00'.repeat(32);
+    const response = await apkResponse(new Request('https://example.org/download/99/studev-9.0.0.apk'), () => {}, f.fetcher);
+    await assert.rejects(response.arrayBuffer(), /APK 校验失败/);
+});
 test('malformed totals and off-origin parts fail before an attachment is created', async () => {
     for (const change of [f => f.manifest.size++, f => f.manifest.parts[0].url = 'https://other.org/part-000']) {
         const f = fixture(1); change(f);

@@ -50,7 +50,9 @@ link.addEventListener('click', event => {
 navigator.serviceWorker?.addEventListener('message', event => {
     const data = event.data;
     if (data?.type !== 'APK_DOWNLOAD' || data.path !== path) return;
-    progress.max = data.total; progress.value = data.done;
+    if (Number.isFinite(data.total) && data.total > 0) {
+        progress.max = data.total; progress.value = data.done;
+    }
     status.textContent = data.state === 'complete' ? '校验完成，请在浏览器的下载列表中打开 APK。'
         : data.state === 'error' ? '下载校验失败，浏览器已中止下载。请重试。'
         : data.state === 'cancelled' ? '下载已取消。'
