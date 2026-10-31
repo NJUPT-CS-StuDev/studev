@@ -47,14 +47,16 @@ class NavigationSessionStore(context: Context) {
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
     fun save(record: PersistedNavigationSession) {
-        preferences.edit().putString("record", json.encodeToString(record)).apply()
+        // The service is started immediately after this call. Commit the small
+        // session record before returning so a process kill cannot lose resume state.
+        check(preferences.edit().putString("record", json.encodeToString(record)).commit())
     }
 
     fun load(): PersistedNavigationSession? = preferences.getString("record", null)?.let {
         runCatching { json.decodeFromString<PersistedNavigationSession>(it) }.getOrNull()
     }
 
-    fun clear() { preferences.edit().remove("record").apply() }
+    fun clear() { preferences.edit().remove("record").commit() }
 }
 
 /** Process session outlives Activities. The foreground service owns live updates and speech. */
