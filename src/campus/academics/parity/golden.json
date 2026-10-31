@@ -1,9 +1,9 @@
 {
   "source": {
-    "release": "local-202610311221-facts",
+    "release": "local-202610311609-facts",
     "teaching": "2026-2027-1",
     "exams": "2025-2026-2",
-    "inputsHash": "2d3044f8b3ec6a973f3b95870255b59a572d8774f8a80fe466c55d4213d0bb7a"
+    "inputsHash": "41880c4d44755cca982042400cb8ab4e13ba2473f0166fd531c728b8abd6894a"
   },
   "term": {
     "term": "2026-2027-1",
@@ -202,69 +202,10 @@
             "hours": 8,
             "hours_composition": "理论:8,实验:8",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/04f6e48062394e8f",
-              "teaching-class/09842fe04256279f",
-              "teaching-class/0af65ffe94a7f555",
-              "teaching-class/0d07ac1d6ced1771",
-              "teaching-class/102df43a4f4ae2e3",
-              "teaching-class/13f4c77a256ca1cc",
-              "teaching-class/1b1f6a809adeb088",
-              "teaching-class/1dd97123e1e7c620",
-              "teaching-class/1e105c14e6af7ece",
-              "teaching-class/2de44c1dfd085961",
-              "teaching-class/35b6b60f763469ae",
-              "teaching-class/3c32d012a18ff1b2",
-              "teaching-class/3c695e88995ee317",
-              "teaching-class/3ed6dfd784d9df47",
-              "teaching-class/510f7dc0bbf82e1f",
-              "teaching-class/5235bd21f8db103c",
-              "teaching-class/5431bab6387ca561",
-              "teaching-class/55a39058519eff52",
-              "teaching-class/591175c3f3dddfe1",
-              "teaching-class/5a58aead12d723fc",
-              "teaching-class/60ad13da29476f06",
-              "teaching-class/62139c2468c37c7a",
-              "teaching-class/65fa9358dbbf7c15",
-              "teaching-class/672d8daf89539916",
-              "teaching-class/6750a6cb83f327b4",
-              "teaching-class/6923e340b6daa33a",
-              "teaching-class/7141b4602a826348",
-              "teaching-class/73087a021a588cd3",
-              "teaching-class/7571a00f6801b023",
-              "teaching-class/788113633002a024",
-              "teaching-class/7895bc934f6a3674",
-              "teaching-class/793222543035df87",
-              "teaching-class/7d52f5f2b2994826",
-              "teaching-class/80acb0e1e791017f",
-              "teaching-class/8e7c12035e86f73e",
-              "teaching-class/a4bb69fcc8135d07",
-              "teaching-class/ab6ef708be08a915",
-              "teaching-class/afab5bbace19eb49",
-              "teaching-class/b309ee7992e764e4",
-              "teaching-class/b9d40a8f7e28eae0",
-              "teaching-class/cb0862500c8fdedf",
-              "teaching-class/d437eb84e83d1ac1",
-              "teaching-class/daf16f1f56c9f804",
-              "teaching-class/e398ca5ba995e486",
-              "teaching-class/e48ba92dd19b1980",
-              "teaching-class/e8439f510c9a776d",
-              "teaching-class/e8470f7c56a0d7a4",
-              "teaching-class/e8b0e00a04d69372",
-              "teaching-class/ecca504e41e0068f",
-              "teaching-class/ef478777bf177478",
-              "teaching-class/f514c1f4ef9b9351",
-              "teaching-class/f6af60edb08904ef",
-              "teaching-class/fb911008e4f4692e"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/09842fe04256279f",
-            "name": "(2026-2027-1)-ZJ1001T0C-JYZD0020-1",
-            "size": 131,
-            "enrolled": 124,
-            "capacity": 172
+            "id": "teaching-class/09842fe04256279f"
           },
           "campus": "仙林",
           "room": "教3-313",
@@ -314,47 +255,10 @@
             "hours": 40,
             "hours_composition": "理论:32",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/07e64f729ac9131a",
-              "teaching-class/0c3cc5057b880051",
-              "teaching-class/185998e3f93e752f",
-              "teaching-class/1c2a441689f6f573",
-              "teaching-class/1c589370123874b0",
-              "teaching-class/36fd3f719d14b5de",
-              "teaching-class/3a4f69cc619477c9",
-              "teaching-class/44a4de8fb9969076",
-              "teaching-class/515b061ac9aca9e8",
-              "teaching-class/5db57c94be2dcb49",
-              "teaching-class/639952b1dacb8e32",
-              "teaching-class/67ed13f654be002a",
-              "teaching-class/7bb0675471707544",
-              "teaching-class/7d7f154cd8ebef00",
-              "teaching-class/82b4644cabc87b54",
-              "teaching-class/82b6ecb4e5c26b24",
-              "teaching-class/84477c781fd7caef",
-              "teaching-class/87d105c592721266",
-              "teaching-class/a80f073b70c030d9",
-              "teaching-class/a8c053b734d64444",
-              "teaching-class/b256a5d6efab19a9",
-              "teaching-class/b68899df263fb355",
-              "teaching-class/bf18afb24a4d33d0",
-              "teaching-class/c0a2337013ded96f",
-              "teaching-class/c22bbb75ab4f0fab",
-              "teaching-class/c4f99cd5ec911f4b",
-              "teaching-class/cfc5ded5de40baea",
-              "teaching-class/d2903306b302942b",
-              "teaching-class/d54c9f51f8013aae",
-              "teaching-class/dccc8281d11f4d26",
-              "teaching-class/fb39609945a0f9c1"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/dccc8281d11f4d26",
-            "name": "(2026-2027-1)-MY1021T0S-MKSXY020-1",
-            "size": 131,
-            "enrolled": 130,
-            "capacity": 234
+            "id": "teaching-class/dccc8281d11f4d26"
           },
           "campus": "仙林",
           "room": "教3-302",
@@ -416,47 +320,10 @@
             "hours": 32,
             "hours_composition": "理论:32",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/1dffefdbe7443b51",
-              "teaching-class/21e29247c5c0a05f",
-              "teaching-class/2d9596229c091fd7",
-              "teaching-class/340b6e68b482d0e3",
-              "teaching-class/357742bd3c3ef670",
-              "teaching-class/3bc1f86deaf6dcc2",
-              "teaching-class/47b636127d6b24e1",
-              "teaching-class/55d8bceb537c4626",
-              "teaching-class/5c4ec5719da511a4",
-              "teaching-class/5ce523c50efc22ed",
-              "teaching-class/666d8d0802187741",
-              "teaching-class/681979836f88b387",
-              "teaching-class/779df057e83014cc",
-              "teaching-class/7f5ee1c579eaf15f",
-              "teaching-class/7f88a87b7a62f08b",
-              "teaching-class/817303267f93e27b",
-              "teaching-class/88184466992db43f",
-              "teaching-class/8ea06d40c018cbc8",
-              "teaching-class/8f5fd65c3a114879",
-              "teaching-class/96c29c54c7d37550",
-              "teaching-class/9796d978962cc43b",
-              "teaching-class/9cd62c3229e29231",
-              "teaching-class/a00d9f9edaf4484c",
-              "teaching-class/aaca75630948480f",
-              "teaching-class/bc6c1ef44cae67d4",
-              "teaching-class/be885a7568db1597",
-              "teaching-class/c1fc571f67e69f06",
-              "teaching-class/c7876844fe1e33bd",
-              "teaching-class/d0e0a733da668104",
-              "teaching-class/dd32db582b96df46",
-              "teaching-class/fd2a100273489614"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/2d9596229c091fd7",
-            "name": "(2026-2027-1)-MY1002T0S-MKSXY020-1",
-            "size": 131,
-            "enrolled": 130,
-            "capacity": 234
+            "id": "teaching-class/2d9596229c091fd7"
           },
           "campus": "仙林",
           "room": "教3-302",
@@ -514,47 +381,10 @@
             "hours": 32,
             "hours_composition": "理论:32",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/1dffefdbe7443b51",
-              "teaching-class/21e29247c5c0a05f",
-              "teaching-class/2d9596229c091fd7",
-              "teaching-class/340b6e68b482d0e3",
-              "teaching-class/357742bd3c3ef670",
-              "teaching-class/3bc1f86deaf6dcc2",
-              "teaching-class/47b636127d6b24e1",
-              "teaching-class/55d8bceb537c4626",
-              "teaching-class/5c4ec5719da511a4",
-              "teaching-class/5ce523c50efc22ed",
-              "teaching-class/666d8d0802187741",
-              "teaching-class/681979836f88b387",
-              "teaching-class/779df057e83014cc",
-              "teaching-class/7f5ee1c579eaf15f",
-              "teaching-class/7f88a87b7a62f08b",
-              "teaching-class/817303267f93e27b",
-              "teaching-class/88184466992db43f",
-              "teaching-class/8ea06d40c018cbc8",
-              "teaching-class/8f5fd65c3a114879",
-              "teaching-class/96c29c54c7d37550",
-              "teaching-class/9796d978962cc43b",
-              "teaching-class/9cd62c3229e29231",
-              "teaching-class/a00d9f9edaf4484c",
-              "teaching-class/aaca75630948480f",
-              "teaching-class/bc6c1ef44cae67d4",
-              "teaching-class/be885a7568db1597",
-              "teaching-class/c1fc571f67e69f06",
-              "teaching-class/c7876844fe1e33bd",
-              "teaching-class/d0e0a733da668104",
-              "teaching-class/dd32db582b96df46",
-              "teaching-class/fd2a100273489614"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/2d9596229c091fd7",
-            "name": "(2026-2027-1)-MY1002T0S-MKSXY020-1",
-            "size": 131,
-            "enrolled": 130,
-            "capacity": 234
+            "id": "teaching-class/2d9596229c091fd7"
           },
           "campus": "仙林",
           "room": "教3-302",
@@ -598,47 +428,10 @@
             "hours": 40,
             "hours_composition": "理论:32",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/07e64f729ac9131a",
-              "teaching-class/0c3cc5057b880051",
-              "teaching-class/185998e3f93e752f",
-              "teaching-class/1c2a441689f6f573",
-              "teaching-class/1c589370123874b0",
-              "teaching-class/36fd3f719d14b5de",
-              "teaching-class/3a4f69cc619477c9",
-              "teaching-class/44a4de8fb9969076",
-              "teaching-class/515b061ac9aca9e8",
-              "teaching-class/5db57c94be2dcb49",
-              "teaching-class/639952b1dacb8e32",
-              "teaching-class/67ed13f654be002a",
-              "teaching-class/7bb0675471707544",
-              "teaching-class/7d7f154cd8ebef00",
-              "teaching-class/82b4644cabc87b54",
-              "teaching-class/82b6ecb4e5c26b24",
-              "teaching-class/84477c781fd7caef",
-              "teaching-class/87d105c592721266",
-              "teaching-class/a80f073b70c030d9",
-              "teaching-class/a8c053b734d64444",
-              "teaching-class/b256a5d6efab19a9",
-              "teaching-class/b68899df263fb355",
-              "teaching-class/bf18afb24a4d33d0",
-              "teaching-class/c0a2337013ded96f",
-              "teaching-class/c22bbb75ab4f0fab",
-              "teaching-class/c4f99cd5ec911f4b",
-              "teaching-class/cfc5ded5de40baea",
-              "teaching-class/d2903306b302942b",
-              "teaching-class/d54c9f51f8013aae",
-              "teaching-class/dccc8281d11f4d26",
-              "teaching-class/fb39609945a0f9c1"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/dccc8281d11f4d26",
-            "name": "(2026-2027-1)-MY1021T0S-MKSXY020-1",
-            "size": 131,
-            "enrolled": 130,
-            "capacity": 234
+            "id": "teaching-class/dccc8281d11f4d26"
           },
           "campus": "仙林",
           "room": "教3-302",
@@ -700,47 +493,10 @@
             "hours": 32,
             "hours_composition": "理论:32",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/1dffefdbe7443b51",
-              "teaching-class/21e29247c5c0a05f",
-              "teaching-class/2d9596229c091fd7",
-              "teaching-class/340b6e68b482d0e3",
-              "teaching-class/357742bd3c3ef670",
-              "teaching-class/3bc1f86deaf6dcc2",
-              "teaching-class/47b636127d6b24e1",
-              "teaching-class/55d8bceb537c4626",
-              "teaching-class/5c4ec5719da511a4",
-              "teaching-class/5ce523c50efc22ed",
-              "teaching-class/666d8d0802187741",
-              "teaching-class/681979836f88b387",
-              "teaching-class/779df057e83014cc",
-              "teaching-class/7f5ee1c579eaf15f",
-              "teaching-class/7f88a87b7a62f08b",
-              "teaching-class/817303267f93e27b",
-              "teaching-class/88184466992db43f",
-              "teaching-class/8ea06d40c018cbc8",
-              "teaching-class/8f5fd65c3a114879",
-              "teaching-class/96c29c54c7d37550",
-              "teaching-class/9796d978962cc43b",
-              "teaching-class/9cd62c3229e29231",
-              "teaching-class/a00d9f9edaf4484c",
-              "teaching-class/aaca75630948480f",
-              "teaching-class/bc6c1ef44cae67d4",
-              "teaching-class/be885a7568db1597",
-              "teaching-class/c1fc571f67e69f06",
-              "teaching-class/c7876844fe1e33bd",
-              "teaching-class/d0e0a733da668104",
-              "teaching-class/dd32db582b96df46",
-              "teaching-class/fd2a100273489614"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/2d9596229c091fd7",
-            "name": "(2026-2027-1)-MY1002T0S-MKSXY020-1",
-            "size": 131,
-            "enrolled": 130,
-            "capacity": 234
+            "id": "teaching-class/2d9596229c091fd7"
           },
           "campus": "仙林",
           "room": "教3-302",
@@ -798,21 +554,10 @@
             "hours": 54,
             "hours_composition": "理论:32,实验:8",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/230d29ffea352cb2",
-              "teaching-class/2e6c8108b9782187",
-              "teaching-class/462ebcf61a1df491",
-              "teaching-class/5a8fc4eff9672e53",
-              "teaching-class/6e586edcd1ff4a8f"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/5a8fc4eff9672e53",
-            "name": "(2026-2027-1)-JS112300S-JSJY0001-1",
-            "size": 163,
-            "enrolled": 153,
-            "capacity": 172
+            "id": "teaching-class/5a8fc4eff9672e53"
           },
           "campus": "仙林",
           "room": "教3-312",
@@ -891,21 +636,10 @@
             "hours": 54,
             "hours_composition": "理论:32,实验:8",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/230d29ffea352cb2",
-              "teaching-class/2e6c8108b9782187",
-              "teaching-class/462ebcf61a1df491",
-              "teaching-class/5a8fc4eff9672e53",
-              "teaching-class/6e586edcd1ff4a8f"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/5a8fc4eff9672e53",
-            "name": "(2026-2027-1)-JS112300S-JSJY0001-1",
-            "size": 163,
-            "enrolled": 153,
-            "capacity": 172
+            "id": "teaching-class/5a8fc4eff9672e53"
           },
           "campus": "仙林",
           "room": "教4-312",
@@ -966,21 +700,10 @@
             "hours": 36,
             "hours_composition": "理论:26,实验:6",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/03816a5da1b2acee",
-              "teaching-class/5528c100095d2156",
-              "teaching-class/741da57b2f2ea2eb",
-              "teaching-class/8b98be7ed362e58a",
-              "teaching-class/c5d1db42f0d2e1a8"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/741da57b2f2ea2eb",
-            "name": "(2026-2027-1)-JS113701S-JSJY0001-1",
-            "size": 316,
-            "enrolled": 155,
-            "capacity": 172
+            "id": "teaching-class/741da57b2f2ea2eb"
           },
           "campus": "仙林",
           "room": "教4-313",
@@ -1060,17 +783,10 @@
             "hours": 36,
             "hours_composition": "理论:24,实验:8",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/6df0dc6350ae9692"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/6df0dc6350ae9692",
-            "name": "(2026-2027-1)-JS102K03C-FZKT0001-1",
-            "size": 316,
-            "enrolled": 208,
-            "capacity": 234
+            "id": "teaching-class/6df0dc6350ae9692"
           },
           "campus": "仙林",
           "room": "教4-101",
@@ -1136,17 +852,10 @@
             "hours": 36,
             "hours_composition": "理论:24,实验:8",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/6df0dc6350ae9692"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/6df0dc6350ae9692",
-            "name": "(2026-2027-1)-JS102K03C-FZKT0001-1",
-            "size": 316,
-            "enrolled": 208,
-            "capacity": 234
+            "id": "teaching-class/6df0dc6350ae9692"
           },
           "campus": "仙林",
           "room": null,
@@ -1212,23 +921,10 @@
             "hours": 72,
             "hours_composition": "理论:48,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/04467dfbb864646b",
-              "teaching-class/077503fb048152fe",
-              "teaching-class/0a784fb5930377e3",
-              "teaching-class/22d33be3e4e45b73",
-              "teaching-class/3fabb8bc2fdc44c4",
-              "teaching-class/44fe445ecf657d91",
-              "teaching-class/b7a28bc120b2c86b"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/04467dfbb864646b",
-            "name": "(2026-2027-1)-JS160201S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 97,
-            "capacity": 172
+            "id": "teaching-class/04467dfbb864646b"
           },
           "campus": "仙林",
           "room": "教4-312",
@@ -1305,22 +1001,10 @@
             "hours": 54,
             "hours_composition": "理论:40,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/299de1a71074600b",
-              "teaching-class/4969972fba8f008e",
-              "teaching-class/98568a339ff3f353",
-              "teaching-class/a57b8623a5acb364",
-              "teaching-class/d22cb1a4f21e3120",
-              "teaching-class/dccd4913c4841b97"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/a57b8623a5acb364",
-            "name": "(2026-2027-1)-JS140301S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 101,
-            "capacity": 172
+            "id": "teaching-class/a57b8623a5acb364"
           },
           "campus": "仙林",
           "room": "教3-410",
@@ -1422,25 +1106,10 @@
             "hours": 72,
             "hours_composition": "理论:48,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/2a9cdbca380060aa",
-              "teaching-class/3a1cb1cab22edbcd",
-              "teaching-class/3c54f1ae5e92bab8",
-              "teaching-class/57359fd3628f08c1",
-              "teaching-class/58cc7fb3de1b34e2",
-              "teaching-class/5ddfe60d4ef7dbf4",
-              "teaching-class/b3be8a5863ba804a",
-              "teaching-class/cd5941b393a4bdc5",
-              "teaching-class/eb25723382c3d414"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/eb25723382c3d414",
-            "name": "(2026-2027-1)-JS140801S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 95,
-            "capacity": 172
+            "id": "teaching-class/eb25723382c3d414"
           },
           "campus": "仙林",
           "room": "教4-312",
@@ -1517,22 +1186,10 @@
             "hours": 54,
             "hours_composition": "理论:40,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/299de1a71074600b",
-              "teaching-class/4969972fba8f008e",
-              "teaching-class/98568a339ff3f353",
-              "teaching-class/a57b8623a5acb364",
-              "teaching-class/d22cb1a4f21e3120",
-              "teaching-class/dccd4913c4841b97"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/a57b8623a5acb364",
-            "name": "(2026-2027-1)-JS140301S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 101,
-            "capacity": 172
+            "id": "teaching-class/a57b8623a5acb364"
           },
           "campus": "仙林",
           "room": "教4-309",
@@ -1608,23 +1265,10 @@
             "hours": 72,
             "hours_composition": "理论:48,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/04467dfbb864646b",
-              "teaching-class/077503fb048152fe",
-              "teaching-class/0a784fb5930377e3",
-              "teaching-class/22d33be3e4e45b73",
-              "teaching-class/3fabb8bc2fdc44c4",
-              "teaching-class/44fe445ecf657d91",
-              "teaching-class/b7a28bc120b2c86b"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/04467dfbb864646b",
-            "name": "(2026-2027-1)-JS160201S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 97,
-            "capacity": 172
+            "id": "teaching-class/04467dfbb864646b"
           },
           "campus": "仙林",
           "room": "教4-313",
@@ -1697,25 +1341,10 @@
             "hours": 72,
             "hours_composition": "理论:48,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/2a9cdbca380060aa",
-              "teaching-class/3a1cb1cab22edbcd",
-              "teaching-class/3c54f1ae5e92bab8",
-              "teaching-class/57359fd3628f08c1",
-              "teaching-class/58cc7fb3de1b34e2",
-              "teaching-class/5ddfe60d4ef7dbf4",
-              "teaching-class/b3be8a5863ba804a",
-              "teaching-class/cd5941b393a4bdc5",
-              "teaching-class/eb25723382c3d414"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/eb25723382c3d414",
-            "name": "(2026-2027-1)-JS140801S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 95,
-            "capacity": 172
+            "id": "teaching-class/eb25723382c3d414"
           },
           "campus": "仙林",
           "room": "教4-312",
@@ -1792,23 +1421,10 @@
             "hours": 72,
             "hours_composition": "理论:48,实验:8,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/04467dfbb864646b",
-              "teaching-class/077503fb048152fe",
-              "teaching-class/0a784fb5930377e3",
-              "teaching-class/22d33be3e4e45b73",
-              "teaching-class/3fabb8bc2fdc44c4",
-              "teaching-class/44fe445ecf657d91",
-              "teaching-class/b7a28bc120b2c86b"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/04467dfbb864646b",
-            "name": "(2026-2027-1)-JS160201S-JSJY0002-1",
-            "size": 100,
-            "enrolled": 97,
-            "capacity": 172
+            "id": "teaching-class/04467dfbb864646b"
           },
           "campus": "仙林",
           "room": "教4-313",
@@ -1851,18 +1467,10 @@
             "hours": 36,
             "hours_composition": "理论:28,实验:4",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/011519af60a5cdcc",
-              "teaching-class/bf225705679e6d72"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/011519af60a5cdcc",
-            "name": "(2026-2027-1)-JS114201S-JSJY0001-1",
-            "size": 285,
-            "enrolled": 181,
-            "capacity": 234
+            "id": "teaching-class/011519af60a5cdcc"
           },
           "campus": "仙林",
           "room": "教4-101",
@@ -1945,18 +1553,10 @@
             "hours": 36,
             "hours_composition": "理论:28,实验:4",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/09c203ffcec37c56",
-              "teaching-class/fd50dd4c0ece6240"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/09c203ffcec37c56",
-            "name": "(2026-2027-1)-JS113102C-JSJY0001-1",
-            "size": 285,
-            "enrolled": 61,
-            "capacity": 172
+            "id": "teaching-class/09c203ffcec37c56"
           },
           "campus": "仙林",
           "room": "教4-409",
@@ -2039,17 +1639,10 @@
             "hours": 36,
             "hours_composition": "理论:28,实验:4",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/29d87907f30f0254"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/29d87907f30f0254",
-            "name": "(2026-2027-1)-JS115301C-JSJY0001-1",
-            "size": 285,
-            "enrolled": 43,
-            "capacity": 57
+            "id": "teaching-class/29d87907f30f0254"
           },
           "campus": "仙林",
           "room": "教4-103",
@@ -2132,18 +1725,10 @@
             "hours": 48,
             "hours_composition": "理论:14,实验:18",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/136527b0bf1077e6",
-              "teaching-class/ff3ed90da36dff90"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/136527b0bf1077e6",
-            "name": "(2026-2027-1)-JS116K01C-JSJY0001-2",
-            "size": 285,
-            "enrolled": 36,
-            "capacity": 172
+            "id": "teaching-class/136527b0bf1077e6"
           },
           "campus": "仙林",
           "room": "教4-208",
@@ -4141,50 +3726,10 @@
             "hours": 9,
             "hours_composition": "理论:8",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/08212a5ad3a2553b",
-              "teaching-class/1fe60ebf90c49be7",
-              "teaching-class/37b75af31f09139a",
-              "teaching-class/3913aeee56ea662f",
-              "teaching-class/440388081f6a400a",
-              "teaching-class/45a83e65badca8af",
-              "teaching-class/4936820a24f77d2d",
-              "teaching-class/4bd4c38cbd30c186",
-              "teaching-class/51b29ca84c22f295",
-              "teaching-class/60a06d8131af4961",
-              "teaching-class/6742e13db40d825b",
-              "teaching-class/682adbce359ca2a3",
-              "teaching-class/6f73ca58bf6921f0",
-              "teaching-class/753554402b1ea62b",
-              "teaching-class/7b435256122d9697",
-              "teaching-class/8efcdc8cfd8f6a94",
-              "teaching-class/912d99062b4e8805",
-              "teaching-class/9862074691c2940e",
-              "teaching-class/99b5cd65cc92e74f",
-              "teaching-class/a692c7bbf0b565ae",
-              "teaching-class/b0caa7ac0a2cf6b9",
-              "teaching-class/b68745affe6ef967",
-              "teaching-class/b904c03076d51cee",
-              "teaching-class/bf0bb354fd50a383",
-              "teaching-class/c9c0aa6f7a2d0bd8",
-              "teaching-class/ca00c16435d92bd1",
-              "teaching-class/dd5d662f95a74ef7",
-              "teaching-class/dec7450a7b717328",
-              "teaching-class/e067926aa4ba3422",
-              "teaching-class/e082bba78825bd3c",
-              "teaching-class/e7c9b1c5fadf876c",
-              "teaching-class/ed0c6ee26ba361f2",
-              "teaching-class/fa5bbd329bed7f80",
-              "teaching-class/fc3fc9da56b75697"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/bf0bb354fd50a383",
-            "name": "(2026-2027-1)-MY1007T0C-MKSXY001-1",
-            "size": 186,
-            "enrolled": 188,
-            "capacity": 234
+            "id": "teaching-class/bf0bb354fd50a383"
           },
           "campus": "仙林",
           "room": "教4-101",
@@ -4234,22 +3779,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0258e7761e570407",
-              "teaching-class/a834f3eaff607b46",
-              "teaching-class/ccd750686ab79e52",
-              "teaching-class/d50aaf82341e03d0",
-              "teaching-class/db1f5960f860d13c",
-              "teaching-class/f8373fd62af1c6ab"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/a834f3eaff607b46",
-            "name": "(2026-2027-1)-TX100011S-FZKT0001-1",
-            "size": 6,
-            "enrolled": 41,
-            "capacity": 36
+            "id": "teaching-class/a834f3eaff607b46"
           },
           "campus": "仙林",
           "room": "教4-211(5)",
@@ -4331,22 +3864,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0258e7761e570407",
-              "teaching-class/a834f3eaff607b46",
-              "teaching-class/ccd750686ab79e52",
-              "teaching-class/d50aaf82341e03d0",
-              "teaching-class/db1f5960f860d13c",
-              "teaching-class/f8373fd62af1c6ab"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/a834f3eaff607b46",
-            "name": "(2026-2027-1)-TX100011S-FZKT0001-1",
-            "size": 6,
-            "enrolled": 41,
-            "capacity": 36
+            "id": "teaching-class/a834f3eaff607b46"
           },
           "campus": "仙林",
           "room": null,
@@ -4428,17 +3949,10 @@
             "hours": null,
             "hours_composition": null,
             "assessment": "未安排",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/7fe68b3fb6024644"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/7fe68b3fb6024644",
-            "name": null,
-            "size": null,
-            "enrolled": 0,
-            "capacity": null
+            "id": "teaching-class/7fe68b3fb6024644"
           },
           "campus": "仙林",
           "room": null,
@@ -4541,17 +4055,10 @@
             "hours": null,
             "hours_composition": null,
             "assessment": "未安排",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/72676de2d75f8bb2"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/72676de2d75f8bb2",
-            "name": null,
-            "size": null,
-            "enrolled": 0,
-            "capacity": null
+            "id": "teaching-class/72676de2d75f8bb2"
           },
           "campus": "仙林",
           "room": null,
@@ -4640,17 +4147,10 @@
             "hours": null,
             "hours_composition": null,
             "assessment": "未安排",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/7fe68b3fb6024644"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/7fe68b3fb6024644",
-            "name": null,
-            "size": null,
-            "enrolled": 0,
-            "capacity": null
+            "id": "teaching-class/7fe68b3fb6024644"
           },
           "campus": "仙林",
           "room": null,
@@ -4721,150 +4221,10 @@
             "hours": 18,
             "hours_composition": "实验:24",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/018f36de5fd970c0",
-              "teaching-class/0201c78efdc14819",
-              "teaching-class/02bdf7bace41632b",
-              "teaching-class/033525d8ca02fcfb",
-              "teaching-class/06230c56b1beb077",
-              "teaching-class/090f9f02eaf91053",
-              "teaching-class/0b86e4ae549fd2cc",
-              "teaching-class/0bb6c84279e07575",
-              "teaching-class/0ed11097b48a0599",
-              "teaching-class/11215f4c9296f558",
-              "teaching-class/12cdf0a99dbec041",
-              "teaching-class/136ef667d2d81b5f",
-              "teaching-class/16906fd22adde0bb",
-              "teaching-class/182cbd59817ab0ad",
-              "teaching-class/1bf984758d7914f9",
-              "teaching-class/1c607e4a8526e1ec",
-              "teaching-class/1c826c6943b0e761",
-              "teaching-class/1cd848aefd6bfd5c",
-              "teaching-class/23ca639a64869c3e",
-              "teaching-class/2542a833806d2a42",
-              "teaching-class/2585ec8eb8ff0372",
-              "teaching-class/29bc0e6d5db0dfc0",
-              "teaching-class/29f9bf7da8e255ae",
-              "teaching-class/2a2cff613f04d4aa",
-              "teaching-class/2a83556aae27e64e",
-              "teaching-class/2b1a34a09a9fb22b",
-              "teaching-class/2c5acec617e7e314",
-              "teaching-class/2dc88cadbad4eab1",
-              "teaching-class/2e04eb9c9fa95d72",
-              "teaching-class/2e8fd63e9eac8d4a",
-              "teaching-class/304702d33be0d193",
-              "teaching-class/32e553602a867ccc",
-              "teaching-class/3502e4315bbfe7cc",
-              "teaching-class/3864e4baa759ce60",
-              "teaching-class/3b73c2ec10796f6b",
-              "teaching-class/3f9572d958e2e18c",
-              "teaching-class/4168e6d46125b882",
-              "teaching-class/418d83b4516a2504",
-              "teaching-class/426f7c88243851fd",
-              "teaching-class/43920eea941937bb",
-              "teaching-class/43f86ca14fc2b9f0",
-              "teaching-class/44b88093644404ac",
-              "teaching-class/4553a907eabf05d3",
-              "teaching-class/477bde4e43ca2c94",
-              "teaching-class/49f7102852566736",
-              "teaching-class/4afc974c4e39e930",
-              "teaching-class/4c10633ea838872b",
-              "teaching-class/4dff26674986d04c",
-              "teaching-class/50d97537ba2d0198",
-              "teaching-class/5198d9c375a4d66e",
-              "teaching-class/533244df6c2e63a0",
-              "teaching-class/562cd800a8a259c1",
-              "teaching-class/596dddcb20c7065c",
-              "teaching-class/5c69cb07c030c839",
-              "teaching-class/62e2728af619e852",
-              "teaching-class/6500fc430211388a",
-              "teaching-class/654de721ff66f846",
-              "teaching-class/67f512adf1079882",
-              "teaching-class/68293a84b21781b9",
-              "teaching-class/69ac711a80fc5267",
-              "teaching-class/6c45150dca5e405f",
-              "teaching-class/6fe9dcb5acad9043",
-              "teaching-class/730864efef0509a7",
-              "teaching-class/739ea1048ed6c4f7",
-              "teaching-class/75f2d1b05f712e4b",
-              "teaching-class/765aed5f6c740ea9",
-              "teaching-class/7f0e00750507c9c5",
-              "teaching-class/7fbda4b8a82c9c48",
-              "teaching-class/81abe7accf550946",
-              "teaching-class/843e660b1a0f93fa",
-              "teaching-class/8708be6d096c6afe",
-              "teaching-class/87e2da032c73ec8b",
-              "teaching-class/897136d698d029ee",
-              "teaching-class/8bcee18674b14f8c",
-              "teaching-class/8e4e43af993ebc2d",
-              "teaching-class/8e7a498f9fea9f5e",
-              "teaching-class/8f3d3670bca5094f",
-              "teaching-class/92a4fb8c4a9b5303",
-              "teaching-class/92d82ef1f3637179",
-              "teaching-class/97c6e5b09a430f66",
-              "teaching-class/9a14aa5d2a5385ca",
-              "teaching-class/9c9fa1ed10b52101",
-              "teaching-class/a0d8864d6e2d5629",
-              "teaching-class/a161ca4b658f0d81",
-              "teaching-class/a46b066f6ab1da14",
-              "teaching-class/a56eee96bf733c38",
-              "teaching-class/a8f1e7aef3d69abf",
-              "teaching-class/a99ccfc3122a69f5",
-              "teaching-class/aa5d35d1832b2a54",
-              "teaching-class/ac7858640a369760",
-              "teaching-class/adaed7f6a5f7af2a",
-              "teaching-class/afbda9c149e0f30f",
-              "teaching-class/b906519e2444b2f2",
-              "teaching-class/bab72d497e1e3fdb",
-              "teaching-class/bbb4626b1255c166",
-              "teaching-class/bd7ceeb41d960e4a",
-              "teaching-class/be28ec8db0285d05",
-              "teaching-class/bfa8f162a3c739eb",
-              "teaching-class/bff7dbf87fec747e",
-              "teaching-class/c082152c19cccc14",
-              "teaching-class/c0a37e02f95e7e76",
-              "teaching-class/c232ec0c5f9e24a4",
-              "teaching-class/c3e187f8cd3835e3",
-              "teaching-class/c57c6a1501c59d04",
-              "teaching-class/c5cf9b01093270ab",
-              "teaching-class/c7b245a3cf126590",
-              "teaching-class/ca39b14f9aae2546",
-              "teaching-class/ca75bd5a5ea06dd0",
-              "teaching-class/ca951f16e23b5ba3",
-              "teaching-class/cbed7fb2257543b4",
-              "teaching-class/d05ce3445f7f575f",
-              "teaching-class/d24e21291ff3b42b",
-              "teaching-class/d783edd2e3a04795",
-              "teaching-class/da4f631953f70056",
-              "teaching-class/dab5f233cc7efdf2",
-              "teaching-class/db8c4542ec3bf10e",
-              "teaching-class/de5b395cbbdab677",
-              "teaching-class/e1b42c3f996592b0",
-              "teaching-class/e244fa72984d0969",
-              "teaching-class/e378a9e34449583d",
-              "teaching-class/e3d2aeedefe28636",
-              "teaching-class/e7e92209a51a9057",
-              "teaching-class/e9dda75162b0b710",
-              "teaching-class/ea4734ad19497ac7",
-              "teaching-class/ec3466eb0e918fa8",
-              "teaching-class/ee7a0b5b6132a740",
-              "teaching-class/f20249f8eebbe2fa",
-              "teaching-class/f257b53e7328d2c0",
-              "teaching-class/f2b85945cc4d382f",
-              "teaching-class/f4ddb970c0eeb419",
-              "teaching-class/f661c86e2d2db6a7",
-              "teaching-class/f85d7706a26ecca2",
-              "teaching-class/fa8204b2d34f88d3",
-              "teaching-class/fd9afed6ff734861"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/090f9f02eaf91053",
-            "name": "(2026-2027-1)-LX1048F4S-LXY00005-1",
-            "size": 33,
-            "enrolled": 36,
-            "capacity": 49
+            "id": "teaching-class/090f9f02eaf91053"
           },
           "campus": "仙林",
           "room": null,
@@ -4921,83 +4281,10 @@
             "hours": 42,
             "hours_composition": "理论:10,实验:38",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0d1d37c5e415d08e",
-              "teaching-class/0fe46d23a8c1dfe7",
-              "teaching-class/103343e7e4b3e38d",
-              "teaching-class/1178bc1ba6cdcc0d",
-              "teaching-class/13ac9047616071ce",
-              "teaching-class/1530f21cebb7c7b0",
-              "teaching-class/1643d4a14a60989d",
-              "teaching-class/1e7678881fa0915c",
-              "teaching-class/221c4406322f7b6b",
-              "teaching-class/2b7ee0e7853c7dc3",
-              "teaching-class/3419a4d9465bb662",
-              "teaching-class/35f4644749c8671d",
-              "teaching-class/39d398968d5c5795",
-              "teaching-class/4244783a2aa9f4a2",
-              "teaching-class/42cc128b09d95447",
-              "teaching-class/44234a14513cbbed",
-              "teaching-class/4e254b423087c172",
-              "teaching-class/5101a03cf806045a",
-              "teaching-class/53995af302152457",
-              "teaching-class/5621e211003ada43",
-              "teaching-class/563c1721de8b10ab",
-              "teaching-class/591a586f77fefda9",
-              "teaching-class/616616dbda55b919",
-              "teaching-class/628a9c04b17ae2cb",
-              "teaching-class/6c08ab5df906162d",
-              "teaching-class/6d3013489b57d896",
-              "teaching-class/713e79b315b6f93a",
-              "teaching-class/76aac7d4a86047d2",
-              "teaching-class/76de861f85bb8ea7",
-              "teaching-class/7a25a450a1fc0841",
-              "teaching-class/7dd08b8df1754f46",
-              "teaching-class/7e9628ade4610369",
-              "teaching-class/8251acdbe0754629",
-              "teaching-class/8270d89473d6fc6d",
-              "teaching-class/82d1ae58ad5af5cd",
-              "teaching-class/87998d39d1236e5a",
-              "teaching-class/89d7353d0ab80037",
-              "teaching-class/8e1de898601f2763",
-              "teaching-class/9051370660cd5a34",
-              "teaching-class/90ed4310ebb3f924",
-              "teaching-class/9215486ad3deab71",
-              "teaching-class/95d2227be886e6d9",
-              "teaching-class/97372ea93b437f11",
-              "teaching-class/9a210b081790dff1",
-              "teaching-class/a32c57daebe3e082",
-              "teaching-class/a5bdcbe259188e11",
-              "teaching-class/a8dd824fb9005f3e",
-              "teaching-class/aaf995ff8d05af28",
-              "teaching-class/b0dfceac5f71228c",
-              "teaching-class/bd0ff11a51d00299",
-              "teaching-class/bd7f16ff492a2e35",
-              "teaching-class/c056e3447b17799b",
-              "teaching-class/c9680c90735a26a8",
-              "teaching-class/d28b2d9993469ae2",
-              "teaching-class/d2d3dfabf811420f",
-              "teaching-class/d80c742bc53cfb55",
-              "teaching-class/d90157c2b8a4eb56",
-              "teaching-class/e000c45f22675e07",
-              "teaching-class/e0523eedca83451d",
-              "teaching-class/e134fb80320ae007",
-              "teaching-class/e45b7f596e1fd77f",
-              "teaching-class/e79e24decd632326",
-              "teaching-class/eb8d442403fef4b1",
-              "teaching-class/f4ebfae6b704755b",
-              "teaching-class/f8a5892d8494fb46",
-              "teaching-class/f96ad68d0cb7172d",
-              "teaching-class/fc2922876d7ed6f7"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/616616dbda55b919",
-            "name": "(2026-2027-1)-SY1003F4S-DGDZ0005-1",
-            "size": 33,
-            "enrolled": 36,
-            "capacity": 36
+            "id": "teaching-class/616616dbda55b919"
           },
           "campus": "仙林",
           "room": "第五实验室教3-226",
@@ -5064,29 +4351,10 @@
             "hours": 28,
             "hours_composition": "理论:24,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/2a1719578e4f165f",
-              "teaching-class/33e34a80bdeb1b21",
-              "teaching-class/3cd3fad3cc392bea",
-              "teaching-class/7521794cdbfc79cc",
-              "teaching-class/8747e1d7c9d6096b",
-              "teaching-class/a2ce3e12b417aa6a",
-              "teaching-class/a53e689da60eefac",
-              "teaching-class/b82523dd0e0ee4b7",
-              "teaching-class/d691d9e4fa6e698a",
-              "teaching-class/d762d7cea448052b",
-              "teaching-class/dc21abf0810a27fb",
-              "teaching-class/de449aba9177bf95",
-              "teaching-class/fbb855c2aaa510af"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/8747e1d7c9d6096b",
-            "name": "(2026-2027-1)-JS1111X0S-FZKT0001-1",
-            "size": 33,
-            "enrolled": 36,
-            "capacity": 36
+            "id": "teaching-class/8747e1d7c9d6096b"
           },
           "campus": "仙林",
           "room": "教4-211(4)",
@@ -5153,29 +4421,10 @@
             "hours": 28,
             "hours_composition": "理论:24,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/2a1719578e4f165f",
-              "teaching-class/33e34a80bdeb1b21",
-              "teaching-class/3cd3fad3cc392bea",
-              "teaching-class/7521794cdbfc79cc",
-              "teaching-class/8747e1d7c9d6096b",
-              "teaching-class/a2ce3e12b417aa6a",
-              "teaching-class/a53e689da60eefac",
-              "teaching-class/b82523dd0e0ee4b7",
-              "teaching-class/d691d9e4fa6e698a",
-              "teaching-class/d762d7cea448052b",
-              "teaching-class/dc21abf0810a27fb",
-              "teaching-class/de449aba9177bf95",
-              "teaching-class/fbb855c2aaa510af"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/8747e1d7c9d6096b",
-            "name": "(2026-2027-1)-JS1111X0S-FZKT0001-1",
-            "size": 33,
-            "enrolled": 36,
-            "capacity": 36
+            "id": "teaching-class/8747e1d7c9d6096b"
           },
           "campus": "仙林",
           "room": null,
@@ -5228,25 +4477,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/3753ede366bd31d3",
-              "teaching-class/520537cf37c3480a",
-              "teaching-class/6cb7b2311924d5f2",
-              "teaching-class/7aa495fc0c679a62",
-              "teaching-class/969cbb1fa37f5cff",
-              "teaching-class/a2ba2576966ccc63",
-              "teaching-class/aefd7708e58ed595",
-              "teaching-class/da969b0efaa3fe6d",
-              "teaching-class/f173b65bd135e4ad"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/6cb7b2311924d5f2",
-            "name": "(2026-2027-1)-DG1006TXS-DGXY0002-1",
-            "size": 128,
-            "enrolled": 133,
-            "capacity": 172
+            "id": "teaching-class/6cb7b2311924d5f2"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -5324,22 +4558,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0258e7761e570407",
-              "teaching-class/a834f3eaff607b46",
-              "teaching-class/ccd750686ab79e52",
-              "teaching-class/d50aaf82341e03d0",
-              "teaching-class/db1f5960f860d13c",
-              "teaching-class/f8373fd62af1c6ab"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/db1f5960f860d13c",
-            "name": "(2026-2027-1)-TX100011S-TXXY0002-1",
-            "size": 126,
-            "enrolled": 114,
-            "capacity": 172
+            "id": "teaching-class/db1f5960f860d13c"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -5415,40 +4637,10 @@
             "hours": 54,
             "hours_composition": "理论:48",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0224ce192061142d",
-              "teaching-class/032a122b9cf9fe99",
-              "teaching-class/0adc0b256cae1f32",
-              "teaching-class/203aef6c2f03fd98",
-              "teaching-class/28d104dd9aa27144",
-              "teaching-class/2ddeba863718b149",
-              "teaching-class/3cf13d90d4733406",
-              "teaching-class/51ddb3ba0d593eb2",
-              "teaching-class/57c851708ee201cd",
-              "teaching-class/658c5b2a672d2b88",
-              "teaching-class/87657a940d249c35",
-              "teaching-class/a01eb2d146c80c97",
-              "teaching-class/a0a237032983d12a",
-              "teaching-class/a2f72dfc2228345e",
-              "teaching-class/b221cb132f75296e",
-              "teaching-class/b44f6e6bbe5b5388",
-              "teaching-class/c9c40408e37017aa",
-              "teaching-class/cc4a936c4b9dc153",
-              "teaching-class/d45a8848392f1b64",
-              "teaching-class/e98dd07ecdcea7eb",
-              "teaching-class/ea5ebc8907a6f9d1",
-              "teaching-class/f0aa17bdc1e8ab81",
-              "teaching-class/f7a83de8cdf777c3",
-              "teaching-class/ff6b328b38a2b095"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/cc4a936c4b9dc153",
-            "name": "(2026-2027-1)-LX1042F4S-LXY00002-1",
-            "size": 128,
-            "enrolled": 133,
-            "capacity": 172
+            "id": "teaching-class/cc4a936c4b9dc153"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -5526,22 +4718,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0258e7761e570407",
-              "teaching-class/a834f3eaff607b46",
-              "teaching-class/ccd750686ab79e52",
-              "teaching-class/d50aaf82341e03d0",
-              "teaching-class/db1f5960f860d13c",
-              "teaching-class/f8373fd62af1c6ab"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/db1f5960f860d13c",
-            "name": "(2026-2027-1)-TX100011S-TXXY0002-1",
-            "size": 126,
-            "enrolled": 114,
-            "capacity": 172
+            "id": "teaching-class/db1f5960f860d13c"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -5619,25 +4799,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/3753ede366bd31d3",
-              "teaching-class/520537cf37c3480a",
-              "teaching-class/6cb7b2311924d5f2",
-              "teaching-class/7aa495fc0c679a62",
-              "teaching-class/969cbb1fa37f5cff",
-              "teaching-class/a2ba2576966ccc63",
-              "teaching-class/aefd7708e58ed595",
-              "teaching-class/da969b0efaa3fe6d",
-              "teaching-class/f173b65bd135e4ad"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/6cb7b2311924d5f2",
-            "name": "(2026-2027-1)-DG1006TXS-DGXY0002-1",
-            "size": 128,
-            "enrolled": 133,
-            "capacity": 172
+            "id": "teaching-class/6cb7b2311924d5f2"
           },
           "campus": "仙林",
           "room": "教3-208",
@@ -5681,22 +4846,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0258e7761e570407",
-              "teaching-class/a834f3eaff607b46",
-              "teaching-class/ccd750686ab79e52",
-              "teaching-class/d50aaf82341e03d0",
-              "teaching-class/db1f5960f860d13c",
-              "teaching-class/f8373fd62af1c6ab"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/db1f5960f860d13c",
-            "name": "(2026-2027-1)-TX100011S-TXXY0002-1",
-            "size": 126,
-            "enrolled": 114,
-            "capacity": 172
+            "id": "teaching-class/db1f5960f860d13c"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -5740,40 +4893,10 @@
             "hours": 54,
             "hours_composition": "理论:48",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0224ce192061142d",
-              "teaching-class/032a122b9cf9fe99",
-              "teaching-class/0adc0b256cae1f32",
-              "teaching-class/203aef6c2f03fd98",
-              "teaching-class/28d104dd9aa27144",
-              "teaching-class/2ddeba863718b149",
-              "teaching-class/3cf13d90d4733406",
-              "teaching-class/51ddb3ba0d593eb2",
-              "teaching-class/57c851708ee201cd",
-              "teaching-class/658c5b2a672d2b88",
-              "teaching-class/87657a940d249c35",
-              "teaching-class/a01eb2d146c80c97",
-              "teaching-class/a0a237032983d12a",
-              "teaching-class/a2f72dfc2228345e",
-              "teaching-class/b221cb132f75296e",
-              "teaching-class/b44f6e6bbe5b5388",
-              "teaching-class/c9c40408e37017aa",
-              "teaching-class/cc4a936c4b9dc153",
-              "teaching-class/d45a8848392f1b64",
-              "teaching-class/e98dd07ecdcea7eb",
-              "teaching-class/ea5ebc8907a6f9d1",
-              "teaching-class/f0aa17bdc1e8ab81",
-              "teaching-class/f7a83de8cdf777c3",
-              "teaching-class/ff6b328b38a2b095"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/cc4a936c4b9dc153",
-            "name": "(2026-2027-1)-LX1042F4S-LXY00002-1",
-            "size": 128,
-            "enrolled": 133,
-            "capacity": 172
+            "id": "teaching-class/cc4a936c4b9dc153"
           },
           "campus": "仙林",
           "room": "教3-412",
@@ -5833,25 +4956,10 @@
             "hours": 72,
             "hours_composition": "理论:56,线上:16",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/3753ede366bd31d3",
-              "teaching-class/520537cf37c3480a",
-              "teaching-class/6cb7b2311924d5f2",
-              "teaching-class/7aa495fc0c679a62",
-              "teaching-class/969cbb1fa37f5cff",
-              "teaching-class/a2ba2576966ccc63",
-              "teaching-class/aefd7708e58ed595",
-              "teaching-class/da969b0efaa3fe6d",
-              "teaching-class/f173b65bd135e4ad"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/6cb7b2311924d5f2",
-            "name": "(2026-2027-1)-DG1006TXS-DGXY0002-1",
-            "size": 128,
-            "enrolled": 133,
-            "capacity": 172
+            "id": "teaching-class/6cb7b2311924d5f2"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -5927,50 +5035,10 @@
             "hours": 54,
             "hours_composition": "理论:48",
             "assessment": "考试",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/0258cd867edbb87c",
-              "teaching-class/17008eccb271b098",
-              "teaching-class/2c8b3a8e9d49ec4f",
-              "teaching-class/2e744ffdfa2bf8a6",
-              "teaching-class/2f2b14b2051f76e8",
-              "teaching-class/3000dc770536fe21",
-              "teaching-class/3258233b39d9573c",
-              "teaching-class/45183e2c29e2bcc6",
-              "teaching-class/4c45ee5edac1ef90",
-              "teaching-class/4dab9a5f8fb58396",
-              "teaching-class/563984959c3b0d9d",
-              "teaching-class/5c00837ca72d8ff5",
-              "teaching-class/5d371a46ad531de5",
-              "teaching-class/5f2948e6ef5a63fb",
-              "teaching-class/6dc2b7e058e8e840",
-              "teaching-class/7d7c6c9d97651a94",
-              "teaching-class/9fa8192dd8504d45",
-              "teaching-class/a0f21fcc443089cb",
-              "teaching-class/a452cb4c9d715f75",
-              "teaching-class/ace50bb228241726",
-              "teaching-class/adc31324166301be",
-              "teaching-class/b6c67be5f807b88c",
-              "teaching-class/b8283e74093f5cbc",
-              "teaching-class/cae775f130f84353",
-              "teaching-class/cc1e707f123a284f",
-              "teaching-class/cd3a96e046b4faf9",
-              "teaching-class/ce68428e06985989",
-              "teaching-class/d48e67a3c9ef275a",
-              "teaching-class/d6cf15ab47713678",
-              "teaching-class/df1633d8419153e4",
-              "teaching-class/e87ec7bf93c103a3",
-              "teaching-class/e95fa5ee074bdfbf",
-              "teaching-class/f9f91fd24834fe86",
-              "teaching-class/fe762347fc8af002"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/adc31324166301be",
-            "name": "(2026-2027-1)-MY1001T0S-MKSXY005-1",
-            "size": 128,
-            "enrolled": 133,
-            "capacity": 172
+            "id": "teaching-class/adc31324166301be"
           },
           "campus": "仙林",
           "room": "教3-409",
@@ -7777,24 +6845,10 @@
             "hours": 8,
             "hours_composition": "理论:8",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/495a4ab0fece443d",
-              "teaching-class/7253ce78c1cf88fb",
-              "teaching-class/7d2ae7aa5f75d4d2",
-              "teaching-class/7fb97025e4e2c792",
-              "teaching-class/9448363575009a16",
-              "teaching-class/966c93bacaafd60a",
-              "teaching-class/a2985767b492a556",
-              "teaching-class/a76f0e411ce1d45c"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/7253ce78c1cf88fb",
-            "name": "(2026-2027-1)-JS103202C-JSJY0001-2",
-            "size": 143,
-            "enrolled": 140,
-            "capacity": 234
+            "id": "teaching-class/7253ce78c1cf88fb"
           },
           "campus": "仙林",
           "room": "教2-101",
@@ -7840,29 +6894,10 @@
             "hours": 20,
             "hours_composition": "理论:16",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/1116c95f08b67d76",
-              "teaching-class/2d5d0ffbef394c0a",
-              "teaching-class/4034a47fe64b97f3",
-              "teaching-class/42651bb12e800585",
-              "teaching-class/5bfe2bddf9e30d7d",
-              "teaching-class/86523b3ad8bb0992",
-              "teaching-class/9d035ce285fb64f8",
-              "teaching-class/afcebcb9265277d6",
-              "teaching-class/c740ed9d616a1a9f",
-              "teaching-class/dce9cdbd346d8652",
-              "teaching-class/eb09b7e5cfbf6e55",
-              "teaching-class/f252c27a65035474",
-              "teaching-class/f33be42271173ed3"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/42651bb12e800585",
-            "name": "(2026-2027-1)-DG1001T0C-DGXY0004-1",
-            "size": 143,
-            "enrolled": 142,
-            "capacity": 172
+            "id": "teaching-class/42651bb12e800585"
           },
           "campus": "仙林",
           "room": "教3-310",
@@ -7924,24 +6959,10 @@
             "hours": 8,
             "hours_composition": "理论:8",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/495a4ab0fece443d",
-              "teaching-class/7253ce78c1cf88fb",
-              "teaching-class/7d2ae7aa5f75d4d2",
-              "teaching-class/7fb97025e4e2c792",
-              "teaching-class/9448363575009a16",
-              "teaching-class/966c93bacaafd60a",
-              "teaching-class/a2985767b492a556",
-              "teaching-class/a76f0e411ce1d45c"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/7253ce78c1cf88fb",
-            "name": "(2026-2027-1)-JS103202C-JSJY0001-2",
-            "size": 143,
-            "enrolled": 140,
-            "capacity": 234
+            "id": "teaching-class/7253ce78c1cf88fb"
           },
           "campus": "仙林",
           "room": "教2-101",
@@ -7987,38 +7008,10 @@
             "hours": 20,
             "hours_composition": "理论:16",
             "assessment": "考查",
-            "exam": null,
-            "teaching_class_ids": [
-              "teaching-class/01bcb9472401b074",
-              "teaching-class/0375a30b82563642",
-              "teaching-class/105f2e8c45e7413f",
-              "teaching-class/262dbab5326662a9",
-              "teaching-class/315c89dcd5e6e8ba",
-              "teaching-class/31d78644754e5b3e",
-              "teaching-class/41da05644644c268",
-              "teaching-class/4a787e61265cb7d4",
-              "teaching-class/51807f784f2a794a",
-              "teaching-class/701e0c1c9be1054a",
-              "teaching-class/7e1c9ccae8637c68",
-              "teaching-class/8b5d4e706efed61d",
-              "teaching-class/8dfde920915c5549",
-              "teaching-class/9ced3bb251588ad5",
-              "teaching-class/9eb3211807700043",
-              "teaching-class/abafd5f3a1e3c1d9",
-              "teaching-class/b54da2b73a6fe4a2",
-              "teaching-class/cc54d7b2474e025e",
-              "teaching-class/ce8d4ad298991439",
-              "teaching-class/d53e9ba540cdfd45",
-              "teaching-class/d9a864d75b34a353",
-              "teaching-class/da38da5f31162451"
-            ]
+            "exam": null
           },
           "teaching_class": {
-            "id": "teaching-class/8dfde920915c5549",
-            "name": "(2026-2027-1)-SR1002T0C-RWXY0006-1",
-            "size": 143,
-            "enrolled": 132,
-            "capacity": 234
+            "id": "teaching-class/8dfde920915c5549"
           },
           "campus": "仙林",
           "room": "教2-301",

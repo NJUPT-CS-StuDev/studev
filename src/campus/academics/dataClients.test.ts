@@ -20,18 +20,22 @@ const mockFiles = (files: Record<string, unknown>) => {
 describe('fact readers', () => {
     it('loads separate teaching fact files and keeps elective meetings outside the class shard', async () => {
         const base = '/data/release/teaching/' + term.term;
+        const plans = '/data/release/space/%E4%BB%99%E6%9E%97/entities/information.json';
+        const agents = '/data/release/space/%E4%BB%99%E6%9E%97/entities/agent.json';
         const fetch = mockFiles({
             [base + '/term.json']: term, [base + '/classes.json']: [klass], [base + '/periods.json']: periods,
+            [plans]: { schema_version: 'entities/3', kind: 'information', items: [{ id: 'information/course-plan/JS101', kind: 'information', subtype: 'information:course-plan', names: ['算法'], aliases: [], teaching_class_ids: ['teaching-class/teaching-1'] }] },
+            [agents]: { schema_version: 'entities/3', kind: 'agent', items: [{ id: 'teaching-class/teaching-1', kind: 'agent', subtype: 'agent:teaching-class', names: ['教学班1'], aliases: [], size: null, enrolled: null, capacity: null }] },
             [base + '/classes/B240402.json']: { class: klass, meetings: [facts[0]] }, [base + '/meetings.json']: facts,
         });
-        const client = new TeachingScheduleClient(base);
+        const client = new TeachingScheduleClient(base, plans, agents);
         const loaded = await client.loadClass(' b240402 ');
-        expect(loaded).toEqual({ term, periods, classes: [klass], classInfo: klass, meetings: [facts[0]] });
-        expect(fetch.mock.calls.map(([url]) => url)).not.toContain(base + '/meetings.json');
+        expect(loaded).toEqual({ term, periods, classes: [klass], coursePlans: expect.any(Array), teachingClasses: expect.any(Array), classInfo: klass, meetings: [facts[0]] });
+        expect(fetch.mock.calls.map(([url]) => url)).toContain(plans);
         expect(await client.suggest('B2404')).toEqual(['B240402']);
         expect((await client.loadCatalog()).flatMap(c => c.meetings)).toEqual(facts);
         await client.loadCatalog(); await client.loadClass('B240402');
-        expect(fetch).toHaveBeenCalledTimes(5);
+        expect(fetch).toHaveBeenCalledTimes(7);
     });
     it('loads raw exam changes for removed classes without reconstructing snapshots', async () => {
         const base = '/data/release/exams/2025-2026-2';

@@ -27,6 +27,11 @@ describe('course catalog', () => {
         expect(groupCatalog([elective])[0]?.meetings[0]).toBe(elective);
         expect(searchCatalog(groupCatalog([elective]), 'JS101').map(catalogId)).toEqual(['teaching-class/elective']);
     });
+    it('uses course-plan entity links to order and select teaching classes', () => {
+        const plan = { id: 'information/course-plan/aC', kind: 'information' as const, subtype: 'information:course-plan' as const,
+            names: ['中国文化概论'], aliases: [], teaching_class_ids: ['teaching-class/a'] };
+        expect(groupCatalog(facts, [plan]).map(catalogId)).toEqual(['teaching-class/a', 'teaching-class/b', 'teaching-class/c']);
+    });
 });
 describe('suspended weeks', () => {
     it('finds a hole in a weekly or alternate-week run for grid display', () => {

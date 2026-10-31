@@ -12,7 +12,6 @@ const meeting = (meetingId: string, weekday: number, startPeriod: number, endPer
         hours_composition: null,
         assessment: null,
         exam: null,
-        teaching_class_ids: [`teaching-class/${meetingId}`]
     },
     teaching_class: {
         id: `teaching-class/${meetingId}`,

@@ -13,7 +13,6 @@ const createMeeting = (meetingId: string, courseCode: string, courseName: string
         hours_composition: null,
         assessment: null,
         exam: null,
-        teaching_class_ids: [`teaching-class/${meetingId}`]
     },
     teaching_class: {
         id: meetingId,
