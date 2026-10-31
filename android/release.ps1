@@ -70,3 +70,4 @@ Write-Output "release APK: $apk"
 Write-Output "release size: $((Get-Item $apk).Length) bytes"
 Write-Output "release signature SHA-1: $sha1"
 Write-Output "GitHub release: $releaseUrl"
+Remove-Item $tempRoot -Recurse -Force
