@@ -4,7 +4,7 @@ import product from '../../product.json' with { type: 'json' };
  * Verify an OSCA private, prefix-scoped S3 credential without exposing it.
  *
  * Default: configuration check only, no network requests or files written.
- * Run explicitly: node scripts/collection/verify-storage.mjs --run
+ * Run explicitly: node scripts/platform/verify-storage.mjs --run
  *
  * Read ONLY from this process's environment (never reads .env or a profile):
  *   OSCA_ACCESS_KEY_ID, OSCA_SECRET_ACCESS_KEY, OSCA_BUCKET
@@ -472,7 +472,7 @@ export async function runVerification(config) {
 
 export async function main(args = process.argv.slice(2), env = process.env) {
   if (args.includes('--help')) {
-    emit({ mode: 'help', run: 'node scripts/collection/verify-storage.mjs --run', default: 'configuration-check-only', requiredEnv: ['OSCA_ACCESS_KEY_ID', 'OSCA_SECRET_ACCESS_KEY', 'OSCA_BUCKET'], optionalEnv: ['OSCA_ENDPOINT', 'OSCA_REGION', 'OSCA_PREFIX', 'STUDEV_ORIGIN'], bytes: 1024, reportRoot: REPORT_ROOT });
+    emit({ mode: 'help', run: 'node scripts/platform/verify-storage.mjs --run', default: 'configuration-check-only', requiredEnv: ['OSCA_ACCESS_KEY_ID', 'OSCA_SECRET_ACCESS_KEY', 'OSCA_BUCKET'], optionalEnv: ['OSCA_ENDPOINT', 'OSCA_REGION', 'OSCA_PREFIX', 'STUDEV_ORIGIN'], bytes: 1024, reportRoot: REPORT_ROOT });
     return 0;
   }
   if (args.some((argument) => argument !== '--run')) throw new VerificationError('UNKNOWN_ARGUMENT');

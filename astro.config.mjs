@@ -26,7 +26,6 @@ const excludedSitemapPaths = new Set([
   '/forms',
   '/fill',
   '/submissions',
-  '/legacy-collection',
   '/life/organizational-genesis',
   '/life/anti-formalism-council',
 ]);

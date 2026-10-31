@@ -133,7 +133,10 @@ test('registration and login errors match for web/app; registering cannot claim 
     const result = await send(f.registration);
     assert.equal(result.status, 409); assert.equal(result.body.error.code, 'ACCOUNT_PENDING_REVIEW');
   }
-  for (const path of ['/auth/token', '/auth/token/refresh', '/auth/legacy-profile-login', '/members']) assert.equal((await f.app(path)).status, 404);
+  for (const path of ['/auth/token', '/auth/token/refresh', '/auth/legacy-profile-login', '/members', '/admin/legacy/submissions', '/admin/legacy/submissions/1793400000000-00000000-0000-4000-a000-000000000004/download']) {
+    assert.equal((await f.app(path)).status, 404);
+    assert.equal((await f.browser.call(path, { method: 'POST', body: {} })).status, 404);
+  }
 });
 
 test('deployment migration is read-only by default, promotes every stored member, preserves identity and credentials, and is resumable', async () => {

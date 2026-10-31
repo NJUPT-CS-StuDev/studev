@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "npm run digest && node scripts/server/build.mjs && astro build",
-    "test:collection": "node --test tests/upload-collection.test.mjs tests/verify-osca-upload.test.mjs",
+    "test:collection": "node --test tests/platform-storage.test.mjs tests/verify-osca-upload.test.mjs",
     "test:platform": "node --test tests/platform-*.test.mjs",
     "check": "astro check",
     "test:markdown": "node --test tests/markdown-render.test.mjs",

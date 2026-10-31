@@ -34,8 +34,6 @@ export async function verifyLive() {
     check('anonymous admin denied', (await guest.call('/admin/forms')).status === 401);
     check('cross-origin POST denied', (await guest.call('/auth/login', { method: 'POST', body: {}, headers: { Origin: 'https://example.invalid' } })).status === 403);
     check('public auth configuration', (await guest.call('/auth/config', { expected: 200 })).body.emailDeliveryEnabled === false);
-    const legacyStatus = await fetch(`${origin}/api/collection/config`, { redirect: 'error', signal: AbortSignal.timeout(60000) });
-    check('legacy shared-password API retired', legacyStatus.status === 410);
     for (let index = 0; index < members.length; index++) {
       const info = run.members[index];
       const result = await members[index].call('/auth/register', { method: 'POST', body: { ...info, nickname: `验收成员${index + 1}` }, expected: 201 });
@@ -127,8 +125,6 @@ export async function verifyLive() {
     run.members[1].revision = disabled.body.user.revision;
     check('disabled account cannot log in', (await members[1].call('/auth/login', { method: 'POST', body: { studentId: run.members[1].studentId, password: run.members[1].password } })).status === 401);
     check('owner cannot be downgraded', (await owner.call(`/admin/users/${ownerUser.id}`, { method: 'POST', body: { revision: ownerUser.revision, role: 'user' } })).status === 403);
-    const legacy = await owner.call('/admin/legacy/submissions', { expected: 200 });
-    check('historical collection visible through unified identity', Array.isArray(legacy.body.items));
     const existingTemplates = new Set((await owner.call('/admin/forms', { expected: 200 })).body.items.map(form => form.title));
     let usableTemplates = 0;
     for (const [suffix, values] of [

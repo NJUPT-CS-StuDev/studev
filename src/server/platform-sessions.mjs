@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { digest } from './collection-auth.mjs';
+import { digest } from './platform-crypto.mjs';
 import { fail, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
 

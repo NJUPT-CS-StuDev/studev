@@ -82,6 +82,14 @@ async function complete(f, submission) {
   return f.request(`/submissions/${submission.submission.id}/complete`, { method: 'POST', body: { receiptToken: submission.receiptToken } });
 }
 
+test('form lists require the current snapshot contract and never load an old snapshotless index', async () => {
+  const f = fixture(), form = await createForm(f);
+  f.data.set(`platform-v1/form-index/${form.id}.json`, { id: form.id });
+  const result = await f.request('/admin/forms', { user: 'owner' });
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error.code, 'FORM_INDEX_INVALID');
+});
+
 test('staff operations require staff role, completed MFA, CSRF and same origin', async () => {
   const f = fixture();
   for (const [options, expected] of [[{}, 401], [{ user: 'member' }, 403], [{ user: 'owner', mfa: false }, 403], [{ user: 'owner', csrf: false }, 403], [{ user: 'owner', origin: 'https://attacker.test' }, 403]]) {

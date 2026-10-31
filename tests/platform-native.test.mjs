@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createPlatformHandler } from '../src/server/platform-app.mjs';
 import { createRepository } from '../src/server/platform-store.mjs';
 import { encryptTotp, totpCode } from '../src/server/platform-totp.mjs';
-import { digest } from '../src/server/collection-auth.mjs';
+import { digest } from '../src/server/platform-crypto.mjs';
 import { memoryBlob, memoryGateway, requestClient, testEnvironment } from './helpers/platform-fixtures.mjs';
 
 const config = await testEnvironment();
@@ -96,7 +96,7 @@ test('browser and native password attempts share account rate limits', async () 
 
 test('every existing mutating endpoint still rejects cross-origin cookies, including spoofed bearer and native bootstrap', async () => {
   const f = await fixture(), id = '00000000-0000-0000-0000-000000000001';
-  const paths = ['/auth/register', '/auth/login', '/auth/logout', '/auth/profile', '/auth/password', '/auth/totp/setup', '/auth/totp/confirm', '/auth/totp/disable', '/admin/roster/sync', '/admin/users', `/admin/users/${id}`, `/admin/users/${id}/reset-password`, `/admin/users/${id}/reset-totp`, `/admin/users/${id}/delete`, '/admin/forms', `/admin/forms/${id}`, `/admin/forms/${id}/delete`, `/admin/forms/${id}/duplicate`, `/forms/${id}/submissions`, `/submissions/${id}/complete`, `/submissions/${id}/edit`, `/submissions/${id}/review`, `/submissions/${id}/files/${id}/download`, `/admin/legacy/submissions/1234567890123-${id}/download`, '/auth/login', '/auth/refresh', `/auth/devices/${id}/revoke`];
+  const paths = ['/auth/register', '/auth/login', '/auth/logout', '/auth/profile', '/auth/password', '/auth/totp/setup', '/auth/totp/confirm', '/auth/totp/disable', '/admin/roster/sync', '/admin/users', `/admin/users/${id}`, `/admin/users/${id}/reset-password`, `/admin/users/${id}/reset-totp`, `/admin/users/${id}/delete`, '/admin/forms', `/admin/forms/${id}`, `/admin/forms/${id}/delete`, `/admin/forms/${id}/duplicate`, `/forms/${id}/submissions`, `/submissions/${id}/complete`, `/submissions/${id}/edit`, `/submissions/${id}/review`, `/submissions/${id}/files/${id}/download`, '/auth/login', '/auth/refresh', `/auth/devices/${id}/revoke`];
   for (const path of paths) {
     for (const headers of [{ Origin: 'https://evil.invalid' }, { Origin: '' }, { Origin: 'https://studev.test', 'Sec-Fetch-Site': 'cross-site' }]) {
       const result = await f.browser.call(path, { method: 'POST', body: {}, headers });
