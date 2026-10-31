@@ -42,7 +42,7 @@ describe('product landing shells', () => {
         const html = renderToStaticMarkup(
             <ClassroomsView
                 client={{ initialize: () => new Promise<never>(() => undefined) } as unknown as ClassroomAvailabilityClient}
-                campus={null} date={null} week={null} weekday={null} period={null} until={null} room={null} building={null}
+                campus={null} date={null} period={null} until={null} room={null} building={null}
                 filter=""
                 onChange={() => undefined}
             />,

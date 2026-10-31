@@ -1,7 +1,7 @@
 # build output
 dist/
 .edgeone/
-.collection-build/
+.server-build/
 .search-data/
 # generated types
 .astro/

@@ -1,3 +1,4 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import type { TeachingPeriod, TeachingWeek, Room, RoomDay, RoomOccupant } from '@/academics/facts';
 import type { ClassroomIndexFile } from './ClassroomAvailabilityClient';
 import { campusConfig } from '../../../../campus.config';
@@ -5,7 +6,7 @@ import { campusConfig } from '../../../../campus.config';
 /** Today's date and the minute of the day in Nanjing, wherever the browser is. */
 export const nowInShanghai = (now = new Date()): { date: string; minutes: number } => {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        timeZone: PRODUCT_CONFIG.TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(now).map(part => [part.type, part.value]));
     return { date: `${parts.year}-${parts.month}-${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
 };

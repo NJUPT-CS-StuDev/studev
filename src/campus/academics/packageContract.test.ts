@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { packageFacts } from '../../../scripts/package-facts';
+import { packageFacts } from '../../../scripts/data/package-facts';
 import { exam, meeting } from '../../../tests/campus-facts';
 import type { ExamChange, RoomDay, TeachingClass, TeachingTerm } from './facts';
 

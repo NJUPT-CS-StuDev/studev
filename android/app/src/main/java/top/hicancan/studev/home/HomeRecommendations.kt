@@ -46,7 +46,7 @@ enum class DayMoment(val title: String, val subtitle: String, val categories: Li
 data class Recommendation(val place: Place, val distance: Double, val status: HoursStatus)
 
 object HomeRecommendations {
-    val centre = listOf(118.9262, 32.1146)
+    val centre = listOf(top.hicancan.studev.BuildConfig.CAMPUS_LONGITUDE, top.hicancan.studev.BuildConfig.CAMPUS_LATITUDE)
     fun distance(a: List<Double>, b: List<Double>): Double {
         val lat = Math.toRadians(b[1] - a[1]); val lon = Math.toRadians(b[0] - a[0])
         val h = sin(lat / 2).pow(2) + cos(Math.toRadians(a[1])) * cos(Math.toRadians(b[1])) * sin(lon / 2).pow(2)

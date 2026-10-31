@@ -40,7 +40,7 @@ object TimetableCalendar {
             put(CalendarContract.Calendars.CALENDAR_COLOR, Tokens.Color.Light.brand.toArgb())
             put(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.CAL_ACCESS_OWNER)
             put(CalendarContract.Calendars.OWNER_ACCOUNT, ACCOUNT); put(CalendarContract.Calendars.VISIBLE, 1)
-            put(CalendarContract.Calendars.SYNC_EVENTS, 1); put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, "Asia/Shanghai")
+            put(CalendarContract.Calendars.SYNC_EVENTS, 1); put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, top.hicancan.studev.timetable.CampusDay.zone.id)
         })?.let(ContentUris::parseId) ?: error("设备未提供本地日历")
         val existing = mutableMapOf<String, Long>()
         resolver.query(CalendarContract.Events.CONTENT_URI, arrayOf(CalendarContract.Events._ID, CalendarContract.Events._SYNC_ID),
@@ -51,7 +51,7 @@ object TimetableCalendar {
                 put(CalendarContract.Events.CALENDAR_ID, id); put(CalendarContract.Events._SYNC_ID, event.id)
                 put(CalendarContract.Events.TITLE, if (event.exam) "考试 · ${event.title}" else event.title)
                 put(CalendarContract.Events.DTSTART, event.start.toEpochMilli()); put(CalendarContract.Events.DTEND, event.end.toEpochMilli())
-                put(CalendarContract.Events.EVENT_TIMEZONE, "Asia/Shanghai"); put(CalendarContract.Events.EVENT_LOCATION, event.location ?: event.room.orEmpty())
+                put(CalendarContract.Events.EVENT_TIMEZONE, top.hicancan.studev.timetable.CampusDay.zone.id); put(CalendarContract.Events.EVENT_LOCATION, event.location ?: event.room.orEmpty())
                 put(CalendarContract.Events.DESCRIPTION, event.description); put(CalendarContract.Events.HAS_ALARM, 0)
             }
             val old = existing.remove(event.id)

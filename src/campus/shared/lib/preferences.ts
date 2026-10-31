@@ -114,8 +114,6 @@ export const subscribePreferences = (listener: () => void): (() => void) => {
     };
 };
 
-export const termKey = (academicYear: string, termNumber: number): string => `${academicYear}-${termNumber}`;
-
 export const timetableEdits = (prefs: Preferences, term: string): TimetableEdits =>
     prefs.timetable?.[term] ?? { hidden: [], added: [] };
 

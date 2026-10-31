@@ -180,7 +180,7 @@ internal fun CampusMap(
             if (!holder.destroyed) {
                 map = ready; controller.map = ready
                 if (!holder.isRestored) ready.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(32.1146, 118.9262)).zoom(15.6).build()
+                    .target(LatLng(top.hicancan.studev.BuildConfig.CAMPUS_LATITUDE, top.hicancan.studev.BuildConfig.CAMPUS_LONGITUDE)).zoom(15.6).build()
                 ready.setMinZoomPreference(12.0); ready.setMaxZoomPreference(21.0)
                 ready.addOnCameraMoveListener { controller.bearing = ready.cameraPosition.bearing }
                 ready.addOnMoveListener(object : MapLibreMap.OnMoveListener {

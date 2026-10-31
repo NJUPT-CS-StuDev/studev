@@ -1,6 +1,6 @@
 export type MapSheetState = 'collapsed' | 'half' | 'full';
 
-export const SHEET_STATES: readonly MapSheetState[] = ['collapsed', 'half', 'full'];
+const SHEET_STATES: readonly MapSheetState[] = ['collapsed', 'half', 'full'];
 
 export function sheetHeight(state: MapSheetState, viewport: number, safeBottom = 0): number {
   const available = Math.max(320, viewport - safeBottom);
@@ -11,7 +11,7 @@ export function sheetHeight(state: MapSheetState, viewport: number, safeBottom =
   return Math.max(half + 24, Math.min(available - 12, Math.max(half + 24, available * 0.88)));
 }
 
-export function sheetIndex(state: MapSheetState): number { return SHEET_STATES.indexOf(state); }
+function sheetIndex(state: MapSheetState): number { return SHEET_STATES.indexOf(state); }
 
 /** Resolve a drag release. `deltaY` is negative when the finger moved upwards. */
 export function snapSheet(current: MapSheetState, deltaY: number, velocityY: number): MapSheetState {

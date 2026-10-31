@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import top.hicancan.studev.account.PLATFORM_ORIGIN
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.*
@@ -65,9 +66,6 @@ import top.hicancan.studev.timetable.*
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START && access.granted) location.acquire(owner)
             if (event == Lifecycle.Event.ON_STOP) location.release(owner)
-            if (event == Lifecycle.Event.ON_RESUME) {
-                runCatching { AppUpdates.installDownloaded(context) }.getOrNull()?.let(model::tell)
-            }
         }
         lifecycle.addObserver(observer)
         if (access.granted && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) location.acquire(owner)
@@ -99,7 +97,7 @@ import top.hicancan.studev.timetable.*
     LaunchedEffect(deepLink, state.busy) {
         if (deepLink == null || state.busy) return@LaunchedEffect
         val uri = Uri.parse(deepLink)
-        if (uri.scheme != "https" || uri.host != "studev.hicancan.top") { onDeepLinkHandled(); return@LaunchedEffect }
+        if (uri.scheme != "https" || uri.host != Uri.parse(PLATFORM_ORIGIN).host) { onDeepLinkHandled(); return@LaunchedEffect }
         uri.getQueryParameter("class")?.let { id -> if (state.classes.any { it.id.equals(id, true) } || id in state.examClasses) model.chooseClass(id.uppercase(java.util.Locale.ROOT)) }
         query = uri.getQueryParameter("q") ?: uri.getQueryParameter("building").orEmpty()
         when (uri.path?.trimEnd('/')) {

@@ -1,7 +1,7 @@
 import release from '../../../data/campus-release.json';
 import { PRODUCT_CONFIG } from './product';
 
-/** Everything under data/<release>/ is written by scripts/digest.ts and never changes once served. */
+/** Everything under data/<release>/ is written by scripts/data/digest.ts and never changes once served. */
 export const DATA_RELEASE = release;
 
 export const APP_CONFIG = {

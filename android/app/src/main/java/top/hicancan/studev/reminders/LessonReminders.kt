@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.hicancan.studev.MainActivity
 import top.hicancan.studev.R
+import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.timetable.CampusEvent
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -82,7 +83,7 @@ object LessonReminders {
         if (!preferences.getStringSet("ids", emptySet()).orEmpty().contains(id) || preferences.getBoolean("sent:$id", false)) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(TAG, "课程与考试提醒", NotificationManager.IMPORTANCE_HIGH))
-        val uri = Uri.parse("https://studev.hicancan.top/" + if (room == null) "search/timetable/" else "map/?place=${Uri.encode(room)}&route=true")
+        val uri = Uri.parse("$PLATFORM_ORIGIN/" + if (room == null) "search/timetable/" else "map/?place=${Uri.encode(room)}&route=true")
         val open = PendingIntent.getActivity(context, id.hashCode(), Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(uri),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, TAG).setSmallIcon(R.drawable.ic_navigation).setContentTitle(title)

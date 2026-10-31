@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class PersonalSettings(
     val klass: String? = null,
-    val campus: String = "仙林",
+    val campus: String = top.hicancan.studev.BuildConfig.DEFAULT_CAMPUS,
     val theme: String = "system",
     val calendar: Boolean = false,
     val reminders: Boolean = false,

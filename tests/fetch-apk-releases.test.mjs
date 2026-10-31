@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchApkReleases } from '../scripts/fetch-apk-releases.mjs';
+import { fetchApkReleases } from '../scripts/apk/fetch-releases.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 

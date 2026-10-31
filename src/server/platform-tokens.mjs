@@ -3,11 +3,11 @@ import { digest } from './collection-auth.mjs';
 import { fail, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
 
-export const ACCESS_SECONDS = 600;
+const ACCESS_SECONDS = 600;
 const REFRESH_SECONDS = 30 * 86400;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const ID = /^[a-f0-9-]{36}$/;
-export const nativeLoginRoute = (path) => ['/api/platform/auth/token', '/api/platform/auth/token/refresh'].includes(path);
+const nativeLoginRoute = (path) => ['/api/platform/auth/token', '/api/platform/auth/token/refresh'].includes(path);
 export const nativeBootstrap = (request, path) => nativeLoginRoute(path) && !request.headers.has('origin') && !request.headers.has('cookie') && !request.headers.has('sec-fetch-site');
 export const hasAuthorization = (request) => request.headers.has('authorization');
 

@@ -16,6 +16,7 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.*
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.layout.*
+import top.hicancan.studev.account.PLATFORM_ORIGIN
 import androidx.glance.text.*
 import androidx.glance.color.ColorProvider
 import kotlinx.coroutines.CancellationException
@@ -103,8 +104,8 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
             val journey = state[stringPreferencesKey("journey")] ?: "在「我的」选择宿舍，即可显示出门时间"
             val room = state[stringPreferencesKey("room")].orEmpty()
             val theme = state[stringPreferencesKey("theme")] ?: "system"
-            val open = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("https://studev.hicancan.top/search/timetable/"))
-            val go = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("https://studev.hicancan.top/map/?place=${Uri.encode(room)}&route=true"))
+            val open = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("$PLATFORM_ORIGIN/search/timetable/"))
+            val go = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("$PLATFORM_ORIGIN/map/?place=${Uri.encode(room)}&route=true"))
             fun color(light: Color, dark: Color): androidx.glance.unit.ColorProvider = when (theme) {
                 "light" -> androidx.glance.unit.ColorProvider(light)
                 "dark" -> androidx.glance.unit.ColorProvider(dark)

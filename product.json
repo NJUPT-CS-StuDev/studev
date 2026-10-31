@@ -1,0 +1,19 @@
+{
+  "name": "studev",
+  "origin": "https://studev.hicancan.top",
+  "repository": "NJUPT-CS-StuDev/studev",
+  "timeZone": "Asia/Shanghai",
+  "android": {
+    "versionName": "1.0.2",
+    "versionCode": 3,
+    "minSdk": 26
+  },
+  "campus": {
+    "id": "仙林",
+    "centre": [
+      118.9262,
+      32.1146
+    ]
+  },
+  "apkPartBytes": 25165824
+}

@@ -1,3 +1,4 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import { examTimestamp } from '@/exams/ui/examDateTime';
 import type { Exam } from './records';
 
@@ -7,8 +8,8 @@ export interface ICSProductOptions {
 }
 
 const DEFAULT_PRODUCT: Required<ICSProductOptions> = {
-    appName: 'studev',
-    domain: 'studev.hicancan.top'
+    appName: PRODUCT_CONFIG.APP_NAME,
+    domain: new URL(PRODUCT_CONFIG.ORIGIN).hostname
 };
 
 const formatICSDate = (isoString: string): string => {
@@ -69,8 +70,8 @@ export const generateICSContent = (
         'CALSCALE:GREGORIAN',
         'METHOD:PUBLISH',
         'BEGIN:VTIMEZONE',
-        'TZID:Asia/Shanghai',
-        'X-LIC-LOCATION:Asia/Shanghai',
+        `TZID:${PRODUCT_CONFIG.TIME_ZONE}`,
+        `X-LIC-LOCATION:${PRODUCT_CONFIG.TIME_ZONE}`,
         'BEGIN:STANDARD',
         'TZOFFSETFROM:+0800',
         'TZOFFSETTO:+0800',
@@ -94,8 +95,8 @@ export const generateICSContent = (
             'BEGIN:VEVENT',
             `UID:exam-${getExamCalendarIdentity(exam)}@${domain}`,
             `DTSTAMP:${now}`,
-            `DTSTART;TZID=Asia/Shanghai:${formatICSDate(examTimestamp(exam, 'start'))}`,
-            `DTEND;TZID=Asia/Shanghai:${formatICSDate(examTimestamp(exam, 'end'))}`,
+            `DTSTART;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${formatICSDate(examTimestamp(exam, 'start'))}`,
+            `DTEND;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${formatICSDate(examTimestamp(exam, 'end'))}`,
             `SUMMARY:${escapeICSValue(`考试: ${exam.course.name}`)}`,
             `LOCATION:${escapeICSValue([exam.campus ? '[' + exam.campus + ']' : '', exam.location].filter(Boolean).join(' '))}`,
             `DESCRIPTION:${escapeICSValue(description)}`,

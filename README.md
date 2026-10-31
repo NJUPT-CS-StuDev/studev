@@ -4,7 +4,7 @@
 
 [网站](https://studev.hicancan.top/) · [GitHub](https://github.com/NJUPT-CS-StuDev)
 
-`/search/` 下的校园查询是 `src/campus/` 中的 React 应用；`scripts/digest.ts` 原样打包 njupt-data 的事实，按班级分片并生成搜索包，
+`/search/` 下的校园查询是 `src/campus/` 中的 React 应用；`scripts/data/digest.ts` 原样打包 njupt-data 的事实，按班级分片并生成搜索包，
 `campus.config.ts` 决定怎么呈现。全文检索由 [wasm-search](https://github.com/hicancan/wasm-search) 完成。
 
 ```powershell

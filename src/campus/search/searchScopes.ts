@@ -20,7 +20,7 @@ export const SEARCH_SCOPE_OPTIONS: readonly Pick<SearchScope, 'route' | 'title'>
     { route: 'materials', title: '资料搜索' },
 ] as const;
 
-export const REPOSITORY_SEARCH_SOURCE_IDS = [
+const REPOSITORY_SEARCH_SOURCE_IDS = [
     'njupt-survival-guide',
     'njupt-general-free-exams',
 ] as const;

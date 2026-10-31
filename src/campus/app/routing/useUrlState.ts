@@ -13,7 +13,6 @@ export interface UrlState {
     floorParam: string | null;
     roomParam: string | null;
     weekParam: string | null;
-    weekdayParam: string | null;
     periodParam: string | null;
     untilParam: string | null;
 }
@@ -54,7 +53,6 @@ export const parseUrlState = (pathname: string, search: string): UrlState => {
         floorParam: params.get('floor') || null,
         roomParam: params.get('room') || null,
         weekParam: params.get('week') || null,
-        weekdayParam: params.get('weekday') || null,
         periodParam: params.get('period') || null,
         untilParam: params.get('until') || null,
     };

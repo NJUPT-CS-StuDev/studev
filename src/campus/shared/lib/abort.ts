@@ -1,4 +1,4 @@
-export const abortError = (): DOMException => new DOMException('The operation was aborted', 'AbortError');
+const abortError = (): DOMException => new DOMException('The operation was aborted', 'AbortError');
 
 export const waitForAbort = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
     if (!signal) return promise;

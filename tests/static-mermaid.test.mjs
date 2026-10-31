@@ -5,7 +5,7 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
-import rehypeStaticMermaid from '../src/plugins/rehype-static-mermaid.mjs';
+import rehypeStaticMermaid from '../src/markdown/rehype-static-mermaid.mjs';
 
 const taskTempRoot = process.platform === 'win32' ? 'D:/Temp/codex/studev-audit' : join(tmpdir(), 'studev-audit');
 const cacheDir = join(taskTempRoot, 'mermaid-test');

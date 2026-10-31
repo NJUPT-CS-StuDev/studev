@@ -387,7 +387,7 @@ class NavigationTest {
         Unit
     }
     @Test fun verifyEmulatorReplay() {
-        org.junit.Assume.assumeTrue("Run with -e replay true and android/tools/replay.ps1", InstrumentationRegistry.getArguments().getString("replay") == "true")
+        org.junit.Assume.assumeTrue("Run with -e replay true and android/tooling/replay.ps1", InstrumentationRegistry.getArguments().getString("replay") == "true")
         try {
             val bike = InstrumentationRegistry.getArguments().getString("mode") == "bike"
             plan(if (bike) "桃苑22栋" else "梅苑1栋", if (bike) "图书馆" else "教3")

@@ -1,3 +1,4 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/timetable';
 
 const escape = (value: string): string => value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
@@ -5,7 +6,7 @@ const compact = (value: string): string => value.replace(/[-:]/g, '');
 
 export const todayInShanghai = (): string => {
     const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: PRODUCT_CONFIG.TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
     }).formatToParts(new Date());
     const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
     return `${value.year}-${value.month}-${value.day}`;
@@ -37,13 +38,13 @@ export const buildClassCalendar = (
             const week = weeks.find(item => item.week === weekNumber);
             if (!week) continue;
             const date = meetingDate(week, meeting.weekday);
-            const uid = `${meeting.id}-${weekNumber}@studev.hicancan.top`;
+            const uid = `${meeting.id}-${weekNumber}@${new URL(PRODUCT_CONFIG.ORIGIN).hostname}`;
             lines.push(
                 'BEGIN:VEVENT',
                 `UID:${uid}`,
                 `DTSTAMP:${compact(new Date().toISOString().slice(0, 19))}Z`,
-                `DTSTART;TZID=Asia/Shanghai:${compact(date)}T${compact(startPeriod.start)}00`,
-                `DTEND;TZID=Asia/Shanghai:${compact(date)}T${compact(endPeriod.end)}00`,
+                `DTSTART;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${compact(date)}T${compact(startPeriod.start)}00`,
+                `DTEND;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${compact(date)}T${compact(endPeriod.end)}00`,
                 `SUMMARY:${escape(meeting.course.name)}`,
                 `LOCATION:${escape(meeting.location ?? '')}`,
                 `DESCRIPTION:${escape([className, meeting.teachers.map(t => t.name).join(',')].filter(Boolean).join(' · '))}`,

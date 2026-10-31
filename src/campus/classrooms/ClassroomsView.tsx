@@ -1,3 +1,4 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TeachingPeriod } from '@/academics/timetable';
@@ -14,11 +15,9 @@ import { BuildingFilter } from './BuildingFilter';
 import { selectedBuilding, readBuildings, saveBuildings } from './model/buildingSelection';
 import './classrooms.css';
 
-export interface ClassroomsParams {
+interface ClassroomsParams {
     campus: string | null;
     date: string | null;
-    week: number | null;
-    weekday: number | null;
     period: number | null;
     until: number | null;
     room: string | null;
@@ -33,7 +32,7 @@ interface ClassroomsViewProps extends ClassroomsParams {
 }
 
 const WEEKDAYS = '一二三四五六日';
-const DEFAULT_CAMPUS = '仙林';
+const DEFAULT_CAMPUS = PRODUCT_CONFIG.CAMPUS.id;
 
 function useNow() {
     const [now, setNow] = useState(() => nowInShanghai());
@@ -52,7 +51,7 @@ const dayLabel = (date: string, today: string): string => {
 
 /** "10月25日 14:58" in Nanjing time. */
 const checkedText = (iso: string): string => new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    timeZone: PRODUCT_CONFIG.TIME_ZONE, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 }).format(new Date(iso)).replace(/\//, '月').replace(' ', '日 ');
 
 const occupantText = (occupant: Occupant): string => occupant.kind === 'exam'
@@ -78,7 +77,7 @@ const segments = (status: DayStatus, room: string, periods: TeachingPeriod[]): S
     return result;
 };
 
-export function ClassroomsView({ client, campus: campusParam, date: dateParam, week, weekday, period: periodParam, until: untilParam, room: roomParam, building, filter, onChange }: ClassroomsViewProps) {
+export function ClassroomsView({ client, campus: campusParam, date: dateParam, period: periodParam, until: untilParam, room: roomParam, building, filter, onChange }: ClassroomsViewProps) {
     const [index, setIndex] = useState<ClassroomIndexFile | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [day, setDay] = useState<{ date: string; file: ClassroomDayFile | null } | null>(null);
@@ -99,9 +98,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
     const campuses = index?.campuses.filter(c => index.buildings.some(b => b.campus === c.id && index.rooms.some(r => r.listed && r.building === b.id))).map(item => item.id) ?? [];
     const campus = [campusParam, prefs.campus, DEFAULT_CAMPUS].find(value => value && campuses.includes(value)) ?? campuses[0] ?? DEFAULT_CAMPUS;
     const today = weeks.length ? clampToTerm(weeks, now.date) : now.date;
-    const legacyDate = week && weekday ? weeks.find(item => item.week === week)?.start : undefined;
-    const requestedDate = dateParam ?? (legacyDate ? addDays(legacyDate, (weekday ?? 1) - 1) : null);
-    const date = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && weeks.length && clampToTerm(weeks, requestedDate) === requestedDate ? requestedDate : today;
+    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && weeks.length && clampToTerm(weeks, dateParam) === dateParam ? dateParam : today;
     const nowPeriod = date === now.date && periods.length ? periodAt(periods, now.minutes) : null;
     const lastPeriod = periods[periods.length - 1]?.period ?? 12;
     const period = periodParam && periods.some(item => item.period === periodParam) ? periodParam : nowPeriod ?? 1;

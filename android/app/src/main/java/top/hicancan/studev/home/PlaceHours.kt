@@ -24,11 +24,11 @@ fun PlaceHours(place: Place) {
                 Icon(Icons.Outlined.Schedule, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(status.state.label, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
                     color = if (status.state in listOf(OpenState.Open, OpenState.Closing)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                if (place.hours != null) TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(32.dp)) {
+                TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(32.dp)) {
                     Text("一周时间"); Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(16.dp))
                 }
             }
-            Text(if (place.hours == null) status.today else "今日  ${status.today}", style = MaterialTheme.typography.bodyMedium)
+            Text("今日  ${status.today}", style = MaterialTheme.typography.bodyMedium)
             if (status.state == OpenState.Closing) Text("${status.closesAt} 关闭，请留意时间", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             if (expanded) {
                 HorizontalDivider(Modifier.padding(vertical = 7.dp))
@@ -36,10 +36,10 @@ fun PlaceHours(place: Place) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                         Text("周${"一二三四五六日"[day - 1]}", Modifier.width(48.dp), style = MaterialTheme.typography.bodyMedium,
                             color = if (day == now.dayOfWeek.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(place.hours!!.week[day.toString()].orEmpty().joinToString("  ·  ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }, style = MaterialTheme.typography.bodyMedium)
+                        Text(place.hours.week[day.toString()].orEmpty().joinToString("  ·  ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                place.hours?.note?.let { Text(it, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                place.hours.note?.let { Text(it, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text(if (place.sources.any { it.startsWith("hours:https://lib.") }) "来源：南京邮电大学图书馆" else "来源：高德地图 POI / 开放街图",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

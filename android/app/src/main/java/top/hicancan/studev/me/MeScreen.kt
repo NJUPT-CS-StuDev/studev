@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import top.hicancan.studev.BuildConfig
+import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.calendar.TimetableCalendar
 import top.hicancan.studev.campus.*
 import top.hicancan.studev.reminders.LessonReminders
@@ -39,8 +40,6 @@ import androidx.compose.foundation.lazy.items
 @Composable fun MeScreen(model: CampusModel, state: AcademicState, preferences: PersonalSettings, calendarPage: Boolean, onClass: () -> Unit, onCalendar: () -> Unit, onActivities: () -> Unit, onAccount: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var release by remember { mutableStateOf<AppRelease?>(null) }
-    var checking by remember { mutableStateOf(false) }
     var removal by remember { mutableStateOf(false) }
     var dormPicker by remember { mutableStateOf(false) }
     var dormQuery by remember { mutableStateOf("") }
@@ -173,17 +172,8 @@ import androidx.compose.foundation.lazy.items
                         HorizontalDivider()
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("studev ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
-                            TextButton({ scope.launch {
-                                checking = true
-                                when (val result = AppUpdates.check()) {
-                                    is UpdateCheck.Available -> release = result.release
-                                    UpdateCheck.Current -> model.tell("当前已是最新版本")
-                                    UpdateCheck.Unavailable -> model.tell("暂时无法检查更新，请稍后联网重试")
-                                }
-                                checking = false
-                            } }, enabled = !checking) { Text(if (checking) "正在检查…" else "检查应用更新") }
+                            TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/download/"))) }) { Text("下载新版本") }
                         }
-                        if (AppUpdates.pending(context)) FilledTonalButton({ AppUpdates.installDownloaded(context, requestPermission = true)?.let(model::tell) }, Modifier.fillMaxWidth()) { Text("继续安装下载的更新") }
                     }
                 }
             }
@@ -205,8 +195,6 @@ import androidx.compose.foundation.lazy.items
         }
     }, confirmButton = { TextButton({ dormPicker = false }) { Text("完成") } },
         dismissButton = { if (preferences.homeDorm != null) TextButton({ model.settings.update { it.copy(homeDorm = null) }; dormPicker = false }) { Text("清除选择") } })
-    release?.let { latest -> AlertDialog(onDismissRequest = { release = null }, title = { Text("下载 ${latest.name}") }, text = { Text("下载完成后会校验每个分片和完整 APK，并交给系统安装。") },
-        confirmButton = { TextButton({ release = null; scope.launch { runCatching { AppUpdates.download(context, latest) }.onSuccess { model.tell("下载完成，点击继续安装") }.onFailure { model.tell("下载暂时无法开始，请稍后重试") } } }) { Text("下载") } }, dismissButton = { TextButton({ release = null }) { Text("稍后") } }) }
     if (backgroundSettings) {
         val status = backgroundStatus ?: BackgroundRunSettings.status(context).also { backgroundStatus = it }
         AlertDialog(

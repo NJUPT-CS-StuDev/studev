@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeMathjax from 'rehype-mathjax/svg';
 import { AllPackages } from 'mathjax-full/js/input/tex/AllPackages.js';
 import { rehypeGithubAlerts } from 'rehype-github-alerts';
-import remarkTyporaInline from '../src/plugins/remark-typora-inline.mjs';
+import remarkTyporaInline from '../src/markdown/remark-typora-inline.mjs';
 
 const markdown = await createMarkdownProcessor({
   gfm: false,

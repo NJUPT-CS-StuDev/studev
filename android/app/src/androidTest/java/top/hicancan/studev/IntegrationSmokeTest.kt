@@ -29,6 +29,13 @@ class IntegrationSmokeTest {
         instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
         compose.waitForIdle()
     }
+    private fun backTo(tag: String) {
+        repeat(4) {
+            if (compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()) return
+            back()
+        }
+        wait(tag)
+    }
     private fun link(path: String) {
         compose.activityRule.scenario.onActivity {
             val launch = it.intent
@@ -62,6 +69,7 @@ class IntegrationSmokeTest {
         bitmap.recycle()
     }
     @Test fun accountActivitiesReturnToTheSameCampusTab() {
+        link("search/")
         wait("home")
         link("search/timetable/?class=B240402&week=5"); wait("timetable-week"); shot("timetable")
         compose.onNodeWithTag("tab-home").performClick(); wait("home"); shot("home-tab")
@@ -83,7 +91,7 @@ class IntegrationSmokeTest {
         link("map/?place=${Uri.encode("图书馆")}")
         compose.waitUntil(30_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("activity-host-account").assertDoesNotExist()
-        back(); wait("home-search"); back(); wait("home")
+        backTo("home-search"); back(); wait("home")
     }
     @Test fun mapHomeHoursPlanningAndBackShareOneShell() {
         wait("home")
@@ -108,7 +116,7 @@ class IntegrationSmokeTest {
             assertTrue(runtime.state.value.route!!.maneuvers.size >= 2)
             compose.onNodeWithText("开始导航").assertIsDisplayed(); shot("route-planning")
             back(); assertFalse(runtime.state.value.open)
-            back(); wait("home-search")
+            backTo("home-search")
             back(); wait("home")
         } finally { instrumentation.runOnMainSync { runtime.stop(close = true) } }
     }

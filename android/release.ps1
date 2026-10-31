@@ -19,12 +19,12 @@ Push-Location $PSScriptRoot
 try { & $gradle assembleRelease @signingArgs @GradleArgs; $gradleExitCode = $LASTEXITCODE } finally { Pop-Location }
 if ($gradleExitCode -ne 0) { throw "assembleRelease failed" }
 $apk = Join-Path $PSScriptRoot 'app\build\outputs\apk\release\app-release.apk'
-$gradleText = Get-Content (Join-Path $PSScriptRoot 'app\build.gradle.kts') -Raw
-$versionName = [regex]::Match($gradleText, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
-$versionCode = [int][regex]::Match($gradleText, 'versionCode\s*=\s*(\d+)').Groups[1].Value
+$product = Get-Content (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
+$versionName = $product.android.versionName
+$versionCode = [int]$product.android.versionCode
 if (-not $versionName -or -not (Test-Path $apk)) { throw 'release APK or version metadata is missing' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$args = @((Join-Path $repo 'scripts/package-apk.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', '26', '--notes', $releaseNotes)
+$args = @((Join-Path $repo 'scripts/apk/package.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', [string]$product.android.minSdk, '--notes', $releaseNotes)
 if ($PartSize) { $args += @('--part-size', $PartSize) }
 node @args
 if ($LASTEXITCODE -ne 0) { throw 'APK distribution packaging failed' }
@@ -53,7 +53,7 @@ $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
 $assetPaths = @($mirrorLatest, $mirrorManifest) + @($manifest.parts | ForEach-Object { Join-Path $outputRoot "$versionCode\$($_.name)" }) + $fullApk
 $tag = "v$versionName"
-$repoName = 'NJUPT-CS-StuDev/studev'
+$repoName = $product.repository
 $releaseExists = $true
 & gh release view $tag --repo $repoName *> $null
 if ($LASTEXITCODE -ne 0) { $releaseExists = $false }

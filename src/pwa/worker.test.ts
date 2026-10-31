@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { buildWorker } from './build-worker';
 import { runInNewContext } from 'node:vm';
 
 const origin = 'https://campus.example';
-const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+const worker = buildWorker('fixture');
 
 function harness() {
     const stores = new Map<string, Map<string, Response>>();
@@ -25,9 +25,9 @@ function harness() {
         if (path.startsWith('/_astro/')) return new Response('asset');
         return new Response('<script src="/_astro/app.js"></script>', { headers: { 'Content-Type': 'text/html' } });
     });
-    runInNewContext(`const DATA_VERSION = 'fixture';\n${worker}`, {
+    runInNewContext(worker, {
         self: { location: { origin }, clients: { matchAll: async () => [{ postMessage: (message: unknown) => messages.push(message) }], claim: async () => undefined }, addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener), skipWaiting: vi.fn() },
-        URL, Request, Response, Headers, caches, fetch, console,
+        URL, Request, Response, Headers, caches, fetch, console, Uint8Array, Uint32Array, TextEncoder,
     });
     async function dispatch(type: string, request?: Request) {
         let response: Promise<Response> | undefined;

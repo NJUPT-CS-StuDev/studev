@@ -1,0 +1,21 @@
+{
+  "entry": [
+    "scripts/**/*.{mjs,ts}",
+    "tests/**/*.{mjs,ts}",
+    "android/tooling/*.mjs",
+    "src/pwa/worker.js",
+    "src/server/*-entry.mjs",
+    "src/campus/academics/parity/*.{mjs,ts}",
+    "cloud-functions/**/*.js"
+  ],
+  "ignoreIssues": {
+    "src/server/collection-app.mjs": ["exports"]
+  },
+  "project": [
+    "src/**/*.{astro,js,mjs,ts,tsx}",
+    "scripts/**/*.{mjs,ts}",
+    "tests/**/*.{mjs,ts}",
+    "android/tooling/*.mjs",
+    "cloud-functions/**/*.js"
+  ]
+}
