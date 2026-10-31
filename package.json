@@ -13,7 +13,7 @@
     "check": "astro check",
     "test:markdown": "node --test tests/markdown-render.test.mjs",
     "test:render": "node --test tests/static-mermaid.test.mjs tests/site-output.test.mjs",
-    "test:apk": "node --test tests/apk-distribution.test.mjs",
+    "test:apk": "node --test tests/apk-distribution.test.mjs tests/fetch-apk-releases.test.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "predigest": "node design/map/generate.mjs",

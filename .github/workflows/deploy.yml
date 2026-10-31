@@ -49,6 +49,10 @@ jobs:
       - run: npm ci
       - run: npx -y edgeone@1.6.44 makers env pull -e production -t "$EDGEONE_API_TOKEN"
       - run: npm run digest
+      - name: Fetch APK distribution assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/fetch-apk-releases.mjs --output public/download
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform

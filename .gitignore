@@ -50,3 +50,6 @@ CLAUDE.md
 # Generated map styles and assets (design/map/generate.mjs)
 /public/map/
 /android/app/src/main/assets/map/
+
+# APK distribution is fetched from GitHub Releases during deployment.
+/public/download/

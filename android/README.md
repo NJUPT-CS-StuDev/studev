@@ -118,13 +118,21 @@ navigation smoke-test entry helpers select the map tab before running their
 original assertions. Map package internals and navigation runtime logic are
 unchanged; cross-feature actions use the existing public planner/session methods.
 
-Release 1.0.0 uses the current shared campus-space contract. `npm run release:apk`
-builds the release, writes `public/download/<versionCode>/manifest.json` plus
-parts no larger than 24 MiB, updates `public/download/latest.json`, and keeps
-only the latest two versions. Upload `latest.json`, the manifest, every part and
-the full APK to the matching GitHub Release so the same contract is available as
-the secondary mirror. Future APK updates must increase versionCode and use the
-same signing certificate.
+Release 1.0.1 (versionCode 2) uses the current shared campus-space contract. From
+the repository root, one command builds the arm64 release, signs it with the
+private keystore, packages the manifest and parts (each no larger than 24 MiB),
+and uploads `latest.json`, `manifest.json`, every part, and the full APK to the
+matching GitHub Release:
+
+```powershell
+npm run release:apk
+```
+
+The command reads signing values from the local secrets store and never writes
+them to the repository. Deployment fetches the latest two GitHub releases that
+carry this manifest contract into `public/download/`, verifies every part and
+the whole APK, and then builds the site. Future APK updates must increase
+versionCode and use the same signing certificate.
 
 `IntegrationSmokeTest` checks the combined shell on both the phone and emulator:
 tab/back behavior, account and activities across recreation, campus deep links
@@ -359,13 +367,12 @@ The native search currently returns the exact building for `教3`; a room is fou
 by its room name, for example `教3-101`. Both result groups are rendered when the
 kernel returns both kinds.
 
-Release signing stays outside the repository. Pass
-`-Pstudev.keystore=<external-path> -Pstudev.keyAlias=<alias>
--Pstudev.storePassword=<password>` to `npm run release:apk -- -GradleArgs ...` or
-directly to `assembleRelease`; debug uses Android's
-default debug signing. With no keystore property, `assembleRelease` produces a
-debug-signed, R8-minified verification APK. Never publish that verification build
-as a signed production update. Never put signing material or credentials here.
+Release signing stays outside the repository. `npm run release:apk` supplies the
+keystore path, alias and password from `D:\personal-config\secrets`; debug uses
+Android's default debug signing. A direct `assembleRelease` without the signing
+properties produces only a debug-signed, R8-minified verification APK. Never
+publish that verification build as a signed production update. Never put signing
+material or credentials here.
 
 For local data testing, run `node android/tools/data-fixture.mjs` from the root.
 It serves the digested `public/data/<version>/` plus the
