@@ -2,6 +2,7 @@
 // Protomaps basemap), search over campus places and rooms (wasm-search), and walking
 // and cycling routes with turn-by-turn steps (wayfind). Live navigation is the app's.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapLibre } from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
@@ -15,6 +16,7 @@ import MapActivities from '../../activities/MapActivities';
 import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
+import { sheetHeight, snapSheet, type MapSheetState } from './model/sheetState';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
 const ROUTE_SOURCE = 'routes';
@@ -30,7 +32,6 @@ const theme = (): 'light' | 'dark' => {
 };
 const minutes = (s: number) => Math.max(1, Math.round(s / 60));
 const metres = (m: number) => m < 1000 ? `${Math.round(m / 10) * 10} 米` : `${(m / 1000).toFixed(1)} 公里`;
-
 let protocolAdded = false;
 
 export default function MapApp() {
@@ -56,17 +57,35 @@ export default function MapApp() {
     const [clock, setClock] = useState(() => campusTime());
     const [activeTheme, setActiveTheme] = useState(theme);
     const [loaded, setLoaded] = useState(false);
-    const [expanded, setExpanded] = useState(false);
+    const [sheetState, setSheetState] = useState<MapSheetState>('collapsed');
+    const [viewportHeight, setViewportHeight] = useState(() => typeof window === 'undefined' ? 800 : window.innerHeight);
+    const [safeBottomInset, setSafeBottomInset] = useState(0);
+    const [dragHeight, setDragHeight] = useState<number | null>(null);
+    const drag = useRef<{ y: number; started: number; base: number } | null>(null);
+    const suppressHandleClick = useRef(false);
+    const sheetStateRef = useRef(sheetState);
+    sheetStateRef.current = sheetState;
     const panel = useRef<HTMLElement>(null);
     const planAfterSelection = useRef(false);
     const previousSelection = useRef<string | null>(null);
     const search = useMemo(() => new SearchClient({ baseUrl: `${spaceBase()}/search` }), []);
 
     useEffect(() => {
+        const resize = () => {
+            setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
+            const probe = document.createElement('div');
+            probe.style.cssText = 'position:fixed;left:-1px;bottom:0;width:1px;height:0;padding-bottom:env(safe-area-inset-bottom);pointer-events:none;';
+            document.body.appendChild(probe);
+            setSafeBottomInset(parseFloat(getComputedStyle(probe).paddingBottom) || 0);
+            probe.remove();
+        };
+        resize();
+        window.addEventListener('resize', resize, { passive: true });
+        window.visualViewport?.addEventListener('resize', resize, { passive: true });
         const timer = setInterval(() => setClock(campusTime()), 15_000);
         const observer = new MutationObserver(() => setActiveTheme(theme()));
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-        return () => { clearInterval(timer); observer.disconnect(); search.dispose(); };
+        return () => { clearInterval(timer); observer.disconnect(); search.dispose(); window.removeEventListener('resize', resize); window.visualViewport?.removeEventListener('resize', resize); };
     }, [search]);
 
     // Data, routing kernel and the map.
@@ -107,6 +126,7 @@ export default function MapApp() {
 
             });
             instance.on('click', event => {
+                if (window.innerWidth <= 680 && sheetStateRef.current !== 'collapsed') setSheetState('collapsed');
                 const alternative = instance.getLayer('route-alternative') ? instance.queryRenderedFeatures(event.point, { layers: ['route-alternative'] })[0] : undefined;
                 if (alternative) { setChosen(Number(alternative.properties?.index ?? 0)); return; }
                 const hit = instance.queryRenderedFeatures(event.point, { layers: ['campus-building', 'campus-building-3d', 'campus-place'].filter(id => instance.getLayer(id)) })
@@ -146,7 +166,7 @@ export default function MapApp() {
         if (previousSelection.current !== (selected?.id ?? null)) {
             setRoutes([]);
             setPlanning(planAfterSelection.current);
-            setExpanded(false);
+            setSheetState(selected ? 'half' : 'collapsed');
             planAfterSelection.current = false;
             previousSelection.current = selected?.id ?? null;
         }
@@ -166,9 +186,9 @@ export default function MapApp() {
         if (at) {
             marker.current = new maplibregl.Marker({ color: tokens.color[theme()].brand }).setLngLat(at).addTo(instance);
             const phone = window.innerWidth <= 680;
-            instance.easeTo({ center: at, zoom: Math.max(instance.getZoom(), 17), padding: { top: 0, left: phone ? 0 : 408, right: 0, bottom: phone ? instance.getContainer().clientHeight * .42 : 0 }, duration: tokens.motion.camera });
+            instance.easeTo({ center: at, zoom: Math.max(instance.getZoom(), 17), padding: { top: 0, left: phone ? 0 : 408, right: 0, bottom: phone ? sheetHeight(sheetStateRef.current, viewportHeight, safeBottomInset) : 0 }, duration: tokens.motion.camera });
         }
-    }, [selected, space, loaded]);
+    }, [selected, space, loaded, viewportHeight, safeBottomInset, sheetState]);
 
     useEffect(() => {
         if (!me || !map.current || !loaded) return;
@@ -222,13 +242,13 @@ export default function MapApp() {
         if (route) {
             const bounds = route.geometry.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(route.geometry[0], route.geometry[0]));
             const phone = window.innerWidth <= 680;
-            const cardHeight = panel.current?.querySelector('.campus-map-card')?.getBoundingClientRect().height ?? 260;
+            const cardHeight = sheetHeight(sheetStateRef.current, viewportHeight, safeBottomInset);
             // fitBounds adds its padding to the current camera padding. Clear
             // the place-sheet inset first, otherwise a phone has no space left.
             instance.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
-            instance.fitBounds(bounds, { padding: { top: phone ? 120 : 60, bottom: phone ? Math.min(cardHeight + 24, instance.getContainer().clientHeight * .52) : 60, left: phone ? 28 : 440, right: phone ? 28 : 60 }, duration: tokens.motion.camera, maxZoom: 18 });
+            instance.fitBounds(bounds, { padding: { top: phone ? 120 : 60, bottom: phone ? Math.min(cardHeight + 24, instance.getContainer().clientHeight * .88) : 60, left: phone ? 28 : 440, right: phone ? 28 : 60 }, duration: tokens.motion.camera, maxZoom: 18 });
         }
-    }, [routes, chosen, loaded]);
+    }, [routes, chosen, loaded, sheetState, viewportHeight, safeBottomInset]);
 
     const route = routes[chosen];
     const moment = momentAt(clock.hour);
@@ -239,13 +259,46 @@ export default function MapApp() {
         if (place) { setSelected(place); setQuery(''); setResults([]); }
     };
 
+    const mobileSheetHeight = dragHeight ?? sheetHeight(sheetState, viewportHeight, safeBottomInset);
+    const sheetStyle = {
+        '--campus-sheet-height': `${mobileSheetHeight}px`,
+        '--campus-viewport-height': `${viewportHeight}px`,
+    } as CSSProperties;
+    const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (window.innerWidth > 680) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        suppressHandleClick.current = false;
+        drag.current = { y: event.clientY, started: performance.now(), base: sheetHeight(sheetState, viewportHeight, safeBottomInset) };
+    };
+    const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (!drag.current) return;
+        if (Math.abs(event.clientY - drag.current.y) > 8) suppressHandleClick.current = true;
+        const next = Math.max(sheetHeight('collapsed', viewportHeight, safeBottomInset), Math.min(sheetHeight('full', viewportHeight, safeBottomInset), drag.current.base + drag.current.y - event.clientY));
+        setDragHeight(next);
+    };
+    const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (!drag.current) return;
+        const elapsed = Math.max(1, performance.now() - drag.current.started);
+        const delta = drag.current.y - event.clientY;
+        setSheetState(snapSheet(sheetState, -delta, (event.clientY - drag.current.y) / elapsed * 1000));
+        drag.current = null;
+        setDragHeight(null);
+    };
+    const handleHandleClick = () => {
+        if (suppressHandleClick.current) { suppressHandleClick.current = false; return; }
+        setSheetState(sheetState === 'collapsed' ? 'half' : sheetState === 'half' ? 'full' : 'collapsed');
+    };
     return (
-        <div className="campus-map">
+        <div className={`campus-map is-${sheetState}`} style={sheetStyle}>
             <div ref={container} className="campus-map-canvas" />
-            <aside ref={panel} className={`campus-map-panel${query ? ' is-searching' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="校园地图">
+            <a className="campus-map-back-home" href="/" aria-label="返回首页"><ChevronLeft size={20} /></a>
+            <aside ref={panel} className={`campus-map-panel${query ? ' is-searching' : ''} is-${sheetState}`} aria-label="校园地图">
+                <button className="campus-map-sheet-handle" type="button" aria-label={sheetState === 'full' ? '收起地图面板' : '展开地图面板'} aria-expanded={sheetState !== 'collapsed'}
+                    onClick={handleHandleClick}
+                    onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp}><span /></button>
                 <div className="campus-map-search">
                     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="搜索地点、楼栋或教室" aria-label="搜索地点、楼栋或教室"
+                    <input value={query} onFocus={() => sheetState === 'collapsed' && setSheetState('half')} onChange={e => { setQuery(e.target.value); if (e.target.value.trim()) setSheetState('half'); }} placeholder="搜索地点、楼栋或教室" aria-label="搜索地点、楼栋或教室"
                         onKeyDown={e => { if (e.key === 'Enter' && results[0]) pick(results[0]); }} />
                     {query && <button type="button" className="campus-map-clear" onClick={() => setQuery('')} aria-label="清空">×</button>}
                 </div>
@@ -261,10 +314,9 @@ export default function MapApp() {
                     </ul>
                 )}
                 {error && <p className="campus-map-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="关闭">×</button></p>}
-                <MapActivities map={loaded ? map.current : null} space={space} routeOpen={planning} placeSelected={selected !== null} onPick={() => setSelected(null)} onSelectionChange={setActivitySelected} onRoute={place => { planAfterSelection.current = true; setSelected(place); }} />
+                <MapActivities map={loaded ? map.current : null} space={space} routeOpen={planning} placeSelected={selected !== null} onPick={() => { setSelected(null); setSheetState('half'); }} onSelectionChange={active => { setActivitySelected(active); if (active) setSheetState('half'); }} onRoute={place => { planAfterSelection.current = true; setSelected(place); setSheetState('half'); }} />
                 {!space && !error && <p className="campus-map-error" role="status">正在加载校园地图…</p>}
                 {!selected && !activitySelected && space && !query && <section className="campus-map-card campus-map-home">
-                    <button className="campus-map-sheet-handle" type="button" aria-label={expanded ? '收起推荐' : '展开推荐'} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><span /></button>
                     <nav className="campus-map-categories" aria-label="地点分类">{categories.filter(([name]) => space.places.some(p => p.category === name)).map(([name, Icon]) => <button type="button" key={name} aria-pressed={category === name} onClick={() => setCategory(category === name ? null : name)}><span><Icon size={21} strokeWidth={1.8} /></span>{name}</button>)}</nav>
                     <header className="campus-map-home-heading">
                         {category && <button type="button" className="campus-map-back" aria-label="返回热门推荐" onClick={() => setCategory(null)}><ChevronLeft size={20} /></button>}
@@ -279,7 +331,6 @@ export default function MapApp() {
                 </section>}
                 {selected && space && (
                     <section className="campus-map-card">
-                        <button className="campus-map-sheet-handle" type="button" aria-label={expanded ? '收起详情' : '展开详情'} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><span /></button>
                         <header>
                             <div>
                                 <h2>{selected.id}</h2>
