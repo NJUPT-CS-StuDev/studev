@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
-import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -23,7 +22,6 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.visibility
-import org.maplibre.android.style.sources.GeoJsonSource
 import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.location.LocationStatus
@@ -110,15 +108,11 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         ready.animateCamera(CameraUpdateFactory.newCameraPosition(camera), Tokens.Motion.camera)
     }
     internal fun applyLayers() {
-        map?.style?.getLayer("campus-building")?.maxZoom = 24f
-        map?.style?.getLayer("campus-building-3d")?.setProperties(visibility(if (threeD) Property.VISIBLE else Property.NONE))
+        map?.style?.getLayer("building-fill")?.maxZoom = 24f
+        map?.style?.getLayer("building-extrusion")?.setProperties(visibility(if (threeD) Property.VISIBLE else Property.NONE))
     }
     internal fun highlight(place: Place?) {
-        val source = map?.style?.getSourceAs<GeoJsonSource>("places") ?: return
-        val id = place?.let { if (it.kind == "room") it.parent else it.id }
-        if (highlightedId != id) highlightedId?.let { source.removeFeatureState(it) }
-        highlightedId = id
-        if (id != null) source.setFeatureState(id, JsonObject().apply { addProperty("selected", true) })
+        highlightedId = place?.let { if (it.kind == "room") it.parent else it.id }
     }
     fun select(place: Place, campus: CampusPackage, density: Float, sheetBottom: Double = 420.0) {
         stopFollow()
@@ -208,7 +202,7 @@ internal fun CampusMap(
                             return@addOnMapClickListener routeHit != null
                         }
                         val hit = ready.queryRenderedFeatures(RectF(point.x-radius, point.y-radius, point.x+radius, point.y+radius),
-                            "campus-building", "campus-building-3d", "campus-building-label", "campus-place", "campus-place-label")
+                            "building-fill", "building-extrusion", "building-label", "place-point", "place-label")
                             .firstNotNullOfOrNull { feature -> feature.getStringProperty("id")?.let(campus.byId::get) }
                         hit?.let(placeCallback)
                         hit != null

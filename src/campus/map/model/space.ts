@@ -44,7 +44,7 @@ export const spaceBase = (campus = CAMPUS) =>
 export async function loadSpace(campus = CAMPUS): Promise<Space> {
     const base = spaceBase(campus);
     const [places, network, opening] = await Promise.all([
-        fetchJson<Place[]>(`${base}/places.json`),
+        fetchJson<Place[]>(`${base}/entities.json`),
         fetchJson<GraphData>(`${base}/network.json`),
         fetchJson<Record<string, OpeningRecord>>(`${DATA_RELEASE.base}/hours.json`),
     ]);

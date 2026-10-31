@@ -1,5 +1,4 @@
-// /map/: studev's campus map on the web. Our own map (njupt-data's campus space over a
-// Protomaps basemap), search over campus places and rooms (wasm-search), and walking
+// /map/: studev's campus map on the web. Our authored njupt-map basemap, search over campus places and rooms (wasm-search), and walking
 // and cycling routes with turn-by-turn steps (wayfind). Live navigation is the app's.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
@@ -15,6 +14,7 @@ import tokens from '../../../design/tokens.json';
 import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
+import { displayName } from './model/displayName';
 import { sheetHeight, snapSheet, type MapSheetState } from './model/sheetState';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
@@ -110,7 +110,7 @@ export default function MapApp() {
             const instance = new maplibregl.Map({
                 container: container.current, style, center: CAMPUS_CENTRE, zoom: 15.6, maxPitch: 70,
                 localIdeographFontFamily: "'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC',sans-serif",
-                attributionControl: { compact: true },
+                attributionControl: false,
             });
             instance.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
             instance.on('load', () => {
@@ -134,7 +134,7 @@ export default function MapApp() {
                 if (window.innerWidth <= 680 && sheetStateRef.current !== 'collapsed') setSheetState('collapsed');
                 const alternative = instance.getLayer('route-alternative') ? instance.queryRenderedFeatures(event.point, { layers: ['route-alternative'] })[0] : undefined;
                 if (alternative) { setChosen(Number(alternative.properties?.index ?? 0)); return; }
-                const hit = instance.queryRenderedFeatures(event.point, { layers: ['campus-building', 'campus-building-3d', 'campus-place'].filter(id => instance.getLayer(id)) })
+                const hit = instance.queryRenderedFeatures(event.point, { layers: ['building-fill', 'building-extrusion', 'place-point', 'place-fill'].filter(id => instance.getLayer(id)) })
                     .find(feature => feature.properties?.id);
                 const place = hit ? loaded.byId.get(String(hit.properties.id)) : undefined;
                 if (place) setSelected(place);
@@ -165,7 +165,7 @@ export default function MapApp() {
     useEffect(() => {
         const instance = map.current;
         if (!instance || !space || !loaded) return;
-        instance.removeFeatureState({ source: 'places' });
+        instance.removeFeatureState({ source: 'basemap', sourceLayer: 'buildings' });
         marker.current?.remove();
         if (previousSelection.current !== (selected?.id ?? null)) {
             setRoutes([]);
@@ -184,7 +184,7 @@ export default function MapApp() {
         url.searchParams.set('place', selected.id);
         history.replaceState(null, '', url);
         const building = selected.kind === 'room' ? selected.parent : selected.id;
-        if (space.byId.get(building)?.kind === 'building') instance.setFeatureState({ source: 'places', id: building }, { selected: true });
+        if (space.byId.get(building)?.kind === 'building') instance.setFeatureState({ source: 'basemap', sourceLayer: 'buildings', id: building }, { selected: true });
         const at = placePosition(space, selected);
         if (at) {
             marker.current = new maplibregl.Marker({ color: tokens.color[theme()].brand }).setLngLat(at).addTo(instance);
@@ -294,6 +294,7 @@ export default function MapApp() {
     return (
         <div className={`campus-map is-${sheetState}`} style={sheetStyle}>
             <div ref={container} className="campus-map-canvas" />
+            <div className="campus-map-attribution">© njupt-map · © OpenStreetMap contributors</div>
             <a className="campus-map-back-home" href="/" aria-label="返回首页"><ChevronLeft size={20} /></a>
             {notice && <div className="campus-map-notice" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="关闭提示">×</button></div>}
             <aside ref={panel} className={`campus-map-panel${query ? ' is-searching' : ''} is-${sheetState}`} aria-label="校园地图">
@@ -311,7 +312,7 @@ export default function MapApp() {
                     <ul className="campus-map-results">
                         {results.map(result => (
                             <li key={result.id}><button type="button" onClick={() => pick(result)}>
-                                <span className="campus-map-result-title">{result.title}</span>
+                                <span className="campus-map-result-title">{space!.byId.get(result.id) ? displayName(space!.byId.get(result.id)!, space!.byId) : result.title}</span>
                                 <span className="campus-map-result-meta">{result.sourceName}{result.section ? ` · ${result.section}` : ''}</span>
                             </button></li>
                         ))}
@@ -327,7 +328,8 @@ export default function MapApp() {
                     </header>
                     <ul className="campus-map-recommendations">{ranked.map(item => {
                         const Icon = categories.find(([name]) => name === item.place.category)?.[1] ?? MapPin;
-                        return <li key={item.place.id}><button type="button" onClick={() => setSelected(item.place)}><span className="campus-map-place-icon"><Icon size={22} strokeWidth={1.8} /></span><span className="campus-map-place-copy"><strong>{item.place.id}</strong><span>{item.status.state !== 'unknown' && <em data-state={item.status.state}>{openingLabel[item.status.state]}</em>}{metres(item.distance)}</span><small>{item.place.use}</small></span></button><button className="campus-map-go" type="button" aria-label={`前往${item.place.id}`} onClick={() => { planAfterSelection.current = true; setSelected(item.place); }}><ArrowUpRight size={21} /></button></li>;
+                        const title = displayName(item.place, space.byId);
+                        return <li key={item.place.id}><button type="button" onClick={() => setSelected(item.place)}><span className="campus-map-place-icon"><Icon size={22} strokeWidth={1.8} /></span><span className="campus-map-place-copy"><strong>{title}</strong><span>{item.status.state !== 'unknown' && <em data-state={item.status.state}>{openingLabel[item.status.state]}</em>}{metres(item.distance)}</span><small>{item.place.use}</small></span></button><button className="campus-map-go" type="button" aria-label={`前往${title}`} onClick={() => { planAfterSelection.current = true; setSelected(item.place); }}><ArrowUpRight size={21} /></button></li>;
                     })}</ul>
                     {!ranked.length && <p className="campus-map-houses">暂无符合当前时段的地点，试试上方分类</p>}
                     <p className="campus-map-distance-note">{me ? '距离为直线距离 · 路线以实际规划为准' : '距校区中心的直线距离 · 定位后可查看附近'}</p>
@@ -336,7 +338,7 @@ export default function MapApp() {
                     <section className="campus-map-card">
                         <header>
                             <div>
-                                <h2>{selected.id}</h2>
+                                <h2>{displayName(selected, space.byId)}</h2>
                                 <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
                                     {selected.levels ? ` · ${selected.levels} 层` : ''}</p>
                             </div>
@@ -360,7 +362,7 @@ export default function MapApp() {
                                 <label className="campus-map-from">从
                                     <select value={origin.kind === 'me' ? '' : origin.id} onChange={e => setOrigin(e.target.value ? { kind: 'place', id: e.target.value } : { kind: 'me' })}>
                                         <option value="">我的位置</option>
-                                        {space.places.filter(p => p.kind !== 'room' && p.id !== selected.id).map(p => <option key={p.id} value={p.id}>{p.id}</option>)}
+                                        {space.places.filter(p => p.kind !== 'room' && p.id !== selected.id).map(p => <option key={p.id} value={p.id}>{displayName(p, space.byId)}</option>)}
                                     </select>
                                 </label>
                                 <div className="campus-map-modes" role="radiogroup" aria-label="出行方式">
@@ -381,7 +383,7 @@ export default function MapApp() {
                                 {route && (
                                     <details className="campus-map-directions"><summary>路线详情 · {route.maneuvers.length} 步</summary><ol className="campus-map-steps-list">
                                         {route.maneuvers.map((m, i) => <li key={i}><span>{m.instruction}</span>{m.distance_to_next_m > 0 && <small>{metres(m.distance_to_next_m)}</small>}</li>)}
-                                    </ol><p className="campus-map-houses">到达 {selected.id}{selected.floor ? ` · ${selected.floor} 楼` : ''}</p></details>
+                                    </ol><p className="campus-map-houses">到达 {displayName(selected, space.byId)}{selected.floor ? ` · ${selected.floor} 楼` : ''}</p></details>
                                 )}
                             </div>
                         )}

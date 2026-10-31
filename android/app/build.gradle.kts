@@ -120,7 +120,7 @@ val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtu
         val metadata = JsonSlurper().parse(manifest.asFile) as Map<*, *>
         rootProject.file("../public/data/${metadata["version"]}")
     }) {
-        include("teaching/*/classes/B240402.json", "exams/*/classes/B240402.json")
+        include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/B240402.json")
     }
     into(layout.buildDirectory.dir("generated/academic-test/data"))
 }

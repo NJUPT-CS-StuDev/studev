@@ -52,16 +52,18 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
             }
         } catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; emptyList() }
         val next = WidgetLesson.next(events, now)
+        val campus = if (settings.homeDorm != null || next?.room != null) runCatching { CampusPackage.load(context.assets) }.getOrNull() else null
         val walk = if (settings.homeDorm != null && next?.room != null) withContext(Dispatchers.IO) {
             runCatching {
-                val campus = CampusPackage.load(context.assets)
-                val home = campus.byId[settings.homeDorm] ?: return@runCatching null
-                val destination = campus.byId[next.room] ?: return@runCatching null
+                val home = campus?.byId?.get(settings.homeDorm) ?: return@runCatching null
+                val destination = campus?.byId?.get(next.room) ?: return@runCatching null
                 Wayfind.load(context.assets).use { engine ->
                     engine.route(RouteRequest(home.routing, destination.routing, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) }
                 }
             }.getOrNull()
         } else null
+        val homeName = settings.homeDorm?.let { campus?.byId?.get(it)?.displayName(campus.byId) ?: it }
+        val roomName = next?.room?.let { campus?.byId?.get(it)?.displayName(campus.byId) ?: it }
         val headline = next?.let { WidgetLesson.headline(it, now, walk) } ?: when {
             settings.klass == null -> "下一节课，抬眼可见"
             unavailable -> "课表还未下载"
@@ -74,10 +76,10 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
         }
         val journey = when {
             settings.homeDorm == null -> "在「我的」选择宿舍，即可显示出门时间"
-            next == null -> "出发地 · ${settings.homeDorm}"
-            walk != null -> "从${settings.homeDorm}步行 $walk 分钟"
+            next == null -> "出发地 · $homeName"
+            walk != null -> "从${homeName}步行 $walk 分钟"
             next.room == null -> "上课地点待公布"
-            else -> "步行路线暂不可用，打开地图查看"
+            else -> "去$roomName · 步行路线暂不可用，打开地图查看"
         }
         for (id in ids) {
             updateAppWidgetState(context, id) { state ->

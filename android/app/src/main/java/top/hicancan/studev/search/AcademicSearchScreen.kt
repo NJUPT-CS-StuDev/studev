@@ -51,9 +51,10 @@ import top.hicancan.studev.data.Place
             results.isEmpty() && places.isEmpty() -> EmptyCard("没有找到相关内容", "换个关键词试试，或选择上方的查询入口。")
             else -> Supporting("按相关度排列 · ${if (placesOnly) places.size else results.size} 条结果")
         }
+        val byId = places.associateBy { it.id }
         LazyColumn(Modifier.weight(1f).testTag(if (busy) "search-loading" else "search-results"), contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(places, key = { "place:${it.id}" }) { place -> OutlinedCard({ onPlace(place.id) }, Modifier.fillMaxWidth()) {
-                ListItem(headlineContent = { Text(place.id) }, supportingContent = { Text(listOf(place.kindLabel, place.parent).joinToString(" · ")) })
+                ListItem(headlineContent = { Text(place.displayName(byId)) }, supportingContent = { Text(listOf(place.kindLabel, byId[place.parent]?.displayName(byId) ?: "仙林校区").joinToString(" · ")) })
             } }
             items(results, key = { it.id }) { result -> OutlinedCard({
                 val uri = Uri.parse(result.url)
