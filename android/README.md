@@ -66,12 +66,11 @@ entry declares 4×1 and keeps an 80dp visible card even when an OEM launcher
 allocates a larger host. The Huawei EMUI pin flow currently reserves two rows
 for it despite the 4×1 declaration; other launcher items are never moved.
 
-`me/AppUpdates.kt` reads the same GitHub release as the web's 下载 App link: the
-latest stable release (`/releases/latest`) and its `studev.apk` asset. The release
-body declares `versionCode: N`; an equal or older code reports 当前已是最新版本.
-The APK downloads through DownloadManager; its manifest's actual versionCode and
-package name are compared before handing it to the system installer. Signing is
-verified by Android. Unknown-source access is requested only from the explicit
+`me/AppUpdates.kt` reads `/download/latest.json`, follows its manifest URL and
+downloads every part with resume, retries and SHA-256 verification. If the site
+is unavailable it reads the same manifest contract from the GitHub mirror. Parts
+are assembled only after the whole APK hash matches, then the package installer
+receives the file. Unknown-source access is requested only from the explicit
 continue button. Checks run only from 我的; an unreachable release says so.
 
 Deep links cover `/map/`, `/search/`, `/search/timetable/`, `/search/exam/`,
@@ -119,9 +118,21 @@ navigation smoke-test entry helpers select the map tab before running their
 original assertions. Map package internals and navigation runtime logic are
 unchanged; cross-feature actions use the existing public planner/session methods.
 
-Release 1.0.0 uses the current shared campus-space contract. Its stable GitHub
-release carries `studev.apk` and declares `versionCode: 1`; future APK updates
-must increase versionCode and use the same signing certificate.
+Release 1.0.1 (versionCode 2) uses the current shared campus-space contract. From
+the repository root, one command builds the arm64 release, signs it with the
+private keystore, packages the manifest and parts (each no larger than 24 MiB),
+and uploads `latest.json`, `manifest.json`, every part, and the full APK to the
+matching GitHub Release:
+
+```powershell
+npm run release:apk
+```
+
+The command reads signing values from the local secrets store and never writes
+them to the repository. Deployment fetches the latest two GitHub releases that
+carry this manifest contract into `public/download/`, verifies every part and
+the whole APK, and then builds the site. Future APK updates must increase
+versionCode and use the same signing certificate.
 
 `IntegrationSmokeTest` checks the combined shell on both the phone and emulator:
 tab/back behavior, account and activities across recreation, campus deep links
@@ -144,7 +155,7 @@ For headless validation, cold boot without changing AVD data or snapshots:
 & 'D:\Dev\Android\Sdk\emulator\emulator.exe' -avd njupt-nav -port 5554 -no-window -no-snapshot-load -no-snapshot-save -gpu swiftshader
 ```
 
-The native kernels currently ship `arm64-v8a` and `x86_64`.
+Release APKs ship `arm64-v8a` only; debug APKs also keep `x86_64` for emulators.
 
 Prepare the shared inputs from the repository root:
 
@@ -356,12 +367,12 @@ The native search currently returns the exact building for `教3`; a room is fou
 by its room name, for example `教3-101`. Both result groups are rendered when the
 kernel returns both kinds.
 
-Release signing stays outside the repository. Pass
-`-Pstudev.keystore=<external-path> -Pstudev.keyAlias=<alias>
--Pstudev.storePassword=<password>` to `assembleRelease`; debug uses Android's
-default debug signing. With no keystore property, `assembleRelease` produces a
-debug-signed, R8-minified verification APK. Never publish that verification build
-as a signed production update. Never put signing material or credentials here.
+Release signing stays outside the repository. `npm run release:apk` supplies the
+keystore path, alias and password from `D:\personal-config\secrets`; debug uses
+Android's default debug signing. A direct `assembleRelease` without the signing
+properties produces only a debug-signed, R8-minified verification APK. Never
+publish that verification build as a signed production update. Never put signing
+material or credentials here.
 
 For local data testing, run `node android/tools/data-fixture.mjs` from the root.
 It serves the digested `public/data/<version>/` plus the
@@ -396,7 +407,8 @@ system theme; no device theme or GPS settings are changed.
 
 With the rebuilt space data, the full-data debug baseline is 160,845,182 bytes
 (153.39 MiB), the minimal debug APK 56,830,109 bytes (54.20 MiB), and the minified
-release 35,203,943 bytes (33.57 MiB). The APK contains 19 data entries, about
+the arm64-only minified release is expected below 24 MiB (the previous dual-ABI
+release was 35,203,943 bytes / 33.57 MiB). The APK contains 19 data entries, about
 3.5 MiB compressed, rather than class, room-day or content-search shards.
 The selected published route from 荷苑48栋 to 教4-208 is 1,318.6 m / 1,054.88 s,
 displayed as 18 minutes; an 08:00 lesson therefore gives 07:39 departure with

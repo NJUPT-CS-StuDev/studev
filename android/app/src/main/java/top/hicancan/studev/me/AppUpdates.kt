@@ -1,6 +1,5 @@
 package top.hicancan.studev.me
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -11,74 +10,115 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import top.hicancan.studev.BuildConfig
-import top.hicancan.studev.data.AcademicRepository
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URI
+import java.security.MessageDigest
 
-data class AppRelease(val name: String, val asset: String, val url: String, val versionCode: Long?)
-sealed interface UpdateCheck {
-    data class Available(val release: AppRelease) : UpdateCheck
-    data object Current : UpdateCheck
-    data object Unavailable : UpdateCheck
-}
+data class ApkPart(val name: String, val size: Long, val sha256: String, val url: String)
+data class ApkManifest(val versionName: String, val versionCode: Long, val minSdk: Int, val size: Long, val sha256: String, val releaseNotes: String, val parts: List<ApkPart>)
+data class AppRelease(val name: String, val manifest: ApkManifest, val manifestUrl: String)
+sealed interface UpdateCheck { data class Available(val release: AppRelease) : UpdateCheck; data object Current : UpdateCheck; data object Unavailable : UpdateCheck }
+
 object AppUpdates {
-    /** The same release the web's download link resolves: GitHub's latest stable release
-     * (drafts and prereleases are excluded by the endpoint) and its `studev.apk` asset. */
-    const val LATEST = "https://api.github.com/repos/NJUPT-CS-StuDev/studev/releases/latest"
-    const val ASSET = "studev.apk"
+    const val PRIMARY_LATEST = "/download/latest.json"
+    const val MIRROR_LATEST = "https://github.com/NJUPT-CS-StuDev/studev/releases/latest/download/latest.json"
+    private const val PREFS = "app-update"
+    private const val PENDING = "pending"
+    private const val MAX_RETRIES = 3
 
     suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
-        runCatching { parse(AcademicRepository.download(LATEST).decodeToString(), BuildConfig.VERSION_CODE.toLong()) }
-            .getOrDefault(UpdateCheck.Unavailable)
+        runCatching {
+            val primary = "${BuildConfig.DATA_HOST}$PRIMARY_LATEST"
+            val release = runCatching { readRelease(primary) }.getOrElse { readRelease(MIRROR_LATEST) }
+            if (release.manifest.versionCode <= BuildConfig.VERSION_CODE) UpdateCheck.Current else UpdateCheck.Available(release)
+        }.getOrDefault(UpdateCheck.Unavailable)
     }
 
-    /** The release body declares `versionCode: N`. A release that does not is still offered;
-     * the downloaded APK's actual versionCode is compared before installation. */
-    fun parse(json: String, current: Long): UpdateCheck {
-        val data = Json.parseToJsonElement(json).jsonObject
-        val asset = data["assets"]?.jsonArray?.map { it.jsonObject }?.firstOrNull { it["name"]?.jsonPrimitive?.content == ASSET }
-            ?: return UpdateCheck.Current
-        val code = Regex("""versionCode\D{0,3}(\d+)""").find(data["body"]?.jsonPrimitive?.contentOrNull.orEmpty())?.groupValues?.get(1)?.toLongOrNull()
-        if (code != null && code <= current) return UpdateCheck.Current
-        val name = data["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: data.getValue("tag_name").jsonPrimitive.content
-        return UpdateCheck.Available(AppRelease(name, ASSET, asset.getValue("browser_download_url").jsonPrimitive.content, code))
+    suspend fun download(context: Context, release: AppRelease) = withContext(Dispatchers.IO) {
+        val root = updateRoot(context); root.mkdirs()
+        for (part in release.manifest.parts) downloadPart(part, File(root, part.name))
+        val apk = File(root, "studev-update.apk")
+        FileOutputStream(apk).use { output -> release.manifest.parts.forEach { output.write(File(root, it.name).readBytes()) } }
+        check(apk.length() == release.manifest.size && digest(apk) == release.manifest.sha256) { "APK 校验失败" }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(PENDING, true).apply()
     }
-    fun download(context: Context, release: AppRelease) {
-        val url = Uri.parse(release.url)
-        require(url.scheme == "https" && url.host == "github.com" && url.path.orEmpty().startsWith("/NJUPT-CS-StuDev/studev/releases/download/"))
-        File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "studev-update.apk").delete()
-        val request = DownloadManager.Request(url).setTitle("studev ${release.name}").setMimeType("application/vnd.android.package-archive")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "studev-update.apk")
-        val id = context.getSystemService(DownloadManager::class.java).enqueue(request)
-        context.getSharedPreferences("app-update", Context.MODE_PRIVATE).edit().putLong("download", id).apply()
-    }
-    /** Called from the visible Activity on return. Compare the downloaded manifest's actual
-     * versionCode, not GitHub's tag or versionName. The platform installer verifies signing. */
-    fun pending(context: Context) = context.getSharedPreferences("app-update", Context.MODE_PRIVATE).getLong("download", -1) != -1L
+
+    fun pending(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PENDING, false) && apkFile(context).isFile
+
     @Suppress("DEPRECATION")
     fun installDownloaded(context: Context, requestPermission: Boolean = false): String? {
-        val prefs = context.getSharedPreferences("app-update", Context.MODE_PRIVATE)
-        val id = prefs.getLong("download", -1)
-        if (id == -1L) return null
-        context.getSystemService(DownloadManager::class.java).query(DownloadManager.Query().setFilterById(id))?.use { cursor ->
-            if (!cursor.moveToFirst()) return null
-            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            if (status == DownloadManager.STATUS_FAILED) { prefs.edit().remove("download").apply(); return "下载未完成，请重试" }
-            if (status != DownloadManager.STATUS_SUCCESSFUL) return null
-        }
-        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "studev-update.apk")
+        if (!pending(context)) return null
+        val file = apkFile(context)
         val apk = context.packageManager.getPackageArchiveInfo(file.path, 0)
         val code = apk?.let { if (android.os.Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong() }
-        if (apk?.packageName != context.packageName || code == null || code <= BuildConfig.VERSION_CODE) {
-            prefs.edit().remove("download").apply(); file.delete(); return "当前已是最新版本"
-        }
+        if (apk?.packageName != context.packageName || code == null || code <= BuildConfig.VERSION_CODE) { clear(context); return "当前已是最新版本" }
         if (!context.packageManager.canRequestPackageInstalls()) {
             if (requestPermission) context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
             return "允许安装后，返回 studev 继续"
         }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
         context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-        prefs.edit().remove("download").apply()
-        return null
+        clear(context); return null
     }
+
+    internal fun parseLatest(json: String, latestUrl: String): Pair<String, Long> {
+        val data = Json.parseToJsonElement(json).jsonObject
+        val versionCode = data["versionCode"]!!.jsonPrimitive.long
+        return URI(latestUrl).resolve(data["manifestUrl"]!!.jsonPrimitive.content).toString() to versionCode
+    }
+
+    internal fun parseManifest(json: String, manifestUrl: String): ApkManifest {
+        val data = Json.parseToJsonElement(json).jsonObject; val base = URI(manifestUrl)
+        val parts = data["parts"]!!.jsonArray.map { item ->
+            val part = item.jsonObject
+            ApkPart(part["name"]!!.jsonPrimitive.content, part["size"]!!.jsonPrimitive.long, part["sha256"]!!.jsonPrimitive.content, base.resolve(part["url"]!!.jsonPrimitive.content).toString())
+        }
+        require(parts.isNotEmpty() && data["size"]!!.jsonPrimitive.long > 0)
+        return ApkManifest(data["versionName"]!!.jsonPrimitive.content, data["versionCode"]!!.jsonPrimitive.long, data["minSdk"]!!.jsonPrimitive.int, data["size"]!!.jsonPrimitive.long, data["sha256"]!!.jsonPrimitive.content, data["releaseNotes"]?.jsonPrimitive?.contentOrNull.orEmpty(), parts)
+    }
+
+    private fun readRelease(latestUrl: String): AppRelease {
+        val (manifestUrl, pointerCode) = parseLatest(fetch(latestUrl).decodeToString(), latestUrl)
+        val manifest = parseManifest(fetch(manifestUrl).decodeToString(), manifestUrl)
+        require(manifest.versionCode == pointerCode)
+        return AppRelease("studev ${manifest.versionName}", manifest, manifestUrl)
+    }
+
+    private fun downloadPart(part: ApkPart, file: File) {
+        require(part.size > 0 && part.name.matches(Regex("part-[0-9]{3,}")))
+        for (attempt in 0 until MAX_RETRIES) {
+            if (file.isFile && file.length() == part.size && digest(file) == part.sha256) return
+            var offset = file.takeIf { it.isFile }?.length() ?: 0L
+            if (offset > part.size) { file.delete(); offset = 0 }
+            if (offset == part.size) { file.delete(); offset = 0 }
+            val connection = open(part.url)
+            if (offset > 0) connection.setRequestProperty("Range", "bytes=$offset-")
+            try {
+                val status = connection.responseCode
+                if (status !in 200..299 && status != 416) throw IOException("分片请求失败：$status")
+                if (offset > 0 && status == 200) { file.delete(); offset = 0 }
+                if (status == 416 && file.length() == part.size && digest(file) == part.sha256) return
+                connection.inputStream.use { input -> FileOutputStream(file, offset > 0).use { output -> input.copyTo(output) } }
+            } catch (error: IOException) {
+                if (attempt == MAX_RETRIES - 1) throw error
+                continue
+            } finally { connection.disconnect() }
+            if (file.length() == part.size && digest(file) == part.sha256) return
+            if (attempt == MAX_RETRIES - 1) throw IOException("分片校验失败：${part.name}")
+        }
+    }
+
+    private fun fetch(url: String): ByteArray = open(url).let { connection -> try { connection.inputStream.use { it.readBytes() } } finally { connection.disconnect() } }
+    private fun open(address: String): HttpURLConnection {
+        val uri = URI(address)
+        require(uri.scheme == "https" || (BuildConfig.DEBUG && (address.startsWith(BuildConfig.DATA_HOST) || uri.host == "127.0.0.1" || uri.host == "localhost")))
+        return (uri.toURL().openConnection() as HttpURLConnection).apply { connectTimeout = 8_000; readTimeout = 15_000 }
+    }
+    private fun digest(file: File): String { val hash = MessageDigest.getInstance("SHA-256"); file.inputStream().use { input -> val buffer = ByteArray(64 * 1024); while (true) { val count = input.read(buffer); if (count < 0) break; hash.update(buffer, 0, count) } }; return hash.digest().joinToString("") { "%02x".format(it) } }
+    private fun updateRoot(context: Context) = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "studev-update")
+    private fun apkFile(context: Context) = File(updateRoot(context), "studev-update.apk")
+    private fun clear(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(PENDING).apply(); updateRoot(context).deleteRecursively() }
 }

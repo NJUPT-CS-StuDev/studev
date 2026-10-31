@@ -1,30 +1,21 @@
 package top.hicancan.studev.me
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppUpdatesTest {
-    private fun release(body: String?, vararg assets: String) = """{"tag_name":"v1.0.1","name":"studev 1.0.1","body":${body?.let { "\"$it\"" } ?: "null"},
-        "assets":[${assets.joinToString(",") { """{"name":"$it","browser_download_url":"https://github.com/NJUPT-CS-StuDev/studev/releases/download/v1.0.1/$it"}""" }}]}"""
+    private val manifest = """{"format":1,"versionName":"1.0.1","versionCode":2,"minSdk":26,"size":6,"sha256":"${"00".repeat(32)}","releaseNotes":"修复","parts":[{"name":"part-000","size":2,"sha256":"${"11".repeat(32)}","url":"part-000"},{"name":"part-001","size":2,"sha256":"${"22".repeat(32)}","url":"part-001"},{"name":"part-002","size":2,"sha256":"${"33".repeat(32)}","url":"part-002"}]}"""
 
-    @Test fun newerDeclaredVersionCodeOffersTheStudevApk() {
-        val result = AppUpdates.parse(release("校园地图\\n\\nversionCode: 2", "studev-1.0.1.apk", "studev.apk"), 1)
-        val offered = (result as UpdateCheck.Available).release
-        assertEquals("studev.apk", offered.asset); assertEquals(2L, offered.versionCode); assertEquals("studev 1.0.1", offered.name)
-        assertTrue(offered.url.endsWith("/v1.0.1/studev.apk"))
+    @Test fun latestPointsToManifestAndAllPartsAreKept() {
+        val (url, code) = AppUpdates.parseLatest("{\"format\":1,\"versionCode\":2,\"manifestUrl\":\"/download/2/manifest.json\"}", "https://studev.hicancan.top/download/latest.json")
+        val parsed = AppUpdates.parseManifest(manifest, url)
+        assertEquals(2L, code); assertEquals("https://studev.hicancan.top/download/2/manifest.json", url)
+        assertEquals(3, parsed.parts.size); assertEquals("part-002", parsed.parts.last().name); assertEquals(26, parsed.minSdk)
     }
 
-    @Test fun sameOrOlderVersionCodeIsCurrent() {
-        assertEquals(UpdateCheck.Current, AppUpdates.parse(release("versionCode: 1", "studev.apk"), 1))
-        assertEquals(UpdateCheck.Current, AppUpdates.parse(release("versionCode：1", "studev.apk"), 3))
-    }
-
-    @Test fun releaseWithoutTheAssetIsNotAnUpdate() {
-        assertEquals(UpdateCheck.Current, AppUpdates.parse(release("versionCode: 9", "studev-1.0.1.apk"), 1))
-    }
-
-    @Test fun undeclaredVersionCodeDefersToTheDownloadedManifest() {
-        val offered = (AppUpdates.parse(release(null, "studev.apk"), 1) as UpdateCheck.Available).release
-        assertNull(offered.versionCode)
+    @Test fun mirrorRelativePartUrlsResolveFromManifest() {
+        val parsed = AppUpdates.parseManifest(manifest, "https://github.com/NJUPT-CS-StuDev/studev/releases/download/v1/manifest.json")
+        assertTrue(parsed.parts.first().url.startsWith("https://github.com/NJUPT-CS-StuDev/studev/releases/download/v1/"))
     }
 }

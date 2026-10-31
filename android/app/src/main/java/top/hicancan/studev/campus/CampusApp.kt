@@ -2,11 +2,8 @@ package top.hicancan.studev.campus
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.app.DownloadManager
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
@@ -75,16 +72,6 @@ import top.hicancan.studev.timetable.*
         lifecycle.addObserver(observer)
         if (access.granted && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) location.acquire(owner)
         onDispose { lifecycle.removeObserver(observer); location.release(owner) }
-    }
-    DisposableEffect(context, lifecycle) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
-                    runCatching { AppUpdates.installDownloaded(context) }.getOrNull()?.let(model::tell)
-            }
-        }
-        ContextCompat.registerReceiver(context, receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED)
-        onDispose { context.unregisterReceiver(receiver) }
     }
     var now by remember { mutableStateOf(CampusDay.now()) }
     LaunchedEffect(Unit) { while (true) { now = CampusDay.now(); delay(30_000) } }

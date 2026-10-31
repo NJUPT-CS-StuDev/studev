@@ -143,9 +143,11 @@ android {
         applicationId = "top.hicancan.studev"
         minSdk = 26
         targetSdk = 36
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
-        versionCode = 1
-        versionName = "1.0.0"
+        // Production distribution is arm64 only. Debug keeps x86_64 so the
+        // emulator remains a first-class development target.
+        ndk { abiFilters += listOf("arm64-v8a") }
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -161,6 +163,7 @@ android {
 
     buildTypes {
         debug {
+            ndk { abiFilters += listOf("x86_64") }
             buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse("https://studev.hicancan.top").trimEnd('/')}\"")
         }
         release {
