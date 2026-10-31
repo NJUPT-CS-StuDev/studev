@@ -120,9 +120,15 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
     val state = rememberBottomSheetScaffoldState()
     val sheet = state.bottomSheetState
-    LaunchedEffect(place.id, sheetMode) { if (sheetMode == MapSheetState.Full) sheet.expand() else sheet.partialExpand() }
+    var sheetReady by remember { mutableStateOf(false) }
+    LaunchedEffect(place.id, sheetMode) {
+        sheetReady = false
+        if (sheetMode == MapSheetState.Full) sheet.expand() else sheet.partialExpand()
+        sheetReady = true
+    }
     LaunchedEffect(sheet) {
         snapshotFlow { sheet.currentValue }.collect { value ->
+            if (!sheetReady) return@collect
             when (value) {
                 SheetValue.Expanded -> if (sheetMode != MapSheetState.Full) onSheetModeChange(MapSheetState.Full)
                 SheetValue.PartiallyExpanded -> if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)

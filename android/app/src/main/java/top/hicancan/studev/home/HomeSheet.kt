@@ -50,6 +50,7 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
     var debugMenu by remember { mutableStateOf(false) }
     val state = rememberBottomSheetScaffoldState()
     val scope = rememberCoroutineScope()
+    var sheetReady by remember { mutableStateOf(false) }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
     val categories = remember(campus) { listOf("食堂", "图书馆", "教学楼", "超市", "快递", "打印", "体育", "校医院")
         .filter { c -> campus.places.any { it.category == c } } }
@@ -58,10 +59,13 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
         if (category != null) category = null else onSheetModeChange(if (sheetMode == MapSheetState.Full) MapSheetState.Half else MapSheetState.Collapsed)
     }
     LaunchedEffect(sheetMode) {
+        sheetReady = false
         if (sheetMode == MapSheetState.Full) state.bottomSheetState.expand() else state.bottomSheetState.partialExpand()
+        sheetReady = true
     }
     LaunchedEffect(state.bottomSheetState) {
         snapshotFlow { state.bottomSheetState.currentValue }.collect { value ->
+            if (!sheetReady) return@collect
             when (value) {
                 SheetValue.Expanded -> if (sheetMode != MapSheetState.Full) onSheetModeChange(MapSheetState.Full)
                 SheetValue.PartiallyExpanded -> if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)
