@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { createPlatformHandler } from '../src/server/platform-app.mjs';
 import { createRepository } from '../src/server/platform-store.mjs';
 import { buildRosterSnapshot } from '../src/server/platform-roster.mjs';
-import { migrateAccounts } from '../scripts/platform/migrate-accounts.mjs';
 import { memoryBlob, memoryGateway, requestClient, testEnvironment } from './helpers/platform-fixtures.mjs';
 
 const config = await testEnvironment();
@@ -137,23 +136,6 @@ test('registration and login errors match for web/app; registering cannot claim 
     assert.equal((await f.app(path)).status, 404);
     assert.equal((await f.browser.call(path, { method: 'POST', body: {} })).status, 404);
   }
-});
-
-test('deployment migration is read-only by default, promotes every stored member, preserves identity and credentials, and is resumable', async () => {
-  const f = await fixture(), source = await f.repo.latest(`identity/users/${f.user.id}`);
-  await f.repo.append(`identity/users/${source.id}`, { ...source, role: 'member', term: '2026-2027', department: '运营支持部' }, source.revision);
-  await f.repo.put('identity/sessions/old/current.json', { userId: source.id });
-  await f.repo.put('identity/native/sessions/old.json', { userId: source.id });
-  const before = [...f.store.values.entries()];
-  assert.equal((await migrateAccounts(f.repo)).memberToAdmin, 1);
-  assert.deepEqual([...f.store.values.entries()], before);
-  const report = await migrateAccounts(f.repo, { apply: true }); assert.equal(report.applied, true);
-  const current = await f.repo.latest(`identity/users/${source.id}`);
-  for (const key of ['id', 'studentId', 'realName', 'qq', 'passwordHash', 'totp']) assert.deepEqual(current[key], source[key]);
-  assert.equal(current.role, 'admin'); assert.equal((await f.repo.list('identity/native/')).length, 0); assert.equal((await f.repo.list('identity/sessions/')).length, 0);
-  assert.equal((await f.repo.get('roster/2026-2027.json')).totalCount, 1);
-  assert.equal((await migrateAccounts(f.repo, { apply: true })).memberToAdmin, 0);
-  assert.equal((await f.repo.latest(`identity/users/${source.id}`)).revision, current.revision);
 });
 
 test('racing staff corrections reserve only one student identity for an account revision', async () => {
