@@ -50,6 +50,13 @@ import androidx.compose.foundation.lazy.items
     LaunchedEffect(Unit) {
         dorms = CampusPackage.load(context.assets).places.filter { it.kind == "building" && it.category == "宿舍" }
     }
+    LaunchedEffect(preferences.navigationGuidancePending) {
+        if (preferences.navigationGuidancePending && !preferences.navigationGuidanceShown) {
+            backgroundStatus = BackgroundRunSettings.status(context)
+            backgroundSettings = true
+            model.settings.update { it.copy(navigationGuidancePending = false, navigationGuidanceShown = true) }
+        }
+    }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (TimetableCalendar.permitted(context)) model.calendar(!removal) else model.tell("需要日历权限才能同步或移除 studev 日历")
     }

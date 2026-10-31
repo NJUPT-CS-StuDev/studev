@@ -165,8 +165,9 @@ class NavigationRuntime private constructor(private val context: Context) {
             val route = checkNotNull(state.value.route)
             persisted.save(PersistedNavigationSession(route, state.value.destinationName, state.value.mode, state.value.avoidSteps,
                 destination = goal ?: Endpoint.Target(state.value.destinationName)))
-            val firstNavigation = !settings.getBoolean("navigation-guidance", false)
-            if (firstNavigation) settings.edit().putBoolean("navigation-guidance", true).apply()
+            val firstNavigation = !settings.getBoolean("navigation-guidance-started", false)
+            if (firstNavigation) settings.edit().putBoolean("navigation-guidance-started", true)
+                .putBoolean("navigation-guidance-pending", true).apply()
             if (firstNavigation) notice("后台导航需要持续定位，可在“我的 → 后台运行设置”检查一次。")
             ContextCompat.startForegroundService(context, Intent(context, NavigationService::class.java)
                 .putExtra("simulate", simulated).putExtra("speed", speed))

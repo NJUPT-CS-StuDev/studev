@@ -13,6 +13,7 @@ data class PersonalSettings(
     val leadMinutes: Int = 15,
     val homeDorm: String? = null,
     val navigationGuidanceShown: Boolean = false,
+    val navigationGuidancePending: Boolean = false,
     val reminderGuidanceShown: Boolean = false,
 )
 class CampusSettings(context: Context) {
@@ -27,6 +28,7 @@ class CampusSettings(context: Context) {
         leadMinutes = store.getInt("lead", 15),
         homeDorm = store.getString("home-dorm", null),
         navigationGuidanceShown = store.getBoolean("navigation-guidance", false),
+        navigationGuidancePending = store.getBoolean("navigation-guidance-pending", false),
         reminderGuidanceShown = store.getBoolean("reminder-guidance", false),
     ))
     val state = _state.asStateFlow()
@@ -35,6 +37,7 @@ class CampusSettings(context: Context) {
         store.edit().putString("class", next.klass).putString("campus", next.campus).putString("theme", next.theme)
             .putBoolean("calendar", next.calendar).putBoolean("reminders", next.reminders).putInt("lead", next.leadMinutes).putString("home-dorm", next.homeDorm)
             .putBoolean("navigation-guidance", next.navigationGuidanceShown)
+            .putBoolean("navigation-guidance-pending", next.navigationGuidancePending)
             .putBoolean("reminder-guidance", next.reminderGuidanceShown).apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
