@@ -48,7 +48,8 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
     val moment = DayMoment.at(now.hour)
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var debugMenu by remember { mutableStateOf(false) }
-    val state = rememberBottomSheetScaffoldState()
+    val bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    val state = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState)
     val scope = rememberCoroutineScope()
     var sheetReady by remember { mutableStateOf(false) }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
@@ -74,7 +75,8 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
         }
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
-        sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 144.dp; MapSheetState.Half -> peek; MapSheetState.Full -> 104.dp }, sheetContainerColor = MaterialTheme.colorScheme.surface,
+        sheetDragHandle = null,
+        sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 96.dp; MapSheetState.Half -> peek; MapSheetState.Full -> 96.dp }, sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), sheetShadowElevation = 8.dp,
         sheetContent = {
             Column(Modifier.fillMaxWidth().height(height * .88f).navigationBarsPadding()) {

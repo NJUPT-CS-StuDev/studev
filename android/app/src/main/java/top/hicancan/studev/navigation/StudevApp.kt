@@ -88,7 +88,7 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
                             if (access.granted && status == LocationStatus.Disabled) context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                             else requestLocation()
                         }, homePeek = homePeek)
-                    if (selected != null) PlaceSheet(selected, loaded, model.preferences, sheetMode = sheetMode, onSheetModeChange = { sheetMode = it },
+                    if (selected != null) PlaceSheet(selected, loaded, model.preferences, homePeek, sheetMode = sheetMode, onSheetModeChange = { sheetMode = it },
                         onSearch = { nav.navigate("search") { launchSingleTop = true } },
                         onClose = { model.select(null); sheetMode = MapSheetState.Collapsed }, onPlace = { model.select(it.id); sheetMode = MapSheetState.Half }, onRoute = { runtime.open(selected) })
                     else HomeSheet(loaded, fix?.position, homePeek, sheetMode = sheetMode, onSheetModeChange = { sheetMode = it },

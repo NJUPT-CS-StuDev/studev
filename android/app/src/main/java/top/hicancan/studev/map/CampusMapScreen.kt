@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -111,14 +112,17 @@ private fun MapButton(description: String, icon: ImageVector, onClick: () -> Uni
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlacePreferences,
+                        peek: Dp,
                         sheetMode: MapSheetState, onSheetModeChange: (MapSheetState) -> Unit,
                         onSearch: () -> Unit,
                         onClose: () -> Unit, onPlace: (Place) -> Unit, onRoute: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val saved by preferences.saved.collectAsStateWithLifecycle(emptySet())
+    var detailExpanded by rememberSaveable(place.id) { mutableStateOf(false) }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
-    val state = rememberBottomSheetScaffoldState()
+    val bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    val state = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState)
     val sheet = state.bottomSheetState
     var sheetReady by remember { mutableStateOf(false) }
     LaunchedEffect(place.id, sheetMode) {
@@ -141,7 +145,8 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
         else if (sheetMode == MapSheetState.Half) onSheetModeChange(MapSheetState.Collapsed) else onClose()
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
-         sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 144.dp; MapSheetState.Half -> height * .52f; MapSheetState.Full -> 104.dp },
+         sheetDragHandle = null,
+         sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 96.dp; MapSheetState.Half -> peek; MapSheetState.Full -> 96.dp },
         sheetShape = RoundedCornerShape(topStart = Tokens.Radius.sheet.dp, topEnd = Tokens.Radius.sheet.dp),
         sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShadowElevation = Tokens.Elevation.sheet.dp,
@@ -150,7 +155,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                 .padding(horizontal = Tokens.Space.xl.dp).padding(bottom = Tokens.Space.xxl.dp),
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
                  Surface(onClick = { onSheetModeChange(if (sheetMode == MapSheetState.Collapsed) MapSheetState.Half else if (sheetMode == MapSheetState.Half) MapSheetState.Full else MapSheetState.Collapsed) },
-                     modifier = Modifier.fillMaxWidth().height(24.dp), color = Color.Transparent) {
+                     modifier = Modifier.fillMaxWidth().height(24.dp).testTag("map-sheet-handle"), color = Color.Transparent) {
                      Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Surface(Modifier.width(38.dp).height(4.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.outlineVariant) {} }
                  }
                 Surface(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
@@ -190,7 +195,9 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                         Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(Tokens.Space.xs.dp)); Text("分享")
                     }
                 }
-                 TextButton(onClick = { onSheetModeChange(if (sheetMode == MapSheetState.Collapsed) MapSheetState.Half else MapSheetState.Full) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                 TextButton(onClick = {
+                     if (!detailExpanded) detailExpanded = true else onSheetModeChange(MapSheetState.Full)
+                 }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                     Text("地点详情"); Icon(Icons.Outlined.KeyboardArrowDown, null)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
