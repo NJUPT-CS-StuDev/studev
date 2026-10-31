@@ -15,7 +15,7 @@ class AppUpdatesTest {
     }
 
     @Test fun mirrorRelativePartUrlsResolveFromManifest() {
-        val parsed = AppUpdates.parseManifest(manifest, "https://github.com/NJUPT-CS-StuDev/studev/releases/download/v1/manifest.json")
-        assertTrue(parsed.parts.first().url.startsWith("https://github.com/NJUPT-CS-StuDev/studev/releases/download/v1/"))
+        val parsed = AppUpdates.parseManifest(manifest, url)
+        assertTrue(parsed.parts.first().url.startsWith("https://studev.hicancan.top/download/2/"))
     }
 }

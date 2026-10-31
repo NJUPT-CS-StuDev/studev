@@ -24,7 +24,6 @@ sealed interface UpdateCheck { data class Available(val release: AppRelease) : U
 
 object AppUpdates {
     const val PRIMARY_LATEST = "/download/latest.json"
-    const val MIRROR_LATEST = "https://github.com/NJUPT-CS-StuDev/studev/releases/latest/download/latest.json"
     private const val PREFS = "app-update"
     private const val PENDING = "pending"
     private const val MAX_RETRIES = 3
@@ -32,7 +31,7 @@ object AppUpdates {
     suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
         runCatching {
             val primary = "${BuildConfig.DATA_HOST}$PRIMARY_LATEST"
-            val release = runCatching { readRelease(primary) }.getOrElse { readRelease(MIRROR_LATEST) }
+            val release = readRelease(primary)
             if (release.manifest.versionCode <= BuildConfig.VERSION_CODE) UpdateCheck.Current else UpdateCheck.Available(release)
         }.getOrDefault(UpdateCheck.Unavailable)
     }

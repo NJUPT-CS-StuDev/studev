@@ -10,6 +10,10 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
+val productConfig = rootProject.file("../src/campus/app/config/product.ts").readText()
+val productVersion = Regex("VERSION\\s*:\\s*'([^']+)'").find(productConfig)?.groupValues?.get(1)
+    ?: error("src/campus/app/config/product.ts must declare ANDROID_APP.VERSION")
+
 abstract class DesignTokensTask : DefaultTask() {
     @get:InputFile abstract val tokensFile: RegularFileProperty
     @get:OutputDirectory abstract val kotlinDir: DirectoryProperty
@@ -147,7 +151,7 @@ android {
         // emulator remains a first-class development target.
         ndk { abiFilters += listOf("arm64-v8a") }
         versionCode = 3
-        versionName = "1.0.2"
+        versionName = productVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

@@ -60,7 +60,6 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }
     companion object {
         private val locks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
-        const val HOST = "https://studev.hicancan.top"
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         fun download(address: String): ByteArray {
             val url = URI(address).toURL()
