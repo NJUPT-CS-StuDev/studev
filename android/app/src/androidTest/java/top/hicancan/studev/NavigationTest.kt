@@ -246,8 +246,9 @@ class NavigationTest {
         }
     }
     @Test fun screenOffNavigationReplayKeepsForegroundServiceAlive() = runBlocking {
-        org.junit.Assume.assumeTrue("Screen controls require the emulator", Build.HARDWARE in listOf("ranchu", "goldfish"))
-        val seconds = InstrumentationRegistry.getArguments().getString("holdSeconds")?.toLongOrNull()?.coerceIn(20, 3600) ?: 20
+        val requestedSeconds = InstrumentationRegistry.getArguments().getString("holdSeconds")
+        org.junit.Assume.assumeTrue("Screen controls require the emulator", Build.HARDWARE in listOf("ranchu", "goldfish") || requestedSeconds != null)
+        val seconds = requestedSeconds?.toLongOrNull()?.coerceIn(20, 3600) ?: 20
         fun shell(command: String): String = instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
             android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes().decodeToString() }
         }
