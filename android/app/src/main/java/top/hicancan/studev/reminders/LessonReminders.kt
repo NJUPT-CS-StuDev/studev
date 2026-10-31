@@ -100,8 +100,10 @@ class ReminderReceiver : BroadcastReceiver() {
 }
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        if (inputData.getLong("start", 0) > System.currentTimeMillis())
-            LessonReminders.notify(applicationContext, inputData.getString("id") ?: return Result.failure(), inputData.getString("title").orEmpty(), inputData.getString("room"))
+        // WorkManager is the permitted fallback when exact access is absent.
+        // It may run late under Doze/OEM policy; deliver the reminder when it
+        // runs instead of dropping it just because the planned instant passed.
+        LessonReminders.notify(applicationContext, inputData.getString("id") ?: return Result.failure(), inputData.getString("title").orEmpty(), inputData.getString("room"))
         return Result.success()
     }
 }

@@ -3,6 +3,7 @@ package top.hicancan.studev
 import android.Manifest
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.SystemClock
 import android.app.Notification
 import android.content.ComponentName
 import android.content.pm.ServiceInfo
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.junit.Assert.*
 import org.junit.Rule
@@ -240,6 +242,59 @@ class NavigationTest {
             }
             assertTrue(services.contains("NavigationService"))
         } finally {
+            main { runtime.stop(close = true) }
+        }
+    }
+    @Test fun screenOffNavigationReplayKeepsForegroundServiceAlive() = runBlocking {
+        org.junit.Assume.assumeTrue("Screen controls require the emulator", Build.HARDWARE in listOf("ranchu", "goldfish"))
+        val seconds = InstrumentationRegistry.getArguments().getString("holdSeconds")?.toLongOrNull()?.coerceIn(20, 3600) ?: 20
+        fun shell(command: String): String = instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes().decodeToString() }
+        }
+        var cycles = 0
+        try {
+            permissions(); compose.waitForIdle()
+            val campus = CampusPackage.load(context.assets)
+            main { runtime.open(campus.byId.getValue("教3")); runtime.origin(campus.byId.getValue("梅苑1栋")) }
+            compose.waitUntil(20_000) { runtime.state.value.route != null && !runtime.state.value.busy }
+            main { runtime.start(true, 1.0) }
+            compose.waitUntil(15_000) { runtime.state.value.trip.update != null }
+            shell("input keyevent 223")
+            val started = SystemClock.elapsedRealtime()
+            while (SystemClock.elapsedRealtime() - started < seconds * 1000) {
+                val notification = context.getSystemService(android.app.NotificationManager::class.java)
+                    .activeNotifications.any { it.id == NavigationService.ID }
+                assertTrue("navigation notification disappeared", notification)
+                if (runtime.state.value.trip.phase == TripPhase.Arrived) {
+                    // Let the service finish its native session and stop itself
+                    // before starting the next replay cycle.
+                    compose.waitUntil(10_000) {
+                        context.getSystemService(android.app.NotificationManager::class.java)
+                            .activeNotifications.none { it.id == NavigationService.ID }
+                    }
+                    main { runtime.stop() }
+                    delay(1000)
+                    main { runtime.start(true, 1.0) }
+                    compose.waitUntil(15_000) { runtime.state.value.trip.update != null }
+                    cycles++
+                }
+                delay(1000)
+            }
+            val elapsed = SystemClock.elapsedRealtime() - started
+            File(context.getExternalFilesDir(null), "screen-off-replay.txt").writeText(
+                "duration_ms=$elapsed cycles=$cycles\n${shell("dumpsys power | grep -E 'mWakefulness=|mInteractive='")}\n" +
+                    shell("dumpsys activity services ${context.packageName} | grep -E 'NavigationService|isForeground|startForegroundCount'"),
+            )
+            shell("input keyevent 224")
+            shell("wm dismiss-keyguard")
+            File(context.getExternalFilesDir(null), "shots").mkdirs()
+            val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+            File(context.getExternalFilesDir(null), "shots/screen-off-replay.png").outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        } finally {
+            shell("input keyevent 224")
             main { runtime.stop(close = true) }
         }
     }

@@ -186,6 +186,7 @@ class PresentationTest {
                 Thread.sleep(20_000)
             }
             val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+            File(context.getExternalFilesDir(null), "shots").mkdirs()
             File(context.getExternalFilesDir(null), "shots/notification-screen-off.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
             shell("cmd statusbar collapse")
         } finally { shell("input keyevent 224"); shell("cmd statusbar collapse"); restore() }
