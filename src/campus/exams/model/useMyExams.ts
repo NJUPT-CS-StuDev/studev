@@ -16,7 +16,7 @@ export interface MyExams {
 }
 
 const NONE: MyExams = { ownCodes: null, addedExams: [] };
-const teachingClassOf = (meeting: TeachingMeeting) => meeting.teaching_class.id ?? meeting.id;
+const teachingClassOf = (meeting: TeachingMeeting) => meeting.teaching_class.id;
 
 /**
  * Which exams of a class are the visitor's own. A class exam list also holds the

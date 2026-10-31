@@ -51,7 +51,7 @@ object TimetableCalendar {
                 put(CalendarContract.Events.CALENDAR_ID, id); put(CalendarContract.Events._SYNC_ID, event.id)
                 put(CalendarContract.Events.TITLE, if (event.exam) "考试 · ${event.title}" else event.title)
                 put(CalendarContract.Events.DTSTART, event.start.toEpochMilli()); put(CalendarContract.Events.DTEND, event.end.toEpochMilli())
-                put(CalendarContract.Events.EVENT_TIMEZONE, top.hicancan.studev.timetable.CampusDay.zone.id); put(CalendarContract.Events.EVENT_LOCATION, event.location ?: event.room.orEmpty())
+                put(CalendarContract.Events.EVENT_TIMEZONE, "Asia/Shanghai"); put(CalendarContract.Events.EVENT_LOCATION, event.room.orEmpty())
                 put(CalendarContract.Events.DESCRIPTION, event.description); put(CalendarContract.Events.HAS_ALARM, 0)
             }
             val old = existing.remove(event.id)

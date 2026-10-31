@@ -12,7 +12,8 @@ const createMeeting = (meetingId: string, courseCode: string, courseName: string
         hours: null,
         hours_composition: null,
         assessment: null,
-        exam: null
+        exam: null,
+        teaching_class_ids: [`teaching-class/${meetingId}`]
     },
     teaching_class: {
         id: meetingId,
@@ -25,8 +26,7 @@ const createMeeting = (meetingId: string, courseCode: string, courseName: string
     periods: [6, 7],
     id: meetingId,
     campus: '仙林',
-    room: null,
-    location: meetingId === 'lecture' ? '教3-409' : '教4-211(5)',
+    room: meetingId === 'lecture' ? '教3-409' : '教4-211(5)',
     weekday: 1,
     weeks: [1],
     method: null,

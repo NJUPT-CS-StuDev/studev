@@ -9,7 +9,7 @@ const tempRoot = process.platform === 'win32' ? 'D:/Temp/codex' : '/tmp/codex';
 let taskDir: string, input: string, output: string;
 const term: TeachingTerm = { term: '2026-2027-1', year: 2026, number: 1, weeks: [{ week: 1, start: '2026-08-31', end: '2026-09-06' }], observed_at: '2026-10-25T14:12:05Z' };
 const klass: TeachingClass = { id: 'B240402', name: 'B240402', grade: '2024', college: '计算机学院', major: '计算机', campus: '仙林', students: 30, practice: ['课程设计'] };
-const facts = [meeting({ teachers: [{ name: '甲', title: '教授', role: '主讲', weeks: [1] }, { name: '乙', title: null, role: '辅讲', weeks: [2] }] }), meeting({ id: 'elective', classes: [], teaching_class: { id: null, name: null, size: null, enrolled: null, capacity: null } })];
+const facts = [meeting({ teachers: [{ id: 'teacher/a', name: '甲', title: '教授', role: '主讲', weeks: [1] }, { id: 'teacher/b', name: '乙', title: null, role: '辅讲', weeks: [2] }] }), meeting({ id: 'elective', classes: [], teaching_class: { id: 'teaching-class/elective', name: '选修教学班', size: null, enrolled: null, capacity: null } })];
 const exams = [exam()];
 const changes: ExamChange[] = [{ observed: '2026-06-12', class: 'REMOVED', course: { code: 'JS102', name: '离散数学' }, change: 'removed', before: [{ date: '2026-07-01', start: '08:00', end: '09:50', campus: '仙林', location: '教1-101', teacher: null, students: null }], after: null }];
 const day: RoomDay = { date: '2026-08-31', week: 1, weekday: 1, observed_at: '2026-10-25T14:46:45Z', free: { 1: ['教1-102'], 2: ['教1-101'] }, occupied: { '教1-101': [{ kind: 'class', id: facts[0]!.id, course: '算法', teachers: ['甲'], classes: ['B240402'], periods: [1, 2] }] } };

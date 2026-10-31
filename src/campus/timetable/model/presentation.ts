@@ -3,11 +3,11 @@ import { courseToneIndex } from './courseColors';
 import { describeMeetingOverlap, groupOverlappingMeetings } from './overlapLayout';
 import { alternatingWeekLabel, showAsInactiveAlternating, showAsSuspended } from './weekPattern';
 
-const meetingNote = (meeting: TeachingMeeting): string => [
-    meeting.location === '翻转课堂线上自学' ? '翻转课堂 · 线上自学' : '',
+export const meetingNote = (meeting: TeachingMeeting): string => [
+    meeting.room === '翻转课堂线上自学' ? '翻转课堂 · 线上自学' : '',
     meeting.method && meeting.method !== '面授讲课' ? meeting.method.trim() : '',
 ].filter(Boolean).join(' · ');
-const meetingRoom = (meeting: TeachingMeeting): string => meeting.location === '翻转课堂线上自学' ? '' : meeting.location ?? meeting.room ?? '';
+export const meetingRoom = (meeting: TeachingMeeting): string => meeting.room === '翻转课堂线上自学' ? '' : meeting.room ?? '';
 
 /** Display policy and its real-data examples live in academics/parity/spec.json. */
 const meetingState = (meeting: TeachingMeeting, week: number) => meeting.weeks.includes(week)

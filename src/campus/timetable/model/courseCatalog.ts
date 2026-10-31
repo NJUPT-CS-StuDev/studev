@@ -1,18 +1,18 @@
 import type { TeachingMeeting } from '@/academics/timetable';
 /** One displayed teaching class, retaining every original meeting. */
 export interface CatalogCourse { meetings: TeachingMeeting[] }
-export const catalogId = (course: CatalogCourse): string => course.meetings[0]!.teaching_class.id ?? course.meetings[0]!.id;
+export const catalogId = (course: CatalogCourse): string => course.meetings[0]!.teaching_class.id;
 export const groupCatalog = (meetings: TeachingMeeting[]): CatalogCourse[] => {
     const groups = new Map<string, CatalogCourse>();
     for (const meeting of meetings) {
-        const id = meeting.teaching_class.id ?? meeting.id;
+        const id = meeting.teaching_class.id;
         const group = groups.get(id) ?? { meetings: [] };
         group.meetings.push(meeting); groups.set(id, group);
     }
     return [...groups.values()];
 };
 const catalogText = (course: CatalogCourse): string => normalize(course.meetings.flatMap(m => [
-    m.course.name, m.course.code ?? '', ...m.teachers.map(t => t.name), m.location ?? '', ...m.classes,
+    m.course.name, m.course.code ?? '', ...m.teachers.map(t => t.name), m.room ?? '', ...m.classes,
 ]).join(' '));
 
 /** Full-width punctuation and spacing differ between sources ("教3－405", "教3-405"). */

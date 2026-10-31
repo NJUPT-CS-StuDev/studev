@@ -135,6 +135,15 @@ async function main() {
         for (const file of ['places.json', 'places.geojson', 'ways.geojson', 'network.json', 'basemap.pmtiles']) {
             if (existsSync(join(from, file))) await copyFile(join(from, file), join(to, file));
         }
+        // Entity facts are the shared published graph used by both clients. The
+        // reconciliation report is build evidence, not client data.
+        const entitiesFrom = join(from, 'entities');
+        const entitiesTo = join(to, 'entities');
+        await mkdir(entitiesTo, { recursive: true });
+        for (const file of ['index.json', 'space.json', 'agent.json', 'information.json', 'time.json']) {
+            if (!existsSync(join(entitiesFrom, file))) throw new Error(`${version} is missing space/${campus}/entities/${file}`);
+            await copyFile(join(entitiesFrom, file), join(entitiesTo, file));
+        }
         // Places and rooms as their own small search bundle, so finding a place works offline
         // in the app and gives the same answer on the web.
         const places = await read<{ id: string; kind: string; names: string[]; houses?: string[]; parent?: string; floor?: string | null }[]>(join(from, 'places.json'));

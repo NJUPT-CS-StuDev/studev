@@ -98,7 +98,7 @@ export const generateICSContent = (
             `DTSTART;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${formatICSDate(examTimestamp(exam, 'start'))}`,
             `DTEND;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${formatICSDate(examTimestamp(exam, 'end'))}`,
             `SUMMARY:${escapeICSValue(`考试: ${exam.course.name}`)}`,
-            `LOCATION:${escapeICSValue([exam.campus ? '[' + exam.campus + ']' : '', exam.location].filter(Boolean).join(' '))}`,
+            `LOCATION:${escapeICSValue([exam.campus ? '[' + exam.campus + ']' : '', exam.room].filter(Boolean).join(' '))}`,
             `DESCRIPTION:${escapeICSValue(description)}`,
             'STATUS:CONFIRMED'
         );

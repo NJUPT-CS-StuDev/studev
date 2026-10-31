@@ -27,7 +27,7 @@ const currentWeek = (loaded: LoadedClassSchedule): number => {
     return loaded.term.weeks.find(week => today >= week.start && today <= week.end)?.week ?? 1;
 };
 
-const teachingClassOf = (meeting: TeachingMeeting): string => meeting.teaching_class.id ?? meeting.id;
+const teachingClassOf = (meeting: TeachingMeeting): string => meeting.teaching_class.id;
 
 const groupCourses = (meetings: TeachingMeeting[], source: TimetableCourse['source'], hidden: Set<string>): TimetableCourse[] => {
     const groups = new Map<string, TeachingMeeting[]>();

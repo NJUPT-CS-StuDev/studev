@@ -176,7 +176,7 @@ class CampusTabsTest {
         val now = Instant.now()
         val repository = AcademicRepository.open(context)
         val room = repository.rooms().rooms.first { it.id.contains("教3-601") }.id
-        val event = CampusEvent("test-notification-${now.epochSecond}", "算法与数据结构", now.plusSeconds(68), now.plusSeconds(3600), room, room, "提醒调度验证", false)
+        val event = CampusEvent("test-notification-${now.epochSecond}", "算法与数据结构", now.plusSeconds(68), now.plusSeconds(3600), room, "提醒调度验证", false)
         LessonReminders.sync(context, listOf(event), true, 1)
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         compose.waitUntil(30000) { manager.activeNotifications.any { it.id == event.id.hashCode() } }

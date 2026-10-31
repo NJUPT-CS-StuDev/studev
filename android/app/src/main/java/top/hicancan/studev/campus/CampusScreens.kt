@@ -47,7 +47,7 @@ import java.time.temporal.ChronoUnit
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(event.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                Supporting(event.room ?: event.location ?: "地点待定")
+                Supporting(event.room ?: "地点待定")
             }
             if (event.room != null) IconButton({ onRoute(event.room, false) }) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, "去这里 ${event.room}") }
         }
@@ -94,7 +94,7 @@ import java.time.temporal.ChronoUnit
                     }
                     Text(next.title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.Place, null, modifier = Modifier.size(18.dp)); Text(next.room ?: next.location ?: "地点待定", style = MaterialTheme.typography.bodyMedium)
+                        Icon(Icons.Outlined.Place, null, modifier = Modifier.size(18.dp)); Text(next.room ?: "地点待定", style = MaterialTheme.typography.bodyMedium)
                     }
                     if (walk != null) Text("从我的位置步行约 $walk 分钟", style = MaterialTheme.typography.bodySmall)
                     else if (!locationGranted) TextButton(onLocation, contentPadding = PaddingValues(0.dp)) { Text("开启定位，查看步行时间") }

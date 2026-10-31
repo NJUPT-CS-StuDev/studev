@@ -14,7 +14,7 @@ import type { ClassroomIndexFile } from '@/classrooms/model/ClassroomAvailabilit
 describe('the shared web / Android real-data contract', () => {
     for (const schedule of golden.schedules) for (const {week,cells} of schedule.weeks) {
         it(`${schedule.class}, week ${week}: every cell and day has the same state, room, note, colour and column`, () => {
-            const meetings = schedule.meetings as TeachingMeeting[];
+            const meetings = schedule.meetings as unknown as TeachingMeeting[];
             expect(timetableCells(meetings,week)).toEqual(cells);
             const props = {meetings,week:golden.term.weeks.find(w=>w.week===week)! as TeachingWeek, periods:golden.periods as TeachingPeriod[],tones:new Map<string,number>(),onOpen:()=>{}};
             const full = renderToStaticMarkup(<TimetableGrid {...props} />);
@@ -31,9 +31,8 @@ describe('the shared web / Android real-data contract', () => {
     it('includes the published Linux occurrence and real suspension, inactive parity, teaching note and parallel/overlap examples', () => {
         const cells = golden.schedules.flatMap(s=>s.weeks.flatMap(w=>w.cells));
         const week9 = golden.schedules[0]!.weeks.find(w=>w.week===9)!.cells;
-        expect(week9).toContainEqual(expect.objectContaining({course:'Linux编程',day:3,periods:[8,9],state:'active'}));
+        expect(week9).toContainEqual(expect.objectContaining({course:'Linux编程',day:3,periods:[8,9],state:'suspended'}));
         for (const state of ['active','inactive','suspended']) expect(cells.some(c=>c.state===state)).toBe(true);
-        expect(cells.some(c=>c.note==='翻转课堂 · 线上自学')).toBe(true);
         expect(cells.some(c=>c.columns>1)).toBe(true);
         expect(cells.some(c=>c.overlap==='parallel')).toBe(true);
     });

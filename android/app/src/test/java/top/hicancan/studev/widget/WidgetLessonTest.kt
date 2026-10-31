@@ -8,7 +8,7 @@ import java.time.Instant
 class WidgetLessonTest {
     private val morning = Instant.parse("2026-10-30T00:00:00Z") // 08:00 Shanghai
     private fun event(start: Instant = morning, exam: Boolean = false) = CampusEvent("event", "嵌入式手机终端开发技术", start,
-        start.plusSeconds(5400), "教4-208", null, "", exam)
+        start.plusSeconds(5400), "教4-208", "", exam)
     @Test fun departureUsesKernelMinutesAndThreeMinuteBuffer() {
         assertEquals("07:39 出门", WidgetLesson.headline(event(), morning.minusSeconds(3600), 18))
         assertEquals(morning.minusSeconds(21 * 60L), WidgetLesson.departure(event(), 18))

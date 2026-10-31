@@ -161,7 +161,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
             Supporting("${periods.find { it.period == meeting.periods.first() }?.start.orEmpty()} — ${periods.find { it.period == meeting.periods.last() }?.end.orEmpty()}")
             HorizontalDivider()
             DetailLine("授课教师", meeting.teachers.joinToString("、") { it.name }.ifEmpty { "待公布" })
-            DetailLine("上课地点", listOfNotNull(meeting.campus, meeting.location ?: meeting.room).joinToString(" · ").ifEmpty { "待公布" })
+            DetailLine("上课地点", listOfNotNull(meeting.campus, meeting.room).joinToString(" · ").ifEmpty { "待公布" })
             TimetablePresentation.note(meeting).takeIf { it.isNotEmpty() }?.let { DetailLine("授课方式", it) }
             DetailLine("教学周", meeting.weeks.joinToString("、") + " 周")
             meeting.course.credits?.let { DetailLine("学分与考核", "$it 学分 · ${meeting.course.assessment ?: "待公布"}") }

@@ -8,7 +8,7 @@ const weekday = (day: number) => `周${'一二三四五六日'[day - 1] ?? day}`
 
 export const meetingLine = (meeting: TeachingMeeting): string => [
     `${weekday(meeting.weekday)} ${meeting.periods[0]}–${meeting.periods[1]}节`,
-    meeting.location?.replace(/－/g, '-') ?? '地点未定',
+    meeting.room?.replace(/－/g, '-') ?? '地点未定',
     formatWeekNumbers(meeting.weeks),
 ].join(' · ');
 
