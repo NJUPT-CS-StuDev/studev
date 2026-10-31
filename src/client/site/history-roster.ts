@@ -203,47 +203,23 @@ async function initRoster() {
   scrollToHashTarget();
 
   const term = section.dataset.rosterTerm || '2026-2027';
-  const cacheKey = `studev_roster_${term}`;
-  let cachedRaw = '';
-
-  // 0ms instant hydration from local cache (SWR)
-  try {
-    const saved = localStorage.getItem(cacheKey);
-    if (saved) {
-      const parsed = JSON.parse(saved) as RosterSnapshot;
-      if (parsed && parsed.schema === 3 && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
-        cachedRaw = JSON.stringify(parsed.groups);
-        renderRoster(container, countNode, tabCountNode, parsed);
-        scrollToHashTarget();
-      }
-    }
-  } catch {}
-
   try {
     const res = await fetch(`/api/platform/public/roster?term=${encodeURIComponent(term)}`, {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json' }, cache: 'no-store',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as RosterSnapshot;
-    const freshRaw = JSON.stringify(data.groups);
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(data));
-    } catch {}
-    if (freshRaw !== cachedRaw) {
-      renderRoster(container, countNode, tabCountNode, data);
-      scrollToHashTarget();
-    }
+    renderRoster(container, countNode, tabCountNode, data);
+    scrollToHashTarget();
   } catch {
-    if (!cachedRaw) {
-      if (countNode) countNode.textContent = '名册暂不可用';
-      container.replaceChildren();
-      const err = document.createElement('p');
-      err.style.padding = '24px 0';
-      err.style.color = 'var(--muted)';
-      err.style.fontSize = '.9rem';
-      err.textContent = '名册加载未完成，请稍后刷新页面重试。';
-      container.append(err);
-    }
+    if (countNode) countNode.textContent = '名册暂不可用';
+    container.replaceChildren();
+    const err = document.createElement('p');
+    err.style.padding = '24px 0';
+    err.style.color = 'var(--muted)';
+    err.style.fontSize = '.9rem';
+    err.textContent = '名册加载未完成，请稍后刷新页面重试。';
+    container.append(err);
   }
 }
 

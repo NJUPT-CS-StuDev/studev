@@ -52,7 +52,7 @@ const initialSearchPlaceholder =
     <meta name="apple-mobile-web-app-title" content="studev" />
     <script is:inline>
       // Signed-in people see their member links from the first frame.
-      try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.member = ''; } catch { /* Storage may be unavailable. */ }
+      try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.authenticated = ''; } catch { /* Storage may be unavailable. */ }
       let preference;
       try { preference = localStorage.getItem('site-theme'); } catch { /* Storage may be unavailable. */ }
       const theme = preference === 'light' || preference === 'dark'
@@ -115,7 +115,7 @@ const initialSearchPlaceholder =
         </div>
         <nav class="site-nav" aria-label="主导航">
           {nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
-          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-member-link hidden>Forms</a>
+          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>Forms</a>
         </nav>
         <a class:list={['nav-account', { active: active === 'account' || active === 'login' }]} href="/account/" data-global-account-link>Account</a>
         <ThemeToggle />

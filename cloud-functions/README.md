@@ -35,14 +35,18 @@ family. A device re-login replaces its old session; at most 20 active devices
 exist across both carriers. Logout, role/status changes, password changes and
 account deletion invalidate both carriers. TOTP enrollment elevates only its own
 session. Never retry an ambiguous refresh; sign in again. Browser tabs serialize
-refreshes with Web Locks. No credentials enter browser localStorage.
+refreshes with Web Locks and persists a non-secret pending marker before spending
+the refresh ticket, requiring sign-in after an interrupted rotation. No credentials
+enter browser localStorage. All navigation/session checks use that same client.
 
 Roles are one axis: `owner` > `admin` > `user`. Admins and the owner appear in the
 public term roster, manage forms and may list/look up users through `/admin/users`
 and `/admin/users/<id>`. Ordinary users cannot access any account-management
 endpoint. Admins can resolve ordinary-user identity disputes; only the owner
 manages roles or other administrators. Public roster snapshots exclude `user`
-even when their records have department/title/term fields. Ordinary students'
+even when their records have department/title/term fields. Public roster reads
+are not cached in the browser or CDN, so an old projection is never used after
+a role change. Ordinary students'
 identity and contact details are available only to themselves and staff. Other
 students see only their explicitly chosen nickname. Form receipts never expose
 an authenticated submitter's identity or contact details to their holder.

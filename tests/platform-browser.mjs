@@ -8,7 +8,7 @@ assert.ok(['127.0.0.1', 'localhost'].includes(new URL(base).hostname));
 const output = resolve(process.argv[3] || 'D:/Temp/codex/accounts/screenshots');
 await mkdir(output, { recursive: true });
 const user = { id: '00000000-0000-0000-0000-000000000001', qq: '10000901', nickname: '风中的树', realName: '合成测试同学', studentId: 'B26000001', email: '10000901@qq.com', emailVerified: false, role: 'user', status: 'active', revision: 1, profileComplete: true, identityVerified: false, totpEnabled: false, mustChangePassword: false };
-let signedIn = false, requireFactor = true;
+let signedIn = false, cookieExpired = false, refreshCount = 0;
 const writes = [], errors = [], requests = [];
 const browser = await puppeteer.launch({ headless: true });
 try {
@@ -16,7 +16,7 @@ try {
  page.on('pageerror', e => errors.push(e.message));
  await page.setViewport({ width: 1365, height: 1000, deviceScaleFactor: 1 });
  await page.setRequestInterception(true);
- page.on('request', async request => {
+ const intercept = async request => {
   const url = new URL(request.url());
   if (!url.pathname.startsWith('/api/platform/')) { await request.continue(); return; }
   const path = url.pathname.slice('/api/platform'.length);
@@ -29,9 +29,11 @@ try {
   else if (path === '/auth/register') { assert.equal(body.nickname, user.nickname); assert.ok(!('inviteCode' in body)); status = 201; value = { user }; }
   else if (path === '/auth/login') {
    assert.match(body.deviceId, /^[A-Za-z0-9_-]{16,128}$/); assert.ok(body.deviceName);
-   if (requireFactor && body.totp !== '123456') { status = 401; value = { error: { code: 'MFA_REQUIRED', message: '请填写认证器动态验证码或恢复码。' } }; }
+   if (body.totp !== '123456') { status = 401; value = { error: { code: 'MFA_REQUIRED', message: '请填写认证器动态验证码或恢复码。' } }; }
    else { signedIn = true; value = session; }
-  } else if (path === '/auth/session') { if (signedIn) value = session; else { status = 401; value = { error: { code: 'AUTH_REQUIRED', message: '请先登录。' } }; } }
+  } else if (path === '/auth/session') { if (signedIn && !cookieExpired) value = session; else { status = 401; value = { error: { code: 'AUTH_REQUIRED', message: '请先登录。' } }; } }
+  else if (path === '/auth/refresh') { refreshCount++; await new Promise(resolve => setTimeout(resolve, 150)); cookieExpired = false; value = { csrfToken: session.csrfToken }; }
+  else if (path === '/public/roster') value = { schema: 5, term: '2026-2027', totalCount: 1, activeCount: 1, groups: [{ name: '运营支持部', people: [{ name: '公开管理员', nickname: '', role: '管理员', avatarUrl: '', signature: '' }] }] };
   else if (path === '/auth/devices') value = { items: [
    { id: '00000000-0000-0000-0000-000000000002', deviceName: 'Windows · Chrome', kind: 'cookie', current: true, createdAt: '2026-10-31T12:00:00Z', expiresAt: Date.now() + 86400000 },
    { id: '00000000-0000-0000-0000-000000000003', deviceName: 'Huawei ADA-AL00', kind: 'bearer', current: false, createdAt: '2026-10-31T11:00:00Z', expiresAt: Date.now() + 86400000 },
@@ -39,7 +41,8 @@ try {
   else if (path.endsWith('/revoke')) value = { ok: true };
   else { status = 403; value = { error: { code: 'STAFF_REQUIRED', message: '此操作仅限管理员。' } }; }
   await request.respond({ status, contentType: 'application/json', headers: { 'Cache-Control': 'no-store' }, body: JSON.stringify(value) });
- });
+ };
+ page.on('request', intercept);
  const fill = async (id, value) => { await page.locator(id).fill(value); };
  await page.goto(base + '/login/?tab=register&next=/account/', { waitUntil: 'networkidle0' });
  assert.equal(await page.$('#register-invite'), null);
@@ -71,6 +74,34 @@ try {
  for (const button of confirmButtons) if (await button.evaluate(e => e.textContent === '确认退出')) { await button.click(); break; }
  await page.waitForFunction(() => document.querySelector('[data-devices-status]').textContent.includes('设备已退出'));
  assert.equal(writes.at(-1).path, '/auth/devices/00000000-0000-0000-0000-000000000003/revoke');
+ // Tabs share HttpOnly credentials: only one may rotate an expired refresh ticket.
+ const second = await browser.newPage();
+ await second.setRequestInterception(true); second.on('request', intercept);
+ cookieExpired = true;
+ await Promise.all([page.reload({ waitUntil: 'domcontentloaded' }), second.goto(base + '/account/', { waitUntil: 'domcontentloaded' })]);
+ await second.bringToFront();
+ try {
+  await second.waitForFunction(() => document.querySelector('[data-account-content]')?.hidden === false, { polling: 100 });
+  await page.bringToFront();
+  await page.waitForFunction(() => document.querySelector('[data-account-content]')?.hidden === false, { polling: 100 });
+ } catch (error) {
+  console.log(JSON.stringify({ refreshCount, cookieExpired, requests: requests.slice(-20), errors, state: await page.evaluate(() => ({ cached: !!localStorage.getItem('studev_auth_user'), generation: !!localStorage.getItem('studev_session_generation'), pending: !!localStorage.getItem('studev_session_refresh_pending'), status: document.querySelector('[data-account-status]')?.textContent })) }));
+  throw error;
+ }
+ assert.equal(refreshCount, 1);
+ await second.close();
+ // An obsolete local roster cache must never hydrate a now-private identity.
+ await page.evaluate(() => localStorage.setItem('studev_roster_2026-2027', JSON.stringify({ schema: 3, groups: [{ name: '旧名册', people: [{ name: 'CACHED-PRIVATE-IDENTITY', avatarUrl: '' }] }] })));
+ await page.goto(base + '/history/', { waitUntil: 'networkidle0' });
+ await page.waitForFunction(() => document.querySelector('[data-roster-container]').textContent.includes('公开管理员'));
+ assert.ok(!await page.$eval('[data-roster-container]', e => e.textContent.includes('CACHED-PRIVATE-IDENTITY')));
+ const sessionReads = requests.filter(path => path === '/auth/session').length;
+ await page.evaluate(() => localStorage.setItem('studev_session_refresh_pending', '1'));
+ await page.goto(base + '/account/', { waitUntil: 'domcontentloaded' });
+ await page.waitForFunction(() => !localStorage.getItem('studev_auth_user'));
+ assert.equal(await page.$eval('[data-account-content]', e => e.hidden), true);
+ assert.equal(requests.filter(path => path === '/auth/session').length, sessionReads);
+ assert.equal(refreshCount, 1);
  assert.deepEqual(errors, []);
  console.log(JSON.stringify({ passed: true, writes: writes.map(w => w.path), screenshots: output, errors }));
 } finally { await browser.close(); }

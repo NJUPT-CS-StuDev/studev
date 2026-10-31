@@ -218,8 +218,13 @@ async function refreshCookieSession(generation: string | null) {
     refreshRequest ||= navigator.locks.request('studev-session-refresh', async () => {
         // Other tabs may have rotated the HttpOnly ticket while we waited.
         if (localStorage.getItem('studev_session_generation') !== generation) return;
+        if (localStorage.getItem('studev_session_refresh_pending')) throw new PlatformError('登录验证未完成，请重新登录。', 401, 'AUTH_REQUIRED');
+        // Persist before spending the ticket: a killed tab or ambiguous network
+        // result must require sign-in, rather than replaying an old credential.
+        localStorage.setItem('studev_session_refresh_pending', '1');
         try { await api('/auth/refresh', browserDevice()); }
-        catch (error) { if (error instanceof PlatformError && error.status === 401) localStorage.removeItem('studev_session_generation'); throw error; }
+        catch (error) { localStorage.removeItem('studev_session_generation'); throw error; }
+        localStorage.removeItem('studev_session_refresh_pending');
         localStorage.setItem('studev_session_generation', crypto.randomUUID());
     }).finally(() => { refreshRequest = null; });
     return refreshRequest;
@@ -227,6 +232,11 @@ async function refreshCookieSession(generation: string | null) {
 export async function api<T>(path: string, body?: unknown, options: RequestInit = {}, retry = true): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
     throw new PlatformError('请求路径无效。'); let response: Response; try {
     if (path === '/auth/login') body = { ...(body as object), ...browserDevice() };
+    if (!['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path)) {
+        await navigator.locks.request('studev-session-refresh', () => {
+            if (localStorage.getItem('studev_session_refresh_pending')) throw new PlatformError('登录验证未完成，请重新登录。', 401, 'AUTH_REQUIRED');
+        });
+    }
     const generation = localStorage.getItem('studev_session_generation');
     response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     if (response.status === 401 && retry && generation && !['/auth/login', '/auth/register', '/auth/refresh'].includes(path)) {
@@ -250,7 +260,10 @@ catch {
         };
     };
     throw new PlatformError(e.error?.message || '操作未完成，请稍后重试。', response.status, e.error?.code);
-} if (path === '/auth/login') localStorage.setItem('studev_session_generation', crypto.randomUUID());
+} if (path === '/auth/login') {
+    localStorage.removeItem('studev_session_refresh_pending');
+    localStorage.setItem('studev_session_generation', crypto.randomUUID());
+}
 return data as T; }
 async function loadSession(): Promise<Session | null> {
     // PlatformShell and each functional page ask for the session at the same

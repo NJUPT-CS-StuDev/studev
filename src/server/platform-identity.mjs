@@ -352,7 +352,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
       if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) snapshot = await seedAndSyncRoster(term);
-      return response(snapshot, 200, { 'Cache-Control': 'public, max-age=10, stale-while-revalidate=60' });
+      return response(snapshot);
     }
     const userLookup = route.match(/^\/admin\/users\/([a-f0-9-]{36})$/);
     if (method === 'GET' && userLookup) {
