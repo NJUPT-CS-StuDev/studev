@@ -59,6 +59,8 @@ test('apply backs up every changed key first and preserves credentials/history; 
   const f = await fixture(), original = structuredClone([...f.store.values]), dir = await backup(t), plan = await inventoryLegacy(f);
   const set = f.store.setJSON;
   f.store.setJSON = async (...args) => { const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')); assert.ok(manifest.metadata.some(c => c.key === args[0])); return set(...args); };
+  const copy = f.objects.copy;
+  f.objects.copy = async (...args) => { const manifest = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')); assert.ok(manifest.attachments.some(c => c.targetKey === args[1])); return copy(...args); };
   const result = await applyLegacy(plan, { backupDir: dir, writesStopped: true });
   f.store.setJSON = set;
   assert.equal(result.applied, true);
@@ -113,4 +115,27 @@ test('source mutation or corrupt copy aborts with a durable manifest before publ
   const another = await fixture(), changed = await inventoryLegacy(another);
   await another.repo.put('form-index/new.json', { id: 'concurrent-writer' });
   await assert.rejects(applyLegacy(changed, { backupDir: await backup(t), writesStopped: true }), /SOURCE_KEYSET_CHANGED/);
+});
+
+test('abandoned reservations remain incomplete and retain receipt, timing and metadata without inventing an attachment', async t => {
+  const f = await fixture();
+  await f.store.delete(`collections/club-test/completed/${sourceId}.json`);
+  for (const key of [...f.store.values.keys()]) if (key.startsWith(`collections/club-test/reviews/`)) await f.store.delete(key);
+  f.objects.objects.clear();
+  const plan = await inventoryLegacy(f);
+  assert.equal(plan.report.collections[0].submissions, 1); assert.equal(plan.report.collections[0].completed, 0);
+  assert.equal(plan.report.collections[0].items[0].attachmentPresent, false); assert.equal(plan.report.blockers.length, 0);
+  await applyLegacy(plan, { backupDir: await backup(t), writesStopped: true });
+  const target = plan.report.collections[0].items[0].submissionId, record = await f.repo.get(`form-records/${target}.json`);
+  assert.equal(record.receiptHash, f.entry.receiptHash); assert.equal(record.uploadExpiresAt, f.entry.uploadExpiresAt * 1000);
+  assert.equal(await f.repo.get(`form-completed/${target}.json`), null);
+  assert.equal((await f.repo.list(`form-submissions/${record.formId}/`)).length, 1);
+});
+
+test('an existing destination object with different bytes aborts without replacing it', async () => {
+  const f = await fixture(), first = await inventoryLegacy(f), copy = first.copies[0];
+  f.objects.upload({ objectKey: copy.targetKey, contentType: 'text/plain' }, Buffer.from('different'));
+  const before = structuredClone([...f.store.values]);
+  await assert.rejects(inventoryLegacy(f), /TARGET_ATTACHMENT_COLLISION/);
+  assert.deepEqual([...f.store.values], before); assert.equal(Buffer.from(f.objects.objects.get(copy.targetKey).body).toString(), 'different');
 });

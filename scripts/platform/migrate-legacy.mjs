@@ -129,7 +129,7 @@ export async function inventoryLegacy({ store, objects, config = {}, mapping = {
     if (!['owner', 'admin', 'user'].includes(role)) block('INVALID_ROLE', user.id);
     const changed = user.studentId !== selected.studentId || user.realName !== selected.realName || role !== user.role;
     // Same UID, password, encrypted TOTP, security version and immutable history.
-    const next = changed ? { ...user, ...selected, role, revision: user.revision + 1 } : user;
+    const next = changed ? { ...user, ...selected, role, updatedAt: report.checkedAt, revision: user.revision + 1 } : user;
     if (changed) putNew(`${ROOT}identity/users/${user.id}/${String(next.revision).padStart(8, '0')}.json`, next);
     put(`${ROOT}identity/users/${user.id}/current.json`, next);
     updatedUsers.push(next);
@@ -151,7 +151,9 @@ export async function inventoryLegacy({ store, objects, config = {}, mapping = {
   for (const [key, record] of data) if (key.startsWith(`${ROOT}form-records/`)) {
     check(uuidPattern.test(record.id) && uuidPattern.test(record.formId), 'INVALID_FORM_RECORD', key);
     const indexKey = `${ROOT}form-submissions/${record.formId}/${record.id}.json`;
-    if (!await read(store, indexKey)) { putNew(indexKey, { id: record.id }); report.currentSubmissionIndexesToCreate++; }
+    const index = await read(store, indexKey);
+    if (!index) { putNew(indexKey, { id: record.id }); report.currentSubmissionIndexesToCreate++; }
+    else if (index.id !== record.id) block('SUBMISSION_INDEX_MISMATCH', indexKey);
   }
   for (const prefix of [...new Set([...data.keys()].map(k => /^(platform-v1\/form-events\/[^/]+)\//.exec(k)?.[1]).filter(Boolean))]) put(`${prefix}/current.json`, latest(data, prefix));
 
@@ -160,6 +162,7 @@ export async function inventoryLegacy({ store, objects, config = {}, mapping = {
     check(/^[a-z0-9][a-z0-9-]{0,63}$/.test(collectionId), 'INVALID_COLLECTION_ID');
     const prefix = `collections/${collectionId}/`, objectPrefix = `${config.OSCA_PREFIX || 'studev-submissions/'}${collectionId}/`;
     const entries = [...data.keys()].filter(k => k.startsWith(`${prefix}entries/`)).map(k => data.get(k));
+    check(new Set(entries.map(r => r.id)).size === entries.length, 'DUPLICATE_COLLECTION_SUBMISSION', collectionId);
     const collection = { id: collectionId, metadataKeys: [...data.keys()].filter(k => k.startsWith(prefix)).length, submissions: entries.length, completed: 0, reviews: 0, attachmentBytes: 0, formId: uuid(`collection:${collectionId}`), items: [] };
     report.collections.push(collection);
     const formId = collection.formId, targetPrefix = `${config.OSCA_PREFIX || 'studev-submissions/'}platform/${formId}/`;
@@ -177,6 +180,7 @@ export async function inventoryLegacy({ store, objects, config = {}, mapping = {
       check(/^\d{13}-[a-f0-9-]{36}$/.test(record.id) && Number.isFinite(Date.parse(record.createdAt)), 'INVALID_COLLECTION_ENTRY', collectionId);
       const id = uuid(`submission:${collectionId}:${record.id}`), fileId = uuid(`file:${collectionId}:${record.id}`), extension = record.fileName.split('.').at(-1).toLowerCase();
       const completed = data.get(`${prefix}completed/${record.id}.json`);
+      if (completed) collection.completed++;
       const sourceKey = completed?.finalObjectKey || record.objectKey;
       check(typeof record.objectKey === 'string' && record.objectKey.startsWith(`${objectPrefix}staging/`), 'UNSAFE_SOURCE_OBJECT', record.id);
       check(typeof sourceKey === 'string' && sourceKey.startsWith(objectPrefix) && !sourceKey.includes('..'), 'UNSAFE_SOURCE_OBJECT', record.id);
@@ -200,7 +204,6 @@ export async function inventoryLegacy({ store, objects, config = {}, mapping = {
       putNew(`${ROOT}form-records/${id}.json`, migrated); putNew(`${ROOT}form-submissions/${formId}/${id}.json`, { id });
       putNew(`${ROOT}form-quota/${formId}/${String(i).padStart(4, '0')}.json`, { id, createdAt: record.createdAt });
       if (completed && attachment) {
-        collection.completed++;
         putNew(`${ROOT}form-completed/${id}.json`, { completedAt: completed.completedAt, status: 'pending_review', files: [{ id: fileId, finalObjectKey: targetKey, etag: attachment.etag || head.etag, size: head.size, contentType: head.contentType }] });
       }
       const reviews = [...data.keys()].filter(k => k.startsWith(`${prefix}reviews/${record.id}/`)).sort();
