@@ -39,6 +39,7 @@ data class PersistedNavigationSession(
     val destinationLabel: String,
     val mode: String,
     val avoidSteps: Boolean,
+    val destination: Endpoint? = null,
 )
 
 class NavigationSessionStore(context: Context) {
@@ -80,6 +81,7 @@ class NavigationRuntime private constructor(private val context: Context) {
     @Volatile var simulationCommand: String? = null
     init {
         persisted.load()?.let { record ->
+            goal = record.destination ?: Endpoint.Target(record.destinationLabel)
             _state.value = PlannerState(
                 mode = record.mode,
                 avoidSteps = record.avoidSteps,
@@ -161,7 +163,8 @@ class NavigationRuntime private constructor(private val context: Context) {
         try {
             notice(null)
             val route = checkNotNull(state.value.route)
-            persisted.save(PersistedNavigationSession(route, state.value.destinationName, state.value.mode, state.value.avoidSteps))
+            persisted.save(PersistedNavigationSession(route, state.value.destinationName, state.value.mode, state.value.avoidSteps,
+                destination = goal ?: Endpoint.Target(state.value.destinationName)))
             val firstNavigation = !settings.getBoolean("navigation-guidance", false)
             if (firstNavigation) settings.edit().putBoolean("navigation-guidance", true).apply()
             if (firstNavigation) notice("后台导航需要持续定位，可在“我的 → 后台运行设置”检查一次。")

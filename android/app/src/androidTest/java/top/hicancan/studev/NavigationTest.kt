@@ -3,6 +3,9 @@ package top.hicancan.studev
 import android.Manifest
 import android.graphics.Bitmap
 import android.os.Build
+import android.app.Notification
+import android.content.ComponentName
+import android.content.pm.ServiceInfo
 import android.view.View
 import android.view.ViewGroup
 import org.maplibre.android.maps.MapView
@@ -210,6 +213,34 @@ class NavigationTest {
                     }
                 }
             }
+        }
+    }
+    @Test fun foregroundNavigationServicePublishesLocationNotification() = runBlocking {
+        try {
+            permissions()
+            compose.waitForIdle()
+            val campus = CampusPackage.load(context.assets)
+            main { runtime.open(campus.byId.getValue("教3")); runtime.origin(campus.byId.getValue("梅苑1栋")) }
+            compose.waitUntil(20_000) { runtime.state.value.route != null && !runtime.state.value.busy }
+            permissions()
+            main { runtime.start(true, 1.0) }
+            compose.waitUntil(15_000) { runtime.state.value.trip.update != null }
+            val service = context.packageManager.getServiceInfo(
+                ComponentName(context, NavigationService::class.java), 0,
+            )
+            assertTrue(service.foregroundServiceType and ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION != 0)
+            val notification = context.getSystemService(android.app.NotificationManager::class.java)
+                .activeNotifications.firstOrNull { it.id == NavigationService.ID }?.notification
+            assertNotNull(notification)
+            assertTrue(checkNotNull(notification).flags and Notification.FLAG_ONGOING_EVENT != 0)
+            val services = instrumentation.uiAutomation.executeShellCommand(
+                "dumpsys activity services ${context.packageName}",
+            ).use { descriptor ->
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes().decodeToString() }
+            }
+            assertTrue(services.contains("NavigationService"))
+        } finally {
+            main { runtime.stop(close = true) }
         }
     }
     @Test fun myPositionSwapAndOptions() {
