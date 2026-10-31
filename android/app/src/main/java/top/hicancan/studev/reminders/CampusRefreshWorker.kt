@@ -20,8 +20,20 @@ class CampusRefreshWorker(context: Context, parameters: WorkerParameters) : Coro
         Result.success()
     } catch (e: CancellationException) { throw e } catch (_: Exception) { Result.retry() }
     companion object {
+        private const val ONE_SHOT = "campus-refresh"
+        private const val PERIODIC = "campus-maintenance"
+
+        fun enqueue(context: Context) {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                ONE_SHOT,
+                ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<CampusRefreshWorker>().build(),
+            )
+            schedule(context)
+        }
+
         fun schedule(context: Context) {
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("campus-maintenance", ExistingPeriodicWorkPolicy.KEEP,
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<CampusRefreshWorker>(12, TimeUnit.HOURS).build())
         }
     }

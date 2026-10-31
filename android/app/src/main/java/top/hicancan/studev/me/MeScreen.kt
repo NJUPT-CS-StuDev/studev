@@ -45,6 +45,8 @@ import androidx.compose.foundation.lazy.items
     var dormPicker by remember { mutableStateOf(false) }
     var dormQuery by remember { mutableStateOf("") }
     var dorms by remember { mutableStateOf<List<Place>>(emptyList()) }
+    var backgroundSettings by remember { mutableStateOf(false) }
+    var backgroundStatus by remember { mutableStateOf<BackgroundRunStatus?>(null) }
     LaunchedEffect(Unit) {
         dorms = CampusPackage.load(context.assets).places.filter { it.kind == "building" && it.category == "宿舍" }
     }
@@ -52,8 +54,19 @@ import androidx.compose.foundation.lazy.items
         if (TimetableCalendar.permitted(context)) model.calendar(!removal) else model.tell("需要日历权限才能同步或移除 studev 日历")
     }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) { model.settings.update { it.copy(reminders = true) }; model.syncPhone() }
+        if (granted) {
+            val first = !preferences.reminderGuidanceShown
+            model.settings.update { it.copy(reminders = true, reminderGuidanceShown = true) }
+            model.syncPhone()
+            if (first) { backgroundStatus = BackgroundRunSettings.status(context); backgroundSettings = true }
+        }
         else model.tell("通知未开启，课程提醒暂时无法送达")
+    }
+    fun enableReminders() {
+        val first = !preferences.reminderGuidanceShown
+        model.settings.update { it.copy(reminders = true, reminderGuidanceShown = true) }
+        model.syncPhone()
+        if (first) { backgroundStatus = BackgroundRunSettings.status(context); backgroundSettings = true }
     }
     fun toggleCalendar(enabled: Boolean) {
         removal = !enabled
@@ -97,6 +110,10 @@ import androidx.compose.foundation.lazy.items
                 }
             }
             item { OutlinedCard(onCalendar, Modifier.fillMaxWidth()) { ListItem(headlineContent = { Text("系统日历同步") }, supportingContent = { Text(if (preferences.calendar) "已开启 · 课表与考试" else "同步课程与考试到本机日历") }, leadingContent = { Icon(Icons.Outlined.EventAvailable, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) }) } }
+            item { OutlinedCard({ backgroundStatus = BackgroundRunSettings.status(context); backgroundSettings = true }, Modifier.fillMaxWidth().testTag("background-settings")) {
+                val manufacturer = Build.MANUFACTURER.ifBlank { "Android" }
+                ListItem(headlineContent = { Text("后台运行设置") }, supportingContent = { Text("导航、提醒和小组件在 $manufacturer 上更稳定") }, leadingContent = { Icon(Icons.Outlined.BatteryChargingFull, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) })
+            } }
         } else {
             item { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -114,7 +131,8 @@ import androidx.compose.foundation.lazy.items
                 SectionLabel("上课与考试提醒")
                 SettingsSwitch("本地提醒", if (LessonReminders.exact(context)) "可使用准时提醒" else "当前使用系统后台任务，可能延迟", preferences.reminders, preferences.klass != null) { enabled ->
                     if (enabled && Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    else { model.settings.update { it.copy(reminders = enabled) }; model.syncPhone() }
+                    else if (enabled) enableReminders()
+                    else { model.settings.update { it.copy(reminders = false) }; model.syncPhone() }
                 }
                 if (preferences.reminders) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(5, 10, 15, 30).forEach { minutes -> FilterChip(preferences.leadMinutes == minutes, { model.settings.update { it.copy(leadMinutes = minutes) }; model.syncPhone() }, { Text("提前 $minutes 分钟") }) } }
@@ -182,6 +200,26 @@ import androidx.compose.foundation.lazy.items
         dismissButton = { if (preferences.homeDorm != null) TextButton({ model.settings.update { it.copy(homeDorm = null) }; dormPicker = false }) { Text("清除选择") } })
     release?.let { latest -> AlertDialog(onDismissRequest = { release = null }, title = { Text("下载 ${latest.name}") }, text = { Text("下载完成后会校验应用与版本，并交给系统安装。返回此页可继续安装。") },
         confirmButton = { TextButton({ runCatching { AppUpdates.download(context, latest); model.tell("正在下载，完成后返回此页继续安装") }.onFailure { model.tell("下载暂时无法开始，请稍后重试") }; release = null }) { Text("下载") } }, dismissButton = { TextButton({ release = null }) { Text("稍后") } }) }
+    if (backgroundSettings) {
+        val status = backgroundStatus ?: BackgroundRunSettings.status(context).also { backgroundStatus = it }
+        AlertDialog(
+            onDismissRequest = { backgroundSettings = false },
+            title = { Text("后台运行设置") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("导航需要持续定位，提醒和小组件需要系统在后台唤醒 studev。请按设备提示设置一次，之后不会反复打扰。")
+                    Text("电池优化：${if (status.batteryExempt) "已豁免" else "可能限制后台运行"}")
+                    Text("通知：${if (status.notificationsEnabled) "已开启" else "已关闭"}")
+                    Text("准时提醒：${if (status.exactAlarms) "可用" else "需允许准时提醒"}")
+                    TextButton({ BackgroundRunSettings.requestBatteryExemption(context); backgroundStatus = BackgroundRunSettings.status(context) }) { Text("允许后台运行") }
+                    TextButton({ BackgroundRunSettings.openOemStartup(context) }) { Text("打开${status.manufacturer}应用启动管理") }
+                    TextButton({ BackgroundRunSettings.openNotifications(context) }) { Text("检查通知权限和通知分类") }
+                    if (Build.VERSION.SDK_INT >= 31 && !status.exactAlarms) TextButton({ context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))) }) { Text("允许准时提醒") }
+                }
+            },
+            confirmButton = { TextButton({ backgroundSettings = false }) { Text("完成") } },
+        )
+    }
 }
 @Composable private fun SettingsSwitch(title: String, detail: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

@@ -30,6 +30,10 @@ class NavigationTest {
         assertEquals(update(), Json.decodeFromString<NavigationUpdate>(Json.encodeToString(update())))
         assertEquals("校园路", route.via)
     }
+    @Test fun persistedSessionRetainsTheRouteNeededForProcessRestart() {
+        val record = PersistedNavigationSession(route, "教3", "walk", avoidSteps = true)
+        assertEquals(record, Json.decodeFromString<PersistedNavigationSession>(Json.encodeToString(record)))
+    }
     @Test fun fakeNavigatorDrivesBannerOffRouteAndArrivalState() {
         val values = ArrayDeque(listOf(update(), update(off = true), update(arrived = true)))
         val fake = object : NavigationSession {

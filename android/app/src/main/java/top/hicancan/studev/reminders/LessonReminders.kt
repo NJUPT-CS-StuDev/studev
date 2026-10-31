@@ -19,10 +19,14 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 data class ReminderPlan(val event: CampusEvent, val at: Instant)
+enum class ReminderScheduleMode { ExactAlarm, WorkManager }
 object ReminderTimes {
     fun plans(events: List<CampusEvent>, leadMinutes: Int, now: Instant): List<ReminderPlan> = events.map {
         ReminderPlan(it, it.start.minusSeconds(leadMinutes.coerceIn(1, 120) * 60L))
     }.filter { it.at > now }.distinctBy { it.event.id }
+
+    fun mode(exactAllowed: Boolean): ReminderScheduleMode =
+        if (exactAllowed) ReminderScheduleMode.ExactAlarm else ReminderScheduleMode.WorkManager
 }
 object LessonReminders {
     private const val TAG = "studev-reminders"
@@ -35,7 +39,8 @@ object LessonReminders {
     suspend fun sync(context: Context, events: List<CampusEvent>, enabled: Boolean, lead: Int) = withContext(Dispatchers.IO) {
         val alarms = context.getSystemService(AlarmManager::class.java)
         val work = WorkManager.getInstance(context)
-        prefs(context).getStringSet("ids", emptySet()).orEmpty().forEach { alarms.cancel(pending(context, it)) }
+        val preferences = prefs(context)
+        preferences.getStringSet("ids", emptySet()).orEmpty().forEach { alarms.cancel(pending(context, it)) }
         work.cancelAllWorkByTag(TAG).result.get()
         if (!enabled) context.getSystemService(NotificationManager::class.java).let { manager ->
             manager.activeNotifications.filter { it.notification.channelId == TAG }.forEach { manager.cancel(it.id) }
@@ -43,19 +48,33 @@ object LessonReminders {
         // A rolling seven-day window stays below the platform's per-app alarm limit.
         // The persisted maintenance worker replenishes it twice daily and after boot.
         val plans = if (enabled) ReminderTimes.plans(events, lead, Instant.now()).filter { it.at < Instant.now().plusSeconds(7 * 86400L) } else emptyList()
-        prefs(context).edit().putStringSet("ids", plans.map { it.event.id }.toSet()).apply()
+        val edit = preferences.edit().putStringSet("ids", plans.map { it.event.id }.toSet())
+        plans.forEach { edit.remove("sent:${it.event.id}") }
+        edit.apply()
+        if (!enabled) return@withContext
+        val mode = ReminderTimes.mode(exact(context))
         plans.forEach { plan ->
             val event = plan.event
             val title = "${if (event.exam) "考试" else "上课"}还有 $lead 分钟 · ${event.title}"
-            // Keep a persisted fallback even when exact access is later revoked by the system.
-            val fallback = OneTimeWorkRequestBuilder<ReminderWorker>().setInputData(workDataOf("id" to event.id, "title" to title,
-                "room" to event.room, "start" to event.start.toEpochMilli())).setInitialDelay((plan.at.toEpochMilli() - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
-                .addTag(TAG).build()
-            work.enqueueUniqueWork("$TAG:${event.id}", ExistingWorkPolicy.REPLACE, fallback)
-            if (exact(context)) try { alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, plan.at.toEpochMilli(), pending(context, event.id, title, event.room)) }
-                catch (_: SecurityException) { /* The already scheduled work remains valid. */ }
+            when (mode) {
+                ReminderScheduleMode.ExactAlarm -> try {
+                    alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, plan.at.toEpochMilli(), pending(context, event.id, title, event.room))
+                } catch (_: SecurityException) {
+                    // Permission may have been revoked between the decision and
+                    // the call. Rebuild once through the same fallback policy.
+                    val fallback = fallback(event, title, plan.at)
+                    work.enqueueUniqueWork("$TAG:${event.id}", ExistingWorkPolicy.REPLACE, fallback)
+                }
+                ReminderScheduleMode.WorkManager -> {
+                    work.enqueueUniqueWork("$TAG:${event.id}", ExistingWorkPolicy.REPLACE, fallback(event, title, plan.at))
+                }
+            }
         }
     }
+    private fun fallback(event: CampusEvent, title: String, at: Instant): OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<ReminderWorker>().setInputData(workDataOf("id" to event.id, "title" to title,
+            "room" to event.room, "start" to event.start.toEpochMilli())).setInitialDelay((at.toEpochMilli() - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
+            .addTag(TAG).build()
     @SuppressLint("MissingPermission")
     @Synchronized fun notify(context: Context, id: String, title: String, room: String?) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
@@ -88,7 +107,13 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
 }
 class ReminderRestoreReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)) return
-        WorkManager.getInstance(context).enqueueUniqueWork("campus-refresh", ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<CampusRefreshWorker>().build())
+        if (intent.action !in setOf(
+                Intent.ACTION_BOOT_COMPLETED,
+                Intent.ACTION_MY_PACKAGE_REPLACED,
+                Intent.ACTION_TIME_CHANGED,
+                Intent.ACTION_TIMEZONE_CHANGED,
+                AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
+            )) return
+        CampusRefreshWorker.enqueue(context)
     }
 }
