@@ -165,10 +165,7 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
   }
   async function indexedForm(key) {
     const index = await repo.get(key);
-    if (!index || !ID.test(index.id)) return null;
-    // New indexes carry the current immutable snapshot. Existing deployments
-    // keep working through the versioned fallback and migrate on the next edit.
-    return index.form && index.form.id === index.id ? index.form : getForm(index.id);
+    return index && ID.test(index.id) && index.form?.id === index.id ? index.form : null;
   }
   async function getRecord(id) {
     if (!ID.test(id)) fail(404, 'NOT_FOUND', '提交记录不存在。');
