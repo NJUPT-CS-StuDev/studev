@@ -24,7 +24,7 @@ $versionName = $product.android.versionName
 $versionCode = [int]$product.android.versionCode
 if (-not $versionName -or -not (Test-Path $apk)) { throw 'release APK or version metadata is missing' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$args = @((Join-Path $repo 'scripts/package-apk.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', [string]$product.android.minSdk, '--notes', $releaseNotes)
+$args = @((Join-Path $repo 'scripts/apk/package.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', [string]$product.android.minSdk, '--notes', $releaseNotes)
 if ($PartSize) { $args += @('--part-size', $PartSize) }
 node @args
 if ($LASTEXITCODE -ne 0) { throw 'APK distribution packaging failed' }

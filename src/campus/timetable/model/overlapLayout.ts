@@ -1,7 +1,7 @@
 import type { TeachingMeeting } from '@/academics/timetable';
 import { courseIdentity } from './courseColors';
 
-export interface PositionedMeeting {
+interface PositionedMeeting {
     meeting: TeachingMeeting;
     slot: number;
 }

@@ -52,7 +52,7 @@ jobs:
       - name: Fetch APK distribution assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/fetch-apk-releases.mjs --output public/download
+        run: node scripts/apk/fetch-releases.mjs --output public/download
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform

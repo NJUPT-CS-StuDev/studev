@@ -1,14 +1,15 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 // The campus space as the data package serves it (njupt-data out/space/<campus>/,
-// packaged by scripts/digest.ts), and the map style bound to it.
+// packaged by scripts/data/digest.ts), and the map style bound to it.
 import type { StyleSpecification } from 'maplibre-gl';
 import type { GraphData, Position, Endpoint } from 'wayfind';
 import { DATA_RELEASE } from '@/app/config/constants';
 import { fetchJson } from '@/shared/lib/fetch';
 
-export const CAMPUS = '仙林';
-export const CAMPUS_CENTRE: Position = [118.9262, 32.1146];
+const CAMPUS = PRODUCT_CONFIG.CAMPUS.id;
+export const CAMPUS_CENTRE = PRODUCT_CONFIG.CAMPUS.centre as Position;
 
-export interface Entrance { at: Position; source: string }
+interface Entrance { at: Position; source: string }
 export interface Place {
     id: string;
     kind: string;                // "building", "room", or what a standalone place is (高德 type)

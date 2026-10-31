@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { assessCors, readConfig } from '../scripts/verify-osca-upload.mjs';
+import { assessCors, readConfig } from '../scripts/collection/verify-storage.mjs';
 
-const script = fileURLToPath(new URL('../scripts/verify-osca-upload.mjs', import.meta.url));
+const script = fileURLToPath(new URL('../scripts/collection/verify-storage.mjs', import.meta.url));
 const fakeEnv = {
   OSCA_ACCESS_KEY_ID: 'test-key-never-log',
   OSCA_SECRET_ACCESS_KEY: 'test-secret-never-log',

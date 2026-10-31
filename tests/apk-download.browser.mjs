@@ -7,7 +7,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve, extname, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import puppeteer from 'puppeteer';
-import { packageApk } from '../scripts/package-apk.mjs';
+import { packageApk } from '../scripts/apk/package.mjs';
 
 const { values } = parseArgs({ options: { apk: { type: 'string' }, output: { type: 'string', default: 'D:/Temp/codex/converge/browser' } } });
 const root = resolve(values.output);
@@ -90,7 +90,13 @@ try {
         assert.equal(headers['content-disposition'], `attachment; filename="studev-${manifest.versionName}.apk"`);
         await page.click('[data-download-apk]');
         // Capture the live secondary hint; CDP below proves native download progress.
-        await page.waitForFunction(() => document.querySelector('progress').value > 0);
+        await page.waitForFunction(() => {
+            const p = document.querySelector('progress'); return p.value / p.max >= .2;
+        });
+        const colors = await page.$eval('[data-download-apk]', el => {
+            const style = getComputedStyle(el); return { foreground: style.color, background: style.backgroundColor };
+        });
+        assert.notEqual(colors.foreground, colors.background, 'download label must remain visible while hovered');
         await page.screenshot({ path: join(files, 'downloading.png'), fullPage: true });
         const result = await finished;
         assert.equal(result.state, 'completed'); assert.equal(result.totalBytes, source.length);

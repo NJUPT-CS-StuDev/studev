@@ -1,6 +1,6 @@
 export const SUPPORTED_ROSTER_TERMS = new Set(['2026-2027']);
 
-export const DEPARTMENTS_2026_2027 = [
+const DEPARTMENTS_2026_2027 = [
   '主席团',
   '运营支持部',
   '易班建设部',
@@ -211,7 +211,7 @@ export function normalizeRoleTitle(title, studentId = '') {
 }
 
 /** A nickname is only meaningful when it differs from the real name (legacy records default nickname to realName). */
-export function distinctNickname(user) {
+function distinctNickname(user) {
   const nick = typeof user?.nickname === 'string' ? user.nickname.trim() : '';
   if (!nick || nick === user.realName || nick === user.studentId || nick === user.qq) return '';
   return nick;

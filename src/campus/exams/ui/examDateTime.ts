@@ -1,8 +1,9 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 export const formatExamDisplayDate = (isoString?: string | null): string => {
   if (!isoString) return "";
   const date = new Date(isoString);
   return date.toLocaleString("zh-CN", {
-    timeZone: "Asia/Shanghai",
+    timeZone: PRODUCT_CONFIG.TIME_ZONE,
     month: "short",
     day: "numeric",
     weekday: "short",

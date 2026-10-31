@@ -16,7 +16,7 @@ const catalogText = (course: CatalogCourse): string => normalize(course.meetings
 ]).join(' '));
 
 /** Full-width punctuation and spacing differ between sources ("教3－405", "教3-405"). */
-export const normalize = (value: string): string => value
+const normalize = (value: string): string => value
     .normalize('NFKC')
     .toLowerCase()
     .replace(/[－—–]/g, '-')

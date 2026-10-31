@@ -1,6 +1,6 @@
 import type { Exam } from '../records';
 
-export type ClassLookupMode = 'EMPTY' | 'NOT_FOUND' | 'LIST' | 'DETAIL';
+type ClassLookupMode = 'EMPTY' | 'NOT_FOUND' | 'LIST' | 'DETAIL';
 
 export interface ClassLookupResult {
     mode: ClassLookupMode;

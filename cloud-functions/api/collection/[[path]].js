@@ -1,1 +1,1 @@
-export { onRequest } from '../../../.collection-build/handler.mjs';
+export { onRequest } from '../../../.server-build/collection.mjs';

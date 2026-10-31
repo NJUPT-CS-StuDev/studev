@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { TeachingMeeting } from '@/academics/timetable';
 import tokens from '../../../../design/tokens.json';
 
-export const COURSE_TONE_COUNT = Object.keys(tokens.course.light).length;
+const COURSE_TONE_COUNT = Object.keys(tokens.course.light).length;
 /** FNV-1a over Unicode scalar values, unsigned 32-bit wrap after each multiply. */
 export const courseHash = (value: string): number => {
     let result = 2166136261;

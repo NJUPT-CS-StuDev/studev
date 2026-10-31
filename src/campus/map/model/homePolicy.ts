@@ -1,3 +1,4 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import { CAMPUS_CENTRE, type Place } from './space';
 import type { Position } from 'wayfind';
 
@@ -8,7 +9,7 @@ export interface HoursStatus { state: OpenState; today: string; closesAt?: strin
 
 /** Campus presentation always uses China time, including visitors abroad. */
 export function campusTime(date = new Date()): CampusTime {
-    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: PRODUCT_CONFIG.TIME_ZONE, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
     const get = (type: string) => parts.find(part => part.type === type)!.value;
     return { day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(get('weekday')) + 1, hour: Number(get('hour')), minute: Number(get('minute')) };
 }
@@ -40,7 +41,7 @@ export function openingStatus(hours: Place['hours'], now: CampusTime): HoursStat
     };
 }
 
-export const moments = [
+const moments = [
     { title: '早安，开启校园的一天', subtitle: '上课前，找到你的下一站', categories: ['教学楼', '图书馆', '食堂'] },
     { title: '到饭点了，好好吃饭', subtitle: '附近食堂，今天想吃哪一家', categories: ['食堂', '超市'] },
     { title: '午后，继续探索校园', subtitle: '学习、运动，让生活更有节奏', categories: ['教学楼', '图书馆', '体育'] },

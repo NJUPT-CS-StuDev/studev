@@ -90,10 +90,6 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         suspend fun discover(context: Context, klass: String? = null): AcademicRepository? = withContext(Dispatchers.IO) {
             try {
                 val host = BuildConfig.DATA_HOST
-                // Optional standalone manifest, useful for a local data fixture. The
-                // deployed website currently embeds this same contract in its JS.
-                val direct = runCatching { Json.decodeFromString<DataRelease>(download("$host/data/release.json").decodeToString()) }.getOrNull()
-                if (direct != null && validRelease(direct)) return@withContext activate(context, direct, klass)
                 val html = download("$host/search/").decodeToString()
                 val modules = Regex("(?:component-url|src)=\"([^\"]+\\.js)\"").findAll(html).map { it.groupValues[1] }.distinct().take(12).toMutableList()
                 var cursor = 0

@@ -10,8 +10,8 @@ object CampusClock {
     private var override by mutableStateOf<LocalDateTime?>(null)
     fun setDebugTime(value: LocalDateTime?) { check(BuildConfig.DEBUG); override = value }
     @Composable fun now(): LocalDateTime {
-        var tick by remember { mutableStateOf(LocalDateTime.now()) }
-        LaunchedEffect(Unit) { while (true) { tick = LocalDateTime.now(); delay(15_000) } }
+        var tick by remember { mutableStateOf(top.hicancan.studev.timetable.CampusDay.now().toLocalDateTime()) }
+        LaunchedEffect(Unit) { while (true) { tick = top.hicancan.studev.timetable.CampusDay.now().toLocalDateTime(); delay(15_000) } }
         return override ?: tick
     }
 }

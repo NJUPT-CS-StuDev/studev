@@ -152,6 +152,12 @@ android {
         // emulator remains a first-class development target.
         ndk { abiFilters += listOf("arm64-v8a") }
         buildConfigField("String", "SITE_ORIGIN", "\"$productOrigin\"")
+        buildConfigField("String", "CAMPUS_TIME_ZONE", "\"${product["timeZone"]}\"")
+        val campus = product["campus"] as Map<*, *>
+        val centre = campus["centre"] as List<*>
+        buildConfigField("String", "DEFAULT_CAMPUS", "\"${campus["id"]}\"")
+        buildConfigField("double", "CAMPUS_LONGITUDE", centre[0].toString())
+        buildConfigField("double", "CAMPUS_LATITUDE", centre[1].toString())
         versionCode = (androidProduct["versionCode"] as Number).toInt()
         versionName = androidProduct["versionName"] as String
         manifestPlaceholders["siteHost"] = URI(productOrigin).host

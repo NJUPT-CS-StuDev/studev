@@ -24,7 +24,7 @@ function phraseText(code) {
   return text;
 }
 
-export function visibleCharacters(html, extraText = '') {
+function visibleCharacters(html, extraText = '') {
   let text = extraText;
   function visit(node) {
     if (excluded.has(node.tagName)) return;
@@ -63,7 +63,7 @@ async function htmlFiles(directory) {
   return files;
 }
 
-export async function subsetBuiltFonts(directory, { base = '/', log = () => {} } = {}) {
+async function subsetBuiltFonts(directory, { base = '/', log = () => {} } = {}) {
   const files = await htmlFiles(directory);
   // Read the source before bundling renames the array or moves it into a JS asset.
   const homepagePhrases = phraseText(await readFile(new URL('../client/site/typewriter.ts', import.meta.url), 'utf8'));

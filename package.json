@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "npm run digest && node scripts/build-collection.mjs && astro build",
+    "build": "npm run digest && node scripts/server/build.mjs && astro build",
     "test:collection": "node --test tests/upload-collection.test.mjs tests/verify-osca-upload.test.mjs",
     "test:platform": "node --test tests/platform-*.test.mjs",
     "check": "astro check",
@@ -17,11 +17,12 @@
     "preview": "astro preview",
     "astro": "astro",
     "predigest": "node design/map/generate.mjs",
-    "digest": "node scripts/digest.ts",
+    "digest": "node scripts/data/digest.ts",
     "test:campus": "vitest run",
     "typecheck": "astro sync && tsc --noEmit",
     "release:apk": "pwsh android/release.ps1",
-    "test:apk:browser": "node tests/apk-download.browser.mjs"
+    "test:apk:browser": "node tests/apk-download.browser.mjs",
+    "audit:unused": "knip --include files,exports,types --reporter compact --no-progress"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.5",
@@ -72,6 +73,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "esbuild": "^0.28.2",
+    "knip": "^6.44.1",
     "parse5": "^8.0.1",
     "sharp": "^0.35.5",
     "subset-font": "^2.9.0",

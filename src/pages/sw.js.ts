@@ -1,10 +1,9 @@
 import type { APIRoute } from 'astro';
-import { build } from 'esbuild';
+import { buildWorker } from '../pwa/build-worker';
 import release from '../data/campus-release.json';
 
 export const GET: APIRoute = async () => {
-    const result = await build({ entryPoints: ['src/pwa/worker.js'], bundle: true, write: false, format: 'iife', target: 'es2022', define: { DATA_VERSION: JSON.stringify(release.version) } });
-    return new Response(result.outputFiles[0]!.text, {
+    return new Response(buildWorker(release.version), {
         headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' },
     });
 };

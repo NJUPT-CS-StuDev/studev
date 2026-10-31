@@ -1,1 +1,1 @@
-export type { Campus, Building, Room } from '../facts';
+export type { Room } from '../facts';

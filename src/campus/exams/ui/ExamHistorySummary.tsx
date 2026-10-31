@@ -1,9 +1,10 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import type { ExamChange, ExamSource } from '@/academics/facts';
 import { sourceDays } from '../model/sourceDays';
 interface ExamHistorySummaryProps { sources: ExamSource[]; changes: ExamChange[]; loading: boolean; error: string | null }
 
 const formatTime = (value: string): string => new Date(value).toLocaleString('zh-CN', {
-    timeZone: 'Asia/Shanghai',
+    timeZone: PRODUCT_CONFIG.TIME_ZONE,
     month: 'long',
     day: 'numeric',
     hour: '2-digit',

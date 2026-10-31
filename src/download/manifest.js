@@ -1,3 +1,5 @@
+import product from '../../product.json' with { type: 'json' };
+
 /** The one published APK contract, shared by the page and service worker. */
 export async function readManifest(url, fetcher = fetch) {
     const origin = new URL(url).origin;
@@ -13,7 +15,7 @@ export async function readManifest(url, fetcher = fetch) {
     const parts = manifest.parts.map(part => {
         const partUrl = new URL(part.url, url);
         if (!/^part-[0-9]{3,}$/.test(part.name) || names.has(part.name) || !size(part.size) ||
-            part.size > 24 * 1024 * 1024 || !hash(part.sha256) || partUrl.origin !== origin ||
+            part.size > product.apkPartBytes || !hash(part.sha256) || partUrl.origin !== origin ||
             partUrl.pathname !== `/download/${manifest.versionCode}/${part.name}` || partUrl.search || partUrl.hash || partUrl.username || partUrl.password) throw new Error('下载分片信息无效');
         names.add(part.name);
         return { ...part, url: partUrl.href };

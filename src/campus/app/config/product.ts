@@ -2,6 +2,8 @@ import product from '../../../../product.json';
 
 export const PRODUCT_CONFIG = {
     APP_NAME: product.name,
+    TIME_ZONE: product.timeZone,
+    CAMPUS: product.campus,
     ORIGIN: product.origin,
     GITHUB_REPO: `https://github.com/${product.repository}`,
     VISITOR_BADGE_URL:

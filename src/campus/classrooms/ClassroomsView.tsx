@@ -1,3 +1,4 @@
+import { PRODUCT_CONFIG } from '@/app/config/product';
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TeachingPeriod } from '@/academics/timetable';
@@ -14,7 +15,7 @@ import { BuildingFilter } from './BuildingFilter';
 import { selectedBuilding, readBuildings, saveBuildings } from './model/buildingSelection';
 import './classrooms.css';
 
-export interface ClassroomsParams {
+interface ClassroomsParams {
     campus: string | null;
     date: string | null;
     period: number | null;
@@ -31,7 +32,7 @@ interface ClassroomsViewProps extends ClassroomsParams {
 }
 
 const WEEKDAYS = '一二三四五六日';
-const DEFAULT_CAMPUS = '仙林';
+const DEFAULT_CAMPUS = PRODUCT_CONFIG.CAMPUS.id;
 
 function useNow() {
     const [now, setNow] = useState(() => nowInShanghai());
@@ -50,7 +51,7 @@ const dayLabel = (date: string, today: string): string => {
 
 /** "10月25日 14:58" in Nanjing time. */
 const checkedText = (iso: string): string => new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    timeZone: PRODUCT_CONFIG.TIME_ZONE, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 }).format(new Date(iso)).replace(/\//, '月').replace(' ', '日 ');
 
 const occupantText = (occupant: Occupant): string => occupant.kind === 'exam'

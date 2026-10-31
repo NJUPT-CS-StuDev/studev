@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'admin' | 'member';
+type Role = 'owner' | 'admin' | 'member';
 export interface User {
     id: string;
     qq: string;
@@ -107,7 +107,7 @@ export function avatarUrl(user: { qq?: string; avatarUrl?: string }, size: 0 | 1
     }
     return user.avatarUrl || '';
 }
-export function avatarFallbackDataUri(label: string): string {
+function avatarFallbackDataUri(label: string): string {
     const ch = (label.trim().charAt(0) || 'S').toUpperCase().replace(/[<>&"']/g, '');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e8f0fe"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#1a73e8" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -271,7 +271,6 @@ export async function session(required = false, staff = false): Promise<Session 
         return null;
     }
 } return currentSession; }
-export function rememberSession(s: Session | null) { currentSession = s; }
 export function safeNext(raw: string | null): string { if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\x00-\x20]/.test(raw))
     return '/forms/'; try {
     const u = new URL(raw, location.origin);
@@ -303,7 +302,7 @@ export function empty(title: string, description = '') { const box = el('div', u
 export function safeStorageUrl(raw: string): string { const url = new URL(raw); if (url.origin !== 'https://fgws3-ocloud.ihep.ac.cn' || url.username || url.password)
     throw new PlatformError('文件地址无法验证，请联系管理员。'); return url.href; }
 export function saveBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = el('a'); a.href = url; a.download = name.replace(/[\\/\x00-\x1f]/g, '_'); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
-export async function downloadFile(submission: Submission, file: SubmissionFile, receipt?: string) { const result = await api<{
+async function downloadFile(submission: Submission, file: SubmissionFile, receipt?: string) { const result = await api<{
     download: {
         url: string;
         headers: Record<string, string>;

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { packageApk, verifyArtifact } from '../scripts/package-apk.mjs';
+import { packageApk, verifyArtifact } from '../scripts/apk/package.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

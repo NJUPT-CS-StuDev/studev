@@ -29,7 +29,3 @@ export function rememberReceipt(value: LocalReceipt) { try {
 catch {
     return false;
 } }
-export function forgetReceipt(id: string) { try {
-    sessionStorage.setItem(key, JSON.stringify(receipts().filter(v => v.id !== id)));
-}
-catch { /* Storage may be unavailable. */ } }
