@@ -120,14 +120,14 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         highlightedId = id
         if (id != null) source.setFeatureState(id, JsonObject().apply { addProperty("selected", true) })
     }
-    fun select(place: Place, campus: CampusPackage, density: Float) {
+    fun select(place: Place, campus: CampusPackage, density: Float, sheetBottom: Double = 420.0) {
         stopFollow()
         val at = campus.position(place) ?: return
         val ready = map ?: return
         ready.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
             .target(LatLng(at[1], at[0])).zoom(maxOf(17.0, ready.cameraPosition.zoom))
             .tilt(if (threeD) 55.0 else 0.0)
-            .padding(0.0, 96.0 * density, 0.0, 420.0 * density).build()), Tokens.Motion.camera)
+            .padding(0.0, 96.0 * density, 0.0, sheetBottom * density).build()), Tokens.Motion.camera)
     }
 }
 
@@ -142,10 +142,12 @@ internal fun CampusMap(
     onPlace: (Place) -> Unit,
     onLocationStatus: (LocationStatus) -> Unit,
     onMapError: (Boolean) -> Unit,
+    onMapTap: () -> Unit,
     routeState: PlannerState,
     onRoute: (Int) -> Unit,
     modifier: Modifier = Modifier,
     homeBottom: Double = 0.0,
+    sheetBottom: Double = 420.0,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -196,6 +198,7 @@ internal fun CampusMap(
                 }
                 ready.addOnMapClickListener { coordinate ->
                     if (loadedStyle == null || holder.destroyed) false else {
+                        onMapTap()
                         val point = ready.projection.toScreenLocation(coordinate)
                         val radius = 12 * density
                         if (currentRoute.open) {
@@ -227,10 +230,10 @@ internal fun CampusMap(
             if (!holder.destroyed) { loadedStyle = style; controller.applyLayers() }
         }
     }
-    LaunchedEffect(map, loadedStyle, selected, routeState.open, homeBottom) {
+    LaunchedEffect(map, loadedStyle, selected, routeState.open, homeBottom, sheetBottom) {
         if (loadedStyle != null) {
             controller.highlight(selected)
-            if (selected != null) controller.select(selected, campus, density)
+            if (selected != null) controller.select(selected, campus, density, sheetBottom)
             else if (!routeState.open) map?.let { ready ->
                 val bottom = homeBottom * density
                 if (ready.cameraPosition.padding?.getOrNull(3) != bottom) {

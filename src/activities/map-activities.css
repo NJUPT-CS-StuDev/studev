@@ -1,6 +1,7 @@
 .activity-map-tools { display:flex; gap:8px; align-items:center; }
 .activity-map-tools button,.activity-map-tools a,.activity-map-create { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:24px; padding:9px 14px; font:inherit; font-size:13px; color:var(--ink); background:var(--paper); cursor:pointer; text-decoration:none; }
 .activity-map-tools button[aria-pressed=true] { color:var(--blue); background:var(--mark); border-color:var(--blue); }
+.activity-map-tools button.is-unavailable { color:var(--muted); border-color:var(--line); opacity:.75; }
 .activity-map-marker { border:2px solid var(--paper); border-radius:16px; background:var(--brand); color:var(--on-brand); padding:5px 9px; font-size:12px; cursor:pointer; }
 .activity-map-marker:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
 .activity-map-label { color:var(--blue); font-size:12px; display:block; margin-bottom:6px; }

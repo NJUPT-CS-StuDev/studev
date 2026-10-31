@@ -28,6 +28,7 @@ import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.navigation.metres
+import top.hicancan.studev.map.MapSheetState
 import java.time.LocalDateTime
 
 fun categoryIcon(category: String?) = when (category) {
@@ -41,25 +42,48 @@ fun categoryIcon(category: String?) = when (category) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
+                       sheetMode: MapSheetState, onSheetModeChange: (MapSheetState) -> Unit,
                        onSearch: () -> Unit, onPlace: (Place) -> Unit, onRoute: (Place) -> Unit) {
     val now = CampusClock.now()
     val moment = DayMoment.at(now.hour)
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var debugMenu by remember { mutableStateOf(false) }
-    val state = rememberBottomSheetScaffoldState()
+    val bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    val state = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState)
     val scope = rememberCoroutineScope()
+    var sheetReady by remember { mutableStateOf(false) }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
     val categories = remember(campus) { listOf("食堂", "图书馆", "教学楼", "超市", "快递", "打印", "体育", "校医院")
         .filter { c -> campus.places.any { it.category == c } } }
     val ranked = remember(campus, position, now, category) { HomeRecommendations.rank(campus.places, now, position, category) }
-    BackHandler(category != null || state.bottomSheetState.currentValue == SheetValue.Expanded) {
-        if (category != null) category = null else scope.launch { state.bottomSheetState.partialExpand() }
+    BackHandler(category != null || sheetMode != MapSheetState.Collapsed) {
+        if (category != null) category = null else onSheetModeChange(if (sheetMode == MapSheetState.Full) MapSheetState.Half else MapSheetState.Collapsed)
+    }
+    LaunchedEffect(sheetMode) {
+        sheetReady = false
+        if (sheetMode == MapSheetState.Full) state.bottomSheetState.expand() else state.bottomSheetState.partialExpand()
+        sheetReady = true
+    }
+    LaunchedEffect(state.bottomSheetState) {
+        snapshotFlow { state.bottomSheetState.currentValue }.collect { value ->
+            if (!sheetReady) return@collect
+            when (value) {
+                SheetValue.Expanded -> if (sheetMode != MapSheetState.Full) onSheetModeChange(MapSheetState.Full)
+                SheetValue.PartiallyExpanded -> if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)
+                else -> Unit
+            }
+        }
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
-        sheetPeekHeight = peek, sheetContainerColor = MaterialTheme.colorScheme.surface,
+        sheetDragHandle = null,
+        sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 96.dp; MapSheetState.Half -> peek; MapSheetState.Full -> 96.dp }, sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), sheetShadowElevation = 8.dp,
         sheetContent = {
-            Column(Modifier.fillMaxWidth().height(height * .82f).navigationBarsPadding()) {
+            Column(Modifier.fillMaxWidth().height(height * .88f).navigationBarsPadding()) {
+                Surface(onClick = { onSheetModeChange(if (sheetMode == MapSheetState.Collapsed) MapSheetState.Half else if (sheetMode == MapSheetState.Half) MapSheetState.Full else MapSheetState.Collapsed) },
+                    modifier = Modifier.fillMaxWidth().height(24.dp).testTag("map-sheet-handle"), color = Color.Transparent) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Surface(Modifier.width(38.dp).height(4.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.outlineVariant) {} }
+                }
                 Surface(onClick = onSearch, modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth().testTag("home-search"),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(18.dp)) {
                     Row(Modifier.height(54.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -68,7 +92,7 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
                         Text("搜索地点、楼栋或教室", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
-                LazyRow(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (sheetMode != MapSheetState.Collapsed) LazyRow(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(categories) { c ->
                         Column(Modifier.width(64.dp).testTag("category:$c").clickable { category = if (category == c) null else c },
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -79,7 +103,7 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (sheetMode != MapSheetState.Collapsed) Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (category != null) IconButton(onClick = { category = null }, modifier = Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回热门推荐") }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(category?.let { "附近$it" } ?: "热门推荐", style = MaterialTheme.typography.titleLarge)
@@ -97,7 +121,7 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
                         }
                     }
                 }
-                LazyColumn(Modifier.weight(1f).padding(top = 8.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                if (sheetMode != MapSheetState.Collapsed) LazyColumn(Modifier.weight(1f).padding(top = 8.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                     if (ranked.isEmpty()) item { Text("暂无符合当前时段的地点，试试上方分类", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     items(ranked, key = { it.place.id }) { item ->
                         Row(Modifier.fillMaxWidth().testTag("recommend:${item.place.id}").clickable { onPlace(item.place) }.padding(horizontal = 22.dp, vertical = 13.dp),

@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,17 +35,9 @@ import top.hicancan.studev.home.*
 
 @Composable
 internal fun MapControls(controller: CampusMapController, status: LocationStatus, locationGranted: Boolean,
-                         mapError: Boolean, selected: Boolean, onSearch: () -> Unit, onLocate: () -> Unit, homePeek: Dp = 0.dp) {
+                          mapError: Boolean, selected: Boolean, sheetMode: MapSheetState = MapSheetState.Collapsed,
+                          onLocate: () -> Unit, homePeek: Dp = 0.dp) {
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(Tokens.Space.l.dp)) {
-        if (selected) Surface(onClick = onSearch, Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-            shape = RoundedCornerShape(Tokens.Radius.sheet.dp), shadowElevation = Tokens.Elevation.search.dp,
-            color = MaterialTheme.colorScheme.surface) {
-            Row(Modifier.heightIn(min = 56.dp).padding(horizontal = Tokens.Space.l.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp)) {
-                Icon(Icons.Outlined.Search, null, tint = MaterialTheme.colorScheme.primary)
-                Text("搜索地点、楼栋或教室", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
         if (!selected) Surface(Modifier.align(Alignment.TopStart).padding(end = 72.dp), shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("南邮 · 仙林校区", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -63,7 +56,7 @@ internal fun MapControls(controller: CampusMapController, status: LocationStatus
                 }
             }
         }
-        if (!selected) {
+        if (sheetMode != MapSheetState.Full) {
             Column(Modifier.align(Alignment.BottomEnd).padding(bottom = homePeek + 16.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp)) {
                 Surface(shape = RoundedCornerShape(Tokens.Radius.control.dp), shadowElevation = Tokens.Elevation.control.dp) {
                     Column {
@@ -119,29 +112,63 @@ private fun MapButton(description: String, icon: ImageVector, onClick: () -> Uni
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlacePreferences,
+                        peek: Dp,
+                        sheetMode: MapSheetState, onSheetModeChange: (MapSheetState) -> Unit,
+                        onSearch: () -> Unit,
                         onClose: () -> Unit, onPlace: (Place) -> Unit, onRoute: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val saved by preferences.saved.collectAsStateWithLifecycle(emptySet())
-    var half by rememberSaveable(place.id) { mutableStateOf(false) }
+    var detailExpanded by rememberSaveable(place.id) { mutableStateOf(false) }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
-    val state = rememberBottomSheetScaffoldState()
+    val bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    val state = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState)
     val sheet = state.bottomSheetState
-    LaunchedEffect(place.id) { half = false; sheet.partialExpand() }
+    var sheetReady by remember { mutableStateOf(false) }
+    val sheetContentHeight = height * .88f
+    LaunchedEffect(place.id, sheetMode) {
+        sheetReady = false
+        if (sheetMode == MapSheetState.Full) sheet.expand() else sheet.partialExpand()
+        sheetReady = true
+    }
+    LaunchedEffect(sheet) {
+        snapshotFlow { sheet.currentValue }.collect { value ->
+            if (!sheetReady) return@collect
+            when (value) {
+                SheetValue.Expanded -> if (sheetMode != MapSheetState.Full) onSheetModeChange(MapSheetState.Full)
+                SheetValue.PartiallyExpanded -> if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)
+                else -> Unit
+            }
+        }
+    }
     BackHandler {
-        if (sheet.currentValue == SheetValue.Expanded) scope.launch { sheet.partialExpand() }
-        else if (half) half = false else onClose()
+        if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)
+        else if (sheetMode == MapSheetState.Half) onSheetModeChange(MapSheetState.Collapsed) else onClose()
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
-        sheetPeekHeight = if (half) height * .62f else 368.dp,
+         sheetDragHandle = null,
+         sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 96.dp; MapSheetState.Half -> peek; MapSheetState.Full -> 96.dp },
         sheetShape = RoundedCornerShape(topStart = Tokens.Radius.sheet.dp, topEnd = Tokens.Radius.sheet.dp),
         sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShadowElevation = Tokens.Elevation.sheet.dp,
         sheetContent = {
-            Column(Modifier.fillMaxWidth().height(height * .84f).navigationBarsPadding().verticalScroll(rememberScrollState())
+             Column(Modifier.fillMaxWidth().height(sheetContentHeight).navigationBarsPadding().verticalScroll(rememberScrollState())
                 .padding(horizontal = Tokens.Space.xl.dp).padding(bottom = Tokens.Space.xxl.dp),
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
-                Row(verticalAlignment = Alignment.Top) {
+                 Surface(onClick = { onSheetModeChange(if (sheetMode == MapSheetState.Collapsed) MapSheetState.Half else if (sheetMode == MapSheetState.Half) MapSheetState.Full else MapSheetState.Collapsed) },
+                     modifier = Modifier.fillMaxWidth().height(24.dp).testTag("map-sheet-handle"), color = Color.Transparent) {
+                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Surface(Modifier.width(38.dp).height(4.dp), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.outlineVariant) {} }
+                 }
+                Surface(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(18.dp)) {
+                    Row(Modifier.padding(horizontal = Tokens.Space.l.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m.dp)) {
+                        Icon(Icons.Outlined.Search, null, tint = MaterialTheme.colorScheme.primary)
+                        Text("搜索地点、楼栋或教室", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (sheetMode != MapSheetState.Collapsed) {
+                    Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs.dp)) {
                         Text(place.id, style = MaterialTheme.typography.headlineLarge)
                         Text(listOf(place.kindLabel, campus.byId[place.parent]?.id ?: "仙林校区").joinToString(" · "),
@@ -169,9 +196,9 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                         Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(Tokens.Space.xs.dp)); Text("分享")
                     }
                 }
-                TextButton(onClick = {
-                    if (!half) half = true else scope.launch { sheet.expand() }
-                }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                 TextButton(onClick = {
+                     if (!detailExpanded) detailExpanded = true else onSheetModeChange(MapSheetState.Full)
+                 }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                     Text("地点详情"); Icon(Icons.Outlined.KeyboardArrowDown, null)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -203,7 +230,8 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     Text("也叫", style = MaterialTheme.typography.titleMedium)
                     Text(place.names.filter { it != place.id }.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Spacer(Modifier.height(Tokens.Space.l.dp))
+                 Spacer(Modifier.height(Tokens.Space.l.dp))
+                }
             }
         }) { }
 }

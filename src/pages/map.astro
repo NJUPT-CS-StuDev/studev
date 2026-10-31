@@ -2,6 +2,6 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import MapApp from '../campus/map/MapApp';
 ---
-<SiteLayout title="校园地图 — StuDev" description="南京邮电大学仙林校区地图：搜索楼栋、教室与地点，规划步行与骑行路线。" active="map" fill>
+<SiteLayout title="校园地图 — StuDev" description="南京邮电大学仙林校区地图：搜索楼栋、教室与地点，规划步行与骑行路线。" active="map" fill hideFloatingPwa>
   <MapApp client:only="react" />
 </SiteLayout>

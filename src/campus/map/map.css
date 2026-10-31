@@ -1,6 +1,5 @@
-/* /map/: the map fills the page below the site header; one floating panel holds
-   search, the selected place and its routes. On phones the panel sits at the top
-   and the map stays the subject. */
+/* /map/: the map is the surface. Desktop keeps a side panel; phones use one
+   anchored sheet for search, recommendations, places, routes and activities. */
 .campus-map { position: relative; height: 100%; min-height: 360px; overflow: hidden; }
 .campus-map-canvas { position: absolute; inset: 0; }
 
@@ -36,6 +35,8 @@
 
 .campus-map-error { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 12px 14px; color: var(--ink); font-size: 14px; }
 .campus-map-error button { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+.campus-map-notice { position: absolute; top: 16px; left: 50%; z-index: 8; display: flex; gap: 8px; align-items: center; max-width: min(420px, calc(100% - 32px)); transform: translateX(-50%); padding: 10px 12px 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--paper) 96%, transparent); color: var(--ink); box-shadow: 0 4px 18px color-mix(in srgb, var(--scrim) 22%, transparent); font-size: 13px; }
+.campus-map-notice button { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
 
 .campus-map-card { padding: 16px; }
 .campus-map-card header { display: flex; align-items: flex-start; gap: 8px; }
@@ -163,3 +164,51 @@
   .campus-map .maplibregl-ctrl-attrib { font-size: 10px; max-width: 230px; }
 }
 @media (prefers-reduced-motion: reduce) { .campus-map * { scroll-behavior: auto; transition: none !important; } }
+
+/* Mobile map shell. The sheet height is owned by the React state model so the
+   map camera and every floating control share one inset. */
+.campus-map-back-home { display: none; }
+@media (max-width: 680px) {
+  body:has(.campus-map) { overflow: hidden; }
+  body:has(.campus-map) .pwa-entry { display: none; }
+  body:has(.campus-map) .site-header { display: none; }
+  body:has(.campus-map) main.main-fill { padding: 0; }
+  .campus-map { height: var(--campus-viewport-height, 100dvh); min-height: var(--campus-viewport-height, 100dvh); padding-bottom: env(safe-area-inset-bottom); }
+  .campus-map-back-home { position: absolute; display: grid; place-items: center; top: max(12px, env(safe-area-inset-top)); left: 12px; z-index: 7; width: 40px; height: 40px; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--paper) 94%, transparent); box-shadow: 0 2px 12px color-mix(in srgb, var(--scrim) 24%, transparent); text-decoration: none; }
+  .campus-map-notice { top: max(12px, env(safe-area-inset-top)); }
+  .campus-map-panel { top: auto; bottom: 0; left: 0; width: 100%; height: var(--campus-sheet-height); max-height: none; gap: 8px; overflow: hidden; padding: max(8px, env(safe-area-inset-top)) 0 0; border-radius: 26px 26px 0 0; background: var(--paper); box-shadow: 0 -5px 24px color-mix(in srgb, var(--scrim) 22%, transparent); transition: height 220ms cubic-bezier(.2,.8,.2,1); overscroll-behavior: contain; }
+  .campus-map-panel.is-collapsed { height: var(--campus-sheet-height); }
+  .campus-map-panel.is-collapsed > :not(.campus-map-sheet-handle):not(.campus-map-search) { display: none; }
+  .campus-map-panel.is-collapsed .campus-map-search { margin-bottom: 4px; }
+  .campus-map-panel.is-half, .campus-map-panel.is-full { overflow-y: auto; }
+  .campus-map-sheet-handle { display: grid; place-items: center; flex: 0 0 24px; width: 100%; height: 24px; margin: 0; border: 0; background: transparent; cursor: grab; touch-action: none; }
+  .campus-map-sheet-handle:active { cursor: grabbing; }
+  .campus-map-sheet-handle > span { width: 38px; height: 4px; border-radius: 999px; background: var(--line); }
+  .campus-map-search { margin: 0 12px; min-height: 52px; }
+  .campus-map-modules { margin-inline: 12px; overflow-x: auto; scrollbar-width: none; }
+  .campus-map-results, .campus-map-error { margin-inline: 12px; }
+  .campus-map-card { margin: 0; border: 0; border-radius: 0; box-shadow: none; padding: 6px 20px max(20px, env(safe-area-inset-bottom)); }
+  .campus-map-card.campus-map-home { padding-top: 2px; }
+  .campus-map-categories { position: fixed; left: 12px; right: 12px; bottom: calc(var(--campus-sheet-height) + 12px); z-index: 5; display: flex; gap: 8px; padding: 6px; border: 0; border-radius: 18px; background: color-mix(in srgb, var(--paper) 92%, transparent); box-shadow: 0 2px 14px color-mix(in srgb, var(--scrim) 20%, transparent); overflow-x: auto; scrollbar-width: none; }
+  .campus-map-panel.is-collapsed .campus-map-categories { display: none; }
+  .campus-map-categories button { flex: 0 0 57px; gap: 4px; }
+  .campus-map-categories button > span { width: 36px; height: 36px; }
+  .campus-map-home-heading { padding-top: 10px; }
+  .campus-map-recommendations { margin-top: 8px; }
+  .campus-map-locate { right: 12px; bottom: calc(var(--campus-sheet-height) + 16px); z-index: 6; transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
+  .campus-map .maplibregl-ctrl-bottom-right { right: 12px; bottom: calc(var(--campus-sheet-height) + 68px); transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
+  .campus-map .maplibregl-ctrl-bottom-left { bottom: calc(var(--campus-sheet-height) + 8px); transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
+  .campus-map .activity-map-tools { position: fixed; right: 12px; bottom: calc(var(--campus-sheet-height) + 122px); z-index: 6; transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
+  .campus-map .activity-map-tools a { display: none; }
+  .campus-map .activity-map-tools button { width: 44px; height: 44px; justify-content: center; padding: 0; border-radius: 50%; box-shadow: 0 2px 12px color-mix(in srgb, var(--scrim) 24%, transparent); }
+  .campus-map .activity-map-tools button { font-size: 0; }
+  .campus-map .activity-map-tools button svg { width: 19px; height: 19px; }
+  .campus-map .activity-map-sheet { position: static; left: auto; bottom: auto; width: auto; max-height: none; overflow: visible; }
+  .campus-map:has(.campus-map-plan) .campus-map-categories, .campus-map:has(.campus-map-plan) .activity-map-tools { display: none; }
+  .campus-map:has(.campus-map-plan) .campus-map-locate { bottom: calc(var(--campus-sheet-height) + 16px); }
+}
+
+@media (min-width: 681px) {
+  .campus-map-panel { overflow-y: auto; }
+  .campus-map-panel.is-collapsed .campus-map-sheet-handle { display: none; }
+}
