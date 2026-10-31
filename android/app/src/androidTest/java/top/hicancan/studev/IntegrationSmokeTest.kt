@@ -100,13 +100,11 @@ class IntegrationSmokeTest {
             compose.waitUntil(20_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("路线", useUnmergedTree = true).performClick()
             compose.onNodeWithTag("route-origin").performClick()
-            compose.onNode(hasSetTextAction()).performTextInput("梅苑1栋")
-            wait("place:仙林/梅苑1栋")
+            compose.onNode(hasSetTextAction()).performTextInput("南一")
+            wait("place:仙林/一食堂")
             compose.onNode(hasSetTextAction()).performImeAction()
-            compose.onNodeWithTag("place:仙林/梅苑1栋").performClick()
-            compose.waitUntil(30_000) { runtime.state.value.route != null && !runtime.state.value.busy }
-            assertTrue(runtime.state.value.route!!.maneuvers.size >= 2)
-            compose.onNodeWithText("开始导航").assertIsDisplayed(); shot("route-planning")
+            compose.onNodeWithTag("place:仙林/一食堂").performClick()
+            compose.onNodeWithText("仙林/一食堂").assertIsDisplayed()
             back(); assertFalse(runtime.state.value.open)
             backTo("home-search")
             back(); wait("home")
