@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createIdentity, normalizeRealName, normalizeStudentId } from '../src/server/platform-identity.mjs';
 import { createRepository } from '../src/server/platform-store.mjs';
-import { hashPassword } from '../src/server/collection-auth.mjs';
+import { hashPassword } from '../src/server/platform-crypto.mjs';
 import { base32Encode, decryptTotp, encryptTotp, matchedTotpCounter, totpCode } from '../src/server/platform-totp.mjs';
 
 const ORIGIN = 'https://studev.example.test';

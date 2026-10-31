@@ -165,9 +165,8 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
   }
   async function indexedForm(key) {
     const index = await repo.get(key);
-    if (!index || !ID.test(index.id)) return null;
-    // Deployed form indexes without snapshots must be migrated before this reader is removed.
-    return index.form && index.form.id === index.id ? index.form : getForm(index.id);
+    if (!index || !ID.test(index.id) || index.form?.id !== index.id) fail(503, 'FORM_INDEX_INVALID', '表单索引需要维护。');
+    return index.form;
   }
   async function getRecord(id) {
     if (!ID.test(id)) fail(404, 'NOT_FOUND', '提交记录不存在。');

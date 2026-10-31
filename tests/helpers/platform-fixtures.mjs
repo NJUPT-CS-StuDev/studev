@@ -1,11 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { hashPassword } from '../../src/server/collection-auth.mjs';
+import { hashPassword } from '../../src/server/platform-crypto.mjs';
 
 export function memoryBlob() {
   const values = new Map();
   return {
     values,
-    async get(key) { return structuredClone(values.get(key) ?? null); },
+    async get(key, options) {
+      const value = values.get(key);
+      if (value === undefined) return null;
+      if (options?.type === 'arrayBuffer') return Buffer.from(JSON.stringify(value));
+      return structuredClone(value);
+    },
     async setJSON(key, value, options) {
       if (options?.onlyIfNew && values.has(key)) throw Object.assign(new Error('conditional write failed'), { code: 'PRECONDITION_FAILED' });
       values.set(key, structuredClone(value));

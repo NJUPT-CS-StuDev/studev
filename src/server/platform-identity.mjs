@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { digest, hashPassword, safeEqual, validPasswordHash, verifyPassword } from './collection-auth.mjs';
+import { digest, hashPassword, safeEqual, validPasswordHash, verifyPassword } from './platform-crypto.mjs';
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './platform-sessions.mjs';

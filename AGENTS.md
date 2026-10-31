@@ -45,14 +45,13 @@ admins and the owner can list or look up users.
 
 - `src/campus/` is the web campus client. Campus services live under their
   service directory.
-- `src/client/` contains browser code grouped by owner: `site/`, `platform/`,
-  and the legacy `collection/` surface.
+- `src/client/` contains browser code grouped by owner: `site/` and `platform/`.
 - `src/markdown/` contains Markdown/HTML transforms; `src/astro/` contains
   Astro integrations and build-time browser helpers.
 - `android/app/src/main/java/top/hicancan/studev/` is grouped by feature;
   package names are plural feature names where the feature is a collection.
 - `design/` is the shared visual language. `scripts/` at the repository root
-  groups tooling by data, APK, server, platform, collection, and private storage.
+  groups tooling by data, APK, server, platform, and private storage.
   `product.json` owns product and release metadata for both clients and tooling.
   `src/download/` owns the browser's manifest and streaming APK download.
   `android/tooling/` contains Android-only

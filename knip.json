@@ -8,9 +8,6 @@
     "src/campus/academics/parity/*.{mjs,ts}",
     "cloud-functions/**/*.js"
   ],
-  "ignoreIssues": {
-    "src/server/collection-app.mjs": ["exports"]
-  },
   "project": [
     "src/**/*.{astro,js,mjs,ts,tsx}",
     "scripts/**/*.{mjs,ts}",

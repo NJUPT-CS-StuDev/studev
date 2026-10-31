@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { hashPassword } from '../../src/server/collection-auth.mjs';
+import { hashPassword } from '../../src/server/platform-crypto.mjs';
 import { privateFile } from '../private/files.mjs';
 
 const envPath = privateFile('.env.platform.local');
