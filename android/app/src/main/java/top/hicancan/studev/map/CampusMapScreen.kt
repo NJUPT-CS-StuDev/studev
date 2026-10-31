@@ -141,7 +141,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
         else if (sheetMode == MapSheetState.Half) onSheetModeChange(MapSheetState.Collapsed) else onClose()
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
-         sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 104.dp; MapSheetState.Half -> height * .52f; MapSheetState.Full -> 104.dp },
+         sheetPeekHeight = when (sheetMode) { MapSheetState.Collapsed -> 144.dp; MapSheetState.Half -> height * .52f; MapSheetState.Full -> 104.dp },
         sheetShape = RoundedCornerShape(topStart = Tokens.Radius.sheet.dp, topEnd = Tokens.Radius.sheet.dp),
         sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShadowElevation = Tokens.Elevation.sheet.dp,

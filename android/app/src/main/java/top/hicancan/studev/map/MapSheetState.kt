@@ -4,7 +4,8 @@ internal enum class MapSheetState { Collapsed, Half, Full }
 
 internal fun sheetHeight(state: MapSheetState, viewport: Float, safeBottom: Float = 0f): Float {
     val available = (viewport - safeBottom).coerceAtLeast(320f)
-    val collapsed = (available * .14f).coerceIn(72f, 112f)
+    // The collapsed anchor must fit the handle, search field, and gesture inset.
+    val collapsed = (available * .18f).coerceIn(128f, 176f)
     val half = (available * .52f).coerceIn(collapsed + 48f, available * .78f)
     return when (state) {
         MapSheetState.Collapsed -> collapsed

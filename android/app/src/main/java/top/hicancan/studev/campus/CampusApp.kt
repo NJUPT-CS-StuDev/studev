@@ -150,7 +150,7 @@ import top.hicancan.studev.timetable.*
             navigationIcon = { if (screen in listOf("rooms", "search", "calendar")) IconButton({ screen = if (screen == "calendar") "me" else "home" }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
             actions = { if (screen == "home") TextButton({ classPicker = true }) { Text(preferences.klass ?: "选择班级") } else if (screen == "timetable" || screen == "exams") TextButton({ screen = if (screen == "exams") "timetable" else "exams" }) { Text(if (screen == "exams") "课程" else "考试") } })
     }, bottomBar = {
-        if (!route.active) NavigationBar {
+        if (!route.active && screen != "map") NavigationBar {
             listOf("home" to "首页", "timetable" to "课表", "map" to "地图", "me" to "我的").forEach { (key, label) ->
                 NavigationBarItem(tab == key, { openScreen(key) }, icon = { Icon(when (key) { "home" -> Icons.Outlined.Home; "timetable" -> Icons.Outlined.CalendarMonth; "map" -> Icons.Outlined.Map; else -> Icons.Outlined.PersonOutline }, null) }, label = { Text(label) }, modifier = Modifier.testTag("tab-$key"))
             }

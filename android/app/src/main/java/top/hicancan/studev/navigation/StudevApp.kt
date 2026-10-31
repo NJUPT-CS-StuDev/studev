@@ -98,7 +98,7 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
             }
             composable("search") {
                 SearchScreen(loaded, model.search, model.preferences, onBack = { nav.popBackStack() },
-                    onPlace = { model.select(it.id); nav.popBackStack() })
+                    onPlace = { model.select(it.id); sheetMode = MapSheetState.Half; nav.popBackStack() })
             }
             composable("route-search") {
                 SearchScreen(loaded, model.search, model.preferences, onBack = { nav.popBackStack() },
