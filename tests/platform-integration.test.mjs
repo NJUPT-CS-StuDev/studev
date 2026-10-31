@@ -9,12 +9,12 @@ async function fixture() {
   let clock = 1_800_000_000_000;
   const handle = createPlatformHandler({ getStore: () => store, getGateway: () => gateway, now: () => clock });
   const client = () => requestClient(handle, data.env), owner = client();
-  let result = await owner.call('/auth/legacy-profile-login', { method: 'POST', body: { qq: data.env.PLATFORM_OWNER_QQ, password: data.password } });
+  let result = await owner.call('/auth/login', { method: 'POST', body: { studentId: data.env.PLATFORM_OWNER_STUDENT_ID, password: data.password } });
   assert.equal(result.status, 200); assert.equal(result.body.passwordChangeRequired, true);
   assert.equal((await owner.call('/admin/forms')).status, 403);
   const ownerPassword = data.password + '-new';
   assert.equal((await owner.call('/auth/password', { method: 'POST', body: { currentPassword: data.password, newPassword: ownerPassword } })).status, 200);
-  result = await owner.call('/auth/legacy-profile-login', { method: 'POST', body: { qq: data.env.PLATFORM_OWNER_QQ, password: ownerPassword } });
+  result = await owner.call('/auth/login', { method: 'POST', body: { studentId: data.env.PLATFORM_OWNER_STUDENT_ID, password: ownerPassword } });
   assert.equal(result.status, 200); assert.equal(result.body.enrollmentRequired, true);
   const setup = await owner.call('/auth/totp/setup', { method: 'POST', body: { password: ownerPassword } });
   assert.equal(setup.status, 200);
@@ -24,7 +24,7 @@ async function fixture() {
   assert.equal((await owner.call('/auth/profile', { method: 'POST', body: { studentId: 'TESTOWNER01', realName: '测试所有者', revision: ownerState.body.user.revision } })).status, 200);
   assert.equal((await owner.call('/admin/forms')).status, 200);
   async function member(qq, nickname) {
-    const user = client(); const registered = await user.call('/auth/register', { method: 'POST', body: { qq, nickname, studentId: `TEST${qq}`, realName: nickname, password: data.password, inviteCode: data.inviteCode } });
+    const user = client(); const registered = await user.call('/auth/register', { method: 'POST', body: { qq, nickname, studentId: `TEST${qq}`, realName: nickname, password: data.password } });
     assert.equal(registered.status, 201);
     assert.equal((await user.call('/auth/login', { method: 'POST', body: { studentId: `TEST${qq}`, password: data.password } })).status, 200);
     return { client: user, user: registered.body.user };
@@ -87,7 +87,7 @@ test('real identity permits anonymous public submissions and receipt downloads w
   assert.equal((await guest.call(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', body: {} })).status, 404);
 });
 
-test('role promotion and suspension revoke existing sessions; admin can manage forms but cannot delete forms or manage users', async () => {
+test('role promotion and suspension revoke existing sessions; admin can manage forms and look up users but cannot delete forms', async () => {
   const f = await fixture(); const member = await f.member('100002', '待提升成员');
   const promoted = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: member.user.revision, role: 'admin' } });
   assert.equal(promoted.status, 200);
@@ -98,12 +98,12 @@ test('role promotion and suspension revoke existing sessions; admin can manage f
   const createdForm = await member.client.call('/admin/forms', { method: 'POST', body: { title: '管理员新建表', status: 'draft', access: 'members', fields: [{ id: 'note', type: 'text', label: '说明' }] } });
   assert.equal(createdForm.status, 201);
   assert.equal((await member.client.call(`/admin/forms/${createdForm.body.form.id}/delete`, { method: 'POST', body: {} })).status, 403);
-  assert.equal((await member.client.call('/admin/users')).status, 403);
+  assert.equal((await member.client.call('/admin/users')).status, 200);
   const disabled = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: promoted.body.user.revision, status: 'disabled' } });
   assert.equal(disabled.status, 200);
   assert.equal((await member.client.call('/auth/session')).status, 401);
   const ownerSession = await f.owner.call('/auth/session');
-  assert.equal((await f.owner.call(`/admin/users/${ownerSession.body.user.id}`, { method: 'POST', body: { revision: ownerSession.body.user.revision, role: 'member' } })).status, 403);
+  assert.equal((await f.owner.call(`/admin/users/${ownerSession.body.user.id}`, { method: 'POST', body: { revision: ownerSession.body.user.revision, role: 'user' } })).status, 403);
 });
 
 test('student login, owner verification and submission identity preserve a private historical record', async () => {
@@ -112,7 +112,7 @@ test('student login, owner verification and submission identity preserve a priva
   assert.equal(qqLogin.status, 400);
   const lowerCaseLogin = await f.client().call('/auth/login', { method: 'POST', body: { studentId: member.user.studentId.toLowerCase(), password: f.password } });
   assert.equal(lowerCaseLogin.status, 200);
-  assert.equal((await f.client().call('/auth/legacy-profile-login', { method: 'POST', body: { qq: member.user.qq, password: f.password } })).status, 401);
+  assert.equal((await f.client().call('/auth/login', { method: 'POST', body: { qq: member.user.qq, password: f.password } })).status, 400);
   const verification = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: member.user.revision, identityVerified: true } });
   assert.equal(verification.status, 200); assert.equal(verification.body.user.identityVerified, true);
   const createdForm = await f.owner.call('/admin/forms', { method: 'POST', body: { title: '自动关联身份', status: 'published', access: 'members', fields: [{ id: 'note', type: 'text', label: '说明' }] } });

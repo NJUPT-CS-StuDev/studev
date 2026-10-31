@@ -62,7 +62,7 @@ if (hasCachedUser && shouldVerify && !isPlatformManagedPage) {
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify({
               nickname: data.user.nickname,
-              role: data.user.role || 'member',
+              role: data.user.role || 'user',
               verifiedAt: Date.now()
             }));
           } catch {}

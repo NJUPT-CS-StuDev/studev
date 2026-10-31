@@ -1,4 +1,4 @@
-type Role = 'owner' | 'admin' | 'member';
+type Role = 'owner' | 'admin' | 'user';
 export interface User {
     id: string;
     qq: string;
@@ -93,7 +93,7 @@ export class PlatformError extends Error {
 }
 let currentSession: Session | null = null;
 let sessionRequest: Promise<Session | null> | null = null;
-export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '成员填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
+export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', user: '同学', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '登录后填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
 function extractQq(user: { qq?: string; avatarUrl?: string }): string {
     if (user.qq && /^[1-9]\d{4,11}$/.test(user.qq.trim())) return user.qq.trim();
     const match = user.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
@@ -198,19 +198,44 @@ export function initPasswordToggles(root: Document | HTMLElement = document) {
             const isPassword = input.type === 'password';
             input.type = isPassword ? 'text' : 'password';
             button.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
-            const isInvite = input.id.includes('invite');
-            button.setAttribute('aria-label', isPassword ? (isInvite ? '隐藏邀请码' : '隐藏密码') : (isInvite ? '显示邀请码' : '显示密码'));
+            button.setAttribute('aria-label', isPassword ? '隐藏密码' : '显示密码');
         });
     });
 }
 export function pill(state: string): HTMLElement { const n = el('span', labels[state] || state, 'p-pill'); n.dataset.state = state; return n; }
 export function message(node: HTMLElement, text = '', kind = 'info') { node.textContent = text; node.dataset.kind = kind; }
 export function errorText(error: unknown): string { return error instanceof Error ? error.message : '操作未完成，请稍后重试。'; }
-export async function api<T>(path: string, body?: unknown, options: RequestInit = {}): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
-    throw new PlatformError('请求路径无效。'); let response: Response; try {
-    response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+function browserDevice() {
+    let deviceId = localStorage.getItem('studev_device_id');
+    if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem('studev_device_id', deviceId); }
+    const agent = navigator.userAgent;
+    const browser = agent.includes('Edg/') ? 'Edge' : agent.includes('Firefox/') ? 'Firefox' : agent.includes('Chrome/') ? 'Chrome' : '浏览器';
+    const system = agent.includes('Android') ? 'Android' : /iPhone|iPad/.test(agent) ? 'iOS' : agent.includes('Windows') ? 'Windows' : agent.includes('Mac') ? 'macOS' : 'Linux';
+    return { deviceId, deviceName: `${system} · ${browser}` };
 }
-catch {
+let refreshRequest: Promise<void> | null = null;
+async function refreshCookieSession(generation: string | null) {
+    refreshRequest ||= navigator.locks.request('studev-session-refresh', async () => {
+        // Other tabs may have rotated the HttpOnly ticket while we waited.
+        if (localStorage.getItem('studev_session_generation') !== generation) return;
+        try { await api('/auth/refresh', browserDevice()); }
+        catch (error) { if (error instanceof PlatformError && error.status === 401) localStorage.removeItem('studev_session_generation'); throw error; }
+        localStorage.setItem('studev_session_generation', crypto.randomUUID());
+    }).finally(() => { refreshRequest = null; });
+    return refreshRequest;
+}
+export async function api<T>(path: string, body?: unknown, options: RequestInit = {}, retry = true): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
+    throw new PlatformError('请求路径无效。'); let response: Response; try {
+    if (path === '/auth/login') body = { ...(body as object), ...browserDevice() };
+    const generation = localStorage.getItem('studev_session_generation');
+    response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    if (response.status === 401 && retry && generation && !['/auth/login', '/auth/register', '/auth/refresh'].includes(path)) {
+        await refreshCookieSession(generation);
+        return api<T>(path, body, options, false);
+    }
+}
+catch (error) {
+    if (error instanceof PlatformError) throw error;
     throw new PlatformError('网络连接中断，请检查网络后重试。');
 } let data: unknown; try {
     data = await response.json();
@@ -225,7 +250,8 @@ catch {
         };
     };
     throw new PlatformError(e.error?.message || '操作未完成，请稍后重试。', response.status, e.error?.code);
-} return data as T; }
+} if (path === '/auth/login') localStorage.setItem('studev_session_generation', crypto.randomUUID());
+return data as T; }
 async function loadSession(): Promise<Session | null> {
     // PlatformShell and each functional page ask for the session at the same
     // time. Share that in-flight request so one navigation performs one Blob
@@ -237,7 +263,7 @@ async function loadSession(): Promise<Session | null> {
                 try {
                     localStorage.setItem('studev_auth_user', JSON.stringify({
                         nickname: currentSession.user.nickname,
-                        role: currentSession.user.role || 'member',
+                        role: currentSession.user.role || 'user',
                         verifiedAt: Date.now()
                     }));
                 } catch {}
@@ -264,7 +290,7 @@ export async function session(required = false, staff = false): Promise<Session 
     location.replace('/account/?setup=1');
     return null;
 } if (staff && currentSession) {
-    if (currentSession.user.role === 'member')
+    if (currentSession.user.role === 'user')
         throw new PlatformError('只有管理员可以进入管理后台。', 403);
     if ((currentSession.user.role === 'owner' && !currentSession.mfaVerified) || currentSession.mfaRequired || currentSession.enrollmentRequired || currentSession.passwordChangeRequired || currentSession.profileRequired) {
         location.replace('/account/?setup=1');

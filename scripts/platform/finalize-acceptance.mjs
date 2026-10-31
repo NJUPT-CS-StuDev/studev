@@ -18,7 +18,7 @@ async function finalize() {
     const users = (await client.call('/admin/users', { expected: 200 })).body.items;
     const synthetic = new Set(state.runs.flatMap(run => run.members.map(member => member.id)).filter(Boolean));
     for (const user of users) if (synthetic.has(user.id) && user.status !== 'disabled') {
-      await client.call(`/admin/users/${user.id}`, { method: 'POST', body: { revision: user.revision, role: 'member', status: 'disabled' }, expected: 200 }); disabled++;
+      await client.call(`/admin/users/${user.id}`, { method: 'POST', body: { revision: user.revision, role: 'user', status: 'disabled' }, expected: 200 }); disabled++;
     }
     state.finalizedAt = new Date().toISOString();
     await writePrivate(statePath, JSON.stringify(state, null, 2) + '\n');

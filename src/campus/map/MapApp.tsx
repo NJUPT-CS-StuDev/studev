@@ -12,7 +12,6 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import './map.css';
 import tokens from '../../../design/tokens.json';
-import MapActivities from '../activities/MapActivities';
 import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
@@ -40,7 +39,6 @@ export default function MapApp() {
     const marker = useRef<maplibregl.Marker | null>(null);
     const meMarker = useRef<maplibregl.Marker | null>(null);
     const [space, setSpace] = useState<Space | null>(null);
-    const [activitySelected, setActivitySelected] = useState(false);
     const [router, setRouter] = useState<Router | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
@@ -169,7 +167,6 @@ export default function MapApp() {
         if (!instance || !space || !loaded) return;
         instance.removeFeatureState({ source: 'places' });
         marker.current?.remove();
-        const planActivity = planAfterSelection.current;
         if (previousSelection.current !== (selected?.id ?? null)) {
             setRoutes([]);
             setPlanning(planAfterSelection.current);
@@ -179,13 +176,12 @@ export default function MapApp() {
         }
         (instance.getSource('selected-entrances') as GeoJSONSource).setData({ type: 'FeatureCollection', features: (selected?.entrances ?? []).map(entrance => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: entrance.at } })) });
         const url = new URL(location.href);
-        if (selected && !planActivity) url.searchParams.delete('activity');
         if (!selected) {
             url.searchParams.delete('place');
             history.replaceState(null, '', url);
             return;
         }
-        if (selected.kind !== 'activity-point') url.searchParams.set('place', selected.id);
+        url.searchParams.set('place', selected.id);
         history.replaceState(null, '', url);
         const building = selected.kind === 'room' ? selected.parent : selected.id;
         if (space.byId.get(building)?.kind === 'building') instance.setFeatureState({ source: 'places', id: building }, { selected: true });
@@ -322,9 +318,8 @@ export default function MapApp() {
                     </ul>
                 )}
                 {error && <p className="campus-map-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="关闭">×</button></p>}
-                <MapActivities map={loaded ? map.current : null} space={space} routeOpen={planning} placeSelected={selected !== null} onPick={() => { setSelected(null); setSheetState('half'); }} onSelectionChange={active => { setActivitySelected(active); if (active) setSheetState('half'); }} onRoute={place => { planAfterSelection.current = true; setSelected(place); setSheetState('half'); }} />
                 {!space && !error && <p className="campus-map-error" role="status">正在加载校园地图…</p>}
-                {!selected && !activitySelected && space && !query && <section className="campus-map-card campus-map-home">
+                {!selected && space && !query && <section className="campus-map-card campus-map-home">
                     <nav className="campus-map-categories" aria-label="地点分类">{categories.filter(([name]) => space.places.some(p => p.category === name)).map(([name, Icon]) => <button type="button" key={name} aria-pressed={category === name} onClick={() => setCategory(category === name ? null : name)}><span><Icon size={21} strokeWidth={1.8} /></span>{name}</button>)}</nav>
                     <header className="campus-map-home-heading">
                         {category && <button type="button" className="campus-map-back" aria-label="返回热门推荐" onClick={() => setCategory(null)}><ChevronLeft size={20} /></button>}
@@ -342,12 +337,12 @@ export default function MapApp() {
                         <header>
                             <div>
                                 <h2>{selected.id}</h2>
-                                <p>{selected.kind === 'activity-point' ? '活动集合点' : kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
+                                <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
                                     {selected.levels ? ` · ${selected.levels} 层` : ''}</p>
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
                         </header>
-                        {selected.kind !== 'activity-point' && <p className="campus-map-houses">用途 · {selected.use}</p>}
+                        <p className="campus-map-houses">用途 · {selected.use}</p>
                         {selected.hours && <details className="campus-map-hours">
                             <summary><span data-state={status.state}>{openingLabel[status.state]}</span><span>今日 {status.today}</span><small>一周时间</small></summary>
                             {status.state === 'closing' && <p>{status.closesAt} 关闭，请留意时间</p>}
@@ -390,7 +385,6 @@ export default function MapApp() {
                                 )}
                             </div>
                         )}
-                        <a className="activity-map-create" href={selected.kind === 'activity-point' && selected.centre ? `/activities/?new=1&lon=${selected.centre[0]}&lat=${selected.centre[1]}` : `/activities/?place=${encodeURIComponent(selected.id)}`}>在这里发起活动</a>
                     </section>
                 )}
             </aside>

@@ -188,7 +188,7 @@ export function qqAvatarUrl(qq) {
 }
 
 /** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
-export const ROSTER_SCHEMA = 4;
+export const ROSTER_SCHEMA = 5;
 
 const SEED_BY_STUDENT_ID = new Map(ROSTER_SEED_2026_2027.map((s) => [s.studentId, s]));
 
@@ -219,10 +219,10 @@ function distinctNickname(user) {
 
 export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new Date().toISOString()) {
   const rosterUsers = users
-    .filter((u) => u && u.term === term && u.department && u.status !== 'disabled')
+    .filter((u) => u && ['admin', 'owner'].includes(u.role) && u.term === term && u.status !== 'disabled')
     .map((u) => ({
       ...u,
-      department: normalizeDepartmentName(u.department),
+      department: normalizeDepartmentName(u.department || '学生发展中心'),
       title: normalizeRoleTitle(u.title, u.studentId),
     }))
     .sort((a, b) => ((a.order ?? 999) - (b.order ?? 999)) || String(a.studentId || '').localeCompare(String(b.studentId || '')));

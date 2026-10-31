@@ -10,13 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import top.hicancan.studev.campus.CampusApp
 import top.hicancan.studev.ui.theme.StuDevTheme
-import top.hicancan.studev.activities.ActivityHost
-import top.hicancan.studev.activities.ActivityLinks
-import top.hicancan.studev.account.PLATFORM_ORIGIN
+import top.hicancan.studev.account.AccountHost
+
 
 class MainActivity : ComponentActivity() {
     private var place by mutableStateOf<String?>(null)
-    private var activityLink by mutableStateOf<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         if (android.os.Build.VERSION.SDK_INT < 31) {
             val theme = top.hicancan.studev.me.CampusSettings(this).state.value.theme
@@ -26,12 +24,10 @@ class MainActivity : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) readLink(intent) else { place = savedInstanceState.getString("pendingPlace"); activityLink = savedInstanceState.getString("pendingActivity") }
+        if (savedInstanceState == null) readLink(intent) else { place = savedInstanceState.getString("pendingPlace") }
         setContent { StuDevTheme {
-            ActivityHost(activityLink, campusLink = place, onLinkHandled = { activityLink = null }, onPlace = {
-                place = android.net.Uri.Builder().scheme("https").authority(android.net.Uri.parse(PLATFORM_ORIGIN).host).path("/map/").appendQueryParameter("place", it).build().toString()
-            }) { onActivities, onAccount ->
-                CampusApp(place, onDeepLinkHandled = { place = null }, onActivities = onActivities, onAccount = onAccount)
+            AccountHost(campusLink = place) { onAccount ->
+                CampusApp(place, onDeepLinkHandled = { place = null }, onAccount = onAccount)
             }
         } }
     }
@@ -42,12 +38,10 @@ class MainActivity : ComponentActivity() {
         // surface attached, and update the system bars for the new palette too.
         enableEdgeToEdge()
     }
-    override fun onSaveInstanceState(outState: Bundle) { outState.putString("pendingPlace", place); outState.putString("pendingActivity", activityLink); super.onSaveInstanceState(outState) }
+    override fun onSaveInstanceState(outState: Bundle) { outState.putString("pendingPlace", place); super.onSaveInstanceState(outState) }
     private fun readLink(intent: Intent) {
         val uri = intent.data ?: return
-        if (ActivityLinks.parse(uri.toString()) != null) { place = null; activityLink = uri.toString(); return }
-        if (uri.scheme == "https" && uri.host == android.net.Uri.parse(PLATFORM_ORIGIN).host) {
-            activityLink = null
+        if (uri.scheme == "https" && uri.host == android.net.Uri.parse(BuildConfig.SITE_ORIGIN).host) {
             place = uri.toString()
         }
     }

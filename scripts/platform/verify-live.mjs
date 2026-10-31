@@ -38,17 +38,16 @@ export async function verifyLive() {
     check('legacy shared-password API retired', legacyStatus.status === 410);
     for (let index = 0; index < members.length; index++) {
       const info = run.members[index];
-      const result = await members[index].call('/auth/register', { method: 'POST', body: { ...info, nickname: `验收成员${index + 1}`, inviteCode: access.registrationCode }, expected: 201 });
+      const result = await members[index].call('/auth/register', { method: 'POST', body: { ...info, nickname: `验收成员${index + 1}` }, expected: 201 });
       info.id = result.body.user.id; info.revision = result.body.user.revision; await save();
       const login = await members[index].call('/auth/login', { method: 'POST', body: { studentId: info.studentId, password: info.password }, expected: 200 });
-      check(`member ${index + 1} password-only session`, login.body.user.role === 'member' && !login.body.mfaRequired && !login.body.enrollmentRequired);
+      check(`member ${index + 1} password-only session`, login.body.user.role === 'user' && !login.body.mfaRequired && !login.body.enrollmentRequired);
       check(`member ${index + 1} student identity complete`, login.body.user.studentId === info.studentId && login.body.user.realName === info.realName && login.body.user.profileComplete && !login.body.profileRequired && !login.body.user.identityVerified);
     }
     const duplicateStudent = credentials();
-    check('student number uniqueness ignores case', (await guest.call('/auth/register', { method: 'POST', body: { ...duplicateStudent, studentId: run.members[0].studentId.toLowerCase(), inviteCode: access.registrationCode } })).status === 409);
-    check('QQ contact remains unique', (await guest.call('/auth/register', { method: 'POST', body: { ...duplicateStudent, qq: run.members[0].qq, inviteCode: access.registrationCode } })).status === 409);
+    check('student number uniqueness ignores case', (await guest.call('/auth/register', { method: 'POST', body: { ...duplicateStudent, studentId: run.members[0].studentId.toLowerCase() } })).status === 409);
+    check('QQ contact remains unique', (await guest.call('/auth/register', { method: 'POST', body: { ...duplicateStudent, qq: run.members[0].qq } })).status === 409);
     check('QQ is not a normal login identifier', (await guest.call('/auth/login', { method: 'POST', body: { qq: run.members[0].qq, password: run.members[0].password } })).status === 400);
-    check('new complete account cannot use legacy migration login', (await guest.call('/auth/legacy-profile-login', { method: 'POST', body: { qq: run.members[0].qq, password: run.members[0].password } })).status === 401);
     const studentCaseLogin = new LiveClient(origin);
     check('student login normalizes letter case', (await studentCaseLogin.call('/auth/login', { method: 'POST', body: { studentId: run.members[0].studentId.toLowerCase(), password: run.members[0].password } })).status === 200);
     await studentCaseLogin.call('/auth/logout', { method: 'POST', body: {}, expected: 200 });
@@ -124,10 +123,10 @@ export async function verifyLive() {
     check('role promotion revokes old session', (await members[1].call('/auth/session')).status === 401);
     const pending = await members[1].call('/auth/login', { method: 'POST', body: { studentId: run.members[1].studentId, password: run.members[1].password }, expected: 200 });
     check('new administrator must enroll TOTP', pending.body.enrollmentRequired === true && (await members[1].call('/admin/forms')).status === 403);
-    const disabled = await owner.call(`/admin/users/${run.members[1].id}`, { method: 'POST', body: { revision: promoted.body.user.revision, role: 'member', status: 'disabled' }, expected: 200 });
+    const disabled = await owner.call(`/admin/users/${run.members[1].id}`, { method: 'POST', body: { revision: promoted.body.user.revision, role: 'user', status: 'disabled' }, expected: 200 });
     run.members[1].revision = disabled.body.user.revision;
     check('disabled account cannot log in', (await members[1].call('/auth/login', { method: 'POST', body: { studentId: run.members[1].studentId, password: run.members[1].password } })).status === 401);
-    check('owner cannot be downgraded', (await owner.call(`/admin/users/${ownerUser.id}`, { method: 'POST', body: { revision: ownerUser.revision, role: 'member' } })).status === 403);
+    check('owner cannot be downgraded', (await owner.call(`/admin/users/${ownerUser.id}`, { method: 'POST', body: { revision: ownerUser.revision, role: 'user' } })).status === 403);
     const legacy = await owner.call('/admin/legacy/submissions', { expected: 200 });
     check('historical collection visible through unified identity', Array.isArray(legacy.body.items));
     const existingTemplates = new Set((await owner.call('/admin/forms', { expected: 200 })).body.items.map(form => form.title));

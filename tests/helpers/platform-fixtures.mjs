@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { hashPassword } from '../../src/server/collection-auth.mjs';
 
 export function memoryBlob() {
@@ -34,30 +34,33 @@ export function memoryGateway() {
 export async function testEnvironment() {
   // Fictional test identifiers; never connected to real QQ/mail services.
   const password = 'Test-password-only-123456';
-  const inviteCode = 'Test-invitation-only-123456';
   return {
-    password, inviteCode,
+    password,
     env: {
       PLATFORM_ENABLED: 'true', PLATFORM_ORIGIN: 'https://studev.test',
       PLATFORM_SESSION_SECRET: 'test-session-secret-'.repeat(3),
       PLATFORM_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
-      PLATFORM_OWNER_QQ: '100001', PLATFORM_OWNER_NICKNAME: '测试所有者',
-      PLATFORM_OWNER_PASSWORD_HASH: await hashPassword(password), PLATFORM_REGISTRATION_HASH: await hashPassword(inviteCode),
+      PLATFORM_OWNER_QQ: '100001', PLATFORM_OWNER_STUDENT_ID: 'TESTOWNER01', PLATFORM_OWNER_REAL_NAME: '测试所有者', PLATFORM_OWNER_NICKNAME: '测试所有者',
+      PLATFORM_OWNER_PASSWORD_HASH: await hashPassword(password),
       OSCA_ENDPOINT: 'https://fgws3-ocloud.ihep.ac.cn', OSCA_BUCKET: 'test-only-bucket', OSCA_ACCESS_KEY_ID: 'test-only-ak', OSCA_SECRET_ACCESS_KEY: 'test-only-secret', OSCA_REGION: 'us-east-1', OSCA_PREFIX: 'studev-submissions/',
     },
   };
 }
 export function requestClient(handle, env) {
   let cookie = '', csrf = '';
+  const deviceId = randomUUID();
+  const cookies = new Map();
   return {
     get cookie() { return cookie; }, get csrf() { return csrf; },
     async call(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
+      if (['/auth/login', '/auth/refresh'].includes(path)) body = { deviceId, deviceName: '测试浏览器', ...body };
       const request = new Request('https://studev.test/api/platform' + path, {
         method, headers: { ...(cookie ? { Cookie: cookie } : {}), ...(method === 'POST' ? { Origin: 'https://studev.test', 'X-CSRF-Token': csrf } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const result = await handle({ request, env, clientIp: 'test-client' });
-      const setCookie = result.headers.get('set-cookie'); if (setCookie) cookie = setCookie.split(';')[0];
+      for (const setCookie of result.headers.getSetCookie()) { const pair = setCookie.split(';')[0]; cookies.set(pair.split('=')[0], pair); }
+      cookie = [...cookies.values()].join('; ');
       const value = raw ? await result.text() : await result.json(); if (value.csrfToken) csrf = value.csrfToken;
       return { status: result.status, body: value };
     },

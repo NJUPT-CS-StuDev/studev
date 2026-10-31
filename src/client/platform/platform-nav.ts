@@ -5,7 +5,7 @@ try {
   const raw = localStorage.getItem('studev_auth_user');
   if (raw) {
     const cached = JSON.parse(raw);
-    if (cached && cached.role && cached.role !== 'member') {
+    if (cached && cached.role && cached.role !== 'user') {
       document.querySelectorAll<HTMLElement>('[data-platform-staff]').forEach((n) => (n.hidden = false));
     }
   }
@@ -15,7 +15,7 @@ void (async () => {
   try {
     const current = await session();
     if (!current) return;
-    if (current.user.role !== 'member') {
+    if (current.user.role !== 'user') {
       document.querySelectorAll<HTMLElement>('[data-platform-staff]').forEach((n) => (n.hidden = false));
     }
   } catch {

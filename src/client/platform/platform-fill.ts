@@ -259,7 +259,7 @@ void (async () => {
         q('[data-fill-card]').hidden = false;
         if (!canSubmit) {
             message(status, result.reason || '此表单暂时不能提交。');
-            q('[data-fill-preview]').hidden = identity?.user.role === 'member' || !identity;
+            q('[data-fill-preview]').hidden = identity?.user.role === 'user' || !identity;
         }
         else
             message(status);

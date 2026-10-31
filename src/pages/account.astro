@@ -4,11 +4,11 @@ import '../styles/platform.css';
 ---
 <SiteLayout title="Account — StuDev" active="account" noindex={true}>
   <div class="platform" data-account-shell>
-    <nav class="p-nav" aria-label="账号与组织导航" data-member-only hidden>
+    <nav class="p-nav" aria-label="账号与组织导航" data-signed-in hidden>
       <div class="p-nav-group" role="tablist">
         <button type="button" role="tab" aria-selected="true" data-account-tab="settings">设置</button>
-        <button type="button" role="tab" aria-selected="false" data-account-tab="profile" data-member-only hidden>我的账号</button>
-        <button type="button" role="tab" aria-selected="false" data-account-tab="members" data-member-only hidden>组织成员</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="profile" data-signed-in hidden>我的账号</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="members" data-staff-only hidden>用户管理</button>
         <button type="button" role="tab" aria-selected="false" data-account-tab="audit" data-owner-only hidden>操作记录</button>
       </div>
     </nav>
@@ -63,8 +63,8 @@ import '../styles/platform.css';
               <a class="p-button secondary" href="/login/?tab=register&amp;next=%2Faccount%2F%3Ftab%3Dprofile">注册账号</a>
             </div>
           </div>
-          <div data-settings-member hidden>
-            <p class="p-muted" data-settings-member-text></p>
+          <div data-settings-signed-in hidden>
+            <p class="p-muted" data-settings-signed-in-text></p>
             <div class="p-actions" style="margin-top:16px">
               <a class="p-button secondary" href="/forms/">表单</a>
               <a class="p-button secondary" href="/submissions/">我的提交</a>
@@ -94,7 +94,7 @@ import '../styles/platform.css';
         <section class="p-id-card" data-account-id-card aria-label="数字身份名片"></section>
         <section class="p-card" aria-labelledby="devices-title" style="margin-bottom:20px">
           <h2 id="devices-title">已登录的设备</h2>
-          <p class="p-muted">查看使用此账号的 App。退出设备后，该设备需要重新登录。</p>
+          <p class="p-muted">查看使用此账号的网页与 App。退出设备后，该设备需要重新登录。</p>
           <div data-account-devices style="margin-top:16px"></div>
           <p class="p-message" data-devices-status role="status"></p>
         </section>
@@ -198,7 +198,7 @@ import '../styles/platform.css';
         <header class="p-heading">
           <div>
             <h1>组织成员</h1>
-            <p class="p-muted" data-members-summary>查看中心全体成员名录、所属部门、职务分工与联系方式。</p>
+            <p class="p-muted" data-members-summary>仅管理员和所有者可查看用户身份与联系方式。</p>
           </div>
           <div class="p-actions">
             <a class="p-button secondary small" href="/history/#people">查看公开历届档案 ↗</a>
@@ -248,7 +248,11 @@ import '../styles/platform.css';
   <dialog class="p-modal" data-roster-edit-modal>
     <form method="dialog" data-roster-edit-form>
       <h2 data-roster-edit-title>编辑成员档案</h2>
-      <p class="p-help" style="margin-bottom:14px">保存后将实时更新组织成员名录与公开历届档案页面。</p>
+      <p class="p-help" style="margin-bottom:14px">请核对身份后更正资料。仅管理员和所有者会出现在公开名册中。</p>
+      <div class="p-inline-grid">
+        <div class="p-field"><label for="roster-edit-student">学号</label><input id="roster-edit-student" pattern="[A-Za-z0-9]{6,20}" maxlength="20" required /></div>
+        <div class="p-field"><label for="roster-edit-real-name">真实姓名</label><input id="roster-edit-real-name" maxlength="40" required /></div>
+      </div>
       <div class="p-inline-grid">
         <div class="p-field">
           <label for="roster-edit-term">所属届别</label>

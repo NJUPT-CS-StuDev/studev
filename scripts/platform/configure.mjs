@@ -12,20 +12,21 @@ const accessPath = privateFile('.env.platform-access.local.json');
 let config = {}, access;
 try { config = parseEnv(await readFile(envPath, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 try { access = JSON.parse(await readFile(accessPath, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+const ownerProfile = JSON.parse(await readFile(privateFile('.env.platform-owner-profile.local.json'), 'utf8'));
 const ownerQq = config.PLATFORM_OWNER_QQ || process.env.STUDEV_OWNER_QQ;
 if (!/^[1-9]\d{4,11}$/.test(ownerQq || '')) throw new Error('Provide the explicitly selected owner QQ via STUDEV_OWNER_QQ for first-time provisioning.');
 access ||= {
   ownerQq, ownerEmail: `${ownerQq}@qq.com`, ownerPassword: randomBytes(24).toString('base64url'),
-  registrationCode: randomBytes(14).toString('base64url'),
   ownerUrl: `${product.origin}/login/`, formsUrl: `${product.origin}/forms/`,
   createdAt: new Date().toISOString(),
 };
+delete config.PLATFORM_REGISTRATION_HASH;
+delete access.registrationCode;
 config = {
   ...config, PLATFORM_ENABLED: 'true', PLATFORM_ORIGIN: product.origin,
   PLATFORM_SESSION_SECRET: config.PLATFORM_SESSION_SECRET || randomBytes(48).toString('base64url'),
   PLATFORM_ENCRYPTION_KEY: config.PLATFORM_ENCRYPTION_KEY || randomBytes(32).toString('base64'),
-  PLATFORM_REGISTRATION_HASH: config.PLATFORM_REGISTRATION_HASH || await hashPassword(access.registrationCode),
-  PLATFORM_OWNER_QQ: ownerQq,
+  PLATFORM_OWNER_QQ: ownerQq, PLATFORM_OWNER_STUDENT_ID: ownerProfile.studentId, PLATFORM_OWNER_REAL_NAME: ownerProfile.realName,
   PLATFORM_OWNER_PASSWORD_HASH: config.PLATFORM_OWNER_PASSWORD_HASH || await hashPassword(access.ownerPassword),
   PLATFORM_OWNER_NICKNAME: config.PLATFORM_OWNER_NICKNAME || 'hicancan',
 };

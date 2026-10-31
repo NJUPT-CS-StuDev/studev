@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { fail, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
-import { hasAuthorization } from './platform-tokens.mjs';
+import { hasAuthorization } from './platform-sessions.mjs';
 
 const API = '/api/platform';
 const ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -304,7 +304,7 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
           if (!canSubmit(form)) fail(409, 'FORM_CLOSED', '本表当前不接受新提交。');
           await repo.throttle('form-submit', session?.user.id || context.clientIp || 'unknown', 15);
           const body = await readJson(request); const answers = answersInput(body.answers, form.fields); const files = fileInput(body.files || [], form.fields);
-          const submitterName = session ? text(session.user.nickname || session.user.qq, '提交者', 80, true) : text(body.submitterName, '称呼', 80, true);
+          const submitterName = session ? text(session.user.nickname, '提交者', 80, true) : text(body.submitterName, '称呼', 80, true);
           const submitterIdentity = session ? identitySnapshot(session.user) : null;
           const config = files.length ? oscaConfig(env, form.id) : null;
           const id = randomUUID(); const token = randomBytes(32).toString('base64url'); const timestamp = iso();

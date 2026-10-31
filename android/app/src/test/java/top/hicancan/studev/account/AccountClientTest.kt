@@ -28,7 +28,7 @@ class AccountClientTest {
     @Test fun signInPersistsTokensAndDeviceButNeverPasswordOrFactor() = runBlocking {
         val storage = Storage()
         val client = AccountClient(storage, PlatformTransport { path, body, bearer ->
-            assertEquals("/auth/token", path); assertNull(bearer)
+            assertEquals("/auth/login", path); assertNull(bearer)
             assertEquals("test-device-00000001", body!!.getValue("deviceId").jsonPrimitive.content)
             assertEquals("123456", body.getValue("totp").jsonPrimitive.content)
             reply()
@@ -43,40 +43,40 @@ class AccountClientTest {
         var refreshCount = 0
         val client = AccountClient(storage, PlatformTransport { path, body, bearer ->
             when (path) {
-                "/auth/token" -> reply()
-                "/auth/token/refresh" -> { refreshCount++; assertEquals("refresh-one", body!!.getValue("refreshToken").jsonPrimitive.content); reply("access-two", "refresh-two") }
+                "/auth/login" -> reply()
+                "/auth/refresh" -> { refreshCount++; assertEquals("refresh-one", body!!.getValue("refreshToken").jsonPrimitive.content); reply("access-two", "refresh-two") }
                 else -> { assertEquals("access-two", bearer); PlatformReply(200, buildJsonObject { put("ok", true) }) }
             }
         }, now = { 10_000 })
         client.signIn("TEST123456", "password", "", "device")
         storage.value = storage.value.copy(session = storage.value.session!!.copy(expiresAt = 1))
-        coroutineScope { (1..8).map { async { client.request("/activities", authenticated = true) } }.awaitAll() }
+        coroutineScope { (1..8).map { async { client.request("/auth/devices", authenticated = true) } }.awaitAll() }
         assertEquals(1, refreshCount); assertEquals("refresh-two", storage.value.session!!.refreshToken)
     }
     @Test fun unauthorizedAccessRetriesOnceWithRotatedToken() = runBlocking {
         val storage = Storage(); var calls = 0
         val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
-            "/auth/token" -> reply()
-            "/auth/token/refresh" -> reply("access-two", "refresh-two")
+            "/auth/login" -> reply()
+            "/auth/refresh" -> reply("access-two", "refresh-two")
             else -> { calls++; PlatformReply(if (bearer == "access-one") 401 else 200, buildJsonObject {}) }
         } })
         client.signIn("TEST123456", "password", "", "device")
-        client.request("/me/activities", authenticated = true)
+        client.request("/auth/devices", authenticated = true)
         assertEquals(2, calls)
     }
     @Test fun ambiguousRefreshClearsSessionWithoutReusingRefresh() = runBlocking {
         val storage = Storage(); var refreshes = 0
-        val client = AccountClient(storage, PlatformTransport { path, _, _ -> if (path == "/auth/token") reply() else { refreshes++; throw java.io.IOException("test timeout") } })
+        val client = AccountClient(storage, PlatformTransport { path, _, _ -> if (path == "/auth/login") reply() else { refreshes++; throw java.io.IOException("test timeout") } })
         client.signIn("TEST123456", "password", "", "device")
         storage.value = storage.value.copy(session = storage.value.session!!.copy(expiresAt = 0))
-        try { client.request("/me/activities", authenticated = true); fail() } catch (_: java.io.IOException) { }
+        try { client.request("/auth/devices", authenticated = true); fail() } catch (_: java.io.IOException) { }
         assertNull(storage.value.session); assertEquals(1, refreshes)
-        try { client.request("/me/activities", authenticated = true); fail() } catch (e: PlatformFailure) { assertEquals("AUTH_REQUIRED", e.code) }
+        try { client.request("/auth/devices", authenticated = true); fail() } catch (e: PlatformFailure) { assertEquals("AUTH_REQUIRED", e.code) }
         assertEquals(1, refreshes)
     }
     @Test fun signOutRevokesBeforeClearingAndKeepsStableDeviceId() = runBlocking {
         val storage = Storage(); var revoked = false
-        val client = AccountClient(storage, PlatformTransport { path, _, bearer -> if (path == "/auth/token") reply() else { assertEquals("/auth/logout", path); assertEquals("access-one", bearer); revoked = true; PlatformReply(200, buildJsonObject {}) } })
+        val client = AccountClient(storage, PlatformTransport { path, _, bearer -> if (path == "/auth/login") reply() else { assertEquals("/auth/logout", path); assertEquals("access-one", bearer); revoked = true; PlatformReply(200, buildJsonObject {}) } })
         client.signIn("TEST123456", "password", "", "device"); client.signOut()
         assertTrue(revoked); assertNull(client.current()); assertEquals("test-device-00000001", storage.value.deviceId)
     }
@@ -92,26 +92,26 @@ class AccountClientTest {
         }
         val rotated = CompletableDeferred<Unit>(); var refreshes = 0
         val client = AccountClient(storage, PlatformTransport { path, _, _ ->
-            if (path == "/auth/token") reply() else {
+            if (path == "/auth/login") reply() else {
                 refreshes++; rotated.complete(Unit); awaitCancellation()
             }
         })
         client.signIn("TEST123456", "password", "", "device")
         memory.value = memory.value.copy(session = memory.value.session!!.copy(expiresAt = 0))
-        val request = launch { client.request("/me/activities", authenticated = true) }
+        val request = launch { client.request("/auth/devices", authenticated = true) }
         rotated.await(); request.cancelAndJoin()
         assertNull(memory.value.session)
-        try { client.request("/me/activities", authenticated = true); fail() } catch (e: PlatformFailure) { assertEquals("AUTH_REQUIRED", e.code) }
+        try { client.request("/auth/devices", authenticated = true); fail() } catch (e: PlatformFailure) { assertEquals("AUTH_REQUIRED", e.code) }
         assertEquals(1, refreshes)
     }
     @Test fun processDeathDuringRotationCannotLeaveAReusableRefreshTokenOnDisk() = runBlocking {
         val storage = Storage(); val processStopped = AssertionError("Synthetic process death")
         val client = AccountClient(storage, PlatformTransport { path, _, _ ->
-            if (path == "/auth/token") reply() else throw processStopped
+            if (path == "/auth/login") reply() else throw processStopped
         })
         client.signIn("TEST123456", "password", "", "device")
         storage.value = storage.value.copy(session = storage.value.session!!.copy(expiresAt = 0))
-        try { client.request("/me/activities", authenticated = true); fail() } catch (e: AssertionError) { assertSame(processStopped, e) }
+        try { client.request("/auth/devices", authenticated = true); fail() } catch (e: AssertionError) { assertSame(processStopped, e) }
         // A new process can only use persisted storage; no finalizer ran.
         val restarted = AccountClient(storage, PlatformTransport { _, _, _ -> error("Must require sign-in, not replay the spent refresh") })
         assertNull(restarted.current())
@@ -120,12 +120,12 @@ class AccountClientTest {
         val storage = Storage(); val sent = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
         val tokensUsed = mutableListOf<String?>(); var logins = 0
         val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
-            "/auth/token" -> { logins++; reply("access-$logins", "refresh-$logins", "family-$logins") }
-            "/activities" -> { tokensUsed.add(bearer); sent.complete(Unit); release.await(); PlatformReply(401, buildJsonObject {}) }
+            "/auth/login" -> { logins++; reply("access-$logins", "refresh-$logins", "family-$logins") }
+            "/auth/devices" -> { tokensUsed.add(bearer); sent.complete(Unit); release.await(); PlatformReply(401, buildJsonObject {}) }
             else -> error("Unexpected request: $path")
         } })
         client.signIn("ACCOUNT1", "password", "", "device")
-        val mutation = async { runCatching { client.request("/activities", buildJsonObject {}, authenticated = true) } }
+        val mutation = async { runCatching { client.request("/auth/devices", buildJsonObject {}, authenticated = true) } }
         sent.await(); client.signIn("ACCOUNT2", "password", "", "device"); release.complete(Unit)
         assertTrue(mutation.await().exceptionOrNull() is PlatformFailure)
         assertEquals(listOf("access-1"), tokensUsed)
@@ -134,7 +134,7 @@ class AccountClientTest {
     @Test fun delayedLogoutDoesNotEraseALaterSignIn() = runBlocking {
         val storage = Storage(); val sent = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>(); var logins = 0
         val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
-            "/auth/token" -> { logins++; reply("access-$logins", "refresh-$logins", "family-$logins") }
+            "/auth/login" -> { logins++; reply("access-$logins", "refresh-$logins", "family-$logins") }
             "/auth/logout" -> { assertEquals("access-1", bearer); sent.complete(Unit); release.await(); PlatformReply(200, buildJsonObject {}) }
             else -> error("Unexpected request: $path")
         } })

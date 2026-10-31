@@ -178,9 +178,11 @@ android {
         debug {
             ndk { abiFilters += listOf("x86_64") }
             buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse(productOrigin).trimEnd('/')}\"")
+            buildConfigField("String", "PLATFORM_HOST", "\"${providers.gradleProperty("studev.platformHost").getOrElse(productOrigin).trimEnd('/')}\"")
         }
         release {
             buildConfigField("String", "DATA_HOST", "\"$productOrigin\"")
+            buildConfigField("String", "PLATFORM_HOST", "\"$productOrigin\"")
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = if (providers.gradleProperty("studev.keystore").isPresent) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
