@@ -34,7 +34,8 @@ $certificateOutput = (& $apksigner verify --print-certs $apk 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed' }
 $sha1Match = [regex]::Match($certificateOutput, '(?im)SHA-1 digest:\s*([0-9A-F:]+)')
 if (-not $sha1Match.Success) { throw 'APK signature SHA-1 was not reported' }
-$sha1 = $sha1Match.Groups[1].Value.ToUpperInvariant()
+$sha1 = ($sha1Match.Groups[1].Value -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
+if ($sha1.Length -eq 40) { $sha1 = ($sha1 -split '(?<=\G..)(?=.)') -join ':' }
 if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificate SHA-1 prefix: $sha1" }
 
 $outputRoot = Join-Path $repo 'public\download'
