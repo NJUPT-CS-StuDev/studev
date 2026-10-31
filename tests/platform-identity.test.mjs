@@ -325,3 +325,16 @@ test('normal login accepts only normalized student ID and independently checks t
   f.values.set('platform-v1/identity/student/OTHERID01.json', { id: member.user.id });
   await rejects(f.call('/auth/login', 'POST', { studentId: 'OTHERID01', password: MEMBER_PASSWORD }), 'LOGIN_FAILED', 401);
 });
+
+test('pre-recorded staff use managed password and status operations to activate, then must change the temporary password', async () => {
+  const f = fixture(), owner = await f.owner();
+  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin' }, owner);
+  assert.equal(seeded.user.status, 'pending');
+  await rejects(f.call('/auth/register', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', nickname: '有人', password: MEMBER_PASSWORD }), 'ACCOUNT_PENDING_REVIEW', 409);
+  await f.call(`/admin/users/${seeded.user.id}/reset-password`, 'POST', { password: MEMBER_PASSWORD }, owner);
+  const latest = await f.call(`/admin/users/${seeded.user.id}`, 'GET', undefined, owner);
+  await f.call(`/admin/users/${seeded.user.id}`, 'POST', { revision: latest.user.revision, status: 'active' }, owner);
+  const login = await f.call('/auth/login', 'POST', { studentId: 'STAFF00001', password: MEMBER_PASSWORD });
+  assert.equal(login.user.role, 'admin'); assert.equal(login.passwordChangeRequired, true);
+  await rejects(f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, login), { staff: true }), 'AUTH_SETUP_REQUIRED', 403);
+});

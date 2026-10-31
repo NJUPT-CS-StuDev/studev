@@ -152,3 +152,17 @@ test('deployment migration is read-only by default, promotes every stored member
   assert.equal((await migrateAccounts(f.repo, { apply: true })).memberToAdmin, 0);
   assert.equal((await f.repo.latest(`identity/users/${source.id}`)).revision, current.revision);
 });
+
+test('racing staff corrections reserve only one student identity for an account revision', async () => {
+  const f = await fixture(), source = await f.repo.latest(`identity/users/${f.user.id}`);
+  await f.repo.append(`identity/users/${source.id}`, { ...source, role: 'admin' }, source.revision);
+  const auth = await f.appLogin();
+  const created = await f.app('/auth/register', { ...f.registration, qq: '10000999', studentId: 'CORRECTOLD' });
+  const target = created.body.user;
+  const results = await Promise.all(['CORRECTA01', 'CORRECTB01'].map(studentId => f.app(`/admin/users/${target.id}`, { revision: target.revision, studentId }, auth.body.accessToken)));
+  assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
+  const user = await f.repo.latest(`identity/users/${target.id}`);
+  const claims = [];
+  for (const key of await f.repo.list('identity/student/')) if ((await f.repo.get(key)).id === target.id) claims.push(key);
+  assert.deepEqual(claims, [`identity/student/${user.studentId}.json`]);
+});

@@ -449,8 +449,17 @@ function renderMembers() {
       );
     }
 
-    if (isOwner && !isSelf) {
+    if ((isOwner || (isStaff && user.role === 'user')) && !isSelf) {
       const isPending = user.status === 'pending';
+      if (isPending) controls.append(button('设置密码并激活', () => guard(async () => {
+        const password = await confirmAction('激活账号', `核实 ${display}（${ref}）的身份后设置临时密码。对方首次登录必须修改密码。`, true);
+        if (password === null) return;
+        await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, { password });
+        const latest = await api<{ user: User }>(`/admin/users/${encodeURIComponent(user.id)}`);
+        await api(`/admin/users/${encodeURIComponent(user.id)}`, { revision: latest.user.revision, status: 'active' });
+        await refreshMembers();
+        message(status, '账号已激活，请向本人安全交付临时密码。', 'success');
+      })));
       if (!isPending) {
         controls.append(
           button(
