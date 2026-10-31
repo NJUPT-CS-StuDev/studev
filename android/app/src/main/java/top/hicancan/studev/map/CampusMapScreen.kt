@@ -125,6 +125,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
     val state = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState)
     val sheet = state.bottomSheetState
     var sheetReady by remember { mutableStateOf(false) }
+    val sheetContentHeight = height * .88f
     LaunchedEffect(place.id, sheetMode) {
         sheetReady = false
         if (sheetMode == MapSheetState.Full) sheet.expand() else sheet.partialExpand()
@@ -151,7 +152,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
         sheetContainerColor = MaterialTheme.colorScheme.surface,
         sheetShadowElevation = Tokens.Elevation.sheet.dp,
         sheetContent = {
-             Column(Modifier.fillMaxWidth().height(height * .88f).navigationBarsPadding().verticalScroll(rememberScrollState())
+             Column(Modifier.fillMaxWidth().height(sheetContentHeight).navigationBarsPadding().verticalScroll(rememberScrollState())
                 .padding(horizontal = Tokens.Space.xl.dp).padding(bottom = Tokens.Space.xxl.dp),
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
                  Surface(onClick = { onSheetModeChange(if (sheetMode == MapSheetState.Collapsed) MapSheetState.Half else if (sheetMode == MapSheetState.Half) MapSheetState.Full else MapSheetState.Collapsed) },
