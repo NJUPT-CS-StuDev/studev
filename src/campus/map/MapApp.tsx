@@ -14,7 +14,7 @@ import tokens from '../../../design/tokens.json';
 import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
-import { displayName } from './model/displayName';
+import { displayName, roomDisplayName } from './model/displayName';
 import { sheetHeight, snapSheet, type MapSheetState } from './model/sheetState';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
@@ -339,7 +339,7 @@ export default function MapApp() {
                         <header>
                             <div>
                                 <h2>{displayName(selected, space.byId)}</h2>
-                                <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
+                                <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${roomDisplayName(selected.parent, space.byId) ?? selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
                                     {selected.levels ? ` · ${selected.levels} 层` : ''}</p>
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>

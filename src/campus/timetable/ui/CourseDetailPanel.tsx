@@ -4,6 +4,7 @@ import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/
 import { buildClassCalendar, downloadCalendar, meetingDate } from '../model/calendar';
 import { courseToneStyle } from '../model/courseColors';
 import { alternatingWeekLabel, formatWeekNumbers, suspendedWeeks } from '../model/weekPattern';
+import { displayRoomId } from '@/map/model/displayName';
 
 interface CourseDetailPanelProps {
     className: string;
@@ -60,6 +61,7 @@ export function CourseDetailPanel({ className, meeting, week, weeks, periods, to
     const copy = async () => {
         await navigator.clipboard.writeText([meeting.course.name, `${date} 第${meeting.periods[0]}-${meeting.periods[1]}节`, meeting.room, meeting.teachers.map(t => t.name).join(',')].filter(Boolean).join('\n'));
     };
+    const room = displayRoomId(meeting.room);
     const calendar = () => downloadCalendar(`${className}-${meeting.course.name}.ics`, buildClassCalendar(className, [meeting], weeks, periods));
 
     return (
@@ -81,7 +83,7 @@ export function CourseDetailPanel({ className, meeting, week, weeks, periods, to
                 </header>
                 <div className="course-detail-body">
                     <section><h3>课程</h3><dl>{row('课程号', meeting.course.code)}{row('课程类别', meeting.course.category)}{row('课程性质', meeting.course.nature)}{row('学分', meeting.course.credits)}{row('总学时', meeting.course.hours)}{row('课程总学时', meeting.course.hours)}{row('学时组成', meeting.course.hours_composition)}</dl></section>
-                    <section><h3>上课安排</h3><dl>{row('上课周次', formatWeekNumbers(meeting.weeks))}{row('停课', suspended.length ? `第${suspended.join('、')}周（原本连续上课，这几周未排课）` : null)}{row('当前选择', `第${week.week}周${activeThisWeek ? '' : `（${status}）`}`)}{row('对应日期', activeThisWeek ? date : null)}{row('星期', `星期${'一二三四五六日'[meeting.weekday - 1]}`)}{row('节次', `第${meeting.periods[0]}-${meeting.periods[1]}节`)}{row('时间', start && end ? `${start.start}–${end.end}` : null)}{row('校区', meeting.campus)}{row('教室', meeting.room)}{row('授课方式', meeting.method)}</dl></section>
+                    <section><h3>上课安排</h3><dl>{row('上课周次', formatWeekNumbers(meeting.weeks))}{row('停课', suspended.length ? `第${suspended.join('、')}周（原本连续上课，这几周未排课）` : null)}{row('当前选择', `第${week.week}周${activeThisWeek ? '' : `（${status}）`}`)}{row('对应日期', activeThisWeek ? date : null)}{row('星期', `星期${'一二三四五六日'[meeting.weekday - 1]}`)}{row('节次', `第${meeting.periods[0]}-${meeting.periods[1]}节`)}{row('时间', start && end ? `${start.start}–${end.end}` : null)}{row('校区', meeting.campus)}{row('教室', room)}{row('授课方式', meeting.method)}</dl></section>
                     <section><h3>教学</h3><dl>{row('教师', meeting.teachers.map(t => t.name).join(','))}{row('教师职称', meeting.teachers.map(t => t.title).filter(Boolean).join(','))}{row('主辅讲', meeting.teachers.map(t => t.role).filter(Boolean).join(','))}{row('教学班', meeting.teaching_class.name)}{row('教学班组成', meeting.classes.join('、'))}{row('教学班人数', meeting.teaching_class.size)}{row('选课人数', meeting.teaching_class.enrolled)}{row('最终容量', meeting.teaching_class.capacity)}</dl></section>
                     {(meeting.course.assessment || meeting.course.exam) ? <section><h3>考核</h3><dl>{row('考核方式', meeting.course.assessment)}{row('考试方式', meeting.course.exam)}</dl></section> : null}
                     <section><h3>补充</h3><dl>{row('数据更新时间', updatedAt)}</dl></section>

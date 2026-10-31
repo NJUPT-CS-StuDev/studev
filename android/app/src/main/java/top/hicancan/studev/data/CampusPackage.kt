@@ -56,10 +56,21 @@ data class Place(
                 parentPlace.names.firstOrNull { it.isNotBlank() }?.let { return "${category ?: "建筑"} · ${it.trim()}" }
                 parentPlace = byId[parentPlace.parent]
             }
+            val leaf = id.substringAfterLast('/').trim()
+            if (leaf.isNotEmpty() && !leaf.all { it.isDigit() } && leaf.lowercase() !in setOf("建筑", "building", "space")) return leaf
             return "未命名建筑"
         }
         return category?.let { "$it · 未命名地点" } ?: id
     }
+}
+
+fun roomDisplayName(room: String?, byId: Map<String, Place>): String? {
+    if (room == null) return null
+    val place = byId[room]
+    if (place == null) return room.substringAfterLast('/')
+    val title = place.displayName(byId)
+    val parent = place.parent?.let { byId[it] }
+    return if (place.kind == "room" && parent != null) "${parent.displayName(byId)} · $title" else title
 }
 
 /** Pure binding: glyph placeholders remain intact for MapLibre. */
@@ -74,6 +85,7 @@ class CampusPackage private constructor(
     val places: List<Place>,
     private val lightStyle: String,
     private val darkStyle: String,
+    val basemapFile: File?,
 ) {
     val byId = places.associateBy { it.id }
     fun position(place: Place) = place.centre ?: byId[place.parent]?.centre
@@ -97,7 +109,7 @@ class CampusPackage private constructor(
             val data = mapFile?.parentFile?.toURI()?.toString()?.trimEnd('/') ?: StyleTokens.DATA
             return CampusPackage(text("data/version.txt").trim(), places.map { place -> place.copy(hours = opening[place.id]?.hours) },
                 StyleTokens.resolve(text("$BASE/style-light.json"), data),
-                StyleTokens.resolve(text("$BASE/style-dark.json"), data))
+                StyleTokens.resolve(text("$BASE/style-dark.json"), data), mapFile)
         }
     }
 }

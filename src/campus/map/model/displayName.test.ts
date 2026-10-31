@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { displayName } from './displayName';
 import type { Place } from './space';
+import vectors from './displayName.golden.json';
 
 const base = (value: Partial<Place>): Place => ({ id: '仙林/建筑/024', kind: 'building', parent: '仙林', names: [], sources: ['map'], use: '宿舍', routing: { type: 'target', id: '仙林/建筑/024' }, category: '宿舍', ...value });
 
@@ -11,5 +12,12 @@ describe('displayName', () => {
         const place = base({ parent: campus.id });
         expect(displayName(place, new Map([[campus.id, campus]]))).toBe('宿舍 · 仙林校区');
     });
-    it('falls back to the explicit nameless-building label', () => expect(displayName(base({ parent: '' }))).toBe('未命名建筑'));
+    it('uses a meaningful id leaf for an unnamed building', () => expect(displayName(base({ id: '仙林/菊苑18栋', parent: '' }))).toBe('菊苑18栋'));
+    it('falls back to the explicit nameless-building label for opaque ids', () => expect(displayName(base({ id: '仙林/建筑/024', parent: '' }))).toBe('未命名建筑'));
+    it('matches the shared golden vectors', () => {
+        for (const vector of vectors.cases) {
+            const parents = new Map(vector.parents.map(parent => [parent.id, parent as Place]));
+            expect(displayName(vector.place as Place, parents)).toBe(vector.expected);
+        }
+    });
 });

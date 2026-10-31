@@ -19,7 +19,7 @@ object WidgetLesson {
         val time = (walkMinutes?.let { departure(event, it) } ?: event.start).atZone(CampusDay.zone).format(DateTimeFormatter.ofPattern("HH:mm"))
         return prefix + time + if (walkMinutes != null) " 出门" else if (event.exam) " 考试" else " 上课"
     }
-    fun detail(event: CampusEvent): String = listOf(event.title, event.room ?: "地点待公布",
+    fun detail(event: CampusEvent, roomName: String? = event.room): String = listOf(event.title, roomName ?: "地点待公布",
         event.start.atZone(CampusDay.zone).format(DateTimeFormatter.ofPattern("HH:mm")) + if (event.exam) " 考试" else " 上课").joinToString(" · ")
     fun refreshAt(events: List<CampusEvent>, now: Instant): Instant {
         val midnight = now.atZone(CampusDay.zone).toLocalDate().plusDays(1).atStartOfDay(CampusDay.zone).toInstant()

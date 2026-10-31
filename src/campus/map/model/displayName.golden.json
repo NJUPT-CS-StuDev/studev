@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "place": { "id": "仙林/菊苑18栋", "kind": "building", "parent": "", "names": [], "category": "宿舍" },
+      "parents": [],
+      "expected": "菊苑18栋"
+    },
+    {
+      "place": { "id": "仙林/建筑/024", "kind": "building", "parent": "", "names": [], "category": "宿舍" },
+      "parents": [],
+      "expected": "未命名建筑"
+    },
+    {
+      "place": { "id": "仙林/建筑/025", "kind": "building", "parent": "仙林", "names": [], "category": "宿舍" },
+      "parents": [{ "id": "仙林", "kind": "campus", "parent": "", "names": ["仙林校区"] }],
+      "expected": "宿舍 · 仙林校区"
+    },
+    {
+      "place": { "id": "仙林/教3-601", "kind": "room", "parent": "仙林/教3", "names": ["601"] },
+      "parents": [{ "id": "仙林/教3", "kind": "building", "parent": "仙林", "names": ["教三"] }],
+      "expected": "601"
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
 import { style } from '../../design/map/campus-style.mjs';
+import { displayName } from '../../src/campus/map/model/displayName.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -59,27 +60,6 @@ interface MapPlace {
     group?: string;
     levels?: number;
     houses?: string[];
-}
-
-interface DisplayPlace { id: string; kind: string; parent?: string; name?: string; names?: string[]; aliases?: string[]; category?: string }
-
-function placeDisplayName(place: DisplayPlace, byId: Map<string, DisplayPlace>): string {
-    const direct = [place.name, ...(place.names ?? []), ...(place.aliases ?? [])].find(value => value?.trim());
-    if (direct) {
-        return direct.trim();
-    }
-    if (place.kind === 'building') {
-        let parent = place.parent ? byId.get(place.parent) : undefined;
-        while (parent) {
-            const context = [parent.name, ...(parent.names ?? []), ...(parent.aliases ?? [])].find(value => value?.trim());
-            if (context) {
-                return `${place.category ?? '建筑'} · ${context.trim()}`;
-            }
-            parent = parent.parent ? byId.get(parent.parent) : undefined;
-        }
-        return '未命名建筑';
-    }
-    return place.category ? `${place.category} · 未命名地点` : place.id;
 }
 
 interface Source {
@@ -415,8 +395,8 @@ async function buildCampus(
         source: place.kind === 'room' ? 'rooms' : 'places',
         source_name: place.kind === 'room' ? '教室' : '地点',
         url: `/map/?place=${encodeURIComponent(place.id)}`,
-        title: placeDisplayName(place, byId),
-        text: [place.id, ...place.names, placeDisplayName(place, byId)].join(' '),
+        title: displayName(place, byId),
+        text: [place.id, ...place.names, displayName(place, byId)].join(' '),
         published: null,
         updated: null,
         section: place.parent || null,

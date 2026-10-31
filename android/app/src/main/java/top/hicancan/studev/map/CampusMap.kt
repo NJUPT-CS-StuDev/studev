@@ -22,8 +22,16 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.visibility
+import org.maplibre.android.style.sources.CustomVectorSource
+import org.maplibre.android.style.sources.CustomVectorTileProvider
+import org.maplibre.android.style.sources.TileData
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.Place
+import top.hicancan.studev.data.PmTilesReader
 import top.hicancan.studev.location.LocationStatus
 import top.hicancan.studev.location.PlatformLocationEngine
 import top.hicancan.studev.ui.theme.Tokens
@@ -160,6 +168,9 @@ internal fun CampusMap(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
     val brand = if (dark) Tokens.Color.Dark.brand else Tokens.Color.Light.brand
+    val tileReader = remember(campus.basemapFile) { campus.basemapFile?.let { PmTilesReader(it) } }
+    val tileScope = remember(campus.basemapFile) { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
+    DisposableEffect(tileReader, tileScope) { onDispose { tileReader?.close(); tileScope.cancel() } }
 
     DisposableEffect(holder, controller) {
         val failure = org.maplibre.android.maps.MapView.OnDidFailLoadingMapListener { errorCallback(true) }
@@ -220,8 +231,21 @@ internal fun CampusMap(
     LaunchedEffect(map, dark) {
         val ready = map ?: return@LaunchedEffect
         loadedStyle = null; errorCallback(false)
-        ready.setStyle(Style.Builder().fromJson(campus.style(dark))) { style ->
-            if (!holder.destroyed) { loadedStyle = style; controller.applyLayers() }
+        val styleJson = campus.style(dark).replace(Regex("\"url\":\"pmtiles://[^\"]+\""), "\"tiles\":[]")
+        ready.setStyle(Style.Builder().fromJson(styleJson)) { style ->
+            if (!holder.destroyed) {
+                val layers = style.layers.toList()
+                layers.forEach { style.removeLayer(it) }
+                style.removeSource("basemap")
+                val reader = tileReader
+                if (reader != null) style.addSource(CustomVectorSource("basemap", object : CustomVectorTileProvider {
+                    override suspend fun fetchTile(z: Int, x: Int, y: Int): TileData {
+                        return TileData.Mvt(reader.tile(z, x, y) ?: ByteArray(0))
+                    }
+                }, tileScope, 0, 16))
+                layers.forEach(style::addLayer)
+                loadedStyle = style; controller.applyLayers()
+            }
         }
     }
     LaunchedEffect(map, loadedStyle, selected, routeState.open, homeBottom, sheetBottom) {

@@ -26,7 +26,7 @@ import java.time.temporal.ChronoUnit
 
 import top.hicancan.studev.campus.*
 
-@Composable internal fun ExamsScreen(state: AcademicState, klass: String?, onClass: () -> Unit, onRoute: (String, Boolean) -> Unit) {
+@Composable internal fun ExamsScreen(state: AcademicState, klass: String?, onClass: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) {
     val now = CampusDay.now()
     val published = state.exams
     val future = published.filter { examPresentation(it, now.toInstant()).state in listOf("upcoming", "ongoing", "unknown") }
@@ -55,9 +55,9 @@ import top.hicancan.studev.campus.*
                         }
                         Text(exam.course.name, style = MaterialTheme.typography.titleMedium)
                         Text("${exam.start} — ${exam.end} · ${cell.duration} 分钟", style = MaterialTheme.typography.bodyMedium)
-                        Supporting(listOfNotNull(exam.campus, cell.room, exam.teacher).joinToString(" · "))
+                        Supporting(listOfNotNull(exam.campus, roomDisplayName(cell.room, campus?.byId ?: emptyMap()), exam.teacher).joinToString(" · "))
                         exam.note?.takeIf { it.isNotBlank() }?.let { Supporting(it) }
-                        exam.room?.let { room -> TextButton({ onRoute(room, false) }, contentPadding = PaddingValues(0.dp)) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("去这里 · $room") } }
+                        exam.room?.let { room -> TextButton({ onRoute(room, false) }, contentPadding = PaddingValues(0.dp)) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("去这里 · ${roomDisplayName(room, campus?.byId ?: emptyMap())}") } }
                     }
                 }
             }

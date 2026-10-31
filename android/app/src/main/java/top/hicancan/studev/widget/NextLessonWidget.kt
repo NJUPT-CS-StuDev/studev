@@ -69,7 +69,7 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
             unavailable -> "课表还未下载"
             else -> "今天和明天没有课"
         }
-        val detail = next?.let(WidgetLesson::detail) ?: when {
+        val detail = next?.let { WidgetLesson.detail(it, roomName) } ?: when {
             settings.klass == null -> "在「我的」选择班级，让课表来到桌面"
             unavailable -> "请联网打开课表；新版本可能尚未发布"
             else -> "好好休息，按自己的节奏来"

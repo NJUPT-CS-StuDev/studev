@@ -26,7 +26,7 @@ data class PlannerState(
     val simulating: Boolean = false, val destinationLabel: String? = null,
 ) {
     val route get() = routes.getOrNull(selected)
-    val destinationName get() = if (destinationIsMyPosition) "我的位置" else destination?.id ?: destinationLabel ?: "目的地"
+    val destinationName get() = if (destinationIsMyPosition) "我的位置" else destinationLabel ?: destination?.id ?: "目的地"
     val active get() = trip.phase == TripPhase.Navigating
     fun swapped() = copy(origin = if (destinationIsMyPosition) null else destination,
         destination = origin, destinationIsMyPosition = origin == null)
@@ -110,11 +110,11 @@ class NavigationRuntime private constructor(private val context: Context) {
     private fun engine() = engine ?: Wayfind.load(context.assets).also { engine = it }
     fun open(destination: Place) {
         if (state.value.active) return
-        _state.value = PlannerState(open = true, destination = destination, destinationLabel = destination.id)
+        _state.value = PlannerState(open = true, destination = destination, destinationLabel = destination.displayName(mapOf(destination.id to destination)))
         plan()
     }
     fun origin(place: Place?) { _state.update { it.copy(origin = place) }; plan() }
-    fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false, destinationLabel = place.id) }; plan() }
+    fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false, destinationLabel = place.displayName(mapOf(place.id to place)) ) }; plan() }
     fun swap() {
         _state.update { it.swapped() }; plan()
     }
