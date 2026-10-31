@@ -35,6 +35,8 @@
 
 .campus-map-error { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 12px 14px; color: var(--ink); font-size: 14px; }
 .campus-map-error button { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+.campus-map-notice { position: absolute; top: 16px; left: 50%; z-index: 8; display: flex; gap: 8px; align-items: center; max-width: min(420px, calc(100% - 32px)); transform: translateX(-50%); padding: 10px 12px 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--paper) 96%, transparent); color: var(--ink); box-shadow: 0 4px 18px color-mix(in srgb, var(--scrim) 22%, transparent); font-size: 13px; }
+.campus-map-notice button { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
 
 .campus-map-card { padding: 16px; }
 .campus-map-card header { display: flex; align-items: flex-start; gap: 8px; }
@@ -173,6 +175,7 @@
   body:has(.campus-map) main.main-fill { padding: 0; }
   .campus-map { height: var(--campus-viewport-height, 100dvh); min-height: var(--campus-viewport-height, 100dvh); padding-bottom: env(safe-area-inset-bottom); }
   .campus-map-back-home { position: absolute; display: grid; place-items: center; top: max(12px, env(safe-area-inset-top)); left: 12px; z-index: 7; width: 40px; height: 40px; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--paper) 94%, transparent); box-shadow: 0 2px 12px color-mix(in srgb, var(--scrim) 24%, transparent); text-decoration: none; }
+  .campus-map-notice { top: max(12px, env(safe-area-inset-top)); }
   .campus-map-panel { top: auto; bottom: 0; left: 0; width: 100%; height: var(--campus-sheet-height); max-height: none; gap: 8px; overflow: hidden; padding: max(8px, env(safe-area-inset-top)) 0 0; border-radius: 26px 26px 0 0; background: var(--paper); box-shadow: 0 -5px 24px color-mix(in srgb, var(--scrim) 22%, transparent); transition: height 220ms cubic-bezier(.2,.8,.2,1); overscroll-behavior: contain; }
   .campus-map-panel.is-collapsed { height: var(--campus-sheet-height); }
   .campus-map-panel.is-collapsed > :not(.campus-map-sheet-handle):not(.campus-map-search) { display: none; }

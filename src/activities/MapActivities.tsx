@@ -9,7 +9,7 @@ import './map-activities.css';
 export default function MapActivities({ map, space, onPick, onRoute, routeOpen, placeSelected, onSelectionChange }: {
   map: maplibregl.Map | null; space: Space | null; onPick: () => void; onRoute: (place: Place) => void; routeOpen: boolean; placeSelected: boolean; onSelectionChange: (selected: boolean) => void;
 }) {
-  const [visible, setVisible] = useState(true), [items, setItems] = useState<Activity[]>([]), [selected, setSelected] = useState<Activity | null>(null);
+  const [visible, setVisible] = useState(false), [items, setItems] = useState<Activity[]>([]), [selected, setSelected] = useState<Activity | null>(null);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [reload, setReload] = useState(0);
   const picking = new URLSearchParams(location.search).has('pickActivity');
   useEffect(() => { onSelectionChange(picking || (visible && selected !== null)); }, [picking, visible, selected, onSelectionChange]);
@@ -45,8 +45,7 @@ export default function MapActivities({ map, space, onPick, onRoute, routeOpen, 
   const close = () => { setSelected(null); const url = new URL(location.href); url.searchParams.delete('activity'); history.replaceState(null, '', url); };
   if (picking) return <section className="campus-map-card"><h2>选择集合点</h2><p>移动地图，点击活动集合的位置。</p><a href="/activities/?new=1">取消选点</a></section>;
   return <>
-    <div className="activity-map-tools"><button type="button" aria-pressed={visible} onClick={() => setVisible(!visible)}><CalendarDays size={16} />活动{items.length > 0 ? ` · ${items.length}` : ''}</button><a href="/activities/">全部活动 <ArrowUpRight size={14} /></a></div>
-    {visible && error && <div className="campus-map-error" role="status">{error}<button type="button" className="activity-retry" onClick={() => setReload(reload + 1)}>重试</button></div>}
+    <div className="activity-map-tools"><button type="button" className={error ? 'is-unavailable' : undefined} aria-pressed={visible} aria-disabled={error ? true : undefined} title={error || undefined} onClick={() => error ? setReload(reload + 1) : setVisible(!visible)}><CalendarDays size={16} />{error ? '活动不可用' : `活动${items.length > 0 ? ` · ${items.length}` : ''}`}</button><a href="/activities/">全部活动 <ArrowUpRight size={14} /></a></div>
     {visible && selected && !routeOpen && <section className="campus-map-card activity-map-sheet" aria-label="活动详情"><header><div><span className="activity-map-label">校园活动{selected.visibility === 'unlisted' ? ' · 仅凭链接访问' : ''}</span><h2>{selected.title}</h2></div><button type="button" className="campus-map-close" aria-label="关闭活动" onClick={close}>×</button></header><p><CalendarDays size={16} />{activityTime(selected)}</p><p><MapPin size={16} />{activityPlaceName(selected.place)}</p><p>{selected.organiser.name} 发起</p>{selected.description && <div className="activity-map-description">{selected.description}</div>}
       <button type="button" className="campus-map-primary" disabled={!space || !activityPosition(selected.place, space)} onClick={() => {
         if (!space) return;

@@ -43,6 +43,7 @@ export default function MapApp() {
     const [activitySelected, setActivitySelected] = useState(false);
     const [router, setRouter] = useState<Router | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [selected, setSelected] = useState<Place | null>(null);
@@ -69,6 +70,12 @@ export default function MapApp() {
     const planAfterSelection = useRef(false);
     const previousSelection = useRef<string | null>(null);
     const search = useMemo(() => new SearchClient({ baseUrl: `${spaceBase()}/search` }), []);
+
+    useEffect(() => {
+        if (!notice) return;
+        const timer = window.setTimeout(() => setNotice(null), 6000);
+        return () => window.clearTimeout(timer);
+    }, [notice]);
 
     useEffect(() => {
         const resize = () => {
@@ -206,7 +213,7 @@ export default function MapApp() {
                 setMe(at);
                 map.current?.easeTo({ center: at, zoom: 17, duration: tokens.motion.camera });
             },
-            () => setError('无法获取你的位置：请允许浏览器使用定位，或从地图上选择出发地。'),
+            () => setNotice('无法获取你的位置：请允许浏览器使用定位，或从地图上选择出发地。'),
             { enableHighAccuracy: true, timeout: 10000 },
         );
     }, []);
@@ -292,6 +299,7 @@ export default function MapApp() {
         <div className={`campus-map is-${sheetState}`} style={sheetStyle}>
             <div ref={container} className="campus-map-canvas" />
             <a className="campus-map-back-home" href="/" aria-label="返回首页"><ChevronLeft size={20} /></a>
+            {notice && <div className="campus-map-notice" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="关闭提示">×</button></div>}
             <aside ref={panel} className={`campus-map-panel${query ? ' is-searching' : ''} is-${sheetState}`} aria-label="校园地图">
                 <button className="campus-map-sheet-handle" type="button" aria-label={sheetState === 'full' ? '收起地图面板' : '展开地图面板'} aria-expanded={sheetState !== 'collapsed'}
                     onClick={handleHandleClick}
