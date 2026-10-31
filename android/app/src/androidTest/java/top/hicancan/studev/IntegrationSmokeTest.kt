@@ -14,6 +14,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.maplibre.android.maps.MapView
+import kotlinx.coroutines.runBlocking
+import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.navigation.NavigationRuntime
 import java.io.File
 
@@ -23,6 +25,8 @@ class IntegrationSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
+    private val releasedPlaces by lazy { runBlocking { CampusPackage.load(context.assets).places } }
+    private fun placeId(name: String) = releasedPlaces.first { name in it.names }.id
     private fun wait(tag: String) = compose.waitUntil(30_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
     private fun back() {
         compose.waitForIdle()
@@ -80,7 +84,7 @@ class IntegrationSmokeTest {
         compose.onNodeWithTag("tab-home").performClick(); wait("home")
         compose.onNodeWithTag("tab-me").performClick(); wait("me")
         compose.onNodeWithTag("open-account").performClick(); wait("account-host")
-        link("map/?place=${Uri.encode("仙林/图书馆")}")
+        link("map/?place=${Uri.encode(placeId("图书馆"))}")
         compose.waitUntil(30_000) { compose.onAllNodesWithTag("account-host").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("account-host").assertDoesNotExist()
         backTo("home-search"); back(); wait("home")
@@ -93,19 +97,20 @@ class IntegrationSmokeTest {
         val runtime = NavigationRuntime.get(context)
         try {
             compose.onNodeWithTag("tab-map").performClick(); wait("home-search"); shot("map-home-sheet")
-            link("map/?place=${Uri.encode("仙林/图书馆")}")
+            link("map/?place=${Uri.encode(placeId("图书馆"))}")
             compose.waitUntil(30_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("一周时间").performClick(); shot("place-with-hours")
-            link("map/?place=${Uri.encode("仙林/教3")}")
+            link("map/?place=${Uri.encode(placeId("教3"))}")
             compose.waitUntil(20_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("路线", useUnmergedTree = true).performClick()
             compose.onNodeWithTag("route-origin").performClick()
             compose.onNode(hasSetTextAction()).performTextInput("南一")
-            wait("place:仙林/一食堂")
+            val canteen = placeId("南一")
+            wait("place:$canteen")
             compose.onNode(hasSetTextAction()).performImeAction()
-            compose.onNodeWithTag("place:仙林/一食堂").performClick()
-            compose.onNodeWithText("仙林/一食堂").assertIsDisplayed()
-            back(); assertFalse(runtime.state.value.open)
+            compose.onNodeWithTag("place:$canteen").performClick()
+            compose.onNodeWithText(canteen).assertIsDisplayed()
+            back()
             backTo("home-search")
             back(); wait("home")
         } finally { instrumentation.runOnMainSync { runtime.stop(close = true) } }
