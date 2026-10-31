@@ -22,7 +22,6 @@ export function useAppRouter(initialRoute: AppRoute) {
         buildingParam,
         roomParam,
         weekParam,
-        weekdayParam,
         periodParam,
         untilParam,
         navigate,
@@ -86,8 +85,6 @@ export function useAppRouter(initialRoute: AppRoute) {
         classrooms: {
             campus: campusParam,
             date: dateParam,
-            week: number(weekParam),
-            weekday: number(weekdayParam, /^[1-7]$/),
             period: number(periodParam),
             until: number(untilParam),
             room: roomParam,

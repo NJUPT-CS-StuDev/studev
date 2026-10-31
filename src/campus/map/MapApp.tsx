@@ -12,7 +12,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import './map.css';
 import tokens from '../../../design/tokens.json';
-import MapActivities from '../../activities/MapActivities';
+import MapActivities from '../activities/MapActivities';
 import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';

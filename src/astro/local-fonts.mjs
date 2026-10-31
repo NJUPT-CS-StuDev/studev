@@ -66,7 +66,7 @@ async function htmlFiles(directory) {
 export async function subsetBuiltFonts(directory, { base = '/', log = () => {} } = {}) {
   const files = await htmlFiles(directory);
   // Read the source before bundling renames the array or moves it into a JS asset.
-  const homepagePhrases = phraseText(await readFile(new URL('../scripts/typewriter.ts', import.meta.url), 'utf8'));
+  const homepagePhrases = phraseText(await readFile(new URL('../client/site/typewriter.ts', import.meta.url), 'utf8'));
   const pages = await Promise.all(files.map(async (path) => {
     const html = await readFile(path, 'utf8');
     const extra = path === join(directory, 'index.html') ? homepagePhrases : '';

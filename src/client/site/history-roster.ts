@@ -1,4 +1,4 @@
-import tokens from '../../design/tokens.json';
+import tokens from '../../../design/tokens.json';
 
 interface RosterPerson {
   name: string;

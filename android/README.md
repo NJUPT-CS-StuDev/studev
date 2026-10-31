@@ -67,11 +67,10 @@ allocates a larger host. The Huawei EMUI pin flow currently reserves two rows
 for it despite the 4×1 declaration; other launcher items are never moved.
 
 `me/AppUpdates.kt` reads `/download/latest.json`, follows its manifest URL and
-downloads every part with resume, retries and SHA-256 verification. If the site
-is unavailable it reads the same manifest contract from the GitHub mirror. Parts
-are assembled only after the whole APK hash matches, then the package installer
+downloads every part with resume, retries and SHA-256 verification. Parts are
+assembled only after the whole APK hash matches, then the package installer
 receives the file. Unknown-source access is requested only from the explicit
-continue button. Checks run only from 我的; an unreachable release says so.
+continue button. Checks run only from 我的; an unreachable site says so.
 
 Deep links cover `/map/`, `/search/`, `/search/timetable/`, `/search/exam/`,
 `/search/classrooms/` and `/search/web/` (including community/materials search).
@@ -285,9 +284,9 @@ For platform GPS testing, export a route, start normal navigation, and run from
 the repository root (only emulator serials are accepted):
 
 ```powershell
-pwsh android/tools/replay.ps1 -Device emulator-5554
+pwsh android/tooling/replay.ps1 -Device emulator-5554
 # Accelerated replay, with a deliberate detour:
-pwsh android/tools/replay.ps1 -Route D:\Temp\codex\app-nav\route-walk.json -SpeedFactor 10 -DetourAtMetres 90
+pwsh android/tooling/replay.ps1 -Route D:\Temp\codex\app-nav\route-walk.json -SpeedFactor 10 -DetourAtMetres 90
 ```
 
 The script pulls the debug export when `-Route` is omitted. It interpolates
@@ -374,7 +373,7 @@ properties produces only a debug-signed, R8-minified verification APK. Never
 publish that verification build as a signed production update. Never put signing
 material or credentials here.
 
-For local data testing, run `node android/tools/data-fixture.mjs` from the root.
+For local data testing, run `node android/tooling/data-fixture.mjs` from the root.
 It serves the digested `public/data/<version>/` plus the
 unchanged `src/data/campus-release.json` at `/data/release.json`. Build debug with
 `'-Pstudev.dataHost=http://127.0.0.1:18764'` and use

@@ -1,4 +1,4 @@
-package top.hicancan.studev.activity
+package top.hicancan.studev.activities
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn

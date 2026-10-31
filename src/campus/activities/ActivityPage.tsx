@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { CalendarDays, MapPin, ArrowUpRight, Link, Plus, ArrowLeft, Users } from 'lucide-react';
-import { api, errorText, session, type Session } from '../scripts/platform-client';
-import { loadSpace, type Space } from '../campus/map/model/space';
+import { api, errorText, session, type Session } from '../../client/platform/platform-client';
+import { loadSpace, type Space } from '../map/model/space';
 import { activityPlaceName, activityTime, activityUrl, getActivities, getActivity, type Activity, type ActivityInput } from './api';
 import './activities.css';
 

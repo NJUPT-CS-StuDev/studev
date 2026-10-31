@@ -5,7 +5,7 @@ build when recording before; capture after against the same route list. Output
 belongs in the task's screenshot directory, outside the repository.
 
 Example:
-  python src/integrations/pages.browser.py --phase after --shots <directory>
+  python src/astro/pages.browser.py --phase after --shots <directory>
 """
 import argparse
 import asyncio

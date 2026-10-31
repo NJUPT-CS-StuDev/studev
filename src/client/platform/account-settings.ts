@@ -1,6 +1,6 @@
 // The settings tab of /account/: a visitor's class, usual campus, theme and
 // timetable edits, all kept in this browser (see campus/shared/lib/preferences).
-import { clearPreferences, readPreferences, subscribePreferences, writePreferences } from '../campus/shared/lib/preferences';
+import { clearPreferences, readPreferences, subscribePreferences, writePreferences } from '../../campus/shared/lib/preferences';
 
 const form = document.querySelector<HTMLFormElement>('[data-settings-form]');
 const status = document.querySelector<HTMLElement>('[data-settings-status]');

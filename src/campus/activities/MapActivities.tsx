@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import { CalendarDays, MapPin, Share2, ArrowUpRight, Plus } from 'lucide-react';
-import type { Place, Space } from '../campus/map/model/space';
+import type { Place, Space } from '../map/model/space';
 import { activityPlaceName, activityPosition, activityTime, activityUrl, getActivities, getActivity, type Activity } from './api';
-import { errorText } from '../scripts/platform-client';
+import { errorText } from '../../client/platform/platform-client';
 import './map-activities.css';
 
 export default function MapActivities({ map, space, onPick, onRoute, routeOpen, placeSelected, onSelectionChange }: {

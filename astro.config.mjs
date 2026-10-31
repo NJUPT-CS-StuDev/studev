@@ -9,11 +9,11 @@ import remarkGfm from 'remark-gfm';
 import rehypeMathjax from 'rehype-mathjax/svg';
 import { AllPackages } from 'mathjax-full/js/input/tex/AllPackages.js';
 import { rehypeGithubAlerts } from 'rehype-github-alerts';
-import remarkTyporaInline from './src/plugins/remark-typora-inline.mjs';
-import rehypeEditorialImages from './src/plugins/rehype-editorial-images.mjs';
-import rehypeStaticMermaid from './src/plugins/rehype-static-mermaid.mjs';
-import localFonts from './src/integrations/local-fonts.mjs';
-import webTokens from './src/integrations/web-tokens.mjs';
+import remarkTyporaInline from './src/markdown/remark-typora-inline.mjs';
+import rehypeEditorialImages from './src/markdown/rehype-editorial-images.mjs';
+import rehypeStaticMermaid from './src/markdown/rehype-static-mermaid.mjs';
+import localFonts from './src/astro/local-fonts.mjs';
+import webTokens from './src/astro/web-tokens.mjs';
 import { copyFile } from 'node:fs/promises';
 
 const excludedSitemapPaths = new Set([

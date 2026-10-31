@@ -1,4 +1,4 @@
-package top.hicancan.studev.activity
+package top.hicancan.studev.activities
 
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.runBlocking

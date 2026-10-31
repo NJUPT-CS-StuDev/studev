@@ -1,4 +1,4 @@
-package top.hicancan.studev.activity
+package top.hicancan.studev.activities
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*

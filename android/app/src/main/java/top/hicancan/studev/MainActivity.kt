@@ -10,8 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import top.hicancan.studev.campus.CampusApp
 import top.hicancan.studev.ui.theme.StuDevTheme
-import top.hicancan.studev.activity.ActivityHost
-import top.hicancan.studev.activity.ActivityLinks
+import top.hicancan.studev.activities.ActivityHost
+import top.hicancan.studev.activities.ActivityLinks
 
 class MainActivity : ComponentActivity() {
     private var place by mutableStateOf<String?>(null)

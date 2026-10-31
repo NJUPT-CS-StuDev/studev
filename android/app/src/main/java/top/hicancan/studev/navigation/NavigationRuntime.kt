@@ -103,7 +103,7 @@ class NavigationRuntime private constructor(private val context: Context) {
             withContext(Dispatchers.IO) {
                 java.io.File(context.getExternalFilesDir(null), "route.json").writeText(kotlinx.serialization.json.Json.encodeToString(route))
             }
-            notice("路线已导出，可用 android/tools/replay.ps1 回放。")
+            notice("路线已导出，可用 android/tooling/replay.ps1 回放。")
         }
     }
     private suspend fun <T> native(block: () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }

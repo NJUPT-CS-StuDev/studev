@@ -14,7 +14,7 @@ class AppUpdatesTest {
         assertEquals(3, parsed.parts.size); assertEquals("part-002", parsed.parts.last().name); assertEquals(26, parsed.minSdk)
     }
 
-    @Test fun mirrorRelativePartUrlsResolveFromManifest() {
+    @Test fun siteRelativePartUrlsResolveFromManifest() {
         val parsed = AppUpdates.parseManifest(manifest, url)
         assertTrue(parsed.parts.first().url.startsWith("https://studev.hicancan.top/download/2/"))
     }

@@ -17,8 +17,6 @@ import './classrooms.css';
 export interface ClassroomsParams {
     campus: string | null;
     date: string | null;
-    week: number | null;
-    weekday: number | null;
     period: number | null;
     until: number | null;
     room: string | null;
@@ -78,7 +76,7 @@ const segments = (status: DayStatus, room: string, periods: TeachingPeriod[]): S
     return result;
 };
 
-export function ClassroomsView({ client, campus: campusParam, date: dateParam, week, weekday, period: periodParam, until: untilParam, room: roomParam, building, filter, onChange }: ClassroomsViewProps) {
+export function ClassroomsView({ client, campus: campusParam, date: dateParam, period: periodParam, until: untilParam, room: roomParam, building, filter, onChange }: ClassroomsViewProps) {
     const [index, setIndex] = useState<ClassroomIndexFile | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [day, setDay] = useState<{ date: string; file: ClassroomDayFile | null } | null>(null);
@@ -99,9 +97,7 @@ export function ClassroomsView({ client, campus: campusParam, date: dateParam, w
     const campuses = index?.campuses.filter(c => index.buildings.some(b => b.campus === c.id && index.rooms.some(r => r.listed && r.building === b.id))).map(item => item.id) ?? [];
     const campus = [campusParam, prefs.campus, DEFAULT_CAMPUS].find(value => value && campuses.includes(value)) ?? campuses[0] ?? DEFAULT_CAMPUS;
     const today = weeks.length ? clampToTerm(weeks, now.date) : now.date;
-    const legacyDate = week && weekday ? weeks.find(item => item.week === week)?.start : undefined;
-    const requestedDate = dateParam ?? (legacyDate ? addDays(legacyDate, (weekday ?? 1) - 1) : null);
-    const date = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && weeks.length && clampToTerm(weeks, requestedDate) === requestedDate ? requestedDate : today;
+    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && weeks.length && clampToTerm(weeks, dateParam) === dateParam ? dateParam : today;
     const nowPeriod = date === now.date && periods.length ? periodAt(periods, now.minutes) : null;
     const lastPeriod = periods[periods.length - 1]?.period ?? 12;
     const period = periodParam && periods.some(item => item.period === periodParam) ? periodParam : nowPeriod ?? 1;

@@ -1,4 +1,4 @@
-package top.hicancan.studev.activity
+package top.hicancan.studev.activities
 
 import android.content.Context
 import android.content.Intent

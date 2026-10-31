@@ -1,5 +1,5 @@
-import { api, formatTime } from '../scripts/platform-client';
-import { placePosition, type Space } from '../campus/map/model/space';
+import { api, formatTime } from '../../client/platform/platform-client';
+import { placePosition, type Space } from '../map/model/space';
 export type ActivityPlace = { kind: 'campus'; id: string } | { kind: 'point'; name: string; position: [number, number] };
 export interface ActivityInput { title: string; description: string; startsAt: string; endsAt: string; place: ActivityPlace; visibility: 'public' | 'unlisted' }
 export interface Activity extends ActivityInput { id: string; organiser: { id: string; name: string }; revision: number; createdAt: string; updatedAt: string }
