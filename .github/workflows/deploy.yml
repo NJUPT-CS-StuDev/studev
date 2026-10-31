@@ -1,13 +1,11 @@
 name: Deploy
 
-# Deploys on every push to main, and within a quarter of an hour of a data
-# release the site is not serving yet.
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
+  repository_dispatch:
+    types: [upstream-release]
 
 permissions:
   contents: read
@@ -16,30 +14,13 @@ concurrency:
   group: deploy
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    outputs:
-      deploy: ${{ steps.data.outputs.deploy }}
-    steps:
-      - id: data
-        env:
-          DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
-          DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
-        run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          version=$(curl -sf -H "Authorization: Bearer $DATA_TOKEN" "https://api.github.com/repos/$DATA_REPOSITORY/releases/latest" | jq -r .tag_name)
-          status=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top/data/$version-facts/rooms/index.json")
-          echo "latest data $version, served: $status"
-          if [ "$status" = "200" ]; then echo "deploy=false" >> "$GITHUB_OUTPUT"; else echo "deploy=true" >> "$GITHUB_OUTPUT"; fi
-
   deploy:
-    needs: check
-    if: needs.check.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     env:
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
       DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+      MAP_REPOSITORY: hicancan/njupt-map
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -48,6 +29,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx -y edgeone@1.6.44 makers env pull -e production -t "$EDGEONE_API_TOKEN"
+      # digest resolves and verifies the latest map/data release pair.
       - run: npm run digest
       - name: Fetch APK distribution assets
         env:
@@ -56,11 +38,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform
+      - run: npm run test:collection
+      - run: npm run test:apk
       - run: npm run build
-      # The CLI can report failure from calls it makes after the deployment is
-      # live (a 522 from DescribePagesEncipherToken, 2026-10-26). Such a run
-      # counts as deployed when the CLI said "Deploy Success" and the site
-      # serves this build's data and home-page script.
       - name: Deploy
         run: |
           set -o pipefail
@@ -68,11 +48,12 @@ jobs:
           grep -q "Deploy Success" deploy.log || { echo "the deployment itself failed"; exit 1; }
           echo "the CLI failed after the deployment went live; checking the site"
           base=$(node -p "require('./src/data/campus-release.json').base")
-          script=$(grep -o '/_astro/[^"]*\.js' dist/index.html | head -1)
+          script=$(grep -o '/_astro/[^\"]*\.js' dist/index.html | head -1)
           for attempt in $(seq 1 20); do
             data=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$base/rooms/index.json")
             code=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$script")
             if [ "$data" = "200" ] && [ "$code" = "200" ]; then echo "serving $base and $script"; exit 0; fi
             sleep 15
           done
-          echo "the site does not serve $base and $script after five minutes"; exit 1
+          echo "the site does not serve $base and $script after five minutes"
+          exit 1

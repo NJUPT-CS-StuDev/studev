@@ -1,6 +1,6 @@
 import { PRODUCT_CONFIG } from '@/app/config/product';
-// The campus space as the data package serves it (njupt-data out/space/<campus>/,
-// packaged by scripts/data/digest.ts), and the map style bound to it.
+// The campus space comes from njupt-map; opening hours are the only place facts
+// contributed by njupt-data and are joined by canonical map id.
 import type { StyleSpecification } from 'maplibre-gl';
 import type { GraphData, Position, Endpoint } from 'wayfind';
 import { DATA_RELEASE } from '@/app/config/constants';
@@ -30,6 +30,8 @@ export interface Place {
     featured?: boolean;
 }
 
+interface OpeningRecord { hours: NonNullable<Place['hours']>; sources?: string[] }
+
 export interface Space {
     places: Place[];
     byId: Map<string, Place>;
@@ -41,11 +43,16 @@ export const spaceBase = (campus = CAMPUS) =>
 
 export async function loadSpace(campus = CAMPUS): Promise<Space> {
     const base = spaceBase(campus);
-    const [places, network] = await Promise.all([
+    const [places, network, opening] = await Promise.all([
         fetchJson<Place[]>(`${base}/places.json`),
         fetchJson<GraphData>(`${base}/network.json`),
+        fetchJson<Record<string, OpeningRecord>>(`${DATA_RELEASE.base}/hours.json`),
     ]);
-    return { places, byId: new Map(places.map(p => [p.id, p])), network };
+    const joined = places.map(place => {
+        const record = opening[place.id];
+        return record ? { ...place, hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : place;
+    });
+    return { places: joined, byId: new Map(joined.map(p => [p.id, p])), network };
 }
 
 /** The packaged style, with its two tokens bound to this site. */

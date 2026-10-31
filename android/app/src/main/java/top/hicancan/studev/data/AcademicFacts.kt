@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-@Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val rooms: String)
+@Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null)
 @Serializable data class TeachingWeek(val week: Int, val start: String, val end: String)
 @Serializable data class TeachingTerm(val term: String, val year: Int, val number: Int, val weeks: List<TeachingWeek>, val observed_at: String)
 @Serializable data class TeachingPeriod(val period: Int, val start: String, val end: String, val part: String?)

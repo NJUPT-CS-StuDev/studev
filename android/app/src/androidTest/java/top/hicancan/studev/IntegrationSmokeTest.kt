@@ -80,7 +80,7 @@ class IntegrationSmokeTest {
         compose.onNodeWithTag("tab-home").performClick(); wait("home")
         compose.onNodeWithTag("tab-me").performClick(); wait("me")
         compose.onNodeWithTag("open-account").performClick(); wait("account-host")
-        link("map/?place=${Uri.encode("图书馆")}")
+        link("map/?place=${Uri.encode("仙林/图书馆")}")
         compose.waitUntil(30_000) { compose.onAllNodesWithTag("account-host").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("account-host").assertDoesNotExist()
         backTo("home-search"); back(); wait("home")
@@ -93,17 +93,17 @@ class IntegrationSmokeTest {
         val runtime = NavigationRuntime.get(context)
         try {
             compose.onNodeWithTag("tab-map").performClick(); wait("home-search"); shot("map-home-sheet")
-            link("map/?place=${Uri.encode("图书馆")}")
+            link("map/?place=${Uri.encode("仙林/图书馆")}")
             compose.waitUntil(30_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("一周时间").performClick(); shot("place-with-hours")
-            link("map/?place=${Uri.encode("教3")}")
+            link("map/?place=${Uri.encode("仙林/教3")}")
             compose.waitUntil(20_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("路线", useUnmergedTree = true).performClick()
             compose.onNodeWithTag("route-origin").performClick()
             compose.onNode(hasSetTextAction()).performTextInput("梅苑1栋")
-            wait("place:梅苑1栋")
+            wait("place:仙林/梅苑1栋")
             compose.onNode(hasSetTextAction()).performImeAction()
-            compose.onNodeWithTag("place:梅苑1栋").performClick()
+            compose.onNodeWithTag("place:仙林/梅苑1栋").performClick()
             compose.waitUntil(30_000) { runtime.state.value.route != null && !runtime.state.value.busy }
             assertTrue(runtime.state.value.route!!.maneuvers.size >= 2)
             compose.onNodeWithText("开始导航").assertIsDisplayed(); shot("route-planning")

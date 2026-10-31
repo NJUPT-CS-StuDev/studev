@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import top.hicancan.studev.navigation.Endpoint
 
 @Serializable
@@ -13,6 +14,9 @@ data class Entrance(val at: List<Double>, val source: String)
 
 @Serializable
 data class OpeningHours(val week: Map<String, List<List<String>>>, val note: String? = null)
+
+@Serializable
+private data class OpeningRecord(val hours: OpeningHours, val sources: List<JsonObject> = emptyList())
 
 /** The shared package contract. Absent optional fields stay absent on serialization. */
 @Serializable
@@ -59,7 +63,9 @@ class CampusPackage private constructor(
         const val BASE = "data/space/仙林"
         suspend fun load(assets: AssetManager): CampusPackage = withContext(Dispatchers.IO) {
             fun text(path: String) = assets.open(path).bufferedReader().use { it.readText() }
-            CampusPackage(text("data/version.txt").trim(), Json.decodeFromString(text("$BASE/places.json")),
+            val places = Json.decodeFromString<List<Place>>(text("$BASE/places.json"))
+            val opening = Json.decodeFromString<Map<String, OpeningRecord>>(text("data/hours.json"))
+            CampusPackage(text("data/version.txt").trim(), places.map { place -> place.copy(hours = opening[place.id]?.hours) },
                 StyleTokens.resolve(text("$BASE/style-light.json")),
                 StyleTokens.resolve(text("$BASE/style-dark.json")))
         }

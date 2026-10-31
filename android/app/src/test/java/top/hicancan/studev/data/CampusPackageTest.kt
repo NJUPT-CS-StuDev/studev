@@ -12,16 +12,16 @@ class CampusPackageTest {
         assertTrue(places.all { it.id.isNotBlank() && it.names.isNotEmpty() })
         assertEquals(places.size, places.map { it.id }.toSet().size)
         assertTrue(places.all { it.use.isNotBlank() })
-        assertNotNull(places.first { it.id == "图书馆" }.hours)
-        val building = places.first { it.id == "教3" }
+        val hours = Json.decodeFromString<Map<String, JsonObject>>(resource("data/hours.json"))
+        assertTrue(hours.containsKey("仙林/图书馆"))
+        val building = places.first { it.id == "仙林/教3" }
         assertEquals("building", building.kind)
         assertEquals("仙林", building.parent)
-        assertEquals(6, building.levels)
         assertEquals(2, building.centre!!.size)
-        assertTrue(building.entrances.all { it.at.size == 2 && it.source.isNotBlank() })
-        val room = places.first { it.kind == "room" && it.parent == "教3" }
-        assertNotNull(room.seats)
-        assertNull(room.centre)
+        assertTrue(building.names.contains("教三"))
+        val room = places.first { it.id == "仙林/教3-601" }
+        assertEquals("仙林/教3/6", room.parent)
+        assertEquals(2, room.centre!!.size)
         assertTrue(room.sources.isNotEmpty())
     }
     @Test fun allContractFieldsRoundTrip() {
