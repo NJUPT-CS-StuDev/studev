@@ -13,12 +13,14 @@
     "check": "astro check",
     "test:markdown": "node --test tests/markdown-render.test.mjs",
     "test:render": "node --test tests/static-mermaid.test.mjs tests/site-output.test.mjs",
+    "test:apk": "node --test tests/apk-distribution.test.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "predigest": "node design/map/generate.mjs",
     "digest": "node scripts/digest.ts",
     "test:campus": "vitest run",
-    "typecheck": "astro sync && tsc --noEmit"
+    "typecheck": "astro sync && tsc --noEmit",
+    "release:apk": "pwsh android/release.ps1"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",

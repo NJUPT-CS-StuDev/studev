@@ -180,8 +180,8 @@ import androidx.compose.foundation.lazy.items
         }
     }, confirmButton = { TextButton({ dormPicker = false }) { Text("完成") } },
         dismissButton = { if (preferences.homeDorm != null) TextButton({ model.settings.update { it.copy(homeDorm = null) }; dormPicker = false }) { Text("清除选择") } })
-    release?.let { latest -> AlertDialog(onDismissRequest = { release = null }, title = { Text("下载 ${latest.name}") }, text = { Text("下载完成后会校验应用与版本，并交给系统安装。返回此页可继续安装。") },
-        confirmButton = { TextButton({ runCatching { AppUpdates.download(context, latest); model.tell("正在下载，完成后返回此页继续安装") }.onFailure { model.tell("下载暂时无法开始，请稍后重试") }; release = null }) { Text("下载") } }, dismissButton = { TextButton({ release = null }) { Text("稍后") } }) }
+    release?.let { latest -> AlertDialog(onDismissRequest = { release = null }, title = { Text("下载 ${latest.name}") }, text = { Text("下载完成后会校验每个分片和完整 APK，并交给系统安装。") },
+        confirmButton = { TextButton({ release = null; scope.launch { runCatching { AppUpdates.download(context, latest) }.onSuccess { model.tell("下载完成，点击继续安装") }.onFailure { model.tell("下载暂时无法开始，请稍后重试") } } }) { Text("下载") } }, dismissButton = { TextButton({ release = null }) { Text("稍后") } }) }
 }
 @Composable private fun SettingsSwitch(title: String, detail: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

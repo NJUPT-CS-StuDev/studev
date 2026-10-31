@@ -1,4 +1,5 @@
 import release from '../data/campus-release.json';
+import { downloadApk, readApkManifest, saveApkBlob } from './apk-download';
 
 interface InstallEvent extends Event {
     prompt(): Promise<void>;
@@ -12,6 +13,10 @@ const save = document.querySelector<HTMLButtonElement>('[data-pwa-save]');
 const help = document.querySelector<HTMLElement>('[data-pwa-install-help]');
 const update = document.querySelector<HTMLElement>('[data-pwa-update]');
 const refresh = document.querySelector<HTMLButtonElement>('[data-pwa-refresh]');
+const appDownload = document.querySelector<HTMLAnchorElement>('[data-app-download]');
+const appDownloadStatus = document.querySelector<HTMLElement>('[data-app-download-status]');
+const appDownloadProgress = document.querySelector<HTMLProgressElement>('[data-app-download-progress]');
+const appDownloadFallback = document.querySelector<HTMLElement>('[data-app-download-fallback]');
 let installEvent: InstallEvent | undefined;
 let registration: ServiceWorkerRegistration | undefined;
 let applying = false;
@@ -29,6 +34,41 @@ if (iPhone) {
     const title = document.querySelector<HTMLElement>('[data-pwa-web-title]');
     if (title) title.textContent = '添加到主屏幕';
 }
+
+function showApkStatus(text: string, visible = true) {
+    if (!appDownloadStatus) return;
+    appDownloadStatus.textContent = text; appDownloadStatus.hidden = !visible;
+}
+function showApkFallback(manifest: Awaited<ReturnType<typeof readApkManifest>>) {
+    if (!appDownloadFallback) return;
+    appDownloadFallback.replaceChildren(...manifest.parts.map(part => {
+        const item = document.createElement('li'); const link = document.createElement('a');
+        link.href = part.url; link.textContent = `下载 ${part.name}`; link.target = '_blank'; link.rel = 'noopener'; item.append(link); return item;
+    }));
+    appDownloadFallback.hidden = false;
+}
+appDownload?.addEventListener('click', event => {
+    event.preventDefault();
+    if (/MicroMessenger|QQ\//i.test(navigator.userAgent)) { showApkStatus('请在浏览器中打开此页面，再下载 Android 版。'); return; }
+    if (iPhone) return;
+    void (async () => {
+        appDownload!.setAttribute('aria-disabled', 'true'); appDownload!.classList.add('is-busy');
+        if (appDownloadProgress) { appDownloadProgress.hidden = false; appDownloadProgress.value = 0; }
+        if (appDownloadFallback) appDownloadFallback.hidden = true;
+        try {
+            const latestUrl = new URL(appDownload!.href, location.href).toString();
+            const manifest = await readApkManifest(latestUrl);
+            showApkStatus(`正在下载 ${manifest.versionName}（0%）`);
+            const blob = await downloadApk(manifest, new URL(latestUrl, location.href).toString(), (done, total) => {
+                const percent = Math.round(done / total * 100); if (appDownloadProgress) appDownloadProgress.value = percent;
+                showApkStatus(`正在下载 ${manifest.versionName}（${percent}%）`);
+            });
+            if (!saveApkBlob(blob, manifest.versionName)) { showApkStatus('当前浏览器无法直接保存 APK，请逐个下载分片：'); showApkFallback(manifest); }
+            else showApkStatus(`已校验并开始保存 studev-${manifest.versionName}.apk`);
+        } catch (error) { showApkStatus(error instanceof Error ? error.message : '下载失败，请稍后重试。'); }
+        finally { appDownload!.removeAttribute('aria-disabled'); appDownload!.classList.remove('is-busy'); }
+    })();
+});
 
 function openPanel() {
     panel?.showModal();
