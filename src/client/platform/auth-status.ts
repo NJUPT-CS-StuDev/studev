@@ -1,12 +1,14 @@
+import { api, PlatformError, type Session } from './platform-client';
+
 const CACHE_KEY = 'studev_auth_user';
 
 function updateNavLinks(isLoggedIn: boolean) {
   // Forms are for people with an account; everyone else never sees the link.
-  document.querySelectorAll<HTMLElement>('[data-member-link]').forEach((link) => {
+  document.querySelectorAll<HTMLElement>('[data-account-link]').forEach((link) => {
     link.hidden = !isLoggedIn;
   });
-  if (isLoggedIn) document.documentElement.dataset.member = '';
-  else delete document.documentElement.dataset.member;
+  if (isLoggedIn) document.documentElement.dataset.authenticated = '';
+  else delete document.documentElement.dataset.authenticated;
 }
 
 // 0ms 瞬间从本地状态初始化
@@ -51,27 +53,22 @@ const isPlatformManagedPage = /^\/(?:account|admin|forms|fill|submissions)(?:\/|
 if (hasCachedUser && shouldVerify && !isPlatformManagedPage) {
   void (async () => {
     try {
-      const res = await fetch('/api/platform/auth/session', {
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json() as { user?: { nickname?: string; role?: string } };
-        if (data?.user) {
-          try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify({
-              nickname: data.user.nickname,
-              role: data.user.role || 'member',
-              verifiedAt: Date.now()
-            }));
-          } catch {}
-          updateNavLinks(true);
-          return;
-        }
+      const data = await api<Session>('/auth/session');
+      if (data?.user) {
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            nickname: data.user.nickname,
+            role: data.user.role || 'user',
+            verifiedAt: Date.now()
+          }));
+        } catch {}
+        updateNavLinks(true);
       }
-      try { localStorage.removeItem(CACHE_KEY); } catch {}
-      updateNavLinks(false);
-    } catch {}
+    } catch (error) {
+      if (error instanceof PlatformError && error.status === 401) {
+        try { localStorage.removeItem(CACHE_KEY); } catch {}
+        updateNavLinks(false);
+      }
+    }
   })();
 }

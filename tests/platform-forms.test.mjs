@@ -5,8 +5,8 @@ import { createRepository } from '../src/server/platform-store.mjs';
 import { AppError, fail, response } from '../src/server/platform-common.mjs';
 
 const ORIGIN = 'https://studev.test';
-const member = { id: 'member-one', role: 'member', nickname: '测试成员', qq: '12345678', studentId: '202600000001', realName: '测试成员甲', identityVerified: false, profileComplete: true };
-const secondMember = { id: 'member-two', role: 'member', nickname: '另一成员', qq: '12345679', studentId: '202600000002', realName: '测试成员乙', identityVerified: false, profileComplete: true };
+const member = { id: 'member-one', role: 'user', nickname: '测试成员', qq: '12345678', studentId: '202600000001', realName: '测试成员甲', identityVerified: false, profileComplete: true };
+const secondMember = { id: 'member-two', role: 'user', nickname: '另一成员', qq: '12345679', studentId: '202600000002', realName: '测试成员乙', identityVerified: false, profileComplete: true };
 const owner = { id: 'owner-one', role: 'owner', nickname: '测试所有者', qq: '12345680', studentId: '202600000000', realName: '测试维护者', identityVerified: false, profileComplete: true };
 function fixture() {
   let clock = Date.UTC(2026, 9, 21, 15);

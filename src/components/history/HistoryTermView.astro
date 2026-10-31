@@ -62,7 +62,7 @@ const skeletonGroups = [
         data-tab-trigger="people"
       >
         <span>成员名册</span>
-        <span class="term-tab-badge" data-roster-tab-count>17</span>
+        <span class="term-tab-badge" data-roster-tab-count>—</span>
       </button>
     </div>
   </header>
@@ -108,7 +108,7 @@ const skeletonGroups = [
       <div class="term-section-heading">
         <span class="section-number">02</span>
         <h2 id="people-title">历届成员</h2>
-        <span class="section-aside" data-roster-count>17 人</span>
+        <span class="section-aside" data-roster-count>正在读取名册</span>
       </div>
 
       <div data-roster-container class="roster-container">
@@ -116,7 +116,6 @@ const skeletonGroups = [
           <section class="member-group" aria-labelledby={`skeleton-group-${gIdx}`}>
             <div class="member-group-header">
               <h3 id={`skeleton-group-${gIdx}`}>{group.name}</h3>
-              <span class="member-group-count">{group.count}</span>
             </div>
             <div class="member-grid">
               {Array.from({ length: group.count }).map(() => (

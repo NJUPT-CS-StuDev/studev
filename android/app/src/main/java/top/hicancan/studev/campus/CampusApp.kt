@@ -37,7 +37,7 @@ import top.hicancan.studev.search.AcademicSearchScreen
 import top.hicancan.studev.timetable.*
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onActivities: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
+@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by model.state.collectAsStateWithLifecycle()
@@ -159,7 +159,7 @@ import top.hicancan.studev.timetable.*
                         "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go)
                         "rooms" -> RoomsScreen(state.repository!!, state.rooms!!, preferences.campus, query, roomDate, roomPeriod, { value -> model.settings.update { it.copy(campus = value) } }, ::go)
                         "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }) { target, text -> openScreen(target, text) }
-                        "me", "calendar" -> MeScreen(model, state, preferences, screen == "calendar", { classPicker = true }, { screen = "calendar" }, onActivities, onAccount)
+                        "me", "calendar" -> MeScreen(model, state, preferences, screen == "calendar", { classPicker = true }, { screen = "calendar" }, onAccount)
                     } } }
                 }
             }

@@ -1307,8 +1307,8 @@ html[data-theme='dark'] .filter-tag-btn.active {
 }
 
 /* Member links appear in the first frame for people signed in on this browser. */
-.site-nav [data-member-link][hidden] { display: none; }
-html[data-member] .site-nav [data-member-link][hidden] { display: inline-flex; }
+.site-nav [data-account-link][hidden] { display: none; }
+html[data-authenticated] .site-nav [data-account-link][hidden] { display: inline-flex; }
 
 /* A full-height application page (SiteLayout fill): the header, then the app filling the rest. */
 body:has(> main.main-fill) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }

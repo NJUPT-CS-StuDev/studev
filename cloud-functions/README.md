@@ -1,87 +1,82 @@
-# Native accounts and activities
+# Shared community accounts
 
-The `/api/platform/[[path]]` entry still loads the bundled
-`.collection-build/platform.mjs`. Run `npm run build` with the normal data release
-configuration; deploy its static output **and** the platform function together.
-This change needs no new environment variables, secret, store or OSCA bucket.
-It uses the existing strong-consistency `studev-collections` Blob store.
+Web and Android use the same `/api/platform` identity endpoints and errors:
 
-## Native login
+- `POST /auth/register`: `studentId`, `realName`, `nickname`, `qq`, `password`.
+  Registration is open to every student as `user`. No invitation or email
+  verification. Student IDs normalize NFKC and case, and have one atomic claim.
+  Pre-recorded staff accounts require administrator activation; public
+  registration cannot claim administrator privileges by knowing a student ID.
+- `POST /auth/login`: `studentId`, `password`, optional `totp` (TOTP or recovery
+  code), `deviceId` (16–128 URL-safe characters), `deviceName` (1–80 characters).
+  Missing/invalid factors return `MFA_REQUIRED`/`MFA_INVALID`; used factors return
+  `MFA_REPLAYED`, identically for both clients. Temporary-password and owner TOTP
+  setup use the same restricted session and endpoints on either client.
+- `POST /auth/refresh`: `deviceId`, plus a bearer client's `refreshToken`.
+- `GET /auth/session`, `POST /auth/logout`, `/auth/profile`, `/auth/password`,
+  `/auth/totp/setup`, `/auth/totp/confirm`, `/auth/totp/disable` are shared.
+- `GET /auth/devices` lists both carriers with `kind`, `current`, `id`,
+  `deviceName`, `createdAt`, `expiresAt`. `POST /auth/devices/<id>/revoke` revokes
+  either kind, including the current session, from either client.
 
-`POST /api/platform/auth/token` accepts `studentId`, `password`, optional `totp`
-(a code or recovery code), `deviceId` (16–128 URL-safe characters) and
-`deviceName` (1–80 characters). Incomplete accounts finish setup on the web.
-The response contains `user`, `tokenType: "Bearer"`, `accessToken`, `expiresIn`
-(600 seconds), `refreshToken`, `refreshExpiresAt` (epoch milliseconds) and
-`deviceSessionId`. It never sets a cookie. Password attempts share the browser's
-account/IP rate-limit buckets. No browser authentication endpoint was replaced.
+A request without Origin, cookies or browser fetch metadata bootstraps bearer
+credentials. Browser requests require exact same Origin; credential-bearing
+browser mutations also require the session CSRF token. Any Authorization header
+is validated and never falls back to cookies. Browser responses deliver access
+and refresh credentials only as HttpOnly, SameSite=Strict, Secure host cookies
+(Secure is omitted for loopback HTTP development). Native clients store tokens
+in Android Keystore-encrypted storage. Refresh cookies never appear in JSON.
 
-`POST /api/platform/auth/token/refresh` accepts `deviceId` and `refreshToken`.
-It spends the old ticket atomically, returning a new access/refresh pair with the
-same absolute 30-day device-session expiry. Replay revokes the entire family.
-Serialize refreshes and persist the replacement before using it. Never retry an
-ambiguous refresh: require sign-in again. Re-login from the same installation
-revokes its previous families. Concurrent logins reserve an immutable account
-generation; a conflicting login returns 409 and may be retried with a fresh MFA
-code if required. The generation also enforces the 20-device account limit.
-Native requests send `Authorization: Bearer ...`;
-an invalid header never falls back to cookies. Cookie mutations retain Origin
-and CSRF validation. Origin-free token bootstrap accepts neither cookies nor
-browser fetch metadata. No cross-origin browser access is enabled.
+All devices share `platform-v1/identity/devices/`: immutable sessions, per-user
+indices, hashed access/refresh tickets, spent/revoked markers, login generations,
+and versioned security state. Access expires in 600 seconds; the session expires
+absolutely after 30 days. Rotation spends one atomic ticket; replay revokes the
+family. A device re-login replaces its old session; at most 20 active devices
+exist across both carriers. Logout, role/status changes, password changes and
+account deletion invalidate both carriers. TOTP enrollment elevates only its own
+session. Never retry an ambiguous refresh; sign in again. Browser tabs serialize
+refreshes with Web Locks and persists a non-secret pending marker before spending
+the refresh ticket, requiring sign-in after an interrupted rotation. No credentials
+enter browser localStorage. All navigation/session checks use that same client.
 
-`GET /auth/devices` lists the caller's active native sessions; cookie-authenticated
-`POST /auth/devices/<id>/revoke` requires the existing CSRF token. Native
-`POST /auth/logout` revokes its own family. Account security-version changes and
-disabled/deleted accounts invalidate access and refresh credentials.
+Roles are one axis: `owner` > `admin` > `user`. Admins and the owner appear in the
+public term roster, manage forms and may list/look up users through `/admin/users`
+and `/admin/users/<id>`. Ordinary users cannot access any account-management
+endpoint. Admins can resolve ordinary-user identity disputes; only the owner
+manages roles or other administrators. Public roster snapshots exclude `user`
+even when their records have department/title/term fields. Public roster reads
+are not cached in the browser or CDN, so an old projection is never used after
+a role change. Ordinary students'
+identity and contact details are available only to themselves and staff. Other
+students see only their explicitly chosen nickname. Form receipts never expose
+an authenticated submitter's identity or contact details to their holder.
 
-New keys below `platform-v1/identity/native/`: `sessions/<id>.json`,
-`by-user/<user>/<id>.json`, `access/<sha256>.json`, `refresh/<sha256>.json`,
-`spent/<sha256>.json`, `revoked/<id>.json`, immutable `logins/<user>/<generation>.json`
-device-family heads, and versioned `state/<id>/` for existing security-setting
-operations. No raw token or device ID is stored. Access,
-refresh, spent and revoked records include `expiresAt`; maintenance may purge
-them **after** expiry. Login generations also carry `expiresAt`; preserve them
-until that expiry so an older family can never become current again. Keep
-revocation/spent markers until that expiry. Session
-and by-user records may be removed together after their 30-day expiry.
+Build `.server-build/platform.mjs` with `npm run build` and deploy the static
+output and function together. This contract replaces `/auth/token`,
+`/auth/token/refresh`, `/auth/legacy-profile-login` and `/members`; no redirects or
+compatibility readers remain.
 
-## Activities
+## Deployment migration
 
-All paths below are relative to `/api/platform`:
+Before deploying, quiesce identity writes and run
+`scripts/platform/migrate-accounts.mjs` with process-scoped `ACCOUNTS_PROJECT_ID`,
+`ACCOUNTS_BLOB_TOKEN`, and `STUDEV_PRIVATE_DIR` pointing outside the repository.
+Default invocation is read-only; inspect its counts, then run with `--apply`.
+It appends `member` → `admin` revisions, preserves UID/student/password/TOTP,
+validates student claims, fills a missing owner identity from the private owner
+profile if necessary, rebuilds roster snapshots, and removes the superseded
+cookie/native session keys. Existing devices must sign in again. Re-running is
+safe after a partial migration. Resolve any incomplete identities or conflicting
+claims before applying. Do not deploy the new reader until this step succeeds.
+The new initialization configuration additionally supplies
+`PLATFORM_OWNER_STUDENT_ID` and `PLATFORM_OWNER_REAL_NAME`; already initialized
+owners keep their stored identity.
 
-- `GET /activities`: upcoming/in-progress public activities, ordered by start;
-  pages of 100, with `next` as the next `?after=<id>` cursor.
-- `GET /me/activities`: the caller's upcoming activities, including unlisted.
-- `GET /activities/<id>`: public read, including unlisted links.
-- `POST /activities`: authenticated create.
-- `POST /activities/<id>`: owner update with `revision`.
-- `POST /activities/<id>/delete` (or `DELETE /activities/<id>`): owner delete
-  with `revision`.
+Read-only production preflight on 2026-10-31: 34 accounts, 32 `member` records to
+promote, 0 incomplete active profiles, 0 conflicting claims, 321 obsolete session
+**keys**. The migration was not applied by the accounts task.
 
-Input: `title` (1–80), `description` (0–2000), `startsAt` and `endsAt` (ISO with
-timezone), `visibility` (`public` or `unlisted`) and `place`. Place is either
-`{kind:"campus",id:"<packaged place ID>"}` or
-`{kind:"point",name:"<1–80 characters>",position:[longitude,latitude]}`.
-The server checks campus IDs against the fixed versioned package URL, not a
-caller-provided URL. Time range is at most 31 days, ending in the future and
-starting within a year. JSON is limited to 12 KiB. Creation is limited to 10 per
-account/hour; editing to 60/minute. Organiser identity comes from authentication,
-never submitted fields. Unlisted means link-only discoverability, not secrecy.
-
-New Blob prefixes: `platform-v1/activities/records/<id>/` (immutable revisions
-and current snapshot), `activities/index/<id>.json`, and
-`activities/by-user/<user>/<id>.json`. Delete leaves a tombstone. Existing form
-records, file storage and data package shapes are unchanged.
-
-Share URL: `https://studev.hicancan.top/map/?activity=<id>`.
-Android registers the host in `MainActivity.kt` only. The map module may call
-`ActivityEntryPoints.createAt(place.id)` (or the named-point overload) to open the
-editor. Domain-verification behavior uses the existing map intent filter.
-
-## Rollback
-
-Deploy the previous static output and platform function together. Leave the new
-namespaced Blob metadata in place; old code ignores it. No existing records or
-secrets need reverting. Native clients will need the new backend before sign-in
-or activity requests work again. Do not remove shared campus package versions
-that are still referenced by deployed functions or clients.
+The removed campus activity service was inventoried read-only at
+2026-10-31T15:30:02Z in project `makers-xubgsi8n79pp`, store
+`studev-collections`, exact prefix `platform-v1/activities/`. It contained 0 Blob
+keys and 0 activities (0 non-test activities). No production data was deleted.

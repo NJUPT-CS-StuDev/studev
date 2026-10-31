@@ -48,9 +48,12 @@ async function confirmAction(title: string, description: string, password = fals
   );
 }
 
-async function editRosterModal(user: User): Promise<{ nickname: string; term: string; department: string; title: string; signature: string; order: number } | null> {
+async function editRosterModal(user: User): Promise<{ studentId: string; realName: string; nickname: string; term: string; department: string; title: string; signature: string; order: number } | null> {
   const dialog = q<HTMLDialogElement>('[data-roster-edit-modal]');
   q('[data-roster-edit-title]').textContent = `编辑档案 · ${user.realName || user.nickname}`;
+  const studentInput = q<HTMLInputElement>('#roster-edit-student');
+  const realNameInput = q<HTMLInputElement>('#roster-edit-real-name');
+  studentInput.value = user.studentId; realNameInput.value = user.realName;
   const termInput = q<HTMLInputElement>('#roster-edit-term');
   const orderInput = q<HTMLInputElement>('#roster-edit-order');
   const deptInput = q<HTMLInputElement>('#roster-edit-department');
@@ -75,6 +78,8 @@ async function editRosterModal(user: User): Promise<{ nickname: string; term: st
         }
         const parsedOrder = Number.parseInt(orderInput.value, 10);
         resolve({
+          studentId: studentInput.value.trim().toUpperCase(),
+          realName: realNameInput.value.trim(),
           nickname: nickInput.value.trim(),
           term: termInput.value.trim(),
           department: deptInput.value.trim(),
@@ -270,8 +275,7 @@ function render() {
   q<HTMLButtonElement>('[data-profile-save]').disabled = profileBlocked;
   q('[data-account-content]').hidden = false;
   q('[data-account-logout]').hidden = false;
-  const staff = user.role !== 'member';
-  q('[data-account-mfa]').hidden = !staff && !user.totpEnabled;
+  q('[data-account-mfa]').hidden = false;
   if (user.role === 'owner') {
     document.querySelectorAll<HTMLElement>('[data-owner-only]').forEach((n) => (n.hidden = false));
   }
@@ -280,7 +284,7 @@ function render() {
     ? '已开启双重验证（登录与修改密码时校验 6 位动态码）。'
     : user.role === 'owner'
       ? '平台所有者账号须绑定动态验证器。'
-      : '可选安全增强：管理员可按需绑定动态验证器（非强制），日常管理无需动态码即可直接进入。';
+      : '可绑定认证器，登录时使用动态验证码或恢复码。';
   q('[data-totp-setup]').hidden = user.totpEnabled || !!current.passwordChangeRequired;
   if (!user.totpEnabled && current.passwordChangeRequired) q('[data-mfa-state]').textContent = '请先修改密码并重新登录，再绑定验证器。';
   const required = q('[data-account-required]');
@@ -303,7 +307,7 @@ function render() {
 }
 
 async function refreshMembers() {
-  const res = await api<{ items: User[] }>('/members');
+  const res = await api<{ items: User[] }>('/admin/users');
   members = res.items;
   members.sort((a, b) => ((a.order ?? 999) - (b.order ?? 999)) || String(a.studentId || '').localeCompare(String(b.studentId || '')));
   renderMembers();
@@ -312,8 +316,8 @@ async function refreshMembers() {
 function renderMembers() {
   const isOwner = current?.user.role === 'owner';
   const isStaff = current?.user.role === 'owner' || current?.user.role === 'admin';
-  const rosterCount = members.filter((u) => u.department).length;
-  q('[data-members-summary]').textContent = `中心共有 ${rosterCount} 位在编成员，点击任意成员可查看完整档案名片与联系方式。`;
+  const rosterCount = members.filter(u => ['admin', 'owner'].includes(u.role)).length;
+  q('[data-members-summary]').textContent = `共 ${members.length} 个账号，其中 ${rosterCount} 位管理员与所有者。身份资料仅限管理用途。`;
 
   const term = q<HTMLInputElement>('[data-members-search]').value.trim().toLowerCase();
   const deptFilter = q<HTMLSelectElement>('[data-members-dept-filter]').value;
@@ -386,7 +390,7 @@ function renderMembers() {
       select.style.padding = '6px 9px';
       select.style.minHeight = '34px';
       select.setAttribute('aria-label', `${display}的角色`);
-      for (const roleValue of ['member', 'admin']) {
+      for (const roleValue of ['user', 'admin']) {
         const option = el('option', labels[roleValue]);
         option.value = roleValue;
         select.append(option);
@@ -421,13 +425,13 @@ function renderMembers() {
     const controls = el('div', undefined, 'p-actions');
     controls.append(button('查看档案', () => openMemberCardModal(user)));
 
-    if (isStaff) {
+    if (isOwner || (isStaff && user.role === 'user')) {
       controls.append(
         button('编辑档案', () =>
           guard(async () => {
             const nextProfile = await editRosterModal(user);
             if (!nextProfile) return;
-            await api(`/members/${encodeURIComponent(user.id)}/profile`, {
+            await api(`/admin/users/${encodeURIComponent(user.id)}`, {
               revision: user.revision,
               ...nextProfile,
             });
@@ -445,8 +449,17 @@ function renderMembers() {
       );
     }
 
-    if (isOwner && !isSelf) {
+    if ((isOwner || (isStaff && user.role === 'user')) && !isSelf) {
       const isPending = user.status === 'pending';
+      if (isPending) controls.append(button('设置密码并激活', () => guard(async () => {
+        const password = await confirmAction('激活账号', `核实 ${display}（${ref}）的身份后设置临时密码。对方首次登录必须修改密码。`, true);
+        if (password === null) return;
+        await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, { password });
+        const latest = await api<{ user: User }>(`/admin/users/${encodeURIComponent(user.id)}`);
+        await api(`/admin/users/${encodeURIComponent(user.id)}`, { revision: latest.user.revision, status: 'active' });
+        await refreshMembers();
+        message(status, '账号已激活，请向本人安全交付临时密码。', 'success');
+      })));
       if (!isPending) {
         controls.append(
           button(
@@ -766,7 +779,8 @@ void (async () => {
       status.hidden = true;
       return;
     }
-    document.querySelectorAll<HTMLElement>('[data-member-only]').forEach((n) => (n.hidden = false));
+    document.querySelectorAll<HTMLElement>('[data-signed-in]').forEach((n) => (n.hidden = false));
+    document.querySelectorAll<HTMLElement>('[data-staff-only]').forEach(n => n.hidden = current!.user.role === 'user');
     document.dispatchEvent(new CustomEvent('studev:account', { detail: { nickname: nicknameOf(current.user), role: current.user.role } }));
     render();
     initPasswordToggles();
@@ -774,9 +788,9 @@ void (async () => {
     status.hidden = true;
     const tabParam = new URLSearchParams(location.search).get('tab');
     const setupBlocked = !!current.passwordChangeRequired || !!current.enrollmentRequired || !!current.mfaRequired || !!current.profileRequired || !current.user.profileComplete;
-    switchTab(setupBlocked || !tabParam ? 'profile' : tabParam === 'settings' ? 'settings' : tabParam === 'members' || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile');
+    switchTab(setupBlocked || !tabParam ? 'profile' : tabParam === 'settings' ? 'settings' : (tabParam === 'members' && current.user.role !== 'user') || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile');
     if (!setupBlocked) {
-      void refreshMembers().catch(() => {});
+      if (current.user.role !== 'user') void refreshMembers().catch(() => {});
       if (tabParam === 'audit' && current.user.role === 'owner') void guard(refreshAudit);
     }
   } catch (e) {

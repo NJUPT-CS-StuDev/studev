@@ -68,29 +68,21 @@ class IntegrationSmokeTest {
         }
         bitmap.recycle()
     }
-    @Test fun accountActivitiesReturnToTheSameCampusTab() {
+    @Test fun accountReturnsToTheSameCampusTab() {
         link("search/")
         wait("home")
-        link("search/timetable/?class=B240402&week=5"); wait("timetable-week"); shot("timetable")
-        compose.onNodeWithTag("tab-home").performClick(); wait("home"); shot("home-tab")
-        compose.onNodeWithTag("tab-me").performClick(); wait("me"); shot("account-activities-entry")
+        compose.onNodeWithTag("tab-me").performClick(); wait("me"); shot("account-entry")
         compose.onNodeWithTag("open-account").performClick()
         compose.onNodeWithText("账号", substring = false).assertIsDisplayed(); shot("account")
         compose.activityRule.scenario.recreate()
         compose.onNodeWithText("账号", substring = false).assertIsDisplayed()
         back(); wait("me")
-        compose.onNodeWithTag("open-activities").performClick(); wait("activity-host-activities"); shot("activities")
-        compose.activityRule.scenario.recreate()
-        wait("activity-host-activities")
-        back(); wait("me")
-        compose.onNodeWithTag("activity-host-activities").assertDoesNotExist()
-        compose.onNodeWithTag("tab-timetable").performClick(); wait("timetable-week")
-        back(); wait("home")
+        compose.onNodeWithTag("tab-home").performClick(); wait("home")
         compose.onNodeWithTag("tab-me").performClick(); wait("me")
-        compose.onNodeWithTag("open-account").performClick(); wait("activity-host-account")
+        compose.onNodeWithTag("open-account").performClick(); wait("account-host")
         link("map/?place=${Uri.encode("图书馆")}")
-        compose.waitUntil(30_000) { compose.onAllNodesWithText("一周时间").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("activity-host-account").assertDoesNotExist()
+        compose.waitUntil(30_000) { compose.onAllNodesWithTag("account-host").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("account-host").assertDoesNotExist()
         backTo("home-search"); back(); wait("home")
     }
     @Test fun mapHomeHoursPlanningAndBackShareOneShell() {

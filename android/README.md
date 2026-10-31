@@ -44,7 +44,7 @@ or package-install permission.
 ## Data and feature ownership
 
 Packages under `top.hicancan.studev` name their feature: `campus` owns the product
-shell, `activities` owns campus activities, `account` owns account screens,
+shell, `account` owns account screens,
 `data` owns release readers and models, and `map`, `navigation`, `location`,
 `search`, `timetable`, `exams`, `rooms`, `me`, `calendar`, `reminders` and `widget`
 own their respective service or device integration. `ui/theme` owns shared
@@ -90,6 +90,22 @@ alternatives, maneuvers, matching, rerouting and arrival come from wayfind.
 Live navigation uses a foreground service, notification, wake lock and Chinese
 TTS. Exit stops the session; a killed process does not restart a stale trip.
 
+## Accounts
+
+The account surface supports student registration, login, profile editing,
+password changes, TOTP enrollment/recovery and a shared web/Android device list.
+Both clients call the same identity endpoints; see cloud-functions/README.md.
+Only credentials differ: HttpOnly cookies on web, Keystore-encrypted bearer
+credentials on Android. Registration creates role user; roles admin/owner
+control staff visibility and management on the server.
+
+For local account acceptance, run `node android/tooling/platform-fixture.mjs`,
+build debug with `'-Pstudev.platformHost=http://127.0.0.1:4319'`, and reverse
+port 4319 on the explicitly selected emulator. `AccountFlowTest` registers and
+signs in against the actual platform handler with an in-memory Blob adapter;
+it verifies the mixed device list and captures screenshots. The fixture never
+connects to production. Release always uses the product origin.
+
 ## Device verification
 
 Always use `adb -s`. Change only studev on the owner's phone; never fake its
@@ -105,7 +121,7 @@ $device = 'emulator-5554' # or the explicitly identified owner's phone
 ```
 
 `MapSmokeTest`, `CampusTabsTest` and `NavigationTest` exercise actual native data
-and kernels. `IntegrationSmokeTest` checks tab/back behavior, account/activity
+and kernels. `IntegrationSmokeTest` checks tab/back behavior, account
 overlays, deep links, opening hours and rendered routes. Screenshots are saved
 inside the app's external files directory. Tests restore app theme preferences;
 they do not change device-wide theme. Keep evidence under `D:\Temp\codex/<task>`.

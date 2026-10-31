@@ -16,7 +16,9 @@ import java.io.ByteArrayOutputStream
 
 const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-@Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false)
+@Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0)
+@Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
+@Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
 @Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null)
 interface AccountStorage { suspend fun read(): StoredAccount; suspend fun write(value: StoredAccount) }
@@ -32,7 +34,7 @@ internal fun InputStream.accountBytes(limit: Int): ByteArray {
 class HttpsPlatformTransport : PlatformTransport {
     override suspend fun send(path: String, body: JsonObject?, bearer: String?): PlatformReply = withContext(Dispatchers.IO) {
         require(path.startsWith('/') && !path.startsWith("//") && !path.contains('\\'))
-        val connection = URI(PLATFORM_ORIGIN + "/api/platform" + path).toURL().openConnection() as HttpURLConnection
+        val connection = URI(BuildConfig.PLATFORM_HOST + "/api/platform" + path).toURL().openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 15_000; connection.readTimeout = 15_000
             connection.instanceFollowRedirects = false
@@ -71,7 +73,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     )
     suspend fun signIn(studentId: String, password: String, totp: String, deviceName: String): AccountUser = lock.withLock {
         val stored = storage.read()
-        val value = checked(transport.send("/auth/token", buildJsonObject {
+        val value = checked(transport.send("/auth/login", buildJsonObject {
             put("studentId", studentId.trim()); put("password", password); put("deviceId", stored.deviceId); put("deviceName", deviceName.take(80))
             if (totp.isNotBlank()) put("totp", totp.trim())
         }, null))
@@ -79,6 +81,24 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         storage.write(stored.copy(session = tokens(value, user)))
         user
     }
+    suspend fun register(studentId: String, realName: String, nickname: String, qq: String, password: String) {
+        checked(transport.send("/auth/register", buildJsonObject {
+            put("studentId", studentId.trim()); put("realName", realName.trim()); put("nickname", nickname.trim())
+            put("qq", qq.trim()); put("password", password)
+        }, null))
+    }
+    suspend fun state(): AccountState {
+        val value = request("/auth/session", authenticated = true)
+        val state = accountJson.decodeFromJsonElement<AccountState>(value)
+        lock.withLock {
+            val stored = storage.read()
+            if (stored.session?.user?.id == state.user.id) storage.write(stored.copy(session = stored.session.copy(user = state.user)))
+        }
+        return state
+    }
+    suspend fun devices(): List<AccountDevice> = accountJson.decodeFromJsonElement(request("/auth/devices", authenticated = true).getValue("items"))
+    suspend fun revokeDevice(id: String) { request("/auth/devices/$id/revoke", buildJsonObject {}, authenticated = true) }
+    suspend fun forget() = lock.withLock { val stored = storage.read(); storage.write(stored.copy(session = null)) }
     private suspend fun access(forceFor: AccountSession? = null): AccountSession = lock.withLock {
         val stored = storage.read()
         val session = stored.session ?: throw PlatformFailure(401, "AUTH_REQUIRED", "请先登录。")
@@ -89,7 +109,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
             // might have committed. Persist the spent intent BEFORE sending,
             // so even process death requires sign-in rather than token replay.
             storage.write(stored.copy(session = null))
-            val value = checked(transport.send("/auth/token/refresh", buildJsonObject { put("refreshToken", session.refreshToken); put("deviceId", stored.deviceId) }, null))
+            val value = checked(transport.send("/auth/refresh", buildJsonObject { put("refreshToken", session.refreshToken); put("deviceId", stored.deviceId) }, null))
             val fresh = tokens(value, session.user)
             storage.write(stored.copy(session = fresh)); fresh
         } catch (failure: Exception) {

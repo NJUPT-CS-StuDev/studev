@@ -61,7 +61,7 @@ login.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<
         if (data.user) {
           localStorage.setItem('studev_auth_user', JSON.stringify({
             nickname: data.user.nickname || data.user.studentId,
-            role: data.user.role || 'member',
+            role: data.user.role || 'user',
             verifiedAt: Date.now()
           }));
         }
@@ -85,7 +85,7 @@ catch (e) {
 register.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<HTMLButtonElement>('button[type=submit]', register); try {
     if (q<HTMLInputElement>('#register-password').value !== q<HTMLInputElement>('#register-confirm').value)
         throw new Error('两次输入的密码不一致。');
-    await busy(b, async () => { const qq = q<HTMLInputElement>('#register-qq').value.trim();const studentId=q<HTMLInputElement>('#register-student-id').value.trim().toUpperCase(); await api('/auth/register', { qq, studentId, realName: q<HTMLInputElement>('#register-real-name').value.trim(), password: q<HTMLInputElement>('#register-password').value, inviteCode: q<HTMLInputElement>('#register-invite').value.trim().toUpperCase() }); register.reset(); showTab('login'); q<HTMLInputElement>('#login-student-id').value = studentId; q<HTMLInputElement>('#login-password').focus(); message(status, '账号注册成功，请使用学号和新密码登录。', 'success'); });
+    await busy(b, async () => { const qq = q<HTMLInputElement>('#register-qq').value.trim();const studentId=q<HTMLInputElement>('#register-student-id').value.trim().toUpperCase(); await api('/auth/register', { qq, studentId, realName: q<HTMLInputElement>('#register-real-name').value.trim(), password: q<HTMLInputElement>('#register-password').value, nickname: q<HTMLInputElement>('#register-nickname').value.trim() }); register.reset(); showTab('login'); q<HTMLInputElement>('#login-student-id').value = studentId; q<HTMLInputElement>('#login-password').focus(); message(status, '账号注册成功，请使用学号和新密码登录。', 'success'); });
 }
 catch (e) {
     message(status, errorText(e), 'error');
@@ -100,24 +100,5 @@ void api<{
 q<HTMLInputElement>('#register-student-id').addEventListener('blur',event=>{const input=event.currentTarget as HTMLInputElement;input.value=input.value.trim().toUpperCase();});
 
 q<HTMLInputElement>('#login-student-id').addEventListener('blur',event=>{const input=event.currentTarget as HTMLInputElement;input.value=input.value.trim().toUpperCase();});
-
-q<HTMLInputElement>('#register-invite')?.addEventListener('blur', event => {
-  const input = event.currentTarget as HTMLInputElement;
-  input.value = input.value.trim().toUpperCase();
-});
-
-const urlParams = new URLSearchParams(location.search);
-const inviteParam = urlParams.get('invite') || urlParams.get('code');
-const tabParam = urlParams.get('tab');
-if (inviteParam) {
-  const inviteInput = q<HTMLInputElement>('#register-invite');
-  if (inviteInput) {
-    inviteInput.value = inviteParam.trim().toUpperCase();
-    showTab('register');
-    message(status, '已自动填入社团邀请码', 'success');
-  }
-} else if (tabParam === 'register') {
-  showTab('register');
-}
 
 initPasswordToggles();

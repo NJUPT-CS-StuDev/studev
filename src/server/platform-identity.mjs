@@ -1,17 +1,15 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { digest, hashPassword, mac, safeEqual, validPasswordHash, verifyPassword } from './collection-auth.mjs';
+import { digest, hashPassword, safeEqual, validPasswordHash, verifyPassword } from './collection-auth.mjs';
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './platform-common.mjs';
 import { isConflict } from './platform-store.mjs';
-import { createNativeTokens, hasAuthorization, nativeBootstrap } from './platform-tokens.mjs';
+import { createSessions, hasAuthorization, bearerBootstrap } from './platform-sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './platform-totp.mjs';
 import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl } from './platform-roster.mjs';
 
 const API = '/api/platform';
-const MAX_SESSION_SECONDS = 7200;
 const ID = /^[a-f0-9-]{36}$/;
 const QQ = /^[1-9]\d{4,11}$/;
 const userKey = (id) => `identity/users/${id}`;
-const sessionKey = (id) => `identity/sessions/${id}`;
 const staffRole = (role) => role === 'admin' || role === 'owner';
 const iso = (now) => new Date(now()).toISOString();
 const secretToken = () => randomBytes(32).toString('base64url');
@@ -56,18 +54,15 @@ export function createIdentity({ repo, env, now = Date.now }) {
   const origin = platformOrigin(env);
   const local = origin.startsWith('http://');
   const cookieName = local ? 'studev_platform_dev' : '__Host-studev_platform';
+  const refreshCookieName = local ? 'studev_refresh_dev' : '__Host-studev_refresh';
   const sessionSecret = env.PLATFORM_SESSION_SECRET;
   if (typeof sessionSecret !== 'string' || sessionSecret.length < 32 || !validPasswordHash(env.PLATFORM_OWNER_PASSWORD_HASH) || !QQ.test(String(env.PLATFORM_OWNER_QQ || '')) || !/^[A-Za-z0-9+/]{43}=$/.test(String(env.PLATFORM_ENCRYPTION_KEY || ''))) {
     fail(503, 'NOT_CONFIGURED', '平台身份配置尚未完成。');
   }
   let bootstrapPromise;
-  const native = createNativeTokens({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
-  const bearerRequests = new WeakMap();
-  function bearerFor(request) {
-    if (!bearerRequests.has(request)) bearerRequests.set(request, native.authenticate(request));
-    return bearerRequests.get(request);
-  }
-  const authSessionKey = (auth) => auth.kind === 'bearer' ? `identity/native/state/${auth.sessionId}` : sessionKey(auth.sessionId);
+  const sessions = createSessions({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
+  const authRequests = new WeakMap();
+  const authSessionKey = (auth) => `identity/devices/state/${auth.sessionId}`;
   function publicUser(user) {
     return {
       id: user.id,
@@ -109,31 +104,31 @@ export function createIdentity({ repo, env, now = Date.now }) {
         return;
       }
       const user = { id: index.id, qq, nickname: text(env.PLATFORM_OWNER_NICKNAME || 'StuDev Owner', '昵称', 40, true), email: `${qq}@qq.com`, emailVerified: false,
-        studentId: '', realName: '', identityVerified: false,
+        studentId: normalizeStudentId(env.PLATFORM_OWNER_STUDENT_ID), realName: normalizeRealName(env.PLATFORM_OWNER_REAL_NAME), identityVerified: true,
         term: '', department: '', title: '', order: 999, signature: '',
         role: 'owner', status: 'active', passwordHash: env.PLATFORM_OWNER_PASSWORD_HASH, mustChangePassword: true,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now) };
-      try { await repo.append(userKey(index.id), user, 0); await repo.audit('system', 'identity.owner.initialized', index.id); }
+      try { await claimStudent(user.studentId, user.id); await repo.append(userKey(index.id), user, 0); await repo.audit('system', 'identity.owner.initialized', index.id); }
       catch (error) { if (!isConflict(error)) throw error; const winner = await repo.latest(userKey(index.id)); if (winner?.role !== 'owner') throw error; }
     })();
     return bootstrapPromise;
   }
-  function sessionCookie(token, seconds = MAX_SESSION_SECONDS) {
-    return `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${seconds}${local ? '' : '; Secure'}`;
+  function sessionCookie(name, token, seconds) {
+    return `${name}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${seconds}${local ? '' : '; Secure'}`;
   }
-  function seal(payload) {
-    const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    return `${data}.${mac(sessionSecret, data)}`;
+  function credentialResponse({ credentials, session }, body = {}) {
+    const payload = { ...body, deviceSessionId: session.id, csrfToken: session.csrfToken };
+    if (session.kind === 'bearer') return response({ ...payload, ...credentials });
+    const result = response(payload);
+    result.headers.append('Set-Cookie', sessionCookie(cookieName, credentials.accessToken, credentials.expiresIn));
+    result.headers.append('Set-Cookie', sessionCookie(refreshCookieName, credentials.refreshToken, Math.max(0, Math.floor((session.expiresAt - now()) / 1000))));
+    return result;
   }
-  function open(token) {
-    if (typeof token !== 'string' || token.length > 1024) return null;
-    const [data, sig, extra] = token.split('.');
-    if (!data || !sig || extra || !safeEqual(mac(sessionSecret, data), sig)) return null;
-    try {
-      const value = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-      const seconds = Math.floor(now() / 1000);
-      return value.v === 1 && /^[a-f0-9]{48}$/.test(value.sid) && Number.isSafeInteger(value.exp) && value.exp > seconds && value.exp <= seconds + MAX_SESSION_SECONDS ? value : null;
-    } catch { return null; }
+  function signedOutResponse(kind) {
+    if (kind === 'bearer') return response({ ok: true });
+    const result = response({ ok: true });
+    for (const name of [cookieName, refreshCookieName]) result.headers.append('Set-Cookie', sessionCookie(name, '', 0));
+    return result;
   }
   function setupStatus(user, session) {
     return {
@@ -146,16 +141,13 @@ export function createIdentity({ repo, env, now = Date.now }) {
   }
   async function authenticate(request, { required = false, staff = false, owner = false, csrf = false, allowEnrollment = false } = {}) {
     await bootstrap();
-    const bearer = hasAuthorization(request) ? await bearerFor(request) : null;
-    const payload = bearer ? null : open(cookieValue(request, cookieName));
-    let session = bearer?.session, user = bearer?.user;
-    if (payload) {
-      session = await repo.latest(sessionKey(payload.sid));
-      if (session && !session.revoked && session.expiresAt > now() && ID.test(session.userId)) {
-        user = await repo.latest(userKey(session.userId));
-        if (!user || user.status !== 'active' || user.securityVersion !== session.securityVersion) user = null;
-      }
-    }
+    const kind = hasAuthorization(request) ? 'bearer' : 'cookie';
+    const header = request.headers.get('authorization') || '';
+    const token = kind === 'bearer' ? /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header)?.[1] : cookieValue(request, cookieName);
+    if (!authRequests.has(request)) authRequests.set(request,
+      kind === 'cookie' && !token ? Promise.resolve(null) : sessions.authenticate(token, kind));
+    const auth = await authRequests.get(request);
+    const user = auth?.user, session = auth?.session;
     if (!user) {
       if (required || staff || owner || csrf) fail(401, 'AUTH_REQUIRED', '请先登录。');
       return null;
@@ -165,21 +157,15 @@ export function createIdentity({ repo, env, now = Date.now }) {
     const state = setupStatus(user, session);
     if (!allowEnrollment && (state.passwordChangeRequired || state.enrollmentRequired || state.mfaRequired || state.profileRequired)) fail(403, 'AUTH_SETUP_REQUIRED', '请先完成身份资料、密码修改与安全验证。');
     if ((owner || user.role === 'owner' || user.totp) && !allowEnrollment && !session.mfaVerified) fail(403, 'MFA_REQUIRED', '请完成动态验证码验证。');
-    if (csrf && !bearer) {
+    if (csrf && kind === 'cookie') {
       requireOrigin(request, env);
       if (!safeEqual(request.headers.get('x-csrf-token') || '', session.csrfToken)) fail(403, 'CSRF_REJECTED', '页面已失效，请刷新后重试。');
     }
-    return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind: bearer ? 'bearer' : 'cookie' };
+    return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind };
   }
-  async function startSession(user, mfaVerified) {
-    const id = randomBytes(24).toString('hex');
-    const session = await repo.append(sessionKey(id), { id, userId: user.id, securityVersion: user.securityVersion, csrfToken: secretToken(), mfaVerified,
-      expiresAt: now() + MAX_SESSION_SECONDS * 1000, revoked: false, createdAt: iso(now) }, 0);
-    return { session, cookie: sessionCookie(seal({ v: 1, sid: id, exp: Math.floor(session.expiresAt / 1000) })) };
-  }
-  async function sessionResponse(user, mfaVerified) {
-    const { session, cookie } = await startSession(user, mfaVerified);
-    return response({ user: publicUser(user), csrfToken: session.csrfToken, ...setupStatus(user, session) }, 200, { 'Set-Cookie': cookie });
+  async function sessionResponse(user, mfaVerified, body, kind) {
+    const started = await sessions.start(user, body, { kind, mfaVerified });
+    return credentialResponse(started, { user: publicUser(user), ...setupStatus(user, started.session) });
   }
   async function saveUser(current, changes) {
     return repo.append(userKey(current.id), { ...current, ...changes, updatedAt: iso(now) }, current.revision);
@@ -199,10 +185,10 @@ export function createIdentity({ repo, env, now = Date.now }) {
     }
   }
   async function bindStudent(current, studentId, realName) {
-    if (!current.studentId) {
-      // Fix a single binding target before writing the global student-ID index. Two
-      // first-time profile requests must not reserve two IDs for one account.
-      const key = `identity/binding/${current.id}.json`;
+    if (studentId !== current.studentId) {
+      // Reserve one target per account revision before claiming a student ID.
+      // Initial binding and staff corrections use this same mechanism.
+      const key = `identity/binding/${current.id}/${current.revision}.json`;
       let intent = await repo.get(key);
       if (!intent) {
         // Reject the usual typo/occupied-ID case without leaving a binding intent.
@@ -315,7 +301,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
             title: seed.title,
             order: seed.order,
             signature: seed.signature,
-            role: 'member',
+            role: 'admin',
             status: 'pending',
             passwordHash: '',
             mustChangePassword: false,
@@ -331,50 +317,34 @@ export function createIdentity({ repo, env, now = Date.now }) {
     }
     return rebuildRoster(term);
   }
-  async function bodyFor(request) { requireOrigin(request, env); return readJson(request, 8192); }
 
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
-    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && !path.startsWith(`${API}/members`) && path !== `${API}/admin/audit`) return null;
+    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
     await bootstrap();
     const request = context.request;
     const route = path.slice(API.length);
     const method = request.method;
-    if (method === 'POST' && ['/auth/token', '/auth/token/refresh'].includes(route)) {
-      if (!nativeBootstrap(request, path)) requireOrigin(request, env);
+    if (method === 'POST' && route === '/auth/refresh') {
+      const kind = bearerBootstrap(request, path) ? 'bearer' : 'cookie';
+      if (kind === 'cookie') requireOrigin(request, env);
       const body = await readJson(request, 8192);
-      if (route === '/auth/token/refresh') {
-        await repo.throttle('token-refresh-client', clientId(context), 60, 60);
-        return response(await native.refresh(body));
-      }
-      // Share both password rate-limit buckets with the browser login.
-      await repo.throttle('login-client', clientId(context), 60, 60);
-      const identifier = normalizeStudentId(body.studentId);
-      await repo.throttle('login-account', identifier, 10, 60);
-      const index = await repo.get(studentKey(identifier));
-      const user = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
-      const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
-      if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
-      if (user.totp) {
-        if (!body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
-        await consumeFactor(user, body.totp);
-      }
-      const state = setupStatus(user, { mfaVerified: Boolean(user.totp) });
-      if (state.enrollmentRequired || state.passwordChangeRequired || state.profileRequired) fail(403, 'AUTH_SETUP_REQUIRED', '请先在网页账号中心完成身份资料、密码修改与安全设置。');
-      return response({ ...await native.start(user, body), user: publicUser(user) });
+      await repo.throttle('token-refresh-client', clientId(context), 60, 60);
+      if (kind === 'cookie') body.refreshToken = cookieValue(request, refreshCookieName);
+      return credentialResponse(await sessions.refresh(body, kind));
     }
     if (method === 'GET' && route === '/auth/devices') {
       const auth = await authenticate(request, { required: true });
-      return response({ items: await native.list(auth.user.id) });
+      return response({ items: (await sessions.list(auth.user.id)).map(item => ({ ...item, current: item.id === auth.sessionId })) });
     }
     const device = route.match(/^\/auth\/devices\/([a-f0-9-]{36})\/revoke$/);
     if (method === 'POST' && device) {
       const auth = await authenticate(request, { required: true, csrf: true });
-      await native.revokeOwned(auth.user.id, device[1]);
+      await sessions.revokeOwned(auth.user.id, device[1]);
       await repo.audit(auth.user.id, 'identity.device.revoked', device[1]);
       return response({ ok: true });
     }
-    if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: validPasswordHash(env.PLATFORM_REGISTRATION_HASH), emailDeliveryEnabled: false });
+    if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: true, emailDeliveryEnabled: false });
     if (method === 'GET' && route === '/public/roster') {
       const url = new URL(request.url);
       const term = (url.searchParams.get('term') || '2026-2027').trim();
@@ -382,35 +352,12 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
       if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) snapshot = await seedAndSyncRoster(term);
-      return response(snapshot, 200, { 'Cache-Control': 'public, max-age=10, stale-while-revalidate=60' });
+      return response(snapshot);
     }
-    if (method === 'GET' && route === '/members') {
-      const auth = await authenticate(request, { required: true });
-      const currentRoster = await repo.get('roster/2026-2027.json');
-      if (!currentRoster || currentRoster.schema !== ROSTER_SCHEMA) {
-        await seedAndSyncRoster('2026-2027');
-      }
-      const users = await loadAllUsers();
-      const visible = auth.user.role === 'owner' ? users : users.filter((u) => u.status !== 'disabled');
-      return response({ items: visible.map(publicUser) });
-    }
-    const memberProfile = route.match(/^\/members\/([a-f0-9-]{36})\/profile$/);
-    if (method === 'POST' && memberProfile) {
-      const auth = await authenticate(request, { staff: true, csrf: true });
-      const user = await loadUser(memberProfile[1]);
-      const body = await readJson(request, 8192);
-      if (body.revision !== user.revision) fail(409, 'REVISION_CONFLICT', '档案已更新，请刷新后重试。');
-      const rawNick = body.nickname === undefined ? undefined : String(body.nickname).trim();
-      const nickname = rawNick === undefined ? user.nickname : rawNick === '' ? (user.realName || user.qq) : text(rawNick, '昵称', 40, true);
-      const term = body.term === undefined ? (user.term || '') : text(body.term, '届别', 32, false);
-      const department = body.department === undefined ? (user.department || '') : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
-      const title = body.title === undefined ? (user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
-      const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
-      const order = body.order === undefined ? (user.order ?? 999) : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
-      const updated = await saveUser(user, { nickname, term, department, title, signature, order });
-      if (user.term || updated.term) await rebuildRoster(updated.term || user.term);
-      await repo.audit(auth.user.id, 'identity.user.updated', user.id, { department, term });
-      return response({ user: publicUser(updated) });
+    const userLookup = route.match(/^\/admin\/users\/([a-f0-9-]{36})$/);
+    if (method === 'GET' && userLookup) {
+      await authenticate(request, { staff: true });
+      return response({ user: publicUser(await loadUser(userLookup[1])) });
     }
     if (method === 'POST' && route === '/admin/roster/sync') {
       const auth = await authenticate(request, { owner: true, csrf: true });
@@ -422,50 +369,17 @@ export function createIdentity({ repo, env, now = Date.now }) {
       return response({ snapshot });
     }
     if (method === 'POST' && route === '/auth/register') {
-      const body = await bodyFor(request);
+      if (!bearerBootstrap(request, path)) requireOrigin(request, env);
+      const body = await readJson(request, 8192);
       await repo.throttle('register-client', clientId(context), 60, 600);
       const qq = qqValue(body.qq), password = validatePassword(body.password);
       const studentId = normalizeStudentId(body.studentId), realName = normalizeRealName(body.realName);
-      const nickname = body.nickname === undefined || body.nickname === '' ? realName : text(body.nickname, '昵称', 40, true);
+      const nickname = text(body.nickname, '昵称', 40, true);
       await repo.throttle('register-account', qq, 3, 600);
-      if (!validPasswordHash(env.PLATFORM_REGISTRATION_HASH)) fail(403, 'REGISTRATION_CLOSED', '注册暂未开放。');
-      const rawInvite = typeof body.inviteCode === 'string' ? body.inviteCode.trim() : '';
-      let inviteValid = await verifyPassword(rawInvite, env.PLATFORM_REGISTRATION_HASH);
-      if (!inviteValid && rawInvite.toUpperCase() !== rawInvite) {
-        inviteValid = await verifyPassword(rawInvite.toUpperCase(), env.PLATFORM_REGISTRATION_HASH);
-      }
-      if (!inviteValid) fail(403, 'INVITE_INVALID', '注册邀请码不正确。');
-
       // Check if this studentId belongs to a pre-seeded pending roster member
       const studentClaim = await repo.get(studentKey(studentId));
       const claimedUser = studentClaim?.id && ID.test(studentClaim.id) ? await repo.latest(userKey(studentClaim.id)) : null;
-      if (claimedUser && claimedUser.status === 'pending') {
-        const indexKey = `identity/qq/${qq}.json`;
-        const qqIndex = await repo.get(indexKey);
-        if (qqIndex && qqIndex.id !== claimedUser.id && await repo.latest(userKey(qqIndex.id))) {
-          fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录或联系所有者。');
-        }
-        if (claimedUser.qq && claimedUser.qq !== qq) {
-          const oldQqIndex = await repo.get(`identity/qq/${claimedUser.qq}.json`);
-          if (oldQqIndex?.id === claimedUser.id) await repo.remove(`identity/qq/${claimedUser.qq}.json`);
-        }
-        if (!qqIndex || qqIndex.id !== claimedUser.id) {
-          await repo.put(indexKey, { id: claimedUser.id });
-        }
-        const activated = await saveUser(claimedUser, {
-          qq,
-          email: `${qq}@qq.com`,
-          nickname: body.nickname === undefined || body.nickname === '' ? (claimedUser.nickname || realName) : nickname,
-          realName,
-          status: 'active',
-          passwordHash: await hashPassword(password),
-          mustChangePassword: false,
-          securityVersion: secretToken(),
-        });
-        if (activated.term) await rebuildRoster(activated.term);
-        await repo.audit(activated.id, 'identity.registered', activated.id, { activatedPending: true });
-        return response({ user: publicUser(activated) }, 201);
-      }
+      if (claimedUser?.status === 'pending') fail(409, 'ACCOUNT_PENDING_REVIEW', '此学号已有预录账号，请联系管理员核实并激活。');
 
       const indexKey = `identity/qq/${qq}.json`;
       let index = await repo.get(indexKey);
@@ -482,29 +396,30 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const { id } = index, { passwordHash } = index.registration;
       if (await repo.latest(userKey(id))) fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录。');
       await claimStudent(studentId, id);
-      const user = await repo.append(userKey(id), { id, qq, nickname, email: `${qq}@qq.com`, emailVerified: false, role: 'member', status: 'active',
+      const user = await repo.append(userKey(id), { id, qq, nickname, email: `${qq}@qq.com`, emailVerified: false, role: 'user', status: 'active',
         studentId, realName, identityVerified: false,
         term: '', department: '', title: '', order: 999, signature: '',
         passwordHash, securityVersion: secretToken(), mustChangePassword: false, totp: null, createdAt: iso(now), updatedAt: iso(now) }, 0);
       await repo.audit(id, 'identity.registered', id);
       return response({ user: publicUser(user) }, 201);
     }
-    if (method === 'POST' && ['/auth/login', '/auth/legacy-profile-login'].includes(route)) {
-      const body = await bodyFor(request);
+    if (method === 'POST' && route === '/auth/login') {
+      const kind = bearerBootstrap(request, path) ? 'bearer' : 'cookie';
+      if (kind === 'cookie') requireOrigin(request, env);
+      const body = await readJson(request, 8192);
       await repo.throttle('login-client', clientId(context), 60, 60);
-      const legacy = route === '/auth/legacy-profile-login';
-      if (!legacy && body.qq !== undefined) fail(400, 'STUDENT_LOGIN_REQUIRED', '请使用学号登录，QQ 仅作为联系方式。');
-      const identifier = legacy ? qqValue(body.qq) : normalizeStudentId(body.studentId);
-      await repo.throttle(legacy ? 'legacy-login-account' : 'login-account', identifier, 10, 60);
-      const index = await repo.get(legacy ? `identity/qq/${identifier}.json` : studentKey(identifier));
+      if (body.qq !== undefined) fail(400, 'INVALID_STUDENT_ID', '请使用学号登录，QQ 仅作为联系方式。');
+      const identifier = normalizeStudentId(body.studentId);
+      await repo.throttle('login-account', identifier, 10, 60);
+      const index = await repo.get(studentKey(identifier));
       const user = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
-      // Use a real hash even for unknown users to avoid the cheap account-existence timing path.
       const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
-      const validIdentity = legacy ? user?.qq === identifier && !profileComplete(user) && !index.registration : user?.studentId === identifier;
-      if (!correct || !user || !validIdentity || user.status !== 'active') fail(401, 'LOGIN_FAILED', legacy ? '旧账号迁移登录不可用，请联系所有者。' : '学号或密码不正确，或账号尚未激活/已停用。');
-      let mfaVerified = false;
-      if (user.totp && body.totp) { await consumeFactor(user, body.totp); mfaVerified = true; }
-      return sessionResponse(user, mfaVerified);
+      if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
+      if (user.totp) {
+        if (!body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
+        await consumeFactor(user, body.totp);
+      }
+      return sessionResponse(user, Boolean(user.totp), body, kind);
     }
     if (method === 'GET' && route === '/auth/session') {
       const auth = await authenticate(request, { required: true, allowEnrollment: true });
@@ -512,12 +427,8 @@ export function createIdentity({ repo, env, now = Date.now }) {
     }
     if (method === 'POST' && route === '/auth/logout') {
       const auth = await authenticate(request, { required: true, csrf: true, allowEnrollment: true });
-      if (auth.kind === 'bearer') {
-        await native.revokeOwned(auth.user.id, auth.sessionId);
-        return response({ ok: true });
-      }
-      await repo.append(authSessionKey(auth), { ...auth.session, revoked: true, pendingTotp: null }, auth.session.revision || 0);
-      return response({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+      await sessions.revokeOwned(auth.user.id, auth.sessionId);
+      return signedOutResponse(auth.kind);
     }
     if (method === 'POST' && route === '/auth/profile') {
       const auth = await authenticate(request, { required: true, csrf: true, allowEnrollment: true });
@@ -530,10 +441,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const realName = body.realName === undefined && current.realName ? current.realName : normalizeRealName(body.realName);
       if ((current.studentId && studentId !== current.studentId) || (current.realName && realName !== current.realName)) fail(403, 'IDENTITY_LOCKED', '学号与真实姓名绑定后不可自行修改，请联系所有者核对。');
       const changedIdentity = studentId !== current.studentId || realName !== current.realName;
-      // Empty nickname clears it (falls back to realName, which display layers treat as "no nickname").
-      const nickname = body.nickname === undefined ? (current.nickname || realName)
-        : String(body.nickname).trim() === '' ? realName
-        : text(body.nickname, '昵称', 40, true);
+      const nickname = body.nickname === undefined ? current.nickname : text(body.nickname, '昵称', 40, true);
       const signature = body.signature === undefined ? (current.signature || '') : text(body.signature, '个性签名', 120, false);
       await bindStudent(current, studentId, realName);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });
@@ -551,7 +459,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (await verifyPassword(body.newPassword, auth.user.passwordHash)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
       await saveUser(auth.user, { passwordHash, mustChangePassword: false, securityVersion: secretToken() });
       await repo.audit(auth.user.id, 'identity.password.changed', auth.user.id);
-      return response({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+      return signedOutResponse(auth.kind);
     }
     if (method === 'POST' && route === '/auth/totp/setup') {
       const auth = await authenticate(request, { required: true, csrf: true, allowEnrollment: true });
@@ -592,10 +500,10 @@ export function createIdentity({ repo, env, now = Date.now }) {
       await consumeFactor(auth.user, body.code);
       await saveUser(auth.user, { totp: null, securityVersion: secretToken() });
       await repo.audit(auth.user.id, 'identity.totp.disabled', auth.user.id);
-      return response({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+      return signedOutResponse(auth.kind);
     }
     if (method === 'GET' && route === '/admin/users') {
-      await authenticate(request, { owner: true });
+      await authenticate(request, { staff: true });
       const users = await loadAllUsers();
       return response({ items: users.map(publicUser) });
     }
@@ -605,8 +513,8 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const studentId = normalizeStudentId(body.studentId);
       const realName = normalizeRealName(body.realName);
       const qq = qqValue(body.qq);
-      const role = body.role === undefined ? 'member' : body.role;
-      if (!['admin', 'member'].includes(role)) fail(400, 'INVALID_ROLE', '预录成员角色须为成员或管理员。');
+      const role = body.role === undefined ? 'admin' : body.role;
+      if (!['admin', 'user'].includes(role)) fail(400, 'INVALID_ROLE', '预录成员角色须为成员或管理员。');
       const term = body.term === undefined ? '2026-2027' : text(body.term, '届别', 32, false);
       const department = body.department === undefined ? '' : text(body.department, '所属部门', 60, false);
       const title = body.title === undefined ? '' : text(body.title, '职务头衔', 80, false);
@@ -635,8 +543,9 @@ export function createIdentity({ repo, env, now = Date.now }) {
     }
     const management = route.match(/^\/admin\/users\/([a-f0-9-]{36})(\/reset-password|\/reset-totp|\/delete)?$/);
     if (['POST', 'DELETE'].includes(method) && management) {
-      const auth = await authenticate(request, { owner: true, csrf: true });
+      const auth = await authenticate(request, { staff: true, csrf: true });
       const user = await loadUser(management[1]);
+      if (auth.user.role !== 'owner' && user.role !== 'user') fail(403, 'OWNER_REQUIRED', '管理员账号由所有者管理。');
       if (management[2] === '/delete' || method === 'DELETE') {
         if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
         await repo.remove(`identity/qq/${user.qq}.json`);
@@ -662,14 +571,14 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (body.revision !== user.revision) fail(409, 'REVISION_CONFLICT', '账号已更新，请刷新后重试。');
       const role = body.role === undefined ? user.role : body.role;
       const status = body.status === undefined ? user.status : body.status;
-      if (!['owner', 'admin', 'member'].includes(role) || !['active', 'disabled', 'pending'].includes(status)) fail(400, 'INVALID_ROLE', '账号角色或状态无效。');
+      if (!['owner', 'admin', 'user'].includes(role) || !['active', 'disabled', 'pending'].includes(status)) fail(400, 'INVALID_ROLE', '账号角色或状态无效。');
       if (user.role === 'owner' && (role !== 'owner' || status !== 'active')) fail(403, 'LAST_OWNER_PROTECTED', '不能停用或降级平台所有者。');
       if (role === 'owner' && user.role !== 'owner') fail(403, 'OWNER_PROVISIONING_REQUIRED', '所有者由受控初始化配置管理。');
       const studentId = body.studentId === undefined ? (user.studentId || '') : normalizeStudentId(body.studentId);
-      if (user.studentId && studentId !== user.studentId) fail(403, 'STUDENT_ID_LOCKED', '学号由首次绑定锁定，更正需受控维护，不能在此直接修改。');
+      if (auth.user.role !== 'owner' && role !== user.role) fail(403, 'OWNER_REQUIRED', '角色由所有者管理。');
       const realName = body.realName === undefined ? (user.realName || '') : normalizeRealName(body.realName);
       const rawNick = body.nickname === undefined ? undefined : String(body.nickname).trim();
-      const nickname = rawNick === undefined ? user.nickname : rawNick === '' ? (realName || user.realName || user.qq) : text(rawNick, '昵称', 40, true);
+      const nickname = rawNick === undefined ? user.nickname : text(rawNick, '昵称', 40, true);
       const nameChanged = realName !== (user.realName || '');
       const identityChanged = studentId !== (user.studentId || '') || nameChanged;
       if (studentId && !user.studentId && !realName) fail(400, 'INVALID_REAL_NAME', '首次绑定学号时请同时填写真实姓名。');
@@ -681,10 +590,19 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const title = body.title === undefined ? (user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const order = body.order === undefined ? (user.order ?? 999) : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
-      const changedSecurity = role !== user.role || status !== user.status;
-      if (studentId && !user.studentId) await bindStudent(user, studentId, realName);
+      const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
+      if (studentId && studentId !== user.studentId) {
+        await bindStudent(user, studentId, realName);
+      }
       const updated = await saveUser(user, { role, status, nickname, studentId, realName, identityVerified, term, department, title, signature, order, ...(changedSecurity ? { securityVersion: secretToken() } : {}) });
-      if (user.term || updated.term) await rebuildRoster(updated.term || user.term);
+      if (user.studentId && studentId !== user.studentId) {
+        const previous = await repo.get(studentKey(user.studentId));
+        if (previous?.id === user.id) await repo.remove(studentKey(user.studentId));
+      }
+      if (user.term || updated.term) {
+        if (user.term && user.term !== updated.term) await rebuildRoster(user.term);
+        if (updated.term) await rebuildRoster(updated.term);
+      }
       await repo.audit(auth.user.id, 'identity.user.updated', user.id, { role, status, previousRole: user.role, previousStatus: user.status, department, term });
       if (identityChanged || identityVerified !== (user.identityVerified === true)) await repo.audit(auth.user.id, identityChanged ? 'identity.profile.corrected' : 'identity.verification.updated', user.id, { identityVerified, profileComplete: profileComplete(updated) });
       return response({ user: publicUser(updated) });

@@ -1,5 +1,6 @@
 /* /map/: the map is the surface. Desktop keeps a side panel; phones use one
-   anchored sheet for search, recommendations, places, routes and activities. */
+   anchored sheet for search, recommendations, places and routes. */
+.campus-map:has(.campus-map-plan) .campus-map-categories { display: none; }
 .campus-map { position: relative; height: 100%; min-height: 360px; overflow: hidden; }
 .campus-map-canvas { position: absolute; inset: 0; }
 
@@ -198,13 +199,6 @@
   .campus-map-locate { right: 12px; bottom: calc(var(--campus-sheet-height) + 16px); z-index: 6; transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
   .campus-map .maplibregl-ctrl-bottom-right { right: 12px; bottom: calc(var(--campus-sheet-height) + 68px); transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
   .campus-map .maplibregl-ctrl-bottom-left { bottom: calc(var(--campus-sheet-height) + 8px); transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
-  .campus-map .activity-map-tools { position: fixed; right: 12px; bottom: calc(var(--campus-sheet-height) + 122px); z-index: 6; transition: bottom 220ms cubic-bezier(.2,.8,.2,1); }
-  .campus-map .activity-map-tools a { display: none; }
-  .campus-map .activity-map-tools button { width: 44px; height: 44px; justify-content: center; padding: 0; border-radius: 50%; box-shadow: 0 2px 12px color-mix(in srgb, var(--scrim) 24%, transparent); }
-  .campus-map .activity-map-tools button { font-size: 0; }
-  .campus-map .activity-map-tools button svg { width: 19px; height: 19px; }
-  .campus-map .activity-map-sheet { position: static; left: auto; bottom: auto; width: auto; max-height: none; overflow: visible; }
-  .campus-map:has(.campus-map-plan) .campus-map-categories, .campus-map:has(.campus-map-plan) .activity-map-tools { display: none; }
   .campus-map:has(.campus-map-plan) .campus-map-locate { bottom: calc(var(--campus-sheet-height) + 16px); }
 }
 

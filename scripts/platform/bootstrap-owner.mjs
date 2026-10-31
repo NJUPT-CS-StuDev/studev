@@ -35,21 +35,14 @@ function ensure(result, expected, label) {
 export async function loginOwner(client, access, recovery) {
   const profile = await readOptional(profilePath);
   const studentId = profile?.studentId || access.ownerStudentId;
-  let loginPath = '/auth/login';
-  let identifier = { studentId };
+  const loginPath = '/auth/login';
+  const identifier = { studentId };
   let result = await client.call(loginPath, { method: 'POST', body: { ...identifier, password: access.ownerPassword } });
-  if ((result.status === 401 || result.status === 400) && studentId) {
-    // This migration endpoint only accepts pre-upgrade accounts with missing identity.
-    // Once bound, the same QQ cannot authenticate through this endpoint again.
-    loginPath = '/auth/legacy-profile-login'; identifier = { qq: access.ownerQq };
-    result = await client.call(loginPath, { method: 'POST', body: { ...identifier, password: access.ownerPassword } });
-  }
-  if (result.status === 401 && access.pendingOwnerPassword) {
+  if (result.body?.error?.code === 'LOGIN_FAILED' && access.pendingOwnerPassword) {
     result = await client.call(loginPath, { method: 'POST', body: { ...identifier, password: access.pendingOwnerPassword } });
-    if (result.status === 200) { access.ownerPassword = access.pendingOwnerPassword; delete access.pendingOwnerPassword; await writePrivate(accessPath, JSON.stringify(access, null, 2) + '\n'); }
+    if (result.status === 200 || result.body?.error?.code === 'MFA_REQUIRED') { access.ownerPassword = access.pendingOwnerPassword; delete access.pendingOwnerPassword; await writePrivate(accessPath, JSON.stringify(access, null, 2) + '\n'); }
   }
-  let body = ensure(result, 200, 'Owner login');
-  if (body.mfaRequired) {
+  if (result.body?.error?.code === 'MFA_REQUIRED') {
     if (!recovery?.secret) throw new Error('Owner authenticator material is required; no automatic MFA bypass is provided.');
     for (let attempt = 0; attempt < 2; attempt++) {
       result = await client.call(loginPath, { method: 'POST', body: { ...identifier, password: access.ownerPassword, totp: totpCode(recovery.secret, Math.floor(Date.now() / 30000)) } });
@@ -58,9 +51,9 @@ export async function loginOwner(client, access, recovery) {
       // Wait only for the next standard TOTP step, at most 30 seconds.
       await new Promise((r) => setTimeout(r, 30000 - Date.now() % 30000 + 100));
     }
-    body = ensure(result, 200, 'Owner MFA');
+    ensure(result, 200, 'Owner MFA');
   }
-  return body;
+  return ensure(result, 200, 'Owner login');
 }
 export async function initializeOwner() {
   const access = JSON.parse(await readFile(accessPath, 'utf8'));

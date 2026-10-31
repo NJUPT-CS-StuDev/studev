@@ -1,18 +1,18 @@
 import { api, button, el, errorText, formatTime, message, q, session } from './platform-client';
-interface Device { id: string; deviceName: string; createdAt: string; expiresAt: number }
+interface Device { id: string; deviceName: string; createdAt: string; expiresAt: number; kind: 'cookie' | 'bearer'; current: boolean }
 const root = q('[data-account-devices]'), status = q('[data-devices-status]');
 async function refresh() {
   const result = await api<{ items: Device[] }>('/auth/devices');
   root.replaceChildren();
-  if (!result.items.length) { root.append(el('p', '目前没有已登录的 App 设备。', 'p-muted')); return; }
+  if (!result.items.length) { root.append(el('p', '目前没有已登录的设备。', 'p-muted')); return; }
   for (const device of result.items) {
     const row = el('div', undefined, 'p-card');
-    row.append(el('h3', device.deviceName), el('p', `登录于 ${formatTime(device.createdAt)} · 最晚 ${formatTime(new Date(device.expiresAt).toISOString())} 重新登录`, 'p-help'));
+    row.append(el('h3', device.deviceName + (device.current ? ' · 当前设备' : '') + (device.kind === 'cookie' ? ' · 网页' : ' · Android')), el('p', `登录于 ${formatTime(device.createdAt)} · 最晚 ${formatTime(new Date(device.expiresAt).toISOString())} 重新登录`, 'p-help'));
     const actions = el('div', undefined, 'p-actions');
     actions.style.marginTop = '12px';
     actions.append(button('退出此设备', () => {
       actions.replaceChildren(el('span', '此设备将立即退出。', 'p-help'), button('确认退出', async () => {
-        try { await api(`/auth/devices/${device.id}/revoke`, {}); await refresh(); message(status, '设备已退出。', 'success'); }
+        try { await api(`/auth/devices/${device.id}/revoke`, {}); if (device.current) { location.assign('/login/'); return; } await refresh(); message(status, '设备已退出。', 'success'); }
         catch(e) { message(status, errorText(e), 'error'); }
       }), button('取消', async () => { try { await refresh(); } catch(e) { message(status, errorText(e), 'error'); } }));
     }));
