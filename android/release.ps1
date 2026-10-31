@@ -23,7 +23,8 @@ $gradleText = Get-Content (Join-Path $PSScriptRoot 'app\build.gradle.kts') -Raw
 $versionName = [regex]::Match($gradleText, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
 $versionCode = [int][regex]::Match($gradleText, 'versionCode\s*=\s*(\d+)').Groups[1].Value
 if (-not $versionName -or -not (Test-Path $apk)) { throw 'release APK or version metadata is missing' }
-$args = @((Join-Path $repo 'scripts/package-apk.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', '26', '--notes', $Notes)
+$releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
+$args = @((Join-Path $repo 'scripts/package-apk.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', '26', '--notes', $releaseNotes)
 if ($PartSize) { $args += @('--part-size', $PartSize) }
 node @args
 if ($LASTEXITCODE -ne 0) { throw 'APK distribution packaging failed' }
@@ -57,7 +58,6 @@ $releaseExists = $true
 & gh release view $tag --repo $repoName *> $null
 if ($LASTEXITCODE -ne 0) { $releaseExists = $false }
 if (-not $releaseExists) {
-    $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
     $notesPath = Join-Path $tempRoot 'release-notes.md'
     Set-Content -Path $notesPath -Value $releaseNotes -NoNewline
     & gh release create $tag --repo $repoName --title "studev $versionName" --notes-file $notesPath
