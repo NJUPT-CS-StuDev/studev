@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.location.CampusLocation
@@ -21,13 +23,40 @@ data class PlannerState(
     val routes: List<CampusRoute> = emptyList(), val selected: Int = 0,
     val busy: Boolean = false, val error: String? = null, val trip: TripState = TripState(),
     val fix: NavFix? = null, val muted: Boolean = false, val notice: String? = null,
-    val simulating: Boolean = false,
+    val simulating: Boolean = false, val destinationLabel: String? = null,
 ) {
     val route get() = routes.getOrNull(selected)
-    val destinationName get() = if (destinationIsMyPosition) "我的位置" else destination?.id ?: "目的地"
+    val destinationName get() = if (destinationIsMyPosition) "我的位置" else destination?.id ?: destinationLabel ?: "目的地"
     val active get() = trip.phase == TripPhase.Navigating
     fun swapped() = copy(origin = if (destinationIsMyPosition) null else destination,
         destination = origin, destinationIsMyPosition = origin == null)
+}
+
+/** Small durable record used only while a foreground navigation trip is active. */
+@Serializable
+data class PersistedNavigationSession(
+    val route: CampusRoute,
+    val destinationLabel: String,
+    val mode: String,
+    val avoidSteps: Boolean,
+    val destination: Endpoint? = null,
+)
+
+class NavigationSessionStore(context: Context) {
+    private val preferences = context.applicationContext.getSharedPreferences("navigation-session", Context.MODE_PRIVATE)
+    private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
+
+    fun save(record: PersistedNavigationSession) {
+        // The service is started immediately after this call. Commit the small
+        // session record before returning so a process kill cannot lose resume state.
+        check(preferences.edit().putString("record", json.encodeToString(record)).commit())
+    }
+
+    fun load(): PersistedNavigationSession? = preferences.getString("record", null)?.let {
+        runCatching { json.decodeFromString<PersistedNavigationSession>(it) }.getOrNull()
+    }
+
+    fun clear() { preferences.edit().remove("record").commit() }
 }
 
 /** Process session outlives Activities. The foreground service owns live updates and speech. */
@@ -47,9 +76,22 @@ class NavigationRuntime private constructor(private val context: Context) {
     private val _state = MutableStateFlow(PlannerState())
     val state = _state.asStateFlow()
     val location = CampusLocation.get(context)
+    private val persisted = NavigationSessionStore(context)
+    private val settings = context.getSharedPreferences("campus-settings", Context.MODE_PRIVATE)
     @Volatile var simulationPaused = false
         private set
     @Volatile var simulationCommand: String? = null
+    init {
+        persisted.load()?.let { record ->
+            goal = record.destination ?: Endpoint.Target(record.destinationLabel)
+            _state.value = PlannerState(
+                mode = record.mode,
+                avoidSteps = record.avoidSteps,
+                routes = listOf(record.route),
+                destinationLabel = record.destinationLabel,
+            )
+        }
+    }
     fun debugCommand(command: String) {
         if (!BuildConfig.DEBUG) return
         if (command == "pause") simulationPaused = !simulationPaused else simulationCommand = command
@@ -68,11 +110,11 @@ class NavigationRuntime private constructor(private val context: Context) {
     private fun engine() = engine ?: Wayfind.load(context.assets).also { engine = it }
     fun open(destination: Place) {
         if (state.value.active) return
-        _state.value = PlannerState(open = true, destination = destination)
+        _state.value = PlannerState(open = true, destination = destination, destinationLabel = destination.id)
         plan()
     }
     fun origin(place: Place?) { _state.update { it.copy(origin = place) }; plan() }
-    fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false) }; plan() }
+    fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false, destinationLabel = place.id) }; plan() }
     fun swap() {
         _state.update { it.swapped() }; plan()
     }
@@ -122,9 +164,19 @@ class NavigationRuntime private constructor(private val context: Context) {
         if (simulated && !BuildConfig.DEBUG) return
         try {
             notice(null)
+            val route = checkNotNull(state.value.route)
+            persisted.save(PersistedNavigationSession(route, state.value.destinationName, state.value.mode, state.value.avoidSteps,
+                destination = goal ?: Endpoint.Target(state.value.destinationName)))
+            val firstNavigation = !settings.getBoolean("navigation-guidance-started", false)
+            if (firstNavigation) settings.edit().putBoolean("navigation-guidance-started", true)
+                .putBoolean("navigation-guidance-pending", true).apply()
+            if (firstNavigation) notice("后台导航需要持续定位，可在“我的 → 后台运行设置”检查一次。")
             ContextCompat.startForegroundService(context, Intent(context, NavigationService::class.java)
                 .putExtra("simulate", simulated).putExtra("speed", speed))
-        } catch (_: RuntimeException) { notice("无法开始导航，请确认已允许定位且系统定位已开启。") }
+        } catch (_: RuntimeException) {
+            persisted.clear()
+            notice("无法开始导航，请确认已允许定位且系统定位已开启。")
+        }
     }
     suspend fun begin(simulated: Boolean) {
         val route = state.value.route ?: return
@@ -161,16 +213,24 @@ class NavigationRuntime private constructor(private val context: Context) {
         }
         return value.voice_prompts
     }
-    suspend fun finishSession() { native { session?.close(); session = null } }
+    suspend fun finishSession(clearPersisted: Boolean = false) {
+        native { session?.close(); session = null }
+        if (clearPersisted) persisted.clear()
+    }
     fun stop(close: Boolean = false) {
         ++generation; planning?.cancel()
+        persisted.clear()
         context.stopService(Intent(context, NavigationService::class.java))
         _state.update { if (close) PlannerState() else it.copy(trip = TripState(), fix = null, simulating = false, notice = null) }
         scope.launch { finishSession() }
     }
     fun serviceStopped() {
-        if (state.value.active) _state.update { it.copy(trip = TripState(), simulating = false, notice = "导航已停止") }
-        scope.launch { finishSession() }
+        if (state.value.active) {
+            _state.update { it.copy(notice = "后台导航暂时停止，系统将尝试恢复") }
+        } else {
+            persisted.clear()
+            scope.launch { finishSession() }
+        }
     }
     companion object {
         // get() retains only applicationContext, never an Activity.

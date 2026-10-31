@@ -28,13 +28,16 @@ class NavigationService : Service() {
         voice = VoiceGuide(this, runtime::voiceUnavailable)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (job != null) return START_NOT_STICKY
+        if (job?.isActive == true) return START_STICKY
         if (runtime.state.value.route == null) { stopSelf(); return START_NOT_STICKY }
         try {
             ServiceCompat.startForeground(this, ID, notification(runtime.state.value),
                 if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
+            getSystemService(NotificationManager::class.java).cancel(RECOVERY_ID)
         } catch (_: SecurityException) { runtime.notice("请允许定位后再开始导航。"); stopSelf(); return START_NOT_STICKY }
-        wake = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "studev:navigation").apply { acquire(6 * 60 * 60 * 1000L) }
+        wake = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "studev:navigation").apply {
+            setReferenceCounted(false); acquire()
+        }
         val simulate = BuildConfig.DEBUG && intent?.getBooleanExtra("simulate", false) == true
         job = scope.launch {
             try {
@@ -55,16 +58,16 @@ class NavigationService : Service() {
                     runtime.location.fix.filterNotNull().collect { fix -> process(fix) }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { android.util.Log.e("StudevNav", "navigation stopped", e); runtime.notice("导航暂时中断，请重新开始。"); stopSelf() }
-        }
-        return START_NOT_STICKY
+            catch (e: Exception) { android.util.Log.e("StudevNav", "navigation stopped", e); runtime.notice("导航暂时中断，系统将尝试恢复。"); stopSelf() }
+        }.also { task -> task.invokeOnCompletion { if (job === task) job = null } }
+        return START_STICKY
     }
     private suspend fun process(fix: NavFix) {
         val prompts = runtime.feed(fix)
         if (prompts.isNotEmpty()) voice.speak(prompts.joinToString("，") { it.text })
         if (runtime.state.value.trip.phase == TripPhase.Arrived) {
             runtime.location.release(this)
-            runtime.finishSession()
+            runtime.finishSession(clearPersisted = true)
             // Finish the final arrival announcement before releasing TTS and the wake lock.
             withTimeoutOrNull(12_000) { delay(600); while (voice.speaking) delay(150) }
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
@@ -119,12 +122,24 @@ class NavigationService : Service() {
             .addAction(0, "退出导航", exit).build()
     }
     override fun onDestroy() {
+        val wasActive = runtime.state.value.active
         scope.cancel(); runtime.location.release(this)
         voice.close(); wake?.let { if (it.isHeld) it.release() }; wake = null
         runtime.serviceStopped()
+        if (wasActive) getSystemService(NotificationManager::class.java).notify(RECOVERY_ID, recoveryNotification())
         super.onDestroy()
     }
-    companion object { const val CHANNEL = "campus-navigation"; const val ID = 41 }
+    private fun recoveryNotification(): Notification {
+        val resume = if (Build.VERSION.SDK_INT >= 26) PendingIntent.getForegroundService(
+            this, 2, Intent(this, NavigationService::class.java).setAction(ACTION_RESUME),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        else PendingIntent.getService(this, 2, Intent(this, NavigationService::class.java).setAction(ACTION_RESUME),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_navigation)
+            .setContentTitle("后台导航已暂停").setContentText("点击继续前往${runtime.state.value.destinationName}")
+            .setContentIntent(resume).setAutoCancel(true).setCategory(NotificationCompat.CATEGORY_NAVIGATION).build()
+    }
+    companion object { const val CHANNEL = "campus-navigation"; const val ID = 41; const val RECOVERY_ID = 42; const val ACTION_RESUME = "studev.navigation.resume" }
 }
 
 /** Notification stop action does not depend on a visible Activity. */

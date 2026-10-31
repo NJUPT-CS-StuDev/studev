@@ -22,4 +22,8 @@ class ReminderTimesTest {
         assertEquals("lesson", ReminderTimes.plans(listOf(event("lesson")), 30, start.minusSeconds(3600)).single().event.id)
         assertEquals(start.minusSeconds(1800), ReminderTimes.plans(listOf(event("lesson")), 30, start.minusSeconds(3600)).single().at)
     }
+    @Test fun schedulerChoosesExactlyOneDeliveryMechanism() {
+        assertEquals(ReminderScheduleMode.ExactAlarm, ReminderTimes.mode(true))
+        assertEquals(ReminderScheduleMode.WorkManager, ReminderTimes.mode(false))
+    }
 }
