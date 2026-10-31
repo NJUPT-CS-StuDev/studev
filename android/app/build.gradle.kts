@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import java.net.URI
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.file.FileSystemOperations
@@ -10,9 +11,9 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
-val productConfig = rootProject.file("../src/campus/app/config/product.ts").readText()
-val productVersion = Regex("VERSION\\s*:\\s*'([^']+)'").find(productConfig)?.groupValues?.get(1)
-    ?: error("src/campus/app/config/product.ts must declare ANDROID_APP.VERSION")
+val product = JsonSlurper().parse(rootProject.file("../product.json")) as Map<*, *>
+val androidProduct = product["android"] as Map<*, *>
+val productOrigin = product["origin"] as String
 
 abstract class DesignTokensTask : DefaultTask() {
     @get:InputFile abstract val tokensFile: RegularFileProperty
@@ -145,13 +146,15 @@ android {
 
     defaultConfig {
         applicationId = "top.hicancan.studev"
-        minSdk = 26
+        minSdk = (androidProduct["minSdk"] as Number).toInt()
         targetSdk = 36
         // Production distribution is arm64 only. Debug keeps x86_64 so the
         // emulator remains a first-class development target.
         ndk { abiFilters += listOf("arm64-v8a") }
-        versionCode = 3
-        versionName = productVersion
+        buildConfigField("String", "SITE_ORIGIN", "\"$productOrigin\"")
+        versionCode = (androidProduct["versionCode"] as Number).toInt()
+        versionName = androidProduct["versionName"] as String
+        manifestPlaceholders["siteHost"] = URI(productOrigin).host
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -168,10 +171,10 @@ android {
     buildTypes {
         debug {
             ndk { abiFilters += listOf("x86_64") }
-            buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse("https://studev.hicancan.top").trimEnd('/')}\"")
+            buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse(productOrigin).trimEnd('/')}\"")
         }
         release {
-            buildConfigField("String", "DATA_HOST", "\"https://studev.hicancan.top\"")
+            buildConfigField("String", "DATA_HOST", "\"$productOrigin\"")
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = if (providers.gradleProperty("studev.keystore").isPresent) signingConfigs.getByName("release") else signingConfigs.getByName("debug")

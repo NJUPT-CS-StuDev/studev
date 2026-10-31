@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import product from './product.json' with { type: 'json' };
 import sitemap from '@astrojs/sitemap';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
@@ -31,7 +32,7 @@ const excludedSitemapPaths = new Set([
 ]);
 
 export default defineConfig({
-  site: 'https://studev.hicancan.top',
+  site: product.origin,
   prefetch: {
     prefetchAll: true,
     defaultStrategy: 'hover',

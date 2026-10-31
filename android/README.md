@@ -66,11 +66,8 @@ entry declares 4×1 and keeps an 80dp visible card even when an OEM launcher
 allocates a larger host. The Huawei EMUI pin flow currently reserves two rows
 for it despite the 4×1 declaration; other launcher items are never moved.
 
-`me/AppUpdates.kt` reads `/download/latest.json`, follows its manifest URL and
-downloads every part with resume, retries and SHA-256 verification. Parts are
-assembled only after the whole APK hash matches, then the package installer
-receives the file. Unknown-source access is requested only from the explicit
-continue button. Checks run only from 我的; an unreachable site says so.
+我的 opens `/download/` in the browser for application updates. The browser downloads
+and installs the APK; the app has no APK downloader or package installer permission.
 
 Deep links cover `/map/`, `/search/`, `/search/timetable/`, `/search/exam/`,
 `/search/classrooms/` and `/search/web/` (including community/materials search).

@@ -1,9 +1,10 @@
+import { PRODUCT_CONFIG } from '../app/config/product';
 import { api, formatTime } from '../../client/platform/platform-client';
 import { placePosition, type Space } from '../map/model/space';
 export type ActivityPlace = { kind: 'campus'; id: string } | { kind: 'point'; name: string; position: [number, number] };
 export interface ActivityInput { title: string; description: string; startsAt: string; endsAt: string; place: ActivityPlace; visibility: 'public' | 'unlisted' }
 export interface Activity extends ActivityInput { id: string; organiser: { id: string; name: string }; revision: number; createdAt: string; updatedAt: string }
-export const activityUrl = (id: string) => `https://studev.hicancan.top/map/?activity=${encodeURIComponent(id)}`;
+export const activityUrl = (id: string) => `${PRODUCT_CONFIG.ORIGIN}/map/?activity=${encodeURIComponent(id)}`;
 export const activityTime = (a: Activity) => {
   const start = new Date(a.startsAt), end = new Date(a.endsAt);
   const sameDay = start.toDateString() === end.toDateString();

@@ -5,16 +5,13 @@ interface Props { floating?: boolean }
 const { floating = true } = Astro.props;
 const app = PRODUCT_CONFIG.ANDROID_APP;
 ---
-{floating && <a class="pwa-entry" href={app.APK_URL} data-pwa-open aria-haspopup="dialog">下载 App</a>}
+{floating && <a class="pwa-entry" href={app.DOWNLOAD_URL} data-pwa-open aria-haspopup="dialog">下载 App</a>}
 <dialog class="pwa-panel" data-pwa-panel aria-labelledby="pwa-title">
   <header><h2 id="pwa-title">studev App</h2><button type="button" data-pwa-close aria-label="关闭">×</button></header>
   <section class="pwa-app" data-app-android>
     <p class="pwa-app-name"><strong>Android 版</strong><span class="pwa-version">v{app.VERSION}</span></p>
     <p>{app.SUMMARY}</p>
-    <a class="pwa-primary pwa-download" href={app.APK_URL} data-app-download>下载 App（APK）</a>
-    <p class="pwa-hint" data-app-download-status role="status" hidden></p>
-    <progress class="pwa-download-progress" data-app-download-progress max="100" value="0" hidden></progress>
-    <ul class="pwa-download-fallback" data-app-download-fallback hidden></ul>
+    <a class="pwa-primary pwa-download" href={app.DOWNLOAD_URL}>下载 App（APK）</a>
     <p class="pwa-hint">首次安装时按系统提示允许浏览器安装应用；之后可在 App 的「我的」中检查更新。</p>
     <hr />
   </section>

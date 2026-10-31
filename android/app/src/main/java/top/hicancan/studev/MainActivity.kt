@@ -12,6 +12,7 @@ import top.hicancan.studev.campus.CampusApp
 import top.hicancan.studev.ui.theme.StuDevTheme
 import top.hicancan.studev.activities.ActivityHost
 import top.hicancan.studev.activities.ActivityLinks
+import top.hicancan.studev.account.PLATFORM_ORIGIN
 
 class MainActivity : ComponentActivity() {
     private var place by mutableStateOf<String?>(null)
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) readLink(intent) else { place = savedInstanceState.getString("pendingPlace"); activityLink = savedInstanceState.getString("pendingActivity") }
         setContent { StuDevTheme {
             ActivityHost(activityLink, campusLink = place, onLinkHandled = { activityLink = null }, onPlace = {
-                place = android.net.Uri.Builder().scheme("https").authority("studev.hicancan.top").path("/map/").appendQueryParameter("place", it).build().toString()
+                place = android.net.Uri.Builder().scheme("https").authority(android.net.Uri.parse(PLATFORM_ORIGIN).host).path("/map/").appendQueryParameter("place", it).build().toString()
             }) { onActivities, onAccount ->
                 CampusApp(place, onDeepLinkHandled = { place = null }, onActivities = onActivities, onAccount = onAccount)
             }
@@ -45,7 +46,7 @@ class MainActivity : ComponentActivity() {
     private fun readLink(intent: Intent) {
         val uri = intent.data ?: return
         if (ActivityLinks.parse(uri.toString()) != null) { place = null; activityLink = uri.toString(); return }
-        if (uri.scheme == "https" && uri.host == "studev.hicancan.top") {
+        if (uri.scheme == "https" && uri.host == android.net.Uri.parse(PLATFORM_ORIGIN).host) {
             activityLink = null
             place = uri.toString()
         }

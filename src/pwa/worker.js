@@ -1,4 +1,5 @@
-/* Classic service worker; DATA_VERSION is injected by the static Astro endpoint. */
+import { apkResponse } from '../download/stream.js';
+/* DATA_VERSION is injected by the static Astro endpoint. */
 const SHELL = `studev-shell-2-${DATA_VERSION}`;
 const DATA = `studev-data-${DATA_VERSION}`;
 const META = 'studev-release';
@@ -85,6 +86,7 @@ self.addEventListener('activate', event => {
     })());
 });
 self.addEventListener('message', event => {
+    if (event.data?.type === 'APK_READY') event.ports[0]?.postMessage({ ready: true });
     if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
     if (event.data?.type === 'SAVE_OFFLINE') event.waitUntil(warm(Boolean(event.data.all)).catch(() => announce({ type: 'OFFLINE_PARTIAL' })));
 });
@@ -109,6 +111,13 @@ self.addEventListener('fetch', event => {
     const url = new URL(request.url);
     if (request.method !== 'GET' || url.origin !== self.location.origin) return;
     const path = url.pathname;
+    if (/^\/download\/[1-9][0-9]*\/studev-[A-Za-z0-9._-]+\.apk$/.test(path)) {
+        event.respondWith(apkResponse(request, message => { void announce(message); }).catch(async () => {
+            await announce({ type: 'APK_DOWNLOAD', path, state: 'error' });
+            return Response.error();
+        }));
+        return;
+    }
     if (path === '/pwa-release.json') {
         event.respondWith((async () => {
             const cache = await caches.open(META);

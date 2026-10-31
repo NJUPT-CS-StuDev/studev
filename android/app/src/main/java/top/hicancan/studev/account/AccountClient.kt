@@ -1,5 +1,6 @@
 package top.hicancan.studev.account
 
+import top.hicancan.studev.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
@@ -13,7 +14,7 @@ import java.util.UUID
 import java.io.InputStream
 import java.io.ByteArrayOutputStream
 
-const val PLATFORM_ORIGIN = "https://studev.hicancan.top"
+const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 @Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)

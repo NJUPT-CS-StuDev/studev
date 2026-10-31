@@ -1,7 +1,6 @@
 import { catalogId } from '../model/courseCatalog';
 import { Eye, EyeOff, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { TeachingMeeting } from '@/academics/timetable';
 import { searchCatalog, type CatalogCourse } from '../model/courseCatalog';
 import { CourseResults, meetingLine, suspensionNote } from './CourseResults';
 

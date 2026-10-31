@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.data.PlacePreferences
+import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.location.LocationStatus
 import top.hicancan.studev.ui.theme.Tokens
 import top.hicancan.studev.home.*
@@ -187,7 +188,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                         Spacer(Modifier.width(Tokens.Space.xs.dp)); Text(if (place.id in saved) "已收藏" else "收藏")
                     }
                     OutlinedButton(onClick = {
-                        val link = android.net.Uri.Builder().scheme("https").authority("studev.hicancan.top").path("/map/")
+                        val link = android.net.Uri.Builder().scheme("https").authority(android.net.Uri.parse(PLATFORM_ORIGIN).host).path("/map/")
                             .appendQueryParameter("place", place.id).build().toString()
                         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "${place.id} · 南邮仙林校区\n$link")

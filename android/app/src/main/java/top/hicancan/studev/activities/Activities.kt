@@ -63,7 +63,7 @@ object ActivityLinks {
     fun url(id: String): String { require(validId(id)); return "$PLATFORM_ORIGIN/map/?activity=$id" }
     fun parse(raw: String?): String? = runCatching {
         val uri = URI(raw ?: return null)
-        if (uri.scheme != "https" || uri.host != "studev.hicancan.top" || uri.userInfo != null || uri.port !in listOf(-1, 443) || uri.path.trimEnd('/') != "/map") return null
+        if (uri.scheme != "https" || uri.host != URI(PLATFORM_ORIGIN).host || uri.userInfo != null || uri.port !in listOf(-1, 443) || uri.path.trimEnd('/') != "/map") return null
         val values = uri.rawQuery?.split('&')?.map { it.split('=', limit = 2) }?.filter { URLDecoder.decode(it[0], "UTF-8") == "activity" }
         if (values?.size != 1) return null
         values.single().getOrNull(1)?.let { URLDecoder.decode(it, "UTF-8") }?.takeIf(::validId)
