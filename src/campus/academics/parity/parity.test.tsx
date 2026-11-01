@@ -8,6 +8,7 @@ import { toggleBuilding } from '@/classrooms/model/buildingSelection';
 import { TimetableGrid } from '@/timetable/ui/TimetableGrid';
 import { examPresentation } from '@/exams/model/presentation';
 import { roomSelectionResult, type RoomSelection } from '@/classrooms/model/roomSelection';
+import { roomMatches } from '@/classrooms/model/campusDay';
 import type { TeachingMeeting, TeachingWeek, TeachingPeriod, Exam, RoomDay } from '../facts';
 import type { ClassroomIndexFile } from '@/classrooms/model/ClassroomAvailabilityClient';
 
@@ -45,6 +46,11 @@ describe('the shared web / Android real-data contract', () => {
         it(`room selection ${i}: ${test.date} ${test.selection.campus}, exact matching/free IDs`, () => {
             const day = golden.rooms.days.find(day=>day.date===test.date)!;
             expect(roomSelectionResult(golden.rooms.index as ClassroomIndexFile,day as unknown as RoomDay,test.selection as RoomSelection)).toEqual(test.expected);
+        });
+    }
+    for (const [i, test] of golden.rooms.matchCases.entries()) {
+        it(`room query ${i}: TypeScript reference result`, () => {
+            expect(roomMatches(test.room, test.query)).toBe(test.expected);
         });
     }
     it('hashes Unicode scalar values, including supplementary characters', () => {

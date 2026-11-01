@@ -7,6 +7,7 @@ import { timetableCells } from '@/timetable/model/presentation';
 import { courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
 import { examPresentation } from '@/exams/model/presentation';
 import { roomSelectionResult, type RoomSelection } from '@/classrooms/model/roomSelection';
+import { roomMatches } from '@/classrooms/model/campusDay';
 import { toggleBuilding } from '@/classrooms/model/buildingSelection';
 import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, RoomDay } from '@/academics/facts';
 import type { ClassroomIndexFile } from '@/classrooms/model/ClassroomAvailabilityClient';
@@ -37,6 +38,11 @@ const roomCases = days.flatMap(day => ['仙林','三牌楼'].flatMap(campus => {
         return { date:day.date, selection, expected:roomSelectionResult(index,day,selection) };
     }));
 }));
+const roomMatchRoom = index.rooms.find(room => room.listed && /^\d+$/.test(room.number)) ?? index.rooms.find(room => room.listed) ?? index.rooms[0]!;
+const fullWidthNumber = roomMatchRoom.number.replace(/[0-9]/g, digit => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
+const roomMatchQueries = ['', roomMatchRoom.id, roomMatchRoom.number, roomMatchRoom.building, roomMatchRoom.names[0] ?? '',
+    `${roomMatchRoom.building}—${roomMatchRoom.number}`, ` ${roomMatchRoom.building} ${roomMatchRoom.number} `, `\u00a0${roomMatchRoom.building}\ufeff${roomMatchRoom.number}`, fullWidthNumber, '不存在'];
+const roomMatchCases = roomMatchQueries.map(query => ({ room: roomMatchRoom, query, expected: roomMatches(roomMatchRoom, query) }));
 for (const selection of [
     {campus:'仙林', buildings:['教3','教4'],everything:false,query:'',minSeats:0,from:3,until:3},
     {campus:'仙林', buildings:null, everything:true,query:'图',minSeats:0,from:1,until:4},
@@ -59,5 +65,5 @@ const invalidExams = [
     {...exams[0]!.exams[0]!,date:'2026-02-31'}, {...exams[0]!.exams[0]!,start:'24:00'},
     {...exams[0]!.exams[0]!,date:'',start:'',end:'',location:null,room:null},
 ].map(exam=>({exam,now:'2026-10-30T00:00:00Z',expected:examPresentation(exam,new Date('2026-10-30T00:00:00Z'))}));
-writeFileSync('src/campus/academics/parity/golden.json',JSON.stringify({source:{release:release.version,teaching:release.teaching,exams:release.exams,inputsHash},term,periods,schedules,exams,rooms:{index,days,cases:roomCases},edgeCases:{colours,buildingTransitions,invalidExams}},null,2)+'\n');
+writeFileSync('src/campus/academics/parity/golden.json',JSON.stringify({source:{release:release.version,teaching:release.teaching,exams:release.exams,inputsHash},term,periods,schedules,exams,rooms:{index,days,cases:roomCases,matchCases:roomMatchCases},edgeCases:{colours,buildingTransitions,invalidExams}},null,2)+'\n');
 console.log(JSON.stringify({schedules:schedules.length,weeks:schedules.flatMap(s=>s.weeks).length,cells:schedules.flatMap(s=>s.weeks.flatMap(w=>w.cells)).length,examCases:exams.flatMap(e=>e.cases).length,roomCases:roomCases.length,inputsHash}));

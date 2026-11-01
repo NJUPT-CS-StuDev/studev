@@ -11,7 +11,7 @@ export interface TeachingMeeting {
 }
 export interface CoursePlan { id: string; kind: 'information'; subtype: 'information:course-plan'; names: string[]; aliases: string[]; source?: string; teaching_class_ids: string[] }
 export interface CoursePlanFile { schema_version: string; kind: 'information'; items: CoursePlan[] }
-export interface TeachingClassEntity { id: string; kind: 'agent'; subtype: 'agent:teaching-class'; names: string[]; aliases: string[]; source?: string; size: number | null; enrolled: number | null; capacity: number | null }
+interface TeachingClassEntity { id: string; kind: 'agent'; subtype: 'agent:teaching-class'; names: string[]; aliases: string[]; source?: string; size: number | null; enrolled: number | null; capacity: number | null }
 export interface TeachingClassEntityFile { schema_version: string; kind: 'agent'; items: TeachingClassEntity[] }
 export interface Exam { id: string; class: string; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string | null; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null }
 export type ExamSlot = { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null };

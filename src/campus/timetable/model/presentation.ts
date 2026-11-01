@@ -4,7 +4,7 @@ import { describeMeetingOverlap, groupOverlappingMeetings } from './overlapLayou
 import { alternatingWeekLabel, showAsInactiveAlternating, showAsSuspended } from './weekPattern';
 import { roomDisplayName } from '@/map/model/displayName';
 
-export const meetingNote = (meeting: TeachingMeeting): string => [
+const meetingNote = (meeting: TeachingMeeting): string => [
     meeting.room === '翻转课堂线上自学' ? '翻转课堂 · 线上自学' : '',
     meeting.method && meeting.method !== '面授讲课' ? meeting.method.trim() : '',
 ].filter(Boolean).join(' · ');

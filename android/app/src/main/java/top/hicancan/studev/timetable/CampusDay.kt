@@ -23,7 +23,7 @@ object CampusDay {
     fun occupants(day: RoomDay, room: String, period: Int): List<RoomOccupant>? = if (isFree(day, room, period)) emptyList()
         else day.occupied[room].orEmpty().filter { period in it.periods.first()..it.periods.last() }.ifEmpty { null }
     fun freeRun(day: RoomDay, room: String, from: Int, last: Int) = (from..last).takeWhile { isFree(day, room, it) }.size
-    private fun fold(value: String) = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT).replace(Regex("[－—–\\s]"), "")
+    private fun fold(value: String) = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT).filterNot { it == '－' || it == '—' || it == '–' || it.isWhitespace() || it == '\uFEFF' }
     fun roomMatches(room: Room, query: String) = (listOf(room.id, room.number, room.building, room.building + room.number) + room.names).any { fold(it).contains(fold(query)) }
     fun eligible(room: Room, everything: Boolean = false) = room.listed && (everything || room.kinds.any { kind -> listOf("多媒体", "非多媒体", "翻转课堂").any(kind::contains) })
 }

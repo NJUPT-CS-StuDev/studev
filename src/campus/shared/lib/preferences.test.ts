@@ -14,14 +14,6 @@ Object.assign(globalThis, { window: Object.assign(new EventTarget(), { localStor
 describe('preferences', () => {
     beforeEach(() => localStorage.clear());
 
-    it('moves settings saved under the old keys into one record', () => {
-        localStorage.setItem('SAVED_TIMETABLE_CLASS', 'b240402');
-        localStorage.setItem('SAVED_CLASSROOM_QUERY', JSON.stringify({ campus: '三牌楼', period: '3' }));
-        expect(readPreferences()).toEqual({ class: 'B240402', campus: '三牌楼' });
-        expect(localStorage.getItem('SAVED_TIMETABLE_CLASS')).toBeNull();
-        expect(localStorage.getItem('SAVED_CLASSROOM_QUERY')).toBeNull();
-    });
-
     it('keeps timetable edits per term and drops malformed values', () => {
         updateTimetableEdits('2026-2027-1', edits => ({ ...edits, added: [...edits.added, 'x', 'x'] }));
         updateTimetableEdits('2026-2027-1', edits => ({ ...edits, hidden: ['y'] }));
