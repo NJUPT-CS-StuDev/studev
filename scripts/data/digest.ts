@@ -9,6 +9,7 @@ import { compileBundle } from 'wasm-search/compile';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
+import { SPACE_DIRECTORIES, SPACE_FILES } from './space-contract.ts';
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
 
@@ -379,10 +380,15 @@ async function buildCampus(
     const normalized = entities.map(place => normalizePlace(place, roomFacts, mapLevels));
     await mkdir(to, { recursive: true });
     await write(join(to, 'entities.json'), normalized);
-    await copyFile(join(from, 'network.json'), join(to, 'network.json'));
-    await copyFile(join(from, 'basemap.pmtiles'), join(to, 'basemap.pmtiles'));
-    for (const theme of ['light', 'dark'] as const) {
-        await write(join(to, `style-${theme}.json`), style(theme));
+    for (const file of SPACE_FILES) {
+        if (file === 'entities.json') continue;
+        if (file === 'style-light.json') {
+            await write(join(to, file), style('light'));
+        } else if (file === 'style-dark.json') {
+            await write(join(to, file), style('dark'));
+        } else {
+            await copyFile(join(from, file), join(to, file));
+        }
     }
     const byId = new Map(normalized.map(place => [place.id, place]));
     const placeDocs: SearchDocument[] = normalized.map(place => ({
@@ -400,7 +406,7 @@ async function buildCampus(
         tags: [],
         files: [],
     }));
-    await compileBundle(placeDocs, { aliases: [] }, join(to, 'search'));
+    await compileBundle(placeDocs, { aliases: [] }, join(to, SPACE_DIRECTORIES[0]));
 }
 
 async function main() {

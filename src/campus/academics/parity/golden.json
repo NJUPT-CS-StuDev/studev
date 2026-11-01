@@ -62110,6 +62110,198 @@
           ]
         }
       }
+    ],
+    "matchCases": [
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "图科楼-226",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "226",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "图科楼",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "图科楼226",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "图科楼—226",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": " 图科楼 226 ",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": " 图科楼﻿226",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "２２６",
+        "expected": true
+      },
+      {
+        "room": {
+          "id": "图科楼-226",
+          "building": "图科楼",
+          "floor": "2",
+          "number": "226",
+          "campus": "三牌楼",
+          "kinds": [
+            "三牌楼机房"
+          ],
+          "names": [
+            "图科楼226"
+          ],
+          "listed": true,
+          "seats": 60
+        },
+        "query": "不存在",
+        "expected": false
+      }
     ]
   },
   "edgeCases": {

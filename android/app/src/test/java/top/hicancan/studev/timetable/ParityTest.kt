@@ -63,6 +63,13 @@ class ParityTest {
             assertEquals("$selection on ${day.date}", test.getValue("expected"), actual)
         }
     }
+    @Test fun roomQueryNormalizationMatchesTheWebReference() {
+        golden.getValue("rooms").jsonObject.getValue("matchCases").jsonArray.forEachIndexed { index, item ->
+            val test = item.jsonObject
+            val room = json.decodeFromJsonElement<Room>(test.getValue("room"))
+            assertEquals("room query $index", test.getValue("expected").jsonPrimitive.boolean, CampusDay.roomMatches(room, test.getValue("query").text()))
+        }
+    }
     @Test fun coloursAreIndependentOfTheMeetingSetAndUseUnicodeCodePoints() {
         val meeting = json.decodeFromJsonElement<List<TeachingMeeting>>(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")).first()
         val changed = meeting.copy(course = meeting.course.copy(code = null, name = "😀课程"))

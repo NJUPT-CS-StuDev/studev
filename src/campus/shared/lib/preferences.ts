@@ -18,8 +18,6 @@ export interface Preferences {
 
 const KEY = 'studev_prefs';
 const EVENT = 'studev:preferences';
-const LEGACY_CLASS_KEYS = ['SAVED_TIMETABLE_CLASS', 'SAVED_CLASS'];
-const LEGACY_CLASSROOM_KEY = 'SAVED_CLASSROOM_QUERY';
 
 const storage = (): Storage | null => {
     try {
@@ -51,32 +49,11 @@ const sanitize = (raw: unknown): Preferences => {
     return result;
 };
 
-/** Settings saved before there was one record move into it once. */
-const migrate = (store: Storage): Preferences => {
-    const prefs: Preferences = {};
-    for (const key of LEGACY_CLASS_KEYS) {
-        const value = store.getItem(key)?.trim().toUpperCase();
-        if (!prefs.class && isClassName(value)) prefs.class = value;
-    }
-    try {
-        const campus = (JSON.parse(store.getItem(LEGACY_CLASSROOM_KEY) ?? 'null') as { campus?: unknown } | null)?.campus;
-        if (typeof campus === 'string') prefs.campus = campus;
-    } catch {
-        // An unreadable old value is simply dropped.
-    }
-    for (const key of [...LEGACY_CLASS_KEYS, LEGACY_CLASSROOM_KEY]) store.removeItem(key);
-    return prefs;
-};
-
 export const readPreferences = (): Preferences => {
     const store = storage();
     if (!store) return {};
     const raw = store.getItem(KEY);
-    if (raw === null) {
-        const migrated = migrate(store);
-        store.setItem(KEY, JSON.stringify(migrated));
-        return migrated;
-    }
+    if (raw === null) return {};
     try {
         return sanitize(JSON.parse(raw));
     } catch {
