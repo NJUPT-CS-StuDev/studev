@@ -67,8 +67,12 @@ fun roomDisplayName(room: String?, byId: Map<String, Place>): String? {
     val place = byId[room]
     if (place == null) return room.substringAfterLast('/')
     val title = place.displayName(byId)
-    val parent = place.parent?.let { byId[it] }
-    return if (place.kind == "room" && parent != null) "${parent.displayName(byId)} · $title" else title
+    if (place.kind == "room") {
+        var parent = byId[place.parent]
+        while (parent != null && parent.kind != "building") parent = byId[parent.parent]
+        if (parent != null) return "${parent.displayName(byId)}-$title"
+    }
+    return title
 }
 
 /** Pure binding: glyph placeholders remain intact for MapLibre. */

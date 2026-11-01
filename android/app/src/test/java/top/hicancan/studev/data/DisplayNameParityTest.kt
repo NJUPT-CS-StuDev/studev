@@ -19,6 +19,9 @@ class DisplayNameParityTest {
             val place = item.getValue("place").jsonObject.toPlace()
             val parents = item.getValue("parents").jsonArray.map { it.jsonObject.toPlace() }.associateBy { it.id }
             assertEquals(item.getValue("expected").jsonPrimitive.content, place.displayName(parents))
+            item.get("roomExpected")?.let { expected ->
+                assertEquals(expected.jsonPrimitive.content, roomDisplayName(place.id, parents))
+            }
         }
     }
 

@@ -4,7 +4,7 @@ import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/
 import { buildClassCalendar, downloadCalendar, meetingDate } from '../model/calendar';
 import { courseToneStyle } from '../model/courseColors';
 import { alternatingWeekLabel, formatWeekNumbers, suspendedWeeks } from '../model/weekPattern';
-import { displayRoomId } from '@/map/model/displayName';
+import { roomDisplayName } from '@/map/model/displayName';
 
 interface CourseDetailPanelProps {
     className: string;
@@ -61,7 +61,7 @@ export function CourseDetailPanel({ className, meeting, week, weeks, periods, to
     const copy = async () => {
         await navigator.clipboard.writeText([meeting.course.name, `${date} 第${meeting.periods[0]}-${meeting.periods[1]}节`, meeting.room, meeting.teachers.map(t => t.name).join(',')].filter(Boolean).join('\n'));
     };
-    const room = displayRoomId(meeting.room);
+    const room = roomDisplayName(meeting.room);
     const calendar = () => downloadCalendar(`${className}-${meeting.course.name}.ics`, buildClassCalendar(className, [meeting], weeks, periods));
 
     return (

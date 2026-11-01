@@ -81,6 +81,10 @@ class MapSmokeTest {
         compose.onNodeWithTag("place:仙林/教3").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("关闭地点").fetchSemanticsNodes().isNotEmpty() }
         shot("place-jiao3")
+        withMap { map ->
+            val features = map.queryRenderedFeatures(RectF(0f, 0f, 1080f, 1100f), "building-fill", "building-label")
+            Log.i("StudevMap", "selected camera=${map.cameraPosition.target} zoom=${map.cameraPosition.zoom} buildingFeatures=${features.size} ids=${features.map { it.getStringProperty("id") }.take(8)}")
+        }
         withMap { map -> assertNotNull(map.style!!.getSource("basemap")) }
         compose.onNodeWithText("地点详情").performClick()
         shot("place-jiao3-half")

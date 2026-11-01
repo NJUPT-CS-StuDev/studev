@@ -27,9 +27,10 @@ export function roomDisplayName(room: string | null | undefined, byId?: Readonly
     const place = byId?.get(room);
     if (place) {
         const title = displayName(place, byId);
-        if (place.kind === 'room' && place.parent) {
-            const parent = byId?.get(place.parent);
-            if (parent) return `${displayName(parent, byId)} · ${title}`;
+        if (place.kind === 'room') {
+            let parent = place.parent ? byId?.get(place.parent) : undefined;
+            while (parent && parent.kind !== 'building') parent = parent.parent ? byId?.get(parent.parent) : undefined;
+            if (parent) return `${displayName(parent, byId)}-${title}`;
         }
         return title;
     }

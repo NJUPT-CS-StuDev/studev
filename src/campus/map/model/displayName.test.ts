@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayName } from './displayName';
+import { displayName, roomDisplayName } from './displayName';
 import type { Place } from './space';
 import vectors from './displayName.golden.json';
 
@@ -18,6 +18,7 @@ describe('displayName', () => {
         for (const vector of vectors.cases) {
             const parents = new Map(vector.parents.map(parent => [parent.id, parent as Place]));
             expect(displayName(vector.place as Place, parents)).toBe(vector.expected);
+            if ('roomExpected' in vector) expect(roomDisplayName(vector.place.id, parents)).toBe(vector.roomExpected);
         }
     });
 });
