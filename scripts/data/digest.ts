@@ -34,6 +34,7 @@ const safeRelative = (name: string) => {
 };
 
 interface DataIndex {
+    version?: string;
     built_at: string;
     content: string[];
     teaching: string[];
@@ -213,13 +214,14 @@ async function locateMap() {
     return verifyMap(versionDir);
 }
 
-async function locateData(): Promise<{ dir: string; version: string; index: DataIndex }> {
+async function locateData(): Promise<{ dir: string; version: string; index: DataIndex; staged?: boolean }> {
     const staged = join(root, 'public', 'data-source');
-    const local = process.env.DATA_DIR?.trim() || (existsSync(join(staged, 'index.json')) ? staged : '');
+    const hasStaged = existsSync(join(staged, 'index.json'));
+    const local = process.env.DATA_DIR?.trim() || (hasStaged ? staged : '');
     if (local) {
         const index = await read<DataIndex>(join(local, 'index.json'));
-        const version = process.env.DATA_VERSION?.trim() || `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}-facts`;
-        return { dir: local, version, index };
+        const version = process.env.DATA_VERSION?.trim() || index.version?.trim() || `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}-facts`;
+        return { dir: local, version, index, staged: hasStaged && local === staged };
     }
     const token = dataToken();
     const repository = process.env.DATA_REPOSITORY?.trim();
@@ -470,6 +472,9 @@ async function main() {
         built_at: data.index.built_at,
         ...terms,
     });
+    if (data.staged) {
+        await rm(data.dir, { recursive: true, force: true });
+    }
     console.log(`digested ${map.version} + ${data.version} (${version})`);
 }
 

@@ -42,7 +42,7 @@ if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificat
 $outputRoot = Join-Path $repo 'public\download'
 $manifestPath = Join-Path $outputRoot "$versionCode\manifest.json"
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-$tempRoot = 'D:\Temp\codex\apk-dist-release'
+$tempRoot = 'D:\Temp\antigravity\apk-dist-release'
 if (Test-Path $tempRoot) { Remove-Item $tempRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 $mirrorLatest = Join-Path $tempRoot 'latest.json'

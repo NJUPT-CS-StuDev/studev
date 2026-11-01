@@ -8,7 +8,7 @@ const meetingNote = (meeting: TeachingMeeting): string => [
     meeting.room === '翻转课堂线上自学' ? '翻转课堂 · 线上自学' : '',
     meeting.method && meeting.method !== '面授讲课' ? meeting.method.trim() : '',
 ].filter(Boolean).join(' · ');
-export const meetingRoom = (meeting: TeachingMeeting): string => meeting.room === '翻转课堂线上自学' ? '' : roomDisplayName(meeting.room) ?? '';
+const meetingRoom = (meeting: TeachingMeeting): string => meeting.room === '翻转课堂线上自学' ? '' : roomDisplayName(meeting.room) ?? '';
 
 /** Display policy and its real-data examples live in academics/parity/spec.json. */
 const meetingState = (meeting: TeachingMeeting, week: number) => meeting.weeks.includes(week)

@@ -36,5 +36,3 @@ export function roomDisplayName(room: string | null | undefined, byId?: Readonly
     }
     return room.split('/').at(-1) || room;
 }
-
-export const displayRoomId = (room: string | null | undefined): string => room?.split('/').at(-1) ?? '';
