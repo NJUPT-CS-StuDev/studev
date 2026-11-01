@@ -92,12 +92,14 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         centering = true
         component.cameraMode = CameraMode.NONE
         ready.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
-            .target(LatLng(fix.latitude, fix.longitude)).padding(0.0, 0.0, 0.0, 0.0).build()),
+            .target(LatLng(fix.latitude, fix.longitude))
+            .tilt(if (threeD) 55.0 else 0.0)
+            .padding(0.0, 0.0, 0.0, 0.0).build()),
             Tokens.Motion.camera, object : MapLibreMap.CancelableCallback {
                 override fun onFinish() {
                     if (command != cameraCommand) return
                     centering = false
-                    component.setCameraMode(desired, 1L, null, null, null, null)
+                    component.setCameraMode(desired, 1L, null, null, if (threeD) 55.0 else 0.0, null)
                 }
                 override fun onCancel() {
                     if (command != cameraCommand) return
@@ -110,10 +112,16 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         threeD = !threeD
         applyLayers()
         val ready = map ?: return
-        val camera = CameraPosition.Builder(ready.cameraPosition)
-            .tilt(if (threeD) 55.0 else 0.0)
-            .zoom(if (threeD) maxOf(17.0, ready.cameraPosition.zoom) else ready.cameraPosition.zoom).build()
-        ready.animateCamera(CameraUpdateFactory.newCameraPosition(camera), Tokens.Motion.camera)
+        val pitch = if (threeD) 55.0 else 0.0
+        val targetZoom = if (threeD) maxOf(17.0, ready.cameraPosition.zoom) else ready.cameraPosition.zoom
+        val component = ready.locationComponent
+        if (follow != FollowMode.None && component.isLocationComponentActivated && component.isLocationComponentEnabled) {
+            if (threeD && ready.cameraPosition.zoom < 17.0) component.zoomWhileTracking(17.0, Tokens.Motion.camera.toLong())
+            component.tiltWhileTracking(pitch, Tokens.Motion.camera.toLong())
+        } else {
+            val camera = CameraPosition.Builder(ready.cameraPosition).tilt(pitch).zoom(targetZoom).build()
+            ready.animateCamera(CameraUpdateFactory.newCameraPosition(camera), Tokens.Motion.camera)
+        }
     }
     internal fun applyLayers() {
         map?.style?.getLayer("building-fill")?.maxZoom = 24f
