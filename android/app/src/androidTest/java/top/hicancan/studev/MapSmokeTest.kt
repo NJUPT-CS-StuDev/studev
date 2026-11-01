@@ -9,6 +9,8 @@ import android.view.View
 import android.view.ViewGroup
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.RectF
@@ -106,6 +108,7 @@ class MapSmokeTest {
     }
     @Test fun symbolLayersRenderFeatures() {
         waitForMap()
+        withMap { it.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(32.115, 118.925), 15.6)) }
         compose.waitUntil(15_000) {
             var rendered = false
             withMap { map ->
@@ -116,6 +119,14 @@ class MapSmokeTest {
             }
             rendered
         }
+        shot("symbols-z15")
+        withMap { it.animateCamera(CameraUpdateFactory.zoomTo(17.0)) }
+        compose.waitUntil(15_000) {
+            var rendered = false
+            withMap { map -> rendered = map.queryRenderedFeatures(RectF(0f, 0f, 1080f, 2400f), "building-label", "place-label").isNotEmpty() }
+            rendered
+        }
+        shot("symbols-z17")
     }
     @Test fun themeLocationAndDeepLink() {
         waitForMap()
