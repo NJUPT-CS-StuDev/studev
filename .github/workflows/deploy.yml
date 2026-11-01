@@ -37,7 +37,7 @@ jobs:
       - run: npm run digest
       - name: Stage the verified data release for the EdgeOne builder
         run: |
-          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('src/data/campus-release.json','utf8')); fs.rmSync('public/data-source',{recursive:true,force:true}); fs.cpSync('.data/'+r.data_version,'public/data-source',{recursive:true});"
+          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('src/data/campus-release.json','utf8')); fs.rmSync('public/data-source',{recursive:true,force:true}); fs.cpSync('.data/'+r.data_version,'public/data-source',{recursive:true}); fs.appendFileSync(process.env.GITHUB_ENV, 'DATA_VERSION='+r.data_version+'\n');"
       - name: Fetch APK distribution assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
