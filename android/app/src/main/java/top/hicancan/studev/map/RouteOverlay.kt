@@ -55,7 +55,7 @@ internal fun CampusMapController.routes(state: PlannerState, dark: Boolean, dens
                 circleRadius(8f), circleColor("#ffffff"), circleStrokeWidth(3f)))
             addOverlay(SymbolLayer("route-endpoint-labels", endpointId).withProperties(
                 textField(get("label")), textSize(13f), textOffset(arrayOf(0f, -1.5f)),
-                textFont(arrayOf("Noto Sans Medium")),
+                textFont(arrayOf("Noto-Sans-Medium")),
                 textColor("#202124"), textHaloColor("#ffffff"), textHaloWidth(2f), textAllowOverlap(true)))
         }
         val main = if (dark) Tokens.Color.Dark.route else Tokens.Color.Light.route

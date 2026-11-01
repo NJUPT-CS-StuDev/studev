@@ -169,7 +169,7 @@ class WidgetDataTest {
         compose.onNodeWithText("荷苑48栋").assertIsDisplayed()
         val campus = CampusPackage.load(context.assets)
         val walk = withContext(Dispatchers.IO) { Wayfind.load(context.assets).use {
-            it.route(RouteRequest(campus.byId.getValue("荷苑48栋").routing, campus.byId.getValue("教4-208").routing, alternatives = 1)).first()
+            it.route(RouteRequest(campus.byId.getValue("荷苑48栋").endpoint, campus.byId.getValue("教4-208").endpoint, alternatives = 1)).first()
         } }
         assertTrue(walk.duration_s > 60)
         val directory = File(context.getExternalFilesDir(null), "widget-shots").apply { mkdirs() }

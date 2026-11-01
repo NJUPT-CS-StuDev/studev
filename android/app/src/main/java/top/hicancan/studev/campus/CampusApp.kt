@@ -40,6 +40,9 @@ import top.hicancan.studev.timetable.*
 @Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val campusPackage by produceState<CampusPackage?>(initialValue = null, context) {
+        value = runCatching { CampusPackage.load(context.assets) }.getOrNull()
+    }
     val state by model.state.collectAsStateWithLifecycle()
     val preferences by model.settings.state.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()
@@ -125,7 +128,7 @@ import top.hicancan.studev.timetable.*
         walk = withContext(Dispatchers.IO) { runCatching {
             val campus = CampusPackage.load(context.assets)
             val place = campus.byId[room] ?: return@runCatching null
-            Wayfind.load(context.assets).use { engine -> engine.route(RouteRequest(Endpoint.Position(position.position), place.routing, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) } }
+            Wayfind.load(context.assets).use { engine -> engine.route(RouteRequest(Endpoint.Position(position.position), place.endpoint, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) } }
         }.getOrNull() }
     }
     val tab = when (screen) { "timetable", "exams" -> "timetable"; "map" -> "map"; "me", "calendar" -> "me"; else -> "home" }
@@ -154,9 +157,9 @@ import top.hicancan.studev.timetable.*
                     if (state.classBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (state.error != null) TextButton(model::load) { Text("${state.error} · 重试") }
                     Box(Modifier.weight(1f)) { destinations.SaveableStateProvider(screen) { when (screen) {
-                        "home" -> CampusHome(state, preferences.klass, now, walk, access.granted, requestLocation, { classPicker = true }, { openScreen(it) }, { lesson = it }, ::go)
-                        "timetable" -> TimetableScreen(state, preferences.klass, week, { classPicker = true }, { lesson = it })
-                        "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go)
+                        "home" -> CampusHome(state, preferences.klass, now, walk, access.granted, requestLocation, { classPicker = true }, { openScreen(it) }, { lesson = it }, ::go, campusPackage)
+                        "timetable" -> TimetableScreen(state, preferences.klass, week, { classPicker = true }, { lesson = it }, campusPackage)
+                        "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go, campusPackage)
                         "rooms" -> RoomsScreen(state.repository!!, state.rooms!!, preferences.campus, query, roomDate, roomPeriod, { value -> model.settings.update { it.copy(campus = value) } }, ::go)
                         "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }) { target, text -> openScreen(target, text) }
                         "me", "calendar" -> MeScreen(model, state, preferences, screen == "calendar", { classPicker = true }, { screen = "calendar" }, onAccount)
@@ -166,5 +169,5 @@ import top.hicancan.studev.timetable.*
         }
     }
     if (classPicker && !state.busy) ClassPicker(state, { model.chooseClass(it); classPicker = false }, { classPicker = false })
-    lesson?.let { LessonDetail(it, state.periods, { lesson = null }, ::go) }
+    lesson?.let { LessonDetail(it, state.periods, { lesson = null }, ::go, campusPackage) }
 }

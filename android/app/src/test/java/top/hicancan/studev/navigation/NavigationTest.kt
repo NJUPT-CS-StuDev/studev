@@ -69,7 +69,7 @@ class NavigationTest {
         assertTrue(message.contains("100 米")); assertTrue(message.contains("选择"))
     }
     @Test fun swappingMyPositionIsReversible() {
-        val place = top.hicancan.studev.data.Place("教3", "building", "仙林", listOf("教3"), sources = listOf("test"), use = "教学", routing = Endpoint.Target("教3"))
+        val place = top.hicancan.studev.data.Place("教3", "building", "仙林", listOf("教3"), sources = listOf("test"), routing = Endpoint.Target("教3"))
         val initial = PlannerState(open = true, destination = place)
         val reversed = initial.swapped()
         assertEquals(place, reversed.origin)

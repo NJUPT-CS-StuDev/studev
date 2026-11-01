@@ -14,7 +14,7 @@ export function examPresentation(exam: Exam, now = new Date()) {
     const state = !Number.isFinite(start) || !Number.isFinite(end) ? 'unknown'
         : now.getTime() >= end ? 'ended' : now.getTime() >= start ? 'ongoing' : 'upcoming';
     return { id: exam.id, course: exam.course.name, date: exam.date, start: exam.start, end: exam.end,
-        room: exam.location || exam.room || '待定', state, days,
+        room: exam.room || '待定', state, days,
         countdown: state === 'unknown' ? '时间待定' : state === 'ended' ? '已结束' : state === 'ongoing' ? '正在考试'
             : days === 0 ? '今天' : days === 1 ? '明天' : `还有 ${days} 天`,
         duration: validClock(exam.start) && validClock(exam.end) ? examDuration(exam) : 0, note: exam.note ?? '' };

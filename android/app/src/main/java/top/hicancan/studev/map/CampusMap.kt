@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
-import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -21,9 +20,17 @@ import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
 import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.Place
 import top.hicancan.studev.location.LocationStatus
@@ -47,7 +54,6 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
     internal var routeSourceIds = emptyList<String>()
     internal var routeSnapshot: List<Any?>? = null
     internal var routeStyle: Style? = null
-    private var highlightedId: String? = null
     private var centering = false
     private var cameraCommand = 0
     internal fun trackingChanged(mode: Int) {
@@ -110,15 +116,21 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         ready.animateCamera(CameraUpdateFactory.newCameraPosition(camera), Tokens.Motion.camera)
     }
     internal fun applyLayers() {
-        map?.style?.getLayer("campus-building")?.maxZoom = 24f
-        map?.style?.getLayer("campus-building-3d")?.setProperties(visibility(if (threeD) Property.VISIBLE else Property.NONE))
+        map?.style?.getLayer("building-fill")?.maxZoom = 24f
+        map?.style?.getLayer("building-extrusion")?.setProperties(visibility(if (threeD) Property.VISIBLE else Property.NONE))
     }
-    internal fun highlight(place: Place?) {
-        val source = map?.style?.getSourceAs<GeoJsonSource>("places") ?: return
-        val id = place?.let { if (it.kind == "room") it.parent else it.id }
-        if (highlightedId != id) highlightedId?.let { source.removeFeatureState(it) }
-        highlightedId = id
-        if (id != null) source.setFeatureState(id, JsonObject().apply { addProperty("selected", true) })
+    internal fun applySelection(style: Style, campus: CampusPackage, place: Place?, dark: Boolean) {
+        val source = style.getSourceAs<GeoJsonSource>("selected-place")
+            ?: GeoJsonSource("selected-place").also(style::addSource)
+        val point = place?.let(campus::position)
+        source.setGeoJson(point?.let {
+            FeatureCollection.fromFeatures(arrayOf(Feature.fromGeometry(Point.fromLngLat(it[0], it[1]))))
+        } ?: FeatureCollection.fromFeatures(emptyArray()))
+        val color = if (dark) Tokens.Color.Dark.brand else Tokens.Color.Light.brand
+        val paper = if (dark) Tokens.Color.Dark.paper else Tokens.Color.Light.paper
+        val layer = style.getLayerAs<CircleLayer>("selected-place-marker")
+            ?: CircleLayer("selected-place-marker", "selected-place").also(style::addLayer)
+        layer.setProperties(circleRadius(8f), circleColor(color.toArgb()), circleStrokeColor(paper.toArgb()), circleStrokeWidth(2f))
     }
     fun select(place: Place, campus: CampusPackage, density: Float, sheetBottom: Double = 420.0) {
         stopFollow()
@@ -166,13 +178,12 @@ internal fun CampusMap(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
     val brand = if (dark) Tokens.Color.Dark.brand else Tokens.Color.Light.brand
-
     DisposableEffect(holder, controller) {
         val failure = org.maplibre.android.maps.MapView.OnDidFailLoadingMapListener { errorCallback(true) }
         // GeoJSON parsing finishes after onStyleLoaded. Reapply state when the
         // map is ready so a cold deep link/restoration highlights its building.
         val finished = org.maplibre.android.maps.MapView.OnDidFinishLoadingMapListener {
-            if (!holder.destroyed) controller.highlight(currentSelection)
+            if (!holder.destroyed) map?.style?.let { controller.applySelection(it, campus, selected, dark) }
         }
         holder.view.addOnDidFailLoadingMapListener(failure)
         holder.view.addOnDidFinishLoadingMapListener(finished)
@@ -208,7 +219,7 @@ internal fun CampusMap(
                             return@addOnMapClickListener routeHit != null
                         }
                         val hit = ready.queryRenderedFeatures(RectF(point.x-radius, point.y-radius, point.x+radius, point.y+radius),
-                            "campus-building", "campus-building-3d", "campus-building-label", "campus-place", "campus-place-label")
+                            "building-fill", "building-extrusion", "building-label", "place-point", "place-label")
                             .firstNotNullOfOrNull { feature -> feature.getStringProperty("id")?.let(campus.byId::get) }
                         hit?.let(placeCallback)
                         hit != null
@@ -227,12 +238,14 @@ internal fun CampusMap(
         val ready = map ?: return@LaunchedEffect
         loadedStyle = null; errorCallback(false)
         ready.setStyle(Style.Builder().fromJson(campus.style(dark))) { style ->
-            if (!holder.destroyed) { loadedStyle = style; controller.applyLayers() }
+            if (!holder.destroyed) {
+                loadedStyle = style; controller.applyLayers()
+            }
         }
     }
     LaunchedEffect(map, loadedStyle, selected, routeState.open, homeBottom, sheetBottom) {
         if (loadedStyle != null) {
-            controller.highlight(selected)
+            loadedStyle?.let { controller.applySelection(it, campus, selected, dark) }
             if (selected != null) controller.select(selected, campus, density, sheetBottom)
             else if (!routeState.open) map?.let { ready ->
                 val bottom = homeBottom * density

@@ -130,15 +130,15 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
                                 Icon(categoryIcon(item.place.category), null, Modifier.padding(14.dp).size(24.dp), tint = MaterialTheme.colorScheme.primary)
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(item.place.id, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.place.displayName(campus.byId), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     if (item.status.state != OpenState.Unknown) Text(item.status.state.label, style = MaterialTheme.typography.labelMedium,
                                         color = if (item.status.state in listOf(OpenState.Open, OpenState.Closing)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(metres(item.distance), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text(item.place.use, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(item.place.category ?: item.place.kindLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            IconButton(onClick = { onRoute(item.place) }, Modifier.testTag("recommend-route:${item.place.id}")) { Icon(Icons.Outlined.Directions, "前往${item.place.id}", tint = MaterialTheme.colorScheme.primary) }
+                            IconButton(onClick = { onRoute(item.place) }, Modifier.testTag("recommend-route:${item.place.id}")) { Icon(Icons.Outlined.Directions, "前往${item.place.displayName(campus.byId)}", tint = MaterialTheme.colorScheme.primary) }
                         }
                         HorizontalDivider(Modifier.padding(start = 88.dp, end = 22.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                     }

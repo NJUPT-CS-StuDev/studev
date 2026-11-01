@@ -28,7 +28,7 @@ object CampusDay {
     fun eligible(room: Room, everything: Boolean = false) = room.listed && (everything || room.kinds.any { kind -> listOf("多媒体", "非多媒体", "翻转课堂").any(kind::contains) })
 }
 
-data class CampusEvent(val id: String, val title: String, val start: Instant, val end: Instant, val room: String?, val location: String?, val description: String, val exam: Boolean)
+data class CampusEvent(val id: String, val title: String, val start: Instant, val end: Instant, val room: String?, val description: String, val exam: Boolean)
 object CampusEvents {
     fun build(term: TeachingTerm, periods: List<TeachingPeriod>, schedule: ClassSchedule?, exams: List<Exam>): List<CampusEvent> = buildList {
         schedule?.meetings?.forEach { meeting ->
@@ -39,7 +39,7 @@ object CampusEvents {
                 val date = LocalDate.parse(week.start).plusDays((meeting.weekday - 1).toLong())
                 add(CampusEvent("lesson:${term.term}:${meeting.id}:$number", meeting.course.name,
                     date.atTime(LocalTime.parse(start.start)).atZone(CampusDay.zone).toInstant(),
-                    date.atTime(LocalTime.parse(end.end)).atZone(CampusDay.zone).toInstant(), meeting.room, meeting.location,
+                    date.atTime(LocalTime.parse(end.end)).atZone(CampusDay.zone).toInstant(), meeting.room,
                     "${schedule.klass.name} · " + meeting.teachers.filter { number in it.weeks }.joinToString("、") { it.name }, false))
             }
         }
@@ -47,7 +47,7 @@ object CampusEvents {
             val date = LocalDate.parse(exam.date)
             add(CampusEvent("exam:${exam.id}", exam.course.name,
                 date.atTime(LocalTime.parse(exam.start)).atZone(CampusDay.zone).toInstant(),
-                date.atTime(LocalTime.parse(exam.end)).atZone(CampusDay.zone).toInstant(), exam.room, exam.location,
+                date.atTime(LocalTime.parse(exam.end)).atZone(CampusDay.zone).toInstant(), exam.room,
                 listOfNotNull(exam.klass, exam.teacher, exam.note).joinToString(" · "), true))
         }
     }.distinctBy { it.id }.sortedBy { it.start }

@@ -10,6 +10,8 @@ export const APP_CONFIG = {
     DATA_URLS: {
         SEARCH: `${release.base}/search`,
         TIMETABLE: `${release.base}/teaching/${release.teaching}`,
+    COURSE_PLANS: `${release.base}/entities/information.json`,
+    TEACHING_CLASSES: `${release.base}/entities/agent.json`,
         EXAMS: `${release.base}/exams/${release.exams}`,
         CLASSROOMS: `${release.base}/rooms`,
     },

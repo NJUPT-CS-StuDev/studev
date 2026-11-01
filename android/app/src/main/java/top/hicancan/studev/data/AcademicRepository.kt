@@ -49,7 +49,18 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
     suspend fun classes() = read<List<TeachingClass>>("teaching/${release.teaching}/classes.json")
-    suspend fun schedule(id: String) = read<ClassSchedule>("teaching/${release.teaching}/classes/$id.json")
+    suspend fun coursePlans() = read<CoursePlanFile>("entities/information.json").items.filter { it.subtype == "information:course-plan" }
+    suspend fun teachingClasses() = read<AgentEntityFile>("entities/agent.json").items.filter { it.subtype == "agent:teaching-class" }
+    suspend fun schedule(id: String): ClassSchedule {
+        val groups = teachingClasses().associateBy { it.id }
+        return read<ClassSchedule>("teaching/${release.teaching}/classes/$id.json").let { schedule ->
+            schedule.copy(meetings = schedule.meetings.map { meeting ->
+                groups[meeting.teaching_class.id]?.let { group ->
+                    meeting.copy(teaching_class = TeachingGroup(group.id, group.names.firstOrNull(), group.size, group.enrolled, group.capacity))
+                } ?: meeting
+            })
+        }
+    }
     suspend fun examIndex() = release.exams?.let { read<ExamIndex>("exams/$it/index.json") }
     suspend fun exams(id: String): List<Exam> {
         val term = release.exams ?: return emptyList()

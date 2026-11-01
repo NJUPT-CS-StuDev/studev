@@ -46,7 +46,7 @@ export const buildClassCalendar = (
                 `DTSTART;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${compact(date)}T${compact(startPeriod.start)}00`,
                 `DTEND;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${compact(date)}T${compact(endPeriod.end)}00`,
                 `SUMMARY:${escape(meeting.course.name)}`,
-                `LOCATION:${escape(meeting.location ?? '')}`,
+                `LOCATION:${escape(meeting.room ?? '')}`,
                 `DESCRIPTION:${escape([className, meeting.teachers.map(t => t.name).join(',')].filter(Boolean).join(' · '))}`,
                 'END:VEVENT',
             );

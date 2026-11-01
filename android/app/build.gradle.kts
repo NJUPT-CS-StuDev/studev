@@ -73,9 +73,13 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
             // shards are fetched by AcademicRepository and retained in files/.
             if (!bundleAllData.get()) {
                 include("space/**")
+                include("entities/**")
+                include("hours.json")
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "rooms/index.json")
+                include("teaching/${metadata["teaching"]}/classes/B240402.json")
                 metadata["exams"]?.let { include("exams/$it/index.json") }
+                metadata["exams"]?.let { include("exams/$it/classes/B240402.json") }
             }
         }
         releaseManifest.get().asFile.copyTo(assetDir.file("data/release.json").get().asFile, overwrite = true)
@@ -119,7 +123,7 @@ val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtu
         val metadata = JsonSlurper().parse(manifest.asFile) as Map<*, *>
         rootProject.file("../public/data/${metadata["version"]}")
     }) {
-        include("teaching/*/classes/B240402.json", "exams/*/classes/B240402.json")
+        include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/B240402.json")
     }
     into(layout.buildDirectory.dir("generated/academic-test/data"))
 }

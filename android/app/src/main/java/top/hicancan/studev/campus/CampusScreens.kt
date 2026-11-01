@@ -38,7 +38,7 @@ import java.time.temporal.ChronoUnit
         }
     }
 }
-@Composable internal fun EventCard(event: CampusEvent, onClick: () -> Unit, onRoute: (String, Boolean) -> Unit) {
+@Composable internal fun EventCard(event: CampusEvent, campus: CampusPackage?, onClick: () -> Unit, onRoute: (String, Boolean) -> Unit) {
     OutlinedCard(onClick, Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(54.dp)) {
@@ -47,14 +47,14 @@ import java.time.temporal.ChronoUnit
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(event.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                Supporting(event.room ?: event.location ?: "地点待定")
+                Supporting(roomDisplayName(event.room, campus?.byId ?: emptyMap()) ?: "地点待定")
             }
-            if (event.room != null) IconButton({ onRoute(event.room, false) }) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, "去这里 ${event.room}") }
+            if (event.room != null) IconButton({ onRoute(event.room, false) }) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, "去这里 ${roomDisplayName(event.room, campus?.byId ?: emptyMap())}") }
         }
     }
 }
 @Composable internal fun CampusHome(state: AcademicState, klass: String?, now: ZonedDateTime, walk: Int?, locationGranted: Boolean,
-    onLocation: () -> Unit, onClass: () -> Unit, onScreen: (String) -> Unit, onLesson: (TeachingMeeting) -> Unit, onRoute: (String, Boolean) -> Unit) {
+    onLocation: () -> Unit, onClass: () -> Unit, onScreen: (String) -> Unit, onLesson: (TeachingMeeting) -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) {
     val next = state.events.firstOrNull { !it.exam && it.start > now.toInstant() }
     val today = state.events.filter { !it.exam && it.start.atZone(CampusDay.zone).toLocalDate() == now.toLocalDate() && it.end > now.toInstant() }
     val exams = state.events.filter { it.exam && it.end > now.toInstant() }.take(2)
@@ -94,7 +94,7 @@ import java.time.temporal.ChronoUnit
                     }
                     Text(next.title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.Place, null, modifier = Modifier.size(18.dp)); Text(next.room ?: next.location ?: "地点待定", style = MaterialTheme.typography.bodyMedium)
+                    Icon(Icons.Outlined.Place, null, modifier = Modifier.size(18.dp)); Text(roomDisplayName(next.room, campus?.byId ?: emptyMap()) ?: "地点待定", style = MaterialTheme.typography.bodyMedium)
                     }
                     if (walk != null) Text("从我的位置步行约 $walk 分钟", style = MaterialTheme.typography.bodySmall)
                     else if (!locationGranted) TextButton(onLocation, contentPadding = PaddingValues(0.dp)) { Text("开启定位，查看步行时间") }
@@ -108,12 +108,12 @@ import java.time.temporal.ChronoUnit
         if (klass != null) {
             item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { SectionLabel("今天还有 ${today.size} 节课"); TextButton({ onScreen("timetable") }) { Text("完整课表") } } }
             if (today.isEmpty()) item { Supporting("今天的课程已结束，留点时间给自己。") }
-            items(today, key = { it.id }) { event -> EventCard(event, {
+            items(today, key = { it.id }) { event -> EventCard(event, campus, {
                 state.schedule?.meetings?.find { event.id.contains(":${it.id}:") }?.let(onLesson)
             }, onRoute) }
             item { SectionLabel("近期考试") }
             if (exams.isEmpty()) item { EmptyCard("暂无待考科目", "${state.repository?.release?.exams ?: "考试"} · 以学校最新通知为准。", "查看已发布考试", { onScreen("exams") }) }
-            items(exams, key = { it.id }) { event -> EventCard(event, { onScreen("exams") }, onRoute) }
+            items(exams, key = { it.id }) { event -> EventCard(event, campus, { onScreen("exams") }, onRoute) }
         }
         item { Supporting("${klass ?: "尚未选择班级"} · 离线可用", Modifier.padding(vertical = 12.dp)) }
     }
@@ -142,9 +142,9 @@ import java.time.temporal.ChronoUnit
 }
 
 // Keep the product shell entry points stable; feature implementation lives with its policy.
-@Composable internal fun TimetableScreen(state: AcademicState, klass: String?, requestedWeek: Int?, onClass: () -> Unit, onLesson: (TeachingMeeting) -> Unit) =
-    top.hicancan.studev.timetable.TimetableScreen(state, klass, requestedWeek, onClass, onLesson)
-@Composable internal fun LessonDetail(meeting: TeachingMeeting, periods: List<TeachingPeriod>, onClose: () -> Unit, onRoute: (String, Boolean) -> Unit) =
-    top.hicancan.studev.timetable.LessonDetail(meeting, periods, onClose, onRoute)
-@Composable internal fun ExamsScreen(state: AcademicState, klass: String?, onClass: () -> Unit, onRoute: (String, Boolean) -> Unit) =
-    top.hicancan.studev.exams.ExamsScreen(state, klass, onClass, onRoute)
+@Composable internal fun TimetableScreen(state: AcademicState, klass: String?, requestedWeek: Int?, onClass: () -> Unit, onLesson: (TeachingMeeting) -> Unit, campus: CampusPackage? = null) =
+    top.hicancan.studev.timetable.TimetableScreen(state, klass, requestedWeek, onClass, onLesson, campus)
+@Composable internal fun LessonDetail(meeting: TeachingMeeting, periods: List<TeachingPeriod>, onClose: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) =
+    top.hicancan.studev.timetable.LessonDetail(meeting, periods, onClose, onRoute, campus)
+@Composable internal fun ExamsScreen(state: AcademicState, klass: String?, onClass: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) =
+    top.hicancan.studev.exams.ExamsScreen(state, klass, onClass, onRoute, campus)

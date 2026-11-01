@@ -15,7 +15,7 @@ import top.hicancan.studev.search.AcademicSearch
 import top.hicancan.studev.search.CampusSearch
 
 data class AcademicState(val repository: AcademicRepository? = null, val term: TeachingTerm? = null, val periods: List<TeachingPeriod> = emptyList(),
-    val classes: List<TeachingClass> = emptyList(), val examClasses: List<String> = emptyList(), val schedule: ClassSchedule? = null,
+    val classes: List<TeachingClass> = emptyList(), val coursePlans: List<CoursePlan> = emptyList(), val examClasses: List<String> = emptyList(), val schedule: ClassSchedule? = null,
     val exams: List<Exam> = emptyList(), val rooms: RoomIndex? = null, val busy: Boolean = true, val classBusy: Boolean = false,
     val error: String? = null, val events: List<CampusEvent> = emptyList())
 class CampusModel(application: Application) : AndroidViewModel(application) {
@@ -64,9 +64,9 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         }
     }
     private suspend fun loadRepository(repo: AcademicRepository) {
-        val term = repo.term(); val periods = repo.periods(); val classes = repo.classes(); val rooms = repo.rooms()
+        val term = repo.term(); val periods = repo.periods(); val classes = repo.classes(); val coursePlans = runCatching { repo.coursePlans() }.getOrDefault(emptyList()); val rooms = repo.rooms()
         val examClasses = repo.examIndex()?.classes.orEmpty()
-        _state.value = AcademicState(repo, term, periods, classes, examClasses, rooms = rooms, busy = false)
+        _state.value = AcademicState(repo, term, periods, classes, coursePlans, examClasses, rooms = rooms, busy = false)
         loadClass(settings.state.value.klass)
     }
     fun chooseClass(id: String) {

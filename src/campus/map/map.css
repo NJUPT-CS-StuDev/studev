@@ -3,6 +3,7 @@
 .campus-map:has(.campus-map-plan) .campus-map-categories { display: none; }
 .campus-map { position: relative; height: 100%; min-height: 360px; overflow: hidden; }
 .campus-map-canvas { position: absolute; inset: 0; }
+.campus-map-attribution { position: absolute; right: 8px; bottom: 8px; z-index: 3; padding: 3px 7px; border-radius: 4px; background: color-mix(in srgb, var(--paper) 88%, transparent); color: var(--muted); font-size: 11px; line-height: 16px; pointer-events: none; }
 
 .campus-map-panel {
   position: absolute; top: 16px; left: 16px; z-index: 2;

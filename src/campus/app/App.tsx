@@ -73,7 +73,7 @@ function App({ initialRoute }: { initialRoute: AppRoute }) {
         }
         return historyClientPromiseRef.current;
     }, [examClient]);
-    const teachingClient = useMemo(() => new TeachingScheduleClient(APP_CONFIG.DATA_URLS.TIMETABLE), []);
+    const teachingClient = useMemo(() => new TeachingScheduleClient(APP_CONFIG.DATA_URLS.TIMETABLE, APP_CONFIG.DATA_URLS.COURSE_PLANS, APP_CONFIG.DATA_URLS.TEACHING_CLASSES), []);
     const classroomClient = useMemo(() => new ClassroomAvailabilityClient(APP_CONFIG.DATA_URLS.CLASSROOMS), []);
     const disposeTimerRef = useRef<number | null>(null);
     useEffect(() => {

@@ -39,7 +39,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
     return palette[index % palette.size]
 }
 
-@Composable internal fun TimetableScreen(state: AcademicState, klass: String?, requestedWeek: Int?, onClass: () -> Unit, onLesson: (TeachingMeeting) -> Unit) {
+@Composable internal fun TimetableScreen(state: AcademicState, klass: String?, requestedWeek: Int?, onClass: () -> Unit, onLesson: (TeachingMeeting) -> Unit, campus: CampusPackage? = null) {
     val today = CampusDay.now().toLocalDate()
     val weeks = state.term!!.weeks
     var number by rememberSaveable(state.term.term, requestedWeek) { mutableIntStateOf(requestedWeek?.takeIf { n -> weeks.any { it.week == n } } ?: CampusDay.weekOf(weeks, today)?.week ?: 1) }
@@ -107,7 +107,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
                         val start = state.periods.indexOfFirst { it.period == cell.periods.first() }
                         val end = state.periods.indexOfFirst { it.period == cell.periods.last() }
                         val width = maxWidth / cell.columns
-                        if (start >= 0 && end >= start) CourseCell(cell, dayView,
+                        if (start >= 0 && end >= start) CourseCell(cell, dayView, campus,
                             Modifier.offset(x = width * cell.slot, y = rowHeight * start).width(width).height(rowHeight * (end-start+1)).padding(horizontal = 1.dp, vertical = 5.dp),
                             { byId[cell.id]?.let(onLesson) })
                     }
@@ -122,7 +122,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
 )
 
-@Composable private fun CourseCell(cell: TimetableCell, dayView: Boolean, modifier: Modifier, onClick: () -> Unit) {
+@Composable private fun CourseCell(cell: TimetableCell, dayView: Boolean, campus: CampusPackage?, modifier: Modifier, onClick: () -> Unit) {
     val colours = courseColours(cell.colourIndex, cell.state != "active")
     val suspended = cell.state == "suspended"
     val small = !dayView && cell.columns > 1
@@ -140,7 +140,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
             Text(cell.course, fontSize = if (dayView) 15.sp else if (small) 9.sp else 11.sp, lineHeight = if (dayView) 19.sp else if (small) 11.sp else 14.sp,
                 fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = if (dayView) 2 else if (small) 3 else 5, overflow = TextOverflow.Ellipsis,
                 textDecoration = if (suspended) TextDecoration.LineThrough else TextDecoration.None)
-            if (cell.room.isNotEmpty()) Text(cell.room, fontSize = if (dayView) 12.sp else if (small) 8.sp else 9.sp, lineHeight = if (dayView) 15.sp else 11.sp, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+            if (cell.room.isNotEmpty()) Text(roomDisplayName(cell.room, campus?.byId ?: emptyMap()) ?: cell.room, fontSize = if (dayView) 12.sp else if (small) 8.sp else 9.sp, lineHeight = if (dayView) 15.sp else 11.sp, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
             if (cell.note.isNotEmpty()) Text(cell.note, fontSize = if (dayView) 12.sp else 9.sp, lineHeight = if (dayView) 15.sp else 11.sp, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
             if (cell.label.isNotEmpty()) Text(cell.label, fontSize = if (dayView) 12.sp else 8.sp, lineHeight = if (dayView) 15.sp else 10.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
         }
@@ -149,7 +149,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun LessonDetail(meeting: TeachingMeeting, periods: List<TeachingPeriod>, onClose: () -> Unit, onRoute: (String, Boolean) -> Unit) {
+@Composable internal fun LessonDetail(meeting: TeachingMeeting, periods: List<TeachingPeriod>, onClose: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) {
     val colours = courseColours(TimetablePresentation.colourIndex(meeting))
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp).testTag("lesson-detail"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -161,11 +161,11 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
             Supporting("${periods.find { it.period == meeting.periods.first() }?.start.orEmpty()} — ${periods.find { it.period == meeting.periods.last() }?.end.orEmpty()}")
             HorizontalDivider()
             DetailLine("授课教师", meeting.teachers.joinToString("、") { it.name }.ifEmpty { "待公布" })
-            DetailLine("上课地点", listOfNotNull(meeting.campus, meeting.location ?: meeting.room).joinToString(" · ").ifEmpty { "待公布" })
+            DetailLine("上课地点", listOfNotNull(meeting.campus, roomDisplayName(meeting.room, campus?.byId ?: emptyMap())).joinToString(" · ").ifEmpty { "待公布" })
             TimetablePresentation.note(meeting).takeIf { it.isNotEmpty() }?.let { DetailLine("授课方式", it) }
             DetailLine("教学周", meeting.weeks.joinToString("、") + " 周")
             meeting.course.credits?.let { DetailLine("学分与考核", "$it 学分 · ${meeting.course.assessment ?: "待公布"}") }
-            if (meeting.room != null) Button({ onRoute(meeting.room, false) }, Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null); Spacer(Modifier.width(8.dp)); Text("去这里 · ${meeting.room}") }
+            if (meeting.room != null) Button({ onRoute(meeting.room, false) }, Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null); Spacer(Modifier.width(8.dp)); Text("去这里 · ${roomDisplayName(meeting.room, campus?.byId ?: emptyMap())}") }
         }
     }
 }

@@ -150,8 +150,8 @@ private fun PlaceRow(place: Place, campus: CampusPackage, icon: ImageVector, onP
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
         Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs.dp)) {
-            Text(place.id, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOf(place.kindLabel, campus.byId[place.parent]?.id ?: "仙林校区").joinToString(" · "),
+            Text(place.displayName(campus.byId), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOf(place.kindLabel, campus.byId[place.parent]?.displayName(campus.byId) ?: "仙林校区").joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

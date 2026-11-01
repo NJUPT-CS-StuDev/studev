@@ -90,7 +90,7 @@ internal fun MapControls(controller: CampusMapController, status: LocationStatus
                 }
             }
             Surface(Modifier.align(Alignment.BottomStart).padding(bottom = homePeek), color = MaterialTheme.colorScheme.surface.copy(alpha = .9f), shape = MaterialTheme.shapes.small) {
-                Text("© OpenStreetMap · Protomaps · njupt-data", Modifier.padding(horizontal = Tokens.Space.s.dp, vertical = Tokens.Space.xs.dp),
+                Text("© njupt-map · © OpenStreetMap contributors", Modifier.padding(horizontal = Tokens.Space.s.dp, vertical = Tokens.Space.xs.dp),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -171,13 +171,13 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                 if (sheetMode != MapSheetState.Collapsed) {
                     Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs.dp)) {
-                        Text(place.id, style = MaterialTheme.typography.headlineLarge)
-                        Text(listOf(place.kindLabel, campus.byId[place.parent]?.id ?: "仙林校区").joinToString(" · "),
+                        Text(place.displayName(campus.byId), style = MaterialTheme.typography.headlineLarge)
+                        Text(listOf(place.kindLabel, campus.byId[place.parent]?.displayName(campus.byId) ?: "仙林校区").joinToString(" · "),
                             style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onClose, Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "关闭地点") }
                 }
-                Text("用途 · ${place.use}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("用途 · ${place.category ?: place.kindLabel}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 PlaceHours(place)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
                     FilledTonalButton(onClick = onRoute, modifier = Modifier.weight(1f)) {
@@ -191,7 +191,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                         val link = android.net.Uri.Builder().scheme("https").authority(android.net.Uri.parse(PLATFORM_ORIGIN).host).path("/map/")
                             .appendQueryParameter("place", place.id).build().toString()
                         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "${place.id} · 南邮仙林校区\n$link")
+                            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "${place.displayName(campus.byId)} · 南邮仙林校区\n$link")
                         }, "分享地点"))
                     }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(Tokens.Space.xs.dp)); Text("分享")
@@ -216,7 +216,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                         OutlinedCard(onClick = { onPlace(parent) }, Modifier.fillMaxWidth()) {
                             Row(Modifier.fillMaxWidth().padding(Tokens.Space.l.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Apartment, null, tint = MaterialTheme.colorScheme.primary)
-                                Text(parent.id, Modifier.weight(1f).padding(start = Tokens.Space.m.dp), style = MaterialTheme.typography.titleMedium)
+                                Text(parent.displayName(campus.byId), Modifier.weight(1f).padding(start = Tokens.Space.m.dp), style = MaterialTheme.typography.titleMedium)
                                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, "查看所在楼栋")
                             }
                         }

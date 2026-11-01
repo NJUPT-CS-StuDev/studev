@@ -1,0 +1,171 @@
+{
+  "cases": [
+    {
+      "place": {
+        "id": "仙林/菊苑18栋",
+        "kind": "building",
+        "parent": "仙林",
+        "names": [
+          "菊苑18栋"
+        ],
+        "centre": [
+          118.92841151818183,
+          32.115005
+        ],
+        "sources": [
+          "map"
+        ],
+        "category": "宿舍",
+        "featured": true
+      },
+      "parents": [
+        {
+          "id": "仙林",
+          "kind": "campus",
+          "parent": "",
+          "names": [
+            "南京邮电大学仙林校区"
+          ],
+          "centre": [
+            118.9260639257143,
+            32.11526898999999
+          ],
+          "sources": [
+            "map"
+          ]
+        }
+      ],
+      "expected": "菊苑18栋"
+    },
+    {
+      "place": {
+        "id": "仙林/建筑/024",
+        "kind": "building",
+        "parent": "仙林/建筑",
+        "names": [],
+        "centre": [
+          118.92713587142859,
+          32.121924428571425
+        ],
+        "sources": [
+          "map"
+        ],
+        "category": "宿舍",
+        "featured": true
+      },
+      "parents": [],
+      "expected": "未命名建筑"
+    },
+    {
+      "place": {
+        "id": "仙林/教3-601",
+        "kind": "room",
+        "parent": "仙林/教3/6",
+        "names": [
+          "601",
+          "语音10室(教3-601)"
+        ],
+        "centre": [
+          118.92527044,
+          32.110737140000005
+        ],
+        "floor": "6",
+        "seats": 56,
+        "room_kinds": [
+          "仙林语音室"
+        ],
+        "sources": [
+          "map"
+        ],
+        "category": "教室"
+      },
+      "parents": [
+        {
+          "id": "仙林/教3/6",
+          "kind": "floor",
+          "parent": "仙林/教3",
+          "names": [
+            "6层"
+          ],
+          "levels": 6,
+          "sources": [
+            "map"
+          ]
+        },
+        {
+          "id": "仙林/教3",
+          "kind": "building",
+          "parent": "仙林",
+          "names": [
+            "教3",
+            "教三",
+            "教学楼3"
+          ],
+          "centre": [
+            118.92503893076925,
+            32.11074917692307
+          ],
+          "sources": [
+            "map"
+          ],
+          "category": "教学",
+          "featured": true
+        },
+        {
+          "id": "仙林",
+          "kind": "campus",
+          "parent": "",
+          "names": [
+            "南京邮电大学仙林校区"
+          ],
+          "centre": [
+            118.9260639257143,
+            32.11526898999999
+          ],
+          "sources": [
+            "map"
+          ]
+        }
+      ],
+      "expected": "601"
+      ,"roomExpected": "教3-601"
+    },
+    {
+      "place": {
+        "id": "仙林/2食堂公交站",
+        "kind": "place",
+        "parent": "仙林",
+        "names": [
+          "2食堂公交站",
+          "2食堂"
+        ],
+        "centre": [
+          118.927617,
+          32.1138776
+        ],
+        "sources": [
+          "map"
+        ],
+        "category": "食堂"
+      },
+      "parents": [
+        {
+          "id": "仙林",
+          "kind": "campus",
+          "parent": "",
+          "names": [
+            "南京邮电大学仙林校区"
+          ],
+          "centre": [
+            118.9260639257143,
+            32.11526898999999
+          ],
+          "sources": [
+            "map"
+          ]
+        }
+      ],
+      "expected": "2食堂公交站"
+    }
+  ]
+}

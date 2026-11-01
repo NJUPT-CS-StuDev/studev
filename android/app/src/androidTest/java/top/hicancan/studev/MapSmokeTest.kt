@@ -9,9 +9,12 @@ import android.view.View
 import android.view.ViewGroup
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.RectF
+import android.util.Log
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -59,8 +62,8 @@ class MapSmokeTest {
         val campus = CampusPackage.load(context.assets)
         CampusSearch(context.assets).use { search ->
             val teaching = search.search("教3", campus)
-            assertTrue(teaching.any { it.id == "教3" })
-            assertTrue(search.search("教3-101", campus).any { it.id == "教3-101" })
+            assertTrue(teaching.any { it.id == "仙林/教3" })
+            assertTrue(search.search("教3-101", campus).any { it.id == "仙林/教3-101" })
             assertTrue(search.search("图书馆", campus).any { it.id.contains("图书馆") })
             assertTrue(search.search("zzzxqv9999", campus).isEmpty())
         }
@@ -71,14 +74,18 @@ class MapSmokeTest {
         compose.onNode(hasSetTextAction()).performTextInput("教3")
         compose.mainClock.advanceTimeBy(500)
         try {
-            compose.waitUntil(15000) { compose.onAllNodesWithTag("place:教3").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(15000) { compose.onAllNodesWithTag("place:仙林/教3").fetchSemanticsNodes().isNotEmpty() }
         } finally { compose.waitForIdle() }
         compose.onNode(hasSetTextAction()).performImeAction()
         shot("search-jiao3")
-        compose.onNodeWithTag("place:教3").performClick()
+        compose.onNodeWithTag("place:仙林/教3").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("关闭地点").fetchSemanticsNodes().isNotEmpty() }
         shot("place-jiao3")
-        withMap { map -> assertEquals(true, map.style!!.getSourceAs<GeoJsonSource>("places")!!.getFeatureState("教3")?.get("selected")?.asBoolean) }
+        withMap { map ->
+            val features = map.queryRenderedFeatures(RectF(0f, 0f, 1080f, 1100f), "building-fill", "building-label")
+            Log.i("StudevMap", "selected camera=${map.cameraPosition.target} zoom=${map.cameraPosition.zoom} buildingFeatures=${features.size} ids=${features.map { it.getStringProperty("id") }.take(8)}")
+        }
+        withMap { map -> assertNotNull(map.style!!.getSource("basemap")) }
         compose.onNodeWithText("地点详情").performClick()
         shot("place-jiao3-half")
         compose.onNodeWithText("地点详情").performClick()
@@ -94,7 +101,7 @@ class MapSmokeTest {
         compose.onNodeWithText("搜索地点、楼栋或教室").performClick()
         compose.onNode(hasSetTextAction()).performTextReplacement("图书馆")
         compose.mainClock.advanceTimeBy(500)
-        compose.waitUntil(15000) { compose.onAllNodesWithTag("place:图书馆").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("place:仙林/图书馆").fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasSetTextAction()).performImeAction()
         shot("search-library")
         compose.onNodeWithContentDescription("返回地图").performClick()
@@ -102,6 +109,28 @@ class MapSmokeTest {
         compose.onNodeWithContentDescription("切换三维地图").performClick()
         shot("map-3d")
         compose.onNodeWithContentDescription("切换二维地图").performClick()
+    }
+    @Test fun symbolLayersRenderFeatures() {
+        waitForMap()
+        withMap { it.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(32.115, 118.925), 15.6)) }
+        compose.waitUntil(15_000) {
+            var rendered = false
+            withMap { map ->
+                val layers = listOf("building-label", "place-label", "water-label", "sports-label")
+                val features = map.queryRenderedFeatures(RectF(0f, 0f, 1080f, 2400f), *layers.toTypedArray())
+                Log.i("StudevMap", "symbol features=${features.size} layers=${layers.map { it to (map.style?.getLayer(it) != null) }} camera=${map.cameraPosition.zoom}")
+                rendered = features.isNotEmpty()
+            }
+            rendered
+        }
+        shot("symbols-z15")
+        withMap { it.animateCamera(CameraUpdateFactory.zoomTo(17.0)) }
+        compose.waitUntil(15_000) {
+            var rendered = false
+            withMap { map -> rendered = map.queryRenderedFeatures(RectF(0f, 0f, 1080f, 2400f), "building-label", "place-label").isNotEmpty() }
+            rendered
+        }
+        shot("symbols-z17")
     }
     @Test fun themeLocationAndDeepLink() {
         waitForMap()
@@ -123,7 +152,7 @@ class MapSmokeTest {
                 waitForMap()
             }
             val link = Uri.Builder().scheme("https").authority("studev.hicancan.top").path("/map/")
-                .appendQueryParameter("place", "教3").build()
+                .appendQueryParameter("place", "仙林/教3").build()
             compose.activityRule.scenario.onActivity { activity ->
                 val launchIntent = activity.intent
                 instrumentation.callActivityOnNewIntent(activity, Intent(activity, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(link))

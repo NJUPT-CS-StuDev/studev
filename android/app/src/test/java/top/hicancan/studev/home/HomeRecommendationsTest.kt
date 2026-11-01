@@ -11,7 +11,7 @@ class HomeRecommendationsTest {
     private fun time(hour: Int, minute: Int = 0) = LocalDateTime.of(2026, 10, 30, hour, minute)
     private fun hours(start: String, end: String) = OpeningHours((1..7).associate { it.toString() to listOf(listOf(start, end)) })
     private fun place(id: String, category: String, hours: OpeningHours? = null, featured: Boolean = true) = Place(
-        id, "building", "campus", listOf(id), centre = listOf(118.926, 32.114), sources = listOf("fixture"), use = "测试用途", routing = Endpoint.Target(id), category = category, hours = hours, featured = featured)
+        id, "building", "campus", listOf(id), centre = listOf(118.926, 32.114), sources = listOf("fixture"), routing = Endpoint.Target(id), category = category, hours = hours, featured = featured)
 
     @Test fun openingBoundariesAndClosingThreshold() {
         val schedule = hours("08:00", "22:00")

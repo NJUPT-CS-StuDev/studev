@@ -22,7 +22,7 @@ class AppModel(application: Application, private val state: SavedStateHandle) : 
     init { load() }
     fun load() { viewModelScope.launch {
         _error.value = null
-        try { _campus.value = CampusPackage.load(getApplication<Application>().assets) }
+        try { _campus.value = CampusPackage.load(getApplication<Application>()) }
         catch (e: java.io.IOException) { _error.value = e.message ?: "无法读取校园数据" }
         catch (e: kotlinx.serialization.SerializationException) { _error.value = e.message ?: "校园数据格式有误" }
     } }
