@@ -73,6 +73,7 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
             // shards are fetched by AcademicRepository and retained in files/.
             if (!bundleAllData.get()) {
                 include("space/**")
+                include("entities/**")
                 include("hours.json")
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "rooms/index.json")
