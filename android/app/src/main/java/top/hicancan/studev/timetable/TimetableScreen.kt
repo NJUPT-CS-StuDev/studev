@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.hicancan.studev.campus.*
 import top.hicancan.studev.data.*
+import top.hicancan.studev.me.TimetableEdits
 import top.hicancan.studev.ui.theme.Tokens
 import java.time.LocalDate
 
@@ -39,7 +40,16 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
     return palette[index % palette.size]
 }
 
-@Composable internal fun TimetableScreen(state: AcademicState, klass: String?, requestedWeek: Int?, onClass: () -> Unit, onLesson: (TeachingMeeting) -> Unit, campus: CampusPackage? = null) {
+@Composable internal fun TimetableScreen(
+    state: AcademicState,
+    klass: String?,
+    requestedWeek: Int?,
+    onClass: () -> Unit,
+    onLesson: (TeachingMeeting) -> Unit,
+    campus: CampusPackage? = null,
+    edits: TimetableEdits = TimetableEdits(),
+    onManageCourses: (() -> Unit)? = null,
+) {
     val today = CampusDay.now().toLocalDate()
     val weeks = state.term!!.weeks
     var number by rememberSaveable(state.term.term, requestedWeek) { mutableIntStateOf(requestedWeek?.takeIf { n -> weeks.any { it.week == n } } ?: CampusDay.weekOf(weeks, today)?.week ?: 1) }
@@ -50,9 +60,19 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
     val cells = remember(meetings, number) { TimetablePresentation.cells(meetings, number) }
     val byId = remember(meetings) { meetings.associateBy { it.id } }
     val days = if (dayView) listOf(day) else (1..7).toList()
+    val editCount = edits.hidden.size + edits.added.size
     Column(Modifier.fillMaxSize().testTag("timetable")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClass) { Icon(Icons.Outlined.Groups, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(klass ?: "选择班级") }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClass) { Icon(Icons.Outlined.Groups, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(klass ?: "选择班级") }
+                if (klass != null && onManageCourses != null) {
+                    TextButton(onManageCourses, modifier = Modifier.testTag("manage-courses")) {
+                        Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (editCount > 0) "课程($editCount)" else "课程")
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(!dayView, { dayView = false }, { Text("周视图") }, modifier = Modifier.testTag("week-view"), colors = timetableChipColours())
                 FilterChip(dayView, { dayView = true }, { Text("日视图") }, modifier = Modifier.testTag("day-view"), colors = timetableChipColours())
@@ -149,7 +169,15 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun LessonDetail(meeting: TeachingMeeting, periods: List<TeachingPeriod>, onClose: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) {
+@Composable internal fun LessonDetail(
+    meeting: TeachingMeeting,
+    periods: List<TeachingPeriod>,
+    onClose: () -> Unit,
+    onRoute: (String, Boolean) -> Unit,
+    campus: CampusPackage? = null,
+    isAddedCourse: Boolean = false,
+    onRemoveCourse: (() -> Unit)? = null,
+) {
     val colours = courseColours(TimetablePresentation.colourIndex(meeting))
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp).testTag("lesson-detail"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -166,11 +194,232 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
             DetailLine("教学周", meeting.weeks.joinToString("、") + " 周")
             meeting.course.credits?.let { DetailLine("学分与考核", "$it 学分 · ${meeting.course.assessment ?: "待公布"}") }
             if (meeting.room != null) Button({ onRoute(meeting.room, false) }, Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null); Spacer(Modifier.width(8.dp)); Text("去这里 · ${roomDisplayName(meeting.room, campus?.byId ?: emptyMap())}") }
+            if (onRemoveCourse != null) {
+                OutlinedButton(
+                    onClick = { onRemoveCourse(); onClose() },
+                    modifier = Modifier.fillMaxWidth().testTag("lesson-remove"),
+                ) {
+                    Icon(if (isAddedCourse) Icons.Outlined.DeleteOutline else Icons.Outlined.VisibilityOff, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isAddedCourse) "移出我的课表" else "我不上这门课")
+                }
+            }
         }
     }
 }
 @Composable private fun DetailLine(title: String, text: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Supporting(title); Text(text, style = MaterialTheme.typography.bodyLarge) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable internal fun CourseManagerSheet(
+    className: String,
+    state: AcademicState,
+    edits: TimetableEdits,
+    initialQuery: String = "",
+    onHide: (String) -> Unit,
+    onShow: (String) -> Unit,
+    onAdd: (CatalogCourse) -> Unit,
+    onRemoveAdded: (String) -> Unit,
+    onReset: () -> Unit,
+    onClose: () -> Unit,
+) {
+    var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
+    val ownMeetings = state.rawSchedule?.meetings.orEmpty()
+    val managed = remember(ownMeetings, state.catalog, edits) {
+        CourseCatalog.managedCourses(ownMeetings, state.catalog, edits)
+    }
+    val present = remember(managed) {
+        managed.filter { !it.hidden }.mapTo(HashSet()) { it.id }
+    }
+    val classCourses = remember(managed) { managed.filter { it.source == "class" } }
+    val addedCourses = remember(managed) { managed.filter { it.source == "added" } }
+    val results = remember(state.catalog, query) {
+        if (query.isBlank() || state.catalog.isEmpty()) emptyList()
+        else CourseCatalog.searchCatalog(state.catalog, query)
+    }
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp).testTag("course-manager"),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Supporting("$className · 我的课表")
+                    Text("管理课程", style = MaterialTheme.typography.headlineSmall)
+                }
+                if (edits.hidden.isNotEmpty() || edits.added.isNotEmpty()) {
+                    TextButton(onReset, modifier = Modifier.testTag("course-manager-reset")) {
+                        Text("恢复默认")
+                    }
+                }
+            }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth().testTag("course-manager-search"),
+                placeholder = { Text("搜索课程、教师、课程号或教室，加入重修与选修") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton({ query = "" }) { Icon(Icons.Outlined.Close, "清空搜索") }
+                    }
+                },
+                singleLine = true,
+            )
+            if (query.isNotBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        when {
+                            state.catalogBusy -> "正在加载全校课程…"
+                            state.catalogError != null -> state.catalogError
+                            state.catalog.isEmpty() -> "正在准备课程目录…"
+                            else -> "找到 ${results.size}${if (results.size == 60) "+" else ""} 个教学班"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    if (!state.catalogBusy && state.catalog.isNotEmpty() && results.isEmpty()) {
+                        Supporting("没有匹配的课程。可以试试只输入课程名中的几个字，或教师姓名。")
+                    }
+                    results.forEach { course ->
+                        val id = CourseCatalog.catalogId(course)
+                        val inTimetable = id in present
+                        val first = course.meetings.first()
+                        val teachers = course.meetings.flatMap { m -> m.teachers.map { it.name } }.distinct().joinToString("、").ifEmpty { "教师未定" }
+                        val suspended = CourseCatalog.suspensionNote(course.meetings)
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth().testTag("catalog-course-$id"),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        buildString {
+                                            append(first.course.name)
+                                            first.course.code?.let { append(" · $it") }
+                                            first.course.credits?.let { append(" · $it 学分") }
+                                        },
+                                        style = MaterialTheme.typography.titleSmall,
+                                    )
+                                    Supporting(listOfNotNull(teachers, first.campus).joinToString(" · "))
+                                    course.meetings.forEach { meeting ->
+                                        Text(CourseCatalog.meetingLine(meeting), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    if (suspended != null) {
+                                        Text(suspended, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                    }
+                                    if (first.classes.isNotEmpty()) {
+                                        val classSummary = first.classes.take(6).joinToString("、") + if (first.classes.size > 6) " 等 ${first.classes.size} 个班" else ""
+                                        Supporting("教学班：$classSummary")
+                                    }
+                                }
+                                if (inTimetable) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            val existing = managed.find { it.id == id }
+                                            if (existing?.source == "added") onRemoveAdded(id) else onHide(id)
+                                        },
+                                        modifier = Modifier.testTag("course-toggle-$id"),
+                                    ) {
+                                        Icon(Icons.Outlined.Check, null, Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("已加入")
+                                    }
+                                } else {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            val existing = managed.find { it.id == id }
+                                            if (existing?.source == "class") onShow(id) else onAdd(course)
+                                        },
+                                        modifier = Modifier.testTag("course-toggle-$id"),
+                                    ) {
+                                        Icon(Icons.Outlined.Add, null, Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("加入")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
+            if (addedCourses.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("自己加入的课程", style = MaterialTheme.typography.titleSmall)
+                    addedCourses.forEach { course ->
+                        ManagedCourseRow(
+                            course = course,
+                            actionLabel = "移出",
+                            actionIcon = Icons.Outlined.DeleteOutline,
+                            onAction = { onRemoveAdded(course.id) },
+                        )
+                    }
+                }
+                HorizontalDivider()
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("班级课表中的课程", style = MaterialTheme.typography.titleSmall)
+                Supporting("没有选的课点「不上」，它就不再出现在你的课表里；随时可以恢复。")
+                classCourses.forEach { course ->
+                    ManagedCourseRow(
+                        course = course,
+                        actionLabel = if (course.hidden) "恢复" else "不上",
+                        actionIcon = if (course.hidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        onAction = { if (course.hidden) onShow(course.id) else onHide(course.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun ManagedCourseRow(
+    course: TimetableCourse,
+    actionLabel: String,
+    actionIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    onAction: () -> Unit,
+) {
+    val first = course.meetings.first()
+    val teachers = course.meetings.flatMap { m -> m.teachers.map { it.name } }.distinct().joinToString("、").ifEmpty { "教师未定" }
+    val suspended = CourseCatalog.suspensionNote(course.meetings)
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (course.hidden) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().testTag("managed-course-${course.id}"),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    first.course.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    textDecoration = if (course.hidden) TextDecoration.LineThrough else TextDecoration.None,
+                    color = if (course.hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                )
+                Supporting(teachers)
+                course.meetings.forEach { meeting ->
+                    Text(CourseCatalog.meetingLine(meeting), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (suspended != null) {
+                    Text(suspended, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            OutlinedButton(onClick = onAction, modifier = Modifier.testTag("managed-action-${course.id}")) {
+                Icon(actionIcon, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(actionLabel)
+            }
+        }
+    }
 }
 
 

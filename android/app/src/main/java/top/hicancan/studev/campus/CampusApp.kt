@@ -53,6 +53,7 @@ import top.hicancan.studev.timetable.*
     var roomDate by rememberSaveable { mutableStateOf<String?>(null) }
     var roomPeriod by rememberSaveable { mutableStateOf<Int?>(null) }
     var classPicker by rememberSaveable { mutableStateOf(false) }
+    var courseManager by rememberSaveable { mutableStateOf(false) }
     var lesson by remember { mutableStateOf<TeachingMeeting?>(null) }
     val destinations = rememberSaveableStateHolder()
     var pendingMap by rememberSaveable { mutableStateOf<String?>(null) }
@@ -108,7 +109,10 @@ import top.hicancan.studev.timetable.*
                 pendingMap = uri.getQueryParameter("place"); openScreen("map")
                 if (uri.getQueryParameter("route") == "true") pendingMap?.let { go(it, false) }
             }
-            "/search/timetable" -> { week = uri.getQueryParameter("week")?.toIntOrNull(); openScreen("timetable", query) }
+            "/search/timetable" -> {
+                week = uri.getQueryParameter("week")?.toIntOrNull(); openScreen("timetable", query)
+                if (query.isNotBlank()) { courseManager = true; model.openCourseManager() }
+            }
             "/search/exam" -> openScreen("exams")
             "/search/classrooms" -> {
                 roomDate = uri.getQueryParameter("date"); roomPeriod = uri.getQueryParameter("period")?.toIntOrNull()
@@ -158,10 +162,22 @@ import top.hicancan.studev.timetable.*
                     if (state.error != null) TextButton(model::load) { Text("${state.error} · 重试") }
                     Box(Modifier.weight(1f)) { destinations.SaveableStateProvider(screen) { when (screen) {
                         "home" -> CampusHome(state, preferences.klass, now, walk, access.granted, requestLocation, { classPicker = true }, { openScreen(it) }, { lesson = it }, ::go, campusPackage)
-                        "timetable" -> TimetableScreen(state, preferences.klass, week, { classPicker = true }, { lesson = it }, campusPackage)
+                        "timetable" -> TimetableScreen(
+                            state = state,
+                            klass = preferences.klass,
+                            requestedWeek = week,
+                            onClass = { classPicker = true },
+                            onLesson = { lesson = it },
+                            campus = campusPackage,
+                            edits = state.term?.let { preferences.timetableEdits(it.term) } ?: TimetableEdits(),
+                            onManageCourses = { courseManager = true; model.openCourseManager() },
+                        )
                         "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go, campusPackage)
                         "rooms" -> RoomsScreen(state.repository!!, state.rooms!!, preferences.campus, query, roomDate, roomPeriod, { value -> model.settings.update { it.copy(campus = value) } }, ::go)
-                        "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }) { target, text -> openScreen(target, text) }
+                        "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }) { target, text ->
+                            openScreen(target, text)
+                            if (target == "timetable" && text.isNotBlank()) { courseManager = true; model.openCourseManager() }
+                        }
                         "me", "calendar" -> MeScreen(model, state, preferences, screen == "calendar", { classPicker = true }, { screen = "calendar" }, onAccount)
                     } } }
                 }
@@ -169,5 +185,33 @@ import top.hicancan.studev.timetable.*
         }
     }
     if (classPicker && !state.busy) ClassPicker(state, { model.chooseClass(it); classPicker = false }, { classPicker = false })
-    lesson?.let { LessonDetail(it, state.periods, { lesson = null }, ::go, campusPackage) }
+    if (courseManager && !state.busy && preferences.klass != null && state.term != null) {
+        CourseManagerSheet(
+            className = preferences.klass!!,
+            state = state,
+            edits = preferences.timetableEdits(state.term!!.term),
+            initialQuery = query,
+            onHide = model::hideCourse,
+            onShow = model::showCourse,
+            onAdd = model::addCourse,
+            onRemoveAdded = model::removeAddedCourse,
+            onReset = model::resetTimetableEdits,
+            onClose = { courseManager = false; query = "" },
+        )
+    }
+    lesson?.let { currentLesson ->
+        val isAdded = state.rawSchedule?.meetings?.none { it.id == currentLesson.id } == true
+        LessonDetail(
+            meeting = currentLesson,
+            periods = state.periods,
+            onClose = { lesson = null },
+            onRoute = ::go,
+            campus = campusPackage,
+            isAddedCourse = isAdded,
+            onRemoveCourse = {
+                val id = currentLesson.teaching_class.id
+                if (isAdded) model.removeAddedCourse(id) else model.hideCourse(id)
+            },
+        )
+    }
 }

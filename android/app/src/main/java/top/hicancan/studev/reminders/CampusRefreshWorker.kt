@@ -14,7 +14,8 @@ class CampusRefreshWorker(context: Context, parameters: WorkerParameters) : Coro
     override suspend fun doWork(): Result = try {
         val settings = CampusSettings(applicationContext).state.value
         val repo = AcademicRepository.open(applicationContext)
-        val events = CampusEvents.build(repo.term(), repo.periods(), settings.klass?.let { repo.schedule(it) }, settings.klass?.let { repo.exams(it) }.orEmpty())
+        val term = repo.term()
+        val events = CampusEvents.build(term, repo.periods(), settings.klass?.let { repo.effectiveSchedule(it, settings.timetableEdits(term.term)) }, settings.klass?.let { repo.exams(it) }.orEmpty())
         DeviceSchedule.update(applicationContext, events, settings.klass)
         NextLessonWidget().refreshAll(applicationContext)
         Result.success()

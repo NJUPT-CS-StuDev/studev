@@ -51,15 +51,29 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun classes() = read<List<TeachingClass>>("teaching/${release.teaching}/classes.json")
     suspend fun coursePlans() = read<CoursePlanFile>("entities/information.json").items.filter { it.subtype == "information:course-plan" }
     suspend fun teachingClasses() = read<AgentEntityFile>("entities/agent.json").items.filter { it.subtype == "agent:teaching-class" }
+    private fun enrichMeetings(meetings: List<TeachingMeeting>, groups: Map<String, AgentEntity>): List<TeachingMeeting> =
+        meetings.map { meeting ->
+            groups[meeting.teaching_class.id]?.let { group ->
+                meeting.copy(teaching_class = TeachingGroup(group.id, group.names.firstOrNull(), group.size, group.enrolled, group.capacity))
+            } ?: meeting
+        }
+    suspend fun meetings(): List<TeachingMeeting> {
+        val groups = teachingClasses().associateBy { it.id }
+        return enrichMeetings(read<List<TeachingMeeting>>("teaching/${release.teaching}/meetings.json"), groups)
+    }
+    suspend fun catalog(): List<top.hicancan.studev.timetable.CatalogCourse> =
+        top.hicancan.studev.timetable.CourseCatalog.groupCatalog(meetings(), runCatching { coursePlans() }.getOrDefault(emptyList()))
     suspend fun schedule(id: String): ClassSchedule {
         val groups = teachingClasses().associateBy { it.id }
         return read<ClassSchedule>("teaching/${release.teaching}/classes/$id.json").let { schedule ->
-            schedule.copy(meetings = schedule.meetings.map { meeting ->
-                groups[meeting.teaching_class.id]?.let { group ->
-                    meeting.copy(teaching_class = TeachingGroup(group.id, group.names.firstOrNull(), group.size, group.enrolled, group.capacity))
-                } ?: meeting
-            })
+            schedule.copy(meetings = enrichMeetings(schedule.meetings, groups))
         }
+    }
+    suspend fun effectiveSchedule(id: String, edits: top.hicancan.studev.me.TimetableEdits): ClassSchedule {
+        val base = schedule(id)
+        if (edits.hidden.isEmpty() && edits.added.isEmpty()) return base
+        val catalog = if (edits.added.isNotEmpty()) runCatching { catalog() }.getOrDefault(emptyList()) else emptyList()
+        return base.copy(meetings = top.hicancan.studev.timetable.CourseCatalog.effectiveMeetings(base.meetings, catalog, edits))
     }
     suspend fun examIndex() = release.exams?.let { read<ExamIndex>("exams/$it/index.json") }
     suspend fun exams(id: String): List<Exam> {
