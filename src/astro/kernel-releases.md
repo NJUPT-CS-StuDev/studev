@@ -5,7 +5,7 @@
 | 包 | 来源 | 版本 |
 | --- | --- | --- |
 | `wayfind` | `hicancan/wayfind` release `v0.1.0` 的 `wayfind-0.1.0.tgz` | 0.1.0 |
-| `wasm-search` | `hicancan/wasm-search` release `v1.0.3` 的 `wasm-search-1.0.3.tgz` | 1.0.3 |
+| `wasm-search` | `hicancan/wasm-search` release `v2.0.0` 的 `wasm-search-2.0.0.tgz` | 2.0.0 |
 
 `package-lock.json` 记录两个附件的实际 sha512 integrity，干净检出直接 `npm ci`。
 已发布附件不替换；内核修改时在内核仓库递增版本、发布新附件，再更新 `package.json`
@@ -23,3 +23,4 @@ npm 的 `allowScripts` 同时批准 Puppeteer 的浏览器安装脚本，内容�
 部署配置的 `Permissions-Policy` 为 `geolocation=(self)`；`/sw.js` 和
 `/pwa-release.json` 使用 `Cache-Control: no-cache`，让边缘节点及时重新验证更新入口；
 版本化的 `/data/*` 永久缓存。
+
