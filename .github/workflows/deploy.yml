@@ -35,6 +35,9 @@ jobs:
           npx -y edgeone@1.6.44 makers env set DATA_TOKEN "$DATA_TOKEN" -e production -t "$EDGEONE_API_TOKEN"
       # digest resolves and verifies the latest map/data release pair.
       - run: npm run digest
+      - name: Stage the verified data release for the EdgeOne builder
+        run: |
+          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('src/data/campus-release.json','utf8')); fs.rmSync('public/data-source',{recursive:true,force:true}); fs.cpSync('.data/'+r.data_version,'public/data-source',{recursive:true});"
       - name: Fetch APK distribution assets
         env:
           GITHUB_TOKEN: ${{ github.token }}

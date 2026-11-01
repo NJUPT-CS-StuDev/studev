@@ -214,7 +214,8 @@ async function locateMap() {
 }
 
 async function locateData(): Promise<{ dir: string; version: string; index: DataIndex }> {
-    const local = process.env.DATA_DIR?.trim();
+    const staged = join(root, 'public', 'data-source');
+    const local = process.env.DATA_DIR?.trim() || (existsSync(join(staged, 'index.json')) ? staged : '');
     if (local) {
         const index = await read<DataIndex>(join(local, 'index.json'));
         const version = process.env.DATA_VERSION?.trim() || `local-${index.built_at.replace(/\D/g, '').slice(0, 12)}-facts`;
