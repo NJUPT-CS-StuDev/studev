@@ -14,3 +14,8 @@ npm run build
 ```
 
 技术栈：Astro 7、React 19（islands）、TypeScript、Tailwind CSS 4、Vitest。
+
+## 开源协议
+
+本项目采用 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0) 协议开源。
+
