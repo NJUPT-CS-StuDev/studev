@@ -6,6 +6,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "build:logo": "node scripts/build-logo.mjs",
     "dev": "astro dev",
     "build": "npm run digest && node scripts/server/build.mjs && astro build",
     "test:collection": "node --test tests/platform-storage.test.mjs tests/verify-osca-upload.test.mjs",
