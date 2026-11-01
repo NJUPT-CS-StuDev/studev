@@ -62,7 +62,7 @@ interface MapPlace {
     group?: string;
     levels?: number;
     houses?: string[];
-    routing?: { type: string; id: string };
+    routing: { type: 'target'; id: string };
 }
 
 interface Source {
@@ -295,6 +295,9 @@ function centre(geometry: MapPlace['geometry']): [number, number] | undefined {
 }
 
 function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>, mapLevels: Map<string, number>) {
+    if (!raw.routing || raw.routing.type !== 'target' || raw.routing.id !== raw.id) {
+        throw new Error(`map entity has no canonical routing target: ${raw.id}`);
+    }
     const prefix = raw.id.includes('/') ? raw.id.slice(0, raw.id.lastIndexOf('/')) : '';
     const fact = roomFacts.get(raw.id);
     const parent = raw.parent || prefix;
@@ -313,7 +316,7 @@ function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>, mapLevels: M
         ...(fact?.seats != null ? { seats: fact.seats } : {}),
         ...(fact?.kinds?.length ? { room_kinds: fact.kinds } : {}),
         sources: ['map'],
-        ...(raw.routing && raw.routing.id !== raw.id ? { routing: raw.routing } : {}),
+        routing: raw.routing,
         ...(category(raw) ? { category: category(raw) } : {}),
         ...((raw.kind === 'building' && category(raw)) ? { featured: true } : {}),
     };

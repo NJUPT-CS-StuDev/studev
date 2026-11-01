@@ -41,12 +41,12 @@ data class Place(
     @SerialName("room_kinds") val roomKinds: List<String> = emptyList(),
     val sources: List<String>,
     val amap: String? = null,
-    val routing: Endpoint? = null,
+    val routing: Endpoint,
     val hours: OpeningHours? = null,
     val category: String? = null,
     val featured: Boolean = false,
 ) {
-    val endpoint get() = routing ?: Endpoint.Target(id)
+    val endpoint get() = routing
     val kindLabel get() = when (kind) { "building" -> "楼栋"; "room" -> "教室"; else -> kind }
     fun displayName(byId: Map<String, Place>): String {
         names.firstOrNull { it.isNotBlank() }?.let { return it.trim() }

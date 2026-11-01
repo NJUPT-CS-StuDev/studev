@@ -39,7 +39,7 @@ data class PersistedNavigationSession(
     val destinationLabel: String,
     val mode: String,
     val avoidSteps: Boolean,
-    val destination: Endpoint? = null,
+    val destination: Endpoint,
 )
 
 class NavigationSessionStore(context: Context) {
@@ -52,8 +52,10 @@ class NavigationSessionStore(context: Context) {
         check(preferences.edit().putString("record", json.encodeToString(record)).commit())
     }
 
-    fun load(): PersistedNavigationSession? = preferences.getString("record", null)?.let {
-        runCatching { json.decodeFromString<PersistedNavigationSession>(it) }.getOrNull()
+    fun load(): PersistedNavigationSession? {
+        val raw=preferences.getString("record", null) ?: return null
+        return runCatching { json.decodeFromString<PersistedNavigationSession>(raw) }
+            .getOrElse { clear(); null }
     }
 
     fun clear() { preferences.edit().remove("record").commit() }
@@ -83,7 +85,7 @@ class NavigationRuntime private constructor(private val context: Context) {
     @Volatile var simulationCommand: String? = null
     init {
         persisted.load()?.let { record ->
-            goal = record.destination ?: Endpoint.Target(record.destinationLabel)
+            goal = record.destination
             _state.value = PlannerState(
                 mode = record.mode,
                 avoidSteps = record.avoidSteps,
@@ -166,7 +168,7 @@ class NavigationRuntime private constructor(private val context: Context) {
             notice(null)
             val route = checkNotNull(state.value.route)
             persisted.save(PersistedNavigationSession(route, state.value.destinationName, state.value.mode, state.value.avoidSteps,
-                destination = goal ?: Endpoint.Target(state.value.destinationName)))
+                destination = checkNotNull(goal)))
             val firstNavigation = !settings.getBoolean("navigation-guidance-started", false)
             if (firstNavigation) settings.edit().putBoolean("navigation-guidance-started", true)
                 .putBoolean("navigation-guidance-pending", true).apply()
@@ -242,7 +244,7 @@ class NavigationRuntime private constructor(private val context: Context) {
         fun routeError(e: Exception, myPosition: Boolean) = when {
             e.message.orEmpty().contains("snap", true) && myPosition -> "您目前不在校园道路附近（超出 100 米吸附范围）。请选择校园内的起点。"
             e.message.orEmpty().contains("snap", true) -> "起终点附近没有可通行道路，请更换地点。"
-            e.message.orEmpty().contains("unknown target", true) -> "此地点尚未接入步行路网，请选择附近楼栋。"
+            e.message.orEmpty().contains("unknown target", true) -> "校园数据缺少该地点的导航目标，请更新数据后重试。"
             else -> "无法找到可通行路线，请更换起终点或出行方式。"
         }
     }

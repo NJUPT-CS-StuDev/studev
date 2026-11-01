@@ -48,8 +48,11 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
         fetchJson<Record<string, OpeningRecord>>(`${DATA_RELEASE.base}/hours.json`),
     ]);
     const joined = places.map(place => {
+        if (!place.routing || place.routing.type !== 'target' || place.routing.id !== place.id) {
+            throw new Error(`地图实体缺少规范导航目标：${place.id}`);
+        }
         const record = opening[place.id];
-        return { ...place, routing: place.routing ?? { type: 'target', id: place.id }, ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };
+        return { ...place, ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };
     });
     return { places: joined, byId: new Map(joined.map(p => [p.id, p])), network };
 }

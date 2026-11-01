@@ -31,7 +31,7 @@ class NavigationTest {
         assertEquals("校园路", route.via)
     }
     @Test fun persistedSessionRetainsTheRouteNeededForProcessRestart() {
-        val record = PersistedNavigationSession(route, "教3", "walk", avoidSteps = true)
+        val record = PersistedNavigationSession(route, "教3", "walk", avoidSteps = true, destination = Endpoint.Target("教3"))
         assertEquals(record, Json.decodeFromString<PersistedNavigationSession>(Json.encodeToString(record)))
     }
     @Test fun fakeNavigatorDrivesBannerOffRouteAndArrivalState() {
@@ -67,6 +67,10 @@ class NavigationTest {
     @Test fun campusSnapErrorOffersPickingOrigin() {
         val message = NavigationRuntime.routeError(IllegalArgumentException("no usable edge within snap distance"), true)
         assertTrue(message.contains("100 米")); assertTrue(message.contains("选择"))
+    }
+    @Test fun missingCanonicalTargetReportsDataContractFailure() {
+        val message = NavigationRuntime.routeError(IllegalArgumentException("unknown target: 仙林/教3-601"), false)
+        assertTrue(message.contains("缺少")); assertFalse(message.contains("附近楼栋"))
     }
     @Test fun swappingMyPositionIsReversible() {
         val place = top.hicancan.studev.data.Place("教3", "building", "仙林", listOf("教3"), sources = listOf("test"), routing = Endpoint.Target("教3"))
