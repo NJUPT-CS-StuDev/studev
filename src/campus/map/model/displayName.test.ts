@@ -3,7 +3,7 @@ import { displayName } from './displayName';
 import type { Place } from './space';
 import vectors from './displayName.golden.json';
 
-const base = (value: Partial<Place>): Place => ({ id: '仙林/建筑/024', kind: 'building', parent: '仙林', names: [], sources: ['map'], use: '宿舍', routing: { type: 'target', id: '仙林/建筑/024' }, category: '宿舍', ...value });
+const base = (value: Partial<Place>): Place => ({ id: '仙林/建筑/024', kind: 'building', parent: '仙林', names: [], sources: ['map'], routing: { type: 'target', id: '仙林/建筑/024' }, category: '宿舍', ...value });
 
 describe('displayName', () => {
     it('prefers an authored name over the stable id', () => expect(displayName(base({ names: ['菊苑18栋'] }))).toBe('菊苑18栋'));
@@ -12,8 +12,8 @@ describe('displayName', () => {
         const place = base({ parent: campus.id });
         expect(displayName(place, new Map([[campus.id, campus]]))).toBe('宿舍 · 仙林校区');
     });
-    it('uses a meaningful id leaf for an unnamed building', () => expect(displayName(base({ id: '仙林/菊苑18栋', parent: '' }))).toBe('菊苑18栋'));
-    it('falls back to the explicit nameless-building label for opaque ids', () => expect(displayName(base({ id: '仙林/建筑/024', parent: '' }))).toBe('未命名建筑'));
+    it('falls back to the explicit nameless-building label when no ancestor is named', () => expect(displayName(base({ id: '仙林/菊苑18栋', parent: '' }))).toBe('未命名建筑'));
+    it('uses category text for a nameless place', () => expect(displayName(base({ kind: 'place', category: '体育场', parent: '' }))).toBe('体育场 · 未命名地点'));
     it('matches the shared golden vectors', () => {
         for (const vector of vectors.cases) {
             const parents = new Map(vector.parents.map(parent => [parent.id, parent as Place]));

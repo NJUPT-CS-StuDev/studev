@@ -177,7 +177,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     }
                     IconButton(onClick = onClose, Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "关闭地点") }
                 }
-                Text("用途 · ${place.use}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("用途 · ${place.category ?: place.kindLabel}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 PlaceHours(place)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s.dp)) {
                     FilledTonalButton(onClick = onRoute, modifier = Modifier.weight(1f)) {

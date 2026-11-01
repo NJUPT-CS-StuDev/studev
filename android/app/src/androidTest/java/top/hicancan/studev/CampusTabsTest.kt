@@ -117,7 +117,7 @@ class CampusTabsTest {
     @Test fun nextLessonWalkingTimeUsesTheNativeRouter() = runBlocking {
         val campus = CampusPackage.load(context.assets)
         Wayfind.load(context.assets).use { engine ->
-            val routes = engine.route(RouteRequest(Endpoint.Position(listOf(118.9255, 32.1150)), campus.byId.getValue("教4-208").routing, alternatives = 1))
+            val routes = engine.route(RouteRequest(Endpoint.Position(listOf(118.9255, 32.1150)), campus.byId.getValue("教4-208").endpoint, alternatives = 1))
             assertTrue(routes.isNotEmpty()); assertTrue(routes.first().duration_s > 0)
         }
     }

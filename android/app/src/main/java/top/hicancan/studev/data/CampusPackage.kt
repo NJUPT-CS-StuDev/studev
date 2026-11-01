@@ -41,12 +41,12 @@ data class Place(
     @SerialName("room_kinds") val roomKinds: List<String> = emptyList(),
     val sources: List<String>,
     val amap: String? = null,
-    val use: String,
-    val routing: Endpoint,
+    val routing: Endpoint? = null,
     val hours: OpeningHours? = null,
     val category: String? = null,
     val featured: Boolean = false,
 ) {
+    val endpoint get() = routing ?: Endpoint.Target(id)
     val kindLabel get() = when (kind) { "building" -> "楼栋"; "room" -> "教室"; else -> kind }
     fun displayName(byId: Map<String, Place>): String {
         names.firstOrNull { it.isNotBlank() }?.let { return it.trim() }
@@ -56,11 +56,9 @@ data class Place(
                 parentPlace.names.firstOrNull { it.isNotBlank() }?.let { return "${category ?: "建筑"} · ${it.trim()}" }
                 parentPlace = byId[parentPlace.parent]
             }
-            val leaf = id.substringAfterLast('/').trim()
-            if (leaf.isNotEmpty() && !leaf.all { it.isDigit() } && leaf.lowercase() !in setOf("建筑", "building", "space")) return leaf
             return "未命名建筑"
         }
-        return category?.let { "$it · 未命名地点" } ?: id
+        return "${category ?: kind} · 未命名地点"
     }
 }
 
@@ -77,7 +75,7 @@ fun roomDisplayName(room: String?, byId: Map<String, Place>): String? {
 object StyleTokens {
     const val DATA = "asset://data/space/仙林"
     const val ASSETS = "asset://map"
-    fun resolve(json: String, data: String = DATA): String = json.replace("{data}", data).replace("{assets}", ASSETS)
+    fun resolve(json: String, data: String = DATA, assets: String = ASSETS): String = json.replace("{data}", data).replace("{assets}", assets)
 }
 
 class CampusPackage private constructor(
@@ -106,10 +104,10 @@ class CampusPackage private constructor(
             fun text(path: String) = assets.open(path).bufferedReader().use { it.readText() }
             val places = Json.decodeFromString<List<Place>>(text("$BASE/entities.json"))
             val opening = Json.decodeFromString<Map<String, OpeningRecord>>(text("data/hours.json"))
-            val data = mapFile?.parentFile?.toURI()?.toString()?.trimEnd('/') ?: StyleTokens.DATA
+            val data = mapFile?.parentFile?.let { "file://${it.absolutePath}" } ?: StyleTokens.DATA
+            fun style(path: String) = StyleTokens.resolve(text(path), data, StyleTokens.ASSETS)
             return CampusPackage(text("data/version.txt").trim(), places.map { place -> place.copy(hours = opening[place.id]?.hours) },
-                StyleTokens.resolve(text("$BASE/style-light.json"), data),
-                StyleTokens.resolve(text("$BASE/style-dark.json"), data), mapFile)
+                style("$BASE/style-light.json"), style("$BASE/style-dark.json"), mapFile)
         }
     }
 }

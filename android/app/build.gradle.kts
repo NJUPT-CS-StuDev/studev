@@ -76,7 +76,9 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
                 include("hours.json")
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "rooms/index.json")
+                include("teaching/${metadata["teaching"]}/classes/B240402.json")
                 metadata["exams"]?.let { include("exams/$it/index.json") }
+                metadata["exams"]?.let { include("exams/$it/classes/B240402.json") }
             }
         }
         releaseManifest.get().asFile.copyTo(assetDir.file("data/release.json").get().asFile, overwrite = true)

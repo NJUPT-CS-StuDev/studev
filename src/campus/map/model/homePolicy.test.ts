@@ -4,7 +4,7 @@ import type { Place } from './space';
 
 const time = (hour: number, minute = 0, day = 5) => ({ hour, minute, day });
 const hours = (start: string, end: string): NonNullable<Place['hours']> => ({ week: Object.fromEntries(Array.from({ length: 7 }, (_, i) => [String(i + 1), [[start, end]]])) });
-const place = (id: string, category: string, schedule?: Place['hours'], featured = true): Place => ({ id, kind: 'building', parent: 'campus', names: [id], centre: [118.926, 32.114], sources: ['fixture'], use: '测试用途', routing: { type: 'target', id }, category, hours: schedule, featured });
+const place = (id: string, category: string, schedule?: Place['hours'], featured = true): Place => ({ id, kind: 'building', parent: 'campus', names: [id], centre: [118.926, 32.114], sources: ['fixture'], routing: { type: 'target', id }, category, hours: schedule, featured });
 
 describe('Android HomeRecommendations parity', () => {
     it('opening boundaries, closing threshold and unknown hours', () => {

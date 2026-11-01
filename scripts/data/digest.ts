@@ -60,6 +60,7 @@ interface MapPlace {
     group?: string;
     levels?: number;
     houses?: string[];
+    routing?: { type: string; id: string };
 }
 
 interface Source {
@@ -289,7 +290,7 @@ function centre(geometry: MapPlace['geometry']): [number, number] | undefined {
     ];
 }
 
-function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>) {
+function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>, mapLevels: Map<string, number>) {
     const prefix = raw.id.includes('/') ? raw.id.slice(0, raw.id.lastIndexOf('/')) : '';
     const fact = roomFacts.get(raw.id);
     const parent = raw.parent || prefix;
@@ -302,16 +303,15 @@ function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>) {
         parent,
         names: roomName ? [...new Set([roomName, ...names])] : names,
         centre: centre(raw.geometry),
-        levels: raw.levels ?? null,
-        houses: raw.houses ?? [],
-        floor: floor || null,
-        seats: fact?.seats ?? null,
-        room_kinds: fact?.kinds ?? [],
+        ...(((raw.levels ?? raw.level ?? mapLevels.get(raw.id)) != null) ? { levels: raw.levels ?? raw.level ?? mapLevels.get(raw.id) } : {}),
+        ...(raw.houses?.length ? { houses: raw.houses } : {}),
+        ...(floor ? { floor } : {}),
+        ...(fact?.seats != null ? { seats: fact.seats } : {}),
+        ...(fact?.kinds?.length ? { room_kinds: fact.kinds } : {}),
         sources: ['map'],
-        use: category(raw) ?? raw.kind,
-        routing: { type: 'target', id: raw.id },
-        category: category(raw),
-        featured: raw.kind === 'building' && Boolean(category(raw)),
+        ...(raw.routing && raw.routing.id !== raw.id ? { routing: raw.routing } : {}),
+        ...(category(raw) ? { category: category(raw) } : {}),
+        ...((raw.kind === 'building' && category(raw)) ? { featured: true } : {}),
     };
 }
 
@@ -374,20 +374,15 @@ async function buildCampus(
     const from = join(mapRoot, campus);
     const to = join(out, 'space', campus);
     const entities = await read<MapPlace[]>(join(from, 'entities.json'));
-    const normalized = entities.map(place => normalizePlace(place, roomFacts));
+    const mapLevels = new Map<string, number>();
+    for (const place of entities) if (place.kind === 'floor' && place.parent && place.level != null) mapLevels.set(place.parent, Math.max(mapLevels.get(place.parent) ?? 0, place.level));
+    const normalized = entities.map(place => normalizePlace(place, roomFacts, mapLevels));
     await mkdir(to, { recursive: true });
     await write(join(to, 'entities.json'), normalized);
     await copyFile(join(from, 'network.json'), join(to, 'network.json'));
     await copyFile(join(from, 'basemap.pmtiles'), join(to, 'basemap.pmtiles'));
     for (const theme of ['light', 'dark'] as const) {
         await write(join(to, `style-${theme}.json`), style(theme));
-    }
-    const dataEntities = join(dataDir, 'entities');
-    for (const file of ['index.json', 'agent.json', 'information.json', 'time.json']) {
-        if (existsSync(join(dataEntities, file))) {
-            await mkdir(join(to, 'entities'), { recursive: true });
-            await copyFile(join(dataEntities, file), join(to, 'entities', file));
-        }
     }
     const byId = new Map(normalized.map(place => [place.id, place]));
     const placeDocs: SearchDocument[] = normalized.map(place => ({
@@ -449,6 +444,13 @@ async function main() {
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
     const terms = await packageFacts(data.dir, out, data.index, mapPlacesByCampus.get('仙林') ?? []);
     await copyFile(join(data.dir, 'hours.json'), join(out, 'hours.json'));
+    const dataEntities = join(data.dir, 'entities');
+    for (const file of ['index.json', 'agent.json', 'information.json', 'time.json']) {
+        if (existsSync(join(dataEntities, file))) {
+            await mkdir(join(out, 'entities'), { recursive: true });
+            await copyFile(join(dataEntities, file), join(out, 'entities', file));
+        }
+    }
     const roomFacts = new Map((await read<any[]>(join(data.dir, 'places', 'rooms.json'))).map(row => [row.id, row]));
     for (const campus of campuses) {
         await buildCampus(campus, mapSpaceRoot, out, data.dir, roomFacts);

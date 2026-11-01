@@ -128,7 +128,7 @@ import top.hicancan.studev.timetable.*
         walk = withContext(Dispatchers.IO) { runCatching {
             val campus = CampusPackage.load(context.assets)
             val place = campus.byId[room] ?: return@runCatching null
-            Wayfind.load(context.assets).use { engine -> engine.route(RouteRequest(Endpoint.Position(position.position), place.routing, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) } }
+            Wayfind.load(context.assets).use { engine -> engine.route(RouteRequest(Endpoint.Position(position.position), place.endpoint, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) } }
         }.getOrNull() }
     }
     val tab = when (screen) { "timetable", "exams" -> "timetable"; "map" -> "map"; "me", "calendar" -> "me"; else -> "home" }

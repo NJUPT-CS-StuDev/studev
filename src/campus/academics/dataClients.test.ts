@@ -20,8 +20,8 @@ const mockFiles = (files: Record<string, unknown>) => {
 describe('fact readers', () => {
     it('loads separate teaching fact files and keeps elective meetings outside the class shard', async () => {
         const base = '/data/release/teaching/' + term.term;
-        const plans = '/data/release/space/%E4%BB%99%E6%9E%97/entities/information.json';
-        const agents = '/data/release/space/%E4%BB%99%E6%9E%97/entities/agent.json';
+        const plans = '/data/release/entities/information.json';
+        const agents = '/data/release/entities/agent.json';
         const fetch = mockFiles({
             [base + '/term.json']: term, [base + '/classes.json']: [klass], [base + '/periods.json']: periods,
             [plans]: { schema_version: 'entities/3', kind: 'information', items: [{ id: 'information/course-plan/JS101', kind: 'information', subtype: 'information:course-plan', names: ['算法'], aliases: [], teaching_class_ids: ['teaching-class/teaching-1'] }] },

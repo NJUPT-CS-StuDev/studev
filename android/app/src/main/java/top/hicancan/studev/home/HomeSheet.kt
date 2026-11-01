@@ -136,7 +136,7 @@ internal fun HomeSheet(campus: CampusPackage, position: List<Double>?, peek: Dp,
                                         color = if (item.status.state in listOf(OpenState.Open, OpenState.Closing)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(metres(item.distance), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text(item.place.use, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(item.place.category ?: item.place.kindLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { onRoute(item.place) }, Modifier.testTag("recommend-route:${item.place.id}")) { Icon(Icons.Outlined.Directions, "前往${item.place.displayName(campus.byId)}", tint = MaterialTheme.colorScheme.primary) }
                         }

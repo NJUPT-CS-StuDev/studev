@@ -139,13 +139,13 @@ class NavigationRuntime private constructor(private val context: Context) {
             _state.update { it.copy(routes = emptyList(), busy = false,
                 error = "尚未获得当前位置。请开启定位，或选择${if (current.destinationIsMyPosition) "终点" else "起点"}。") }; return
         }
-        val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else destination!!.routing
+        val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else destination!!.endpoint
         goal = null
         _state.update { it.copy(busy = true, error = null, routes = emptyList(), selected = 0, trip = TripState()) }
         planning = scope.launch {
             try {
                 val result = native { engine().route(RouteRequest(
-                    current.origin?.routing ?: Endpoint.Position(at!!.position),
+                    current.origin?.endpoint ?: Endpoint.Position(at!!.position),
                     endpoint, current.mode, current.mode == "walk" && current.avoidSteps)) }
                 if (version == generation) {
                     goal = endpoint // Freeze a position destination for the whole trip, including reroutes.

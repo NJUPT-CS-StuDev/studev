@@ -11,6 +11,8 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.RectF
+import android.util.Log
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -101,6 +103,19 @@ class MapSmokeTest {
         compose.onNodeWithContentDescription("切换三维地图").performClick()
         shot("map-3d")
         compose.onNodeWithContentDescription("切换二维地图").performClick()
+    }
+    @Test fun symbolLayersRenderFeatures() {
+        waitForMap()
+        compose.waitUntil(15_000) {
+            var rendered = false
+            withMap { map ->
+                val layers = listOf("building-label", "place-label", "water-label", "sports-label")
+                val features = map.queryRenderedFeatures(RectF(0f, 0f, 1080f, 2400f), *layers.toTypedArray())
+                Log.i("StudevMap", "symbol features=${features.size} layers=${layers.map { it to (map.style?.getLayer(it) != null) }} camera=${map.cameraPosition.zoom}")
+                rendered = features.isNotEmpty()
+            }
+            rendered
+        }
     }
     @Test fun themeLocationAndDeepLink() {
         waitForMap()

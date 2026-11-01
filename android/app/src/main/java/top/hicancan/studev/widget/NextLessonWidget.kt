@@ -58,7 +58,7 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
                 val home = campus?.byId?.get(settings.homeDorm) ?: return@runCatching null
                 val destination = campus?.byId?.get(next.room) ?: return@runCatching null
                 Wayfind.load(context.assets).use { engine ->
-                    engine.route(RouteRequest(home.routing, destination.routing, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) }
+                    engine.route(RouteRequest(home.endpoint, destination.endpoint, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) }
                 }
             }.getOrNull()
         } else null

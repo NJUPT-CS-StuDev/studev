@@ -49,8 +49,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
     suspend fun classes() = read<List<TeachingClass>>("teaching/${release.teaching}/classes.json")
-    suspend fun coursePlans() = read<CoursePlanFile>("space/仙林/entities/information.json").items.filter { it.subtype == "information:course-plan" }
-    suspend fun teachingClasses() = read<AgentEntityFile>("space/仙林/entities/agent.json").items.filter { it.subtype == "agent:teaching-class" }
+    suspend fun coursePlans() = read<CoursePlanFile>("entities/information.json").items.filter { it.subtype == "information:course-plan" }
+    suspend fun teachingClasses() = read<AgentEntityFile>("entities/agent.json").items.filter { it.subtype == "agent:teaching-class" }
     suspend fun schedule(id: String): ClassSchedule {
         val groups = teachingClasses().associateBy { it.id }
         return read<ClassSchedule>("teaching/${release.teaching}/classes/$id.json").let { schedule ->

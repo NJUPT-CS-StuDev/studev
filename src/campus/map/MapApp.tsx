@@ -329,7 +329,7 @@ export default function MapApp() {
                     <ul className="campus-map-recommendations">{ranked.map(item => {
                         const Icon = categories.find(([name]) => name === item.place.category)?.[1] ?? MapPin;
                         const title = displayName(item.place, space.byId);
-                        return <li key={item.place.id}><button type="button" onClick={() => setSelected(item.place)}><span className="campus-map-place-icon"><Icon size={22} strokeWidth={1.8} /></span><span className="campus-map-place-copy"><strong>{title}</strong><span>{item.status.state !== 'unknown' && <em data-state={item.status.state}>{openingLabel[item.status.state]}</em>}{metres(item.distance)}</span><small>{item.place.use}</small></span></button><button className="campus-map-go" type="button" aria-label={`前往${title}`} onClick={() => { planAfterSelection.current = true; setSelected(item.place); }}><ArrowUpRight size={21} /></button></li>;
+                        return <li key={item.place.id}><button type="button" onClick={() => setSelected(item.place)}><span className="campus-map-place-icon"><Icon size={22} strokeWidth={1.8} /></span><span className="campus-map-place-copy"><strong>{title}</strong><span>{item.status.state !== 'unknown' && <em data-state={item.status.state}>{openingLabel[item.status.state]}</em>}{metres(item.distance)}</span><small>{item.place.category ?? kindLabel(item.place)}</small></span></button><button className="campus-map-go" type="button" aria-label={`前往${title}`} onClick={() => { planAfterSelection.current = true; setSelected(item.place); }}><ArrowUpRight size={21} /></button></li>;
                     })}</ul>
                     {!ranked.length && <p className="campus-map-houses">暂无符合当前时段的地点，试试上方分类</p>}
                     <p className="campus-map-distance-note">{me ? '距离为直线距离 · 路线以实际规划为准' : '距校区中心的直线距离 · 定位后可查看附近'}</p>
@@ -344,7 +344,7 @@ export default function MapApp() {
                             </div>
                             <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
                         </header>
-                        <p className="campus-map-houses">用途 · {selected.use}</p>
+                        <p className="campus-map-houses">用途 · {selected.category ?? kindLabel(selected)}</p>
                         {selected.hours && <details className="campus-map-hours">
                             <summary><span data-state={status.state}>{openingLabel[status.state]}</span><span>今日 {status.today}</span><small>一周时间</small></summary>
                             {status.state === 'closing' && <p>{status.closesAt} 关闭，请留意时间</p>}

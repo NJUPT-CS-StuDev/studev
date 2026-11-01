@@ -16,17 +16,16 @@ export interface Place {
     parent: string;
     names: string[];
     centre?: Position;
-    levels?: number | null;
+    levels?: number;
     houses?: string[];
     entrances?: Entrance[];
-    floor?: string | null;
-    seats?: number | null;
+    floor?: string;
+    seats?: number;
     room_kinds?: string[];
     sources: string[];
-    use: string;
+    category?: string;
     routing: Endpoint;
     hours?: { week: Record<string, [string, string][]>; note?: string };
-    category?: string;
     featured?: boolean;
 }
 
@@ -50,7 +49,7 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
     ]);
     const joined = places.map(place => {
         const record = opening[place.id];
-        return record ? { ...place, hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : place;
+        return { ...place, routing: place.routing ?? { type: 'target', id: place.id }, ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };
     });
     return { places: joined, byId: new Map(joined.map(p => [p.id, p])), network };
 }

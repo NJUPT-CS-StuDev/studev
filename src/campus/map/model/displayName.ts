@@ -17,11 +17,9 @@ export function displayName(place: DisplayPlace, byId?: ReadonlyMap<string, Disp
             if (context) return `${place.category ?? '建筑'} · ${context.trim()}`;
             parent = parent.parent ? byId?.get(parent.parent) : undefined;
         }
-        const leaf = place.id.split('/').at(-1)?.trim() ?? '';
-        if (leaf && !/^\d+$/.test(leaf) && !['建筑', 'building', 'space'].includes(leaf.toLowerCase())) return leaf;
         return '未命名建筑';
     }
-    return place.category ? `${place.category} · 未命名地点` : place.id;
+    return `${place.category ?? place.kind} · 未命名地点`;
 }
 
 export function roomDisplayName(room: string | null | undefined, byId?: ReadonlyMap<string, DisplayPlace>): string | undefined {

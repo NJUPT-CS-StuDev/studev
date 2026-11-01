@@ -28,7 +28,6 @@ class DisplayNameParityTest {
         parent = get("parent")?.jsonPrimitive?.content ?: "",
         names = get("names")?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         sources = emptyList(),
-        use = "",
         routing = Endpoint.Target(getValue("id").jsonPrimitive.content),
         category = get("category")?.jsonPrimitive?.contentOrNull,
     )

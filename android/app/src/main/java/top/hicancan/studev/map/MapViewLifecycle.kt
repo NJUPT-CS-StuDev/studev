@@ -30,6 +30,7 @@ internal class MapViewLifecycle(context: Context, savedState: Bundle?) :
     init {
         MapLibre.getInstance(context)
         view = MapView(context, MapLibreMapOptions.createFromAttributes(context)
+            .localIdeographFontFamilyEnabled(true)
             .localIdeographFontFamily("sans-serif")
             .attributionEnabled(false)
             .logoEnabled(false)

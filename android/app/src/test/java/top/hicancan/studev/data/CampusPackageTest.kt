@@ -11,7 +11,7 @@ class CampusPackageTest {
         val places = Json.decodeFromString<List<Place>>(resource("data/space/仙林/entities.json"))
         assertTrue(places.all { it.id.isNotBlank() })
         assertEquals(places.size, places.map { it.id }.toSet().size)
-        assertTrue(places.all { it.use.isNotBlank() })
+        assertTrue(places.all { it.sources.isNotEmpty() })
         val hours = Json.decodeFromString<Map<String, JsonObject>>(resource("data/hours.json"))
         assertTrue(hours.containsKey("仙林/图书馆"))
         val building = places.first { it.id == "仙林/教3" }
@@ -27,7 +27,7 @@ class CampusPackageTest {
         assertEquals("未命名建筑", unnamed.displayName(places.associateBy { it.id }))
     }
     @Test fun allContractFieldsRoundTrip() {
-        val json = """{"id":"教3-101","kind":"room","parent":"教3","names":["101"],"centre":[118.9,32.1],"levels":6,"houses":["服务"],"entrances":[{"at":[118.9,32.1],"source":"osm"}],"floor":"1","seats":40,"room_kinds":["教室"],"sources":["jwxt"],"use":"多媒体教室","routing":{"type":"target","id":"教3"}}"""
+        val json = """{"id":"教3-101","kind":"room","parent":"教3","names":["101"],"centre":[118.9,32.1],"levels":6,"houses":["服务"],"entrances":[{"at":[118.9,32.1],"source":"osm"}],"floor":"1","seats":40,"room_kinds":["教室"],"sources":["jwxt"],"category":"多媒体教室","routing":{"type":"target","id":"教3"}}"""
         val place = Json.decodeFromString<Place>(json)
         assertEquals(Json.parseToJsonElement(json), Json.parseToJsonElement(Json.encodeToString(place)))
     }
