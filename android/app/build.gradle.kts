@@ -11,7 +11,9 @@ plugins {
     alias(libs.plugins.serialization)
 }
 
-val product = JsonSlurper().parse(rootProject.file("../product.json")) as Map<*, *>
+val product = JsonSlurper().parseText(
+    providers.fileContents(rootProject.layout.projectDirectory.file("../product.json")).asText.get()
+) as Map<*, *>
 val androidProduct = product["android"] as Map<*, *>
 val productOrigin = product["origin"] as String
 val compileSdkVersion = providers.gradleProperty("studev.compileSdk").orNull?.toInt() ?: 37

@@ -23,6 +23,17 @@ $product = Get-Content (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
 $versionName = $product.android.versionName
 $versionCode = [int]$product.android.versionCode
 if (-not $versionName -or -not (Test-Path $apk)) { throw 'release APK or version metadata is missing' }
+$aapt = Join-Path $env:ANDROID_HOME 'build-tools/36.1.0/aapt.exe'
+if (-not (Test-Path -LiteralPath $aapt)) { throw "aapt is missing: $aapt" }
+$badging = (& $aapt dump badging $apk 2>&1 | Out-String)
+if ($LASTEXITCODE -ne 0) { throw 'Could not read release APK metadata' }
+$package = [regex]::Match($badging, "package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'")
+$sdk = [regex]::Match($badging, "(?m)^sdkVersion:'(\d+)'")
+if (-not $package.Success -or $package.Groups[1].Value -ne 'top.hicancan.studev' -or
+    [int]$package.Groups[2].Value -ne $versionCode -or $package.Groups[3].Value -ne $versionName -or
+    -not $sdk.Success -or [int]$sdk.Groups[1].Value -ne [int]$product.android.minSdk) {
+    throw "Release APK metadata disagrees with product.json; refusing to package or publish: $($package.Value), $($sdk.Value)"
+}
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
 $args = @((Join-Path $repo 'scripts/apk/package.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', [string]$product.android.minSdk, '--notes', $releaseNotes)
 if ($PartSize) { $args += @('--part-size', $PartSize) }
