@@ -42,8 +42,8 @@ if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificat
 $outputRoot = Join-Path $repo 'public\download'
 $manifestPath = Join-Path $outputRoot "$versionCode\manifest.json"
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-$tempRoot = 'D:\Temp\antigravity\apk-dist-release'
-if (Test-Path $tempRoot) { Remove-Item $tempRoot -Recurse -Force }
+$tempBase = [System.IO.Path]::GetFullPath('D:\Temp\codex')
+$tempRoot = Join-Path $tempBase ("studev-apk-release-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 $mirrorLatest = Join-Path $tempRoot 'latest.json'
 Set-Content -Path $mirrorLatest -Value (([ordered]@{ format = 1; versionCode = $versionCode; manifestUrl = 'manifest.json' } | ConvertTo-Json) + "`n") -NoNewline
@@ -54,20 +54,28 @@ Copy-Item $apk $fullApk
 $assetPaths = @($mirrorLatest, $mirrorManifest) + @($manifest.parts | ForEach-Object { Join-Path $outputRoot "$versionCode\$($_.name)" }) + $fullApk
 $tag = "v$versionName"
 $repoName = $product.repository
-$releaseExists = $true
-& gh release view $tag --repo $repoName *> $null
-if ($LASTEXITCODE -ne 0) { $releaseExists = $false }
-if (-not $releaseExists) {
+$releaseCommit = (& git -C $repo rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the release commit' }
+$existingRelease = & gh release view $tag --repo $repoName --json isDraft 2>$null
+if ($LASTEXITCODE -eq 0) {
+    if (-not ($existingRelease | ConvertFrom-Json).isDraft) { throw "$tag is already published; increment the Android version before releasing" }
+} else {
     $notesPath = Join-Path $tempRoot 'release-notes.md'
     Set-Content -Path $notesPath -Value $releaseNotes -NoNewline
-    & gh release create $tag --repo $repoName --title "studev $versionName" --notes-file $notesPath
+    & gh release create $tag --repo $repoName --target $releaseCommit --draft --title "studev $versionName" --notes-file $notesPath
     if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed" }
 }
 & gh release upload $tag @assetPaths --repo $repoName --clobber
 if ($LASTEXITCODE -ne 0) { throw "GitHub release asset upload failed" }
+# Publish only once every asset exists. The published event deploys the website
+# with this release's download manifest and APK parts.
+& gh release edit $tag --repo $repoName --draft=false --latest
+if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
 $releaseUrl = (& gh release view $tag --repo $repoName --json url --jq .url).Trim()
 Write-Output "release APK: $apk"
 Write-Output "release size: $((Get-Item $apk).Length) bytes"
 Write-Output "release signature SHA-1: $sha1"
 Write-Output "GitHub release: $releaseUrl"
-Remove-Item $tempRoot -Recurse -Force
+$resolvedTemp = (Resolve-Path -LiteralPath $tempRoot).Path
+if (-not $resolvedTemp.StartsWith($tempBase + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe temporary directory: $resolvedTemp" }
+Remove-Item -LiteralPath $resolvedTemp -Recurse -Force

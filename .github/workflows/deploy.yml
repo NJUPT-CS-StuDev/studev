@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  release:
+    types: [published]
   repository_dispatch:
     types: [upstream-release]
 
@@ -17,6 +19,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
+      PAGES_SOURCE: skills
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
       DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}

@@ -27,7 +27,7 @@ export class TeachingScheduleClient {
             fetchJson<TeachingClass[]>(this.#baseUrl + '/classes.json'),
             fetchJson<CoursePlanFile>(this.#coursePlansUrl),
             fetchJson<TeachingClassEntityFile>(this.#teachingClassesUrl),
-        ]).then(([term, periods, classes, plans, teachingClasses]) => ({ term, periods, classes, coursePlans: plans.items, teachingClasses: teachingClasses.items.filter(item => item.subtype === 'agent:teaching-class') })).catch(error => {
+        ]).then(([term, periods, classes, plans, teachingClasses]) => ({ term, periods, classes, coursePlans: plans.items.filter(item => item.subtype === 'information:course-plan'), teachingClasses: teachingClasses.items.filter(item => item.subtype === 'agent:teaching-class') })).catch(error => {
             this.#indexPromise = null; throw error;
         });
         return waitForAbort(this.#indexPromise, signal);

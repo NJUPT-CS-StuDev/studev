@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { searchCatalog } from '@/timetable/model/courseCatalog';
 import { meeting, exam } from '../../../tests/campus-facts';
 import { TeachingScheduleClient } from '@/timetable/model/TeachingScheduleClient';
 import { ExamSnapshotClient } from '@/exams/model/ExamSnapshotClient';
 import { ExamHistoryClient } from '@/exams/model/ExamHistoryClient';
 import { ClassroomAvailabilityClient } from '@/classrooms/model/ClassroomAvailabilityClient';
-import type { ExamChange, RoomDay, TeachingClass, TeachingTerm } from './facts';
+import type { ExamChange, RoomDay, TeachingClass, TeachingMeeting, TeachingTerm } from './facts';
 
 afterEach(() => vi.unstubAllGlobals());
 const term: TeachingTerm = { term: '2026-2027-1', year: 2026, number: 1, weeks: [{ week: 1, start: '2026-08-31', end: '2026-09-06' }], observed_at: '2026-10-25T14:12:05Z' };
@@ -18,6 +20,30 @@ const mockFiles = (files: Record<string, unknown>) => {
 };
 
 describe('fact readers', () => {
+    it('searches teachers, courses and rooms from the published mixed information file', async () => {
+        const root = new URL('../../', import.meta.url);
+        const release = JSON.parse(await readFile(new URL('data/campus-release.json', root), 'utf8'));
+        const base = release.base + '/teaching/' + release.teaching;
+        const plans = release.base + '/entities/information.json';
+        const agents = release.base + '/entities/agent.json';
+        const files = await Promise.all([
+            base + '/term.json', base + '/periods.json', base + '/classes.json',
+            plans, agents, base + '/meetings.json',
+        ].map(async path => [path, JSON.parse(await readFile(new URL('../public' + path, root), 'utf8'))] as const));
+        const published = Object.fromEntries(files);
+        expect(published[plans].items.some((item: { subtype: string }) => item.subtype === 'information:opening-hours')).toBe(true);
+        mockFiles(published);
+        const client = new TeachingScheduleClient(base, plans, agents);
+        const catalog = await client.loadCatalog();
+        const meetings = published[base + '/meetings.json'] as TeachingMeeting[];
+        const example = meetings.find(meeting => meeting.teachers.length > 0 && meeting.room)!;
+        expect(example).toBeDefined();
+        for (const query of [example.teachers[0]!.name, example.course.name, example.room!]) {
+            expect(searchCatalog(catalog, query, meetings.length).some(course => course.meetings.some(meeting => meeting.id === example.id))).toBe(true);
+        }
+        expect(catalog.flatMap(course => course.meetings)).toHaveLength(meetings.length);
+    });
+
     it('loads separate teaching fact files and keeps elective meetings outside the class shard', async () => {
         const base = '/data/release/teaching/' + term.term;
         const plans = '/data/release/entities/information.json';
