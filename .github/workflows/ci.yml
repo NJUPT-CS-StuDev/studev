@@ -43,8 +43,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK and NDK inputs
+        run: sdkmanager "platforms;android-37" "build-tools;36.1.0" "ndk;28.2.13676358"
       - run: npm ci
       - run: npm run digest
+      - name: Build native routing and search kernels
+        run: bash android/kernels-ci.sh
       - name: Assemble debug APK
         working-directory: android
         run: ./gradlew :app:assembleDebug --no-daemon
