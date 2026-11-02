@@ -86,9 +86,16 @@ class MapSmokeTest {
             Log.i("StudevMap", "selected camera=${map.cameraPosition.target} zoom=${map.cameraPosition.zoom} buildingFeatures=${features.size} ids=${features.map { it.getStringProperty("id") }.take(8)}")
         }
         withMap { map -> assertNotNull(map.style!!.getSource("basemap")) }
-        compose.onNodeWithText("地点详情").performClick()
+        compose.onNodeWithTag("place-details").assertIsDisplayed()
+        compose.onNodeWithText("地点详情").assertIsDisplayed()
+        compose.onNodeWithTag("place-details-toggle").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("收起详情").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("地点信息").assertIsDisplayed()
+        compose.onNodeWithText("收起详情").assertIsDisplayed()
         shot("place-jiao3-half")
-        compose.onNodeWithText("地点详情").performClick()
+        compose.onNodeWithTag("place-details-toggle").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("地点详情").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("place-details").assertDoesNotExist()
         shot("place-jiao3-expanded")
         val wasSaved = compose.onAllNodesWithText("已收藏", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         val before = if (wasSaved) "已收藏" else "收藏"

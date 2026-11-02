@@ -12,7 +12,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -120,7 +119,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val saved by preferences.saved.collectAsStateWithLifecycle(emptySet())
-    var detailExpanded by rememberSaveable(place.id) { mutableStateOf(false) }
+    var detailExpanded by remember { mutableStateOf(false) }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
     val bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
     val state = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState)
@@ -143,7 +142,8 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
         }
     }
     BackHandler {
-        if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)
+        if (detailExpanded) { detailExpanded = false; scope.launch { sheet.partialExpand() }; onSheetModeChange(MapSheetState.Half) }
+        else if (sheetMode == MapSheetState.Full) onSheetModeChange(MapSheetState.Half)
         else if (sheetMode == MapSheetState.Half) onSheetModeChange(MapSheetState.Collapsed) else onClose()
     }
     BottomSheetScaffold(scaffoldState = state, containerColor = Color.Transparent,
@@ -198,10 +198,15 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     }
                 }
                  TextButton(onClick = {
-                     if (!detailExpanded) detailExpanded = true else onSheetModeChange(MapSheetState.Full)
-                 }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text("地点详情"); Icon(Icons.Outlined.KeyboardArrowDown, null)
+                     detailExpanded = !detailExpanded
+                     scope.launch { if (detailExpanded) sheet.expand() else sheet.partialExpand() }
+                     onSheetModeChange(if (detailExpanded) MapSheetState.Full else MapSheetState.Half)
+                 }, modifier = Modifier.align(Alignment.CenterHorizontally).testTag("place-details-toggle")) {
+                    Text(if (detailExpanded) "收起详情" else "地点详情")
+                    Icon(if (detailExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown, null)
                 }
+                if (detailExpanded || sheetMode == MapSheetState.Full) {
+                Column(Modifier.fillMaxWidth().testTag("place-details"), verticalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Text("地点信息", style = MaterialTheme.typography.titleMedium)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
@@ -209,7 +214,7 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     if (place.kind == "room") {
                         place.floor?.takeIf { it.isNotEmpty() }?.let { Fact(Icons.Outlined.Layers, "$it 楼", "所在楼层", Modifier.weight(1f)) }
                         place.seats?.let { Fact(Icons.Outlined.EventSeat, "$it 座", "座位", Modifier.weight(1f)) }
-                    } else Fact(Icons.Outlined.DoorFront, "${place.entrances.size} 个", "出入口", Modifier.weight(1f))
+                    } else if (place.entrances.isNotEmpty()) Fact(Icons.Outlined.DoorFront, "${place.entrances.size} 个", "出入口", Modifier.weight(1f))
                 }
                 if (place.kind == "room") {
                     campus.byId[place.parent]?.let { parent ->
@@ -232,6 +237,8 @@ internal fun PlaceSheet(place: Place, campus: CampusPackage, preferences: PlaceP
                     Text(place.names.filter { it != place.id }.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                  Spacer(Modifier.height(Tokens.Space.l.dp))
+                }
+                }
                 }
             }
         }) { }

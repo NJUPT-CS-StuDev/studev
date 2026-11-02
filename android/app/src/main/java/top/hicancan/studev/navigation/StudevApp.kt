@@ -49,7 +49,7 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
     var sheetMode by rememberSaveable { mutableStateOf(MapSheetState.Collapsed) }
     LaunchedEffect(deepLink, campus) {
         if (campus != null && deepLink != null) {
-            if (campus!!.byId.containsKey(deepLink)) { model.select(deepLink); sheetMode = MapSheetState.Half }
+            if (campus!!.byId.containsKey(deepLink)) { model.select(deepLink); sheetMode = MapSheetState.Full }
             nav.popBackStack("map", false)
             onDeepLinkHandled()
         }
@@ -73,7 +73,7 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
     var pickingOrigin by rememberSaveable { mutableStateOf(true) }
     Box(Modifier.fillMaxSize()) {
         CampusMap(controller, loaded, if (route.open) null else selected, isSystemInDarkTheme(), access.granted,
-            onPlace = { model.select(it.id); sheetMode = MapSheetState.Half }, onLocationStatus = { status = it }, onMapError = { mapError = it },
+            onPlace = { model.select(it.id); sheetMode = MapSheetState.Full }, onLocationStatus = { status = it }, onMapError = { mapError = it },
             onMapTap = { if (sheetMode != MapSheetState.Collapsed) sheetMode = MapSheetState.Collapsed },
             routeState = route, onRoute = runtime::choose, homeBottom = homePeek.value.toDouble(), sheetBottom = homePeek.value.toDouble(), modifier = Modifier.fillMaxSize())
         NavHost(nav, startDestination = "map", enterTransition = { fadeIn(tween(Tokens.Motion.quick)) },
@@ -90,15 +90,15 @@ fun StudevApp(deepLink: String?, onDeepLinkHandled: () -> Unit, model: AppModel 
                         }, homePeek = homePeek)
                     if (selected != null) PlaceSheet(selected, loaded, model.preferences, homePeek, sheetMode = sheetMode, onSheetModeChange = { sheetMode = it },
                         onSearch = { nav.navigate("search") { launchSingleTop = true } },
-                        onClose = { model.select(null); sheetMode = MapSheetState.Collapsed }, onPlace = { model.select(it.id); sheetMode = MapSheetState.Half }, onRoute = { runtime.open(selected) })
+                        onClose = { model.select(null); sheetMode = MapSheetState.Collapsed }, onPlace = { model.select(it.id); sheetMode = MapSheetState.Full }, onRoute = { runtime.open(selected) })
                     else HomeSheet(loaded, fix?.position, homePeek, sheetMode = sheetMode, onSheetModeChange = { sheetMode = it },
                         onSearch = { nav.navigate("search") { launchSingleTop = true } },
-                        onPlace = { model.select(it.id); sheetMode = MapSheetState.Half }, onRoute = { model.select(it.id); sheetMode = MapSheetState.Half; runtime.open(it) })
+                        onPlace = { model.select(it.id); sheetMode = MapSheetState.Full }, onRoute = { model.select(it.id); sheetMode = MapSheetState.Full; runtime.open(it) })
                 }
             }
             composable("search") {
                 SearchScreen(loaded, model.search, model.preferences, onBack = { nav.popBackStack() },
-                    onPlace = { model.select(it.id); sheetMode = MapSheetState.Half; nav.popBackStack() })
+                    onPlace = { model.select(it.id); sheetMode = MapSheetState.Full; nav.popBackStack() })
             }
             composable("route-search") {
                 SearchScreen(loaded, model.search, model.preferences, onBack = { nav.popBackStack() },

@@ -3,6 +3,7 @@ package top.hicancan.studev.data
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -14,6 +15,7 @@ import java.net.URI
 import java.net.URLEncoder
 import top.hicancan.studev.BuildConfig
 import java.io.IOException
+import kotlin.coroutines.coroutineContext
 
 /** One immutable release per reader. Files are fetched lazily, then kept for offline reads.
  * A remote release never falls back to a different release's shards. */
@@ -23,10 +25,14 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     val release = release
     private val bundled: DataRelease by lazy { Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() }) }
     private val root = File(context.filesDir, "campus/${release.version}")
-    private val reads = locks.computeIfAbsent(root.absolutePath) { Mutex() }
-    suspend fun bytes(path: String): ByteArray = withContext(Dispatchers.IO) { reads.withLock {
+    suspend fun bytes(path: String): ByteArray = withContext(Dispatchers.IO) {
         require(path.isNotBlank() && !path.startsWith('/') && path.none { it in "\\:%?#" } && path.split('/').none { it == ".." || it == "." || it.isEmpty() })
         val file = File(root, path)
+        // Coalesce same-file reads across repository instances without a single
+        // release-wide lock blocking all unrelated data behind one download.
+        val lock = locks[(file.absolutePath.hashCode() and Int.MAX_VALUE) % locks.size]
+        lock.withLock {
+        coroutineContext.ensureActive()
         if (file.isFile) return@withLock file.readBytes()
         // The bundled release is already local. Do not wait for the network to use it.
         if (release.version == bundled.version) {
@@ -107,7 +113,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun rooms() = read<RoomIndex>("rooms/index.json")
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }
     companion object {
-        private val locks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+        private val locks = Array(64) { Mutex() }
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         fun download(address: String): ByteArray {
             val url = URI(address).toURL()

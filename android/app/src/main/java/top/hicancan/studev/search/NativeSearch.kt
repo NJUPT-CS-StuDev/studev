@@ -1,9 +1,14 @@
 package top.hicancan.studev.search
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import top.hicancan.search.SearchEngine
@@ -22,7 +27,8 @@ internal class NativeSearch(private val read: suspend (String) -> ByteArray) : A
     private suspend fun bytes(ref: JsonObject) = read(ref.getValue("path").jsonPrimitive.content)
     private fun size(ref: JsonObject) = ref.getValue("decoded_bytes").jsonPrimitive.int.toUInt()
     suspend fun search(query: String, limit: Int): List<JsonObject> = page(query, limit).results
-    suspend fun page(query: String, limit: Int, sort: String = "relevance", filters: JsonObject = buildJsonObject {}): Page = withContext(Dispatchers.IO) { mutex.withLock {
+    suspend fun page(query: String, limit: Int, sort: String = "relevance", filters: JsonObject = buildJsonObject {},
+                     onRanked: suspend (Page) -> Unit = {}): Page = withContext(Dispatchers.IO) { mutex.withLock {
         coroutineContext.ensureActive()
         check(!closed) { "Search is closed" }
         if (query.trim().length < 2) return@withLock Page(emptyList(), 0, buildJsonObject {})
@@ -36,23 +42,35 @@ internal class NativeSearch(private val read: suspend (String) -> ByteArray) : A
                 put("query", query.trim()); put("limit", limit); put("sort", sort); put("filters", filters)
             }
             suspend fun load(indices: String, refs: JsonArray, consume: (UInt, ByteArray, UInt) -> Unit) {
-                for (item in Json.parseToJsonElement(indices).jsonArray) {
-                    coroutineContext.ensureActive()
-                    val index = item.jsonPrimitive.int
-                    val ref = refs[index].jsonObject
-                    consume(index.toUInt(), bytes(ref), size(ref))
+                val slots = Semaphore(4)
+                val loaded = coroutineScope {
+                    Json.parseToJsonElement(indices).jsonArray.map { item -> async {
+                        slots.withPermit {
+                            val index = item.jsonPrimitive.int
+                            val ref = refs[index].jsonObject
+                            Triple(index.toUInt(), bytes(ref), size(ref))
+                        }
+                    } }.awaitAll()
                 }
+                for ((index, data, decoded) in loaded) {
+                    coroutineContext.ensureActive()
+                    consume(index, data, decoded)
+                }
+            }
+            val options = Json.parseToJsonElement(engine.filterOptions()).jsonObject
+            fun page(response: String): Page {
+                val value = Json.parseToJsonElement(response).jsonObject
+                return Page(value.getValue("results").jsonArray.map { it.jsonObject }, value.getValue("totalCandidates").jsonPrimitive.int, options)
             }
             load(engine.beginSearch(request.toString()), m.getValue("lexicon").jsonObject.getValue("blocks").jsonArray, engine::loadLexiconBlock)
             load(engine.requiredPostingChunks(), m.getValue("postings").jsonArray, engine::loadPostingsChunk)
             load(engine.requiredDocumentBlocks(), m.getValue("documents").jsonObject.getValue("blocks").jsonArray, engine::loadDocumentBlock)
             coroutineContext.ensureActive()
-            engine.prepareSearch()
+            onRanked(page(engine.prepareSearch()))
+            coroutineContext.ensureActive()
             load(engine.requiredContentChunks(0u, limit.toUInt()), m.getValue("content").jsonArray, engine::loadContentChunk)
             coroutineContext.ensureActive()
-            val response = Json.parseToJsonElement(engine.hydrateSearch(0u, limit.toUInt())).jsonObject
-            Page(response.getValue("results").jsonArray.map { it.jsonObject }, response.getValue("totalCandidates").jsonPrimitive.int,
-                Json.parseToJsonElement(engine.filterOptions()).jsonObject)
+            page(engine.hydrateSearch(0u, limit.toUInt()))
         }
     } }
     override fun close() { closed = true }
