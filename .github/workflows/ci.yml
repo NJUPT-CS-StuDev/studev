@@ -44,6 +44,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Android Rust targets
+        run: rustup target add aarch64-linux-android x86_64-linux-android
       - name: Install Android SDK and NDK inputs
         run: |
           sdkmanager_path="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/cmdline-tools/latest/bin/sdkmanager"
