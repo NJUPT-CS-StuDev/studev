@@ -46,8 +46,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Android SDK and NDK inputs
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-37" "build-tools;36.1.0" "ndk;28.2.13676358"
+          sdkmanager_path="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager_path" ]; then sdkmanager_path="/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager"; fi
+          yes | "$sdkmanager_path" --licenses >/dev/null || true
+          "$sdkmanager_path" "platforms;android-37" "build-tools;36.1.0" "ndk;28.2.13676358"
       - run: npm ci
       - run: npm run digest
       - name: Build native routing and search kernels
