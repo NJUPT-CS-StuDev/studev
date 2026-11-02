@@ -14,6 +14,7 @@ plugins {
 val product = JsonSlurper().parse(rootProject.file("../product.json")) as Map<*, *>
 val androidProduct = product["android"] as Map<*, *>
 val productOrigin = product["origin"] as String
+val compileSdkVersion = providers.gradleProperty("studev.compileSdk").orNull?.toInt() ?: 37
 
 abstract class DesignTokensTask : DefaultTask() {
     @get:InputFile abstract val tokensFile: RegularFileProperty
@@ -144,7 +145,7 @@ androidComponents.onVariants { variant ->
 android {
     namespace = "top.hicancan.studev"
     compileSdk {
-        version = release(37) { minorApiLevel = 0 }
+        version = release(compileSdkVersion) { minorApiLevel = 0 }
     }
     buildToolsVersion = "36.1.0"
 
