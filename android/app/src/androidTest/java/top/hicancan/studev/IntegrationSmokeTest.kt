@@ -116,4 +116,28 @@ class IntegrationSmokeTest {
             back(); wait("home")
         } finally { instrumentation.runOnMainSync { runtime.stop(close = true) } }
     }
+    @Test fun routeDetailsStayStillAndKeepTheirLastInstructionReachable() {
+        wait("home")
+        val campus = runBlocking { CampusPackage.load(context.assets) }
+        val runtime = NavigationRuntime.get(context)
+        try {
+            compose.onNodeWithTag("tab-map").performClick(); wait("home-search")
+            instrumentation.runOnMainSync {
+                runtime.open(campus.byId.getValue("仙林/教4-208"))
+                runtime.origin(campus.byId.getValue("仙林/教3"))
+            }
+            compose.waitUntil(20_000) { runtime.state.value.route != null && !runtime.state.value.busy }
+            compose.onNodeWithText("路线详情").performClick(); wait("route-steps")
+            Thread.sleep(800); compose.waitForIdle()
+            val positions = (0..15).map {
+                Thread.sleep(80)
+                compose.onNodeWithTag("route-steps").fetchSemanticsNode().boundsInWindow.top
+            }
+            assertTrue("Route details shifted: $positions", positions.max() - positions.min() <= 2f)
+            val last = runtime.state.value.route!!.maneuvers.lastIndex
+            compose.onNodeWithTag("route-steps-list").performScrollToIndex(last)
+            compose.onNodeWithText(top.hicancan.studev.navigation.visibleRouteText(runtime.state.value.route!!.maneuvers[last].instruction)).assertIsDisplayed()
+            shot("stable-route-details")
+        } finally { instrumentation.runOnMainSync { runtime.stop(close = true) } }
+    }
 }
