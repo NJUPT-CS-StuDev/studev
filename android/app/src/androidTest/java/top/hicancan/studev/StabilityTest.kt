@@ -48,6 +48,24 @@ class StabilityTest {
         File(context.getExternalFilesDir(null), "stability-shots").apply { mkdirs() }.resolve("$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
     }
+    @Test fun firstSearchShowsResultsFromAnEmptyCache() = runBlocking {
+        wait("tab-home")
+        val repository = AcademicRepository.bundled(context)
+        val cache = File(context.filesDir, "campus/${repository.release.version}/search")
+        assertTrue(!cache.exists() || cache.deleteRecursively())
+        val start = android.os.SystemClock.elapsedRealtime()
+        link("search/web/?q=${Uri.encode("转专业")}")
+        val result = SemanticsMatcher("a ranked search result") { it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { "" }.startsWith("search-result-") }
+        compose.waitUntil(15_000) { compose.onAllNodes(result).fetchSemanticsNodes().isNotEmpty() }
+        val firstMs = android.os.SystemClock.elapsedRealtime() - start
+        shot("cold-first-results")
+        waitForSearchResults()
+        val completeMs = android.os.SystemClock.elapsedRealtime() - start
+        File(context.getExternalFilesDir(null), "search-cold-ui.json").writeText(buildJsonObject {
+            put("firstResultMs", firstMs); put("completeMs", completeMs)
+        }.toString())
+        shot("cold-complete-results")
+    }
     @Test fun nativeSearchMatchesTheWebScopesAndRetainsResultMetadata() = runBlocking {
         val repository = AcademicRepository.bundled(context)
         AcademicSearch(repository).use { search ->

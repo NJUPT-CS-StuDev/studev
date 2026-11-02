@@ -64,10 +64,19 @@ fun AcademicSearchScreen(engine: AcademicSearch, initialQuery: String, findPlace
         busy = true
         try {
             delay(220)
-            if (scope == "places") places = findPlaces(query) else page = engine.page(query, scope, sort, years, category, source, limit)
+            if (scope == "places") places = findPlaces(query) else page = engine.page(query, scope, sort, years, category, source, limit) { ranked ->
+                withContext(Dispatchers.Main.immediate) {
+                    ensureActive()
+                    page = ranked
+                    displayedKey = requestKey
+                }
+            }
             displayedKey = requestKey
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { error = "搜索数据暂时无法读取。请联网后重试；已下载的数据可离线使用。"; displayedKey = requestKey }
+        catch (_: Exception) {
+            error = if (displayedKey == requestKey && page != null) "部分摘要暂未加载，仍可打开搜索结果。" else "搜索数据暂时无法读取。请联网后重试；已下载的数据可离线使用。"
+            displayedKey = requestKey
+        }
         finally { busy = false }
     }
     val loading = query.trim().length >= 2 && (busy || displayedKey != requestKey)
@@ -122,13 +131,19 @@ fun AcademicSearchScreen(engine: AcademicSearch, initialQuery: String, findPlace
                         } }
                     }
                 }
-                error != null -> item { EmptyCard("暂时无法搜索", error!!, "重试") { retry++ } }
+                error != null && currentPage == null -> item { EmptyCard("暂时无法搜索", error!!, "重试") { retry++ } }
                 loading && currentPage == null && currentPlaces.isEmpty() -> items(3) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         listOf(.45f, .9f, .75f).forEach { width -> Box(Modifier.fillMaxWidth(width).height(14.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(4.dp))) }
                     }
                 }
                 else -> {
+                    if (error != null) item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Supporting(error!!, Modifier.weight(1f))
+                            TextButton(onClick = { retry++ }) { Text("重试") }
+                        }
+                    }
                     val count = if (scope == "places") currentPlaces.size else currentPage?.total ?: 0
                     item { Supporting(if (count == 0) "没有找到相关内容，换个关键词或搜索范围试试。" else "找到 $count 条相关结果" + if (scope != "places" && count > (currentPage?.results?.size ?: 0)) " · 已显示 ${currentPage?.results?.size ?: 0} 条" else "", Modifier.padding(bottom = 10.dp)) }
                     if (scope == "places") items(currentPlaces, key = { "place:${it.id}" }) { place ->

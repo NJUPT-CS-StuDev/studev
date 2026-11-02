@@ -14,7 +14,8 @@ class AcademicSearch(repository: AcademicRepository) : AutoCloseable {
     private val runtime = NativeSearch { path -> repository.bytes("search/$path") }
     suspend fun search(query: String): List<AcademicResult> = page(query).results
     suspend fun page(query: String, scope: String = "web", sort: String = "relevance", years: Int = 0,
-                     category: String? = null, source: String? = null, limit: Int = 30): AcademicPage {
+                     category: String? = null, source: String? = null, limit: Int = 30,
+                     onRanked: suspend (AcademicPage) -> Unit = {}): AcademicPage {
         val filters = buildJsonObject {
             when (scope) {
                 "community" -> put("sourceId", repositorySourceIds[0])
@@ -27,7 +28,9 @@ class AcademicSearch(repository: AcademicRepository) : AutoCloseable {
                 put("publishedFrom", today.minusYears(years.toLong()).toString()); put("publishedTo", today.toString()); put("includeUndated", false)
             }
         }
-        val page = runtime.page(query, limit.coerceIn(1, 200), sort, filters)
+        return convert(runtime.page(query, limit.coerceIn(1, 200), sort, filters) { onRanked(convert(it)) })
+    }
+    private fun convert(page: NativeSearch.Page): AcademicPage {
         val results = page.results.map { result ->
             fun text(key: String) = result[key]?.jsonPrimitive?.contentOrNull.orEmpty()
             AcademicResult(text("id"), text("title"), text("url"), text("sourceName"), text("snippet"), text("source"), text("section"),
