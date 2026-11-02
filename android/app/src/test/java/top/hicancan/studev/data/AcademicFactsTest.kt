@@ -1,6 +1,6 @@
 package top.hicancan.studev.data
 
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import top.hicancan.studev.timetable.CampusEvents
@@ -24,11 +24,22 @@ class AcademicFactsTest {
         assertEquals(first.weekday, occurrence.start.atZone(ZoneId.of("Asia/Shanghai")).dayOfWeek.value)
         assertEquals(first.room, occurrence.room)
     }
-    @Test fun discoverOnlyTheCurrentFactFormat() {
-        val json = """var e={version:`data-20261030-facts`,base:`/data/data-20261030-facts`,built_at:`2026-10-30T16:00:00Z`,teaching:`2026-2027-1`,exams:`2025-2026-2`,rooms:`2026-2027-1`};"""
-        assertEquals("2026-2027-1", AcademicRepository.releaseFromModule(json)?.teaching)
-        assertNotNull(AcademicRepository.releaseFromModule(json.replace('`', '"')))
-        assertNull(AcademicRepository.releaseFromModule("""{version:"old",base:"/data/old",built_at:"2026"}"""))
-        assertNull(AcademicRepository.releaseFromModule(json.replace("/data/data-20261030-facts", "https://other.invalid/data")))
+    @Test fun discoverThePublishedReleaseWithoutDependingOnJavaScriptBundles() {
+        val release = read<DataRelease>("release.json")
+        val manifest = Json.encodeToJsonElement(release).jsonObject.toMutableMap().apply {
+            put("core", JsonArray(emptyList())); put("all", JsonArray(emptyList())); put("bytes", JsonPrimitive(123))
+        }
+        assertEquals(release, AcademicRepository.releaseFromManifest(JsonObject(manifest).toString()))
+        assertNull(AcademicRepository.releaseFromManifest("{}"))
+        manifest["base"] = JsonPrimitive("https://other.invalid/data")
+        assertNull(AcademicRepository.releaseFromManifest(JsonObject(manifest).toString()))
+    }
+    @Test fun decodeOnlyCoursePlansFromTheActualMixedInformationFile() {
+        val file = read<InformationEntityFile>("entities/information.json")
+        assertTrue(file.items.any { it["subtype"]?.jsonPrimitive?.content == "information:opening-hours" })
+        val plans = file.items.filter { it["subtype"]?.jsonPrimitive?.content == "information:course-plan" }
+            .map { Json.decodeFromJsonElement<CoursePlan>(it) }
+        assertTrue(plans.isNotEmpty())
+        assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() })
     }
 }

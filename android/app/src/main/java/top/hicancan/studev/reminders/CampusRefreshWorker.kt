@@ -15,8 +15,8 @@ class CampusRefreshWorker(context: Context, parameters: WorkerParameters) : Coro
         val settings = CampusSettings(applicationContext).state.value
         val repo = AcademicRepository.open(applicationContext)
         val term = repo.term()
-        val events = CampusEvents.build(term, repo.periods(), settings.klass?.let { repo.effectiveSchedule(it, settings.timetableEdits(term.term)) }, settings.klass?.let { repo.exams(it) }.orEmpty())
-        DeviceSchedule.update(applicationContext, events, settings.klass)
+        val events = CampusEvents.build(term, repo.periods(), settings.klass?.takeIf { id -> repo.classes().any { it.id == id } }?.let { repo.effectiveSchedule(it, settings.timetableEdits(term.term)) }, settings.klass?.let { repo.effectiveExams(it, settings) }.orEmpty())
+        DeviceSchedule.update(applicationContext, events, settings.klass, settings)
         NextLessonWidget().refreshAll(applicationContext)
         Result.success()
     } catch (e: CancellationException) { throw e } catch (_: Exception) { Result.retry() }

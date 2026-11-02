@@ -2,6 +2,7 @@ package top.hicancan.studev.timetable
 
 import kotlinx.serialization.Serializable
 import top.hicancan.studev.data.TeachingMeeting
+import top.hicancan.studev.data.roomDisplayName
 import java.util.Locale
 
 /** Contract + actual input/output examples: src/campus/academics/parity/spec.json. */
@@ -49,7 +50,7 @@ object TimetablePresentation {
         if (meeting.room == "翻转课堂线上自学") "翻转课堂 · 线上自学" else null,
         meeting.method?.takeIf { it != "面授讲课" }?.trim()?.takeIf { it.isNotEmpty() },
     ).joinToString(" · ")
-    fun room(meeting: TeachingMeeting): String = if (meeting.room == "翻转课堂线上自学") "" else meeting.room.orEmpty()
+    fun room(meeting: TeachingMeeting): String = if (meeting.room == "翻转课堂线上自学") "" else roomDisplayName(meeting.room, emptyMap()).orEmpty()
     private fun intersects(a: TeachingMeeting, b: TeachingMeeting) = a.weekday == b.weekday && a.periods.first() <= b.periods.last() && a.periods.last() >= b.periods.first()
     fun cells(meetings: List<TeachingMeeting>, week: Int): List<TimetableCell> = buildList {
         val active = meetings.filter { week in it.weeks }

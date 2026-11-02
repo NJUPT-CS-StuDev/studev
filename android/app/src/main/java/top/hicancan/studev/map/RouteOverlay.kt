@@ -19,7 +19,7 @@ internal fun CampusMapController.routes(state: PlannerState, dark: Boolean, dens
     val ready = map ?: return
     val style = ready.style ?: return
     val routes = if (state.open) state.routes else emptyList()
-    val snapshot = listOf(state.open, routes, state.selected, state.origin?.id, state.destinationName, dark)
+    val snapshot = listOf(state.open, routes, state.selected, state.originName, state.destinationName, dark)
     if (routeStyle !== style || routeSnapshot != snapshot) {
         val features = routes.mapIndexed { index, route ->
             Feature.fromGeometry(LineString.fromLngLats(route.geometry.map { Point.fromLngLat(it[0], it[1]) })).also {
@@ -27,7 +27,7 @@ internal fun CampusMapController.routes(state: PlannerState, dark: Boolean, dens
             }
         }
         val endpoints = state.route?.takeIf { state.open }?.let { route ->
-            listOf(route.geometry.first() to (state.origin?.id ?: "起点"), route.geometry.last() to state.destinationName)
+            listOf(route.geometry.first() to (if (state.origin == null) "起点" else state.originName), route.geometry.last() to state.destinationName)
                 .map { (point, label) -> Feature.fromGeometry(Point.fromLngLat(point[0], point[1])).also { it.addStringProperty("label", label) } }
         } ?: emptyList()
         // A generation owns its source IDs. Late worker results for the previous plan must

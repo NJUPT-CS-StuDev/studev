@@ -46,7 +46,7 @@ export function ExamPage({ query, className, onOpenClass, client, historyClient,
         clearExamSelection,
         markExamsExported,
         getExamStatus,
-    } = useSelectedExamIds(currentClass, exams, snapshotId, examPeriodId, sourceUpdatedAt);
+    } = useSelectedExamIds(currentClass, exams, snapshotId, examPeriodId, sourceUpdatedAt, ownCodes);
 
     if (loading) {
         return (

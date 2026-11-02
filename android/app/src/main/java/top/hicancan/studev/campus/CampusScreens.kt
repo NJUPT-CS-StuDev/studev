@@ -140,11 +140,3 @@ import java.time.temporal.ChronoUnit
         }
     }
 }
-
-// Keep the product shell entry points stable; feature implementation lives with its policy.
-@Composable internal fun TimetableScreen(state: AcademicState, klass: String?, requestedWeek: Int?, onClass: () -> Unit, onLesson: (TeachingMeeting) -> Unit, campus: CampusPackage? = null) =
-    top.hicancan.studev.timetable.TimetableScreen(state, klass, requestedWeek, onClass, onLesson, campus)
-@Composable internal fun LessonDetail(meeting: TeachingMeeting, periods: List<TeachingPeriod>, onClose: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) =
-    top.hicancan.studev.timetable.LessonDetail(meeting, periods, onClose, onRoute, campus)
-@Composable internal fun ExamsScreen(state: AcademicState, klass: String?, onClass: () -> Unit, onRoute: (String, Boolean) -> Unit, campus: CampusPackage? = null) =
-    top.hicancan.studev.exams.ExamsScreen(state, klass, onClass, onRoute, campus)

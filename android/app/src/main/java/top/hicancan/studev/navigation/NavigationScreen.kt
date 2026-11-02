@@ -203,7 +203,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { runtime.stop(close = true) }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "关闭路线规划") }
                         Column(Modifier.weight(1f)) {
-                            EndpointField(state.origin?.id?.let(::visibleRouteText) ?: "我的位置", "起点", true) { pick(true) }
+                            EndpointField(state.originName, "起点", true) { pick(true) }
                             HorizontalDivider(Modifier.padding(start = 22.dp), color = MaterialTheme.colorScheme.outlineVariant)
                             EndpointField(state.destinationName, "终点", false) { pick(false) }
                         }
@@ -287,7 +287,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
         Column(Modifier.fillMaxWidth().fillMaxHeight(.90f).testTag("route-steps")) {
             Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("${state.origin?.id?.let(::visibleRouteText) ?: "我的位置"} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
+                    Text("${state.originName} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
                     Text("${minutes(stepRoute.duration_s)} 分钟 · ${metres(stepRoute.distance_m)} · ${if (state.mode == "bike") "骑行" else "步行"}", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = { steps = false }) { Icon(Icons.Outlined.Close, "关闭路线详情") }

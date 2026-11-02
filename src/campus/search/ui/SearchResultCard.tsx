@@ -90,7 +90,7 @@ export function SearchResultCard({ document }: SearchResultCardProps) {
     };
 
     return (
-        <a {...wrapperProps} className="block w-full text-left py-3 group border-b border-[var(--line)] dark:border-[var(--line)] last:border-b-0">
+        <a {...wrapperProps} data-search-result={document.id} className="block w-full text-left py-3 group border-b border-[var(--line)] dark:border-[var(--line)] last:border-b-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--muted)] dark:text-[var(--muted)]">
                 <span className="font-medium text-[var(--ink)] dark:text-[var(--muted)]">{CATEGORY_LABELS[(document.category ?? 'notice_article') as SearchCategory]}</span>
                 <span>{document.sourceName}</span>

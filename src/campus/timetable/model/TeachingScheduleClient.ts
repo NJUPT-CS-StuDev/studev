@@ -1,5 +1,5 @@
 import type { CoursePlanFile, TeachingClass, TeachingClassEntityFile, TeachingMeeting, TeachingPeriod, TeachingTerm, TimetableClassFile } from '@/academics/timetable';
-import { forwardAbort, waitForAbort } from '@/shared/lib/abort';
+import { waitForAbort } from '@/shared/lib/abort';
 import { fetchJson } from '@/shared/lib/fetch';
 import { groupCatalog, type CatalogCourse } from './courseCatalog';
 
@@ -14,7 +14,8 @@ const enrichMeeting = (meeting: TeachingMeeting, entities: Map<string, TeachingC
 export class TeachingScheduleClient {
     readonly #baseUrl: string;
     #indexPromise: Promise<LoadedTeachingIndex> | null = null;
-    #activeClassController: AbortController | null = null;
+    #classController = new AbortController();
+    #classRequests = new Map<string, Promise<LoadedClassSchedule>>();
     #classCache = new Map<string, LoadedClassSchedule>();
     #catalogPromise: Promise<CatalogCourse[]> | null = null;
     readonly #coursePlansUrl: string;
@@ -39,26 +40,28 @@ export class TeachingScheduleClient {
         return loaded.classes.filter(c => normalized(c.name).includes(needle) || normalized(c.id).includes(needle)).slice(0, 20).map(c => c.name);
     }
     async loadClass(className: string, signal?: AbortSignal): Promise<LoadedClassSchedule> {
-        this.#activeClassController?.abort();
-        const controller = new AbortController(); this.#activeClassController = controller;
-        const detach = forwardAbort(signal, controller);
-        try {
-            const loaded = await this.initialize(controller.signal);
-            const target = normalized(className);
-            const entry = loaded.classes.find(c => normalized(c.name) === target || normalized(c.id) === target);
-            if (!entry) throw new Error('没有找到班级 ' + className);
-            const cached = this.#classCache.get(entry.id);
-            if (cached) return cached;
-            const file = await fetchJson<TimetableClassFile>(this.#baseUrl + '/classes/' + encodeURIComponent(entry.id) + '.json', {signal: controller.signal});
-            const entities = new Map(loaded.teachingClasses.map(item => [item.id, item]));
-            const meetings = file.meetings.map(meeting => enrichMeeting(meeting, entities));
-            const result = { ...loaded, classInfo: file.class, meetings };
-            this.#classCache.set(entry.id, result); return result;
-        } finally { detach(); if(this.#activeClassController === controller) this.#activeClassController = null; }
+        const loaded = await this.initialize(signal);
+        const target = normalized(className);
+        const entry = loaded.classes.find(c => normalized(c.name) === target || normalized(c.id) === target);
+        if (!entry) throw new Error('没有找到班级 ' + className);
+        const cached = this.#classCache.get(entry.id);
+        if (cached) return cached;
+        let request = this.#classRequests.get(entry.id);
+        if (!request) {
+            request = fetchJson<TimetableClassFile>(this.#baseUrl + '/classes/' + encodeURIComponent(entry.id) + '.json', { signal: this.#classController.signal }).then(file => {
+                const entities = new Map(loaded.teachingClasses.map(item => [item.id, item]));
+                const meetings = file.meetings.map(meeting => enrichMeeting(meeting, entities));
+                const result = { ...loaded, classInfo: file.class, meetings };
+                this.#classCache.set(entry.id, result);
+                return result;
+            }).finally(() => { this.#classRequests.delete(entry.id); });
+            this.#classRequests.set(entry.id, request);
+        }
+        return waitForAbort(request, signal);
     }
     /** Every fact meeting, including electives and retakes outside a class schedule. */
     loadCatalog(signal?: AbortSignal): Promise<CatalogCourse[]> {
-        this.#catalogPromise ??= Promise.all([this.initialize(signal), fetchJson<TeachingMeeting[]>(this.#baseUrl + '/meetings.json')]).then(([loaded, meetings]) => {
+        this.#catalogPromise ??= Promise.all([this.initialize(), fetchJson<TeachingMeeting[]>(this.#baseUrl + '/meetings.json')]).then(([loaded, meetings]) => {
             const entities = new Map(loaded.teachingClasses.map(item => [item.id, item]));
             return groupCatalog(meetings.map(meeting => enrichMeeting(meeting, entities)), loaded.coursePlans);
         }).catch(error => {
@@ -66,5 +69,5 @@ export class TeachingScheduleClient {
         });
         return waitForAbort(this.#catalogPromise, signal);
     }
-    dispose(): void { this.#activeClassController?.abort(); this.#classCache.clear(); }
+    dispose(): void { this.#classController.abort(); this.#classRequests.clear(); this.#classCache.clear(); }
 }

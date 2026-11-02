@@ -47,7 +47,7 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
                 val term = repo.term()
                 val schedule = try { repo.effectiveSchedule(settings.klass, settings.timetableEdits(term.term)) }
                     catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
-                val exams = try { repo.exams(settings.klass) }
+                val exams = try { repo.effectiveExams(settings.klass, settings) }
                     catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; emptyList() }
                 CampusEvents.build(term, repo.periods(), schedule, exams)
             }

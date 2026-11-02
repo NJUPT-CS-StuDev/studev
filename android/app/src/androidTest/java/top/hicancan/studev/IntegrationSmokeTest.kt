@@ -109,7 +109,8 @@ class IntegrationSmokeTest {
             wait("place:$canteen")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.onNodeWithTag("place:$canteen").performClick()
-            compose.onNodeWithText(canteen).assertIsDisplayed()
+            val campus = runBlocking { CampusPackage.load(context.assets) }
+            compose.onNodeWithText(campus.byId.getValue(canteen).displayName(campus.byId)).assertIsDisplayed()
             back()
             backTo("home-search")
             back(); wait("home")

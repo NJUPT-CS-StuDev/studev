@@ -44,10 +44,15 @@ object CampusEvents {
             }
         }
         exams.forEach { exam ->
-            val date = LocalDate.parse(exam.date)
+            val interval = runCatching {
+                val date = LocalDate.parse(exam.date)
+                val start = date.atTime(LocalTime.parse(exam.start)).atZone(CampusDay.zone).toInstant()
+                val end = date.atTime(LocalTime.parse(exam.end)).atZone(CampusDay.zone).toInstant()
+                require(end > start)
+                start to end
+            }.getOrNull() ?: return@forEach
             add(CampusEvent("exam:${exam.id}", exam.course.name,
-                date.atTime(LocalTime.parse(exam.start)).atZone(CampusDay.zone).toInstant(),
-                date.atTime(LocalTime.parse(exam.end)).atZone(CampusDay.zone).toInstant(), exam.room,
+                interval.first, interval.second, exam.room,
                 listOfNotNull(exam.klass, exam.teacher, exam.note).joinToString(" · "), true))
         }
     }.distinctBy { it.id }.sortedBy { it.start }

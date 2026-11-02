@@ -25,8 +25,11 @@ data class PersonalSettings(
     val navigationGuidancePending: Boolean = false,
     val reminderGuidanceShown: Boolean = false,
     val timetable: Map<String, TimetableEdits> = emptyMap(),
+    val examAttendance: Map<String, Map<String, Boolean>> = emptyMap(),
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
+    fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
+        if (term == null || klass == null) emptyMap() else examAttendance[top.hicancan.studev.exams.ExamAttendance.scope(term, klass)].orEmpty()
 }
 
 private val termPattern = Regex("^\\d{4}-\\d{4}-\\d$")
@@ -41,6 +44,10 @@ private fun sanitizeTimetable(raw: Map<String, TimetableEdits>): Map<String, Tim
         if (hidden.isNotEmpty() || added.isNotEmpty()) put(term, TimetableEdits(hidden, added))
     }
 }
+
+private fun sanitizeAttendance(raw: Map<String, Map<String, Boolean>>) = raw.filterKeys {
+    Regex("^\\d{4}-\\d{4}-\\d:[A-Z]\\d{6}(\\([A-Z]{2}\\))?$").matches(it)
+}.mapValues { (_, choices) -> choices.filterKeys { it.isNotBlank() && it.length < 200 } }
 
 class CampusSettings(context: Context) {
     private val context = context.applicationContext
@@ -59,17 +66,21 @@ class CampusSettings(context: Context) {
         timetable = store.getString("timetable", null)?.let {
             runCatching { sanitizeTimetable(Json.decodeFromString<Map<String, TimetableEdits>>(it)) }.getOrDefault(emptyMap())
         } ?: emptyMap(),
+        examAttendance = store.getString("exam-attendance", null)?.let {
+            runCatching { sanitizeAttendance(Json.decodeFromString<Map<String, Map<String, Boolean>>>(it)) }.getOrDefault(emptyMap())
+        } ?: emptyMap(),
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
         val raw = change(_state.value)
-        val next = raw.copy(timetable = sanitizeTimetable(raw.timetable))
+        val next = raw.copy(timetable = sanitizeTimetable(raw.timetable), examAttendance = sanitizeAttendance(raw.examAttendance))
         store.edit().putString("class", next.klass).putString("campus", next.campus).putString("theme", next.theme)
             .putBoolean("calendar", next.calendar).putBoolean("reminders", next.reminders).putInt("lead", next.leadMinutes).putString("home-dorm", next.homeDorm)
             .putBoolean("navigation-guidance", next.navigationGuidanceShown)
             .putBoolean("navigation-guidance-pending", next.navigationGuidancePending)
             .putBoolean("reminder-guidance", next.reminderGuidanceShown)
-            .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable)).apply()
+            .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
+            .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance)).apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
         // Settings changes are data changes too: rebuild the rolling reminder
@@ -80,6 +91,12 @@ class CampusSettings(context: Context) {
         update { current ->
             val updated = change(current.timetableEdits(term))
             current.copy(timetable = current.timetable + (term to updated))
+        }
+    }
+    fun updateExamAttendance(term: String, klass: String, choices: Map<String, Boolean>) {
+        update { current ->
+            val scope = top.hicancan.studev.exams.ExamAttendance.scope(term, klass)
+            current.copy(examAttendance = current.examAttendance + (scope to (current.examAttendance[scope].orEmpty() + choices)))
         }
     }
 }

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { timetableCells } from '@/timetable/model/presentation';
 import { courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
 import { examPresentation } from '@/exams/model/presentation';
+import { attendingExams } from '@/exams/model/examAttendance';
 import { roomSelectionResult, type RoomSelection } from '@/classrooms/model/roomSelection';
 import { roomMatches } from '@/classrooms/model/campusDay';
 import { toggleBuilding } from '@/classrooms/model/buildingSelection';
@@ -65,5 +66,17 @@ const invalidExams = [
     {...exams[0]!.exams[0]!,date:'2026-02-31'}, {...exams[0]!.exams[0]!,start:'24:00'},
     {...exams[0]!.exams[0]!,date:'',start:'',end:'',location:null,room:null},
 ].map(exam=>({exam,now:'2026-10-30T00:00:00Z',expected:examPresentation(exam,new Date('2026-10-30T00:00:00Z'))}));
-writeFileSync('src/campus/academics/parity/golden.json',JSON.stringify({source:{release:release.version,teaching:release.teaching,exams:release.exams,inputsHash},term,periods,schedules,exams,rooms:{index,days,cases:roomCases,matchCases:roomMatchCases},edgeCases:{colours,buildingTransitions,invalidExams}},null,2)+'\n');
+const examAttendance = exams.flatMap(group => {
+    const first = group.exams[0]!;
+    const ownCodes = first.course.code ? [first.course.code] : [];
+    const cases: Array<{ choices: Record<string, boolean>; ownCodes: string[] | null }> = [
+        { choices: {}, ownCodes: null },
+        { choices: { [first.id]: false }, ownCodes: null },
+        { choices: Object.fromEntries(group.exams.map(exam => [exam.id, false])), ownCodes: null },
+        { choices: {}, ownCodes },
+        { choices: { [first.id]: true }, ownCodes: [] },
+    ];
+    return cases.map(test => ({ class: group.class, ...test, expected: attendingExams(group.exams, test.choices, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id) }));
+});
+writeFileSync('src/campus/academics/parity/golden.json',JSON.stringify({source:{release:release.version,teaching:release.teaching,exams:release.exams,inputsHash},term,periods,schedules,exams,rooms:{index,days,cases:roomCases,matchCases:roomMatchCases},edgeCases:{colours,buildingTransitions,invalidExams,examAttendance}},null,2)+'\n');
 console.log(JSON.stringify({schedules:schedules.length,weeks:schedules.flatMap(s=>s.weeks).length,cells:schedules.flatMap(s=>s.weeks.flatMap(w=>w.cells)).length,examCases:exams.flatMap(e=>e.cases).length,roomCases:roomCases.length,inputsHash}));

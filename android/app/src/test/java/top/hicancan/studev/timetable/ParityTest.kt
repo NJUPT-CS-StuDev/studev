@@ -7,6 +7,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import top.hicancan.studev.data.*
 import top.hicancan.studev.exams.examPresentation
+import top.hicancan.studev.exams.ExamAttendance
 import top.hicancan.studev.rooms.RoomSelection
 
 class ParityTest {
@@ -46,6 +47,23 @@ class ParityTest {
                 assertEquals(test.getValue("cells"), json.encodeToJsonElement(cells))
             }
         }
+    }
+    @Test fun personalExamAttendanceMatchesTheWebReferenceIncludingExplicitRestoration() {
+        golden.getValue("edgeCases").jsonObject.getValue("examAttendance").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            val group = golden.getValue("exams").jsonArray.first { it.jsonObject.getValue("class") == test.getValue("class") }.jsonObject
+            val exams = json.decodeFromJsonElement<List<Exam>>(group.getValue("exams"))
+            val choices = json.decodeFromJsonElement<Map<String, Boolean>>(test.getValue("choices"))
+            val ownCodes = test.getValue("ownCodes").takeIf { it != JsonNull }?.jsonArray?.map { it.text() }?.toSet()
+            assertEquals(test.getValue("expected").jsonArray.map { it.text() }, ExamAttendance.select(exams, choices, ownCodes).map { it.id })
+        }
+    }
+    @Test fun incompleteExamTimesDoNotBreakValidCalendarEvents() {
+        val exams = json.decodeFromJsonElement<List<Exam>>(golden.getValue("exams").jsonArray[0].jsonObject.getValue("exams"))
+        val term = json.decodeFromJsonElement<TeachingTerm>(golden.getValue("term"))
+        val invalid = exams.first().copy(id = "time-pending", date = "", start = "", end = "")
+        val events = CampusEvents.build(term, emptyList(), null, exams + invalid)
+        assertEquals(exams.map { "exam:${it.id}" }.toSet(), events.map { it.id }.toSet())
     }
     @Test fun actualRoomResultsMatchWebForAllBuildingsNoneMultipleCampusAndPeriods() {
         val rooms = golden.getValue("rooms").jsonObject

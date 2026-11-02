@@ -51,7 +51,7 @@ export function useMyExams(
                 const seen = new Set(exams.map(exam => `${exam.course.code}|${examTimestamp(exam, 'start')}`));
                 for (const course of catalog.filter(item => edits.added.includes(catalogId(item)))) {
                     if (course.meetings[0]!.course.code) ownCodes.add(course.meetings[0]!.course.code);
-                    for (const other of course.meetings[0]!.classes.slice(0, 3)) {
+                    for (const other of [...new Set(course.meetings.flatMap(meeting => meeting.classes))]) {
                         const file = await examClient.classFile(other, controller.signal).catch(() => null);
                         for (const exam of file?.exams ?? []) {
                             const id = `${exam.course.code}|${examTimestamp(exam, 'start')}`;

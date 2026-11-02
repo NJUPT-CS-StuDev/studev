@@ -17,7 +17,7 @@ export async function offlineRelease() {
     const map = await files(join(process.cwd(), 'public/map'), '/map');
     const core = data.filter(file => file.path.startsWith(`${release.base}/space/`));
     return {
-        version: release.version, base: release.base,
+        ...release,
         core: [...core, ...map].map(file => file.path), all: data.map(file => file.path),
         bytes: [...data, ...map].reduce((sum, file) => sum + file.bytes, 0),
     };

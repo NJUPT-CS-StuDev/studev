@@ -26,10 +26,13 @@ for (const klass of examClasses) assert.deepEqual(await read(out, 'exams/' + rel
     exams: exams.filter(e => e.class === klass), changes: changes.filter(c => c.class === klass),
 });
 const term = await read(input, 'teaching/' + release.rooms + '/term.json');
-assert.deepEqual(await read(out, 'rooms/index.json'), {
-    term: release.rooms, weeks: term.weeks, periods: await read(input, 'teaching/' + release.rooms + '/periods.json'),
-    rooms: await read(input, 'places/rooms.json'), buildings: await read(input, 'places/buildings.json'), campuses: await read(input, 'places/campuses.json'),
-});
+const roomIndex = await read(out, 'rooms/index.json');
+assert.equal(roomIndex.term, release.rooms);
+assert.deepEqual(roomIndex.weeks, term.weeks);
+assert.deepEqual(roomIndex.periods, await read(input, 'teaching/' + release.rooms + '/periods.json'));
+const mapped = new Set((await read(out, 'space/仙林/entities.json')).filter(place => place.kind === 'room').map(place => place.id));
+assert.deepEqual(roomIndex.rooms.map(room => room.id).sort(), (await read(input, 'places/rooms.json')).filter(room => mapped.has(room.id)).map(room => room.id).sort());
+for (const room of roomIndex.rooms) assert(roomIndex.buildings.some(building => building.id === room.building && building.campus === room.campus), `Orphaned room: ${room.id}`);
 const days = await readdir(join(input, 'rooms', release.rooms));
 for (const file of days) await sameFile('rooms/' + release.rooms + '/' + file);
 console.log(JSON.stringify({ version: release.version, teachingClasses: classes.length, meetings: meetings.length, examClasses: examClasses.length, exams: exams.length, changes: changes.length, roomDays: days.length, result: 'All copied files and class shards match njupt-data.' }, null, 2));

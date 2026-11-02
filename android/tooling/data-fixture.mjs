@@ -18,11 +18,8 @@ http.createServer((req, res) => {
     available = url.searchParams.get('missing') !== 'true';
     res.writeHead(200, {'Content-Type':'application/json'}).end('{}'); return;
   }
-  if (pathname === '/search/') {
-    res.writeHead(200, {'Content-Type':'text/html'}).end('<script src="/_astro/constants.fixture.js"></script>'); return;
-  }
-  if (pathname === '/_astro/constants.fixture.js') {
-    res.writeHead(200, {'Content-Type':'application/javascript'}).end('export const release = ' + JSON.stringify({...release, version:selected, base:`/data/${selected}`})); return;
+  if (pathname === '/pwa-release.json') {
+    res.writeHead(200, {'Content-Type':'application/json'}).end(JSON.stringify({...release, version:selected, base:`/data/${selected}`, core:[], all:[], bytes:0})); return;
   }
   let localPath = pathname;
   if (selected !== release.version && pathname.startsWith(`/data/${selected}/`)) {
