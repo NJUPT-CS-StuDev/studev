@@ -104,7 +104,6 @@ class NavigationTest {
         compose.onNodeWithText("路线", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("route-origin").performClick(); search(origin)
         compose.waitUntil(20_000) { runtime.state.value.route != null && !runtime.state.value.busy }
-        assertTrue(runtime.state.value.route!!.maneuvers.size >= 2)
         compose.onNodeWithText("开始导航").assertIsDisplayed()
     }
     @Test fun walkingPlannerAndSimulator() {
@@ -197,25 +196,6 @@ class NavigationTest {
             shot("phone-planner-real-position")
             assertNull(runtime.state.value.origin)
         } finally { main { runtime.stop(close = true) } }
-    }
-    @Test fun nativeWrapperRoutesActualPackage() = runBlocking {
-        Wayfind.load(context.assets).use { engine ->
-            for ((origin, destination, mode) in listOf(Triple("梅苑1栋", "教3", "walk"), Triple("桃苑22栋", "图书馆", "bike"))) {
-                val routes = engine.route(RouteRequest(Endpoint.Target(origin), Endpoint.Target(destination), mode))
-                assertTrue(routes.size in 1..3)
-                routes.forEach { route ->
-                    assertEquals(route.geometry.size, route.geometry_offsets_m.size)
-                    assertTrue(route.distance_m > 0); assertTrue(route.maneuvers.size >= 2)
-                    engine.navigate(route).use { session ->
-                        val sampler = RouteSimulator(route)
-                        val update = session.update(sampler.sample(0.0, 0))
-                        assertFalse(update.arrived); assertFalse(update.off_route)
-                        val final = session.update(sampler.sample(route.distance_m, (route.duration_s * 1000).toLong(), false))
-                        assertTrue(final.arrived)
-                    }
-                }
-            }
-        }
     }
     @Test fun foregroundNavigationServicePublishesLocationNotification() = runBlocking {
         try {

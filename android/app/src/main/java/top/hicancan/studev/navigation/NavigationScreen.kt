@@ -127,7 +127,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                         ManeuverIcon(banner?.maneuver?.type ?: "continue", banner?.maneuver?.modifier ?: "ahead", 56)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(banner?.let { metres(it.distance_m) } ?: "正在定位", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                            Text(banner?.maneuver?.instruction ?: "沿规划路线前行", style = MaterialTheme.typography.titleMedium)
+                            Text(banner?.maneuver?.instruction?.let(::visibleRouteText) ?: "沿规划路线前行", style = MaterialTheme.typography.titleMedium)
                         }
                     }
                     val route = state.route
@@ -136,7 +136,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                         HorizontalDivider(color = LocalContentColor.current.copy(alpha = .25f))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             ManeuverIcon(following.type, following.modifier, 22)
-                            Text("随后 ${following.instruction}", style = MaterialTheme.typography.bodyMedium)
+                            Text("随后 ${visibleRouteText(following.instruction)}", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                     val folded = banner?.maneuver?.following_actions?.firstOrNull()
@@ -190,7 +190,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Icon(Icons.Outlined.CheckCircle, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.tertiary)
                     Text("已到达 ${state.destinationName}", style = MaterialTheme.typography.headlineMedium)
-                    Text(state.route?.maneuvers?.lastOrNull()?.instruction ?: "已到达目的地附近")
+                    Text(state.route?.maneuvers?.lastOrNull()?.instruction?.let(::visibleRouteText) ?: "已到达目的地附近")
                     state.destination?.floor?.let { Text("${state.destinationName} 在 $it 楼", style = MaterialTheme.typography.titleMedium) }
                     Button(onClick = { runtime.stop(close = true) }, Modifier.fillMaxWidth()) { Text("完成") }
                 }
@@ -203,7 +203,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { runtime.stop(close = true) }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "关闭路线规划") }
                         Column(Modifier.weight(1f)) {
-                            EndpointField(state.origin?.id ?: "我的位置", "起点", true) { pick(true) }
+                            EndpointField(state.origin?.id?.let(::visibleRouteText) ?: "我的位置", "起点", true) { pick(true) }
                             HorizontalDivider(Modifier.padding(start = 22.dp), color = MaterialTheme.colorScheme.outlineVariant)
                             EndpointField(state.destinationName, "终点", false) { pick(false) }
                         }
@@ -258,7 +258,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Text("${minutes(route.duration_s)} 分钟", style = MaterialTheme.typography.titleLarge, color = if (selected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
                                             Text(metres(route.distance_m), style = MaterialTheme.typography.bodyMedium)
-                                            Text("经${route.via}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("经${visibleRouteText(route.via)}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -287,7 +287,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
         Column(Modifier.fillMaxWidth().fillMaxHeight(.90f).testTag("route-steps")) {
             Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("${state.origin?.id ?: "我的位置"} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
+                    Text("${state.origin?.id?.let(::visibleRouteText) ?: "我的位置"} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
                     Text("${minutes(stepRoute.duration_s)} 分钟 · ${metres(stepRoute.distance_m)} · ${if (state.mode == "bike") "骑行" else "步行"}", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = { steps = false }) { Icon(Icons.Outlined.Close, "关闭路线详情") }
@@ -297,7 +297,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) { Box(Modifier.padding(10.dp)) { ManeuverIcon(maneuver.type, maneuver.modifier, 28) } }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(maneuver.instruction, style = MaterialTheme.typography.bodyLarge)
+                            Text(visibleRouteText(maneuver.instruction), style = MaterialTheme.typography.bodyLarge)
                             if (index < stepRoute.maneuvers.lastIndex) Text(metres(maneuver.distance_to_next_m), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }

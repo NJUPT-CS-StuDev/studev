@@ -15,6 +15,7 @@ import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Packa
 import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
 import { displayName, roomDisplayName } from './model/displayName';
+import { visibleRouteText } from './model/routeText';
 import { sheetHeight, snapSheet, type MapSheetState } from './model/sheetState';
 
 type Origin = { kind: 'me' } | { kind: 'place'; id: string };
@@ -362,7 +363,7 @@ export default function MapApp() {
                                 <label className="campus-map-from">从
                                     <select value={origin.kind === 'me' ? '' : origin.id} onChange={e => setOrigin(e.target.value ? { kind: 'place', id: e.target.value } : { kind: 'me' })}>
                                         <option value="">我的位置</option>
-                                        {space.places.filter(p => p.kind !== 'room' && p.id !== selected.id).map(p => <option key={p.id} value={p.id}>{displayName(p, space.byId)}</option>)}
+                                        {space.places.filter(p => (p.kind === 'building' || p.kind === 'place' || p.kind === 'campus') && p.id !== selected.id && displayName(p, space.byId) !== '未命名建筑').map(p => <option key={p.id} value={p.id}>{displayName(p, space.byId)}</option>)}
                                     </select>
                                 </label>
                                 <div className="campus-map-modes" role="radiogroup" aria-label="出行方式">
@@ -375,14 +376,14 @@ export default function MapApp() {
                                     <div className="campus-map-routes">
                                         {routes.map((r, i) => (
                                             <button key={i} type="button" aria-pressed={i === chosen} className={i === chosen ? 'on' : ''} onClick={() => setChosen(i)}>
-                                                <strong>{minutes(r.duration_s)} 分钟</strong><span>{metres(r.distance_m)}</span><small>经 {r.via}</small>
+                                                <strong>{minutes(r.duration_s)} 分钟</strong><span>{metres(r.distance_m)}</span><small>经 {visibleRouteText(r.via)}</small>
                                             </button>
                                         ))}
                                     </div>
                                 )}
                                 {route && (
                                     <details className="campus-map-directions"><summary>路线详情 · {route.maneuvers.length} 步</summary><ol className="campus-map-steps-list">
-                                        {route.maneuvers.map((m, i) => <li key={i}><span>{m.instruction}</span>{m.distance_to_next_m > 0 && <small>{metres(m.distance_to_next_m)}</small>}</li>)}
+                                        {route.maneuvers.map((m, i) => <li key={i}><span>{visibleRouteText(m.instruction)}</span>{m.distance_to_next_m > 0 && <small>{metres(m.distance_to_next_m)}</small>}</li>)}
                                     </ol><p className="campus-map-houses">到达 {displayName(selected, space.byId)}{selected.floor ? ` · ${selected.floor} 楼` : ''}</p></details>
                                 )}
                             </div>

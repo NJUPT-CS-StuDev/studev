@@ -64,7 +64,7 @@ class NavigationService : Service() {
     }
     private suspend fun process(fix: NavFix) {
         val prompts = runtime.feed(fix)
-        if (prompts.isNotEmpty()) voice.speak(prompts.joinToString("，") { it.text })
+        if (prompts.isNotEmpty()) voice.speak(prompts.joinToString("，") { visibleRouteText(it.text) })
         if (runtime.state.value.trip.phase == TripPhase.Arrived) {
             runtime.location.release(this)
             runtime.finishSession(clearPersisted = true)
@@ -115,7 +115,7 @@ class NavigationService : Service() {
         val exit = PendingIntent.getService(this, 1, Intent(this, NavigationStopService::class.java), PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_navigation)
             .setContentTitle(title).setContentText("前往${state.destinationName} · 点击返回导航")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(next?.maneuver?.instruction,
+            .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(next?.maneuver?.instruction?.let(::visibleRouteText),
                 "前往${state.destinationName} · 剩余${metres(state.trip.update?.distance_remaining_m ?: state.route?.distance_m ?: 0.0)}").joinToString("\n")))
             .setContentIntent(pending).setOngoing(true).setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_NAVIGATION).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

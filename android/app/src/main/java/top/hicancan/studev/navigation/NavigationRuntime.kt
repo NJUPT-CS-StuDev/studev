@@ -26,7 +26,7 @@ data class PlannerState(
     val simulating: Boolean = false, val destinationLabel: String? = null,
 ) {
     val route get() = routes.getOrNull(selected)
-    val destinationName get() = if (destinationIsMyPosition) "我的位置" else destinationLabel ?: destination?.id ?: "目的地"
+    val destinationName get() = if (destinationIsMyPosition) "我的位置" else visibleRouteText(destinationLabel ?: destination?.id ?: "目的地")
     val active get() = trip.phase == TripPhase.Navigating
     fun swapped() = copy(origin = if (destinationIsMyPosition) null else destination,
         destination = origin, destinationIsMyPosition = origin == null)
