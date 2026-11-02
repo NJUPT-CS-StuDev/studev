@@ -181,7 +181,7 @@ class CampusTabsTest {
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         compose.waitUntil(30000) { manager.activeNotifications.any { it.id == event.id.hashCode() } }
         val notification = manager.activeNotifications.first { it.id == event.id.hashCode() }.notification
-        assertEquals("导航到 $room", notification.actions.first().title.toString())
+        assertEquals("导航到 ${top.hicancan.studev.data.roomDisplayName(room, emptyMap())}", notification.actions.first().title.toString())
         instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
         Thread.sleep(1600)
         shot("reminder-notification")
