@@ -117,7 +117,7 @@ class CampusTabsTest {
     @Test fun nextLessonWalkingTimeUsesTheNativeRouter() = runBlocking {
         val campus = CampusPackage.load(context.assets)
         Wayfind.load(context.assets).use { engine ->
-            val routes = engine.route(RouteRequest(Endpoint.Position(listOf(118.9255, 32.1150)), campus.byId.getValue("教4-208").endpoint, alternatives = 1))
+            val routes = engine.route(RouteRequest(Endpoint.Position(listOf(118.9255, 32.1150)), campus.byId.getValue("仙林/教4-208").endpoint, alternatives = 1))
             assertTrue(routes.isNotEmpty()); assertTrue(routes.first().duration_s > 0)
         }
     }
@@ -128,7 +128,7 @@ class CampusTabsTest {
         val fixture = context.assets.open("data/rooms/index.json").use { it.readBytes() }
         val requests = java.util.concurrent.atomic.AtomicInteger()
         val fetch: (String) -> ByteArray = { url ->
-            assertEquals("https://studev.hicancan.top${release.base}/rooms/index.json", url)
+            assertEquals("${BuildConfig.DATA_HOST}${release.base}/rooms/index.json", url)
             requests.incrementAndGet(); fixture
         }
         val readers = listOf(AcademicRepository(context, release, fetch), AcademicRepository(context, release, fetch))
@@ -181,7 +181,7 @@ class CampusTabsTest {
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         compose.waitUntil(30000) { manager.activeNotifications.any { it.id == event.id.hashCode() } }
         val notification = manager.activeNotifications.first { it.id == event.id.hashCode() }.notification
-        assertEquals("导航到 $room", notification.actions.first().title.toString())
+        assertEquals("导航到 ${top.hicancan.studev.data.roomDisplayName(room, emptyMap())}", notification.actions.first().title.toString())
         instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
         Thread.sleep(1600)
         shot("reminder-notification")

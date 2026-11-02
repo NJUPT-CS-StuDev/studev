@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonObject
 @Serializable data class TeachingClass(val id: String, val name: String, val grade: String?, val college: String?, val major: String?, val campus: String?, val students: Int?, val practice: List<String>)
 @Serializable data class Course(val code: String?, val name: String, val category: String?, val nature: String?, val credits: Double?, val hours: Double?, val hours_composition: String?, val assessment: String?, val exam: String?)
 @Serializable data class CoursePlan(val id: String, val kind: String, val subtype: String, val names: List<String>, val aliases: List<String>, val source: String? = null, val teaching_class_ids: List<String> = emptyList())
-@Serializable data class CoursePlanFile(val schema_version: String, val kind: String, val items: List<CoursePlan>)
+@Serializable data class InformationEntityFile(val schema_version: String, val kind: String, val items: List<JsonObject>)
 @Serializable data class AgentEntity(val id: String, val kind: String, val subtype: String, val names: List<String>, val aliases: List<String>, val source: String? = null, val role: String? = null, val size: Int? = null, val enrolled: Int? = null, val capacity: Int? = null)
 @Serializable data class AgentEntityFile(val schema_version: String, val kind: String, val items: List<AgentEntity>)
 @Serializable data class Teacher(val id: String, val name: String, val title: String?, val role: String?, val weeks: List<Int>)

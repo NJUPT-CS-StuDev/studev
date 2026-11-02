@@ -87,7 +87,7 @@ export const campusBuildings = (space: ClassroomIndexFile, campus: string, every
     .sort((left, right) => buildingRank(left.id) - buildingRank(right.id) || naturalCompare(left.id, right.id))
     .map(building => {
         const rooms = space.rooms
-            .filter(room => room.building === building.id && room.listed && (everything || room.kinds.some(kind => campusConfig.classrooms.eligibleKinds.some(word => kind.includes(word)))))
+            .filter(room => room.campus === campus && room.building === building.id && room.listed && (everything || room.kinds.some(kind => campusConfig.classrooms.eligibleKinds.some(word => kind.includes(word)))))
             .sort((left, right) => naturalCompare(left.number, right.number));
         const floors = building.floors
             .map(level => ({ level, rooms: rooms.filter(room => room.floor === level) }))

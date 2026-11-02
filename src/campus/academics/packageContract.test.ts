@@ -1,65 +1,51 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { packageFacts } from '../../../scripts/data/package-facts';
-import { exam, meeting } from '../../../tests/campus-facts';
-import type { ExamChange, RoomDay, TeachingClass, TeachingTerm } from './facts';
+import type { Exam, ExamChange, Room, Building, TeachingClass, TeachingMeeting } from './facts';
 
 const tempRoot = process.platform === 'win32' ? 'D:/Temp/codex' : '/tmp/codex';
+const read = async <T>(path: string): Promise<T> => JSON.parse(await readFile(path, 'utf8')) as T;
 let taskDir: string, input: string, output: string;
-const term: TeachingTerm = { term: '2026-2027-1', year: 2026, number: 1, weeks: [{ week: 1, start: '2026-08-31', end: '2026-09-06' }], observed_at: '2026-10-25T14:12:05Z' };
-const klass: TeachingClass = { id: 'B240402', name: 'B240402', grade: '2024', college: '计算机学院', major: '计算机', campus: '仙林', students: 30, practice: ['课程设计'] };
-const facts = [meeting({ teachers: [{ id: 'teacher/a', name: '甲', title: '教授', role: '主讲', weeks: [1] }, { id: 'teacher/b', name: '乙', title: null, role: '辅讲', weeks: [2] }] }), meeting({ id: 'elective', classes: [], teaching_class: { id: 'teaching-class/elective', name: '选修教学班', size: null, enrolled: null, capacity: null } })];
-const exams = [exam()];
-const changes: ExamChange[] = [{ observed: '2026-06-12', class: 'REMOVED', course: { code: 'JS102', name: '离散数学' }, change: 'removed', before: [{ date: '2026-07-01', start: '08:00', end: '09:50', campus: '仙林', location: '教1-101', teacher: null, students: null }], after: null }];
-const day: RoomDay = { date: '2026-08-31', week: 1, weekday: 1, observed_at: '2026-10-25T14:46:45Z', free: { 1: ['教1-102'], 2: ['教1-101'] }, occupied: { '教1-101': [{ kind: 'class', id: facts[0]!.id, course: '算法', teachers: ['甲'], classes: ['B240402'], periods: [1, 2] }] } };
-const sources = [{ file: '2026-06-12-安排.xlsx', url: 'https://example.test/exams.xlsx', notice: 'https://example.test/', title: '考试安排' }];
-const periods = [{ period: 1, start: '08:00', end: '08:45', part: '上午' }];
-const rooms = [{ id: '教1-101', building: '教1', floor: '1', number: '101', campus: '仙林', names: ['教1－101'], kinds: ['多媒体'], listed: true, seats: 30 }, { id: '非列表房间', building: '其他', floor: '', number: '非列表房间', campus: '仙林', names: [], kinds: [] }];
-const buildings = [{ id: '教1', campus: '仙林', floors: ['1', '2'] }], campuses = [{ id: '仙林', aliases: ['仙林校区'] }];
-const json = async <T>(path: string) => JSON.parse(await readFile(join(output, path), 'utf8')) as T;
-
+let release: { version: string; data_version: string; teaching: string; exams: string; rooms: string };
+let places: Array<{ id: string; kind: string; parent?: string; names?: string[] }>;
 beforeAll(async () => {
     await mkdir(tempRoot, { recursive: true });
     taskDir = await mkdtemp(join(tempRoot, 'web-contract-tests-'));
-    input = join(taskDir, 'input'); output = join(taskDir, 'package');
-    const files: Record<string, unknown> = {
-        ['teaching/' + term.term + '/term.json']: term,
-        ['teaching/' + term.term + '/periods.json']: periods,
-        ['teaching/' + term.term + '/classes.json']: [klass],
-        ['teaching/' + term.term + '/meetings.json']: facts,
-        'exams/2025-2026-2/exams.json': exams, 'exams/2025-2026-2/changes.json': changes, 'exams/2025-2026-2/sources.json': sources,
-        ['rooms/' + term.term + '/' + day.date + '.json']: day,
-        'places/rooms.json': rooms, 'places/buildings.json': buildings, 'places/campuses.json': campuses,
-    };
-    for (const [path, value] of Object.entries(files)) {
-        await mkdir(join(input, path, '..'), { recursive: true });
-        await writeFile(join(input, path), JSON.stringify(value, null, 2) + '\n');
-    }
-    await packageFacts(input, output, { teaching: [term.term], exams: ['2025-2026-2'], rooms: [term.term] });
+    output = join(taskDir, 'package');
+    release = await read('src/data/campus-release.json');
+    input = join('.data', release.data_version);
+    places = await read(join('public/data', release.version, 'space/仙林/entities.json'));
+    await packageFacts(input, output, { teaching: [release.teaching], exams: [release.exams], rooms: [release.rooms] }, places);
 });
 afterAll(async () => {
     if (taskDir && resolve(taskDir).startsWith(resolve(tempRoot) + sep)) await rm(taskDir, { recursive: true, force: true });
 });
 
-describe('data package contract', () => {
-    it('copies the teaching files, full meeting catalogue, room days and global changes byte for byte', async () => {
-        for (const path of ['term', 'periods', 'classes', 'meetings'].map(name => 'teaching/' + term.term + '/' + name + '.json').concat(['rooms/' + term.term + '/' + day.date + '.json', 'exams/2025-2026-2/changes.json'])) {
-            expect(await readFile(join(output, path))).toEqual(await readFile(join(input, path)));
+describe('the production map and data package contract', () => {
+    it('copies real teaching facts, room days and global exam changes byte for byte', async () => {
+        const files = ['term', 'periods', 'classes', 'meetings'].map(name => `teaching/${release.teaching}/${name}.json`);
+        const days = await readdir(join(input, 'rooms', release.rooms));
+        files.push(...days.map(day => `rooms/${release.rooms}/${day}`), `exams/${release.exams}/changes.json`);
+        for (const path of files) expect(Buffer.compare(await readFile(join(output, path)), await readFile(join(input, path)))).toBe(0);
+    });
+    it('retains all original fields when splitting real class teaching and exam shards', async () => {
+        const classes = await read<TeachingClass[]>(join(input, `teaching/${release.teaching}/classes.json`));
+        const meetings = await read<TeachingMeeting[]>(join(input, `teaching/${release.teaching}/meetings.json`));
+        for (const klass of classes.filter(item => ['B240402', 'B250105', 'B230402'].includes(item.id))) {
+            expect(await read(join(output, `teaching/${release.teaching}/classes/${klass.id}.json`))).toEqual({ class: klass, meetings: meetings.filter(meeting => meeting.classes.includes(klass.id)) });
         }
+        const exams = await read<Exam[]>(join(input, `exams/${release.exams}/exams.json`));
+        const changes = await read<ExamChange[]>(join(input, `exams/${release.exams}/changes.json`));
+        const index = await read<{ classes: string[] }>(join(output, `exams/${release.exams}/index.json`));
+        for (const klass of index.classes) expect(JSON.stringify(await read(join(output, `exams/${release.exams}/classes/${klass}.json`)))).toBe(JSON.stringify({ exams: exams.filter(exam => exam.class === klass), changes: changes.filter(change => change.class === klass) }));
     });
-    it('splits a class without changing the class, course, teachers or any meeting field', async () => {
-        expect(await json('teaching/' + term.term + '/classes/B240402.json')).toEqual({ class: klass, meetings: [facts[0]] });
-        expect(await json('teaching/' + term.term + '/meetings.json')).toEqual(facts);
-    });
-    it('retains changes for a class whose exams have all been removed', async () => {
-        expect(await json('exams/2025-2026-2/index.json')).toEqual({ classes: ['B240402', 'REMOVED'], sources });
-        expect(await json('exams/2025-2026-2/classes/B240402.json')).toEqual({ exams, changes: [] });
-        expect(await json('exams/2025-2026-2/classes/REMOVED.json')).toEqual({ exams: [], changes });
-    });
-    it('keeps every place, floor and room kind without deriving eligibility or occupancy', async () => {
-        expect(await json('rooms/index.json')).toEqual({ term: term.term, weeks: term.weeks, periods, rooms, buildings, campuses });
-        expect(await json('rooms/' + term.term + '/' + day.date + '.json')).toEqual(day);
-        expect(await readdir(output)).toEqual(['exams', 'rooms', 'teaching']);
+    it('uses map parents for every room and preserves partitioned classroom numbers', async () => {
+        const index = await read<{ rooms: Room[]; buildings: Building[] }>(join(output, 'rooms/index.json'));
+        const source = await read<Room[]>(join(input, 'places/rooms.json'));
+        const mapped = new Set(places.filter(place => place.kind === 'room').map(place => place.id));
+        expect(index.rooms.map(room => room.id).sort()).toEqual(source.filter(room => mapped.has(room.id)).map(room => room.id).sort());
+        for (const room of index.rooms) expect(index.buildings.some(building => building.id === room.building && building.campus === room.campus)).toBe(true);
+        for (const number of ['213-1', '312-1', '412-1']) expect(index.rooms.find(room => room.id === `仙林/教3-${number}`)).toMatchObject({ building: '教3', number, floor: number.slice(0, 1) });
     });
 });

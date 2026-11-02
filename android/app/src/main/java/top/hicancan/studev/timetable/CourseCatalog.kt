@@ -2,6 +2,7 @@ package top.hicancan.studev.timetable
 
 import top.hicancan.studev.data.CoursePlan
 import top.hicancan.studev.data.TeachingMeeting
+import top.hicancan.studev.data.roomDisplayName
 import top.hicancan.studev.me.TimetableEdits
 import java.text.Collator
 import java.text.Normalizer
@@ -120,7 +121,7 @@ object CourseCatalog {
 
     fun meetingLine(meeting: TeachingMeeting): String {
         val dayName = "一二三四五六日".getOrNull(meeting.weekday - 1)?.let { "周$it" } ?: "周${meeting.weekday}"
-        val room = meeting.room?.replace('－', '-') ?: "地点未定"
+        val room = roomDisplayName(meeting.room, emptyMap())?.replace('－', '-') ?: "地点未定"
         return "$dayName ${meeting.periods.first()}–${meeting.periods.last()}节 · $room · ${formatWeekNumbers(meeting.weeks)}"
     }
 

@@ -442,7 +442,8 @@ async function main() {
             throw new Error(`opening-hours id is outside map release: ${id}`);
         }
     }
-    const version = `${map.version}__${data.version}`;
+    // Packaging policy changes must invalidate already-downloaded offline data.
+    const version = `${map.version}__${data.version}__p2`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });
@@ -454,7 +455,7 @@ async function main() {
         docs.push(doc);
     }
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
-    const terms = await packageFacts(data.dir, out, data.index, mapPlacesByCampus.get('仙林') ?? []);
+    const terms = await packageFacts(data.dir, out, data.index, [...mapPlacesByCampus.values()].flat());
     await copyFile(join(data.dir, 'hours.json'), join(out, 'hours.json'));
     const dataEntities = join(data.dir, 'entities');
     for (const file of ['index.json', 'agent.json', 'information.json', 'time.json']) {

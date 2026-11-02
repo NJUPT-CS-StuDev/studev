@@ -28,7 +28,7 @@ describe('fact readers', () => {
         const agents = release.base + '/entities/agent.json';
         const files = await Promise.all([
             base + '/term.json', base + '/periods.json', base + '/classes.json',
-            plans, agents, base + '/meetings.json',
+            plans, agents, base + '/meetings.json', base + '/classes/B240402.json', base + '/classes/B250105.json',
         ].map(async path => [path, JSON.parse(await readFile(new URL('../public' + path, root), 'utf8'))] as const));
         const published = Object.fromEntries(files);
         expect(published[plans].items.some((item: { subtype: string }) => item.subtype === 'information:opening-hours')).toBe(true);
@@ -42,6 +42,13 @@ describe('fact readers', () => {
             expect(searchCatalog(catalog, query, meetings.length).some(course => course.meetings.some(meeting => meeting.id === example.id))).toBe(true);
         }
         expect(catalog.flatMap(course => course.meetings)).toHaveLength(meetings.length);
+        const [firstClass, secondClass] = await Promise.all([client.loadClass('B240402'), client.loadClass('B250105')]);
+        expect(firstClass.classInfo.id).toBe('B240402');
+        expect(secondClass.classInfo.id).toBe('B250105');
+        const controller = new AbortController();
+        controller.abort();
+        await expect(client.loadCatalog(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+        expect(await client.loadCatalog()).toBe(catalog);
     });
 
     it('loads separate teaching fact files and keeps elective meetings outside the class shard', async () => {

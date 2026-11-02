@@ -6,12 +6,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.HttpURLConnection
 import java.net.URI
-import java.net.URL
 import java.net.URLEncoder
 import top.hicancan.studev.BuildConfig
 import java.io.IOException
@@ -35,6 +34,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             if (local != null) return@withLock local
         }
         val bytes = try { fetchBytes("${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }) }
+        catch (e: FileNotFoundException) { throw e }
         catch (e: IOException) { throw DataUnavailableException(e) }
         if (path.endsWith(".json")) Json.parseToJsonElement(bytes.decodeToString())
         file.parentFile!!.mkdirs()
@@ -49,7 +49,9 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
     suspend fun classes() = read<List<TeachingClass>>("teaching/${release.teaching}/classes.json")
-    suspend fun coursePlans() = read<CoursePlanFile>("entities/information.json").items.filter { it.subtype == "information:course-plan" }
+    suspend fun coursePlans() = read<InformationEntityFile>("entities/information.json").items
+        .filter { it["subtype"]?.jsonPrimitive?.content == "information:course-plan" }
+        .map { Json.decodeFromJsonElement<CoursePlan>(it) }
     suspend fun teachingClasses() = read<AgentEntityFile>("entities/agent.json").items.filter { it.subtype == "agent:teaching-class" }
     private fun enrichMeetings(meetings: List<TeachingMeeting>, groups: Map<String, AgentEntity>): List<TeachingMeeting> =
         meetings.map { meeting ->
@@ -62,7 +64,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         return enrichMeetings(read<List<TeachingMeeting>>("teaching/${release.teaching}/meetings.json"), groups)
     }
     suspend fun catalog(): List<top.hicancan.studev.timetable.CatalogCourse> =
-        top.hicancan.studev.timetable.CourseCatalog.groupCatalog(meetings(), runCatching { coursePlans() }.getOrDefault(emptyList()))
+        top.hicancan.studev.timetable.CourseCatalog.groupCatalog(meetings(), coursePlans())
     suspend fun schedule(id: String): ClassSchedule {
         val groups = teachingClasses().associateBy { it.id }
         return read<ClassSchedule>("teaching/${release.teaching}/classes/$id.json").let { schedule ->
@@ -72,7 +74,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun effectiveSchedule(id: String, edits: top.hicancan.studev.me.TimetableEdits): ClassSchedule {
         val base = schedule(id)
         if (edits.hidden.isEmpty() && edits.added.isEmpty()) return base
-        val catalog = if (edits.added.isNotEmpty()) runCatching { catalog() }.getOrDefault(emptyList()) else emptyList()
+        val catalog = if (edits.added.isNotEmpty()) catalog() else emptyList()
         return base.copy(meetings = top.hicancan.studev.timetable.CourseCatalog.effectiveMeetings(base.meetings, catalog, edits))
     }
     suspend fun examIndex() = release.exams?.let { read<ExamIndex>("exams/$it/index.json") }
@@ -80,6 +82,27 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val term = release.exams ?: return emptyList()
         if (examIndex()?.classes?.contains(id) != true) return emptyList()
         return read<ClassExams>("exams/$term/classes/$id.json").exams
+    }
+    suspend fun examCandidates(id: String, edits: top.hicancan.studev.me.TimetableEdits, availableCatalog: List<top.hicancan.studev.timetable.CatalogCourse>? = null): List<Exam> {
+        val published = exams(id).toMutableList()
+        if (release.exams != release.teaching || edits.added.isEmpty()) return published
+        val added = (availableCatalog ?: catalog()).filter { top.hicancan.studev.timetable.CourseCatalog.catalogId(it) in edits.added }
+        val seen = published.mapTo(mutableSetOf()) { "${it.course.code}|${it.date}|${it.start}" }
+        for (course in added) {
+            val code = course.meetings.firstOrNull()?.course?.code ?: continue
+            for (other in course.meetings.flatMap { it.classes }.distinct()) {
+                for (exam in exams(other).filter { it.course.code == code }) {
+                    if (seen.add("${exam.course.code}|${exam.date}|${exam.start}")) published += exam
+                }
+            }
+        }
+        return published
+    }
+    suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {
+        val edits = settings.timetableEdits(release.teaching)
+        val schedule = if (release.exams == release.teaching && classes().any { it.id == id }) effectiveSchedule(id, edits) else null
+        return top.hicancan.studev.exams.ExamAttendance.select(examCandidates(id, edits), settings.examChoices(release.exams, id),
+            top.hicancan.studev.exams.ExamAttendance.ownCodes(release, schedule))
     }
     suspend fun rooms() = read<RoomIndex>("rooms/index.json")
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }
@@ -101,7 +124,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         suspend fun open(context: Context): AcademicRepository = withContext(Dispatchers.IO) {
             DataRefreshWorker.schedule(context)
             val saved = File(context.filesDir, "campus/release.json")
-            val release = runCatching { Json.decodeFromString<DataRelease>(saved.readText()) }.getOrElse {
+            val release = runCatching { Json.decodeFromString<DataRelease>(saved.readText()).takeIf(::validRelease) }.getOrNull() ?: run {
                 Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() })
             }
             require(validRelease(release))
@@ -110,36 +133,26 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         suspend fun bundled(context: Context): AcademicRepository = withContext(Dispatchers.IO) {
             AcademicRepository(context.applicationContext, Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() }))
         }
-        /** The web embeds campus-release.json at build time, rather than exposing a latest URL.
-         * Discover the same release from the campus island's entry module. No date guessing. */
+        /** The same stable release manifest used by the website's offline worker. */
         suspend fun discover(context: Context, klass: String? = null): AcademicRepository? = withContext(Dispatchers.IO) {
             try {
-                val host = BuildConfig.DATA_HOST
-                val html = download("$host/search/").decodeToString()
-                val modules = Regex("(?:component-url|src)=\"([^\"]+\\.js)\"").findAll(html).map { it.groupValues[1] }.distinct().take(12).toMutableList()
-                var cursor = 0
-                while (cursor < modules.size && cursor < 20) {
-                    val module = modules[cursor++]
-                    val url = URL(URL(host), module)
-                    if (url.authority != URL(host).authority || url.protocol != URL(host).protocol) continue
-                    val script = download(url.toString()).decodeToString()
-                    Regex("(?:_astro/|\\./)?constants\\.[A-Za-z0-9_-]+\\.js").findAll(script).forEach {
-                        val dependency = "/_astro/" + it.value.substringAfterLast('/')
-                        if (dependency !in modules) modules += dependency
-                    }
-                    val release = releaseFromModule(script) ?: continue
-                    return@withContext activate(context, release, klass)
-                }
-                null
+                val release = releaseFromManifest(download("${BuildConfig.DATA_HOST}/pwa-release.json").decodeToString()) ?: return@withContext null
+                activate(context, release, klass)
             } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
         }
         private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && release.base == "/data/${release.version}"
         private suspend fun activate(context: Context, release: DataRelease, klass: String?): AcademicRepository {
             require(validRelease(release))
             val repository = AcademicRepository(context.applicationContext, release)
-            repository.term(); repository.periods(); val classes = repository.classes(); repository.rooms(); repository.examIndex()
+            val term = repository.term()
+            repository.periods(); val classes = repository.classes(); repository.rooms(); repository.examIndex()
+            repository.coursePlans(); repository.teachingClasses()
             if (klass != null) {
-                if (classes.any { it.id == klass }) repository.schedule(klass)
+                if (classes.any { it.id == klass }) {
+                    repository.schedule(klass)
+                    val edits = top.hicancan.studev.me.CampusSettings(context).state.value.timetableEdits(term.term)
+                    if (edits.added.isNotEmpty()) repository.catalog()
+                }
                 repository.exams(klass)
             }
             val index = File(context.filesDir, "campus/release.json")
@@ -152,14 +165,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
             return repository
         }
-        internal fun releaseFromModule(script: String): DataRelease? {
-            // Minifiers may quote property names; the values are the untouched digest contract.
-            val objectText = Regex("\\{[^{}]{0,1500}(?:base|\"base\")\\s*:\\s*[\"`]/data/[^\"`]+[\"`][^{}]{0,1500}\\}").find(script)?.value ?: return null
-            fun field(name: String) = Regex("(?:\"$name\"|\\b$name)\\s*:\\s*[\"`]([^\"`]*)[\"`]").find(objectText)?.groupValues?.get(1)
-            val version = field("version") ?: return null
-            val base = field("base") ?: return null
-            if (!Regex("[A-Za-z0-9._-]+").matches(version) || base != "/data/$version") return null
-            return DataRelease(version, base, field("built_at") ?: return null, field("teaching") ?: return null, field("exams"), field("rooms") ?: return null)
-        }
+        internal fun releaseFromManifest(text: String): DataRelease? = runCatching {
+            Json { ignoreUnknownKeys = true }.decodeFromString<DataRelease>(text).takeIf(::validRelease)
+        }.getOrNull()
     }
 }

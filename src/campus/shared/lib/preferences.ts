@@ -14,6 +14,8 @@ export interface Preferences {
     campus?: string;
     /** Keyed by term, e.g. "2026-2027-1": edits never leak into the next term. */
     timetable?: Record<string, TimetableEdits>;
+    /** Explicit attendance choices, scoped to exam term and class. */
+    examAttendance?: Record<string, Record<string, boolean>>;
 }
 
 const KEY = 'studev_prefs';
@@ -45,6 +47,16 @@ const sanitize = (raw: unknown): Preferences => {
             if (next.hidden.length || next.added.length) result.timetable[term] = next;
         }
         if (!Object.keys(result.timetable).length) delete result.timetable;
+    }
+    if (record.examAttendance && typeof record.examAttendance === 'object' && !Array.isArray(record.examAttendance)) {
+        const attendance: NonNullable<Preferences['examAttendance']> = {};
+        for (const [scope, rawChoices] of Object.entries(record.examAttendance)) {
+            if (!/^\d{4}-\d{4}-\d:[A-Z]\d{6}(\([A-Z]{2}\))?$/.test(scope) || !rawChoices || typeof rawChoices !== 'object' || Array.isArray(rawChoices)) continue;
+            const choices: Record<string, boolean> = {};
+            for (const [id, value] of Object.entries(rawChoices)) if (id.length > 0 && id.length < 200 && typeof value === 'boolean') choices[id] = value;
+            attendance[scope] = choices;
+        }
+        if (Object.keys(attendance).length) result.examAttendance = attendance;
     }
     return result;
 };
@@ -99,3 +111,11 @@ export const updateTimetableEdits = (term: string, change: (edits: TimetableEdit
         ...current,
         timetable: { ...current.timetable, [term]: change(timetableEdits(current, term)) },
     }));
+
+export const examAttendanceScope = (term: string, className: string): string => `${term}:${className.toUpperCase()}`;
+
+export const updateExamAttendance = (term: string, className: string, choices: Record<string, boolean>): Preferences =>
+    writePreferences(current => {
+        const scope = examAttendanceScope(term, className);
+        return { ...current, examAttendance: { ...current.examAttendance, [scope]: { ...current.examAttendance?.[scope], ...choices } } };
+    });

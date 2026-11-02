@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Exam } from '@/academics/exam/records';
+import { examAttendanceScope, readPreferences, updateExamAttendance } from '@/shared/lib/preferences';
+import { usePreferences } from '@/shared/lib/usePreferences';
+import { attendingExams } from './examAttendance';
 import {
     buildDefaultSelectedExamIds,
     buildExamSelectionScope,
@@ -8,22 +11,15 @@ import {
     writeExamExportState,
 } from './examSelection';
 
-interface SelectionState {
-    scope: string | null;
-    selectedIds: Set<string>;
-}
-
 export const useSelectedExamIds = (
     className: string | null,
     exams: Exam[],
     snapshotId: string | null,
     examPeriodId: string | null,
-    sourceUpdatedAt: string | null
+    sourceUpdatedAt: string | null,
+    ownCodes: Set<string> | null = null,
 ) => {
-    const [selection, setSelection] = useState<SelectionState>({
-        scope: null,
-        selectedIds: new Set()
-    });
+    const { prefs } = usePreferences();
     const [, refreshExportState] = useState(0);
     const examIds = useMemo(() => exams.map(exam => exam.id), [exams]);
     const scope = useMemo(() => buildExamSelectionScope(className, examPeriodId, snapshotId), [className, snapshotId, examPeriodId]);
@@ -33,34 +29,29 @@ export const useSelectedExamIds = (
         [exams, exportState]
     );
 
-    const selectedIds = selection.scope === scope
-        ? selection.selectedIds
-        : defaultSelectedIds;
+    const attendanceScope = className && examPeriodId ? examAttendanceScope(examPeriodId, className) : null;
+    const legacyChoices = exportState ? Object.fromEntries(exportState.all.map(exam => [exam.id, defaultSelectedIds.has(exam.id)])) : {};
+    const choices = attendanceScope ? prefs.examAttendance?.[attendanceScope] ?? legacyChoices : {};
+    const selectedIds = new Set(attendingExams(exams, choices, ownCodes).map(exam => exam.id));
 
     const toggleExamSelection = useCallback((id: string) => {
         if (!scope) return;
 
-        setSelection(prev => {
-            const base = prev.scope === scope ? prev.selectedIds : defaultSelectedIds;
-            const next = new Set(base);
-            if (next.has(id)) {
-                next.delete(id);
-            } else {
-                next.add(id);
-            }
-            return { scope, selectedIds: next };
-        });
-    }, [defaultSelectedIds, scope]);
+        if (!className || !examPeriodId) return;
+        const currentChoices = readPreferences().examAttendance?.[examAttendanceScope(examPeriodId, className)] ?? legacyChoices;
+        const selected = attendingExams(exams, currentChoices, ownCodes).some(exam => exam.id === id);
+        updateExamAttendance(examPeriodId, className, { ...currentChoices, [id]: !selected });
+    }, [className, examPeriodId, exams, legacyChoices, ownCodes, scope]);
 
     const selectAllExamIds = useCallback(() => {
         if (!scope) return;
-        setSelection({ scope, selectedIds: new Set(examIds) });
-    }, [examIds, scope]);
+        if (className && examPeriodId) updateExamAttendance(examPeriodId, className, Object.fromEntries(examIds.map(id => [id, true])));
+    }, [className, examPeriodId, examIds, scope]);
 
     const clearExamSelection = useCallback(() => {
         if (!scope) return;
-        setSelection({ scope, selectedIds: new Set() });
-    }, [scope]);
+        if (className && examPeriodId) updateExamAttendance(examPeriodId, className, Object.fromEntries(examIds.map(id => [id, false])));
+    }, [className, examPeriodId, examIds, scope]);
 
     const markExamsExported = useCallback((exportedExams: Exam[]) => {
         if (!className || !snapshotId || !examPeriodId || !sourceUpdatedAt) return;

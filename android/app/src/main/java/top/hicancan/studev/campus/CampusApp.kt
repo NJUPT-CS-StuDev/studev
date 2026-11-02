@@ -34,6 +34,7 @@ import top.hicancan.studev.me.*
 import top.hicancan.studev.navigation.*
 import top.hicancan.studev.rooms.RoomsScreen
 import top.hicancan.studev.search.AcademicSearchScreen
+import top.hicancan.studev.exams.ExamsScreen
 import top.hicancan.studev.timetable.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,11 +50,15 @@ import top.hicancan.studev.timetable.*
     val snackbar = remember { SnackbarHostState() }
     var screen by rememberSaveable { mutableStateOf("home") }
     var query by rememberSaveable { mutableStateOf("") }
+    var searchScope by rememberSaveable { mutableStateOf("web") }
     var week by rememberSaveable { mutableStateOf<Int?>(null) }
     var roomDate by rememberSaveable { mutableStateOf<String?>(null) }
     var roomPeriod by rememberSaveable { mutableStateOf<Int?>(null) }
     var classPicker by rememberSaveable { mutableStateOf(false) }
     var courseManager by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(courseManager, state.repository) {
+        if (courseManager && state.repository != null) model.openCourseManager()
+    }
     var lesson by remember { mutableStateOf<TeachingMeeting?>(null) }
     val destinations = rememberSaveableStateHolder()
     var pendingMap by rememberSaveable { mutableStateOf<String?>(null) }
@@ -119,7 +124,7 @@ import top.hicancan.studev.timetable.*
                 uri.getQueryParameter("campus")?.let { campus -> if (state.rooms?.campuses?.any { it.id == campus } == true) model.settings.update { it.copy(campus = campus) } }
                 openScreen("rooms", query)
             }
-            "/search/web", "/search/materials", "/search/community" -> openScreen("search", query)
+            "/search/web", "/search/materials", "/search/community" -> { searchScope = uri.path!!.trimEnd('/').substringAfterLast('/'); openScreen("search", query) }
             else -> openScreen("home")
         }
         onDeepLinkHandled()
@@ -172,9 +177,10 @@ import top.hicancan.studev.timetable.*
                             edits = state.term?.let { preferences.timetableEdits(it.term) } ?: TimetableEdits(),
                             onManageCourses = { courseManager = true; model.openCourseManager() },
                         )
-                        "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go, campusPackage)
+                        "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go, campusPackage,
+                            preferences.examChoices(state.repository?.release?.exams, preferences.klass), model::examAttendance)
                         "rooms" -> RoomsScreen(state.repository!!, state.rooms!!, preferences.campus, query, roomDate, roomPeriod, { value -> model.settings.update { it.copy(campus = value) } }, ::go)
-                        "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }) { target, text ->
+                        "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }, searchScope, campusPackage?.byId.orEmpty()) { target, text ->
                             openScreen(target, text)
                             if (target == "timetable" && text.isNotBlank()) { courseManager = true; model.openCourseManager() }
                         }
@@ -196,6 +202,7 @@ import top.hicancan.studev.timetable.*
             onAdd = model::addCourse,
             onRemoveAdded = model::removeAddedCourse,
             onReset = model::resetTimetableEdits,
+            onRetry = model::openCourseManager,
             onClose = { courseManager = false; query = "" },
         )
     }

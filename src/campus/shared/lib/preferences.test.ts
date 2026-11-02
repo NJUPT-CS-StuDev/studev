@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readPreferences, timetableEdits, updateTimetableEdits, writePreferences } from './preferences';
+import { readPreferences, timetableEdits, updateTimetableEdits, writePreferences, updateExamAttendance, examAttendanceScope } from './preferences';
 
 // A browser-like window with storage, enough for this module.
 const store = new Map<string, string>();
@@ -27,5 +27,14 @@ describe('preferences', () => {
     it('accepts class names with a direction suffix', () => {
         writePreferences(current => ({ ...current, class: 'Q230101(TG)' }));
         expect(readPreferences().class).toBe('Q230101(TG)');
+    });
+    it('saves attendance immediately, isolates class and term, and preserves explicit restoration', () => {
+        updateExamAttendance('2025-2026-2', 'b240402', { 'exam-1': false });
+        updateExamAttendance('2025-2026-2', 'B240403', { 'exam-1': true });
+        expect(readPreferences().examAttendance?.[examAttendanceScope('2025-2026-2', 'B240402')]).toEqual({ 'exam-1': false });
+        expect(readPreferences().examAttendance?.[examAttendanceScope('2026-2027-1', 'B240402')]).toBeUndefined();
+        updateExamAttendance('2025-2026-2', 'B240402', { 'exam-1': true });
+        expect(readPreferences().examAttendance?.['2025-2026-2:B240402']).toEqual({ 'exam-1': true });
+        expect(readPreferences().examAttendance?.['2025-2026-2:B240403']).toEqual({ 'exam-1': true });
     });
 });

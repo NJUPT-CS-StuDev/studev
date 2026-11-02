@@ -86,9 +86,10 @@ object LessonReminders {
         val uri = Uri.parse("$PLATFORM_ORIGIN/" + if (room == null) "search/timetable/" else "map/?place=${Uri.encode(room)}&route=true")
         val open = PendingIntent.getActivity(context, id.hashCode(), Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(uri),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val roomName = top.hicancan.studev.data.roomDisplayName(room, emptyMap())
         val notification = NotificationCompat.Builder(context, TAG).setSmallIcon(R.drawable.ic_navigation).setContentTitle(title)
-            .setContentText(room ?: "打开课表查看详情").setContentIntent(open).setAutoCancel(true)
-        if (room != null) notification.addAction(R.drawable.ic_navigation, "导航到 $room", open)
+            .setContentText(roomName ?: "打开课表查看详情").setContentIntent(open).setAutoCancel(true)
+        if (roomName != null) notification.addAction(R.drawable.ic_navigation, "导航到 $roomName", open)
         manager.notify(id.hashCode(), notification.build())
         preferences.edit().putBoolean("sent:$id", true).apply()
     }

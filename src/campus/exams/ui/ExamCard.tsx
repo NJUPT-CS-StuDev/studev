@@ -57,6 +57,7 @@ export function ExamCard({ exam, isSelected, exportStatus, onToggle }: ExamCardP
                 <div className="pt-1 relative">
                     <input 
                         type="checkbox" 
+                        aria-label={`${isSelected ? '不参加' : '参加'} ${exam.course.name}`}
                         checked={isSelected}
                         onChange={onToggle}
                         className="sr-only peer"

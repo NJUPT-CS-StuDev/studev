@@ -222,6 +222,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
     onAdd: (CatalogCourse) -> Unit,
     onRemoveAdded: (String) -> Unit,
     onReset: () -> Unit,
+    onRetry: () -> Unit,
     onClose: () -> Unit,
 ) {
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
@@ -269,6 +270,7 @@ internal data class CourseColours(val bg: Color, val border: Color, val fg: Colo
             )
             if (query.isNotBlank()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (state.catalogError != null) TextButton(onRetry) { Text("重试加载课程") }
                     Text(
                         when {
                             state.catalogBusy -> "正在加载全校课程…"

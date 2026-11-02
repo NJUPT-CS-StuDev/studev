@@ -203,7 +203,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { runtime.stop(close = true) }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "关闭路线规划") }
                         Column(Modifier.weight(1f)) {
-                            EndpointField(state.origin?.id?.let(::visibleRouteText) ?: "我的位置", "起点", true) { pick(true) }
+                            EndpointField(state.originName, "起点", true) { pick(true) }
                             HorizontalDivider(Modifier.padding(start = 22.dp), color = MaterialTheme.colorScheme.outlineVariant)
                             EndpointField(state.destinationName, "终点", false) { pick(false) }
                         }
@@ -283,16 +283,20 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
         }
     }
     val stepRoute = state.route
-    if (steps && stepRoute != null) ModalBottomSheet(onDismissRequest = { steps = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.90f).testTag("route-steps")) {
+    // Size against the Activity window, not the sheet's inset-adjusted constraints.
+    // Fractional content height otherwise feeds its changing anchor back into top insets.
+    val detailsHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() * .90f }
+    if (steps && stepRoute != null) ModalBottomSheet(onDismissRequest = { steps = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }) {
+        Column(Modifier.fillMaxWidth().height(detailsHeight).navigationBarsPadding().testTag("route-steps")) {
             Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("${state.origin?.id?.let(::visibleRouteText) ?: "我的位置"} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
+                    Text("${state.originName} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
                     Text("${minutes(stepRoute.duration_s)} 分钟 · ${metres(stepRoute.distance_m)} · ${if (state.mode == "bike") "骑行" else "步行"}", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = { steps = false }) { Icon(Icons.Outlined.Close, "关闭路线详情") }
             }
-            LazyColumn(contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)) {
+            LazyColumn(Modifier.weight(1f).testTag("route-steps-list"), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)) {
                 itemsIndexed(stepRoute.maneuvers) { index, maneuver ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) { Box(Modifier.padding(10.dp)) { ManeuverIcon(maneuver.type, maneuver.modifier, 28) } }

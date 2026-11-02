@@ -127,7 +127,7 @@ export function ExamDetail({
                         {className} 考试安排
                     </h2>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-[var(--muted)] dark:text-[var(--muted)]">
-                        <span>已选 {selectedIds.size} 门，共 {exams.length} 门</span>
+                        <span>参加 {selectedIds.size} 门，已排除 {exams.length - selectedIds.size} 门</span>
                         <span>•</span>
                         <button
                             onClick={onSelectAll}
@@ -135,7 +135,7 @@ export function ExamDetail({
                             disabled={allSelected}
                             className={`hover:underline transition-colors ${allSelected ? 'text-[var(--muted)] cursor-not-allowed no-underline' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
                         >
-                            全选
+                            全部参加
                         </button>
                         <button
                             onClick={onClearSelection}
@@ -143,7 +143,7 @@ export function ExamDetail({
                             disabled={noneSelected}
                             className={`hover:underline transition-colors ${noneSelected ? 'text-[var(--muted)] cursor-not-allowed no-underline' : 'text-[var(--color-google-blue)] dark:text-[var(--color-google-blue-dark)]'}`}
                         >
-                            取消全选
+                            全部不参加
                         </button>
                         <span>•</span>
                         <button
@@ -199,6 +199,8 @@ export function ExamDetail({
             <Suspense fallback={null}>
                 <ReminderSettings selected={reminders} onChange={onRemindersChange} />
             </Suspense>
+
+            <p className="mb-4 text-sm text-[var(--muted)]">取消勾选表示不参加该考试；选择会按学期和班级保存在此浏览器，导出的日历只包含已选考试。</p>
 
             <div className="space-y-0 border border-[var(--line)] dark:border-[var(--line)] rounded-lg overflow-hidden bg-[var(--paper)] dark:bg-[var(--paper)]">
                 {classExams.map((exam, idx) => card(exam, idx, classExams))}

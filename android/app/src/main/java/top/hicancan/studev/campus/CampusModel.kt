@@ -14,6 +14,7 @@ import top.hicancan.studev.timetable.*
 import top.hicancan.studev.widget.NextLessonWidget
 import top.hicancan.studev.search.AcademicSearch
 import top.hicancan.studev.search.CampusSearch
+import top.hicancan.studev.exams.ExamAttendance
 
 data class AcademicState(val repository: AcademicRepository? = null, val term: TeachingTerm? = null, val periods: List<TeachingPeriod> = emptyList(),
     val classes: List<TeachingClass> = emptyList(), val coursePlans: List<CoursePlan> = emptyList(), val examClasses: List<String> = emptyList(),
@@ -29,6 +30,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     val notice = _notice.asStateFlow()
     private var loading: Job? = null
     private var phone: Job? = null
+    private var editing: Job? = null
     private var search: AcademicSearch? = null
     private val placeSearch = CampusSearch(application.assets)
     private var campus: CampusPackage? = null
@@ -51,6 +53,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     fun clearNotice() { _notice.value = null }
     fun tell(message: String) { _notice.value = message }
     fun load() {
+        editing?.cancel()
         loading?.cancel()
         loading = viewModelScope.launch {
             try {
@@ -67,12 +70,13 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         }
     }
     private suspend fun loadRepository(repo: AcademicRepository) {
-        val term = repo.term(); val periods = repo.periods(); val classes = repo.classes(); val coursePlans = runCatching { repo.coursePlans() }.getOrDefault(emptyList()); val rooms = repo.rooms()
+        val term = repo.term(); val periods = repo.periods(); val classes = repo.classes(); val coursePlans = repo.coursePlans(); val rooms = repo.rooms()
         val examClasses = repo.examIndex()?.classes.orEmpty()
         _state.value = AcademicState(repo, term, periods, classes, coursePlans, examClasses, rooms = rooms, busy = false)
         loadClass(settings.state.value.klass)
     }
     fun chooseClass(id: String) {
+        editing?.cancel()
         settings.update { it.copy(klass = id) }
         loading?.cancel()
         loading = viewModelScope.launch { loadClass(id) }
@@ -85,17 +89,22 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             val rawSchedule = if (id != null && current.classes.any { it.id == id }) repo.schedule(id) else null
             val edits = current.term?.let { settings.state.value.timetableEdits(it.term) } ?: TimetableEdits()
             val catalog = if (edits.added.isNotEmpty() && current.catalog.isEmpty()) {
-                runCatching { repo.catalog() }.getOrDefault(emptyList())
+                repo.catalog()
             } else current.catalog
-            val schedule = rawSchedule?.let { raw ->
-                raw.copy(meetings = CourseCatalog.effectiveMeetings(raw.meetings, catalog, edits))
+            val exams = id?.let { repo.examCandidates(it, edits, catalog.takeIf { it.isNotEmpty() }) }.orEmpty()
+            if (settings.state.value.klass != id || state.value.repository !== repo) return
+            _state.update { now ->
+                if (settings.state.value.klass != id || now.repository !== repo) return@update now
+                // Loading a class and opening its course manager can finish in either order.
+                // Never replace a catalogue that the manager has just finished loading.
+                val availableCatalog = catalog.ifEmpty { now.catalog }
+                val effective = rawSchedule?.copy(meetings = CourseCatalog.effectiveMeetings(rawSchedule.meetings, availableCatalog, settings.state.value.timetableEdits(checkNotNull(now.term).term)))
+                now.copy(rawSchedule = rawSchedule, schedule = effective, catalog = availableCatalog, exams = exams, classBusy = false,
+                    events = CampusEvents.build(checkNotNull(now.term), now.periods, effective, personalExams(repo, effective, exams)))
             }
-            val exams = id?.let { repo.exams(it) }.orEmpty()
-            _state.update { it.copy(rawSchedule = rawSchedule, schedule = schedule, catalog = catalog, exams = exams, classBusy = false,
-                events = CampusEvents.build(checkNotNull(it.term), it.periods, schedule, exams)) }
             syncPhone()
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { _state.update { it.copy(classBusy = false, error = if (e is DataUnavailableException) e.message else "班级数据暂时无法打开，请重试") } }
+        catch (e: Exception) { _state.update { if (settings.state.value.klass == id && it.repository === repo) it.copy(classBusy = false, error = if (e is DataUnavailableException) e.message else "班级数据暂时无法打开，请重试") else it } }
     }
     fun openCourseManager() {
         val current = state.value
@@ -106,6 +115,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             try {
                 val catalog = repo.catalog()
                 _state.update { stateNow ->
+                    if (stateNow.repository !== repo) return@update stateNow
                     val edits = stateNow.term?.let { settings.state.value.timetableEdits(it.term) } ?: TimetableEdits()
                     val schedule = stateNow.rawSchedule?.let { raw ->
                         raw.copy(meetings = CourseCatalog.effectiveMeetings(raw.meetings, catalog, edits))
@@ -114,33 +124,42 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                         catalog = catalog,
                         catalogBusy = false,
                         schedule = schedule,
-                        events = if (stateNow.term != null) CampusEvents.build(stateNow.term, stateNow.periods, schedule, stateNow.exams) else stateNow.events,
+                        events = if (stateNow.term != null) CampusEvents.build(stateNow.term, stateNow.periods, schedule, personalExams(repo, schedule, stateNow.exams)) else stateNow.events,
                     )
                 }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.update { it.copy(catalogBusy = false, catalogError = "全校课程目录暂时无法加载，请重试") } }
+            catch (_: Exception) { _state.update { if (it.repository === repo) it.copy(catalogBusy = false, catalogError = "全校课程目录暂时无法加载，请重试") else it } }
         }
     }
     private fun applyTimetableChange(change: (TimetableEdits) -> TimetableEdits) {
         val term = state.value.term?.term ?: return
         settings.updateTimetable(term, change)
-        viewModelScope.launch {
+        editing?.cancel()
+        editing = viewModelScope.launch {
+          try {
             val current = state.value
             val edits = settings.state.value.timetableEdits(term)
             val catalog = if (edits.added.isNotEmpty() && current.catalog.isEmpty()) {
-                current.repository?.let { runCatching { it.catalog() }.getOrDefault(emptyList()) }.orEmpty()
+                current.repository?.catalog() ?: return@launch
             } else current.catalog
+            val repo = current.repository ?: return@launch
+            val klass = settings.state.value.klass
+            val exams = klass?.let { repo.examCandidates(it, edits, catalog.takeIf { it.isNotEmpty() }) }.orEmpty()
             _state.update { stateNow ->
+                if (stateNow.repository !== repo || stateNow.term?.term != term || settings.state.value.klass != klass || settings.state.value.timetableEdits(term) != edits) return@update stateNow
                 val schedule = stateNow.rawSchedule?.let { raw ->
                     raw.copy(meetings = CourseCatalog.effectiveMeetings(raw.meetings, catalog, edits))
                 }
                 stateNow.copy(
                     catalog = catalog,
                     schedule = schedule,
-                    events = if (stateNow.term != null) CampusEvents.build(stateNow.term, stateNow.periods, schedule, stateNow.exams) else stateNow.events,
+                    exams = exams,
+                    events = if (stateNow.term != null) CampusEvents.build(stateNow.term, stateNow.periods, schedule, personalExams(repo, schedule, exams)) else stateNow.events,
                 )
             }
             syncPhone()
+          } catch (e: CancellationException) { throw e }
+          catch (_: Exception) { tell("课程目录尚未下载，修改已保存；请联网打开课表后重试。现有日历和提醒保持不变。") }
         }
     }
     fun hideCourse(id: String) = applyTimetableChange { it.copy(hidden = it.hidden + id) }
@@ -148,19 +167,32 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     fun addCourse(course: CatalogCourse) = applyTimetableChange { it.copy(added = it.added + CourseCatalog.catalogId(course)) }
     fun removeAddedCourse(id: String) = applyTimetableChange { it.copy(added = it.added.filterNot { item -> item == id }) }
     fun resetTimetableEdits() = applyTimetableChange { TimetableEdits() }
+    private fun personalExams(repo: AcademicRepository, schedule: ClassSchedule?, exams: List<Exam>) =
+        ExamAttendance.select(exams, settings.state.value.examChoices(repo.release.exams, settings.state.value.klass), ExamAttendance.ownCodes(repo.release, schedule))
+    fun examAttendance(id: String, attending: Boolean) {
+        val current = state.value
+        val repo = current.repository ?: return
+        val klass = settings.state.value.klass ?: return
+        val term = repo.release.exams ?: return
+        settings.updateExamAttendance(term, klass, mapOf(id to attending))
+        _state.update { now ->
+            if (now.repository !== repo || now.term == null) now else now.copy(events = CampusEvents.build(now.term, now.periods, now.schedule, personalExams(repo, now.schedule, now.exams)))
+        }
+        syncPhone()
+    }
     fun refresh() { viewModelScope.launch {
         tell("正在检查校园数据")
         val repo = AcademicRepository.discover(getApplication(), settings.state.value.klass)
         if (repo == null) tell("暂未发现新数据，离线数据仍可使用")
-        else try { loadRepository(repo); tell("校园数据已更新") } catch (_: Exception) { tell("新数据暂时无法读取，请稍后重试") }
+        else try { loadRepository(repo); tell("校园数据已更新") } catch (e: CancellationException) { throw e } catch (_: Exception) { tell("新数据暂时无法读取，请稍后重试") }
     } }
     fun syncPhone() {
         if (state.value.classBusy || state.value.busy) return
         phone?.cancel()
         phone = viewModelScope.launch {
-            val expectedClass = settings.state.value.klass
+            val expectedSettings = settings.state.value
             try {
-                DeviceSchedule.update(getApplication(), state.value.events, expectedClass)?.let { tell("已同步 $it 项课程与考试") }
+                DeviceSchedule.update(getApplication(), state.value.events, expectedSettings.klass, expectedSettings)?.let { tell("已同步 $it 项课程与考试") }
                 NextLessonWidget().refreshAll(getApplication())
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { tell("同步未完成，请检查权限后重试") }

@@ -14,6 +14,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.data.Place
+import top.hicancan.studev.data.CampusPackage
+import top.hicancan.studev.data.roomDisplayName
 import top.hicancan.studev.location.CampusLocation
 
 data class PlannerState(
@@ -23,13 +25,15 @@ data class PlannerState(
     val routes: List<CampusRoute> = emptyList(), val selected: Int = 0,
     val busy: Boolean = false, val error: String? = null, val trip: TripState = TripState(),
     val fix: NavFix? = null, val muted: Boolean = false, val notice: String? = null,
-    val simulating: Boolean = false, val destinationLabel: String? = null,
+    val simulating: Boolean = false, val destinationLabel: String? = null, val originLabel: String? = null,
 ) {
     val route get() = routes.getOrNull(selected)
-    val destinationName get() = if (destinationIsMyPosition) "我的位置" else visibleRouteText(destinationLabel ?: destination?.id ?: "目的地")
+    val originName get() = originLabel ?: origin?.displayName(emptyMap()) ?: "我的位置"
+    val destinationName get() = if (destinationIsMyPosition) "我的位置" else visibleRouteText(destinationLabel ?: destination?.displayName(emptyMap()) ?: "目的地")
     val active get() = trip.phase == TripPhase.Navigating
     fun swapped() = copy(origin = if (destinationIsMyPosition) null else destination,
-        destination = origin, destinationIsMyPosition = origin == null)
+        destination = origin, destinationIsMyPosition = origin == null,
+        originLabel = if (destinationIsMyPosition) null else destinationLabel, destinationLabel = originLabel)
 }
 
 /** Small durable record used only while a foreground navigation trip is active. */
@@ -75,6 +79,7 @@ class NavigationRuntime private constructor(private val context: Context) {
     private var lastFixTimestamp = -1L
     private var lastReroute = Long.MIN_VALUE / 2
     private var voiceWarningShown = false
+    private var placeIndex: Map<String, Place> = emptyMap()
     private val _state = MutableStateFlow(PlannerState())
     val state = _state.asStateFlow()
     val location = CampusLocation.get(context)
@@ -84,6 +89,12 @@ class NavigationRuntime private constructor(private val context: Context) {
         private set
     @Volatile var simulationCommand: String? = null
     init {
+        scope.launch {
+            val campus = try { CampusPackage.load(context.assets) }
+            catch (e: CancellationException) { throw e } catch (_: Exception) { return@launch }
+            placeIndex = campus.byId
+            _state.update { it.copy(originLabel = it.origin?.let(::placeLabel), destinationLabel = it.destination?.let(::placeLabel) ?: it.destinationLabel) }
+        }
         persisted.load()?.let { record ->
             goal = record.destination
             _state.value = PlannerState(
@@ -110,13 +121,14 @@ class NavigationRuntime private constructor(private val context: Context) {
     }
     private suspend fun <T> native(block: () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
     private fun engine() = engine ?: Wayfind.load(context.assets).also { engine = it }
+    private fun placeLabel(place: Place): String = if (place.kind == "room") roomDisplayName(place.id, placeIndex + (place.id to place)).orEmpty() else place.displayName(placeIndex)
     fun open(destination: Place) {
         if (state.value.active) return
-        _state.value = PlannerState(open = true, destination = destination, destinationLabel = destination.displayName(mapOf(destination.id to destination)))
+        _state.value = PlannerState(open = true, destination = destination, destinationLabel = placeLabel(destination))
         plan()
     }
-    fun origin(place: Place?) { _state.update { it.copy(origin = place) }; plan() }
-    fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false, destinationLabel = place.displayName(mapOf(place.id to place)) ) }; plan() }
+    fun origin(place: Place?) { _state.update { it.copy(origin = place, originLabel = place?.let(::placeLabel)) }; plan() }
+    fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false, destinationLabel = placeLabel(place)) }; plan() }
     fun swap() {
         _state.update { it.swapped() }; plan()
     }

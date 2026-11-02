@@ -55,7 +55,7 @@ class NavigationTest {
                         val endpointLayer = map.style?.getLayerAs<org.maplibre.android.style.layers.CircleLayer>("route-endpoints")
                         val source = endpointLayer?.let { map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>(it.sourceId) }
                         val labels = source?.querySourceFeatures(null)?.map { it.getStringProperty("label") }.orEmpty()
-                        loaded = labels.contains(runtime.state.value.origin?.id ?: "起点") && labels.contains(runtime.state.value.destinationName)
+                        loaded = labels.contains(if (runtime.state.value.origin == null) "起点" else runtime.state.value.originName) && labels.contains(runtime.state.value.destinationName)
                     }
                 }
                 loaded
@@ -77,7 +77,7 @@ class NavigationTest {
                     val endpointLayer = map.style!!.getLayerAs<org.maplibre.android.style.layers.CircleLayer>("route-endpoints")!!
                     val endpointSource = map.style!!.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>(endpointLayer.sourceId)!!
                     val labels = endpointSource.querySourceFeatures(null).map { it.getStringProperty("label") }.toSet()
-                    assertTrue("Planner endpoint labels are stale: $labels", labels.contains(runtime.state.value.origin?.id ?: "起点"))
+                    assertTrue("Planner endpoint labels are stale: $labels", labels.contains(if (runtime.state.value.origin == null) "起点" else runtime.state.value.originName))
                 }
             } }
         }
@@ -93,10 +93,12 @@ class NavigationTest {
         compose.waitUntil(20_000) { compose.onAllNodesWithText("搜索地点、楼栋或教室").fetchSemanticsNodes().isNotEmpty() }
     }
     private fun search(query: String) {
+        val campus = runBlocking { CampusPackage.load(context.assets) }
+        val place = campus.places.first { query in it.names || it.id == query || top.hicancan.studev.data.roomDisplayName(it.id, campus.byId) == query }
         compose.onNode(hasSetTextAction()).performTextInput(query)
-        compose.waitUntil(20_000) { compose.onAllNodesWithTag("place:$query").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("place:${place.id}").fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasSetTextAction()).performImeAction()
-        compose.onNodeWithTag("place:$query").performClick()
+        compose.onNodeWithTag("place:${place.id}").performClick()
     }
     private fun plan(origin: String, destination: String) {
         permissions(); ready()
