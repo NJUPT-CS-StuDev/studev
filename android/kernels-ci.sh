@@ -12,7 +12,9 @@ fi
 
 build_kernel() {
   local repo="$1" package="$2" library="$3"
-  git clone --depth 1 "https://github.com/hicancan/${repo}.git" "$work/$repo"
+  local tag
+  tag=$(node -e 'const p=require("./package.json"); const m=p.dependencies[process.argv[1]].match(/\/releases\/download\/(v[^/]+)\//); if(!m) throw new Error("kernel must use an immutable release"); process.stdout.write(m[1]);' "$repo")
+  git clone --depth 1 --branch "$tag" "https://github.com/hicancan/${repo}.git" "$work/$repo"
   pushd "$work/$repo" >/dev/null
   cargo ndk -t arm64-v8a -t x86_64 -P 21 -o android/build/jniLibs build \
     --locked --release --package "$package" --lib

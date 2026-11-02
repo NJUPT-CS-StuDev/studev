@@ -6,12 +6,22 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $destination = Join-Path $PSScriptRoot 'kernels'
+$dependencies = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).dependencies
 $kernels = @(
-    @{ Path = $SearchPath; Package = 'wasm-search-android'; Library = 'wasm_search_android' },
-    @{ Path = $WayfindPath; Package = 'wayfind-android'; Library = 'wayfind_android' }
+    @{ Path = $SearchPath; Name = 'wasm-search'; Package = 'wasm-search-android'; Library = 'wasm_search_android' },
+    @{ Path = $WayfindPath; Name = 'wayfind'; Package = 'wayfind-android'; Library = 'wayfind_android' }
 )
 foreach ($kernel in $kernels) {
     $repo = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($kernel.Path)
+    $release = [regex]::Match($dependencies.($kernel.Name), '/releases/download/(v[^/]+)/')
+    if (-not $release.Success) { throw "Kernel must use an immutable release: $($kernel.Name)" }
+    $tag = $release.Groups[1].Value
+    $expected = (& git -C $repo rev-parse "$tag^{commit}").Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Missing kernel release $tag in $repo" }
+    $actual = (& git -C $repo rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $actual -ne $expected -or (& git -C $repo status --porcelain --untracked-files=no)) {
+        throw "Kernel checkout must be clean at $tag before building: $repo"
+    }
     $script = Join-Path $repo 'android/build.ps1'
     if (-not (Test-Path -LiteralPath $script)) { throw "Native kernel checkout missing: $script" }
     & $script
