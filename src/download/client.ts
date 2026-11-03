@@ -10,7 +10,7 @@ let controlled = false;
 async function prepare() {
     if (embedded) { status.textContent = '请在浏览器中打开'; return; }
     if (!('serviceWorker' in navigator)) throw new Error('请使用支持下载的新版浏览器打开。');
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
+    const registration = await navigator.serviceWorker.register('/download/sw.js', { scope: '/download/', updateViaCache: 'none' });
     // An already installed worker can be the previous site's code. Activate the
     // newly installed worker before exposing its download route.
     if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
