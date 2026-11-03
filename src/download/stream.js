@@ -2,71 +2,157 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { apkPath, readManifest } from './manifest.js';
 
-/** Incremental hashing and backpressure keep memory bounded to network chunks,
- * including N=1. Withhold each part's last chunk until its hash is verified so
- * even a final-byte mismatch cannot look like a completed Content-Length. */
+/** How many parts may be in flight at once.
+ *
+ * EdgeOne serves roughly 750-800 KB/s per connection but about 6 MB/s across
+ * four, so the win comes from concurrency rather than from part count. The
+ * window is a fixed number of parts, which keeps peak memory at
+ * CONCURRENCY x part size no matter how large the APK grows. */
+const CONCURRENCY = 4;
+
+/** Stream every manifest part as one attachment response.
+ *
+ * The head part streams straight through and its last chunk is withheld until
+ * its hash verifies, so even a final-byte mismatch cannot look like a completed
+ * Content-Length. Parts behind the head are drained into memory concurrently --
+ * that concurrency is the whole point -- and are emitted in order once they
+ * reach the head. Peak memory is bounded by the prefetch window, not by APK
+ * size, so a much larger APK only grows the part count. */
 export async function apkResponse(request, progress = () => {}, fetcher = fetch) {
     const url = new URL(request.url);
     const match = /^\/download\/([1-9][0-9]*)\/studev-[A-Za-z0-9._-]+\.apk$/.exec(url.pathname);
     if (!match) return new Response(null, { status: 404 });
     const manifest = await readManifest(new URL(`/download/${match[1]}/manifest.json`, url).href, fetcher);
     if (apkPath(manifest) !== url.pathname) return new Response(null, { status: 404 });
+
     const abort = new AbortController();
     const wholeHash = sha256.create();
-    let index = 0;
-    let done = 0;
-    let offset = 0;
-    let reader;
-    let partHash;
-    let pending;
+    const slots = [];
+    let nextIndex = 0;
+    let sent = 0;
     let lastNotice = 0;
+
     const notify = state => {
         if (state === 'downloading' && Date.now() - lastNotice < 150) return;
         lastNotice = Date.now();
-        progress({ type: 'APK_DOWNLOAD', path: url.pathname, state, done, total: manifest.size });
+        progress({ type: 'APK_DOWNLOAD', path: url.pathname, state, done: sent, total: manifest.size });
     };
-    const cleanup = () => { abort.abort(); void reader?.cancel().catch(() => {}); partHash?.destroy(); wholeHash.destroy(); };
+
+    function start() {
+        if (nextIndex >= manifest.parts.length) return;
+        const part = manifest.parts[nextIndex++];
+        const slot = { part, hash: sha256.create(), offset: 0, reader: null, chunks: [], tail: undefined, buffered: false, failure: null, drain: null };
+        slot.ready = fetcher(part.url, { cache: 'no-store', redirect: 'error', signal: abort.signal })
+            .then(response => {
+                if (!response.ok || !response.body) throw new Error(`分片读取失败：${part.name}`);
+                slot.reader = response.body.getReader();
+            });
+        slots.push(slot);
+    }
+
+    /** Drain a slot that sits behind the head. Running these concurrently is what
+     * turns four throttled connections into one fast download. */
+    async function drain(slot) {
+        await slot.ready;
+        const reader = slot.reader;
+        try {
+            for (;;) {
+                const result = await reader.read();
+                if (result.done) break;
+                slot.offset += result.value.length;
+                if (slot.offset > slot.part.size) throw new Error('分片大小不符');
+                slot.hash.update(result.value);
+                slot.chunks.push(result.value);
+            }
+        } finally {
+            reader.releaseLock();
+            slot.reader = null;
+        }
+        if (slot.offset !== slot.part.size || bytesToHex(slot.hash.digest()) !== slot.part.sha256) {
+            throw new Error(`分片校验失败：${slot.part.name}`);
+        }
+        slot.buffered = true;
+    }
+
+    function fillWindow() {
+        while (slots.length < CONCURRENCY && nextIndex < manifest.parts.length) start();
+        for (let index = 1; index < slots.length; index += 1) {
+            const slot = slots[index];
+            if (!slot.drain) slot.drain = drain(slot).catch(error => { slot.failure = error; });
+        }
+    }
+
+    function cleanup() {
+        abort.abort();
+        for (const slot of slots) {
+            try { slot.hash.destroy(); } catch { /* already digested */ }
+            void slot.reader?.cancel().catch(() => {});
+        }
+        try { wholeHash.destroy(); } catch { /* already digested */ }
+    }
+
     const body = new ReadableStream({
         async pull(controller) {
+            const emit = chunk => {
+                wholeHash.update(chunk);
+                sent += chunk.length;
+                controller.enqueue(chunk);
+                notify('downloading');
+            };
             try {
-                const part = manifest.parts[index];
-                if (!reader) {
-                    const response = await fetcher(part.url, { cache: 'no-store', redirect: 'error', signal: abort.signal });
-                    if (!response.ok || !response.body) throw new Error(`分片读取失败：${part.name}`);
-                    reader = response.body.getReader();
-                    partHash = sha256.create(); offset = 0;
-                }
-                while (!abort.signal.aborted) {
-                    const result = await reader.read();
-                    if (!result.done) {
-                        offset += result.value.length;
-                        if (offset > part.size) throw new Error('分片大小不符');
-                        partHash.update(result.value); wholeHash.update(result.value);
-                        const previous = pending;
-                        pending = result.value;
-                        if (previous) {
-                            controller.enqueue(previous); done += previous.length; notify('downloading');
-                            return;
-                        }
+                for (;;) {
+                    if (abort.signal.aborted) return;
+                    fillWindow();
+                    const head = slots[0];
+                    if (!head) {
+                        if (bytesToHex(wholeHash.digest()) !== manifest.sha256) throw new Error('APK 校验失败');
+                        controller.close();
+                        notify('complete');
+                        return;
+                    }
+                    // A part drained in the background must finish before it can be
+                    // read here, otherwise two readers would race on one stream.
+                    if (head.drain) await head.drain;
+                    if (head.failure) throw head.failure;
+                    await head.ready;
+
+                    if (head.buffered) {
+                        const chunk = head.chunks.shift();
+                        if (chunk) { emit(chunk); return; }
+                        slots.shift();
                         continue;
                     }
-                    if (offset !== part.size || bytesToHex(partHash.digest()) !== part.sha256) throw new Error(`分片校验失败：${part.name}`);
-                    const last = index + 1 === manifest.parts.length;
-                    if (last && bytesToHex(wholeHash.digest()) !== manifest.sha256) throw new Error('APK 校验失败');
-                    reader.releaseLock(); reader = undefined;
-                    const verified = pending; pending = undefined;
-                    controller.enqueue(verified); done += verified.length;
-                    index++;
-                    if (last) { controller.close(); notify('complete'); }
-                    else notify('downloading');
-                    return;
+
+                    const result = await head.reader.read();
+                    if (!result.done) {
+                        head.offset += result.value.length;
+                        if (head.offset > head.part.size) throw new Error('分片大小不符');
+                        head.hash.update(result.value);
+                        const previous = head.tail;
+                        head.tail = result.value;
+                        if (previous) { emit(previous); return; }
+                        continue;
+                    }
+
+                    head.reader.releaseLock();
+                    head.reader = null;
+                    if (head.offset !== head.part.size || bytesToHex(head.hash.digest()) !== head.part.sha256) {
+                        throw new Error(`分片校验失败：${head.part.name}`);
+                    }
+                    const tail = head.tail;
+                    head.tail = undefined;
+                    slots.shift();
+                    if (tail) { emit(tail); return; }
                 }
             } catch (error) {
-                cleanup(); controller.error(error); notify('error');
+                cleanup();
+                controller.error(error);
+                notify('error');
             }
         },
         cancel() { cleanup(); notify('cancelled'); },
     }, { highWaterMark: 0 });
+
     return new Response(body, { headers: {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Length': String(manifest.size),

@@ -31,22 +31,41 @@ for (const count of [1, 3]) test(`streams ${count} verified parts as one attachm
     assert.equal(f.fetched.length, count + 1);
     assert.equal(progress.at(-1).state, 'complete');
 });
-test('a corrupted middle part aborts before emitting it or fetching the next part', async () => {
+test('a corrupted part aborts the stream without ever emitting its bytes', async () => {
     const f = fixture(3, 1);
     const progress = [];
     const response = await apkResponse(new Request('https://example.org/download/99/studev-9.0.0.apk'), p => progress.push(p), f.fetcher);
     const reader = response.body.getReader();
     assert.deepEqual(Buffer.from((await reader.read()).value), Buffer.from([1, 2, 3]));
     await assert.rejects(reader.read(), /校验失败/);
-    assert.equal(f.fetched.length, 3);
+    assert.equal(f.fetched.length, 4, 'the prefetch window covers every part here');
     assert.equal(progress.at(-1).state, 'error');
 });
-test('canceling a download stops fetching subsequent parts', async () => {
-    const f = fixture(3);
+test('canceling a download starts no further parts beyond the prefetch window', async () => {
+    const f = fixture(10);
     const response = await apkResponse(new Request('https://example.org/download/99/studev-9.0.0.apk'), () => {}, f.fetcher);
     const reader = response.body.getReader();
-    await reader.read(); await reader.cancel();
-    assert.equal(f.fetched.length, 2);
+    await reader.read();
+    await reader.cancel();
+    assert.equal(f.fetched.length, 5, 'manifest plus one prefetch window of four');
+});
+test('drains the prefetch window concurrently instead of one part at a time', async () => {
+    const f = fixture(8);
+    let inFlight = 0;
+    let peak = 0;
+    const tracking = async (url, options) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 5));
+            return await f.fetcher(url, options);
+        } finally {
+            inFlight -= 1;
+        }
+    };
+    const response = await apkResponse(new Request('https://example.org/download/99/studev-9.0.0.apk'), () => {}, tracking);
+    assert.equal(hash(Buffer.from(await response.arrayBuffer())), f.manifest.sha256);
+    assert.ok(peak >= 4, `expected at least four concurrent part fetches, saw ${peak}`);
 });
 test('a whole-APK hash mismatch with valid part hashes still aborts the final response', async () => {
     const f = fixture(1);
