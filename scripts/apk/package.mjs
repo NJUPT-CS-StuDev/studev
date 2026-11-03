@@ -34,7 +34,10 @@ export async function verifyArtifact(manifestPath) {
   let total = 0;
   const wholeHash = createHash('sha256');
   for (const part of manifest.parts) {
-    if (!part.name || part.name.includes('/') || part.name.includes('\\') || part.size < 1 || part.size > MAX_PART_BYTES) throw new Error(`invalid part metadata: ${part.name}`);
+    // MAX_PART_BYTES caps what this build may create, not what an already
+    // published release may contain. Lowering the cap must never make older
+    // releases un-fetchable, so only structure and hashes are checked here.
+    if (!part.name || part.name.includes('/') || part.name.includes('\\') || part.size < 1) throw new Error(`invalid part metadata: ${part.name}`);
     const path = join(root, part.name);
     const bytes = await readFile(path);
     const actual = await digestBytes(bytes);
