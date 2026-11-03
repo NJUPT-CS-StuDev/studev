@@ -7,8 +7,8 @@ import tokens from '../../design/tokens.json';
 import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/app/config/product';
 // fill: the page is one full-height application (the map) with no footer.
-interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; hideFloatingPwa?: boolean; }
-const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false, hideFloatingPwa = false } = Astro.props;
+interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; hideFloatingPwa?: boolean; noPwa?: boolean; }
+const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false, hideFloatingPwa = false, noPwa = false } = Astro.props;
 const nav = [
   { href: '/study/', label: 'Study', key: 'study' },
   { href: '/develop/', label: 'Develop', key: 'develop' },
@@ -153,7 +153,7 @@ const initialSearchPlaceholder =
         </div>
       </div>
     </footer>}
-    <PwaPanel floating={fill && !hideFloatingPwa} />
+    {!noPwa && <PwaPanel floating={fill && !hideFloatingPwa} />}
     <script>import '../client/site/copy-text';</script>
     <script>import '../client/site/diagrams';</script>
     <script>import '../client/platform/auth-status';</script>
