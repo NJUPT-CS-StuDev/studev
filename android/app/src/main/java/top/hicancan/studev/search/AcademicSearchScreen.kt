@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.*
 import top.hicancan.studev.campus.*
 import top.hicancan.studev.data.Place
@@ -186,9 +188,19 @@ fun AcademicSearchScreen(engine: AcademicSearch, initialQuery: String, findPlace
 
 @Composable private fun highlightSearchText(text: String, terms: List<String>) = buildAnnotatedString {
     append(text)
-    val highlight = SpanStyle(background = MaterialTheme.colorScheme.secondaryContainer, fontWeight = FontWeight.SemiBold)
-    terms.distinct().filter { it.length >= 2 }.sortedByDescending { it.length }.forEach { term ->
-        var start = text.indexOf(term, ignoreCase = true)
-        while (start >= 0) { addStyle(highlight, start, start + term.length); start = text.indexOf(term, start + term.length, ignoreCase = true) }
-    }
+    val dark = isSystemInDarkTheme()
+    val paper = if (dark) top.hicancan.studev.ui.theme.Tokens.Color.Dark.paper else top.hicancan.studev.ui.theme.Tokens.Color.Light.paper
+    val warning = if (dark) top.hicancan.studev.ui.theme.Tokens.Color.Dark.warning else top.hicancan.studev.ui.theme.Tokens.Color.Light.warning
+    val highlight = SpanStyle(background = mixHighlight(paper, warning), fontWeight = FontWeight.SemiBold)
+    searchHighlightRanges(text, terms).forEach { range -> addStyle(highlight, range.first, range.last + 1) }
+}
+
+private fun mixHighlight(paper: Color, warning: Color): Color {
+    val amount = .25f
+    return Color(
+        red = paper.red * (1 - amount) + warning.red * amount,
+        green = paper.green * (1 - amount) + warning.green * amount,
+        blue = paper.blue * (1 - amount) + warning.blue * amount,
+        alpha = 1f,
+    )
 }
