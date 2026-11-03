@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import product from '../../product.json' with { type: 'json' };
+import { PART_BYTES } from '../../src/download/contract.js';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const MAX_PART_BYTES = product.apkPartBytes;
+const MAX_PART_BYTES = PART_BYTES;
 
 async function digestBytes(bytes) {
   return { size: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') };

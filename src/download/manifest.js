@@ -1,6 +1,4 @@
-import product from '../../product.json' with { type: 'json' };
-
-/** The one published APK contract, shared by the page and service worker. */
+/** The one published APK contract, shared by the page and the download worker. */
 export async function readManifest(url, fetcher = fetch) {
     const origin = new URL(url).origin;
     const response = await fetcher(url, { cache: 'no-store', redirect: 'error' });
@@ -14,8 +12,10 @@ export async function readManifest(url, fetcher = fetch) {
     const names = new Set();
     const parts = manifest.parts.map(part => {
         const partUrl = new URL(part.url, url);
+        // Part size is a build-time choice; a reader must not re-impose it, or
+        // lowering PART_BYTES would make every already published release invalid.
         if (!/^part-[0-9]{3,}$/.test(part.name) || names.has(part.name) || !size(part.size) ||
-            part.size > product.apkPartBytes || !hash(part.sha256) || partUrl.origin !== origin ||
+            !hash(part.sha256) || partUrl.origin !== origin ||
             partUrl.pathname !== `/download/${manifest.versionCode}/${part.name}` || partUrl.search || partUrl.hash || partUrl.username || partUrl.password) throw new Error('下载分片信息无效');
         names.add(part.name);
         return { ...part, url: partUrl.href };

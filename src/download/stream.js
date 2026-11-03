@@ -1,14 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { apkPath, readManifest } from './manifest.js';
-
-/** How many parts may be in flight at once.
- *
- * EdgeOne serves roughly 750-800 KB/s per connection but about 6 MB/s across
- * four, so the win comes from concurrency rather than from part count. The
- * window is a fixed number of parts, which keeps peak memory at
- * CONCURRENCY x part size no matter how large the APK grows. */
-const CONCURRENCY = 4;
+import { CONCURRENCY } from './contract.js';
 
 /** Stream every manifest part as one attachment response.
  *
