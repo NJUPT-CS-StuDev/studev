@@ -423,10 +423,8 @@ async function buildCampus(
             await write(join(to, file), await buildModel(campus, from, layers, entities));
             continue;
         }
-        if (file === 'style-light.json') {
-            await write(join(to, file), style('light'));
-        } else if (file === 'style-dark.json') {
-            await write(join(to, file), style('dark'));
+        if (file === 'style.json') {
+            await write(join(to, file), style());
         } else {
             await copyFile(join(from, file), join(to, file));
         }

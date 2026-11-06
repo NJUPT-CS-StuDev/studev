@@ -104,7 +104,7 @@ object TimetableCalendar {
             })
         } else remove(context, school)
         val rule = facts.run
-        if (settings.runAlarm && rule != null) {
+        if (settings.calendarRun && rule != null) {
             val rows = mutableListOf<Entry>()
             var date = LocalDate.parse(rule.start)
             while (date.toString() <= rule.end) {

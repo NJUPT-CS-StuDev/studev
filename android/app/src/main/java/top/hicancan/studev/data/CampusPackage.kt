@@ -86,13 +86,11 @@ object StyleTokens {
 class CampusPackage private constructor(
     val version: String,
     val places: List<Place>,
-    private val lightStyle: String,
-    private val darkStyle: String,
+    val style: String,
     val basemapFile: File?,
 ) {
     val byId = places.associateBy { it.id }
     fun position(place: Place) = place.centre ?: byId[place.parent]?.centre
-    fun style(dark: Boolean) = if (dark) darkStyle else lightStyle
     companion object {
         const val BASE = "data/space/仙林"
         suspend fun load(assets: AssetManager): CampusPackage = withContext(Dispatchers.IO) {
@@ -110,9 +108,8 @@ class CampusPackage private constructor(
             val places = Json.decodeFromString<List<Place>>(text("$BASE/entities.json"))
             val opening = Json.decodeFromString<Map<String, OpeningRecord>>(text("data/hours.json"))
             val data = mapFile?.parentFile?.let { "file://${it.absolutePath}" } ?: StyleTokens.DATA
-            fun style(path: String) = StyleTokens.resolve(text(path), data, StyleTokens.ASSETS)
             return CampusPackage(text("data/version.txt").trim(), places.map { place -> place.copy(hours = opening[place.id]?.hours) },
-                style("$BASE/style-light.json"), style("$BASE/style-dark.json"), mapFile)
+                StyleTokens.resolve(text("$BASE/style.json"), data, StyleTokens.ASSETS), mapFile)
         }
     }
 }

@@ -1,6 +1,7 @@
 // One campus scene whose light, colour and room states follow the viewed moment. A flat
 // map is this scene seen from straight above; there is no second mode.
 import * as maplibregl from 'maplibre-gl';
+import type { Appearance } from '@/world/appearance';
 import type { GeoJSONSource, Map as MapLibre, StyleSpecification } from 'maplibre-gl';
 import type { Geometry, Position } from 'geojson';
 import { Protocol } from 'pmtiles';
@@ -77,7 +78,7 @@ export class CampusScene {
     private shadowDraft = document.createElement('canvas');
     private ready = false;
     private queued: (() => void)[] = [];
-    private dark = false;
+    private routeColours: Record<'day' | 'night', { line: string; casing: string; alternative: string }> | null = null;
     private night = 0;
     private building: string | null = null;
     private floor: number | null = null;
@@ -130,7 +131,8 @@ export class CampusScene {
         map.addSource('shadow', { type: 'canvas', canvas: this.shadowCanvas, coordinates: [[SHADOW.w, SHADOW.n], [SHADOW.e, SHADOW.n], [SHADOW.e, SHADOW.s], [SHADOW.w, SHADOW.s]], animate: false });
         map.addLayer({ id: 'shadow', type: 'raster', source: 'shadow', paint: { 'raster-opacity': .16, 'raster-fade-duration': 0 } }, 'context');
         for (const id of ['route', 'sel', 'selshell', 'selcore', 'selrooms']) map.addSource(id, { type: 'geojson', data: NONE });
-        const routeTheme = (map.getStyle().metadata as { route: { line: string; casing: string; alternative: string } }).route;
+        this.routeColours = (map.getStyle().metadata as { route: NonNullable<CampusScene['routeColours']> }).route;
+        const routeTheme = this.routeColours.day;
         const round = { 'line-cap': 'round', 'line-join': 'round' } as const;
         map.addLayer({ id: 'route-alternative', type: 'line', source: 'route', filter: ['!', ['get', 'chosen']], layout: round, paint: { 'line-color': routeTheme.alternative, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 3, 18, 7] } }, 'context');
         map.addLayer({ id: 'route-casing', type: 'line', source: 'route', filter: ['get', 'chosen'], layout: round, paint: { 'line-color': routeTheme.casing, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 11] } }, 'context');
@@ -148,12 +150,11 @@ export class CampusScene {
     whenReady(run: () => void) { if (this.ready) run(); else this.queued.push(run); }
     destroy() { clearTimeout(this.shadowTimer); cancelAnimationFrame(this.animation); this.map.remove(); this.labelHost.replaceChildren(); }
 
-    /** Sets the palette and the light for a moment. */
-    setMoment(date: string, min: number, dark: boolean) {
+    /** The light of a moment. A chosen appearance holds it at day or night; "auto" follows the sun. */
+    setMoment(date: string, min: number, appearance: Appearance) {
         if (!this.ready) return;
-        this.dark = dark;
         const altitude = sunAt(date, min).alt;
-        const night = dark ? 1 : altitude >= 8 ? 0 : altitude <= -5 ? 1 : (8 - altitude) / 13;
+        const night = appearance === 'dark' ? 1 : appearance === 'light' ? 0 : altitude >= 8 ? 0 : altitude <= -5 ? 1 : (8 - altitude) / 13;
         if (night.toFixed(2) !== this.night.toFixed(2) || !this.painted) {
             this.night = night;
             this.painted = true;
@@ -161,7 +162,7 @@ export class CampusScene {
             this.paintBuildings();
             this.paintSelectionColours();
         }
-        this.queueShadows(date, min);
+        this.queueShadows(date, appearance === 'light' && altitude < 8 ? 720 : min);
     }
     private painted = false;
     private palette() {
@@ -180,6 +181,10 @@ export class CampusScene {
         set('roads', 'line-color', palette.road);
         set('paths', 'line-color', palette.path);
         set('context', 'fill-extrusion-color', palette.context);
+        const route = this.routeColours![this.night > .55 ? 'night' : 'day'];
+        set('route-alternative', 'line-color', route.alternative);
+        set('route-casing', 'line-color', route.casing);
+        set('route', 'line-color', route.line);
         this.labelHost.classList.toggle('scene-night', this.night > .55);
     }
     /** How free each teaching building is, as a share of its classrooms. */
@@ -242,9 +247,9 @@ export class CampusScene {
         const source = this.map.getSource('shadow') as maplibregl.CanvasSource | undefined;
         if (source) { source.play(); this.map.triggerRepaint(); requestAnimationFrame(() => requestAnimationFrame(() => source.pause())); }
         const strength = sun.alt <= 1.5 ? 0 : Math.min(.2, .05 + sun.alt / 60);
-        const opacity = this.building && this.hasFloors(this.building) ? 0 : this.dark ? strength * .9 : strength;
+        const opacity = this.building && this.hasFloors(this.building) ? 0 : this.night > .55 ? strength * .9 : strength;
         this.map.setPaintProperty('shadow', 'raster-opacity', ['interpolate', ['linear'], ['zoom'], 16, opacity, 18.5, opacity * .55]);
-        this.map.setLight({ anchor: 'map', position: [1.25, sun.az, Math.max(16, Math.min(34, 90 - Math.max(sun.alt, 10)))], color: sun.alt < 14 && sun.alt > 0 ? '#FFE3C4' : '#FFFFFF', intensity: this.dark || sun.alt <= 0 ? .26 : .2 });
+        this.map.setLight({ anchor: 'map', position: [1.25, sun.az, Math.max(16, Math.min(34, 90 - Math.max(sun.alt, 10)))], color: sun.alt < 14 && sun.alt > 0 ? '#FFE3C4' : '#FFFFFF', intensity: this.night > .55 || sun.alt <= 0 ? .26 : .2 });
     }
 
     /* ---- floors ---- */

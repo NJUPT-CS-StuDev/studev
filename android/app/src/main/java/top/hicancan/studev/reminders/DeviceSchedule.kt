@@ -18,7 +18,6 @@ object DeviceSchedule {
         if (settings.klass != expectedClass) return@withLock null
         if (expectedSettings != null && (settings.timetable != expectedSettings.timetable || settings.examAttendance != expectedSettings.examAttendance)) return@withLock null
         LessonReminders.sync(context, events, settings.reminders, settings.leadMinutes)
-        RunAlarm.schedule(context, facts.run, facts.holidays, settings)
         if (TimetableCalendar.permitted(context)) TimetableCalendar.sync(context, events, facts, settings) else null
     }
 }

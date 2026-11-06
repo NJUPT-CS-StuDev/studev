@@ -99,7 +99,6 @@ data class RoomPaint(val id: String, val tier: String, val label: String, val na
 /** The campus scene. A flat map is this scene seen from straight above; there is no second mode. */
 class Scene(private val map: MapLibreMap, private val style: Style, val model: CampusModel) {
     val buildings = model.buildings.associateBy { it.id }
-    private var dark = false
     var night by androidx.compose.runtime.mutableFloatStateOf(0f); private set
     var openBuilding: String? = null; private set
     var openFloor: Int? = null; private set
@@ -133,12 +132,12 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     fun coresOf(id: String, floor: Int) = model.floors["$id/$floor"]?.cores.orEmpty()
     fun centreOf(id: String) = buildings[id]?.let { boundsOf(it.geometry).centre }
     private fun set(layer: String, vararg properties: PropertyValue<*>) { style.getLayer(layer)?.setProperties(*properties) }
-    fun moment(at: Moment, isDark: Boolean) {
-        dark = isDark
-        val (altitude, azimuth) = Sun.at(at.date, at.min)
-        val value = if (isDark) 1f else if (altitude >= 8) 0f else if (altitude <= -5) 1f else ((8 - altitude) / 13).toFloat()
+    /** The light of a moment. A chosen appearance holds it at day or night; "system" follows the sun. */
+    fun moment(at: Moment, appearance: String) {
+        val (altitude, azimuth) = Sun.at(at.date, if (appearance == "light" && Sun.at(at.date, at.min).first < 8) 720 else at.min)
+        val value = if (appearance == "dark") 1f else if (appearance == "light") 0f else if (altitude >= 8) 0f else if (altitude <= -5) 1f else ((8 - altitude) / 13).toFloat()
         if (abs(value - night) > .005f || lastSun.isEmpty()) { night = value; paintGround(); paintBuildings() }
-        val key = "${at.date}:${at.min / 10}:$isDark"
+        val key = "${at.date}:${at.min / 10}:$appearance"
         if (key != lastSun) { lastSun = key; drawShadows(altitude, azimuth) }
     }
     private fun paintGround() {
@@ -181,13 +180,13 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         }
         shadowSource.setImage(shadow)
         val strength = if (altitude <= 1.5) 0f else min(.2f, (.05 + altitude / 60).toFloat())
-        val opacity = if (openBuilding?.let(::hasFloors) == true) 0f else if (dark) strength * .9f else strength
+        val opacity = if (openBuilding?.let(::hasFloors) == true) 0f else if (night > .55f) strength * .9f else strength
         set("shadow", rasterOpacity(opacity))
         style.light?.let { light ->
             light.anchor = Property.ANCHOR_MAP
             light.position = Position(1.25f, azimuth.toFloat(), max(16f, min(34f, (90 - max(altitude, 10.0)).toFloat())))
             light.color = if (altitude < 14 && altitude > 0) "#FFE3C4" else "#FFFFFF"
-            light.intensity = if (dark || altitude <= 0) .26f else .2f
+            light.intensity = if (night > .55f || altitude <= 0) .26f else .2f
         }
     }
     private fun heightExpression(): Expression = coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(4))), literal(3.4)))

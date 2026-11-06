@@ -45,7 +45,7 @@ import top.hicancan.studev.world.Moment
     LaunchedEffect(Unit) { while (true) { now = Moment.of(CampusDay.now()); delay(30_000) } }
     LaunchedEffect(notice) { notice?.let { snackbar.showSnackbar(it); model.clearNotice() } }
     LaunchedEffect(deepLink) {
-        if (deepLink != null) { route.open(deepLink, Uri.parse(PLATFORM_ORIGIN).host.orEmpty()); onDeepLinkHandled() }
+        if (deepLink != null) { route.open(deepLink, PLATFORM_ORIGIN); onDeepLinkHandled() }
     }
     val runtime = remember(context) { NavigationRuntime.get(context) }
     val navigation by runtime.state.collectAsStateWithLifecycle()

@@ -1,5 +1,5 @@
 // The campus scene: flat ground, roads and extruded buildings. Everything that changes
-// with the moment (building tint, light, night palette) is set by the clients over this.
+// with the moment (building tint, light, night palette) is painted by the clients over this.
 import tokens from '../tokens.json' with { type: 'json' };
 
 const ROADS = ['secondary', 'tertiary', 'residential', 'service', 'living_street', 'unclassified'];
@@ -7,12 +7,13 @@ const PATHS = ['path', 'footway', 'pedestrian', 'curated_path', 'track', 'crossi
 export const buildingHeight = ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 4], 3.4]];
 const fill = (id, layer, color) => ({ id, type: 'fill', source: 'basemap', 'source-layer': layer, paint: { 'fill-color': color } });
 
-export function style(theme) {
-    const c = tokens.scene[theme === 'dark' ? 'night' : 'day'];
-    const route = tokens.color[theme];
+const routeColours = theme => ({ line: tokens.color[theme].route, casing: tokens.color[theme].routeCasing, alternative: tokens.color[theme].routeAlternative });
+
+export function style() {
+    const c = tokens.scene.day;
     return {
         version: 8,
-        name: `studev campus ${theme}`,
+        name: 'studev campus',
         glyphs: '{assets}/fonts/{fontstack}/{range}.pbf',
         sources: {
             basemap: { type: 'vector', url: 'pmtiles://{data}/basemap.pmtiles', attribution: '© njupt-map · © OpenStreetMap contributors' },
@@ -45,7 +46,7 @@ export function style(theme) {
                 paint: { 'fill-extrusion-color': c.model, 'fill-extrusion-height': buildingHeight, 'fill-extrusion-opacity': 1 },
             },
         ],
-        // Route colours travel with the style so both clients draw the same line.
-        metadata: { route: { line: route.route, casing: route.routeCasing, alternative: route.routeAlternative } },
+        // Clients repaint these layers for the moment's light, route colours included.
+        metadata: { route: { day: routeColours('light'), night: routeColours('dark') } },
     };
 }

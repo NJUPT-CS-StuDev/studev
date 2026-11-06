@@ -17,12 +17,12 @@ import { visibleRouteText } from './model/routeText';
 import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from './scene';
 import { fetchJson } from '@/shared/lib/fetch';
 import { holidayMap } from '@/world/events';
+import { readAppearance } from '@/world/appearance';
 import '../campus.css';
 import './map.css';
 
 const RULER_START = 7 * 60, RULER_END = 22 * 60;
 const percent = (minutes: number) => `${((Math.max(RULER_START, Math.min(RULER_END, minutes)) - RULER_START) / (RULER_END - RULER_START) * 100).toFixed(2)}%`;
-const theme = () => document.documentElement.dataset.theme === 'dark' ? 'dark' as const : 'light' as const;
 const metres = (m: number) => m < 1000 ? `${Math.round(m / 10) * 10} 米` : `${(m / 1000).toFixed(1)} 公里`;
 const distance = (a: Position, b: Position) => {
     const t = Math.PI / 180;
@@ -75,23 +75,24 @@ export default function MapApp() {
     const [snap, setSnap] = useState(0);
     const [peek, setPeek] = useState<number | null>(null);
     const [campusOpen, setCampusOpen] = useState(false);
-    const [dark, setDark] = useState(theme);
+    const [appearance, setLook] = useState(readAppearance);
+    const [closed, setClosed] = useState(false);
     const [needle, setNeedle] = useState(0);
 
     useEffect(() => {
-        const observer = new MutationObserver(() => setDark(theme()));
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        const observer = new MutationObserver(() => setLook(readAppearance()));
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-appearance'] });
         return () => observer.disconnect();
     }, []);
     useEffect(() => { let live = true; void loadRoomDay(moment.date).then(value => { if (live) setDay(value); }); return () => { live = false; }; }, [moment.date]);
 
-    /* Scene lifecycle: one per theme, since the style carries the theme. */
+    /* Scene lifecycle. */
     const handlers = useRef({ onBuilding: (_: string) => {}, onRoom: (_: string) => {}, onPlace: (_: string) => {}, onEmpty: () => {}, onView: () => {} });
     useEffect(() => {
         if (!world || !canvas.current || !labels.current) return;
         let instance: CampusScene | null = null;
         let cancelled = false;
-        void loadStyle(dark).then(style => {
+        void loadStyle().then(style => {
             if (cancelled || !canvas.current || !labels.current) return;
             const teach = world.space.byId.get('仙林/教3')?.centre ?? [118.928, 32.113];
             instance = new CampusScene(canvas.current, labels.current, style, world.model, [teach[0]! + .0006, teach[1]! - .0002], pitch, {
@@ -101,7 +102,7 @@ export default function MapApp() {
             instance.whenReady(() => { if (!cancelled) setScene(instance); });
         });
         return () => { cancelled = true; instance?.destroy(); setScene(null); };
-    }, [dark, world]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [world]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* What is selected. */
     const selected = placeId ? world?.space.byId.get(placeId) : undefined;
@@ -142,7 +143,7 @@ export default function MapApp() {
         scene.setTint(new Map([...freeBy].map(([id, row]) => [id, row.free / row.total])));
         scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
     }, [freeBy, scene]);
-    useEffect(() => { scene?.setMoment(moment.date, moment.min, dark === 'dark'); }, [dark, moment.date, moment.min, scene]);
+    useEffect(() => { scene?.setMoment(moment.date, moment.min, appearance); }, [appearance, moment.date, moment.min, scene]);
 
     /* Labels. */
     useEffect(() => {
@@ -279,7 +280,7 @@ export default function MapApp() {
         const route = routes[chosen];
         const name = destination.kind === 'room' ? roomLabel(destination.id) : displayName(destination, world.space.byId);
         body = <>
-            <div className="card-h top"><h2>{route ? `${mode === 'walk' ? '步行' : '骑行'} ${Math.max(1, Math.ceil(route.duration_s / 60))} 分钟 · ${metres(route.distance_m)}` : name}</h2><button className="x" aria-label="关闭" onClick={close}><Cross /></button></div>
+            <div className="card-h top"><h2>{route ? `${mode === 'walk' ? '步行' : '骑行'} ${Math.max(1, Math.ceil(route.duration_s / 60))} 分钟 · ${metres(route.distance_m)}` : name}</h2></div>
             <div className="meta">到 {name}</div>
             <label className="from">从
                 <select value={origin} onChange={event => setOrigin(event.target.value)}>
@@ -298,7 +299,7 @@ export default function MapApp() {
         const title = (pickedRoom as Place & { title?: string }).title;
         const roomName = title ? `${title} ${pickedRoom.names[0]}` : roomLabel(pickedRoom.id);
         body = <>
-            <div className="card-h top"><h2>{roomName}</h2><button className="x" aria-label="返回楼层" onClick={() => set({ place: bId, f: floor }, { push: true })}><Cross /></button></div>
+            <div className="card-h top"><h2>{roomName}</h2></div>
             <div className="meta">{openBuilding?.names[0]} {floor} 层{room?.seats ? ` · ${room.seats} 座` : ''}{room?.kinds[0] ? ` · ${room.kinds[0].replace(/^(仙林|三牌楼|锁金)/, '')}` : ''}</div>
             {state && (!day ? <div className="state busy">这一天没有排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>，到 {hm(state.until)}{state.minutes ? `，还能待 ${durationText(state.minutes)}` : ''}</div>)}
             {state && day && <PeriodStrip periods={world.periods} state={state} min={moment.min} />}
@@ -314,7 +315,7 @@ export default function MapApp() {
         const free = inFloor.map(room => ({ room, state: stateOf(room.id)! })).filter(item => day && !item.state.busy).sort((a, b) => b.state.minutes - a.state.minutes);
         const named = scene && floor !== null ? scene.roomsOf(openBuilding.id, floor).map(({ id }) => world.space.byId.get(id)).filter((place): place is Place => Boolean(place)) : [];
         body = <>
-            <div className="card-h top"><h2>{openBuilding.names[0]}{floor !== null ? ` ${floor} 层` : ''}</h2><button className="x" aria-label="关闭" onClick={close}><Cross /></button></div>
+            <div className="card-h top"><h2>{openBuilding.names[0]}{floor !== null ? ` ${floor} 层` : ''}</h2></div>
             <div className="msum">{inFloor.length ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '楼层布局'}</div>
             {inFloor.length > 0 ? roomRows(free) : named.map(place => <button key={place.id} className="rrow" onClick={() => handlers.current.onRoom(place.id)}><span className="m"><span className="a">{(place as Place & { title?: string }).title ?? place.names[0]}</span><span className="b">{place.names[0]}</span></span></button>)}
             {inFloor.length > 0 && !free.length && <div className="empty">这一层此刻没有空教室</div>}
@@ -322,7 +323,7 @@ export default function MapApp() {
     } else if (world && selected) {
         const status = selected.hours ? openingStatus(selected.hours, campusTime()) : null;
         body = <>
-            <div className="card-h top"><h2>{displayName(selected, world.space.byId)}</h2><button className="x" aria-label="关闭" onClick={close}><Cross /></button></div>
+            <div className="card-h top"><h2>{displayName(selected, world.space.byId)}</h2></div>
             <div className="meta">{selected.category ?? ''}</div>
             {status && status.state !== 'unknown' && <div className="state"><b className={status.state === 'closed' ? 'off' : ''}>{openingLabel[status.state]}</b> · 今日 {status.today}</div>}
             <div className="btns"><button className="btn go" onClick={() => set({ nav: selected.id, place: null }, { push: true })}>去这里</button></div>
@@ -375,13 +376,15 @@ export default function MapApp() {
                     <button className="tilt" aria-label="我的位置" onClick={locate}><svg viewBox="0 0 24 24" className="target"><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7.5" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" /></svg></button>
                 </div>
             </div>
-            <section className={`msheet ${peek !== null ? 'drag' : ''}`}>
+            {closed && <button className="sheetopen" onClick={() => { setClosed(false); setSnap(0); }}><b>{hm(moment.min)}</b> 空教室</button>}
+            <section className={`msheet ${peek !== null ? 'drag' : ''}`} hidden={closed}>
                 <div className="grip" onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={gripUp} onPointerCancel={gripUp} />
                 <div className="rulerbox">
                     <div className="rhead">
                         <span className="rtime">{hm(moment.min)}</span>
                         <div className="rdate"><button aria-label="前一天" onClick={() => shiftDay(-1)}><Back /></button><span>{moment.date === now.date ? '今天' : WEEKDAYS[weekdayOf(moment.date)]} {dateLabel(moment.date)}{holiday ? ` · ${holiday}` : ''}</span><button aria-label="后一天" onClick={() => shiftDay(1)}><Chevron /></button></div>
                         <button className={`rnow ${isNow ? '' : 'back'}`} onClick={() => set({ t: null })}>{isNow ? '现在' : '回到现在'}</button>
+                        <button className="rclose" aria-label="关闭" onClick={() => { set({ place: null, f: null, nav: null }, { push: true }); setSnap(0); setClosed(true); }}><Cross /></button>
                     </div>
                     {world && <Ruler periods={world.periods} date={moment.date} min={moment.min} now={now} onChange={min => setMoment(moment.date, min)} />}
                 </div>

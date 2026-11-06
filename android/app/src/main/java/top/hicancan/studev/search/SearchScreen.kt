@@ -128,7 +128,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     LaunchedEffect(page) { list.scrollToItem(0) }
     val hits = answer?.takeIf { it.key == key || it.key.startsWith(key.substringBefore(',')) }?.hits ?: answer?.hits.orEmpty()
     fun open(link: String) {
-        if (!route.open(link, Uri.parse(PLATFORM_ORIGIN).host.orEmpty())) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+        if (!route.open(link, PLATFORM_ORIGIN)) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(top.hicancan.studev.app.absolute(link, PLATFORM_ORIGIN)))) }
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp)) {
         Box(Modifier.padding(end = 40.dp, bottom = 12.dp)) {

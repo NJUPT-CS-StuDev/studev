@@ -58,9 +58,9 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
 }
 
 /** The packaged style, with its two tokens bound to this site. */
-export async function loadStyle(theme: 'light' | 'dark', campus = CAMPUS): Promise<StyleSpecification> {
+export async function loadStyle(campus = CAMPUS): Promise<StyleSpecification> {
     const base = spaceBase(campus);
-    const text = await (await fetch(`${base}/style-${theme}.json`)).text();
+    const text = await (await fetch(`${base}/style.json`)).text();
     return JSON.parse(text.replaceAll('{data}', base).replaceAll('{assets}', new URL('/map', location.origin).href));
 }
 

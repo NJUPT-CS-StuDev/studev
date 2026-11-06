@@ -40,8 +40,8 @@ async function ensureAsset(url, relative, legacyRelative) {
 
 for (const target of targets) {
     await mkdir(target, { recursive: true });
-    await writeFile(join(target, 'style-light.json'), JSON.stringify(style('light')));
-    await writeFile(join(target, 'style-dark.json'), JSON.stringify(style('dark')));
+    await writeFile(join(target, 'style.json'), JSON.stringify(style()));
+    for (const old of ['style-light.json', 'style-dark.json']) await rm(join(target, old), { force: true });
 }
 
 for (const [remoteFont, localFont] of FONTS) {

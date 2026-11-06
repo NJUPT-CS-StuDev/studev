@@ -6,6 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.LocalDate
 
+/** Uri.parse reads anything before the first colon as a scheme, so a site path must gain its origin first. */
+fun absolute(link: String, origin: String) = if (link.startsWith("/")) origin + link else link
+
 /** What is on screen. It has the same shape as the website's address, so a link opens the same thing on either. */
 class Route {
     var tab by mutableStateOf("timetable")
@@ -20,10 +23,10 @@ class Route {
     var moment by mutableStateOf<Pair<LocalDate, Int>?>(null)
     var query by mutableStateOf("")
     var scope by mutableStateOf("all")
-    /** Opens a site link, relative or absolute. External links return false. */
-    fun open(link: String, host: String): Boolean {
-        val uri = Uri.parse(link)
-        if (uri.isAbsolute && uri.host != host) return false
+    /** Opens a site link, relative or absolute. Anything this app has no screen for returns false. */
+    fun open(link: String, origin: String): Boolean {
+        val uri = Uri.parse(absolute(link, origin))
+        if (uri.host != Uri.parse(origin).host) return false
         val path = uri.path.orEmpty().trimEnd('/')
         fun param(name: String) = uri.getQueryParameter(name)
         when (path) {

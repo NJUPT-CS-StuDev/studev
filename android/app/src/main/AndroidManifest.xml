@@ -11,7 +11,6 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
@@ -26,8 +25,6 @@
         <service android:name=".navigation.NavigationService" android:exported="false" android:foregroundServiceType="location" />
         <service android:name=".navigation.NavigationStopService" android:exported="false" />
         <receiver android:name=".reminders.ReminderReceiver" android:exported="false" />
-        <receiver android:name=".reminders.RunAlarmReceiver" android:exported="false" />
-        <activity android:name=".reminders.RunAlarmActivity" android:exported="false" android:showOnLockScreen="true" android:excludeFromRecents="true" android:launchMode="singleInstance" android:theme="@style/Theme.StuDev" />
         <receiver android:name=".reminders.ReminderRestoreReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

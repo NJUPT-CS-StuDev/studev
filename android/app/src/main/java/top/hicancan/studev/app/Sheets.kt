@@ -87,12 +87,14 @@ import top.hicancan.studev.world.*
         Column(Modifier.verticalScroll(rememberScrollState())) {
             KeyRow("班级", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "还没有选" }, chevron = true, onClick = onPickClass)
             if (edits != null) KeyRow("改动", "加了 ${edits.added.size} 门，隐藏了 ${edits.hidden.size} 门", trailing = if (edits.added.size + edits.hidden.size > 0) ({ Chip("还原", { model.resetTimetableEdits() }) }) else null)
-            KeyRow("外观", mapOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色").getValue(settings.theme), chevron = true, onClick = {
-                val next = mapOf("system" to "light", "light" to "dark", "dark" to "system").getValue(settings.theme)
-                model.settings.update { it.copy(theme = next) }
-                if (Build.VERSION.SDK_INT >= 31) context.getSystemService(UiModeManager::class.java).setApplicationNightMode(when (next) { "dark" -> UiModeManager.MODE_NIGHT_YES; "light" -> UiModeManager.MODE_NIGHT_NO; else -> UiModeManager.MODE_NIGHT_AUTO })
-                else (context as? android.app.Activity)?.recreate()
-            })
+            Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Plain("外观", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
+                Choice(listOf("system" to "自动", "light" to "浅色", "dark" to "深色"), settings.theme) { next ->
+                    model.settings.update { it.copy(theme = next) }
+                    if (Build.VERSION.SDK_INT >= 31) context.getSystemService(UiModeManager::class.java).setApplicationNightMode(when (next) { "dark" -> UiModeManager.MODE_NIGHT_YES; "light" -> UiModeManager.MODE_NIGHT_NO; else -> UiModeManager.MODE_NIGHT_AUTO })
+                    else (context as? android.app.Activity)?.recreate()
+                }
+            }
             KeyRow("账号", "登录和社团表单", chevron = true, onClick = { onClose(); onAccount() })
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
@@ -105,16 +107,13 @@ import top.hicancan.studev.world.*
                             Chip("+", { model.setRun { it.copy(runDone = it.runDone + 1) } })
                         }
                     })
-                    KeyRow(null, "跑操日闹钟", "${hm(clock(rule.time[0]) - 30)} 响，放假不响，跑够后自动停", trailing = { Toggle(settings.runAlarm) { on ->
-                        if (on && Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        model.setRun { it.copy(runAlarm = on) }
-                    } })
                 }
             }
             Plain("同步到手机日历", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             fun set(change: (PersonalSettings) -> PersonalSettings) = withCalendar { model.setRun(change) }
             KeyRow(null, "studev 课表", "上课前 15 分钟提醒", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
             KeyRow(null, "studev 考表", "提前 1 天和 1 小时提醒", trailing = { Toggle(settings.calendarExams) { on -> set { it.copy(calendarExams = on) } } })
+            state.run?.let { rule -> KeyRow(null, "studev 早锻炼", "跑操日 ${hm(clock(rule.time[0]))} 开始，放假不提醒，跑够后自动清除", trailing = { Toggle(settings.calendarRun) { on -> withCalendar { set { it.copy(calendarRun = on) } } } }) }
             KeyRow(null, "studev 校历", "放假和校历日程，整天显示", trailing = { Toggle(settings.calendarSchool) { on -> set { it.copy(calendarSchool = on) } } })
             val background = remember(settings) { top.hicancan.studev.me.BackgroundRunSettings.status(context) }
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {

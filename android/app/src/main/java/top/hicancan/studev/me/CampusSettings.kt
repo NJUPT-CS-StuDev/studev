@@ -31,7 +31,7 @@ data class PersonalSettings(
     /** null until someone chooses: 大一大二 see 早锻炼 by default. */
     val runShown: Boolean? = null,
     val runDone: Int = 0,
-    val runAlarm: Boolean = false,
+    val calendarRun: Boolean = false,
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -79,7 +79,7 @@ class CampusSettings(context: Context) {
         calendarSchool = store.getBoolean("calendar-school", false),
         runShown = if (store.contains("run-shown")) store.getBoolean("run-shown", false) else null,
         runDone = store.getInt("run-done", 0),
-        runAlarm = store.getBoolean("run-alarm", false),
+        calendarRun = store.getBoolean("calendar-run", false),
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -93,7 +93,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
-            .putInt("run-done", next.runDone).putBoolean("run-alarm", next.runAlarm)
+            .putInt("run-done", next.runDone).putBoolean("calendar-run", next.calendarRun)
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)

@@ -10,18 +10,9 @@ import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadPerio
 import { gradeOf } from '@/world/events';
 import { Chevron, Sheet, Toggle } from '@/world/ui';
 import type { TeachingClass, TeachingTerm } from '@/academics/facts';
+import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
 import '../campus.css';
 
-type Theme = 'auto' | 'light' | 'dark';
-const THEMES: Record<Theme, string> = { auto: '跟随系统', light: '浅色', dark: '深色' };
-const readTheme = (): Theme => { try { const value = localStorage.getItem('site-theme'); return value === 'light' || value === 'dark' ? value : 'auto'; } catch { return 'auto'; } };
-const applyTheme = (theme: Theme) => {
-    try { if (theme === 'auto') localStorage.removeItem('site-theme'); else localStorage.setItem('site-theme', theme); } catch { /* Storage may be blocked. */ }
-    const resolved = theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
-    document.documentElement.dataset.theme = resolved;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    meta?.setAttribute('content', meta.getAttribute(`data-${resolved}`) ?? '');
-};
 const compact = (value: string) => value.replace(/[-:]/g, '');
 const allDay = (uid: string, name: string, start: string, end: string) => {
     const next = new Date(`${end}T00:00:00Z`);
@@ -33,7 +24,7 @@ const wrap = (rows: string[]) => `${['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-
 export default function MeApp() {
     const [open, setOpen] = useState(false);
     const { prefs } = usePreferences();
-    const [theme, setTheme] = useState<Theme>(readTheme);
+    const [appearance, setLook] = useState<Appearance>(() => typeof document === 'undefined' ? 'auto' : readAppearance());
     const [picking, setPicking] = useState(false);
     const [facts, setFacts] = useState<{ term: TeachingTerm; classes: TeachingClass[]; run: MorningRun | null } | null>(null);
     useEffect(() => {
@@ -77,7 +68,7 @@ export default function MeApp() {
             <button className="kv" onClick={() => setPicking(true)}><span className="k">班级</span><span className="v">{prefs.class}{info?.major ? ` · ${info.major}` : ''}</span><Chevron /></button>
             <div className="kv"><span className="k">改动</span><span className="v">加了 {edits.added.length} 门，隐藏了 {edits.hidden.length} 门</span>
                 {edits.hidden.length + edits.added.length > 0 && facts && <button className="ib" onClick={() => updateTimetableEdits(facts.term.term, () => ({ hidden: [], added: [] }))}>还原</button>}</div>
-            <button className="kv" onClick={() => { const next = ({ auto: 'light', light: 'dark', dark: 'auto' } as const)[theme]; setTheme(next); applyTheme(next); }}><span className="k">外观</span><span className="v">{THEMES[theme]}</span><Chevron /></button>
+            <div className="kv"><span className="k">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{label}</button>)}</div></div>
             <a className="kv" href="/account/"><span className="k">账号</span><span className="v">登录和社团表单</span><Chevron /></a>
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>

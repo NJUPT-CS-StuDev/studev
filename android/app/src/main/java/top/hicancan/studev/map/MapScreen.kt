@@ -68,6 +68,8 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
     var cameraTick by remember { mutableIntStateOf(0) }
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var snap by remember { mutableIntStateOf(0) }
+    var closed by remember { mutableStateOf(false) }
+    LaunchedEffect(route.place, route.nav) { if (route.place != null || route.nav != null) closed = false }
     var dragPeek by remember { mutableStateOf<Float?>(null) }
     var picker by remember { mutableStateOf<Boolean?>(null) }
     var campusOpen by remember { mutableStateOf(false) }
@@ -111,7 +113,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
         }
     }
     LaunchedEffect(scene, freeBy) { scene?.setTint(freeBy.mapValues { (_, value) -> value.first.toFloat() / max(1, value.second) }) }
-    LaunchedEffect(scene, moment, dark) { scene?.moment(moment, dark) }
+    LaunchedEffect(scene, moment, settings.theme) { scene?.moment(moment, settings.theme) }
     val screenDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     val padding = remember(density, picked != null, screenDp) { intArrayOf((28 * density).toInt(), (70 * density).toInt(), (64 * density).toInt(), ((if (picked != null) screenDp * .62f + 30 else 280f) * density).toInt()) }
     var entered by remember { mutableStateOf<String?>(null) }
@@ -152,7 +154,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
     Box(Modifier.fillMaxSize().background(Ink.sunken)) {
         var canvas by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
         Box(Modifier.fillMaxSize().onSizeChanged { canvas = it }) {
-            CampusMap(controller, campus.style(dark), dark, access.granted, onLocationStatus = { status = it },
+            CampusMap(controller, campus.style, (scene?.night ?: 0f) > .55f, access.granted, onLocationStatus = { status = it },
                 onReady = { map: MapLibreMap, style: Style -> mapRef = map; model?.let { scene?.destroy(); scene = Scene(map, style, it) } },
                 onTap = { point ->
                     val active = scene
@@ -219,7 +221,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             }
             val mark = marks()
             val nightScene = (scene?.night ?: 0f) > .55f
-            SystemBarIcons(light = nightScene || dark, restoreLight = dark)
+            SystemBarIcons(light = nightScene, restoreLight = dark)
             placed.forEach { item -> key(item.key) { MapLabel(item, nightScene, mark.free) } }
         }
         if (navigation.open) {
@@ -257,7 +259,10 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 }
             }
             val base = when { picked != null -> 430; selected != null -> if (buildingId != null && floors.isNotEmpty()) 230 else 260; else -> 190 }
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            if (closed) Row(Modifier.align(Alignment.BottomStart).padding(12.dp).height(36.dp).clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)).clickable { closed = false; snap = 0 }.padding(horizontal = 12.dp).testTag("open-sheet"), verticalAlignment = Alignment.CenterVertically) {
+                Plain(hm(moment.min), 14.sp, weight = FontWeight.SemiBold)
+                Plain("  空教室", 13.sp, Ink.muted)
+            } else BoxWithConstraints(Modifier.fillMaxSize()) {
                 val full = maxHeight - 90.dp
                 val target = when (snap) { 2 -> full; 1 -> maxOf(base.dp, maxHeight * .56f); else -> base.dp }
                 val animated by animateDpAsState(target, label = "sheet")
@@ -282,6 +287,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                             Plain("›", 15.sp, Ink.faint, modifier = Modifier.clickable { route.moment = moment.date.plusDays(1) to moment.min }.padding(horizontal = 6.dp))
                             Spacer(Modifier.weight(1f))
                             Plain(if (isNow) "现在" else "回到现在", 12.5.sp, if (isNow) Ink.muted else Ink.brand, modifier = Modifier.clickable { route.moment = null })
+                            Plain("✕", 15.sp, Ink.faint, modifier = Modifier.clickable { route.place = null; route.floor = null; snap = 0; closed = true }.padding(start = 10.dp, top = 4.dp, bottom = 4.dp).testTag("close-sheet"))
                         }
                         Ruler(state.periods, moment, now) { route.moment = moment.date to it }
                     }
@@ -383,7 +389,6 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             item {
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Top) {
                     Plain(picked.title?.let { "$it ${picked.names.firstOrNull().orEmpty()}" } ?: Names.room(picked.id), 20.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Plain("✕", 15.sp, Ink.faint, modifier = Modifier.clickable { route.place = building.id; route.floor = floor; onSnap(0) }.padding(6.dp))
                 }
                 Plain(listOfNotNull("${building.names.firstOrNull().orEmpty()} $floor 层", room?.seats?.let { "$it 座" }, room?.kinds?.firstOrNull()?.removePrefix("仙林")).joinToString(" · "), 13.5.sp, Ink.muted)
                 if (current != null) {
@@ -414,7 +419,6 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             item {
                 Row(Modifier.padding(top = 8.dp)) {
                     Plain(building.names.firstOrNull().orEmpty() + (floor?.let { " $it 层" } ?: ""), 20.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Plain("✕", 15.sp, Ink.faint, modifier = Modifier.clickable { route.place = null; route.floor = null; onSnap(0) }.padding(6.dp))
                 }
                 Plain(if (inFloor.isNotEmpty()) "${free.size} / ${inFloor.size} 间空闲" + (if (floor != null) " · 全楼 ${freeBy[building.id]?.first ?: 0} 间" else "") else "楼层布局", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp))
             }
@@ -432,7 +436,6 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             item {
                 Row(Modifier.padding(top = 8.dp)) {
                     Plain(selected.displayName(campus.byId), 20.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Plain("✕", 15.sp, Ink.faint, modifier = Modifier.clickable { route.place = null; onSnap(0) }.padding(6.dp))
                 }
                 selected.category?.let { Plain(it, 13.5.sp, Ink.muted) }
                 selected.hours?.let { hours ->

@@ -41,12 +41,20 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.authenticated = ''; } catch { /* Storage may be unavailable. */ }
       let preference;
       try { preference = localStorage.getItem('site-theme'); } catch { /* Storage may be unavailable. */ }
-      const theme = preference === 'light' || preference === 'dark'
-        ? preference
-        : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      document.documentElement.dataset.theme = theme;
-      const themeMeta = document.querySelector('meta[name="theme-color"]');
-      themeMeta?.setAttribute('content', themeMeta.getAttribute(`data-${theme}`));
+      const root = document.documentElement;
+      const system = matchMedia('(prefers-color-scheme: dark)');
+      const paint = theme => {
+        root.dataset.theme = theme;
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        themeMeta?.setAttribute('content', themeMeta.getAttribute(`data-${theme}`));
+      };
+      root.dataset.appearance = preference === 'light' || preference === 'dark' ? preference : 'auto';
+      paint(root.dataset.appearance === 'auto' ? (system.matches ? 'dark' : 'light') : root.dataset.appearance);
+      system.addEventListener('change', () => {
+        if (root.dataset.appearance !== 'auto') return;
+        paint(system.matches ? 'dark' : 'light');
+        document.dispatchEvent(new CustomEvent('site:theme-change'));
+      });
     </script>
     <meta name="description" content={description} />
     {Astro.url.pathname === '/' && <meta name="baidu-site-verification" content="codeva-J4MgSBcNRe" />}
