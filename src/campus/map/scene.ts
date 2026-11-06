@@ -13,6 +13,8 @@ import type { RoomTier } from '@/world/rooms';
 import { sunAt } from './model/sun';
 
 interface ModelFloor { level: number; plate: Geometry; cores: { kind: string; geometry: Geometry }[]; rooms: { id: string; geometry: Geometry }[] }
+const LABEL_LAYERS = ['way-label', 'water-label', 'green-label', 'surface-label', 'sport-label', 'context-label', 'nearby-label'];
+
 export interface CampusModel {
     buildings: { id: string; levels: number; height: number; geometry: Geometry }[];
     context: { height: number; geometry: Geometry }[];
@@ -181,6 +183,10 @@ export class CampusScene {
         set('roads', 'line-color', palette.road);
         set('paths', 'line-color', palette.path);
         set('context', 'fill-extrusion-color', palette.context);
+        for (const layer of LABEL_LAYERS) {
+            set(layer, 'text-color', palette.label);
+            set(layer, 'text-halo-color', palette.halo);
+        }
         const route = this.routeColours![this.night > .55 ? 'night' : 'day'];
         set('route-alternative', 'line-color', route.alternative);
         set('route-casing', 'line-color', route.casing);
@@ -193,8 +199,13 @@ export class CampusScene {
         const palette = this.palette();
         const faded = mix(palette.model, palette.campus, .72);
         const open = this.building && this.hasFloors(this.building);
+        // The forms carry their own colours, dimmed as the night comes on.
+        const dim = 1 - this.night * .78;
+        const own = ['to-rgba', ['to-color', ['get', 'color']]];
+        const lit = this.night < .01 ? ['to-color', ['get', 'color']] : ['rgba', ['*', ['at', 0, own], dim], ['*', ['at', 1, own], dim], ['*', ['at', 2, own], dim], 1];
         const pairs = open ? [] : [...this.tint].flatMap(([id, share]) => [id, mix(palette.model, palette.tint, Math.pow(share, .8) * .78)]);
-        this.map.setPaintProperty('bld', 'fill-extrusion-color', pairs.length ? ['match', ['get', 'id'], ...pairs, palette.model] as never : open ? faded : palette.model);
+        this.map.setPaintProperty('forms', 'fill-extrusion-color', (open ? faded : pairs.length ? ['match', ['get', 'building'], ...pairs, lit] : lit) as never);
+        this.map.setPaintProperty('bands', 'fill-extrusion-color', (open ? faded : lit) as never);
     }
     private paintSelectionColours() {
         const palette = this.palette();
@@ -276,6 +287,10 @@ export class CampusScene {
     private setFlatten(value: number) {
         this.flatten = value;
         this.map.setPaintProperty('bld', 'fill-extrusion-height', ['*', buildingHeight, value] as never);
+        for (const layer of ['forms', 'bands']) {
+            this.map.setPaintProperty(layer, 'fill-extrusion-height', ['*', ['get', 'top'], value] as never);
+            this.map.setPaintProperty(layer, 'fill-extrusion-base', ['*', ['get', 'base'], value] as never);
+        }
         this.map.setPaintProperty('context', 'fill-extrusion-height', ['*', ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 3], 3.4]], value] as never);
     }
     private paintLevel(lift: number, lid: number) {
@@ -314,6 +329,7 @@ export class CampusScene {
         const floorHeight = shape.height / shape.levels;
         const target = (level - 1) * floorHeight;
         this.map.setFilter('bld', ['!=', ['get', 'id'], building]);
+        for (const layer of ['forms', 'bands']) this.map.setFilter(layer, ['!=', ['get', 'building'], building]);
         this.paintBuildings();
         const data = this.model.floors[`${building}/${level}`];
         (this.map.getSource('selshell') as GeoJSONSource).setData({ type: 'Feature', geometry: shape.geometry, properties: {} });
@@ -370,6 +386,7 @@ export class CampusScene {
         this.floor = null;
         this.showSelection(false);
         this.map.setFilter('bld', null);
+        for (const layer of ['forms', 'bands']) this.map.setFilter(layer, null);
         this.paintBuildings();
         this.roomLabels.forEach(label => label.el.remove());
         this.roomLabels = [];

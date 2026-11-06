@@ -7,6 +7,17 @@ const PATHS = ['path', 'footway', 'pedestrian', 'curated_path', 'track', 'crossi
 export const buildingHeight = ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 4], 3.4]];
 const fill = (id, layer, color) => ({ id, type: 'fill', source: 'basemap', 'source-layer': layer, paint: { 'fill-color': color } });
 
+const form = (id, layer, minzoom) => ({
+    id, type: 'fill-extrusion', source: 'basemap', 'source-layer': layer, minzoom,
+    paint: { 'fill-extrusion-color': ['to-color', ['get', 'color']], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-vertical-gradient': id === 'forms' },
+});
+const label = (id, layer, minzoom, c, layout = {}, filter) => ({
+    id, type: 'symbol', source: 'basemap', 'source-layer': layer, minzoom,
+    filter: filter ? ['all', ['has', 'label'], filter] : ['has', 'label'],
+    layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto-Sans-Regular'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 4, 'text-optional': true, ...layout },
+    paint: { 'text-color': c.label, 'text-halo-color': c.halo, 'text-halo-width': 1.3 },
+});
+
 const routeColours = theme => ({ line: tokens.color[theme].route, casing: tokens.color[theme].routeCasing, alternative: tokens.color[theme].routeAlternative });
 
 export function style() {
@@ -41,10 +52,20 @@ export function style() {
                 id: 'context', type: 'fill-extrusion', source: 'basemap', 'source-layer': 'context_buildings',
                 paint: { 'fill-extrusion-color': c.context, 'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 3], 3.4]], 'fill-extrusion-opacity': 0.82 },
             },
+            // The footprints stay as what a tap lands on; what is seen are the forms.
             {
                 id: 'bld', type: 'fill-extrusion', source: 'basemap', 'source-layer': 'buildings',
-                paint: { 'fill-extrusion-color': c.model, 'fill-extrusion-height': buildingHeight, 'fill-extrusion-opacity': 1 },
+                paint: { 'fill-extrusion-color': c.model, 'fill-extrusion-height': buildingHeight, 'fill-extrusion-opacity': 0 },
             },
+            form('forms', 'building_forms', 12),
+            form('bands', 'building_bands', 16.6),
+            label('way-label', 'ways', 14, c, { 'symbol-placement': 'line', 'symbol-spacing': 280, 'text-max-angle': 30, 'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 12.5] }, ['in', ['get', 'kind'], ['literal', ROADS]]),
+            label('water-label', 'waters', 13.5, c),
+            label('green-label', 'greens', 14, c),
+            label('surface-label', 'surfaces', 15, c),
+            label('sport-label', 'sports', 15.5, c),
+            label('context-label', 'context_buildings', 15.5, c),
+            label('nearby-label', 'nearby', 16.8, c, { 'text-size': 10 }),
         ],
         // Clients repaint these layers for the moment's light, route colours included.
         metadata: { route: { day: routeColours('light'), night: routeColours('dark') } },

@@ -158,11 +158,11 @@ export default function MapApp() {
             const at = scene.centreOf(building.id);
             if (!name || !at) continue;
             if (freeBy.has(building.id)) out.push({ id: building.id, text: name, count: 0, at, height: building.height, minZoom: 14.5, priority: 0, className: 'teach' });
-            else { const dorm = place.category === '宿舍' || /苑\d/.test(name); out.push({ id: building.id, text: name, at, height: building.height, minZoom: dorm ? 16.9 : 15.7, priority: dorm ? 3 : 1, className: dorm ? 'minor' : '' }); }
+            else { const dorm = place.category === '宿舍' || /苑\d/.test(name); out.push({ id: building.id, text: name, at, height: building.height, minZoom: dorm ? 16.3 : 15.1, priority: dorm ? 3 : 1, className: dorm ? 'minor' : '' }); }
         }
         for (const place of world.space.places) {
             if (place.kind !== 'place' || !place.centre || !place.names[0] || hidesLabel.has(place.category ?? '')) continue;
-            out.push({ id: place.id, text: place.names[0], at: place.centre, height: 0, minZoom: 17.7, priority: 4, className: 'minor place' });
+            out.push({ id: place.id, text: place.names[0], at: place.centre, height: 0, minZoom: 16.6, priority: 4, className: 'minor place' });
         }
         scene.setLabels(out);
         scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));

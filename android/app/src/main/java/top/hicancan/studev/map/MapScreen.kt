@@ -143,11 +143,11 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             for (building in active.buildings) {
                 val place = campus.byId[building.id]; val name = place?.names?.firstOrNull() ?: continue
                 val dorm = place.category == "宿舍" || Regex("苑\\d").containsMatchIn(name)
-                add(LabelInfo(building.id, name, boundsOf(building.geometry).centre, building.height, if (building.id in classrooms.map { "${it.campus}/${it.building}" }) 14.5 else if (dorm) 16.9 else 15.7, if (building.id in freeBy) 0 else if (dorm) 3 else 1, building.id in freeBy, false))
+                add(LabelInfo(building.id, name, boundsOf(building.geometry).centre, building.height, if (building.id in classrooms.map { "${it.campus}/${it.building}" }) 14.5 else if (dorm) 16.3 else 15.1, if (building.id in freeBy) 0 else if (dorm) 3 else 1, building.id in freeBy, false))
             }
             for (place in campus.places) {
                 if (place.kind != "place" || place.centre == null || place.names.isEmpty() || place.category in setOf("停车场", "学院", "宿舍", "公交站")) continue
-                add(LabelInfo(place.id, place.names.first(), place.centre.toDoubleArray(), 0.0, 17.7, 4, false, true))
+                add(LabelInfo(place.id, place.names.first(), place.centre.toDoubleArray(), 0.0, 16.6, 4, false, true))
             }
         }.sortedBy { it.priority }
     }

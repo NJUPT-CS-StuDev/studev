@@ -45,6 +45,8 @@ private fun polygons(geometry: JsonObject): List<List<Ring>> {
     val coordinates = geometry.getValue("coordinates").jsonArray
     return if (geometry.getValue("type").jsonPrimitive.content == "Polygon") listOf(coordinates.map(::ring)) else coordinates.map { polygon -> polygon.jsonArray.map(::ring) }
 }
+private val LABEL_LAYERS = listOf("way-label", "water-label", "green-label", "surface-label", "sport-label", "context-label", "nearby-label")
+
 data class Box2(val west: Double, val south: Double, val east: Double, val north: Double) { val centre get() = doubleArrayOf((west + east) / 2, (south + north) / 2) }
 fun boundsOf(geometry: JsonObject): Box2 {
     val points = polygons(geometry).flatten().flatten()
@@ -146,17 +148,27 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         set("sports", fillColor(hex(mix(day.sport, dusk.sport, night)))); set("waters", fillColor(hex(mix(day.water, dusk.water, night))))
         set("roads", lineColor(hex(mix(day.road, dusk.road, night)))); set("paths", lineColor(hex(mix(day.path, dusk.path, night))))
         set("context", fillExtrusionColor(hex(mix(day.context, dusk.context, night))))
+        for (layer in LABEL_LAYERS) set(layer, textColor(hex(mix(day.label, dusk.label, night))), textHaloColor(hex(mix(day.halo, dusk.halo, night))))
         set("sel-lower", fillExtrusionColor(hex(modelColor()))); set("sel-upper", fillExtrusionColor(hex(modelColor())))
         set("sel-slab", fillExtrusionColor(hex(mix(day.slab, dusk.slab, night))))
     }
     fun setTint(share: Map<String, Float>) { tint = share; paintBuildings() }
+    /** The forms carry their own colours, dimmed as the night comes on. */
     private fun paintBuildings() {
         val base = modelColor()
         val open = openBuilding?.let(::hasFloors) == true
-        if (open) { set("bld", fillExtrusionColor(hex(mix(base, campus(), .72f)))); return }
-        if (tint.isEmpty()) { set("bld", fillExtrusionColor(hex(base))); return }
-        val stops = tint.map { (id, value) -> stop(id, color(hex(mix(base, tintColor(), value.pow(.8f) * .78f)))) }.toTypedArray()
-        set("bld", fillExtrusionColor(match(get("id"), color(hex(base)), *stops)))
+        val own = toRgba(toColor(get("color")))
+        val dim = literal(1 - night * .78f)
+        val lit = if (night < .01f) toColor(get("color")) else rgba(product(at(literal(0), own), dim), product(at(literal(1), own), dim), product(at(literal(2), own), dim), literal(1))
+        if (open) {
+            val faded = hex(mix(base, campus(), .72f))
+            set("forms", fillExtrusionColor(faded)); set("bands", fillExtrusionColor(faded))
+            return
+        }
+        set("bands", fillExtrusionColor(lit))
+        if (tint.isEmpty()) { set("forms", fillExtrusionColor(lit)); return }
+        val stops = tint.map { (id, share) -> stop(id, color(mix(base, tintColor(), share.toDouble().pow(.8).toFloat() * .78f).toArgb())) }.toTypedArray()
+        set("forms", fillExtrusionColor(match(get("building"), lit, *stops)))
     }
     private fun drawShadows(altitude: Double, azimuth: Double) {
         shadow.eraseColor(android.graphics.Color.TRANSPARENT)
@@ -193,6 +205,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     private fun setFlatten(value: Float) {
         flatten = value
         set("bld", fillExtrusionHeight(product(heightExpression(), literal(value))))
+        for (layer in listOf("forms", "bands")) set(layer, fillExtrusionHeight(product(get("top"), literal(value))), fillExtrusionBase(product(get("base"), literal(value))))
         set("context", fillExtrusionHeight(product(coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(3))), literal(3.4))), literal(value))))
     }
     private fun paintLevel(lift: Double, lid: Float) {
@@ -223,6 +236,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         openBuilding = id; openFloor = floor
         val target = (floor - 1) * shape.height / shape.levels
         (style.getLayer("bld") as? FillExtrusionLayer)?.setFilter(neq(get("id"), literal(id)))
+        for (layer in listOf("forms", "bands")) (style.getLayer(layer) as? FillExtrusionLayer)?.setFilter(neq(get("building"), literal(id)))
         paintBuildings()
         val data = model.floors["$id/$floor"]
         style.getSourceAs<GeoJsonSource>("selshell")?.setGeoJson(collection(listOf(feature(shape.geometry))))
@@ -269,6 +283,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         openBuilding = null; openFloor = null
         showSelection(false)
         (style.getLayer("bld") as? FillExtrusionLayer)?.setFilter(literal(true))
+        for (layer in listOf("forms", "bands")) (style.getLayer(layer) as? FillExtrusionLayer)?.setFilter(literal(true))
         paintBuildings()
         val start = flatten
         animate(520) { setFlatten(start + (1 - start) * it) }
