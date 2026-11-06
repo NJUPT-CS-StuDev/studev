@@ -25,6 +25,8 @@ class Route {
     var moment by mutableStateOf<Pair<LocalDate, Int>?>(null)
     var query by mutableStateOf("")
     var scope by mutableStateOf("all")
+    /** Search only inside this entity. */
+    var within by mutableStateOf<String?>(null)
     /** Opens a site link, relative or absolute. Anything this app has no screen for returns false. */
     fun open(link: String, origin: String): Boolean {
         val uri = Uri.parse(absolute(link, origin))
@@ -47,7 +49,7 @@ class Route {
                 moment = param("t")?.let { text -> runCatching { LocalDate.parse(text.take(10)) to (text.drop(11).take(2).toInt() * 60 + text.drop(14).take(2).toInt()) }.getOrNull() }
                 tab = "map"
             }
-            "/search" -> { query = param("q").orEmpty(); scope = param("scope") ?: "all"; tab = "search" }
+            "/search" -> { query = param("q").orEmpty(); scope = param("scope") ?: "all"; within = param("within"); tab = "search" }
             else -> return false
         }
         return true

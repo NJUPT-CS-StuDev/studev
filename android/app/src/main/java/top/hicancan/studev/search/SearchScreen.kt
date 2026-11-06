@@ -40,20 +40,21 @@ import top.hicancan.studev.world.Names
 import top.hicancan.studev.world.WEEKDAYS
 
 private const val PAGE = 10
+private val SINCE = listOf("" to "全部时间", "3" to "近三天", "7" to "近一周", "30" to "近一月", "365" to "近一年", "ahead" to "即将")
 private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places")
 private val OTHERS = listOf("njupt-general-free-exams", "njupt-survival-guide")
 private class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false)
 /** Same channels as campus.config.ts. */
 private val CHANNELS = listOf(
     Channel("all", "全部", excluded = listOf("teaching-classes", "exams")),
+    Channel("room", "教室", listOf("rooms")),
     Channel("academic", "教务", listOf("courses", "teachers", "classes", "teaching-classes", "exams")),
-    Channel("place", "地点", listOf("rooms", "places")),
+    Channel("place", "地点", listOf("places")),
     Channel("notice", "通知", excluded = ENTITIES.toList() + OTHERS, dated = true),
     Channel("material", "考试资料", listOf(OTHERS[0])),
     Channel("community", "社区", listOf(OTHERS[1])),
 )
 private val LABELS = mapOf("courses" to "课程", "teachers" to "老师", "classes" to "班级", "teaching-classes" to "教学班", "exams" to "考试安排", "rooms" to "教室", "places" to "地点")
-private val EXAMPLES = listOf("操作系统", "周浩", "B240402", "教4-309", "一食堂", "奖学金", "高等数学", "校园网")
 private data class Hit(val raw: JsonObject) {
     fun text(key: String) = raw[key]?.jsonPrimitive?.contentOrNull
     val id get() = text("id").orEmpty()
@@ -89,7 +90,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     DisposableEffect(engine) { onDispose { engine?.close() } }
     var page by remember { mutableIntStateOf(1) }
     var source by remember { mutableStateOf<String?>(null) }
-    var sinceYears by remember { mutableIntStateOf(0) }
+    var since by remember { mutableStateOf("") }
     var byDate by remember { mutableStateOf(false) }
     var answer by remember { mutableStateOf<Answer?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -97,10 +98,12 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val channel = CHANNELS.firstOrNull { it.id == route.scope } ?: CHANNELS[0]
     val query = route.query.trim()
     val list = rememberLazyListState()
-    val key = listOf(query, channel.id, source, sinceYears, byDate, page, engine.hashCode()).toString()
+    val browsing = query.isEmpty()
+    val live = channel.id == "room" && browsing && route.within == null
+    val key = listOf(query, channel.id, source, since, byDate, page, route.within, engine.hashCode()).toString()
     LaunchedEffect(key) {
         failed = false
-        if (query.length < 2 || engine == null) { answer = null; return@LaunchedEffect }
+        if (query.length == 1 || live || engine == null) { answer = null; return@LaunchedEffect }
         delay(120)
         val started = System.nanoTime()
         val excluded = channel.excluded.filter { !(channel.id == "all" && query.contains(' ') && it == "teaching-classes") }
@@ -108,17 +111,24 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
             val only = source?.let(::listOf) ?: channel.sources
             if (only.isNotEmpty()) put("sourceIds", JsonArray(only.map(::JsonPrimitive)))
             else if (excluded.isNotEmpty()) put("excludedSourceIds", JsonArray(excluded.map(::JsonPrimitive)))
-            if (sinceYears > 0) { put("publishedFrom", java.time.LocalDate.now().minusYears(sinceYears.toLong()).toString()); put("includeUndated", false) }
+            val today = java.time.LocalDate.now(top.hicancan.studev.world.CampusDay.zone)
+            // What has happened and what is about to are different questions: words look through both.
+            when {
+                since == "ahead" -> { put("publishedFrom", today.plusDays(1).toString()); put("includeUndated", false) }
+                since.isNotEmpty() -> { put("publishedFrom", today.minusDays(since.toLong()).toString()); put("publishedTo", today.toString()); put("includeUndated", false) }
+                browsing -> { put("publishedTo", today.toString()); put("includeUndated", true) }
+            }
+            route.within?.let { put("within", it) }
         }
         try {
-            val done = engine.page(query, PAGE, if (byDate) "date_desc" else "relevance", filters, (page - 1) * PAGE) { ranked ->
+            val done = engine.page(query, PAGE, if (byDate || browsing) "date_desc" else "relevance", filters, (page - 1) * PAGE) { ranked ->
                 answer = Answer(key, ranked.results.map(::Hit), ranked.total, (System.nanoTime() - started) / 1e9)
             }
             answer = Answer(key, done.results.map(::Hit), done.total, answer?.takeIf { it.key == key }?.seconds ?: ((System.nanoTime() - started) / 1e9))
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) {
             // Without a network the index cannot be read; places are always on the phone.
-            val rows = campus?.places.orEmpty().filter { place -> place.kind != "floor" && place.kind != "campus" && place.names.any { it.contains(query, ignoreCase = true) } }.take(30)
+            val rows = if (browsing) emptyList() else campus?.places.orEmpty().filter { place -> place.kind != "floor" && place.kind != "campus" && place.names.any { it.contains(query, ignoreCase = true) } }.take(30)
             if (rows.isEmpty()) failed = true
             answer = Answer(key, rows.map { place -> Hit(buildJsonObject {
                 put("id", place.id); put("source", if (place.kind == "room") "rooms" else "places"); put("title", if (place.kind == "room") Names.room(place.id) else place.names.first()); put("url", "/map/?place=${Uri.encode(place.id)}"); put("section", place.category)
@@ -134,32 +144,29 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
         Box(Modifier.padding(end = 40.dp, bottom = 12.dp)) {
             SearchField(route.query, "搜课程、老师、班级、地点、通知、资料") { route.query = it; page = 1 }
         }
-        if (query.isEmpty()) {
-            Plain("课程、老师、班级、教室、地点、通知、考试资料、社区手册，都在这里", 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { EXAMPLES.forEach { example -> Chip(example, { route.query = example; page = 1 }) } }
-            return@Column
-        }
+        route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; page = 1 }) } }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 18.dp) { route.scope = it; source = null; sinceYears = 0; byDate = false; page = 1 }
+            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 18.dp) { route.scope = it; source = null; since = ""; byDate = false; page = 1 }
+        }
+        if (live) { RoomsBrowse(state, route, Modifier.weight(1f)); return@Column }
+        if (channel.dated || channel.id == "all") Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            SINCE.forEach { (value, label) -> Plain(label, 13.sp, if (since == value) Ink.text else Ink.muted, if (since == value) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.clickable { since = value; page = 1 }) }
         }
         val sources = when {
             channel.sources.size > 1 -> channel.sources.map { it to LABELS.getValue(it) }
             else -> emptyList()
         }
-        if (sources.isNotEmpty() || channel.dated) Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (sources.isNotEmpty() || (channel.dated && !browsing)) Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (sources.isNotEmpty()) Pick(sources.firstOrNull { it.first == source }?.second ?: "全部类型", listOf<Pair<String?, String>>(null to "全部类型") + sources) { source = it; page = 1 }
-            if (channel.dated) {
-                Pick(listOf(0 to "全部时间", 1 to "近一年", 3 to "近三年", 5 to "近五年").first { it.first == sinceYears }.second, listOf(0 to "全部时间", 1 to "近一年", 3 to "近三年", 5 to "近五年")) { sinceYears = it; page = 1 }
-                Pick(if (byDate) "按时间" else "按相关性", listOf(false to "按相关性", true to "按时间")) { byDate = it; page = 1 }
-            }
+            if (channel.dated && !browsing) Pick(if (byDate) "按时间" else "按相关性", listOf(false to "按相关性", true to "按时间")) { byDate = it; page = 1 }
         }
-        if (query.length < 2) { Plain("再多输入一个字", 14.sp, Ink.faint, modifier = Modifier.padding(vertical = 32.dp)); return@Column }
+        if (query.length == 1) { Plain("再多输入一个字", 14.sp, Ink.faint, modifier = Modifier.padding(vertical = 32.dp)); return@Column }
         LazyColumn(Modifier.weight(1f), state = list) {
             answer?.takeIf { it.total > 0 }?.let { current ->
-                item { Plain((if (current.total >= 1000) "超过 1000" else "约 ${current.total}") + " 条结果（${"%.2f".format(current.seconds)} 秒）" + (if (page > 1) " · 第 $page 页" else ""), 12.5.sp, Ink.faint, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)) }
+                item { Plain((if (browsing) "${current.total} 条" else (if (current.total >= 1000) "超过 1000" else "约 ${current.total}") + " 条结果") + "（${"%.2f".format(current.seconds)} 秒）" + (if (page > 1) " · 第 $page 页" else ""), 12.5.sp, Ink.faint, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)) }
             }
             items(hits, key = { it.id }) { hit -> if (hit.source in ENTITIES) EntityRow(hit) { if (hit.source == "courses") courseSheet = hit.title else open(hit.url) } else DocumentRow(hit, ::open) }
-            answer?.takeIf { it.key == key && it.total == 0 }?.let { item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain("没有找到“$query”", 14.sp, Ink.faint) } } }
+            answer?.takeIf { it.key == key && it.total == 0 }?.let { item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(if (browsing) "这段时间没有内容" else "没有找到“$query”", 14.sp, Ink.faint) } } }
             if (failed) item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain("搜索需要联网，请稍后重试", 14.sp, Ink.faint) } }
             answer?.let { current -> item { Pages(page, current.total) { page = it } } }
         }

@@ -11,15 +11,15 @@ import { hm, momentNow, WEEKDAYS } from '@/world/time';
 import { useUrl } from '@/world/useUrl';
 import { Back, Chevron, Magnifier, Sheet, WeekGlyph } from '@/world/ui';
 import { campusConfig } from '../../../campus.config';
+import { RoomsBrowse } from './RoomsBrowse';
 import '../campus.css';
 
 const PAGE_SIZE = 10;
 const CHANNELS = campusConfig.search.channels as readonly { id: string; label: string; sources?: readonly string[]; excluded?: readonly string[]; dated?: boolean }[];
 const ENTITIES = new Set(Object.keys(campusConfig.search.entities));
-const EXAMPLES = ['操作系统', '周浩', 'B240402', '教4-309', '一食堂', '奖学金', '高等数学', '校园网'];
 const CATEGORIES: Record<string, string> = { notice_article: '通知', policy: '政策制度', workflow: '办事流程', download: '下载资源', exam: '考试信息', news: '新闻动态', external: '站外链接' };
-const SINCE = [['', '全部时间'], ['1', '近一年'], ['3', '近三年'], ['5', '近五年']] as const;
-const yearsAgo = (years: number) => { const date = new Date(); date.setUTCFullYear(date.getUTCFullYear() - years); return date.toISOString().slice(0, 10); };
+const SINCE = [['', '全部时间'], ['3', '近三天'], ['7', '近一周'], ['30', '近一月'], ['365', '近一年'], ['ahead', '即将']] as const;
+const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
 /** Marks the kernel's ranges, which count Unicode scalar values. */
 function Marked({ text, ranges }: { text: string; ranges: [number, number][] }) {
@@ -90,6 +90,7 @@ export default function SearchApp() {
     const source = params.get('source');
     const category = params.get('type');
     const since = params.get('since') ?? '';
+    const within = params.get('within');
     const sort: SortMode = params.get('sort') === 'date' ? 'date_desc' : 'relevance';
     const [text, setText] = useState(query);
     const [answer, setAnswer] = useState<{ key: string; results: SearchResult[]; total: number; seconds: number | null } | null>(null);
@@ -100,7 +101,6 @@ export default function SearchApp() {
     const input = useRef<HTMLInputElement>(null);
     const client = useMemo(() => new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH }), []);
     useEffect(() => () => client.dispose(), [client]);
-    useEffect(() => { if (!query) input.current?.focus({ preventScroll: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => { void client.initialize().then(ready => setOptions(ready.filterOptions)).catch(() => setFailed(true)); }, [client]);
 
     const filters = useMemo<SearchFilters>(() => ({
@@ -108,23 +108,30 @@ export default function SearchApp() {
         // Several words can name one teaching class ("周浩 计算机通信"); one word would list them all.
         ...(!source && channel.excluded ? { excludedSourceIds: channel.id === 'all' && /\S\s+\S/.test(query) ? channel.excluded.filter(id => id !== 'teaching-classes') : [...channel.excluded] } : {}),
         ...(category ? { category } : {}),
-        ...(since ? { publishedFrom: yearsAgo(Number(since)), includeUndated: false } : {}),
-    }), [category, channel, query, since, source]);
+        // What has happened and what is about to are different questions: words look through both.
+        ...(since === 'ahead' ? { publishedFrom: daysAgo(-1), includeUndated: false }
+            : since ? { publishedFrom: daysAgo(Number(since)), publishedTo: daysAgo(0), includeUndated: false }
+            : !query.trim() ? { publishedTo: daysAgo(0), includeUndated: true } : {}),
+        ...(within ? { within } : {}),
+    }), [category, channel, query, since, source, within]);
+    // With no words there is nothing to rank by: the filters decide, newest first.
+    const browsing = !query.trim();
+    const live = channel.id === 'room' && browsing && !within;
     const key = JSON.stringify([query.trim(), filters, sort, page]);
     useEffect(() => {
         const trimmed = query.trim();
-        if (trimmed.length < 2) { setAnswer(null); return; }
-        let live = true;
+        if (trimmed.length === 1 || live) { setAnswer(null); return; }
+        let current = true;
         const started = performance.now();
         setFailed(false);
         const pending = client.search({ query: trimmed, offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, sort, filters }, ranked => {
-            if (live) setAnswer({ key, results: ranked.results, total: ranked.totalCandidates, seconds: (performance.now() - started) / 1000 });
+            if (current) setAnswer({ key, results: ranked.results, total: ranked.totalCandidates, seconds: (performance.now() - started) / 1000 });
         });
         pending.response.then(done => {
-            if (live) setAnswer(previous => ({ key, results: done.results, total: done.totalCandidates, seconds: previous?.key === key ? previous.seconds : (performance.now() - started) / 1000 }));
-        }).catch(error => { if (live && !(error instanceof DOMException && error.name === 'AbortError')) setFailed(true); });
-        return () => { live = false; client.cancel(pending.requestId); };
-    }, [client, filters, key, page, query, sort]);
+            if (current) setAnswer(previous => ({ key, results: done.results, total: done.totalCandidates, seconds: previous?.key === key ? previous.seconds : (performance.now() - started) / 1000 }));
+        }).catch(error => { if (current && !(error instanceof DOMException && error.name === 'AbortError')) setFailed(true); });
+        return () => { current = false; client.cancel(pending.requestId); };
+    }, [client, filters, key, live, page, query, sort]);
 
     const results = answer?.results ?? [];
     useEffect(() => {
@@ -148,32 +155,30 @@ export default function SearchApp() {
         : channel.dated ? (options?.sources ?? []).filter(item => !channel.excluded?.includes(item.id)).map(item => ({ id: item.id, label: item.label })) : [];
     const categories = channel.dated ? (options?.categories ?? []).filter(item => CATEGORIES[item.id]) : [];
     let intent = null;
-    if (/空教室|自习/.test(query)) intent = <a className="intent" href="/map/"><span>看此刻的空教室<small>在地图上按“还能待多久”看</small></span><Chevron /></a>;
+    if (/空教室|自习/.test(query)) intent = <a className="intent" href="/search/?scope=room"><span>看此刻的空教室<small>按楼和楼层，还能待多久</small></span><Chevron /></a>;
     else if (/^(考试|考表|放假|校历)/.test(query)) intent = <a className="intent" href="/?scale=term"><span>看整个学期<small>课、考试和假期在同一张表上</small></span><Chevron /></a>;
     const trimmed = query.trim();
     return (
         <div className="sd page search">
             <div className="wrap narrow">
                 <div className="sfield"><Magnifier /><input ref={input} value={text} placeholder="搜课程、老师、班级、地点、通知、资料" aria-label="搜索" autoComplete="off" enterKeyHint="search" onChange={event => type(event.target.value)} /></div>
-                {!trimmed ? <>
-                    <div className="hint">课程、老师、班级、教室、地点、通知、考试资料、社区手册，都在这里</div>
-                    <div className="hintrow">{EXAMPLES.map(example => <button key={example} className="ib" onClick={() => type(example)}>{example}</button>)}</div>
-                </> : <>
-                    <div className="chips" role="tablist">
-                        {CHANNELS.map(item => <button key={item.id} role="tab" aria-selected={item.id === channel.id} className={`chip ${item.id === channel.id ? 'on' : ''}`} onClick={() => go({ scope: item.id === 'all' ? null : item.id, source: null, type: null, since: null, sort: null })}>{item.label}</button>)}
-                    </div>
-                    {(sources.length > 0 || channel.dated) && <div className="refine">
+                {within && <button className="ib within" onClick={() => go({ within: null })}>在 {roomLabel(within)} 里 ×</button>}
+                <div className="chips" role="tablist">
+                    {CHANNELS.map(item => <button key={item.id} role="tab" aria-selected={item.id === channel.id} className={`chip ${item.id === channel.id ? 'on' : ''}`} onClick={() => go({ scope: item.id === 'all' ? null : item.id, source: null, type: null })}>{item.label}</button>)}
+                </div>
+                {live ? <RoomsBrowse /> : <>
+                    {(channel.dated || channel.id === 'all') && <div className="since">{SINCE.map(([value, label]) => <button key={value} className={since === value ? 'on' : ''} onClick={() => go({ since: value || null })}>{label}</button>)}</div>}
+                    {(sources.length > 0 || categories.length > 0 || (channel.dated && !browsing)) && <div className="refine">
                         {sources.length > 0 && <select aria-label="来源" value={source ?? ''} onChange={event => go({ source: event.target.value || null })}><option value="">全部来源</option>{sources.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>}
                         {categories.length > 0 && <select aria-label="类型" value={category ?? ''} onChange={event => go({ type: event.target.value || null })}><option value="">全部类型</option>{categories.map(item => <option key={item.id} value={item.id}>{CATEGORIES[item.id]}</option>)}</select>}
-                        {channel.dated && <select aria-label="时间" value={since} onChange={event => go({ since: event.target.value || null })}>{SINCE.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
-                        {channel.dated && <select aria-label="排序" value={sort === 'date_desc' ? 'date' : ''} onChange={event => go({ sort: event.target.value || null })}><option value="">按相关性</option><option value="date">按时间</option></select>}
+                        {channel.dated && !browsing && <select aria-label="排序" value={sort === 'date_desc' ? 'date' : ''} onChange={event => go({ sort: event.target.value || null })}><option value="">按相关性</option><option value="date">按时间</option></select>}
                     </div>}
-                    {trimmed.length < 2 ? <div className="empty">再多输入一个字</div> : <>
-                        {answer && answer.total > 0 && <div className="tally">{answer.total >= 1000 ? '超过 1000' : `约 ${answer.total.toLocaleString('zh-CN')}`} 条结果{answer.seconds !== null ? `（${answer.seconds.toFixed(2)} 秒）` : ''}{page > 1 ? ` · 第 ${page} 页` : ''}</div>}
+                    {trimmed.length === 1 ? <div className="empty">再多输入一个字</div> : <>
+                        {answer && answer.total > 0 && <div className="tally">{browsing ? `${answer.total.toLocaleString('zh-CN')} 条` : `${answer.total >= 1000 ? '超过 1000' : `约 ${answer.total.toLocaleString('zh-CN')}`} 条结果`}{answer.seconds !== null ? `（${answer.seconds.toFixed(2)} 秒）` : ''}{page > 1 ? ` · 第 ${page} 页` : ''}</div>}
                         {page === 1 && intent}
                         {failed && <div className="empty">搜索暂时出了问题，请稍后重试。</div>}
                         <div className="hits">{results.map(result => <Result key={result.id} result={result} roomState={id => rooms?.(id) ?? null} onCourse={setCourse} />)}</div>
-                        {answer?.key === key && answer.total === 0 && !failed && <div className="empty">没有找到“{trimmed}”{channel.id !== 'all' ? '，换到“全部”试试' : ''}</div>}
+                        {answer?.key === key && answer.total === 0 && !failed && <div className="empty">{browsing ? '这段时间没有内容' : `没有找到“${trimmed}”${channel.id !== 'all' ? '，换到“全部”试试' : ''}`}</div>}
                         {answer?.key === key && answer.total > 0 && results.length === 0 && <div className="empty">结果只有 {Math.ceil(answer.total / PAGE_SIZE)} 页</div>}
                         {answer && <Pages page={page} total={answer.total} onPage={onPage} />}
                     </>}

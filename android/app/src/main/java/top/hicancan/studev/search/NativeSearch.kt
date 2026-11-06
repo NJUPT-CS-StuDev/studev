@@ -59,7 +59,7 @@ internal class NativeSearch(
                      onRanked: suspend (Page) -> Unit = {}): Page = withContext(Dispatchers.IO) { mutex.withLock {
         coroutineContext.ensureActive()
         check(!closed) { "Search is closed" }
-        if (query.trim().length < 2) return@withLock Page(emptyList(), 0, buildJsonObject {})
+        if (query.trim().length == 1) return@withLock Page(emptyList(), 0, buildJsonObject {})
         val search = ready()
         val request = buildJsonObject {
             put("query", query.trim()); put("offset", offset); put("limit", limit); put("sort", sort); put("filters", filters)

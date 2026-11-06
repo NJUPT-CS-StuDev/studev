@@ -415,6 +415,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 }
                 Plain(if (inFloor.isNotEmpty()) "${free.size} / ${inFloor.size} 间空闲" + (if (floor != null) " · 全楼 ${freeBy[building.id]?.first ?: 0} 间" else "") else "楼层布局", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp))
             }
+            item { KeyRow(null, "这栋楼的一切", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = building.id; route.tab = "search" }) }
             if (inFloor.isNotEmpty()) items(free, key = { it.first.id }) { (room, status) -> RoomRow(room, status) { openRoom(room.id) } }
             else if (floor != null) items(scene?.roomsOf(building.id, floor).orEmpty(), key = { it.id }) { row ->
                 val place = campus.byId[row.id]
@@ -437,6 +438,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                     Plain((if (open) "营业中" else "已关闭") + " · 今日 " + (today.joinToString(" · ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }), 14.sp, if (open) mark.free else Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
                 }
                 ActionButton("去这里", go = true, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) { route.nav = selected.id }
+                KeyRow(null, "这里的一切", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = selected.id; route.tab = "search" })
                 selected.hours?.let { hours -> DayOfWeek.entries.forEach { day ->
                     Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 5.dp)) {
                         Plain(WEEKDAYS[day.value], 13.sp, Ink.muted, modifier = Modifier.weight(1f))

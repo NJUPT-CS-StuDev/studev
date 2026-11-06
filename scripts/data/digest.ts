@@ -435,9 +435,9 @@ async function buildCampus(
 
 type Normalized = ReturnType<typeof normalizePlace>;
 const labels: Record<string, string> = campusConfig.search.entities;
-const entity = (source: string, id: string, url: string, title: string, section: string | null, text: string[]): SearchDocument => ({
+const entity = (source: string, id: string, url: string, title: string, section: string | null, text: string[], within: string[] = []): SearchDocument & { within: string[] } => ({
     id: `${source}/${id}`, source, source_name: labels[source] ?? source, url, title, text: [...new Set(text.filter(Boolean))].join(' '),
-    published: null, updated: null, section, kind: 'page', category: source, tags: [], files: [],
+    published: null, updated: null, section, kind: 'page', category: source, tags: [], files: [], within: [...new Set(within)],
 });
 const WEEKDAY = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const plainCourse = (name: string) => name.replace(/[（(].*?[)）]/g, '').trim() || name.trim();
@@ -452,6 +452,13 @@ const group = <T>(rows: T[], key: (row: T) => string[]) => {
 /** Courses, people, classes, exams and places as documents, so one index answers everything. */
 function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[]): SearchDocument[] {
     const docs: SearchDocument[] = [];
+    const byId = new Map(places.map(place => [place.id, place]));
+    /** An entity and everything that contains it. */
+    const chain = (id: string | null | undefined): string[] => {
+        const out: string[] = [];
+        for (let at = id ? byId.get(id) : undefined; at; at = at.parent ? byId.get(at.parent) : undefined) out.push(at.id);
+        return out;
+    };
     for (const [name, rows] of group(meetings, row => [plainCourse(row.course.name)])) {
         const teachers = rows.flatMap(row => row.teachers.map(teacher => teacher.name));
         const count = new Set(rows.map(row => row.teaching_class.id)).size;
@@ -467,20 +474,19 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
         const first = rows[0]!;
         const teachers = [...new Set(rows.flatMap(row => row.teachers.map(teacher => teacher.name)))];
         docs.push(entity('teaching-classes', id, `/?preview=${encodeURIComponent(id)}&scale=week`, [plainCourse(first.course.name), ...teachers].join(' '), first.campus,
-            [...slotText(rows), first.course.code ?? '', ...rows.flatMap(row => row.classes)]));
+            [...slotText(rows), first.course.code ?? '', ...rows.flatMap(row => row.classes)], rows.flatMap(row => chain(row.room))));
     }
     for (const exam of exams) {
         docs.push(entity('exams', exam.id, `/?who=course:${encodeURI(plainCourse(exam.course.name))}&t=${exam.date}&scale=day`, `${plainCourse(exam.course.name)} 考试`, exam.classes.length > 3 ? `${exam.classes.slice(0, 3).join(' ')} 等 ${exam.classes.length} 个班` : exam.classes.join(' '),
-            [`${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), ...exam.classes, exam.teacher ?? '', exam.course.code ?? '']));
+            [`${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), ...exam.classes, exam.teacher ?? '', exam.course.code ?? ''], chain(exam.room)));
     }
-    const byId = new Map(places.map(place => [place.id, place]));
     for (const place of places) {
         if (place.kind === 'floor' || place.kind === 'campus') continue;
         const room = place.kind === 'room';
         const title = room ? place.id.slice(place.id.indexOf('/') + 1) : displayName(place, byId);
         const roomTitle = (place as { title?: string }).title;
         docs.push(entity(room ? 'rooms' : 'places', place.id, `/map/?place=${encodeURI(place.id)}`, title, place.category ?? null,
-            [...place.names, roomTitle ?? '', place.parent, place.floor ? `${place.floor} 层` : '', place.seats ? `${place.seats} 座` : '', ...(place.room_kinds ?? []), ...(place.houses ?? [])]));
+            [...place.names, roomTitle ?? '', place.parent, place.floor ? `${place.floor} 层` : '', place.seats ? `${place.seats} 座` : '', ...(place.room_kinds ?? []), ...(place.houses ?? [])], chain(place.id)));
     }
     return docs;
 }
@@ -513,7 +519,7 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p6`;
+    const version = `${map.version}__${data.version}__p7`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });

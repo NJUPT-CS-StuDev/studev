@@ -35,8 +35,9 @@ export const campusConfig = {
         },
         channels: [
             { id: 'all', label: '全部', excluded: ['teaching-classes', 'exams'] },
+            { id: 'room', label: '教室', sources: ['rooms'] },
             { id: 'academic', label: '教务', sources: ['courses', 'teachers', 'classes', 'teaching-classes', 'exams'] },
-            { id: 'place', label: '地点', sources: ['rooms', 'places'] },
+            { id: 'place', label: '地点', sources: ['places'] },
             { id: 'notice', label: '通知', excluded: ['courses', 'teachers', 'classes', 'teaching-classes', 'exams', 'rooms', 'places', 'njupt-general-free-exams', 'njupt-survival-guide'], dated: true },
             { id: 'material', label: '考试资料', sources: ['njupt-general-free-exams'] },
             { id: 'community', label: '社区', sources: ['njupt-survival-guide'] },

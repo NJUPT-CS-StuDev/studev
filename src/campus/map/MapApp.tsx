@@ -321,6 +321,7 @@ export default function MapApp() {
         const named = scene && floor !== null ? scene.roomsOf(openBuilding.id, floor).map(({ id }) => world.space.byId.get(id)).filter((place): place is Place => Boolean(place)) : [];
         body = <>
             <div className="card-h top"><h2>{openBuilding.names[0]}{floor !== null ? ` ${floor} 层` : ''}</h2></div>
+            <a className="kv" href={`/search/?within=${encodeURIComponent(openBuilding.id)}`}><span className="v">这栋楼的一切</span><Chevron /></a>
             <div className="msum">{inFloor.length ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '楼层布局'}</div>
             {inFloor.length > 0 ? roomRows(free) : named.map(place => <button key={place.id} className="rrow" onClick={() => handlers.current.onRoom(place.id)}><span className="m"><span className="a">{(place as Place & { title?: string }).title ?? place.names[0]}</span><span className="b">{place.names[0]}</span></span></button>)}
             {inFloor.length > 0 && !free.length && <div className="empty">这一层此刻没有空教室</div>}
@@ -332,6 +333,7 @@ export default function MapApp() {
             <div className="meta">{selected.category ?? ''}</div>
             {status && status.state !== 'unknown' && <div className="state"><b className={status.state === 'closed' ? 'off' : ''}>{openingLabel[status.state]}</b> · 今日 {status.today}</div>}
             <div className="btns"><button className="btn go" onClick={() => set({ nav: selected.id, place: null }, { push: true })}>去这里</button></div>
+            <a className="kv" href={`/search/?within=${encodeURIComponent(selected.id)}`}><span className="v">这里的一切</span><Chevron /></a>
             {selected.hours && <div className="hours">{Array.from({ length: 7 }, (_, index) => <div key={index}><span>{WEEKDAYS[index + 1]}</span><span>{selected.hours!.week[String(index + 1)]?.map(range => range.join('–')).join('、') || '不开放'}</span></div>)}</div>}
         </>;
     } else if (world) {
