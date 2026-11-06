@@ -10,19 +10,17 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 ---
-<SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="life">
+<SiteLayout title={`${entry.data.title} — studev`} description={entry.data.description} active="life">
   <article class="detail-wrap">
-    <a class="back-link" href="/life/">← Life</a>
+    <a class="back-link" href="/life/">← 生活</a>
     {entry.data.kicker ? (
-      <p class="eyebrow article-kicker">{entry.data.kicker}</p>
-    ) : (
-      <p class="eyebrow article-kicker">Life · 随笔特写</p>
-    )}
+      <p class="article-kicker">{entry.data.kicker}</p>
+    ) : null}
     <h1>{entry.data.title}</h1>
     {(entry.data.pubDate || entry.data.author) && (
       <div class="article-meta">
-        {entry.data.pubDate && <span>发布于 {entry.data.pubDate}</span>}
-        {entry.data.author && <span>· 作者：{entry.data.author}</span>}
+        {entry.data.pubDate && <span>{entry.data.pubDate}</span>}
+        {entry.data.author && <span>{entry.data.author}</span>}
       </div>
     )}
     {entry.data.tags && entry.data.tags.length > 0 && (
@@ -35,7 +33,6 @@ const { Content } = await render(entry);
       <div class="audio-player-card">
         <div class="audio-player-header">
           <span class="audio-badge">🎙️ 声音纪录 · {entry.data.duration ?? '音频'}</span>
-          <span class="audio-format">高保真音频 · AAC/M4A</span>
         </div>
         <audio controls preload="metadata" class="audio-player" src={entry.data.audio}>
           您的浏览器不支持音频播放，请直接下载收听。

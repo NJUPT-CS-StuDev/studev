@@ -255,7 +255,7 @@ export default function MapApp() {
         return <button key={room.id} className="rrow" onClick={() => handlers.current.onRoom(room.id)}>
             <span className={`sw ${state.tier}`} />
             <span className="m"><span className="a">{roomLabel(room.id)}</span><span className="b">{room.seats ? `${room.seats} 座` : '座位未知'}{walk ? ` · 约步行 ${walk} 分钟` : ''}</span></span>
-            <span className="r">到 {hm(state.until)}</span>
+            <span className="r">{state.minutes ? `到 ${hm(state.until)}` : '今天没课了'}</span>
         </button>;
     });
 
@@ -302,7 +302,7 @@ export default function MapApp() {
         body = <>
             <div className="card-h top"><h2>{roomName}</h2></div>
             <div className="meta">{openBuilding?.names[0]} {floor} 层{room?.seats ? ` · ${room.seats} 座` : ''}{room?.kinds[0] ? ` · ${room.kinds[0].replace(/^(仙林|三牌楼|锁金)/, '')}` : ''}</div>
-            {state && (!day ? <div className="state busy">这一天没有排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>，到 {hm(state.until)}{state.minutes ? `，还能待 ${durationText(state.minutes)}` : ''}</div>)}
+            {state && (!day ? <div className="state busy">这一天没有排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>{state.minutes ? `，到 ${hm(state.until)}，还能待 ${durationText(state.minutes)}` : '，今天没课了'}</div>)}
             {state && day && <PeriodStrip periods={world.periods} state={state} min={moment.min} />}
             <div className="btns">
                 {state && <a className="btn" href={`/?who=room:${encodeURI(pickedRoom.id)}&scale=week&t=${moment.date}`}>这间的课表</a>}

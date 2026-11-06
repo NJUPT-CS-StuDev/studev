@@ -22,6 +22,10 @@ jobs:
       PAGES_SOURCE: skills
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
       DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
+      OSCA_DOWNLOAD_ENDPOINT: ${{ secrets.OSCA_DOWNLOAD_ENDPOINT }}
+      OSCA_DOWNLOAD_BUCKET: ${{ secrets.OSCA_DOWNLOAD_BUCKET }}
+      OSCA_DOWNLOAD_ACCESS_KEY: ${{ secrets.OSCA_DOWNLOAD_ACCESS_KEY }}
+      OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.OSCA_DOWNLOAD_SECRET_KEY }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
       MAP_REPOSITORY: hicancan/njupt-map
     steps:
@@ -36,17 +40,15 @@ jobs:
         run: |
           npx -y edgeone@1.6.44 makers env set DATA_REPOSITORY "$DATA_REPOSITORY" -e production -t "$EDGEONE_API_TOKEN"
           npx -y edgeone@1.6.44 makers env set DATA_TOKEN "$DATA_TOKEN" -e production -t "$EDGEONE_API_TOKEN"
+          for name in OSCA_DOWNLOAD_ENDPOINT OSCA_DOWNLOAD_BUCKET OSCA_DOWNLOAD_ACCESS_KEY OSCA_DOWNLOAD_SECRET_KEY; do
+            npx -y edgeone@1.6.44 makers env set "$name" "${!name}" -e production -t "$EDGEONE_API_TOKEN"
+          done
       # digest resolves and verifies the latest map/data release pair.
       - run: npm run digest
-      - name: Fetch APK distribution assets
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/apk/fetch-releases.mjs --output public/download
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform
       - run: npm run test:collection
-      - run: npm run test:apk
       - run: npm run build
       - name: Stage the verified data release for the EdgeOne builder
         run: |

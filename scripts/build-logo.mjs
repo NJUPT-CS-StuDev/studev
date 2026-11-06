@@ -78,7 +78,6 @@ async function main() {
 
   // 1. Export Master SVGs
   console.log("  -> Generating Master SVGs...");
-  await fs.writeFile(path.join(ROOT_DIR, 'logo.svg'), MASTER_GLYPH_SVG.trim(), 'utf-8');
   await fs.writeFile(path.join(ROOT_DIR, 'src', 'assets', 'logo.svg'), MASTER_GLYPH_SVG.trim(), 'utf-8');
   await fs.writeFile(path.join(ROOT_DIR, 'public', 'favicon.svg'), FAVICON_SVG.trim(), 'utf-8');
 
@@ -88,12 +87,8 @@ async function main() {
     .resize(512, 512)
     .png({ quality: 100, compressionLevel: 9 })
     .toBuffer();
-
-  await fs.writeFile(path.join(ROOT_DIR, 'logo.png'), png512Buffer);
   await fs.writeFile(path.join(ROOT_DIR, 'src', 'assets', 'logo.png'), png512Buffer);
   await fs.writeFile(path.join(ROOT_DIR, 'public', 'assets', 'logo.png'), png512Buffer);
-  await fs.writeFile(path.join(ROOT_DIR, 'ic_launcher_512.png'), png512Buffer);
-  await fs.writeFile(path.join(ROOT_DIR, 'logo_icp.png'), png512Buffer);
 
   // 3. Generate Android Native VectorDrawables (Safe-zone compliant)
   console.log("  -> Writing Android VectorDrawables (Adaptive Icon)...");

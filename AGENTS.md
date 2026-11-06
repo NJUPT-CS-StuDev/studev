@@ -53,7 +53,6 @@ admins and the owner can list or look up users.
 - `design/` is the shared visual language. `scripts/` at the repository root
   groups tooling by data, APK, server, platform, and private storage.
   `product.json` owns product and release metadata for both clients and tooling.
-  `src/download/` owns the browser's manifest and streaming APK download.
   `android/tooling/` contains Android-only
   test and replay tools. Generated data, assets, and native binaries stay
   outside version control.
@@ -71,7 +70,6 @@ npm run typecheck
 npm run test:campus
 npm run test:platform
 npm run test:collection
-npm run test:apk
 npm run audit:unused
 npm run build
 cd android
@@ -80,7 +78,8 @@ cd android
 
 `main` is production and deploys the web site. Work on a branch and merge only
 after review. Release signing material and private configuration live outside
-the repository. `npm run release:apk` builds and signs the Android release and
-uploads its archive to GitHub Releases; deployment materializes that archive
-on the site. Android opens `/download/` in a browser for application updates.
+the repository. `npm run release:apk` builds and signs the Android release, puts it
+on object storage and publishes it on GitHub Releases. `/api/apk` redirects to a
+signed link for the version in `product.json`; `/download/` is the page around it.
+Android opens `/download/` in a browser for application updates.
 Use `astro dev --background` for development (`astro dev stop|status|logs`).

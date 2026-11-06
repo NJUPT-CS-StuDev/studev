@@ -388,7 +388,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 if (current != null) {
                     if (day == null) Plain("这一天没有排课数据", 14.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
                     else if (current.busy) Plain((if (current.current != null) "上课中" else "有人用") + "，到 ${hm(current.until)}", 14.sp, Ink.text, modifier = Modifier.padding(vertical = 12.dp))
-                    else Plain("空闲，到 ${hm(current.until)}" + (if (current.minutes > 0) "，还能待 ${durationText(current.minutes)}" else ""), 14.sp, mark.free, FontWeight.Medium, modifier = Modifier.padding(vertical = 12.dp))
+                    else Plain(if (current.minutes > 0) "空闲，到 ${hm(current.until)}，还能待 ${durationText(current.minutes)}" else "空闲，今天没课了", 14.sp, mark.free, FontWeight.Medium, modifier = Modifier.padding(vertical = 12.dp))
                     if (day != null) PeriodStrip(state.periods, current, moment.min)
                 }
                 Row(Modifier.padding(top = 12.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -461,7 +461,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
     Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(3.dp, 28.dp).clip(RoundedCornerShape(2.dp)).background(free.copy(alpha = when (state.tier) { "long" -> 1f; "mid" -> .55f; else -> .25f })))
         Column(Modifier.weight(1f)) { Plain(Names.room(room.id), 14.5.sp, weight = FontWeight.Medium); Plain(room.seats?.let { "$it 座" } ?: "座位未知", 12.5.sp, Ink.muted) }
-        Plain("到 ${hm(state.until)}", 12.5.sp, Ink.muted)
+        Plain(if (state.minutes > 0) "到 ${hm(state.until)}" else "今天没课了", 12.5.sp, Ink.muted)
     }
 }
 

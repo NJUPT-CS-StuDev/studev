@@ -9,6 +9,6 @@ const entries = (await getCollection('history'))
 
 const currentEntry = entries.find((item) => item.id === '2026-2027') ?? entries[0];
 ---
-<SiteLayout title="History — StuDev" description={currentEntry.data.description} active="history">
+<SiteLayout title="历史 — studev" description={currentEntry.data.description} active="history">
   <HistoryTermView entry={currentEntry} allEntries={entries} />
 </SiteLayout>

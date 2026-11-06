@@ -29,7 +29,7 @@ export function holidayMap(terms: CalendarTerm[]) {
     }
     return days;
 }
-export const isRunDay = (rule: MorningRun, holidays: Map<string, string>, date: string) =>
+const isRunDay = (rule: MorningRun, holidays: Map<string, string>, date: string) =>
     date >= rule.start && date <= rule.end && weekdayOf(date) <= 5 && !holidays.has(date);
 
 const lessonEvent = (meeting: TeachingMeeting, date: string, periods: TeachingPeriod[]): CampusEvent | null => {

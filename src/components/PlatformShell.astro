@@ -2,9 +2,9 @@
 import SiteLayout from '../layouts/SiteLayout.astro';
 import '../styles/platform.css';
 interface Props { title: string; description?: string; active?: string; }
-const {title, description = 'StuDev 表单与信息登记', active = ''} = Astro.props;
+const {title, description = 'studev 表单与信息登记', active = ''} = Astro.props;
 ---
-<SiteLayout title={`${title} — StuDev`} description={description} active="forms" noindex={true}>
+<SiteLayout title={`${title} — studev`} description={description} active="forms" noindex={true}>
   <script is:inline>
     // 0ms 瞬间拦截：若客户端本地无登录态，在首帧 DOM 渲染前直接重定向至登录页，杜绝加载延迟
     try {

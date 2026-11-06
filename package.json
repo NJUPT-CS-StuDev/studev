@@ -15,7 +15,6 @@
     "check": "astro check",
     "test:markdown": "node --test tests/markdown-render.test.mjs",
     "test:render": "node --test tests/static-mermaid.test.mjs tests/site-output.test.mjs",
-    "test:apk": "node --test tests/apk-distribution.test.mjs tests/fetch-apk-releases.test.mjs tests/apk-stream.test.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "predigest": "node design/map/generate.mjs",
@@ -23,7 +22,6 @@
     "test:campus": "vitest run",
     "typecheck": "astro sync && tsc --noEmit",
     "release:apk": "pwsh android/release.ps1",
-    "test:apk:browser": "node tests/apk-download.browser.mjs",
     "audit:unused": "knip --include files,exports,types --reporter compact --no-progress"
   },
   "dependencies": {
@@ -48,7 +46,7 @@
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
     "remark-math-extended": "^6.1.1",
-    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v4.0.0/wasm-search-4.0.0.tgz",
+    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v4.1.0/wasm-search-4.1.0.tgz",
     "wayfind": "https://github.com/hicancan/wayfind/releases/download/v0.1.0/wayfind-0.1.0.tgz"
   },
   "overrides": {

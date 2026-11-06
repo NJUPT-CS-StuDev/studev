@@ -13,10 +13,9 @@ const entries = (await getCollection('life'))
 
 const allTags = Array.from(new Set(entries.flatMap((e) => e.data.tags ?? [])));
 ---
-<SiteLayout title="Life — StuDev" active="life">
+<SiteLayout title="生活 — studev" active="life">
   <section class="listing" aria-labelledby="page-title">
-    <p class="eyebrow">生活 · 随笔</p>
-    <h1 id="page-title">Life</h1>
+    <h1 id="page-title">生活</h1>
 
     {allTags.length > 0 && (
       <div class="filter-tags-wrap" aria-label="主题标签筛选">
@@ -35,13 +34,7 @@ const allTags = Array.from(new Set(entries.flatMap((e) => e.data.tags ?? [])));
           <span>
             <span class="entry-title">{entry.data.shortTitle ?? entry.data.title}</span>
             <span class="entry-description">{entry.data.description}</span>
-            {entry.data.tags && entry.data.tags.length > 0 && (
-              <span class="article-tags" style="margin-top:8px;">
-                {entry.data.tags.map((t: string) => <span class="tag-badge">#{t}</span>)}
-              </span>
-            )}
           </span>
-          <span class="entry-arrow" aria-hidden="true">↗</span>
         </a>
       ))}
     </div>

@@ -25,9 +25,15 @@ import kotlinx.coroutines.withContext
 import top.hicancan.studev.MainActivity
 import top.hicancan.studev.data.*
 import top.hicancan.studev.me.CampusSettings
-import top.hicancan.studev.navigation.*
 import top.hicancan.studev.timetable.*
 import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.ui.theme.darkTone
+import top.hicancan.studev.ui.theme.lightTone
+
+import top.hicancan.studev.world.*
+
+import kotlinx.serialization.json.*
+import java.time.format.DateTimeFormatter
 import java.time.Clock
 import java.time.Instant
 
@@ -40,61 +46,54 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
         WidgetRefreshWorker.enable(context)
         val settings = CampusSettings(context).state.value
         val now = clock.instant()
+        val moment = now.atZone(CampusDay.zone).let { Moment(it.toLocalDate(), it.hour * 60 + it.minute) }
         var unavailable = false
-        val events = try {
-            if (settings.klass == null) emptyList() else {
+        val line = try {
+            if (settings.klass == null) null else {
                 val repo = AcademicRepository.open(context)
                 val term = repo.term()
                 val schedule = try { repo.effectiveSchedule(settings.klass, settings.timetableEdits(term.term)) }
                     catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
                 val exams = try { repo.effectiveExams(settings.klass, settings) }
                     catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; emptyList() }
-                CampusEvents.build(term, repo.periods(), schedule, exams)
+                CampusLine(term, repo.periods(), schedule?.meetings.orEmpty(), exams, CampusLine.holidays(repo.calendar()), null)
             }
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; emptyList() }
-        val next = WidgetLesson.next(events, now)
-        val campus = if (settings.homeDorm != null || next?.room != null) runCatching { CampusPackage.load(context.assets) }.getOrNull() else null
-        val walk = if (settings.homeDorm != null && next?.room != null) withContext(Dispatchers.IO) {
-            runCatching {
-                val home = campus?.byId?.get(settings.homeDorm) ?: return@runCatching null
-                val destination = campus?.byId?.get(next.room) ?: return@runCatching null
-                Wayfind.load(context.assets).use { engine ->
-                    engine.route(RouteRequest(home.endpoint, destination.endpoint, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
+        val shown = line?.let { WidgetDay.of(it, moment) }.orEmpty()
+        val title = when {
+            settings.klass == null -> "studev"
+            unavailable -> "课表还没下载"
+            shown.isEmpty() -> "这两天没有课"
+            else -> (if (shown.first().date == moment.date) "今天" else "明天") + " " + WEEKDAYS[shown.first().date.dayOfWeek.value]
+        }
+        val hint = when {
+            settings.klass == null -> "打开 studev 选择班级"
+            unavailable -> "联网打开一次就有了"
+            else -> ""
+        }
+        val rows = buildJsonArray {
+            shown.take(4).forEach { event ->
+                addJsonObject {
+                    put("time", hm(event.start))
+                    put("name", event.short)
+                    put("room", event.room?.let(Names::room).orEmpty())
+                    put("tone", event.meeting?.let(TimetablePresentation::colourIndex) ?: -1)
+                    event.room?.let { put("nav", it) }
                 }
-            }.getOrNull()
-        } else null
-        val homeName = settings.homeDorm?.let { campus?.byId?.get(it)?.displayName(campus.byId) ?: it }
-        val roomName = next?.room?.let { campus?.byId?.get(it)?.displayName(campus.byId) ?: it }
-        val headline = next?.let { WidgetLesson.headline(it, now, walk) } ?: when {
-            settings.klass == null -> "下一节课，抬眼可见"
-            unavailable -> "课表还未下载"
-            else -> "今天和明天没有课"
-        }
-        val detail = next?.let { WidgetLesson.detail(it, roomName) } ?: when {
-            settings.klass == null -> "在「我的」选择班级，让课表来到桌面"
-            unavailable -> "请联网打开课表；新版本可能尚未发布"
-            else -> "好好休息，按自己的节奏来"
-        }
-        val journey = when {
-            settings.homeDorm == null -> "在「我的」选择宿舍，即可显示出门时间"
-            next == null -> "出发地 · $homeName"
-            walk != null -> "从${homeName}步行 $walk 分钟"
-            next.room == null -> "上课地点待公布"
-            else -> "去$roomName · 步行路线暂不可用，打开地图查看"
-        }
+            }
+        }.toString()
         for (id in ids) {
             updateAppWidgetState(context, id) { state ->
-                state[stringPreferencesKey("headline")] = headline
-                state[stringPreferencesKey("detail")] = detail
-                state[stringPreferencesKey("journey")] = journey
-                state[stringPreferencesKey("room")] = next?.room.orEmpty()
+                state[stringPreferencesKey("title")] = title
+                state[stringPreferencesKey("hint")] = hint
+                state[stringPreferencesKey("rows")] = rows
                 state[stringPreferencesKey("theme")] = settings.theme
             }
             update(context, id)
         }
         // Replace the boundary job only after publishing; replacing a currently
         // running boundary worker cancels that worker's coroutine.
-        val boundary = WidgetLesson.refreshAt(events, now)
+        val boundary = line?.let { WidgetDay.nextChange(it, moment) } ?: moment.date.plusDays(1).atStartOfDay(CampusDay.zone).toInstant()
         if (scheduleBoundary) WidgetRefreshWorker.at(context, boundary, now)
         boundary
     }
@@ -102,13 +101,11 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val state = currentState<Preferences>()
-            val headline = state[stringPreferencesKey("headline")] ?: "下一节课，抬眼可见"
-            val detail = state[stringPreferencesKey("detail")] ?: "在「我的」选择班级，让课表来到桌面"
-            val journey = state[stringPreferencesKey("journey")] ?: "在「我的」选择宿舍，即可显示出门时间"
-            val room = state[stringPreferencesKey("room")].orEmpty()
+            val title = state[stringPreferencesKey("title")] ?: "studev"
+            val hint = state[stringPreferencesKey("hint")] ?: "打开 studev 选择班级"
+            val rows = runCatching { Json.parseToJsonElement(state[stringPreferencesKey("rows")] ?: "[]").jsonArray.map { it.jsonObject } }.getOrDefault(emptyList())
             val theme = state[stringPreferencesKey("theme")] ?: "system"
             val open = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("$PLATFORM_ORIGIN/"))
-            val go = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("$PLATFORM_ORIGIN/map/?nav=${Uri.encode(room)}"))
             fun color(light: Color, dark: Color): androidx.glance.unit.ColorProvider = when (theme) {
                 "light" -> androidx.glance.unit.ColorProvider(light)
                 "dark" -> androidx.glance.unit.ColorProvider(dark)
@@ -116,52 +113,46 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
             }
             val ink = color(Tokens.Color.Light.ink, Tokens.Color.Dark.ink)
             val muted = color(Tokens.Color.Light.muted, Tokens.Color.Dark.muted)
-            val paper = color(Tokens.Color.Light.surfaceRaised, Tokens.Color.Dark.surfaceRaised)
-            val button = color(Tokens.Color.Light.brandContainer, Tokens.Color.Dark.brandContainer)
-            val onButton = color(Tokens.Color.Light.onBrandContainer, Tokens.Color.Dark.onBrandContainer)
-            val compact = LocalSize.current.height < 160.dp
+            val paper = color(Tokens.Color.Light.paper, Tokens.Color.Dark.paper)
+            val compact = LocalSize.current.height < 120.dp
             val shape = if (Build.VERSION.SDK_INT >= 31) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier
-            val bounds = if (compact) GlanceModifier.fillMaxWidth().height(80.dp) else GlanceModifier.fillMaxSize()
-            Column(bounds.then(shape).background(paper).appWidgetBackground()
-                .clickable(actionStartActivity(open)).padding(horizontal = 18.dp, vertical = if (compact) 6.dp else 12.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (compact) headline.removePrefix("明天 ") else headline, style = TextStyle(color = ink, fontSize = if (compact) { if (room.isEmpty()) 18.sp else 20.sp } else 26.sp, fontWeight = FontWeight.Bold),
-                        maxLines = 1, modifier = GlanceModifier.defaultWeight())
-                    if (compact) {
-                        Spacer(GlanceModifier.width(8.dp))
-                        WidgetAction(if (room.isNotEmpty()) "导航" else "课表", if (room.isNotEmpty()) go else open, button, onButton)
-                        if (room.isNotEmpty()) {
-                            Spacer(GlanceModifier.width(4.dp))
-                            WidgetAction("课表", open, button, onButton)
-                        }
+            Column(GlanceModifier.fillMaxSize().then(shape).background(paper).appWidgetBackground().clickable(actionStartActivity(open)).padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = if (compact || rows.isEmpty()) Alignment.CenterVertically else Alignment.Top) {
+                if (rows.isEmpty()) {
+                    Text(title, style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+                    if (hint.isNotEmpty()) Text(hint, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+                } else if (compact) {
+                    WidgetRow(context, rows.first(), ink, muted, theme, headline = true)
+                } else {
+                    Row(GlanceModifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(title, style = TextStyle(color = ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                        if (hint.isNotEmpty()) Text(hint, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
                     }
-                }
-                Spacer(GlanceModifier.height(if (compact) 2.dp else 6.dp))
-                Text(if (compact && headline.startsWith("明天 ")) "明天 · $detail" else detail, style = TextStyle(color = ink, fontSize = if (compact) 12.sp else 13.sp), maxLines = if (compact) 1 else 2)
-                Spacer(GlanceModifier.height(if (compact) 2.dp else 4.dp))
-                Text(journey, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
-                if (!compact) {
-                    Spacer(GlanceModifier.height(8.dp))
-                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        if (room.isNotEmpty()) {
-                            Box(GlanceModifier.defaultWeight()) { WidgetAction("导航", go, button, onButton, true) }
-                            Spacer(GlanceModifier.width(8.dp))
-                        }
-                        Box(GlanceModifier.defaultWeight()) { WidgetAction("课表", open, button, onButton, true) }
-                    }
+                    rows.forEach { row -> WidgetRow(context, row, ink, muted, theme, headline = false) }
                 }
             }
         }
     }
 }
 
-@Composable private fun WidgetAction(label: String, intent: Intent, background: androidx.glance.unit.ColorProvider,
-                                    foreground: androidx.glance.unit.ColorProvider, wide: Boolean = false) {
-    Box((if (wide) GlanceModifier.fillMaxWidth() else GlanceModifier).height(if (wide) 36.dp else 32.dp)
-        .cornerRadius(Tokens.Radius.control.dp).background(background).clickable(actionStartActivity(intent)).padding(horizontal = if (wide) 18.dp else 8.dp),
-        contentAlignment = Alignment.Center) {
-        Text(label, style = TextStyle(color = foreground, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+/** A course's tile colour, then its time, name and room; tapping it starts navigation there. */
+@Composable private fun WidgetRow(context: Context, row: JsonObject, ink: androidx.glance.unit.ColorProvider, muted: androidx.glance.unit.ColorProvider, theme: String, headline: Boolean) {
+    val toneIndex = row.getValue("tone").jsonPrimitive.int
+    val dark = theme == "dark" || (theme == "system" && (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES)
+    val bar = if (toneIndex < 0) (if (dark) Tokens.Color.Dark.ink else Tokens.Color.Light.ink) else (if (dark) darkTone(toneIndex) else lightTone(toneIndex)).border
+    val nav = row["nav"]?.jsonPrimitive?.content
+    val tap = if (nav != null) GlanceModifier.clickable(actionStartActivity(Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("$PLATFORM_ORIGIN/map/?nav=${Uri.encode(nav)}")))) else GlanceModifier
+    Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp).then(tap), verticalAlignment = Alignment.CenterVertically) {
+        Box(GlanceModifier.width(3.dp).height(if (headline) 36.dp else 26.dp).cornerRadius(2.dp).background(androidx.glance.unit.ColorProvider(bar))) {}
+        Spacer(GlanceModifier.width(10.dp))
+        if (headline) Column(GlanceModifier.defaultWeight()) {
+            Text(row.getValue("name").jsonPrimitive.content, style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+            Text("${row.getValue("time").jsonPrimitive.content}  ${row.getValue("room").jsonPrimitive.content}", style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+        } else {
+            Text(row.getValue("time").jsonPrimitive.content, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.width(44.dp))
+            Text(row.getValue("name").jsonPrimitive.content, style = TextStyle(color = ink, fontSize = 13.5.sp), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+            Text(row.getValue("room").jsonPrimitive.content, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+        }
     }
 }
 

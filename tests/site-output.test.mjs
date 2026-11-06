@@ -227,5 +227,5 @@ test('stable sitemap files revalidate without changing other asset headers', asy
   assert.match(cache, /(?:^|,\s*)must-revalidate(?:,|$)/);
   assert.doesNotMatch(cache, /immutable/);
   const cacheRules = config.headers.filter((rule) => rule.headers.some((header) => header.key.toLowerCase() === 'cache-control'));
-  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/*', '/sw.js', '/download/sw.js', '/pwa-release.json'].includes(rule.source)), 'only sitemaps, update manifests/workers and versioned assets may receive a cache override');
+  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/*', '/sw.js', '/pwa-release.json'].includes(rule.source)), 'only sitemaps, update manifests/workers and versioned assets may receive a cache override');
 });

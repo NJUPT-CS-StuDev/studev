@@ -762,21 +762,13 @@ window.addEventListener('pagehide', () => {
 });
 
 void (async () => {
-  // Visitors without an account only get the settings tab; nothing to ask the server.
-  let cached = false;
-  try {
-    cached = !!localStorage.getItem('studev_auth_user');
-  } catch {}
-  if (!cached) return;
-  status.hidden = false;
-  message(status, '正在读取账号……');
   try {
     current = await session(false);
     if (!current) {
       try {
         localStorage.removeItem('studev_auth_user');
       } catch {}
-      status.hidden = true;
+      location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
       return;
     }
     document.querySelectorAll<HTMLElement>('[data-signed-in]').forEach((n) => (n.hidden = false));
@@ -784,11 +776,9 @@ void (async () => {
     document.dispatchEvent(new CustomEvent('studev:account', { detail: { nickname: nicknameOf(current.user), role: current.user.role } }));
     render();
     initPasswordToggles();
-    message(status);
-    status.hidden = true;
     const tabParam = new URLSearchParams(location.search).get('tab');
     const setupBlocked = !!current.passwordChangeRequired || !!current.enrollmentRequired || !!current.mfaRequired || !!current.profileRequired || !current.user.profileComplete;
-    switchTab(setupBlocked || !tabParam ? 'profile' : tabParam === 'settings' ? 'settings' : (tabParam === 'members' && current.user.role !== 'user') || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile');
+    switchTab(setupBlocked || !tabParam ? 'profile' : (tabParam === 'members' && current.user.role !== 'user') || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile');
     if (!setupBlocked) {
       if (current.user.role !== 'user') void refreshMembers().catch(() => {});
       if (tabParam === 'audit' && current.user.role === 'owner') void guard(refreshAudit);

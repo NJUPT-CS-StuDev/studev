@@ -52,11 +52,11 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         bytes
     } }
     /** One byte range of an immutable file, kept on disk so a query works offline next time. */
-    suspend fun block(path: String, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun block(path: String, mirror: String?, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
         val file = File(root, "$path.$offset")
         if (file.isFile) return@withContext file.readBytes()
         val address = "${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }
-        val bytes = try { download(address, offset, length) } catch (e: IOException) { throw DataUnavailableException(e) }
+        val bytes = try { mirror?.let { runCatching { download(it, offset, length) }.getOrNull() } ?: download(address, offset, length) } catch (e: IOException) { throw DataUnavailableException(e) }
         file.parentFile!!.mkdirs()
         val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
         try { pending.writeBytes(bytes); pending.renameTo(file) } finally { pending.delete() }

@@ -20,7 +20,6 @@ data class PersonalSettings(
     val calendar: Boolean = false,
     val reminders: Boolean = false,
     val leadMinutes: Int = 15,
-    val homeDorm: String? = null,
     val navigationGuidanceShown: Boolean = false,
     val navigationGuidancePending: Boolean = false,
     val reminderGuidanceShown: Boolean = false,
@@ -68,7 +67,6 @@ class CampusSettings(context: Context) {
         calendar = store.getBoolean("calendar", false),
         reminders = store.getBoolean("reminders", false),
         leadMinutes = store.getInt("lead", 15),
-        homeDorm = store.getString("home-dorm", null),
         navigationGuidanceShown = store.getBoolean("navigation-guidance", false),
         navigationGuidancePending = store.getBoolean("navigation-guidance-pending", false),
         reminderGuidanceShown = store.getBoolean("reminder-guidance", false),
@@ -90,7 +88,7 @@ class CampusSettings(context: Context) {
         val raw = change(_state.value)
         val next = raw.copy(timetable = sanitizeTimetable(raw.timetable), examAttendance = sanitizeAttendance(raw.examAttendance))
         store.edit().putString("class", next.klass).putString("campus", next.campus).putString("theme", next.theme)
-            .putBoolean("calendar", next.calendar).putBoolean("reminders", next.reminders).putInt("lead", next.leadMinutes).putString("home-dorm", next.homeDorm)
+            .putBoolean("calendar", next.calendar).putBoolean("reminders", next.reminders).putInt("lead", next.leadMinutes)
             .putBoolean("navigation-guidance", next.navigationGuidanceShown)
             .putBoolean("navigation-guidance-pending", next.navigationGuidancePending)
             .putBoolean("reminder-guidance", next.reminderGuidanceShown)

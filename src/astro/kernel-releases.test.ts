@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 it('clean builders resolve both kernels from immutable public release URLs', () => {
     const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
     const lock = JSON.parse(readFileSync(new URL('../../package-lock.json', import.meta.url), 'utf8'));
-    for (const [name, version] of [['wayfind', '0.1.0'], ['wasm-search', '3.1.0']]) {
+    for (const [name, version] of [['wayfind', '0.1.0'], ['wasm-search', '4.1.0']]) {
         const url = `https://github.com/hicancan/${name}/releases/download/v${version}/${name}-${version}.tgz`;
         expect(pkg.dependencies[name!]).toBe(url);
         expect(lock.packages[''].dependencies[name!]).toBe(url);

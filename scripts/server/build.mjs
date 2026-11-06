@@ -4,8 +4,9 @@ import { build } from 'esbuild';
 // with identifier aliases so a dependency's `import { env } from 'process'` cannot collide.
 // This output is server-only and contains no build-time values or credentials.
 await build({
-  entryPoints: ['src/server/platform-entry.mjs'],
-  outfile: '.server-build/platform.mjs',
+  entryPoints: { platform: 'src/server/platform-entry.mjs', apk: 'src/server/apk-entry.mjs' },
+  outdir: '.server-build',
+  outExtension: { '.js': '.mjs' },
   bundle: true,
   external: ['@edgeone/pages-blob'],
   platform: 'node', format: 'esm', target: 'node20',

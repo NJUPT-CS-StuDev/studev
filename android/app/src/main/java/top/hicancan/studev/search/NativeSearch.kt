@@ -17,7 +17,7 @@ import kotlin.coroutines.coroutineContext
 /** Drives one engine through the bundle protocol, fetching only the blocks it names. */
 internal class NativeSearch(
     private val file: suspend (String) -> ByteArray,
-    private val range: suspend (String, Long, Int) -> ByteArray,
+    private val range: suspend (String, String?, Long, Int) -> ByteArray,
 ) : AutoCloseable {
     data class Page(val results: List<JsonObject>, val total: Int, val filters: JsonObject)
     private val mutex = Mutex()
@@ -27,8 +27,10 @@ internal class NativeSearch(
     @Volatile private var closed = false
 
     private suspend fun ref(value: JsonObject): ByteArray {
-        val pack = manifest!!.getValue("packs").jsonArray[value.getValue("pack").jsonPrimitive.int].jsonPrimitive.content
-        return range(pack, value.getValue("offset").jsonPrimitive.long, value.getValue("bytes").jsonPrimitive.int)
+        val number = value.getValue("pack").jsonPrimitive.int
+        val pack = manifest!!.getValue("packs").jsonArray[number].jsonPrimitive.content
+        val mirror = manifest!!["mirrors"]?.jsonArray?.getOrNull(number)?.jsonPrimitive?.content
+        return range(pack, mirror, value.getValue("offset").jsonPrimitive.long, value.getValue("bytes").jsonPrimitive.int)
     }
 
     /** Blocks accumulate between queries; past the budget, start from the index again. */

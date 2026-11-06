@@ -1,5 +1,4 @@
 param(
-    [string]$PartSize = '',
     [string]$Notes = '',
     [string[]]$GradleArgs = @()
 )
@@ -34,12 +33,6 @@ if (-not $package.Success -or $package.Groups[1].Value -ne 'top.hicancan.studev'
     -not $sdk.Success -or [int]$sdk.Groups[1].Value -ne [int]$product.android.minSdk) {
     throw "Release APK metadata disagrees with product.json; refusing to package or publish: $($package.Value), $($sdk.Value)"
 }
-$releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$args = @((Join-Path $repo 'scripts/apk/package.mjs'), '--apk', $apk, '--output', (Join-Path $repo 'public/download'), '--version-name', $versionName, '--version-code', $versionCode, '--min-sdk', [string]$product.android.minSdk, '--notes', $releaseNotes)
-if ($PartSize) { $args += @('--part-size', $PartSize) }
-node @args
-if ($LASTEXITCODE -ne 0) { throw 'APK distribution packaging failed' }
-
 $apksigner = Join-Path $env:ANDROID_HOME 'build-tools\36.1.0\apksigner.bat'
 if (-not (Test-Path $apksigner)) { throw "apksigner is missing: $apksigner" }
 $certificateOutput = (& $apksigner verify --print-certs $apk 2>&1 | Out-String)
@@ -50,19 +43,19 @@ $sha1 = ($sha1Match.Groups[1].Value -replace '[^0-9A-Fa-f]', '').ToUpperInvarian
 if ($sha1.Length -eq 40) { $sha1 = ($sha1 -split '(?<=\G..)(?=.)') -join ':' }
 if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificate SHA-1 prefix: $sha1" }
 
-$outputRoot = Join-Path $repo 'public\download'
-$manifestPath = Join-Path $outputRoot "$versionCode\manifest.json"
-$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-$tempBase = [System.IO.Path]::GetFullPath('D:\Temp\codex')
+$tempBase = [System.IO.Path]::GetFullPath('D:\Temp\claude-wsl')
 $tempRoot = Join-Path $tempBase ("studev-apk-release-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
-$mirrorLatest = Join-Path $tempRoot 'latest.json'
-Set-Content -Path $mirrorLatest -Value (([ordered]@{ format = 1; versionCode = $versionCode; manifestUrl = 'manifest.json' } | ConvertTo-Json) + "`n") -NoNewline
-$mirrorManifest = Join-Path $tempRoot 'manifest.json'
-Copy-Item $manifestPath $mirrorManifest
 $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
-$assetPaths = @($mirrorLatest, $mirrorManifest) + @($manifest.parts | ForEach-Object { Join-Path $outputRoot "$versionCode\$($_.name)" }) + $fullApk
+$env:OSCA_DOWNLOAD_ENDPOINT = Get-Secret local.osca_download.endpoint
+$env:OSCA_DOWNLOAD_BUCKET = Get-Secret local.osca_download.bucket
+$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.osca_download.access_key
+$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.osca_download.secret_key
+& node (Join-Path $repo 'scripts/release/put-apk.mjs') $fullApk "studev-$versionName.apk"
+if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
+$releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
+$assetPaths = @($fullApk)
 $tag = "v$versionName"
 $repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()
@@ -78,8 +71,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 & gh release upload $tag @assetPaths --repo $repoName --clobber
 if ($LASTEXITCODE -ne 0) { throw "GitHub release asset upload failed" }
-# Publish only once every asset exists. The published event deploys the website
-# with this release's download manifest and APK parts.
+# Publish only once the asset exists; the published event deploys the website.
 & gh release edit $tag --repo $repoName --draft=false --latest
 if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
 $releaseUrl = (& gh release view $tag --repo $repoName --json url --jq .url).Trim()

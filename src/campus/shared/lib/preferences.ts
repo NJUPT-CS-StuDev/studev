@@ -99,12 +99,6 @@ export const writePreferences = (update: (current: Preferences) => Preferences):
     return next;
 };
 
-export const clearPreferences = (): void => {
-    storage()?.removeItem(KEY);
-    window.dispatchEvent(new CustomEvent(EVENT));
-};
-
-/** Calls listener when settings change in this tab or another one. */
 export const subscribePreferences = (listener: () => void): (() => void) => {
     const onStorage = (event: StorageEvent) => { if (event.key === KEY || event.key === null) listener(); };
     window.addEventListener(EVENT, listener);

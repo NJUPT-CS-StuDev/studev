@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { compileBundle } from 'wasm-search/compile';
+import { mirrorSearch } from './mirror-search.mjs';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
@@ -512,7 +513,7 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p4`;
+    const version = `${map.version}__${data.version}__p5`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });
@@ -542,6 +543,7 @@ async function main() {
         docs.push(doc);
     }
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
+    await mirrorSearch(join(out, 'search'), version);
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,
         data_version: data.version,
