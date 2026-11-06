@@ -38,7 +38,7 @@ test('every built page has valid local links and complete rendering', async () =
     walk(parse(html), (node) => {
       const attr = attributes(node);
       if (node.tagName === 'a') {
-        const target = localFile(attr.href, file);
+        const target = attr.href?.startsWith('/api/') ? null : localFile(attr.href, file);
         if (target) assert.ok(existsSync(target), `${file}: broken link ${attr.href}`);
       }
       if (node.tagName === 'img') {

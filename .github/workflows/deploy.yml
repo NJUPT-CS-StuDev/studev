@@ -56,8 +56,13 @@ jobs:
       - name: Deploy
         run: |
           set -o pipefail
-          if npx -y edgeone@1.6.44 makers deploy -n studev -t "$EDGEONE_API_TOKEN" --json 2>&1 | tee deploy.log; then exit 0; fi
-          grep -q "Deploy Success" deploy.log || { echo "the deployment itself failed"; exit 1; }
+          # The EdgeOne API answers 522 now and then; a later try gets through.
+          for try in 1 2 3 4; do
+            if npx -y edgeone@1.6.44 makers deploy -n studev -t "$EDGEONE_API_TOKEN" --json 2>&1 | tee deploy.log; then exit 0; fi
+            grep -q "Deploy Success" deploy.log && break
+            [ "$try" = 4 ] && { echo "the deployment itself failed"; exit 1; }
+            sleep $((try * 60))
+          done
           echo "the CLI failed after the deployment went live; checking the site"
           base=$(node -p "require('./src/data/campus-release.json').base")
           script=$(grep -o '/_astro/[^\"]*\.js' dist/index.html | head -1)
