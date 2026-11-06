@@ -13,7 +13,7 @@ describe('web design tokens', () => {
     }
     expect(css).toContain(":root[data-theme='dark']");
   });
-  it('derives legacy aliases and all course slots from the shared palette', () => {
+  it('derives aliases and all course slots from the shared palette', () => {
     expect(css).toContain('--blue: var(--brand)');
     expect(css).toContain('--color-google-blue: var(--brand)');
     for (let index = 0; index < 24; index++) {

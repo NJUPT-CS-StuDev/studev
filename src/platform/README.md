@@ -52,6 +52,4 @@ students see only their explicitly chosen nickname. Form receipts never expose
 an authenticated submitter's identity or contact details to their holder.
 
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
-output and function together. This contract replaces `/auth/token`,
-`/auth/token/refresh`, `/auth/legacy-profile-login` and `/members`; no redirects or
-compatibility readers remain.
+output and function together.

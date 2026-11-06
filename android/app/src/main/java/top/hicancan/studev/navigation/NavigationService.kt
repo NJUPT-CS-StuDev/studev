@@ -130,10 +130,8 @@ class NavigationService : Service() {
         super.onDestroy()
     }
     private fun recoveryNotification(): Notification {
-        val resume = if (Build.VERSION.SDK_INT >= 26) PendingIntent.getForegroundService(
+        val resume = PendingIntent.getForegroundService(
             this, 2, Intent(this, NavigationService::class.java).setAction(ACTION_RESUME),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        else PendingIntent.getService(this, 2, Intent(this, NavigationService::class.java).setAction(ACTION_RESUME),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_navigation)
             .setContentTitle("后台导航已暂停").setContentText("点击继续前往${runtime.state.value.destinationName}")

@@ -160,7 +160,7 @@ export function q<T extends Element = HTMLElement>(selector: string, root: Paren
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] { const node = document.createElement(tag); if (text !== undefined)
     node.textContent = text; if (className)
     node.className = className; return node; }
-/** Nickname worth showing: non-empty and different from real name / student ID / QQ (legacy records default it to realName). */
+/** Nickname worth showing: non-empty and different from real name / student ID / QQ. */
 export function nicknameOf(user: { nickname?: string; realName?: string; studentId?: string; qq?: string }): string {
     const nick = (user.nickname || '').trim();
     return !nick || nick === user.realName || nick === user.studentId || nick === user.qq ? '' : nick;

@@ -210,7 +210,7 @@ export function normalizeRoleTitle(title, studentId = '') {
   return raw;
 }
 
-/** A nickname is only meaningful when it differs from the real name (legacy records default nickname to realName). */
+/** A nickname is only meaningful when it differs from the real name. */
 function distinctNickname(user) {
   const nick = typeof user?.nickname === 'string' ? user.nickname.trim() : '';
   if (!nick || nick === user.realName || nick === user.studentId || nick === user.qq) return '';

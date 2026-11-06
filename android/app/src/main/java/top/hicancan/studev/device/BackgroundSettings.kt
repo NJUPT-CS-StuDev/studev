@@ -27,14 +27,13 @@ object BackgroundSettings {
         val alarms = context.getSystemService(AlarmManager::class.java)
         return BackgroundStatus(
             manufacturer = Build.MANUFACTURER.ifBlank { "Android" },
-            batteryExempt = Build.VERSION.SDK_INT < 23 || power.isIgnoringBatteryOptimizations(context.packageName),
+            batteryExempt = power.isIgnoringBatteryOptimizations(context.packageName),
             notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled(),
             exactAlarms = Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms(),
         )
     }
 
     fun requestBatteryExemption(context: Context) {
-        if (Build.VERSION.SDK_INT < 23) return
         val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
             Uri.parse("package:${context.packageName}")).withTaskStack()
         runCatching { context.startActivity(intent) }.getOrElse {
@@ -64,15 +63,11 @@ object BackgroundSettings {
 
     fun openNotifications(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(NotificationChannel("campus-navigation", "校园导航", NotificationManager.IMPORTANCE_LOW))
-            manager.createNotificationChannel(NotificationChannel("studev-reminders", "课程与考试提醒", NotificationManager.IMPORTANCE_HIGH))
-        }
-        val intent = if (Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+        manager.createNotificationChannel(NotificationChannel("campus-navigation", "校园导航", NotificationManager.IMPORTANCE_LOW))
+        manager.createNotificationChannel(NotificationChannel("studev-reminders", "课程与考试提醒", NotificationManager.IMPORTANCE_HIGH))
+        val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
             putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             putExtra(Settings.EXTRA_CHANNEL_ID, "studev-reminders")
-        } else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         }
         context.startActivity(intent.withTaskStack())
     }
