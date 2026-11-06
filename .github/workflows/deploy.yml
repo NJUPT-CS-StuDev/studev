@@ -35,14 +35,18 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx -y edgeone@1.6.44 makers env pull -e production -t "$EDGEONE_API_TOKEN"
       - name: Configure release inputs for the EdgeOne builder
         run: |
+          # The CLI reports a missing project link and still exits 0, so link it first.
+          mkdir -p .edgeone
+          echo '{"Name":"studev","ProjectId":"makers-xubgsi8n79pp"}' > .edgeone/project.json
           npx -y edgeone@1.6.44 makers env set DATA_REPOSITORY "$DATA_REPOSITORY" -e production -t "$EDGEONE_API_TOKEN"
           npx -y edgeone@1.6.44 makers env set DATA_TOKEN "$DATA_TOKEN" -e production -t "$EDGEONE_API_TOKEN"
           for name in OSCA_DOWNLOAD_ENDPOINT OSCA_DOWNLOAD_BUCKET OSCA_DOWNLOAD_ACCESS_KEY OSCA_DOWNLOAD_SECRET_KEY; do
             npx -y edgeone@1.6.44 makers env set "$name" "${!name}" -e production -t "$EDGEONE_API_TOKEN"
           done
+          npx -y edgeone@1.6.44 makers env pull -e production -t "$EDGEONE_API_TOKEN"
+          grep -q OSCA_DOWNLOAD_BUCKET .env* || { echo "project environment was not updated"; exit 1; }
       # digest resolves and verifies the latest map/data release pair.
       - run: npm run digest
       - run: npm run typecheck
