@@ -14,7 +14,11 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -26,6 +30,31 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import top.hicancan.studev.ui.theme.Tokens
+
+/** The avatar Tencent shows for this QQ number, for checking it really is yours before registering. */
+@Composable private fun QqPreview(qq: String) {
+    val valid = Regex("[1-9]\\d{4,11}").matches(qq)
+    val avatar by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, qq) {
+        value = null
+        if (!valid) return@produceState
+        kotlinx.coroutines.delay(400)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=140").openStream().use { android.graphics.BitmapFactory.decodeStream(it) }?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    if (!valid) { Text("用于重要通知联系与自动匹配官方 QQ 头像", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    Row(Modifier.fillMaxWidth().testTag("qq-preview"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+            avatar?.let { androidx.compose.foundation.Image(it, "QQ 头像", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+        }
+        Column {
+            Text("联系邮箱：$qq@qq.com", style = MaterialTheme.typography.bodyMedium)
+            Text("已匹配该 QQ 号的腾讯官方头像，请核对是否为本人", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 @Composable private fun SecretField(label: String, value: String, enabled: Boolean, onChange: (String) -> Unit) {
     var visible by remember { mutableStateOf(false) }
@@ -100,6 +129,7 @@ import top.hicancan.studev.ui.theme.Tokens
                     OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称") }, supportingText = { Text("其他同学只会看到你的昵称。身份与联系方式仅本人和管理员可见。") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(qq, { qq = it.take(12) }, Modifier.fillMaxWidth(), label = { Text("联系 QQ") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy)
+                    QqPreview(qq)
                 }
                 SecretField("密码", password, !busy) { password = it }
                 if (register) SecretField("确认密码", confirm, !busy) { confirm = it }

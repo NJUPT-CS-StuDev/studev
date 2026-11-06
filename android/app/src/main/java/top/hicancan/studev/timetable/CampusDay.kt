@@ -38,7 +38,7 @@ object CampusEvents {
             }.getOrNull() ?: return@forEach
             add(CampusEvent("exam:${exam.id}", exam.course.name,
                 interval.first, interval.second, exam.room,
-                listOfNotNull(exam.klass, exam.teacher, exam.note).joinToString(" · "), true))
+                listOfNotNull(exam.classes.joinToString(" "), exam.teacher, exam.note).joinToString(" · "), true))
         }
     }.distinctBy { it.id }.sortedBy { it.start }
 }
