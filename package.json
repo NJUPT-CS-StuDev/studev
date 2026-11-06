@@ -48,7 +48,7 @@
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
     "remark-math-extended": "^6.1.1",
-    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v3.1.0/wasm-search-3.1.0.tgz",
+    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v4.0.0/wasm-search-4.0.0.tgz",
     "wayfind": "https://github.com/hicancan/wayfind/releases/download/v0.1.0/wayfind-0.1.0.tgz"
   },
   "overrides": {

@@ -18,6 +18,7 @@ import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from '
 import { fetchJson } from '@/shared/lib/fetch';
 import { holidayMap } from '@/world/events';
 import { readAppearance } from '@/world/appearance';
+import { globe } from './ball';
 import '../campus.css';
 import './map.css';
 
@@ -346,7 +347,7 @@ export default function MapApp() {
         if (!from || !scene) return;
         const [dx, dy] = [event.clientX - from.x, event.clientY - from.y];
         if (!from.moved && Math.hypot(dx, dy) < 4) return;
-        scene.steer(dx * .9, -dy * .5);
+        scene.steer(-dx * .9, -dy * .5);
         ball.current = { x: event.clientX, y: event.clientY, moved: true };
     };
     const ballUp = () => {
@@ -366,8 +367,15 @@ export default function MapApp() {
                 <a className="searchpill" href="/search/?scope=place"><Magnifier /><span>搜地点或教室</span></a>
                 <button className="campus" onClick={() => setCampusOpen(true)}>仙林</button>
                 <div className="camctl">
-                    <button className="tilt ball" aria-label="拖动旋转，点按回正" title="拖动旋转，点按回正" onPointerDown={ballDown} onPointerMove={ballMove} onPointerUp={ballUp} onPointerCancel={ballUp} onClick={ballClick}>
-                        <svg viewBox="0 0 24 24" style={{ transform: scene ? `rotateX(${scene.map.getPitch() * .7}deg) rotateZ(${-scene.map.getBearing()}deg)` : undefined }} data-needle={needle}><path className="n" d="M12 3.5 15.5 12H8.5Z" /><path className="s" d="M12 20.5 8.5 12h7Z" /></svg>
+                    <button className="ball" aria-label="拖动旋转，点按回正" title="拖动旋转，点按回正" onPointerDown={ballDown} onPointerMove={ballMove} onPointerUp={ballUp} onPointerCancel={ballUp} onClick={ballClick}>
+                        {(() => {
+                            const ball = globe(scene?.map.getBearing() ?? -24, scene?.map.getPitch() ?? 52);
+                            return <svg viewBox="-18 -18 36 36" data-needle={needle}>
+                                <circle className="ball-body" r="15" />
+                                <path className="ball-lines" d={ball.lines} />
+                                {ball.north.front && <circle className="ball-north" cx={ball.north.x} cy={ball.north.y} r="2.6" />}
+                            </svg>;
+                        })()}
                     </button>
                     {floors.length > 0 && <div className="floors">{[...floors].reverse().map(level => {
                         const free = roomsInBuilding.some(room => Number(room.floor) === level && day && !stateOf(room.id)?.busy);

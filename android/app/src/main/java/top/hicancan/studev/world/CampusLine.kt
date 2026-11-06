@@ -49,9 +49,10 @@ object Names {
 }
 
 data class LineEvent(val kind: String, val id: String, val date: LocalDate, val name: String, val short: String, val start: Int, val end: Int,
-                     val room: String?, val teachers: List<String>, val meeting: TeachingMeeting? = null, val exam: Exam? = null)
-data class RunPlan(val rule: MorningRun, val done: Int)
-data class RunProgress(val left: Int, val need: Int, val perWeek: Int, val earlyWeeks: Int, val nextBonus: List<Int>?, val reachable: Boolean)
+                     val room: String?, val teachers: List<String>, val meeting: TeachingMeeting? = null, val exam: Exam? = null, val runMark: String? = null)
+/** Which mornings are run ("done") or planned ("plan"), and the bonus or penalty the sports office recorded. */
+data class RunPlan(val rule: MorningRun, val days: Map<String, String>, val adjust: Int)
+data class RunTally(val done: Int, val planned: Int, val count: Int, val need: Int, val nextBonus: List<Int>?)
 
 /** A person or room along time: lessons, exams, the school calendar and 早锻炼 on one line. */
 class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val meetings: List<TeachingMeeting>, val exams: List<Exam>,
@@ -72,7 +73,7 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
         for (exam in exams) if (exam.date == date.toString()) add(LineEvent("exam", exam.id, date, Names.course(exam.course.name), Names.courseShort(exam.course.name),
             clock(exam.start), clock(exam.end), exam.room ?: exam.location, listOfNotNull(exam.teacher), exam = exam))
         val plan = run
-        if (plan != null && isRunDay(plan.rule, holidays, date)) add(LineEvent("run", "run@$date", date, "早锻炼", "早锻炼", clock(plan.rule.time[0]), clock(plan.rule.time[1]), null, emptyList()))
+        plan?.days?.get(date.toString())?.let { mark -> add(LineEvent("run", "run@$date", date, "早锻炼", "早锻炼", clock(plan.rule.time[0]), clock(plan.rule.time[1]), null, emptyList(), runMark = mark)) }
     }.sortedBy { it.start }
     /** What comes next, not counting 早锻炼: it is optional on any given morning. */
     fun next(now: Moment, horizon: Int = 40): LineEvent? {
@@ -89,15 +90,34 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
         }
         fun isRunDay(rule: MorningRun, holidays: Map<LocalDate, String>, date: LocalDate) =
             date.toString() >= rule.start && date.toString() <= rule.end && date.dayOfWeek.value <= 5 && date !in holidays
-        fun progress(plan: RunPlan, holidays: Map<LocalDate, String>, now: Moment): RunProgress {
-            val earlyWeeks = 3
-            var left = 0
-            var date = if (now.min > clock(plan.rule.time[1])) now.date.plusDays(1) else now.date
-            val end = LocalDate.parse(plan.rule.end)
-            while (date <= end) { if (isRunDay(plan.rule, holidays, date)) left++; date = date.plusDays(1) }
-            val need = maxOf(0, plan.rule.required - plan.done)
-            val weeks = maxOf(1, Math.ceilDiv(left, 5) - earlyWeeks)
-            return RunProgress(left, need, Math.ceilDiv(need, weeks), earlyWeeks, plan.rule.bonus.firstOrNull { it[0] > plan.done }, need <= left)
+        fun tally(plan: RunPlan): RunTally {
+            val done = plan.days.values.count { it == "done" }
+            val planned = plan.days.size - done
+            val count = done + plan.adjust
+            return RunTally(done, planned, count, maxOf(0, plan.rule.required - count - planned), plan.rule.bonus.firstOrNull { it[0] > count + planned })
+        }
+        /** Every morning in the term one can run, in order. */
+        fun runDates(rule: MorningRun, holidays: Map<LocalDate, String>) =
+            generateSequence(LocalDate.parse(rule.start)) { it.plusDays(1) }.takeWhile { it.toString() <= rule.end }.filter { isRunDay(rule, holidays, it) }.toList()
+        /** Lays out what is still needed: evenly over the mornings left, and within each stretch on a day
+         *  with an early class. Done mornings stay; earlier plans for mornings still ahead are replaced. */
+        fun planRuns(plan: RunPlan, line: CampusLine, now: Moment): Map<String, String> {
+            val from = if (now.min < clock(plan.rule.time[0])) now.date else now.date.plusDays(1)
+            val days = plan.days.filter { (date, mark) -> mark == "done" || date < from.toString() }.toMutableMap()
+            val open = runDates(plan.rule, line.holidays).filter { it >= from && it.toString() !in days }
+            val need = minOf(open.size, tally(plan.copy(days = days)).need)
+            var last: LocalDate? = null
+            for (part in 0 until need) {
+                val stretch = open.subList(part * open.size / need, (part + 1) * open.size / need)
+                val middle = (stretch.size - 1) / 2.0
+                fun score(date: LocalDate, position: Int) = (if (line.on(date).any { it.kind == "class" && it.start <= 8 * 60 }) 4.0 else 0.0) +
+                    (if (last != null && daysBetween(last!!, date) < 2) -3.0 else 0.0) - Math.abs(position - middle) / maxOf(1, stretch.size)
+                var best = 0
+                stretch.forEachIndexed { position, date -> if (score(date, position) > score(stretch[best], best)) best = position }
+                last = stretch[best]
+                days[stretch[best].toString()] = "plan"
+            }
+            return days
         }
         fun grade(classGrade: String?, term: TeachingTerm) = classGrade?.toIntOrNull()?.let { term.year - it + 1 }
         fun daysBetween(from: LocalDate, to: LocalDate) = ChronoUnit.DAYS.between(from, to).toInt()

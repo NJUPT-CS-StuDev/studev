@@ -43,9 +43,9 @@ export default function MeApp() {
 
     const edits = facts ? timetableEdits(prefs, facts.term.term) : { hidden: [], added: [] };
     const grade = facts ? gradeOf(info?.grade, facts.term) : null;
-    const run = prefs.run ?? { done: 0, alarm: false };
+    const run = prefs.run ?? { days: {}, adjust: 0 };
     const runOn = run.on ?? (grade !== null && grade <= 2);
-    const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { done: 0, alarm: false, ...current.run, ...patch } }));
+    const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { days: {}, adjust: 0, ...current.run, ...patch } }));
     const exportLessons = async () => {
         const [term, periods, meetings] = await Promise.all([loadTerm(), loadPeriods(), loadClassMeetings(prefs.class!)]);
         const hidden = new Set(timetableEdits(prefs, term.term).hidden);
@@ -73,7 +73,7 @@ export default function MeApp() {
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示在课表上<small>{grade !== null && grade <= 2 ? `大${'一二'[grade - 1]}必做，本学期 ${facts.run.required} 次` : '大三大四需要补跑时打开'}</small></span><Toggle on={runOn} /></button>
-                {runOn && <div className="kv"><span className="v">已跑次数<small>对照南邮小程序填写</small></span><span className="stepper"><button className="ib" aria-label="减一次" onClick={() => setRun({ done: Math.max(0, run.done - 1) })}>−</button>{run.done}<button className="ib" aria-label="加一次" onClick={() => setRun({ done: run.done + 1 })}>+</button></span></div>}
+                {runOn && <a className="kv" href="/?scale=term"><span className="v">编排早锻炼<small>学期页可以点选每一天，也能自动排好</small></span><Chevron /></a>}
             </>}
             <h3 className="sh gap">导入手机日历</h3>
             <button className="kv" onClick={() => void exportLessons()}><span className="v">studev 课表<small>下载日历文件</small></span><Chevron /></button>

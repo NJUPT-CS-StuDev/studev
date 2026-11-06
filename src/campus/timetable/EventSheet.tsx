@@ -1,21 +1,21 @@
-import type { CampusEvent, RunPlan } from '@/world/events';
+import { runTally, type CampusEvent, type RunPlan } from '@/world/events';
 import { courseName, roomLabel, unplaced } from '@/world/names';
 import { dateLabel, hm, momentText, WEEKDAYS, weekdayOf } from '@/world/time';
 import { Chevron, Sheet } from '@/world/ui';
 
 const whoLink = (type: string, id: string) => `/?who=${type}:${encodeURI(id)}&scale=week`;
 
-export function EventSheet({ event, isMe, run, onClose, onHide, onSkipExam, onCount }: { event: CampusEvent; isMe: boolean; run: RunPlan | null; onClose: () => void; onHide: (event: CampusEvent) => void; onSkipExam: (event: CampusEvent) => void; onCount: () => void }) {
+export function EventSheet({ event, isMe, run, onClose, onHide, onSkipExam, onRan, onPlan }: { event: CampusEvent; isMe: boolean; run: RunPlan | null; onClose: () => void; onHide: (event: CampusEvent) => void; onSkipExam: (event: CampusEvent) => void; onRan: () => void; onPlan: () => void }) {
     const when = `${WEEKDAYS[weekdayOf(event.date)]} ${dateLabel(event.date)} · ${hm(event.start)}–${hm(event.end)}`;
     if (event.kind === 'run' && run) {
         const place = run.rule.xianlin;
         return (
             <Sheet title="早锻炼" onClose={onClose}>
                 <div className="meta">{when}</div>
-                <div className="btns"><button className="btn" onClick={onCount}>今天跑了，记一次</button>{place && <a className="btn go" href={`/map/?nav=${encodeURI(`仙林/${place.route[0]}`)}`}>去起点</a>}</div>
+                <div className="btns"><button className="btn" onClick={onRan}>{event.runMark === 'done' ? '已记为跑过' : '记为跑过'}</button>{place && <a className="btn go" href={`/map/?nav=${encodeURI(`仙林/${place.route[0]}`)}`}>去起点</a>}</div>
                 {place && <div className="kv"><span className="k">路线</span><span className="v">{place.route.join(' ↔ ')}，约 {place.metres} 米</span></div>}
                 {place && <div className="kv"><span className="k">刷脸</span><span className="v">起点 {place.start_scan_end} 前，终点 {place.end_scan_end} 前<small>{place.male_minutes === place.female_minutes ? `${place.male_minutes} 分钟内` : `男生 ${place.male_minutes} 分钟内，女生 ${place.female_minutes} 分钟内`}，超时无效</small></span></div>}
-                <div className="kv"><span className="k">次数</span><span className="v">{run.done} / {run.rule.required}<small>以南邮小程序为准</small></span></div>
+                <button className="kv" onClick={onPlan}><span className="k">次数</span><span className="v">{runTally(run).count} / {run.rule.required}<small>编排整个学期</small></span><Chevron /></button>
             </Sheet>
         );
     }

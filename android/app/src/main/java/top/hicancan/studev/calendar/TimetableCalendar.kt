@@ -105,16 +105,12 @@ object TimetableCalendar {
         } else remove(context, school)
         val rule = facts.run
         if (settings.calendarRun && rule != null) {
-            val rows = mutableListOf<Entry>()
-            var date = LocalDate.parse(rule.start)
-            while (date.toString() <= rule.end) {
-                if (CampusLine.isRunDay(rule, facts.holidays, date)) {
-                    fun at(minutes: Int) = date.atStartOfDay(CampusDay.zone).plusMinutes(minutes.toLong()).toInstant().toEpochMilli()
-                    rows += Entry("run:$date", "早锻炼", at(clock(rule.time[0])), at(clock(rule.time[1])), rule.xianlin?.route?.joinToString(" ↔ ").orEmpty(), "次数以南邮小程序为准", false, emptyList())
-                }
-                date = date.plusDays(1)
+            val rows = settings.runDays.filterValues { it == "plan" }.keys.map { day ->
+                val date = LocalDate.parse(day)
+                fun at(minutes: Int) = date.atStartOfDay(CampusDay.zone).plusMinutes(minutes.toLong()).toInstant().toEpochMilli()
+                Entry("run:$day", "早锻炼", at(clock(rule.time[0])), at(clock(rule.time[1])), rule.xianlin?.route?.joinToString(" ↔ ").orEmpty(), "你排好的早锻炼", false, listOf(30))
             }
-            write(context, runs, if (settings.runDone >= rule.required) emptyList() else rows)
+            write(context, runs, rows)
         } else remove(context, runs)
         lessonRows.size + examRows.size
     }

@@ -51,6 +51,17 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         } finally { pending.delete() }
         bytes
     } }
+    /** One byte range of an immutable file, kept on disk so a query works offline next time. */
+    suspend fun block(path: String, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
+        val file = File(root, "$path.$offset")
+        if (file.isFile) return@withContext file.readBytes()
+        val address = "${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }
+        val bytes = try { download(address, offset, length) } catch (e: IOException) { throw DataUnavailableException(e) }
+        file.parentFile!!.mkdirs()
+        val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
+        try { pending.writeBytes(bytes); pending.renameTo(file) } finally { pending.delete() }
+        bytes
+    }
     suspend inline fun <reified T> read(path: String): T = Json.decodeFromString(bytes(path).decodeToString())
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
@@ -118,16 +129,18 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     companion object {
         private val locks = Array(64) { Mutex() }
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
-        fun download(address: String): ByteArray {
+        fun download(address: String, offset: Long? = null, length: Int = 0): ByteArray {
             val url = URI(address).toURL()
             require(url.protocol == "https" || (BuildConfig.DEBUG && url.protocol == "http" && address.startsWith(BuildConfig.DATA_HOST + "/")))
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 8_000; connection.readTimeout = 15_000
             connection.setRequestProperty("User-Agent", "studev-android")
+            if (offset != null) connection.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
             try {
                 if (connection.responseCode == 404) throw FileNotFoundException(address)
                 if (connection.responseCode !in 200..299) throw IOException("数据请求失败：${connection.responseCode}")
-                return connection.inputStream.use { it.readBytes() }
+                val body = connection.inputStream.use { it.readBytes() }
+                return if (offset == null || connection.responseCode == 206) body else body.copyOfRange(offset.toInt(), offset.toInt() + length)
             } finally { connection.disconnect() }
         }
         suspend fun open(context: Context): AcademicRepository = withContext(Dispatchers.IO) {

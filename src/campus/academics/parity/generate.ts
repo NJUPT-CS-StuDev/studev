@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { timetableCells } from '@/timetable/model/presentation';
 import { courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
 import { attendingExams } from '@/exams/model/examAttendance';
-import { eventsOn, holidayMap, nextEvent, runProgress, type Timeline } from '@/world/events';
+import { eventsOn, holidayMap, nextEvent, planRuns, runTally, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { isClassroom, makeRoomReader } from '@/world/rooms';
 import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
@@ -24,10 +24,10 @@ const schedules = classes.map(id => {
     const { meetings } = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${id}.json`);
     return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: timetableCells(meetings, week) })) };
 });
-const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, exams: [], holidays, run: { rule: run, done: 12 } };
+const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, exams: [], holidays, run: { rule: run, days: { '2026-09-08': 'done', '2026-09-10': 'done', '2026-11-05': 'plan', '2026-11-09': 'plan', '2026-12-18': 'plan' }, adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 const days = ['2026-09-25', '2026-10-01', '2026-10-12', '2026-11-05', '2026-11-09', '2026-12-18', '2026-12-21', '2027-01-01'].map(date => ({ date, events: eventsOn(line, date).map(brief) }));
-const moments = [{ date: '2026-11-05', min: 13 * 60 + 5 }, { date: '2026-11-07', min: 7 * 60 }, { date: '2027-01-14', min: 22 * 60 }].map(now => ({ now, next: (event => event && brief(event))(nextEvent(line, now)), run: runProgress(line.run!, holidays, now) }));
+const moments = [{ date: '2026-11-05', min: 13 * 60 + 5 }, { date: '2026-11-07', min: 7 * 60 }, { date: '2027-01-14', min: 22 * 60 }].map(now => ({ now, next: (event => event && brief(event))(nextEvent(line, now)), run: runTally(line.run!), plan: Object.keys(planRuns(line.run!, line, now)).sort() }));
 const index = read<RoomIndex>(`${base}/rooms/index.json`);
 const reader = makeRoomReader(periods);
 const roomDays = ['2026-11-05', '2026-11-09'].map(date => read<RoomDay>(`${base}/rooms/${index.term}/${date}.json`));
@@ -46,5 +46,5 @@ const attendanceExams = [{ id: 'a', course: { code: 'X1', name: '甲' } }, { id:
 const examAttendance = [
     { choices: {}, ownCodes: null }, { choices: { a: false }, ownCodes: null }, { choices: {}, ownCodes: ['X1'] }, { choices: { b: true }, ownCodes: ['X1'] },
 ].map(test => ({ ...test, expected: attendingExams(attendanceExams, test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id) }));
-writeFileSync('src/campus/academics/parity/golden.json', JSON.stringify({ source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance } }, null, 1) + '\n');
+writeFileSync('src/campus/academics/parity/golden.json', JSON.stringify({ runDays: line.run!.days, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

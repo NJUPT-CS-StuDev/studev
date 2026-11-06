@@ -18,7 +18,7 @@ class ParityTest {
     private val term = json.decodeFromJsonElement<TeachingTerm>(golden.getValue("term"))
     private val periods = json.decodeFromJsonElement<List<TeachingPeriod>>(golden.getValue("periods"))
     private val holidays = CampusLine.holidays(json.decodeFromJsonElement<List<CalendarTerm>>(golden.getValue("calendar")))
-    private val run = RunPlan(json.decodeFromJsonElement<MorningRun>(golden.getValue("run")), 12)
+    private val run = RunPlan(json.decodeFromJsonElement<MorningRun>(golden.getValue("run")), json.decodeFromJsonElement<Map<String, String>>(golden.getValue("runDays")), 5)
     private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), holidays, run)
     private fun brief(event: LineEvent) = buildJsonObject {
         put("kind", event.kind); put("name", event.name); put("short", event.short); put("start", event.start); put("end", event.end); put("room", event.room)
@@ -49,12 +49,12 @@ class ParityTest {
             val now = Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int)
             assertEquals(test.getValue("next"), line.next(now)?.let(::brief) ?: JsonNull)
             val expected = test.getValue("run").jsonObject
-            val progress = CampusLine.progress(run, holidays, now)
-            assertEquals(expected.getValue("left").jsonPrimitive.int, progress.left)
-            assertEquals(expected.getValue("need").jsonPrimitive.int, progress.need)
-            assertEquals(expected.getValue("perWeek").jsonPrimitive.int, progress.perWeek)
-            assertEquals(expected.getValue("reachable").jsonPrimitive.boolean, progress.reachable)
-            assertEquals(expected["nextBonus"]?.takeUnless { it is JsonNull }?.jsonArray?.map { it.jsonPrimitive.int }, progress.nextBonus)
+            val tally = CampusLine.tally(run)
+            assertEquals(expected.getValue("count").jsonPrimitive.int, tally.count)
+            assertEquals(expected.getValue("need").jsonPrimitive.int, tally.need)
+            assertEquals(expected.getValue("planned").jsonPrimitive.int, tally.planned)
+            assertEquals(expected["nextBonus"]?.takeUnless { it is JsonNull }?.jsonArray?.map { it.jsonPrimitive.int }, tally.nextBonus)
+            assertEquals(test.getValue("plan").jsonArray.map { it.jsonPrimitive.content }, CampusLine.planRuns(run, line, now).keys.sorted())
         }
     }
     @Test fun roomStatesMatchAtEverySampledMoment() {

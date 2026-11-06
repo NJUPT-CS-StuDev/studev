@@ -37,14 +37,14 @@ import top.hicancan.studev.world.*
         PlainSheet("早锻炼", onClose) {
             Plain(whenText, 13.5.sp, Ink.muted)
             Row(Modifier.padding(top = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionButton("今天跑了，记一次", modifier = Modifier.weight(1f)) { model.setRun { it.copy(runDone = it.runDone + 1) }; onClose() }
+                ActionButton(if (event.runMark == "done") "已记为跑过" else "记为跑过", modifier = Modifier.weight(1f)) { model.setRun { it.copy(runDays = it.runDays + (date.toString() to "done")) }; onClose() }
                 if (place != null) ActionButton("去起点", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = "仙林/${place.route[0]}") }
             }
             if (place != null) {
                 KeyRow("路线", "${place.route.joinToString(" ↔ ")}，约 ${place.metres} 米")
                 KeyRow("刷脸", "起点 ${place.start_scan_end} 前，终点 ${place.end_scan_end} 前", if (place.male_minutes == place.female_minutes) "${place.male_minutes} 分钟内，超时无效" else "男生 ${place.male_minutes} 分钟内，女生 ${place.female_minutes} 分钟内，超时无效")
             }
-            KeyRow("次数", "${plan.done} / ${plan.rule.required}", "以南邮小程序为准")
+            KeyRow("次数", "${CampusLine.tally(plan).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term" })
         }
         return
     }
@@ -99,21 +99,13 @@ import top.hicancan.studev.world.*
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 KeyRow(null, "显示在课表上", if (grade != null && grade <= 2) "大${"一二"[grade - 1]}必做，本学期 ${rule.required} 次" else "大三大四需要补跑时打开", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })
-                if (runOn) {
-                    KeyRow(null, "已跑次数", "对照南邮小程序填写", trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Chip("−", { model.setRun { it.copy(runDone = maxOf(0, it.runDone - 1)) } })
-                            Plain(settings.runDone.toString(), 14.sp)
-                            Chip("+", { model.setRun { it.copy(runDone = it.runDone + 1) } })
-                        }
-                    })
-                }
+                if (runOn) KeyRow(null, "编排早锻炼", "学期页可以点选每一天，也能自动排好", chevron = true, onClick = { onClose(); route.timetable("me", "", "term") })
             }
             Plain("同步到手机日历", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             fun set(change: (PersonalSettings) -> PersonalSettings) = withCalendar { model.setRun(change) }
             KeyRow(null, "studev 课表", "上课前 15 分钟提醒", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
             KeyRow(null, "studev 考表", "提前 1 天和 1 小时提醒", trailing = { Toggle(settings.calendarExams) { on -> set { it.copy(calendarExams = on) } } })
-            state.run?.let { rule -> KeyRow(null, "studev 早锻炼", "跑操日 ${hm(clock(rule.time[0]))} 开始，放假不提醒，跑够后自动清除", trailing = { Toggle(settings.calendarRun) { on -> withCalendar { set { it.copy(calendarRun = on) } } } }) }
+            state.run?.let { rule -> KeyRow(null, "studev 早锻炼", "只同步你计划跑的那些天，提前 30 分钟提醒", trailing = { Toggle(settings.calendarRun) { on -> withCalendar { set { it.copy(calendarRun = on) } } } }) }
             KeyRow(null, "studev 校历", "放假和校历日程，整天显示", trailing = { Toggle(settings.calendarSchool) { on -> set { it.copy(calendarSchool = on) } } })
             val background = remember(settings) { top.hicancan.studev.me.BackgroundRunSettings.status(context) }
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {

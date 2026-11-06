@@ -236,14 +236,8 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 val bearing = cameraTick.let { mapRef?.cameraPosition?.bearing ?: 0.0 }
                 val needle = marks().now
                 val faint = Ink.faint
-                Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable { scene?.square() }.testTag("tilt"), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(20.dp).rotate(-bearing.toFloat()).drawBehind {
-                        val path = androidx.compose.ui.graphics.Path().apply { moveTo(size.width / 2, 0f); lineTo(size.width * .68f, size.height / 2); lineTo(size.width * .32f, size.height / 2); close() }
-                        drawPath(path, needle)
-                        val south = androidx.compose.ui.graphics.Path().apply { moveTo(size.width / 2, size.height); lineTo(size.width * .68f, size.height / 2); lineTo(size.width * .32f, size.height / 2); close() }
-                        drawPath(south, faint.copy(alpha = .45f))
-                    })
-                }
+                val pitch = cameraTick.let { mapRef?.cameraPosition?.tilt ?: 52.0 }
+                MapBall(bearing, pitch, Ink.paper, faint.copy(alpha = .7f), needle, Modifier.size(44.dp).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(-drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
                 if (floors.isNotEmpty()) Column(Modifier.clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp))) {
                     floors.reversed().forEach { level ->
                         val on = level == floor

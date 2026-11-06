@@ -175,7 +175,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
         return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), personalExams(repo, state.schedule, state.exams), state.holidays,
-            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDone) })
+            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) })
     }
     private var allMeetings: Deferred<List<TeachingMeeting>>? = null
     /** Every meeting of the term, for viewing a teacher, a course or a room. */

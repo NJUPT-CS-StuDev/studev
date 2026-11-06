@@ -1,26 +1,23 @@
 import { useEffect, useState } from 'react';
-import { eventsOn, runProgress, upcomingExams, type CampusEvent, type Timeline } from '@/world/events';
+import { eventsOn, runTally, upcomingExams, type CampusEvent, type Timeline } from '@/world/events';
 import { loadCalendar, type CalendarTerm } from '@/world/data';
 import { courseName, roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 
-function RunCard({ line, now }: { line: Timeline; now: Moment }) {
+function RunCard({ line, onPlan }: { line: Timeline; onPlan: () => void }) {
     if (!line.run) return null;
-    const { rule, done } = line.run;
-    const progress = runProgress(line.run, line.holidays, now);
+    const { rule } = line.run;
+    const tally = runTally(line.run);
     return (
-        <div className="runc">
-            <b>早锻炼 {done} / {rule.required} 次</b>
-            <div className="bar"><i style={{ width: `${Math.min(100, done / rule.required * 100)}%` }} /></div>
-            距 {dateLabel(rule.end)} 结束还有 {progress.left} 个早锻炼日。
-            {progress.need
-                ? (progress.reachable ? `还差 ${progress.need} 次，每周跑 ${progress.perWeek} 次，可以提前 ${progress.earlyWeeks} 周完成，给雨天留余量。` : `还差 ${progress.need} 次，剩下的早锻炼日已经不够了，尽快联系体育部。`)
-                : `已合格。${progress.nextBonus ? `再跑 ${progress.nextBonus[0] - done} 次，体育成绩 +${progress.nextBonus[1]}。` : ''}`}
-        </div>
+        <button className="runc" onClick={onPlan}>
+            <b>早锻炼 {tally.count} / {rule.required} 次</b>
+            <div className="bar"><i style={{ width: `${Math.min(100, tally.count / rule.required * 100)}%` }} /></div>
+            已跑 {tally.done}，计划 {tally.planned}，{tally.need ? `还差 ${tally.need} 次，点这里编排。` : '够了。'}
+        </button>
     );
 }
 
-export function TermView({ line, now, isMe, onPick, onOpen }: { line: Timeline; now: Moment; isMe: boolean; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
+export function TermView({ line, now, isMe, onPick, onOpen, onPlanRun }: { line: Timeline; now: Moment; isMe: boolean; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void; onPlanRun: () => void }) {
     const [terms, setTerms] = useState<CalendarTerm[]>([]);
     useEffect(() => { void loadCalendar().then(setTerms); }, []);
     const calendar = terms.find(term => term.start === line.term.weeks[0]?.start);
@@ -55,7 +52,7 @@ export function TermView({ line, now, isMe, onPick, onOpen }: { line: Timeline; 
                 <div className="legend"><span><i className="k-class" />课</span><span><i className="k-exam" />考试</span><span><i className="k-hol" />放假</span></div>
             </div>
             <div>
-                {isMe && <RunCard line={line} now={now} />}
+                {isMe && <RunCard line={line} onPlan={onPlanRun} />}
                 {exams.length > 0 && <><h3 className="sh">还有 {exams.length} 场考试</h3>{exams.map(eventRow)}</>}
                 {ahead.length > 0 && <><h3 className="sh">校历</h3>{ahead.map(item => <div key={item.name + item.start} className="xrow"><span className="cd">{daysBetween(now.date, item.start)} 天后</span><span className="m">{item.name}<small>{item.text}</small></span></div>)}</>}
             </div>

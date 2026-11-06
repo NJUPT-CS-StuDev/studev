@@ -102,7 +102,7 @@ import java.time.LocalDate
         Box(Modifier.weight(1f)) {
             when (scale) {
                 "week" -> WeekView(line, day, now, previewRows) { onEvent(it, line) }
-                "term" -> TermView(line, state, now, isMe, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
+                "term" -> TermView(line, state, model, now, isMe, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
                 else -> DayView(line, day, now, isMe, route, walk) { onEvent(it, line) }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
@@ -333,7 +333,7 @@ private const val DAY_END = 21 * 60 + 8
     }
 }
 
-@Composable private fun TermView(line: CampusLine, state: AcademicState, now: Moment, isMe: Boolean, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
+@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
     val mark = marks()
     val brand = Ink.brand
     val paper = Ink.paper
@@ -368,18 +368,16 @@ private const val DAY_END = 21 * 60 + 8
             }
             val plan = line.run
             if (isMe && plan != null) {
-                val progress = CampusLine.progress(plan, line.holidays, now)
-                Column(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 12.dp)) {
-                    Plain("早锻炼 ${plan.done} / ${plan.rule.required} 次", 17.sp, weight = FontWeight.SemiBold)
+                val tally = CampusLine.tally(plan)
+                var planning by remember { mutableStateOf(false) }
+                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { planning = true }.padding(vertical = 12.dp)) {
+                    Plain("早锻炼 ${tally.count} / ${plan.rule.required} 次", 17.sp, weight = FontWeight.SemiBold)
                     Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.sunken)) {
-                        Box(Modifier.fillMaxWidth(minOf(1f, plan.done.toFloat() / plan.rule.required)).fillMaxHeight().background(brand))
+                        Box(Modifier.fillMaxWidth(tally.count.coerceIn(0, plan.rule.required).toFloat() / plan.rule.required).fillMaxHeight().background(brand))
                     }
-                    Plain("距 ${dateLabel(LocalDate.parse(plan.rule.end))} 结束还有 ${progress.left} 个早锻炼日。" + when {
-                        progress.need == 0 -> "已合格。" + (progress.nextBonus?.let { "再跑 ${it[0] - plan.done} 次，体育成绩 +${it[1]}。" } ?: "")
-                        progress.reachable -> "还差 ${progress.need} 次，每周跑 ${progress.perWeek} 次，可以提前 ${progress.earlyWeeks} 周完成，给雨天留余量。"
-                        else -> "还差 ${progress.need} 次，剩下的早锻炼日已经不够了，尽快联系体育部。"
-                    }, 13.5.sp, Ink.muted)
+                    Plain("已跑 ${tally.done}，计划 ${tally.planned}，" + if (tally.need > 0) "还差 ${tally.need} 次，点这里编排。" else "够了。", 13.5.sp, Ink.muted)
                 }
+                if (planning) RunPlanner(plan, line, now, model) { planning = false }
             }
             val exams = line.upcomingExams(now.date)
             if (exams.isNotEmpty()) {

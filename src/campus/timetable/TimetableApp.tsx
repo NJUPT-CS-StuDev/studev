@@ -1,6 +1,7 @@
 // The timetable: pick who, unfold along time. Everything on screen is in the address.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { updateExamAttendance, updateTimetableEdits, writePreferences, type RunSettings } from '@/shared/lib/preferences';
+import { updateExamAttendance, updateTimetableEdits } from '@/shared/lib/preferences';
+import { markRun, RunPlanner } from './RunPlanner';
 import { usePreferences } from '@/shared/lib/usePreferences';
 import { weekOfDate, type CampusEvent } from '@/world/events';
 import { roomLabel } from '@/world/names';
@@ -33,6 +34,7 @@ export default function TimetableApp() {
     const preview = params.get('preview');
     const { loaded, error, previewRows } = useTimeline(who, prefs, ready, preview);
     const [open, setOpen] = useState<CampusEvent | null>(null);
+    const [planning, setPlanning] = useState(false);
 
     const page = useRef<HTMLDivElement>(null);
     // Pinching, or ctrl with the wheel, moves between day, week and term.
@@ -86,7 +88,6 @@ export default function TimetableApp() {
         hideCourse: (id: string) => updateTimetableEdits(term.term, edits => edits.added.includes(id)
             ? { ...edits, added: edits.added.filter(item => item !== id) } : { ...edits, hidden: [...edits.hidden, id] }),
         skipExam: (id: string) => { if (prefs.class) updateExamAttendance(term.term, prefs.class, { [id]: false }); },
-        countRun: (by: number) => writePreferences(current => ({ ...current, run: { alarm: false, ...current.run, done: Math.max(0, (current.run?.done ?? 0) + by) } as RunSettings })),
     };
 
     return (
@@ -112,15 +113,16 @@ export default function TimetableApp() {
                 </div>
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} previewRows={previewRows} onOpen={openEvent} />}
-                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
+                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} onPlanRun={() => setPlanning(true)} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
             </div>
+            {planning && line.run && <RunPlanner plan={line.run} line={line} now={now} onClose={() => setPlanning(false)} />}
             {open && <EventSheet event={open} isMe={isMe} run={line.run} onClose={() => setOpen(null)}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}
-                onCount={() => { mine.countRun(1); setOpen(null); }} />}
+                onRan={() => { markRun(line.run!, open.date); setOpen(null); }} onPlan={() => { setOpen(null); setPlanning(true); }} />}
         </div>
     );
 }

@@ -20,7 +20,8 @@ export interface Preferences {
     run?: RunSettings;
 }
 
-export interface RunSettings { on?: boolean; done: number; alarm: boolean }
+/** The mornings marked in this browser, plus the bonus or penalty entered from the sports office. */
+export interface RunSettings { on?: boolean; days: Record<string, 'done' | 'plan'>; adjust: number }
 
 const KEY = 'studev_prefs';
 const EVENT = 'studev:preferences';
@@ -64,7 +65,9 @@ const sanitize = (raw: unknown): Preferences => {
     }
     if (record.run && typeof record.run === 'object' && !Array.isArray(record.run)) {
         const run = record.run as Record<string, unknown>;
-        result.run = { done: Math.max(0, Math.min(200, Math.floor(Number(run.done)) || 0)), alarm: run.alarm === true };
+        const days: Record<string, 'done' | 'plan'> = {};
+        if (run.days && typeof run.days === 'object') for (const [date, mark] of Object.entries(run.days)) if (/^\d{4}-\d{2}-\d{2}$/.test(date) && (mark === 'done' || mark === 'plan')) days[date] = mark;
+        result.run = { days, adjust: Math.max(-200, Math.min(200, Math.trunc(Number(run.adjust)) || 0)) };
         if (typeof run.on === 'boolean') result.run.on = run.on;
     }
     return result;

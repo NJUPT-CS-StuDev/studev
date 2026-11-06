@@ -30,7 +30,10 @@ data class PersonalSettings(
     val calendarSchool: Boolean = false,
     /** null until someone chooses: 大一大二 see 早锻炼 by default. */
     val runShown: Boolean? = null,
-    val runDone: Int = 0,
+    /** Mornings by date: "done" or "plan". */
+    val runDays: Map<String, String> = emptyMap(),
+    /** The bonus or penalty entered from the sports office. */
+    val runAdjust: Int = 0,
     val calendarRun: Boolean = false,
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
@@ -78,7 +81,8 @@ class CampusSettings(context: Context) {
         calendarExams = store.getBoolean("calendar-exams", false),
         calendarSchool = store.getBoolean("calendar-school", false),
         runShown = if (store.contains("run-shown")) store.getBoolean("run-shown", false) else null,
-        runDone = store.getInt("run-done", 0),
+        runDays = store.getString("run-days", null)?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrDefault(emptyMap()) } ?: emptyMap(),
+        runAdjust = store.getInt("run-adjust", 0),
         calendarRun = store.getBoolean("calendar-run", false),
     ))
     val state = _state.asStateFlow()
@@ -93,7 +97,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
-            .putInt("run-done", next.runDone).putBoolean("calendar-run", next.calendarRun)
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun)
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
