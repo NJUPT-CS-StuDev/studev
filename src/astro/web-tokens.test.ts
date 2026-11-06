@@ -25,8 +25,8 @@ describe('web design tokens', () => {
     changed.color.light.brand = '#123456';
     expect(renderWebTokens(changed)).toContain('--brand: #123456');
     expect(renderWebTokens(changed)).not.toContain(`--brand: ${tokens.color.light.brand}`);
-    expect(css).toContain('--motion-standard: 220ms');
-    expect(css).toContain('--radius-sheet: 24px');
+    expect(css).toContain('--motion-standard: 280ms');
+    expect(css).toContain('--radius-sheet: 14px');
   });
   it('keeps 24 mathematically distinct course mixtures, including reversed pairs', () => {
     const mixtures = [...css.matchAll(/--course-tone-\d+-bg: color-mix\(in srgb, (.*?) 12%,/g)].map(match => {

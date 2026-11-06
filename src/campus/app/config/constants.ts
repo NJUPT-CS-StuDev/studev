@@ -15,7 +15,7 @@ export const APP_CONFIG = {
         EXAMS: `${release.base}/exams/${release.exams}`,
         CLASSROOMS: `${release.base}/rooms`,
     },
-    MAX_CLASS_DISPLAY_COUNT: 50,
-    SEARCH_RESULT_LIMIT: 10,
-    SEARCH_RESULT_MAX: 1000,
+    
+    
+    
 };

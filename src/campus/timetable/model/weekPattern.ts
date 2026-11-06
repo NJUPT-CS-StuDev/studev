@@ -1,4 +1,4 @@
-import type { TeachingMeeting } from '@/academics/timetable';
+import type { TeachingMeeting } from '@/academics/facts';
 
 export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双周' | null => {
     if (meeting.weeks.length < 2) return null;
@@ -13,7 +13,7 @@ export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双�
  * holes inside it means the class was called off those weeks (停课). Irregular
  * schedules (blocks of weeks, two-week labs) are not guessed at.
  */
-export const suspendedWeeks = (weeks: number[]): number[] => {
+const suspendedWeeks = (weeks: number[]): number[] => {
     const sorted = [...new Set(weeks)].sort((left, right) => left - right);
     if (sorted.length < 4) return [];
     const first = sorted[0] as number;

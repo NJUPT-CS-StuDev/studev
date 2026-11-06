@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import golden from '@/academics/parity/golden.json';
-import type { Exam } from '@/academics/exam/records';
+import type { Exam } from '@/academics/facts';
 import { attendingExams } from './examAttendance';
 
-describe('personal attendance on real published exams', () => {
-    it('matches the shared Android vectors', () => {
-        for (const test of golden.edgeCases.examAttendance) {
-            const exams = golden.exams.find(group => group.class === test.class)!.exams as Exam[];
-            expect(attendingExams(exams, test.choices, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id)).toEqual(test.expected);
-        }
+const exam = (id: string, code: string | null) => ({ id, course: { code, name: id } }) as Exam;
+const exams = [exam('a', 'X1'), exam('b', 'X2'), exam('c', null)];
+
+describe('which exams someone attends', () => {
+    it('keeps every exam while the timetable is unknown', () => {
+        expect(attendingExams(exams, {}, null).map(item => item.id)).toEqual(['a', 'b', 'c']);
     });
-    it('keeps an exclusion when the school changes the time or room of that event', () => {
-        const exams = golden.exams[0]!.exams as Exam[];
-        const first = exams[0]!;
-        expect(attendingExams([{ ...first, start: '09:00', room: '教3-410' }], { [first.id]: false })).toEqual([]);
+    it('follows the timetable, never hiding an exam without a course code', () => {
+        expect(attendingExams(exams, {}, new Set(['X1'])).map(item => item.id)).toEqual(['a', 'c']);
+    });
+    it('lets an explicit choice win over the timetable', () => {
+        expect(attendingExams(exams, { a: false, b: true }, new Set(['X1'])).map(item => item.id)).toEqual(['b', 'c']);
+    });
+    it('keeps an exclusion when the school changes the time or room of that exam', () => {
+        expect(attendingExams([{ ...exams[0]!, start: '09:00', room: '教3-401' }], { a: false }).length).toBe(0);
     });
 });

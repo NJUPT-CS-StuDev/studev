@@ -6,7 +6,7 @@ describe('install manifest', () => {
     it('has a stable identity, standalone launch and both install icon sizes', async () => {
         const response = await GET({} as Parameters<typeof GET>[0]);
         const manifest = await response.json();
-        expect(manifest).toMatchObject({ id: '/', scope: '/', start_url: '/map/', display: 'standalone', theme_color: tokens.color.light.paper, background_color: tokens.color.light.paper });
+        expect(manifest).toMatchObject({ id: '/', scope: '/', start_url: '/', display: 'standalone', theme_color: tokens.color.light.paper, background_color: tokens.color.light.paper });
         expect(manifest.icons).toEqual(expect.arrayContaining([
             expect.objectContaining({ sizes: '192x192', purpose: 'any' }),
             expect.objectContaining({ sizes: '512x512', purpose: 'any' }),

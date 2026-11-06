@@ -1,4 +1,7 @@
 ---
-import CampusPage from '../../components/CampusPage.astro';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SearchApp from '../../campus/search/SearchApp';
 ---
-<CampusPage route="home" />
+<SiteLayout title="搜索 — studev" description="搜南京邮电大学的课程、老师、班级、教室、地点、通知和学习资料。" active="search">
+  <SearchApp client:only="react" />
+</SiteLayout>

@@ -9,7 +9,8 @@ import { compileBundle } from 'wasm-search/compile';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
-import { SPACE_DIRECTORIES, SPACE_FILES } from './space-contract.ts';
+import { SPACE_FILES } from './space-contract.ts';
+import type { Exam, TeachingClass, TeachingMeeting } from '../../src/campus/academics/facts.ts';
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
 
@@ -58,6 +59,7 @@ interface MapPlace {
     parent?: string;
     geometry?: { type: string; coordinates: unknown };
     level?: number;
+    title?: string;
     category?: string;
     group?: string;
     levels?: number;
@@ -101,7 +103,7 @@ async function extractArchive(archive: string, destination: string) {
     }
 }
 
-async function verifyMap(rootDir: string): Promise<{ dir: string; version: string; manifest: MapManifest }> {
+async function verifyMap(rootDir: string): Promise<{ dir: string; layers: string; version: string; manifest: MapManifest }> {
     const base = existsSync(join(rootDir, 'manifest.json')) ? rootDir : join(rootDir, 'release');
     const manifest = await read<MapManifest>(join(base, 'manifest.json'));
     if (!manifest.map_version?.match(/^map-v\d+\.\d+\.\d+$/)) {
@@ -171,7 +173,7 @@ async function verifyMap(rootDir: string): Promise<{ dir: string; version: strin
             current = entities.find(item => item.id === current.parent)!;
         }
     }
-    return { dir: base, version: manifest.map_version, manifest };
+    return { dir: base, layers: layersRoot, version: manifest.map_version, manifest };
 }
 
 async function locateMap() {
@@ -312,6 +314,7 @@ function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>, mapLevels: M
         centre: centre(raw.geometry),
         ...(((raw.levels ?? raw.level ?? mapLevels.get(raw.id)) != null) ? { levels: raw.levels ?? raw.level ?? mapLevels.get(raw.id) } : {}),
         ...(raw.houses?.length ? { houses: raw.houses } : {}),
+        ...(raw.title ? { title: raw.title } : {}),
         ...(floor ? { floor } : {}),
         ...(fact?.seats != null ? { seats: fact.seats } : {}),
         ...(fact?.kinds?.length ? { room_kinds: fact.kinds } : {}),
@@ -371,11 +374,39 @@ async function verifyReferences(data: { dir: string; index: DataIndex }, mapIds:
     }
 }
 
+const round = (value: unknown): unknown => Array.isArray(value)
+    ? value.map(round)
+    : typeof value === 'number' ? Math.round(value * 1e7) / 1e7 : value;
+
+/** What the clients draw in 3D: every footprint with a height, and each floor's plate, cores and rooms. */
+async function buildModel(campus: string, from: string, layers: string, entities: MapPlace[]) {
+    const features = async (name: string) => (await read<{ features: { properties: Record<string, any>; geometry: MapPlace['geometry'] }[] }>(join(layers, `${name}.geojson`))).features;
+    const shape = (geometry: MapPlace['geometry']) => ({ type: geometry!.type, coordinates: round(geometry!.coordinates) });
+    const height = (row: Record<string, any>, fallback: number) => Number(row.height_m) || (Number(row.levels) || fallback) * 3.4;
+    const levels = new Map(entities.filter(place => place.kind === 'floor' && place.parent && place.level != null).map(place => [place.id, place.level!]));
+    const indoor = await read<Record<string, { plate: MapPlace['geometry']; cores: { kind: string; geometry: MapPlace['geometry'] }[] }>>(join(from, 'indoor.json'));
+    const floors: Record<string, unknown> = {};
+    for (const [id, floor] of Object.entries(indoor)) {
+        floors[id] = {
+            level: levels.get(id) ?? Number(id.slice(id.lastIndexOf('/') + 1)),
+            plate: shape(floor.plate),
+            cores: floor.cores.map(core => ({ kind: core.kind, geometry: shape(core.geometry) })),
+            rooms: entities.filter(place => place.kind === 'room' && place.parent === id && place.geometry).map(place => ({ id: place.id, geometry: shape(place.geometry) })),
+        };
+    }
+    return {
+        campus,
+        buildings: (await features('buildings')).map(({ properties, geometry }) => ({ id: properties.id, levels: Number(properties.levels) || 3, height: height(properties, 4), geometry: shape(geometry) })),
+        context: (await features('context_buildings')).map(({ properties, geometry }) => ({ height: height(properties, 3), geometry: shape(geometry) })),
+        floors,
+    };
+}
+
 async function buildCampus(
     campus: string,
     mapRoot: string,
+    layers: string,
     out: string,
-    dataDir: string,
     roomFacts: Map<string, any>,
 ) {
     const from = join(mapRoot, campus);
@@ -388,6 +419,10 @@ async function buildCampus(
     await write(join(to, 'entities.json'), normalized);
     for (const file of SPACE_FILES) {
         if (file === 'entities.json') continue;
+        if (file === 'model.json') {
+            await write(join(to, file), await buildModel(campus, from, layers, entities));
+            continue;
+        }
         if (file === 'style-light.json') {
             await write(join(to, file), style('light'));
         } else if (file === 'style-dark.json') {
@@ -396,23 +431,59 @@ async function buildCampus(
             await copyFile(join(from, file), join(to, file));
         }
     }
-    const byId = new Map(normalized.map(place => [place.id, place]));
-    const placeDocs: SearchDocument[] = normalized.map(place => ({
-        id: place.id,
-        source: place.kind === 'room' ? 'rooms' : 'places',
-        source_name: place.kind === 'room' ? '教室' : '地点',
-        url: `/map/?place=${encodeURIComponent(place.id)}`,
-        title: displayName(place, byId),
-        text: [place.id, ...place.names, displayName(place, byId)].join(' '),
-        published: null,
-        updated: null,
-        section: place.parent || null,
-        kind: 'page',
-        category: place.category ?? place.kind,
-        tags: [],
-        files: [],
-    }));
-    await compileBundle(placeDocs, { aliases: [] }, join(to, SPACE_DIRECTORIES[0]));
+    return normalized;
+}
+
+type Normalized = ReturnType<typeof normalizePlace>;
+const labels: Record<string, string> = campusConfig.search.entities;
+const entity = (source: string, id: string, url: string, title: string, section: string | null, text: string[]): SearchDocument => ({
+    id: `${source}/${id}`, source, source_name: labels[source] ?? source, url, title, text: [...new Set(text.filter(Boolean))].join(' '),
+    published: null, updated: null, section, kind: 'page', category: source, tags: [], files: [],
+});
+const WEEKDAY = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const plainCourse = (name: string) => name.replace(/[（(].*?[)）]/g, '').trim() || name.trim();
+const roomText = (room: string | null) => (room ?? '').replace(/^[^/]*\//, '');
+const slotText = (rows: TeachingMeeting[]) => [...new Set(rows.map(row => `${WEEKDAY[row.weekday]} ${row.periods[0]}–${row.periods[1]} 节${row.room ? ` ${roomText(row.room)}` : ''}`))];
+const group = <T>(rows: T[], key: (row: T) => string[]) => {
+    const groups = new Map<string, T[]>();
+    for (const row of rows) for (const name of key(row)) groups.set(name, [...(groups.get(name) ?? []), row]);
+    return groups;
+};
+
+/** Courses, people, classes, exams and places as documents, so one index answers everything. */
+function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[]): SearchDocument[] {
+    const docs: SearchDocument[] = [];
+    for (const [name, rows] of group(meetings, row => [plainCourse(row.course.name)])) {
+        const teachers = rows.flatMap(row => row.teachers.map(teacher => teacher.name));
+        const count = new Set(rows.map(row => row.teaching_class.id)).size;
+        docs.push(entity('courses', name, `/?who=course:${encodeURI(name)}&scale=week`, name, `${count} 个教学班`, [...rows.map(row => row.course.code ?? ''), ...teachers, ...rows.map(row => row.course.category ?? '')]));
+    }
+    for (const [name, rows] of group(meetings, row => row.teachers.map(teacher => teacher.name))) {
+        docs.push(entity('teachers', name, `/?who=teacher:${encodeURI(name)}&scale=week`, name, null, rows.map(row => plainCourse(row.course.name))));
+    }
+    for (const item of classes) {
+        docs.push(entity('classes', item.id, `/?who=class:${encodeURI(item.name)}&scale=week`, item.name, item.major, [item.major ?? '', item.college ?? '', item.campus ?? '', item.students ? `${item.students} 人` : '']));
+    }
+    for (const [id, rows] of group(meetings, row => [row.teaching_class.id])) {
+        const first = rows[0]!;
+        const teachers = [...new Set(rows.flatMap(row => row.teachers.map(teacher => teacher.name)))];
+        docs.push(entity('teaching-classes', id, `/?preview=${encodeURIComponent(id)}&scale=week`, [plainCourse(first.course.name), ...teachers].join(' '), first.campus,
+            [...slotText(rows), first.course.code ?? '', ...rows.flatMap(row => row.classes)]));
+    }
+    for (const exam of exams) {
+        docs.push(entity('exams', exam.id, `/?who=class:${encodeURI(exam.class)}&t=${exam.date}&scale=day`, `${plainCourse(exam.course.name)} 考试`, exam.class,
+            [`${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), exam.class, exam.teacher ?? '', exam.course.code ?? '']));
+    }
+    const byId = new Map(places.map(place => [place.id, place]));
+    for (const place of places) {
+        if (place.kind === 'floor' || place.kind === 'campus') continue;
+        const room = place.kind === 'room';
+        const title = room ? place.id.slice(place.id.indexOf('/') + 1) : displayName(place, byId);
+        const roomTitle = (place as { title?: string }).title;
+        docs.push(entity(room ? 'rooms' : 'places', place.id, `/map/?place=${encodeURI(place.id)}`, title, place.category ?? null,
+            [...place.names, roomTitle ?? '', place.parent, place.floor ? `${place.floor} 层` : '', place.seats ? `${place.seats} 座` : '', ...(place.room_kinds ?? []), ...(place.houses ?? [])]));
+    }
+    return docs;
 }
 
 async function main() {
@@ -443,20 +514,17 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p2`;
+    const version = `${map.version}__${data.version}__p4`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });
     for (const entry of await readdir(outRoot)) {
         await rm(join(outRoot, entry), { recursive: true, force: true });
     }
-    const docs: SearchDocument[] = [];
-    for await (const doc of searchDocuments(data.dir)) {
-        docs.push(doc);
-    }
-    await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
     const terms = await packageFacts(data.dir, out, data.index, [...mapPlacesByCampus.values()].flat());
-    await copyFile(join(data.dir, 'hours.json'), join(out, 'hours.json'));
+    for (const file of ['hours.json', 'calendar.json', 'morning-run.json']) {
+        await copyFile(join(data.dir, file), join(out, file));
+    }
     const dataEntities = join(data.dir, 'entities');
     for (const file of ['index.json', 'agent.json', 'information.json', 'time.json']) {
         if (existsSync(join(dataEntities, file))) {
@@ -465,9 +533,17 @@ async function main() {
         }
     }
     const roomFacts = new Map((await read<any[]>(join(data.dir, 'places', 'rooms.json'))).map(row => [row.id, row]));
+    const places: Normalized[] = [];
     for (const campus of campuses) {
-        await buildCampus(campus, mapSpaceRoot, out, data.dir, roomFacts);
+        places.push(...await buildCampus(campus, mapSpaceRoot, map.layers, out, roomFacts));
     }
+    const teachingDir = join(out, 'teaching', terms.teaching);
+    const examRows = terms.exams ? await read<Exam[]>(join(data.dir, 'exams', terms.exams, 'exams.json')) : [];
+    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, places);
+    for await (const doc of searchDocuments(data.dir)) {
+        docs.push(doc);
+    }
+    await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,
         data_version: data.version,

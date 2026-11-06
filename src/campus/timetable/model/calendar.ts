@@ -1,23 +1,10 @@
 import { PRODUCT_CONFIG } from '@/app/config/product';
-import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/timetable';
+import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/facts';
 
 const escape = (value: string): string => value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
 const compact = (value: string): string => value.replace(/[-:]/g, '');
 
-export const todayInShanghai = (): string => {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: PRODUCT_CONFIG.TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date());
-    const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    return `${value.year}-${value.month}-${value.day}`;
-};
-
-export const weekdayInShanghai = (): number => {
-    const weekday = new Date(`${todayInShanghai()}T00:00:00Z`).getUTCDay();
-    return weekday === 0 ? 7 : weekday;
-};
-
-export const meetingDate = (week: TeachingWeek, weekday: number): string => {
+const meetingDate = (week: TeachingWeek, weekday: number): string => {
     const date = new Date(`${week.start}T00:00:00Z`);
     date.setUTCDate(date.getUTCDate() + weekday - 1);
     return date.toISOString().slice(0, 10);

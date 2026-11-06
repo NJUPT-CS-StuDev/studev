@@ -65,16 +65,11 @@ test('every built page has valid local links and complete rendering', async () =
   assert.ok(captions > 50, 'captions must remain attached to their pictures');
 });
 
-test('homepage ships a small local logo, fonts, and JavaScript', async () => {
+test('the first page starts light: the timetable loads itself after the shell', async () => {
   const html = await readFile(join(output, 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((match) => localFile(match[1], join(output, 'index.html')));
   const size = (await Promise.all(scripts.map(async (path) => (await stat(path)).size))).reduce((sum, bytes) => sum + bytes, 0);
-  assert.ok(size < 12_000, `homepage initial JavaScript is ${size} bytes`);
-  const fonts = [...html.matchAll(/<link data-local-font-preload[^>]+href="([^"]+)"/g)].map((match) => localFile(match[1], join(output, 'index.html')));
-  const fontSize = (await Promise.all(fonts.map(async (path) => (await stat(path)).size))).reduce((sum, bytes) => sum + bytes, 0);
-  assert.ok(fontSize > 0 && fontSize < 70_000, `homepage fonts are ${fontSize} bytes`);
-  const logo = html.match(/<img[^>]+src="([^"]+)"/);
-  assert.ok((await stat(localFile(logo[1], join(output, 'index.html')))).size < 5_000);
+  assert.ok(size < 40_000, `initial JavaScript is ${size} bytes`);
   assert.ok(!existsSync(join(output, 'logo.png')), 'full logo original must not be distributed');
 });
 
@@ -132,13 +127,13 @@ test('every page can share its clean canonical URL', async () => {
         assert.equal(attr.type, 'button');
       }
     });
-    if (file !== join(output, 'map/index.html')) assert.ok(shares > 0, `${file}: missing share action`);
+    // The three entries put their whole state in the address, which is what gets shared.
+    if (![join(output, 'index.html'), join(output, 'map/index.html'), join(output, 'search/index.html')].includes(file)) assert.ok(shares > 0, `${file}: missing share action`);
     const url = new URL(canonical);
     assert.equal(url.origin, 'https://studev.hicancan.top');
     assert.equal(url.search, '');
     assert.equal(url.hash, '');
-    if (file === join(output, 'index.html')) assert.ok(shares >= 1);
-    else if (file !== join(output, 'map/index.html')) assert.match(html, /分享本页/);
+    if (![join(output, 'index.html'), join(output, 'map/index.html'), join(output, 'search/index.html')].includes(file)) assert.match(html, /分享本页/);
   }
 });
 
@@ -232,5 +227,5 @@ test('stable sitemap files revalidate without changing other asset headers', asy
   assert.match(cache, /(?:^|,\s*)must-revalidate(?:,|$)/);
   assert.doesNotMatch(cache, /immutable/);
   const cacheRules = config.headers.filter((rule) => rule.headers.some((header) => header.key.toLowerCase() === 'cache-control'));
-  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/*', '/sw.js', '/pwa-release.json'].includes(rule.source)), 'only sitemaps, update manifests/workers and versioned assets may receive a cache override');
+  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/*', '/sw.js', '/download/sw.js', '/pwa-release.json'].includes(rule.source)), 'only sitemaps, update manifests/workers and versioned assets may receive a cache override');
 });

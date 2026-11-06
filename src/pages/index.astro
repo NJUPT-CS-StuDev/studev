@@ -1,39 +1,7 @@
 ---
 import SiteLayout from '../layouts/SiteLayout.astro';
-import RecruitmentGroup from '../components/RecruitmentGroup.astro';
-import { PRODUCT_CONFIG } from '../campus/app/config/product';
+import TimetableApp from '../campus/timetable/TimetableApp';
 ---
-<SiteLayout title="StuDev — 南邮计软网安学生发展中心" active="">
-  <div class="home">
-    <div class="home-brand">
-      <h1>Stu<span>Dev</span></h1>
-      <p class="home-subtitle">南邮计软网安学生发展中心</p>
-      {PRODUCT_CONFIG.SHOW_RECRUITMENT && <RecruitmentGroup />}
-    </div>
-
-    <div class="home-terminal">
-      <div class="terminal-header">
-        <span class="terminal-dot"></span>
-        <span class="terminal-dot"></span>
-        <span class="terminal-dot"></span>
-        <span class="terminal-meta">studev ~ terminal</span>
-      </div>
-      <div class="terminal-body">
-        <p class="typewriter-line">
-          <span class="typewriter-prompt">&gt;</span>
-          <span class="typewriter-content" id="typewriter-text">未来的空白，由你来书写。</span><span class="typewriter-cursor" aria-hidden="true"></span>
-        </p>
-        <p class="terminal-footnote">计算机学院 · 软件学院 · 网络空间安全学院</p>
-      </div>
-      <div class="terminal-links">
-        <a class="terminal-link-pill" href="/life/">🌿 生活手记</a>
-        <a class="terminal-link-pill" href="/study/">📖 研学启航</a>
-        <a class="terminal-link-pill" href="/develop/">🚀 开源矩阵</a>
-        <a class="terminal-link-pill" href="/search/">🔍 南邮搜索</a>
-        <a class="terminal-link-pill" href="/about/">🏛 组织原点</a>
-      </div>
-    </div>
-  </div>
-
-  <script>import '../client/site/typewriter';</script>
+<SiteLayout title="studev — 南邮课表、地图与搜索" description="南京邮电大学的课表、考试、校历、早锻炼、校园地图和空教室。" active="timetable">
+  <TimetableApp client:only="react" />
 </SiteLayout>

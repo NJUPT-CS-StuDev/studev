@@ -1,82 +1,50 @@
-// Run from the repo root. No network, no changes to source data; freeze the web's actual results.
-// node_modules/.bin/esbuild src/campus/academics/parity/generate.ts --bundle --platform=node --format=esm --packages=external --alias:@=./src/campus --outfile=D:/Temp/codex/parity/generate.mjs
-// node D:/Temp/codex/parity/generate.mjs
+// Run from the repo root. No network; freezes the web's actual results for Android to pass.
+// node_modules/.bin/esbuild src/campus/academics/parity/generate.ts --bundle --platform=node --format=esm --packages=external --alias:@=./src/campus --loader:.json=json --outfile=D:/Temp/claude-wsl/parity/generate.mjs
+// node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { timetableCells } from '@/timetable/model/presentation';
 import { courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
-import { examPresentation } from '@/exams/model/presentation';
 import { attendingExams } from '@/exams/model/examAttendance';
-import { roomSelectionResult, type RoomSelection } from '@/classrooms/model/roomSelection';
-import { roomMatches } from '@/classrooms/model/campusDay';
-import { toggleBuilding } from '@/classrooms/model/buildingSelection';
+import { eventsOn, holidayMap, nextEvent, runProgress, type Timeline } from '@/world/events';
+import { courseName, courseShort, roomLabel } from '@/world/names';
+import { isClassroom, makeRoomReader } from '@/world/rooms';
+import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
 import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, RoomDay } from '@/academics/facts';
-import type { ClassroomIndexFile } from '@/classrooms/model/ClassroomAvailabilityClient';
 
 const read = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
-const release = read<{version:string; teaching:string; exams:string}>('src/data/campus-release.json');
+const release = read<{ version: string; teaching: string; exams?: string }>('src/data/campus-release.json');
 const base = `public/data/${release.version}`;
 const term = read<TeachingTerm>(`${base}/teaching/${release.teaching}/term.json`);
 const periods = read<TeachingPeriod[]>(`${base}/teaching/${release.teaching}/periods.json`);
-const schedules = ['B240402', 'B250105', 'B230402'].map(klass => {
-    const {meetings} = read<{meetings:TeachingMeeting[]}>(`${base}/teaching/${release.teaching}/classes/${klass}.json`);
-    return { class:klass, meetings, weeks:[1,3,8,9,10,16].map(week => ({week, cells:timetableCells(meetings,week)})) };
+const calendar = read<{ terms: CalendarTerm[] }>(`${base}/calendar.json`).terms;
+const run = read<Record<string, MorningRun>>(`${base}/morning-run.json`)[term.term]!;
+const holidays = holidayMap(calendar);
+const classes = ['B240402', 'B250105', 'B230402'];
+const schedules = classes.map(id => {
+    const { meetings } = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${id}.json`);
+    return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: timetableCells(meetings, week) })) };
 });
-const exams = ['B240402', 'B250105', 'B230402'].map(klass => {
-    const {exams} = read<{exams:Exam[]}>(`${base}/exams/${release.exams}/classes/${klass}.json`);
-    const first = exams[0]!;
-    const start = Date.parse(`${first.date}T${first.start}:00+08:00`);
-    const end = Date.parse(`${first.date}T${first.end}:00+08:00`);
-    const times = [start-2*86_400_000, start-86_400_000, start-1, start, end-1, end, end+86_400_000].map(time=>new Date(time).toISOString());
-    return { class:klass, exams, cases:times.map(now=>({now, cells:exams.map(exam=>examPresentation(exam,new Date(now)))})) };
-});
-const index = read<ClassroomIndexFile>(`${base}/rooms/index.json`);
-const days = ['2026-09-02','2026-10-26','2026-10-30'].map(date=>read<RoomDay>(`${base}/rooms/${index.term}/${date}.json`));
-const roomCases = days.flatMap(day => ['仙林','三牌楼'].flatMap(campus => {
-    const ids = index.buildings.filter(b=>b.campus===campus && index.rooms.some(r=>r.building===b.id && r.listed)).map(b=>b.id).sort();
-    return [null, [], ids.slice(0,1), ids.slice(0,2)].flatMap(buildings => [[1,1],[6,9],[10,12]].map(([from,until])=> {
-        const selection: RoomSelection = {campus,buildings,everything:false,query:'',minSeats:0,from:from!,until:until!};
-        return { date:day.date, selection, expected:roomSelectionResult(index,day,selection) };
-    }));
-}));
-const roomMatchRoom = index.rooms.find(room => room.listed && /^\d+$/.test(room.number)) ?? index.rooms.find(room => room.listed) ?? index.rooms[0]!;
-const fullWidthNumber = roomMatchRoom.number.replace(/[0-9]/g, digit => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
-const roomMatchQueries = ['', roomMatchRoom.id, roomMatchRoom.number, roomMatchRoom.building, roomMatchRoom.names[0] ?? '',
-    `${roomMatchRoom.building}—${roomMatchRoom.number}`, ` ${roomMatchRoom.building} ${roomMatchRoom.number} `, `\u00a0${roomMatchRoom.building}\ufeff${roomMatchRoom.number}`, fullWidthNumber, '不存在'];
-const roomMatchCases = roomMatchQueries.map(query => ({ room: roomMatchRoom, query, expected: roomMatches(roomMatchRoom, query) }));
-for (const selection of [
-    {campus:'仙林', buildings:['教3','教4'],everything:false,query:'',minSeats:0,from:3,until:3},
-    {campus:'仙林', buildings:null, everything:true,query:'图',minSeats:0,from:1,until:4},
-    {campus:'仙林', buildings:['教3','教4'],everything:false,query:'３',minSeats:60,from:3,until:5},
-    {campus:'仙林', buildings:['教3'],everything:false,query:'',minSeats:150,from:8,until:9},
-] satisfies RoomSelection[]) roomCases.push({ date:days[2]!.date, selection, expected:roomSelectionResult(index,days[2]!,selection) });
-const inputsHash = createHash('sha256').update(JSON.stringify({schedules:schedules.map(s=>s.meetings),exams:exams.map(e=>e.exams),index,days})).digest('hex');
-// Supplemental policy inputs are synthetic strings, never added to campus facts.
+const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, exams: [], holidays, run: { rule: run, done: 12 } };
+const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
+const days = ['2026-09-25', '2026-10-01', '2026-10-12', '2026-11-05', '2026-11-09', '2026-12-18', '2026-12-21', '2027-01-01'].map(date => ({ date, events: eventsOn(line, date).map(brief) }));
+const moments = [{ date: '2026-11-05', min: 13 * 60 + 5 }, { date: '2026-11-07', min: 7 * 60 }, { date: '2027-01-14', min: 22 * 60 }].map(now => ({ now, next: (event => event && brief(event))(nextEvent(line, now)), run: runProgress(line.run!, holidays, now) }));
+const index = read<RoomIndex>(`${base}/rooms/index.json`);
+const reader = makeRoomReader(periods);
+const roomDays = ['2026-11-05', '2026-11-09'].map(date => read<RoomDay>(`${base}/rooms/${index.term}/${date}.json`));
+const sampleRooms = index.rooms.filter(isClassroom).filter((_, position) => position % 9 === 0);
+const rooms = roomDays.flatMap(day => [7 * 60 + 30, 8 * 60 + 10, 12 * 60, 13 * 60 + 5, 19 * 60, 22 * 60].flatMap(min => sampleRooms.map(room => {
+    const state = reader(day, room.id, min);
+    return { date: day.date, min, room: room.id, tier: state.tier, busy: state.busy, until: state.until, minutes: state.minutes };
+})));
 const colours = [
-    {code:'  js101\u00a0',name:'忽略课程名'}, {code:'A\tB',name:'保留代码内部空白'},
-    {code:null,name:'\ufeff 😀课程\u3000'}, {code:' ',name:'  两个\t\n空格  '},
-    {code:'\u001c',name:'不折叠非 ECMAScript 空白'}, {code:'ß',name:'统一大小写'},
-].map(course=>({course,identity:courseIdentity({course}),colourIndex:courseToneIndex({course})}));
-const buildingTransitions = [
-    {selected:null as string[] | null, all:['教3','实验楼'],toggle:'教3'},
-    {selected:['教3','实验楼'],all:['教3','教4','实验楼'],toggle:'教4'},
-    {selected:[],all:['教3','教4'],toggle:'教3'},
-].map(test=>({...test,expected:toggleBuilding(test.selected,test.all,test.toggle)}));
-const invalidExams = [
-    {...exams[0]!.exams[0]!,date:'2026-02-31'}, {...exams[0]!.exams[0]!,start:'24:00'},
-    {...exams[0]!.exams[0]!,date:'',start:'',end:'',location:null,room:null},
-].map(exam=>({exam,now:'2026-10-30T00:00:00Z',expected:examPresentation(exam,new Date('2026-10-30T00:00:00Z'))}));
-const examAttendance = exams.flatMap(group => {
-    const first = group.exams[0]!;
-    const ownCodes = first.course.code ? [first.course.code] : [];
-    const cases: Array<{ choices: Record<string, boolean>; ownCodes: string[] | null }> = [
-        { choices: {}, ownCodes: null },
-        { choices: { [first.id]: false }, ownCodes: null },
-        { choices: Object.fromEntries(group.exams.map(exam => [exam.id, false])), ownCodes: null },
-        { choices: {}, ownCodes },
-        { choices: { [first.id]: true }, ownCodes: [] },
-    ];
-    return cases.map(test => ({ class: group.class, ...test, expected: attendingExams(group.exams, test.choices, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id) }));
-});
-writeFileSync('src/campus/academics/parity/golden.json',JSON.stringify({source:{release:release.version,teaching:release.teaching,exams:release.exams,inputsHash},term,periods,schedules,exams,rooms:{index,days,cases:roomCases,matchCases:roomMatchCases},edgeCases:{colours,buildingTransitions,invalidExams,examAttendance}},null,2)+'\n');
-console.log(JSON.stringify({schedules:schedules.length,weeks:schedules.flatMap(s=>s.weeks).length,cells:schedules.flatMap(s=>s.weeks.flatMap(w=>w.cells)).length,examCases:exams.flatMap(e=>e.cases).length,roomCases:roomCases.length,inputsHash}));
+    { code: '  js101\u00a0', name: '忽略课程名' }, { code: 'A\tB', name: '保留代码内部空白' },
+    { code: null, name: '\ufeff 😀课程\u3000' }, { code: ' ', name: '  两个\t\n空格  ' },
+    { code: '\u001c', name: '不折叠非 ECMAScript 空白' }, { code: 'ß', name: '统一大小写' },
+].map(course => ({ course, identity: courseIdentity({ course }), colourIndex: courseToneIndex({ course }) }));
+const names = ['操作系统基础', '计算机通信与网络（双语）', '习近平新时代中国特色社会主义思想概论', '仙林/教4-309', '仙林/图书馆-201', '翻转课堂线上自学'].map(value => ({ value, course: courseName(value), short: courseShort(value), room: roomLabel(value) }));
+const attendanceExams = [{ id: 'a', course: { code: 'X1', name: '甲' } }, { id: 'b', course: { code: 'X2', name: '乙' } }, { id: 'c', course: { code: null, name: '丙' } }] as Exam[];
+const examAttendance = [
+    { choices: {}, ownCodes: null }, { choices: { a: false }, ownCodes: null }, { choices: {}, ownCodes: ['X1'] }, { choices: { b: true }, ownCodes: ['X1'] },
+].map(test => ({ ...test, expected: attendingExams(attendanceExams, test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id) }));
+writeFileSync('src/campus/academics/parity/golden.json', JSON.stringify({ source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance } }, null, 1) + '\n');
+console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

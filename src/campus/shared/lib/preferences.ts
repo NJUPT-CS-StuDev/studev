@@ -16,7 +16,11 @@ export interface Preferences {
     timetable?: Record<string, TimetableEdits>;
     /** Explicit attendance choices, scoped to exam term and class. */
     examAttendance?: Record<string, Record<string, boolean>>;
+    /** 早锻炼: the count is copied by hand from the school's mini program. */
+    run?: RunSettings;
 }
+
+export interface RunSettings { on?: boolean; done: number; alarm: boolean }
 
 const KEY = 'studev_prefs';
 const EVENT = 'studev:preferences';
@@ -57,6 +61,11 @@ const sanitize = (raw: unknown): Preferences => {
             attendance[scope] = choices;
         }
         if (Object.keys(attendance).length) result.examAttendance = attendance;
+    }
+    if (record.run && typeof record.run === 'object' && !Array.isArray(record.run)) {
+        const run = record.run as Record<string, unknown>;
+        result.run = { done: Math.max(0, Math.min(200, Math.floor(Number(run.done)) || 0)), alarm: run.alarm === true };
+        if (typeof run.on === 'boolean') result.run.on = run.on;
     }
     return result;
 };

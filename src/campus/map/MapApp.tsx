@@ -1,399 +1,417 @@
-// /map/: studev's campus map on the web. Our authored njupt-map basemap, search over campus places and rooms (wasm-search), and walking
-// and cycling routes with turn-by-turn steps (wayfind). Live navigation is the app's.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import * as maplibregl from 'maplibre-gl';
-import type { GeoJSONSource, Map as MapLibre } from 'maplibre-gl';
-import { Protocol } from 'pmtiles';
-import { SearchClient, type SearchResult } from 'wasm-search';
-import { initialize as initializeRouting, Router, type Mode, type Position, type Route } from 'wayfind';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import './map.css';
-import tokens from '../../../design/tokens.json';
-import { ArrowUpRight, BookOpen, Building2, ChevronLeft, Hospital, MapPin, Package, Printer, ShoppingBag, Trophy, Utensils } from 'lucide-react';
-import { campusTime, momentAt, openingLabel, openingStatus, recommendations } from './model/homePolicy';
-import { CAMPUS_CENTRE, kindLabel, loadSpace, loadStyle, placePosition, spaceBase, type Place, type Space } from './model/space';
-import { displayName, roomDisplayName } from './model/displayName';
+// The map: pick a moment, unfold campus > building > floor > room. Free rooms, places and
+// walking routes all live here; the address always says what is shown.
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { initialize as initializeRouting, Router, type Mode, type Route } from 'wayfind';
+import type { Position } from 'geojson';
+import type { Room, RoomDay, TeachingPeriod, TeachingTerm } from '@/academics/facts';
+import { loadCalendar, loadPeriods, loadRoomDay, loadRoomIndex, loadTerm } from '@/world/data';
+import { courseName, roomLabel } from '@/world/names';
+import { isClassroom, makeRoomReader, type RoomState } from '@/world/rooms';
+import { addDays, dateLabel, durationText, hm, minutesOf, momentNow, momentText, parseMoment, WEEKDAYS, weekdayOf } from '@/world/time';
+import { useUrl, useWide } from '@/world/useUrl';
+import { Back, Chevron, Cross, Magnifier, Sheet } from '@/world/ui';
+import { campusTime, openingLabel, openingStatus } from './model/homePolicy';
+import { displayName } from './model/displayName';
+import { loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
 import { visibleRouteText } from './model/routeText';
-import { sheetHeight, snapSheet, type MapSheetState } from './model/sheetState';
+import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from './scene';
+import { fetchJson } from '@/shared/lib/fetch';
+import { holidayMap } from '@/world/events';
+import '../campus.css';
+import './map.css';
 
-type Origin = { kind: 'me' } | { kind: 'place'; id: string };
-const ROUTE_SOURCE = 'routes';
-const categories = [
-    ['食堂', Utensils], ['图书馆', BookOpen], ['教学楼', Building2], ['超市', ShoppingBag],
-    ['快递', Package], ['打印', Printer], ['体育', Trophy], ['校医院', Hospital],
-] as const;
-
-const theme = (): 'light' | 'dark' => {
-    const set = document.documentElement.dataset.theme;
-    if (set === 'dark' || set === 'light') return set;
-    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
-const minutes = (s: number) => Math.max(1, Math.round(s / 60));
+const RULER_START = 7 * 60, RULER_END = 22 * 60;
+const percent = (minutes: number) => `${((Math.max(RULER_START, Math.min(RULER_END, minutes)) - RULER_START) / (RULER_END - RULER_START) * 100).toFixed(2)}%`;
+const theme = () => document.documentElement.dataset.theme === 'dark' ? 'dark' as const : 'light' as const;
 const metres = (m: number) => m < 1000 ? `${Math.round(m / 10) * 10} 米` : `${(m / 1000).toFixed(1)} 公里`;
-let protocolAdded = false;
+const distance = (a: Position, b: Position) => {
+    const t = Math.PI / 180;
+    return Math.hypot((b[0]! - a[0]!) * t * Math.cos(a[1]! * t), (b[1]! - a[1]!) * t) * 6371000;
+};
+const hidesLabel = new Set(['停车场', '学院', '宿舍', '公交站']);
+
+interface World { space: Space; model: CampusModel; router: Router; rooms: Room[]; roomById: Map<string, Room>; periods: TeachingPeriod[]; term: TeachingTerm; holidays: Map<string, string>; read: ReturnType<typeof makeRoomReader> }
+
+function useWorld() {
+    const [world, setWorld] = useState<World | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    useEffect(() => {
+        Promise.all([loadSpace(), fetchJson<CampusModel>(`${spaceBase()}/model.json`), loadRoomIndex(), loadPeriods(), loadTerm(), loadCalendar(), initializeRouting()]).then(([space, model, index, periods, term, calendar]) => {
+            setWorld({ space, model, router: new Router(space.network), rooms: index.rooms, roomById: new Map(index.rooms.map(room => [room.id, room])), periods, term, holidays: holidayMap(calendar), read: makeRoomReader(periods) });
+        }).catch(reason => setError(reason instanceof Error ? reason.message : String(reason)));
+    }, []);
+    return { world, error };
+}
+
+const buildingOfPlace = (space: Space, place: Place | undefined): Place | null => {
+    let current = place;
+    while (current && current.kind !== 'building') current = current.parent ? space.byId.get(current.parent) : undefined;
+    return current ?? null;
+};
 
 export default function MapApp() {
-    const container = useRef<HTMLDivElement>(null);
-    const map = useRef<MapLibre | null>(null);
-    const marker = useRef<maplibregl.Marker | null>(null);
-    const meMarker = useRef<maplibregl.Marker | null>(null);
-    const [space, setSpace] = useState<Space | null>(null);
-    const [router, setRouter] = useState<Router | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [notice, setNotice] = useState<string | null>(null);
-    const [query, setQuery] = useState('');
-    const [results, setResults] = useState<SearchResult[]>([]);
-    const [selected, setSelected] = useState<Place | null>(null);
+    const { params, set } = useUrl();
+    const wide = useWide();
+    const { world, error } = useWorld();
+    const canvas = useRef<HTMLDivElement>(null);
+    const labels = useRef<HTMLDivElement>(null);
+    const [scene, setScene] = useState<CampusScene | null>(null);
+    const [now] = useState(momentNow);
+    const moment = useMemo(() => parseMoment(params.get('t'), now), [now, params]);
+    const isNow = !params.get('t');
+    const placeId = params.get('place');
+    const navId = params.get('nav');
+    const floorParam = Number(params.get('f')) || null;
+    const pitch = params.get('tilt') === '0' ? 0 : 52;
+    const [day, setDay] = useState<RoomDay | null>(null);
     const [me, setMe] = useState<Position | null>(null);
-    const [origin, setOrigin] = useState<Origin>({ kind: 'me' });
+    const [origin, setOrigin] = useState('');
     const [mode, setMode] = useState<Mode>('walk');
-    const [avoidSteps, setAvoidSteps] = useState(false);
     const [routes, setRoutes] = useState<Route[]>([]);
     const [chosen, setChosen] = useState(0);
-    const [planning, setPlanning] = useState(false);
-    const [category, setCategory] = useState<string | null>(null);
-    const [clock, setClock] = useState(() => campusTime());
-    const [activeTheme, setActiveTheme] = useState(theme);
-    const [loaded, setLoaded] = useState(false);
-    const [sheetState, setSheetState] = useState<MapSheetState>('collapsed');
-    const [viewportHeight, setViewportHeight] = useState(() => typeof window === 'undefined' ? 800 : window.innerHeight);
-    const [safeBottomInset, setSafeBottomInset] = useState(0);
-    const [dragHeight, setDragHeight] = useState<number | null>(null);
-    const drag = useRef<{ y: number; started: number; base: number } | null>(null);
-    const suppressHandleClick = useRef(false);
-    const sheetStateRef = useRef(sheetState);
-    sheetStateRef.current = sheetState;
-    const panel = useRef<HTMLElement>(null);
-    const planAfterSelection = useRef(false);
-    const previousSelection = useRef<string | null>(null);
-    const search = useMemo(() => new SearchClient({ baseUrl: `${spaceBase()}/search` }), []);
+    const [notice, setNotice] = useState<string | null>(null);
+    const [snap, setSnap] = useState(0);
+    const [peek, setPeek] = useState<number | null>(null);
+    const [campusOpen, setCampusOpen] = useState(false);
+    const [dark, setDark] = useState(theme);
+    const [needle, setNeedle] = useState(0);
 
     useEffect(() => {
-        if (!notice) return;
-        const timer = window.setTimeout(() => setNotice(null), 6000);
-        return () => window.clearTimeout(timer);
-    }, [notice]);
-
-    useEffect(() => {
-        const resize = () => {
-            setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
-            const probe = document.createElement('div');
-            probe.style.cssText = 'position:fixed;left:-1px;bottom:0;width:1px;height:0;padding-bottom:env(safe-area-inset-bottom);pointer-events:none;';
-            document.body.appendChild(probe);
-            setSafeBottomInset(parseFloat(getComputedStyle(probe).paddingBottom) || 0);
-            probe.remove();
-        };
-        resize();
-        window.addEventListener('resize', resize, { passive: true });
-        window.visualViewport?.addEventListener('resize', resize, { passive: true });
-        const timer = setInterval(() => setClock(campusTime()), 15_000);
-        const observer = new MutationObserver(() => setActiveTheme(theme()));
+        const observer = new MutationObserver(() => setDark(theme()));
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-        return () => { clearInterval(timer); observer.disconnect(); search.dispose(); window.removeEventListener('resize', resize); window.visualViewport?.removeEventListener('resize', resize); };
-    }, [search]);
+        return () => observer.disconnect();
+    }, []);
+    useEffect(() => { let live = true; void loadRoomDay(moment.date).then(value => { if (live) setDay(value); }); return () => { live = false; }; }, [moment.date]);
 
-    // Data, routing kernel and the map.
+    /* Scene lifecycle: one per theme, since the style carries the theme. */
+    const handlers = useRef({ onBuilding: (_: string) => {}, onRoom: (_: string) => {}, onPlace: (_: string) => {}, onEmpty: () => {}, onView: () => {} });
     useEffect(() => {
+        if (!world || !canvas.current || !labels.current) return;
+        let instance: CampusScene | null = null;
         let cancelled = false;
-        if (!protocolAdded) {
-            maplibregl.setWorkerUrl(workerUrl);
-            maplibregl.addProtocol('pmtiles', new Protocol().tile);
-            protocolAdded = true;
+        void loadStyle(dark).then(style => {
+            if (cancelled || !canvas.current || !labels.current) return;
+            const teach = world.space.byId.get('仙林/教3')?.centre ?? [118.928, 32.113];
+            instance = new CampusScene(canvas.current, labels.current, style, world.model, [teach[0]! + .0006, teach[1]! - .0002], pitch, {
+                onBuilding: id => handlers.current.onBuilding(id), onRoom: id => handlers.current.onRoom(id),
+                onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
+            });
+            instance.whenReady(() => { if (!cancelled) setScene(instance); });
+        });
+        return () => { cancelled = true; instance?.destroy(); setScene(null); };
+    }, [dark, world]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    /* What is selected. */
+    const selected = placeId ? world?.space.byId.get(placeId) : undefined;
+    const openBuilding = world && selected ? buildingOfPlace(world.space, selected) : null;
+    const pickedRoom = selected?.kind === 'room' ? selected : null;
+    const bId = openBuilding?.id ?? null;
+    const roomsInBuilding = useMemo(() => world && bId ? world.rooms.filter(room => `${room.campus}/${room.building}` === bId && isClassroom(room)) : [], [bId, world]);
+    const teaching = roomsInBuilding.length > 0 || Boolean(scene && bId && scene.hasFloors(bId));
+    const stateOf = useCallback((id: string): RoomState | null => world ? world.read(day, id, moment.min) : null, [day, moment.min, world]);
+    const floors = useMemo(() => scene && bId ? scene.floorsOf(bId) : [], [bId, scene]);
+    const bestFloor = useMemo(() => {
+        if (!floors.length) return null;
+        let best = floors[0]!, most = -1;
+        for (const level of floors) {
+            const free = roomsInBuilding.filter(room => Number(room.floor) === level && !stateOf(room.id)?.busy).length;
+            if (free > most) { most = free; best = level; }
         }
-        const colors = tokens.color[activeTheme];
-        setLoaded(false);
-        Promise.all([loadSpace(), loadStyle(activeTheme), initializeRouting()]).then(([loaded, style]) => {
-            if (cancelled || !container.current) return;
-            setSpace(loaded);
-            setRouter(new Router(loaded.network));
-            const instance = new maplibregl.Map({
-                container: container.current, style, center: CAMPUS_CENTRE, zoom: 15.6, maxPitch: 70,
-                localIdeographFontFamily: "'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC',sans-serif",
-                attributionControl: false,
-            });
-            instance.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
-            instance.on('load', () => {
-                setLoaded(true);
-                instance.addSource(ROUTE_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-                instance.addSource('selected-entrances', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-                instance.addLayer({ id: 'selected-entrances', type: 'circle', source: 'selected-entrances', paint: { 'circle-radius': 4, 'circle-color': colors.brand, 'circle-stroke-color': colors.paper, 'circle-stroke-width': 2 } });
-                const before = instance.getLayer('campus-place-label') ? 'campus-place-label' : undefined;
-                instance.addLayer({ id: 'route-alternative', type: 'line', source: ROUTE_SOURCE, filter: ['!', ['get', 'chosen']],
-                    layout: { 'line-cap': 'round', 'line-join': 'round' },
-                    paint: { 'line-color': colors.routeAlternative, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 4, 19, 12] } }, before);
-                instance.addLayer({ id: 'route-casing', type: 'line', source: ROUTE_SOURCE, filter: ['get', 'chosen'],
-                    layout: { 'line-cap': 'round', 'line-join': 'round' },
-                    paint: { 'line-color': colors.routeCasing, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 6, 19, 16] } }, before);
-                instance.addLayer({ id: 'route', type: 'line', source: ROUTE_SOURCE, filter: ['get', 'chosen'],
-                    layout: { 'line-cap': 'round', 'line-join': 'round' },
-                    paint: { 'line-color': colors.route, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 4, 19, 12] } }, before);
+        return best;
+    }, [floors, roomsInBuilding, stateOf]);
+    const floor = pickedRoom?.floor ? Number(pickedRoom.floor) : floorParam && floors.includes(floorParam) ? floorParam : bestFloor;
 
-            });
-            instance.on('click', event => {
-                if (window.innerWidth <= 680 && sheetStateRef.current !== 'collapsed') setSheetState('collapsed');
-                const alternative = instance.getLayer('route-alternative') ? instance.queryRenderedFeatures(event.point, { layers: ['route-alternative'] })[0] : undefined;
-                if (alternative) { setChosen(Number(alternative.properties?.index ?? 0)); return; }
-                const hit = instance.queryRenderedFeatures(event.point, { layers: ['building-fill', 'building-extrusion', 'place-point', 'place-fill'].filter(id => instance.getLayer(id)) })
-                    .find(feature => feature.properties?.id);
-                const place = hit ? loaded.byId.get(String(hit.properties.id)) : undefined;
-                if (place) setSelected(place);
-            });
-            map.current = instance;
-            const wanted = new URLSearchParams(location.search).get('place');
-            if (wanted && loaded.byId.has(wanted)) setSelected(loaded.byId.get(wanted) ?? null);
-        }).catch(reason => setError(reason instanceof Error ? reason.message : String(reason)));
-        return () => {
-            cancelled = true;
-            map.current?.remove();
-            map.current = null;
-            marker.current = null;
-            meMarker.current = null;
-        };
-    }, [activeTheme]);
-
-    // Search as one types.
+    /* Free counts and tints, redrawn only when occupancy can change. */
+    const freeBy = useMemo(() => {
+        const counts = new Map<string, { free: number; total: number }>();
+        if (!world) return counts;
+        for (const room of world.rooms) {
+            if (!isClassroom(room)) continue;
+            const key = `${room.campus}/${room.building}`;
+            const row = counts.get(key) ?? { free: 0, total: 0 };
+            row.total++;
+            if (day && !world.read(day, room.id, moment.min).busy) row.free++;
+            counts.set(key, row);
+        }
+        return counts;
+    }, [day, moment.min, world]);
     useEffect(() => {
-        const text = query.trim();
-        if (!text) { setResults([]); return; }
-        const { requestId, response } = search.search({ query: text, limit: 8, sort: 'relevance', filters: {} }, update => setResults(update.results));
-        response.then(answer => setResults(answer.results)).catch(() => undefined);
-        return () => search.cancel(requestId);
-    }, [query, search]);
+        if (!scene) return;
+        scene.setTint(new Map([...freeBy].map(([id, row]) => [id, row.free / row.total])));
+        scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
+    }, [freeBy, scene]);
+    useEffect(() => { scene?.setMoment(moment.date, moment.min, dark === 'dark'); }, [dark, moment.date, moment.min, scene]);
 
-    // The selected place: highlighted, centred, in the address.
+    /* Labels. */
     useEffect(() => {
-        const instance = map.current;
-        if (!instance || !space || !loaded) return;
-        instance.removeFeatureState({ source: 'basemap', sourceLayer: 'buildings' });
-        marker.current?.remove();
-        if (previousSelection.current !== (selected?.id ?? null)) {
+        if (!scene || !world) return;
+        const out: SceneLabel[] = [];
+        for (const building of world.model.buildings) {
+            const place = world.space.byId.get(building.id);
+            const name = place?.names[0];
+            const at = scene.centreOf(building.id);
+            if (!name || !at) continue;
+            if (freeBy.has(building.id)) out.push({ id: building.id, text: name, count: 0, at, height: building.height, minZoom: 14.5, priority: 0, className: 'teach' });
+            else { const dorm = place.category === '宿舍' || /苑\d/.test(name); out.push({ id: building.id, text: name, at, height: building.height, minZoom: dorm ? 16.9 : 15.7, priority: dorm ? 3 : 1, className: dorm ? 'minor' : '' }); }
+        }
+        for (const place of world.space.places) {
+            if (place.kind !== 'place' || !place.centre || !place.names[0] || hidesLabel.has(place.category ?? '')) continue;
+            out.push({ id: place.id, text: place.names[0], at: place.centre, height: 0, minZoom: 17.7, priority: 4, className: 'minor place' });
+        }
+        scene.setLabels(out);
+        scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
+    }, [scene, world]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    /* Open the selected building, or fly to the selected place. */
+    const padding = useMemo(() => wide ? { top: 60, bottom: 60, left: 50, right: 70 } : { top: 70, bottom: 272, left: 28, right: 64 }, [wide]);
+    const entered = useRef<string | null>(null);
+    const paints = useCallback((): RoomPaint[] => {
+        if (!world || !scene || !bId || floor === null) return [];
+        return scene.roomsOf(bId, floor).map(({ id }) => {
+            const room = world.roomById.get(id);
+            const place = world.space.byId.get(id);
+            const classroom = room && isClassroom(room);
+            const title = (place as Place & { title?: string } | undefined)?.title;
+            return { id, tier: id === pickedRoom?.id ? 'picked' : classroom && day ? world.read(day, id, moment.min).tier : 'other', label: title ?? place?.names[0] ?? id.slice(id.lastIndexOf('-') + 1), named: Boolean(title) };
+        });
+    }, [bId, day, floor, moment.min, pickedRoom?.id, scene, world]);
+    useEffect(() => {
+        if (!scene || !world || navId) return;
+        const first = entered.current === null;
+        if (bId && floor !== null && scene.hasFloors(bId)) {
+            const key = `${bId}/${floor}/${pickedRoom?.id ?? ''}`;
+            if (entered.current !== key) {
+                const rooms = scene.roomsOf(bId, floor);
+                const focus = pickedRoom ? rooms.filter(room => room.id === pickedRoom.id) : rooms;
+                scene.enter(bId, floor, paints(), padding, pitch, focus.map(room => room.geometry), first);
+                entered.current = key;
+            } else scene.paintRooms(paints());
+        } else {
+            if (entered.current) scene.exit();
+            entered.current = '';
+            const at = selected?.centre ?? (bId ? scene.centreOf(bId) : null);
+            if (at) scene.focusPoint(at, padding, first);
+        }
+    }, [bId, floor, navId, padding, paints, pickedRoom, pitch, scene, selected, world]);
+
+    /* Routes. */
+    const destination = navId ? world?.space.byId.get(navId) : undefined;
+    useEffect(() => {
+        if (!destination || !world) { setRoutes([]); return; }
+        const from = origin ? world.space.byId.get(origin)?.routing : me ? { type: 'position' as const, position: me as [number, number] } : null;
+        if (!from) { setRoutes([]); return; }
+        try {
+            const answer = world.router.route({ origin: from, destination: destination.routing, mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 3 });
+            setRoutes(answer.routes);
+            setChosen(0);
+            setNotice(answer.routes.length ? null : '没有找到路线。');
+        } catch {
             setRoutes([]);
-            setPlanning(planAfterSelection.current);
-            setSheetState(selected ? 'half' : 'collapsed');
-            planAfterSelection.current = false;
-            previousSelection.current = selected?.id ?? null;
+            setNotice(origin ? '没有找到路线。' : '你现在不在校园路网附近，请选一个出发地。');
         }
-        (instance.getSource('selected-entrances') as GeoJSONSource).setData({ type: 'FeatureCollection', features: (selected?.entrances ?? []).map(entrance => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: entrance.at } })) });
-        const url = new URL(location.href);
-        if (!selected) {
-            url.searchParams.delete('place');
-            history.replaceState(null, '', url);
-            return;
-        }
-        url.searchParams.set('place', selected.id);
-        history.replaceState(null, '', url);
-        const building = selected.kind === 'room' ? selected.parent : selected.id;
-        if (space.byId.get(building)?.kind === 'building') instance.setFeatureState({ source: 'basemap', sourceLayer: 'buildings', id: building }, { selected: true });
-        const at = placePosition(space, selected);
-        if (at) {
-            marker.current = new maplibregl.Marker({ color: tokens.color[theme()].brand }).setLngLat(at).addTo(instance);
-            const phone = window.innerWidth <= 680;
-            instance.easeTo({ center: at, zoom: Math.max(instance.getZoom(), 17), padding: { top: 0, left: phone ? 0 : 408, right: 0, bottom: phone ? sheetHeight(sheetStateRef.current, viewportHeight, safeBottomInset) : 0 }, duration: tokens.motion.camera });
-        }
-    }, [selected, space, loaded, viewportHeight, safeBottomInset, sheetState]);
-
+    }, [destination, me, mode, origin, world]);
     useEffect(() => {
-        if (!me || !map.current || !loaded) return;
-        if (!meMarker.current) {
-            const dot = document.createElement('div');
-            dot.className = 'campus-map-me';
-            meMarker.current = new maplibregl.Marker({ element: dot }).setLngLat(me).addTo(map.current);
-        } else meMarker.current.setLngLat(me);
-    }, [me, loaded]);
+        if (!scene) return;
+        if (navId && entered.current) { scene.exit(); entered.current = ''; }
+        scene.showRoutes(routes.map(route => route.geometry), chosen, wide ? { top: 80, bottom: 80, left: 80, right: 80 } : { top: 70, bottom: 330, left: 50, right: 50 }, pitch);
+    }, [chosen, navId, pitch, routes, scene, wide]);
 
     const locate = useCallback(() => {
         navigator.geolocation?.getCurrentPosition(
-            position => {
-                const at: Position = [position.coords.longitude, position.coords.latitude];
-                setMe(at);
-                map.current?.easeTo({ center: at, zoom: 17, duration: tokens.motion.camera });
-            },
-            () => setNotice('无法获取你的位置：请允许浏览器使用定位，或从地图上选择出发地。'),
+            position => { const at: Position = [position.coords.longitude, position.coords.latitude]; setMe(at); scene?.setMe(at); },
+            () => setNotice('没有拿到你的位置：请允许定位，或选一个出发地。'),
             { enableHighAccuracy: true, timeout: 10000 },
         );
-    }, []);
+    }, [scene]);
+    useEffect(() => { if (navId && !me && !origin) locate(); }, [locate, me, navId, origin]);
 
-    // Plan routes whenever the request changes.
-    useEffect(() => {
-        if (!planning || !router || !space || !selected) return;
-        const target = selected.routing;
-        const from = origin.kind === 'me'
-            ? (me ? { type: 'position' as const, position: me } : null)
-            : space.byId.get(origin.id)?.routing;
-        if (!from) { if (origin.kind === 'me') locate(); return; }
-        try {
-            const answer = router.route({ origin: from, destination: target, mode, avoid_steps: avoidSteps, max_snap_distance_m: 100, alternatives: 3 });
-            setRoutes(answer.routes);
-            setChosen(0);
-            setError(answer.routes.length ? null : '没有找到路线。');
-        } catch (reason) {
-            setRoutes([]);
-            setError(origin.kind === 'me' ? '你当前不在校园路网附近，请从地图上选择出发地。' : String(reason));
-        }
-    }, [planning, router, space, selected, origin, me, mode, avoidSteps, locate]);
-
-    // Draw routes, the chosen one on top.
-    useEffect(() => {
-        const instance = map.current;
-        const source = instance?.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined;
-        if (!instance || !source) return;
-        source.setData({ type: 'FeatureCollection', features: routes.map((route, i) => ({
-            type: 'Feature' as const, properties: { chosen: i === chosen, index: i }, geometry: { type: 'LineString' as const, coordinates: route.geometry },
-        })).sort((a, b) => Number(a.properties.chosen) - Number(b.properties.chosen)) });
-        const route = routes[chosen];
-        if (route) {
-            const bounds = route.geometry.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(route.geometry[0], route.geometry[0]));
-            const phone = window.innerWidth <= 680;
-            const cardHeight = sheetHeight(sheetStateRef.current, viewportHeight, safeBottomInset);
-            // fitBounds adds its padding to the current camera padding. Clear
-            // the place-sheet inset first, otherwise a phone has no space left.
-            instance.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
-            instance.fitBounds(bounds, { padding: { top: phone ? 120 : 60, bottom: phone ? Math.min(cardHeight + 24, instance.getContainer().clientHeight * .88) : 60, left: phone ? 28 : 440, right: phone ? 28 : 60 }, duration: tokens.motion.camera, maxZoom: 18 });
-        }
-    }, [routes, chosen, loaded, sheetState, viewportHeight, safeBottomInset]);
-
-    const route = routes[chosen];
-    const moment = momentAt(clock.hour);
-    const ranked = useMemo(() => recommendations(space?.places ?? [], clock, me, category), [space, clock, me, category]);
-    const status = openingStatus(selected?.hours, clock);
-    const pick = (result: SearchResult) => {
-        const place = space?.byId.get(result.id);
-        if (place) { setSelected(place); setQuery(''); setResults([]); }
+    /* Handlers read current state through a ref so the scene never needs rebuilding. */
+    handlers.current = {
+        onBuilding: id => { set({ place: id, f: null, nav: null }, { push: true }); setSnap(0); },
+        onRoom: id => { set({ place: id, f: null, nav: null }, { push: true }); setSnap(1); },
+        onPlace: id => { set({ place: id, f: null, nav: null }, { push: true }); setSnap(0); },
+        onEmpty: () => { if (placeId || navId) set({ place: null, f: null, nav: null }, { push: true }); setSnap(0); },
+        onView: () => { if (scene) setNeedle(scene.map.getBearing() * 1e3 + scene.map.getPitch()); },
     };
+    const setMoment = (date: string, min: number) => { set(date === now.date && min === now.min ? { t: null } : { t: momentText({ date, min }) }); };
 
-    const mobileSheetHeight = dragHeight ?? sheetHeight(sheetState, viewportHeight, safeBottomInset);
-    const sheetStyle = {
-        '--campus-sheet-height': `${mobileSheetHeight}px`,
-        '--campus-viewport-height': `${viewportHeight}px`,
-    } as CSSProperties;
-    const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-        if (window.innerWidth > 680) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        suppressHandleClick.current = false;
-        drag.current = { y: event.clientY, started: performance.now(), base: sheetHeight(sheetState, viewportHeight, safeBottomInset) };
-    };
-    const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    /* Lists. */
+    const freeRooms = useMemo(() => {
+        if (!world || !day) return [];
+        return world.rooms.filter(isClassroom).map(room => ({ room, state: world.read(day, room.id, moment.min) })).filter(item => !item.state.busy);
+    }, [day, moment.min, world]);
+    const walkTo = useCallback((room: Room) => {
+        if (!me || !world) return null;
+        const at = world.space.byId.get(`${room.campus}/${room.building}`)?.centre;
+        return at ? Math.max(1, Math.ceil(distance(me, at) / 80)) : null;
+    }, [me, world]);
+    const ranked = useMemo(() => [...freeRooms].sort((a, b) => (a.state.minutes >= 60 ? 0 : 1) - (b.state.minutes >= 60 ? 0 : 1) || (walkTo(a.room) ?? 0) - (walkTo(b.room) ?? 0) || b.state.minutes - a.state.minutes), [freeRooms, walkTo]);
+    const roomRows = (items: { room: Room; state: RoomState }[]) => items.map(({ room, state }) => {
+        const walk = walkTo(room);
+        return <button key={room.id} className="rrow" onClick={() => handlers.current.onRoom(room.id)}>
+            <span className={`sw ${state.tier}`} />
+            <span className="m"><span className="a">{roomLabel(room.id)}</span><span className="b">{room.seats ? `${room.seats} 座` : '座位未知'}{walk ? ` · 约步行 ${walk} 分钟` : ''}</span></span>
+            <span className="r">到 {hm(state.until)}</span>
+        </button>;
+    });
+
+    /* Sheet on phones. */
+    const base = navId ? 300 : pickedRoom ? 430 : placeId ? (teaching ? 230 : 260) : 190;
+    const viewport = typeof innerHeight === 'number' ? innerHeight : 800;
+    const sheetPeek = peek ?? (snap === 2 ? viewport - 130 : snap === 1 ? Math.max(base, Math.round(viewport * .56)) : base);
+    const drag = useRef<{ y: number; start: number } | null>(null);
+    const gripDown = (event: ReactPointerEvent) => { drag.current = { y: event.clientY, start: sheetPeek }; event.currentTarget.setPointerCapture(event.pointerId); };
+    const gripMove = (event: ReactPointerEvent) => { if (drag.current) setPeek(Math.max(150, drag.current.start + drag.current.y - event.clientY)); };
+    const gripUp = (event: ReactPointerEvent) => {
         if (!drag.current) return;
-        if (Math.abs(event.clientY - drag.current.y) > 8) suppressHandleClick.current = true;
-        const next = Math.max(sheetHeight('collapsed', viewportHeight, safeBottomInset), Math.min(sheetHeight('full', viewportHeight, safeBottomInset), drag.current.base + drag.current.y - event.clientY));
-        setDragHeight(next);
-    };
-    const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
-        if (!drag.current) return;
-        const elapsed = Math.max(1, performance.now() - drag.current.started);
-        const delta = drag.current.y - event.clientY;
-        setSheetState(snapSheet(sheetState, -delta, (event.clientY - drag.current.y) / elapsed * 1000));
+        const moved = drag.current.y - event.clientY;
+        setPeek(null);
+        setSnap(Math.abs(moved) < 6 ? (snap ? 0 : 1) : moved > 0 ? Math.min(2, snap + 1) : Math.max(0, snap - 1));
         drag.current = null;
-        setDragHeight(null);
     };
-    const handleHandleClick = () => {
-        if (suppressHandleClick.current) { suppressHandleClick.current = false; return; }
-        setSheetState(sheetState === 'collapsed' ? 'half' : sheetState === 'half' ? 'full' : 'collapsed');
-    };
+
+    /* Panels. */
+    const close = () => set({ place: null, f: null, nav: null }, { push: true });
+    let body = null;
+    if (world && destination) {
+        const route = routes[chosen];
+        const name = destination.kind === 'room' ? roomLabel(destination.id) : displayName(destination, world.space.byId);
+        body = <>
+            <div className="card-h top"><h2>{route ? `${mode === 'walk' ? '步行' : '骑行'} ${Math.max(1, Math.ceil(route.duration_s / 60))} 分钟 · ${metres(route.distance_m)}` : name}</h2><button className="x" aria-label="关闭" onClick={close}><Cross /></button></div>
+            <div className="meta">到 {name}</div>
+            <label className="from">从
+                <select value={origin} onChange={event => setOrigin(event.target.value)}>
+                    <option value="">我的位置</option>
+                    {world.space.places.filter(place => (place.kind === 'building' || place.kind === 'place') && place.id !== destination.id && place.names[0]).map(place => <option key={place.id} value={place.id}>{place.names[0]}</option>)}
+                </select>
+            </label>
+            <div className="tabs slim">{(['walk', 'bike'] as const).map(item => <button key={item} className={mode === item ? 'on' : ''} onClick={() => setMode(item)}>{item === 'walk' ? '步行' : '骑行'}</button>)}</div>
+            {routes.length > 1 && routes.map((item, index) => <button key={index} className={`occ ${index === chosen ? 'cur' : ''}`} onClick={() => setChosen(index)}><span className="tm">{Math.max(1, Math.ceil(item.duration_s / 60))} 分钟</span><span className="nm">{metres(item.distance_m)}<small>经 {visibleRouteText(item.via)}</small></span></button>)}
+            {route && <ol className="steps">{route.maneuvers.map((step, index) => <li key={index}>{visibleRouteText(step.instruction)}</li>)}</ol>}
+            {!route && !notice && <p className="msum">正在找你的位置…</p>}
+        </>;
+    } else if (world && pickedRoom && bId) {
+        const room = world.roomById.get(pickedRoom.id);
+        const state = room && isClassroom(room) ? stateOf(pickedRoom.id) : null;
+        const title = (pickedRoom as Place & { title?: string }).title;
+        const roomName = title ? `${title} ${pickedRoom.names[0]}` : roomLabel(pickedRoom.id);
+        body = <>
+            <div className="card-h top"><h2>{roomName}</h2><button className="x" aria-label="返回楼层" onClick={() => set({ place: bId, f: floor }, { push: true })}><Cross /></button></div>
+            <div className="meta">{openBuilding?.names[0]} {floor} 层{room?.seats ? ` · ${room.seats} 座` : ''}{room?.kinds[0] ? ` · ${room.kinds[0].replace(/^(仙林|三牌楼|锁金)/, '')}` : ''}</div>
+            {state && (!day ? <div className="state busy">这一天没有排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>，到 {hm(state.until)}{state.minutes ? `，还能待 ${durationText(state.minutes)}` : ''}</div>)}
+            {state && day && <PeriodStrip periods={world.periods} state={state} min={moment.min} />}
+            <div className="btns">
+                {state && <a className="btn" href={`/?who=room:${encodeURI(pickedRoom.id)}&scale=week&t=${moment.date}`}>这间的课表</a>}
+                <button className="btn go" onClick={() => set({ nav: pickedRoom.id, place: null }, { push: true })}>去这里</button>
+            </div>
+            {state?.occupants.map(occupant => <a key={occupant.id} className={`occ ${occupant === state.current ? 'cur' : ''}`} href={`/?who=course:${encodeURI(courseName(occupant.course))}&scale=week`}><span className="tm">{hm(occupant.start)}–{hm(occupant.end)}</span><span className="nm">{courseName(occupant.course)}{occupant.kind === 'exam' ? ' · 考试' : ''}<small>{occupant.teachers.join(' ')}{occupant.classes.length ? ` · ${occupant.classes.slice(0, 2).join(' ')}${occupant.classes.length > 2 ? ' 等' : ''}` : ''}</small></span></a>)}
+            {state && day && !state.occupants.length && <div className="empty small">今天没有排课</div>}
+        </>;
+    } else if (world && openBuilding && teaching) {
+        const inFloor = roomsInBuilding.filter(room => floor === null || Number(room.floor) === floor);
+        const free = inFloor.map(room => ({ room, state: stateOf(room.id)! })).filter(item => day && !item.state.busy).sort((a, b) => b.state.minutes - a.state.minutes);
+        const named = scene && floor !== null ? scene.roomsOf(openBuilding.id, floor).map(({ id }) => world.space.byId.get(id)).filter((place): place is Place => Boolean(place)) : [];
+        body = <>
+            <div className="card-h top"><h2>{openBuilding.names[0]}{floor !== null ? ` ${floor} 层` : ''}</h2><button className="x" aria-label="关闭" onClick={close}><Cross /></button></div>
+            <div className="msum">{inFloor.length ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '楼层布局'}</div>
+            {inFloor.length > 0 ? roomRows(free) : named.map(place => <button key={place.id} className="rrow" onClick={() => handlers.current.onRoom(place.id)}><span className="m"><span className="a">{(place as Place & { title?: string }).title ?? place.names[0]}</span><span className="b">{place.names[0]}</span></span></button>)}
+            {inFloor.length > 0 && !free.length && <div className="empty">这一层此刻没有空教室</div>}
+        </>;
+    } else if (world && selected) {
+        const status = selected.hours ? openingStatus(selected.hours, campusTime()) : null;
+        body = <>
+            <div className="card-h top"><h2>{displayName(selected, world.space.byId)}</h2><button className="x" aria-label="关闭" onClick={close}><Cross /></button></div>
+            <div className="meta">{selected.category ?? ''}</div>
+            {status && status.state !== 'unknown' && <div className="state"><b className={status.state === 'closed' ? 'off' : ''}>{openingLabel[status.state]}</b> · 今日 {status.today}</div>}
+            <div className="btns"><button className="btn go" onClick={() => set({ nav: selected.id, place: null }, { push: true })}>去这里</button></div>
+            {selected.hours && <div className="hours">{Array.from({ length: 7 }, (_, index) => <div key={index}><span>{WEEKDAYS[index + 1]}</span><span>{selected.hours!.week[String(index + 1)]?.map(range => range.join('–')).join('、') || '不开放'}</span></div>)}</div>}
+        </>;
+    } else if (world) {
+        body = day
+            ? <><div className="msum"><b>{freeRooms.length}</b> 间空教室，{me ? '离你近的在前' : '能待得久的在前'}</div>{roomRows(ranked.slice(0, 40))}</>
+            : <div className="empty">这一天没有排课数据</div>;
+    }
+    const holiday = world?.holidays.get(moment.date);
+    const shiftDay = (by: number) => setMoment(addDays(moment.date, by), moment.min);
+
     return (
-        <div className={`campus-map is-${sheetState}`} style={sheetStyle}>
-            <div ref={container} className="campus-map-canvas" />
-            <div className="campus-map-attribution">© njupt-map · © OpenStreetMap contributors</div>
-            <a className="campus-map-back-home" href="/" aria-label="返回首页"><ChevronLeft size={20} /></a>
-            {notice && <div className="campus-map-notice" role="status">{notice}<button type="button" onClick={() => setNotice(null)} aria-label="关闭提示">×</button></div>}
-            <aside ref={panel} className={`campus-map-panel${query ? ' is-searching' : ''} is-${sheetState}`} aria-label="校园地图">
-                <button className="campus-map-sheet-handle" type="button" aria-label={sheetState === 'full' ? '收起地图面板' : '展开地图面板'} aria-expanded={sheetState !== 'collapsed'}
-                    onClick={handleHandleClick}
-                    onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp}><span /></button>
-                <div className="campus-map-search">
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-                    <input value={query} onFocus={() => sheetState === 'collapsed' && setSheetState('half')} onChange={e => { setQuery(e.target.value); if (e.target.value.trim()) setSheetState('half'); }} placeholder="搜索地点、楼栋或教室" aria-label="搜索地点、楼栋或教室"
-                        onKeyDown={e => { if (e.key === 'Enter' && results[0]) pick(results[0]); }} />
-                    {query && <button type="button" className="campus-map-clear" onClick={() => setQuery('')} aria-label="清空">×</button>}
+        <div className="sd mapview" style={{ '--peek': `${sheetPeek}px` } as React.CSSProperties}>
+            <div className="canvas" ref={canvas} aria-label="校园模型" />
+            <div className="labels" ref={labels} />
+            <div className="mapui">
+                <a className="searchpill" href="/search/?scope=place"><Magnifier /><span>搜地点或教室</span></a>
+                <button className="campus" onClick={() => setCampusOpen(true)}>仙林</button>
+                <div className="camctl">
+                    <button className="tilt" aria-label={pitch ? '切到俯视' : '切到立体'} onClick={() => { const next = scene && scene.map.getPitch() > 4 ? 0 : 52; scene?.setPitch(next); set({ tilt: next ? null : 0 }); }}>
+                        <svg viewBox="0 0 24 24" style={{ transform: scene ? `rotateX(${scene.map.getPitch() * .7}deg) rotateZ(${-scene.map.getBearing()}deg)` : undefined }} data-needle={needle}><path className="n" d="M12 3.5 15.5 12H8.5Z" /><path className="s" d="M12 20.5 8.5 12h7Z" /></svg>
+                    </button>
+                    {floors.length > 0 && <div className="floors">{[...floors].reverse().map(level => {
+                        const free = roomsInBuilding.some(room => Number(room.floor) === level && day && !stateOf(room.id)?.busy);
+                        return <button key={level} className={level === floor ? 'on' : ''} onClick={() => set({ place: bId, f: level })}>{level}{free && <i />}</button>;
+                    })}</div>}
+                    <button className="tilt" aria-label="我的位置" onClick={locate}><svg viewBox="0 0 24 24" className="target"><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7.5" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" /></svg></button>
                 </div>
-                {!query && <nav className="campus-map-modules" aria-label="校园服务"><a href="/search/timetable/">课表</a><a href="/search/exam/">考试</a><a href="/search/classrooms/">空教室</a><a href="/search/">校园搜索</a></nav>}
-                {results.length > 0 && (
-                    <ul className="campus-map-results">
-                        {results.map(result => (
-                            <li key={result.id}><button type="button" onClick={() => pick(result)}>
-                                <span className="campus-map-result-title">{space!.byId.get(result.id) ? displayName(space!.byId.get(result.id)!, space!.byId) : result.title}</span>
-                                <span className="campus-map-result-meta">{result.sourceName}{result.section ? ` · ${result.section}` : ''}</span>
-                            </button></li>
-                        ))}
-                    </ul>
-                )}
-                {error && <p className="campus-map-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="关闭">×</button></p>}
-                {!space && !error && <p className="campus-map-error" role="status">正在加载校园地图…</p>}
-                {!selected && space && !query && <section className="campus-map-card campus-map-home">
-                    <nav className="campus-map-categories" aria-label="地点分类">{categories.filter(([name]) => space.places.some(p => p.category === name)).map(([name, Icon]) => <button type="button" key={name} aria-pressed={category === name} onClick={() => setCategory(category === name ? null : name)}><span><Icon size={21} strokeWidth={1.8} /></span>{name}</button>)}</nav>
-                    <header className="campus-map-home-heading">
-                        {category && <button type="button" className="campus-map-back" aria-label="返回热门推荐" onClick={() => setCategory(null)}><ChevronLeft size={20} /></button>}
-                        <div><p>{category ? '校园生活' : moment.title}</p><h2>{category ? `附近${category}` : '热门推荐'}</h2><p>{category ? `${ranked.length} 个地点` : moment.subtitle}</p></div>
-                    </header>
-                    <ul className="campus-map-recommendations">{ranked.map(item => {
-                        const Icon = categories.find(([name]) => name === item.place.category)?.[1] ?? MapPin;
-                        const title = displayName(item.place, space.byId);
-                        return <li key={item.place.id}><button type="button" onClick={() => setSelected(item.place)}><span className="campus-map-place-icon"><Icon size={22} strokeWidth={1.8} /></span><span className="campus-map-place-copy"><strong>{title}</strong><span>{item.status.state !== 'unknown' && <em data-state={item.status.state}>{openingLabel[item.status.state]}</em>}{metres(item.distance)}</span><small>{item.place.category ?? kindLabel(item.place)}</small></span></button><button className="campus-map-go" type="button" aria-label={`前往${title}`} onClick={() => { planAfterSelection.current = true; setSelected(item.place); }}><ArrowUpRight size={21} /></button></li>;
-                    })}</ul>
-                    {!ranked.length && <p className="campus-map-houses">暂无符合当前时段的地点，试试上方分类</p>}
-                    <p className="campus-map-distance-note">{me ? '距离为直线距离 · 路线以实际规划为准' : '距校区中心的直线距离 · 定位后可查看附近'}</p>
-                </section>}
-                {selected && space && (
-                    <section className="campus-map-card">
-                        <header>
-                            <div>
-                                <h2>{displayName(selected, space.byId)}</h2>
-                                <p>{kindLabel(selected)}{selected.kind === 'room' ? ` · ${roomDisplayName(selected.parent, space.byId) ?? selected.parent} ${selected.floor ? `${selected.floor} 楼` : ''}${selected.seats ? ` · ${selected.seats} 座` : ''}` : ''}
-                                    {selected.levels ? ` · ${selected.levels} 层` : ''}</p>
-                            </div>
-                            <button type="button" className="campus-map-close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
-                        </header>
-                        <p className="campus-map-houses">用途 · {selected.category ?? kindLabel(selected)}</p>
-                        {selected.hours && <details className="campus-map-hours">
-                            <summary><span data-state={status.state}>{openingLabel[status.state]}</span><span>今日 {status.today}</span><small>一周时间</small></summary>
-                            {status.state === 'closing' && <p>{status.closesAt} 关闭，请留意时间</p>}
-                            <dl>{Array.from({ length: 7 }, (_, i) => <div key={i}><dt>周{'一二三四五六日'[i]}</dt><dd>{selected.hours!.week[String(i + 1)]?.map(r => r.join('–')).join('、') || '不开放'}</dd></div>)}</dl>
-                            {selected.hours.note && <p>{selected.hours.note}</p>}
-                        </details>}
-                        {!!selected.entrances?.length && <p className="campus-map-houses">{selected.entrances.length} 个入口 · 路线自动选择适合的入口</p>}
-                        {selected.houses && selected.houses.length > 0 && <p className="campus-map-houses">{selected.houses.slice(0, 6).join('、')}</p>}
-                        {!planning ? (
-                            <button type="button" className="campus-map-primary" onClick={() => setPlanning(true)}>
-                                路线
-                            </button>
-                        ) : (
-                            <div className="campus-map-plan">
-                                <label className="campus-map-from">从
-                                    <select value={origin.kind === 'me' ? '' : origin.id} onChange={e => setOrigin(e.target.value ? { kind: 'place', id: e.target.value } : { kind: 'me' })}>
-                                        <option value="">我的位置</option>
-                                        {space.places.filter(p => (p.kind === 'building' || p.kind === 'place' || p.kind === 'campus') && p.id !== selected.id && displayName(p, space.byId) !== '未命名建筑').map(p => <option key={p.id} value={p.id}>{displayName(p, space.byId)}</option>)}
-                                    </select>
-                                </label>
-                                <div className="campus-map-modes" role="radiogroup" aria-label="出行方式">
-                                    {(['walk', 'bike'] as const).map(m => (
-                                        <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'walk' ? '步行' : '骑行'}</button>
-                                    ))}
-                                    {mode === 'walk' && <label className="campus-map-steps"><input type="checkbox" checked={avoidSteps} onChange={e => setAvoidSteps(e.target.checked)} />避开楼梯</label>}
-                                </div>
-                                {routes.length > 0 && (
-                                    <div className="campus-map-routes">
-                                        {routes.map((r, i) => (
-                                            <button key={i} type="button" aria-pressed={i === chosen} className={i === chosen ? 'on' : ''} onClick={() => setChosen(i)}>
-                                                <strong>{minutes(r.duration_s)} 分钟</strong><span>{metres(r.distance_m)}</span><small>经 {visibleRouteText(r.via)}</small>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                {route && (
-                                    <details className="campus-map-directions"><summary>路线详情 · {route.maneuvers.length} 步</summary><ol className="campus-map-steps-list">
-                                        {route.maneuvers.map((m, i) => <li key={i}><span>{visibleRouteText(m.instruction)}</span>{m.distance_to_next_m > 0 && <small>{metres(m.distance_to_next_m)}</small>}</li>)}
-                                    </ol><p className="campus-map-houses">到达 {displayName(selected, space.byId)}{selected.floor ? ` · ${selected.floor} 楼` : ''}</p></details>
-                                )}
-                            </div>
-                        )}
-                    </section>
-                )}
-            </aside>
-            <button type="button" className="campus-map-locate" onClick={() => { locate(); if (me) map.current?.easeTo({ center: me, zoom: 17 }); }} aria-label="我的位置">
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3.5" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="7.5" /></svg>
-            </button>
+            </div>
+            <section className={`msheet ${peek !== null ? 'drag' : ''}`}>
+                <div className="grip" onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={gripUp} onPointerCancel={gripUp} />
+                <div className="rulerbox">
+                    <div className="rhead">
+                        <span className="rtime">{hm(moment.min)}</span>
+                        <div className="rdate"><button aria-label="前一天" onClick={() => shiftDay(-1)}><Back /></button><span>{moment.date === now.date ? '今天' : WEEKDAYS[weekdayOf(moment.date)]} {dateLabel(moment.date)}{holiday ? ` · ${holiday}` : ''}</span><button aria-label="后一天" onClick={() => shiftDay(1)}><Chevron /></button></div>
+                        <button className={`rnow ${isNow ? '' : 'back'}`} onClick={() => set({ t: null })}>{isNow ? '现在' : '回到现在'}</button>
+                    </div>
+                    {world && <Ruler periods={world.periods} date={moment.date} min={moment.min} now={now} onChange={min => setMoment(moment.date, min)} />}
+                </div>
+                <div className="mbody" style={{ paddingBottom: wide ? undefined : `${Math.max(0, viewport - 130 - sheetPeek) + 20}px` }}>
+                    {error ? <div className="empty">地图暂时打不开，请刷新重试。</div> : !world ? <div className="msum">正在打开校园…</div> : body}
+                    {notice && <p className="notice" role="status">{notice}<button aria-label="知道了" onClick={() => setNotice(null)}><Cross /></button></p>}
+                </div>
+            </section>
+            <div className="credit">© OpenStreetMap 贡献者 · njupt-map</div>
+            {campusOpen && <Sheet title="校区" onClose={() => setCampusOpen(false)}>
+                <div className="kv"><span className="v"><b>仙林</b><small>{world?.model.buildings.length ?? ''} 栋楼</small></span><span className="rnow">当前</span></div>
+                <div className="kv"><span className="v"><b>三牌楼</b><small>地图资料收集中</small></span></div>
+                <div className="kv"><span className="v"><b>锁金</b><small>地图资料收集中</small></span></div>
+            </Sheet>}
         </div>
     );
+}
+
+function Ruler({ periods, date, min, now, onChange }: { periods: TeachingPeriod[]; date: string; min: number; now: { date: string; min: number }; onChange: (min: number) => void }) {
+    const element = useRef<HTMLDivElement>(null);
+    const dragging = useRef(false);
+    const from = (event: ReactPointerEvent) => {
+        const box = element.current!.getBoundingClientRect();
+        onChange(Math.round((RULER_START + Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * (RULER_END - RULER_START)) / 5) * 5);
+    };
+    return (
+        <div className="ruler" ref={element} role="slider" aria-label="查看的时刻" aria-valuemin={RULER_START} aria-valuemax={RULER_END} aria-valuenow={min} aria-valuetext={hm(min)} tabIndex={0}
+            onKeyDown={event => { if (event.key === 'ArrowLeft') onChange(Math.max(RULER_START, min - 5)); if (event.key === 'ArrowRight') onChange(Math.min(RULER_END, min + 5)); }}
+            onPointerDown={event => { dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); from(event); event.preventDefault(); }}
+            onPointerMove={event => { if (dragging.current) from(event); }}
+            onPointerUp={() => { dragging.current = false; }}>
+            <div className="base">{periods.map(period => <div key={period.period} className="per" style={{ left: percent(minutesOf(period.start)), width: `${(minutesOf(period.end) - minutesOf(period.start)) / (RULER_END - RULER_START) * 100}%` }} />)}</div>
+            {[8, 10, 12, 14, 16, 18, 20].map(hour => <span key={hour} className="tick" style={{ left: percent(hour * 60) }}>{hour}</span>)}
+            {date === now.date && <div className="nowt" style={{ left: percent(now.min) }} />}
+            <div className="cur" style={{ left: percent(min) }} />
+        </div>
+    );
+}
+
+function PeriodStrip({ periods, state, min }: { periods: TeachingPeriod[]; state: RoomState; min: number }) {
+    const busy = (period: TeachingPeriod) => state.occupants.some(occupant => occupant.periods[0] <= period.period && period.period <= occupant.periods[1]);
+    const breaks = new Set([5, 9]);
+    let position: number | null = null;
+    const widths = periods.flatMap(period => [{ start: minutesOf(period.start), end: minutesOf(period.end), width: 1 }, ...(breaks.has(period.period) ? [{ start: minutesOf(period.end), end: minutesOf(periods.find(next => next.period === period.period + 1)?.start ?? period.end), width: .35 }] : [])]);
+    const total = widths.reduce((sum, item) => sum + item.width, 0);
+    let passed = 0;
+    for (const item of widths) {
+        if (min < item.start) { position = passed / total; break; }
+        if (min <= item.end) { position = (passed + (min - item.start) / Math.max(1, item.end - item.start) * item.width) / total; break; }
+        passed += item.width;
+    }
+    return <>
+        <div className="strip">{periods.map(period => <span key={period.period} className="seg"><i className={busy(period) ? 'b' : ''} />{breaks.has(period.period) && <i className="gap" />}</span>)}{position !== null && <u style={{ left: `${(position * 100).toFixed(1)}%` }} />}</div>
+        <div className="stripn">{periods.map(period => <span key={period.period} className="seg"><span>{period.period}</span>{breaks.has(period.period) && <span className="gap" />}</span>)}</div>
+    </>;
 }

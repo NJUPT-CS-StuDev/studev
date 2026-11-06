@@ -29,6 +29,18 @@ export const campusConfig = {
             { id: 'workflow', words: ['流程', '办理', '申请', '指南'] },
             { id: 'news', words: ['新闻', '快讯', '动态'] },
         ],
+        /** Every searchable thing is one document in one bundle; a channel is a set of its sources. */
+        entities: {
+            courses: '课程', teachers: '老师', classes: '班级', 'teaching-classes': '教学班', exams: '考试安排', rooms: '教室', places: '地点',
+        },
+        channels: [
+            { id: 'all', label: '全部', excluded: ['teaching-classes', 'exams'] },
+            { id: 'academic', label: '教务', sources: ['courses', 'teachers', 'classes', 'teaching-classes', 'exams'] },
+            { id: 'place', label: '地点', sources: ['rooms', 'places'] },
+            { id: 'notice', label: '通知', excluded: ['courses', 'teachers', 'classes', 'teaching-classes', 'exams', 'rooms', 'places', 'njupt-general-free-exams', 'njupt-survival-guide'], dated: true },
+            { id: 'material', label: '考试资料', sources: ['njupt-general-free-exams'] },
+            { id: 'community', label: '社区', sources: ['njupt-survival-guide'] },
+        ],
         defaultCategory: 'notice_article',
         fileCategory: 'download',
         linkCategory: 'external',

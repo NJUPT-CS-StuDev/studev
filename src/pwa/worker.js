@@ -2,7 +2,7 @@
 const SHELL = `studev-shell-2-${DATA_VERSION}`;
 const DATA = `studev-data-${DATA_VERSION}`;
 const META = 'studev-release';
-const SHELL_PATHS = ['/', '/map/', '/search/', '/search/timetable/', '/search/exam/', '/search/classrooms/'];
+const SHELL_PATHS = ['/', '/map/', '/search/'];
 const PUBLIC_PAGE = new Set(SHELL_PATHS);
 const saved = new Set();
 

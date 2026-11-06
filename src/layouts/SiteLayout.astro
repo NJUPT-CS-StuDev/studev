@@ -1,46 +1,32 @@
 ---
 import '../styles/global.css';
-import ThemeToggle from '../components/ThemeToggle.astro';
-import { Image, getImage } from 'astro:assets';
+import MeApp from '../campus/me/MeApp';
+import { getImage } from 'astro:assets';
 import logo from '../assets/logo.png';
 import tokens from '../../design/tokens.json';
 import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/app/config/product';
 // fill: the page is one full-height application (the map) with no footer.
-interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; hideFloatingPwa?: boolean; noPwa?: boolean; }
-const { title = 'StuDev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false, hideFloatingPwa = false, noPwa = false } = Astro.props;
-const nav = [
-  { href: '/study/', label: 'Study', key: 'study' },
-  { href: '/develop/', label: 'Develop', key: 'develop' },
-  { href: '/life/', label: 'Life', key: 'life' },
-  { href: '/history/', label: 'History', key: 'history' },
-  { href: '/about/', label: 'About', key: 'about' },
+interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
+const { title = 'studev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
+const tabs = [
+  { href: '/', label: '课表', key: 'timetable' },
+  { href: '/map/', label: '地图', key: 'map' },
+  { href: '/search/', label: '搜索', key: 'search' },
+];
+const clubKeys = ['club', 'study', 'develop', 'life', 'history', 'about'];
+const clubNav = [
+  { href: '/study/', label: '学习', key: 'study' },
+  { href: '/develop/', label: '开发', key: 'develop' },
+  { href: '/life/', label: '生活', key: 'life' },
+  { href: '/history/', label: '历史', key: 'history' },
+  { href: '/about/', label: '关于', key: 'about' },
 ];
 const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
 const canonical = new URL(Astro.url.pathname, Astro.site);
-const normalizedPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
-const initialSearchRoute = normalizedPath === '/search'
-  ? 'home'
-  : active === 'search'
-    ? 'subpage'
-    : undefined;
-const initialSearchPlaceholder =
-  normalizedPath === '/search/classrooms'
-    ? '搜索校区、楼栋或教室'
-    : normalizedPath === '/search/timetable'
-      ? '搜索班级、课程或教师'
-      : normalizedPath === '/search/exam'
-        ? '搜索班级或考试课程'
-        : normalizedPath === '/search/community'
-          ? '搜索南邮生存手册'
-          : normalizedPath === '/search/materials'
-            ? '搜索历年课程资料'
-            : normalizedPath === '/search/web'
-              ? '搜索校内通知与公告'
-              : '搜通知、课表、考场、资料…';
 ---
 <!doctype html>
-<html lang="zh-CN" data-search-route={initialSearchRoute}>
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -76,53 +62,18 @@ const initialSearchPlaceholder =
   <body>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="/" aria-label="StuDev 首页"><Image src={logo} alt="" width={56} height={56} densities={[1, 2, 3]} loading="eager" decoding="async" /></a>
-        <div class="header-search" data-header-search>
-          <form class="header-search-form" action="/search/" method="get" role="search" data-header-search-form>
-            <a class="header-search-icon-link" href="/search/" aria-label="前往 studev-search 首页" title="studev-search 首页">
-              <svg class="header-search-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8"></circle>
-                <path d="m21 21-4.3-4.3"></path>
-              </svg>
-            </a>
-            <input
-              class="header-search-input"
-              type="text"
-              name="q"
-              placeholder={initialSearchPlaceholder}
-              autocomplete="off"
-              spellcheck="false"
-              aria-label="studev-search 全站校园搜索"
-              data-header-search-input
-            />
-            <button class="header-search-clear" type="button" aria-label="清空搜索" hidden data-header-search-clear>×</button>
-            <kbd class="header-search-kbd" aria-hidden="true">/</kbd>
-          </form>
-          <div class="header-search-panel" aria-label="studev-search 快捷入口">
-            <div class="header-search-panel-head">
-              <span class="header-search-brand">studev<span>-search</span></span>
-              <a class="header-search-home" href="/search/">聚合主页 →</a>
-            </div>
-            <div class="header-search-grid">
-              <a href="/search/timetable/">📅 课表</a>
-              <a href="/search/classrooms/">🏫 空教室</a>
-              <a href="/search/exam/">📝 考试安排</a>
-              <a href="/search/web/">🌐 校内通知</a>
-              <a href="/search/community/">📖 生存手册</a>
-              <a href="/search/materials/">📚 历年资料</a>
-            </div>
-          </div>
-        </div>
+        <a class="wordmark" href="/" aria-label="studev 首页">studev</a>
         <nav class="site-nav" aria-label="主导航">
-          {nav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
-          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>Forms</a>
+          {tabs.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
+          <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">社团</a>
+          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
-        <a class:list={['nav-account', { active: active === 'account' || active === 'login' }]} href="/account/" data-global-account-link>Account</a>
-        <ThemeToggle />
+        <button class="avatar" type="button" data-me aria-label="我">我</button>
       </div>
+      {clubKeys.includes(active) && <nav class="club-nav" aria-label="社团栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
     </header>
     <main class:list={[fill && 'main-fill']}><slot /></main>
-    {!fill && <footer class="site-footer">
+    {!fill && !tabs.some((item) => item.key === active) && <footer class="site-footer">
       <div class="footer-inner">
         <div class="footer-meta">
           <a class="footer-badge-link" href="https://visitor-badge.laobi.icu" target="_blank" rel="noopener noreferrer" title="全站访问量统计（visitor-badge）">
@@ -153,10 +104,13 @@ const initialSearchPlaceholder =
         </div>
       </div>
     </footer>}
-    {!noPwa && <PwaPanel floating={fill && !hideFloatingPwa} />}
+    <nav class="phone-tabs" aria-label="主导航">
+      {tabs.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
+    </nav>
+    <MeApp client:only="react" />
+    {!noPwa && <PwaPanel floating={false} />}
     <script>import '../client/site/copy-text';</script>
     <script>import '../client/site/diagrams';</script>
     <script>import '../client/platform/auth-status';</script>
-    <script>import '../client/site/header-search';</script>
   </body>
 </html>

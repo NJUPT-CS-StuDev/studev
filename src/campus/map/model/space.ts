@@ -64,10 +64,4 @@ export async function loadStyle(theme: 'light' | 'dark', campus = CAMPUS): Promi
     return JSON.parse(text.replaceAll('{data}', base).replaceAll('{assets}', new URL('/map', location.origin).href));
 }
 
-/** Where to draw a place: its centre, or its building's for a room. */
-export function placePosition(space: Space, place: Place): Position | undefined {
-    return place.centre ?? (place.parent ? space.byId.get(place.parent)?.centre : undefined);
-}
 
-const KIND_LABELS: Record<string, string> = { building: '楼栋', room: '教室' };
-export const kindLabel = (place: Place) => KIND_LABELS[place.kind] ?? place.kind;

@@ -14,18 +14,8 @@ function characters(text) {
   return new Set([...text.replace(/\s+/gu, ' ')]);
 }
 
-function phraseText(code) {
+function visibleCharacters(html) {
   let text = '';
-  for (const match of code.matchAll(/(?:const|let)\s+phrases\s*=\s*\[([\s\S]*?)\]/g)) {
-    for (const string of match[1].matchAll(/(['"])((?:\\.|(?!\1)[^\\])*)\1/g)) {
-      text += string[2].replace(/\\(['"\\])/g, '$1');
-    }
-  }
-  return text;
-}
-
-function visibleCharacters(html, extraText = '') {
-  let text = extraText;
   function visit(node) {
     if (excluded.has(node.tagName)) return;
     if (node.nodeName === '#text') text += node.value;
@@ -33,7 +23,6 @@ function visibleCharacters(html, extraText = '') {
   }
   visit(parse(html));
 
-  text += phraseText(html);
   return characters(text);
 }
 
@@ -65,12 +54,9 @@ async function htmlFiles(directory) {
 
 async function subsetBuiltFonts(directory, { base = '/', log = () => {} } = {}) {
   const files = await htmlFiles(directory);
-  // Read the source before bundling renames the array or moves it into a JS asset.
-  const homepagePhrases = phraseText(await readFile(new URL('../client/site/typewriter.ts', import.meta.url), 'utf8'));
   const pages = await Promise.all(files.map(async (path) => {
     const html = await readFile(path, 'utf8');
-    const extra = path === join(directory, 'index.html') ? homepagePhrases : '';
-    return { path, html, characters: visibleCharacters(html, extra) };
+    return { path, html, characters: visibleCharacters(html) };
   }));
   if (!pages.length) return [];
 

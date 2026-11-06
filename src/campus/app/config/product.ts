@@ -11,7 +11,7 @@ export const PRODUCT_CONFIG = {
     ANDROID_APP: {
         VERSION: product.android.versionName,
         DOWNLOAD_URL: '/download/',
-        SUMMARY: '校园地图与步行导航，课表、考试、空教室，桌面小部件，离线可用。',
+        SUMMARY: '课表、地图和搜索，早锻炼闹钟，桌面小组件，离线可用。',
     },
     /** 招新模块展示开关：招新期设为 true 首页展示入群及二维码，招新结束后设为 false 撤回 */
     SHOW_RECRUITMENT: false,

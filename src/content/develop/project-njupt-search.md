@@ -116,11 +116,10 @@ flowchart LR
 ### 5. `njupt-search`：Web 搜索与教务查询
 通过浏览器访问 [njupt.hicancan.top](https://njupt.hicancan.top)，或直接使用本站的各项查询入口：
 - 🔍 [校园搜索直达](/search/) · 检索校方通知与红头文件附件
-- 📖 [社区经验搜索](/search/community/) · 《南邮生存手册》办事与生活指南
-- 📚 [历年资料搜索](/search/materials/) · 课程课件、试卷与笔记
-- 📅 [班级课表查询](/search/timetable/) · 周次课表与 ICS 日历同步
-- 🏫 [教室占用拓扑](/search/classrooms/) · 楼层地图、空间拓扑与课程考试占用
-- 📝 [期末考试安排](/search/exam/) · 一键检索考场时间与座位安排
+- 📖 [社区经验搜索](/search/?scope=community) · 《南邮生存手册》办事与生活指南
+- 📚 [历年资料搜索](/search/?scope=material) · 课程课件、试卷与笔记
+- 📅 [课表](/) · 课、考试、校历和早锻炼在同一条时间线上
+- 🏫 [校园地图](/map/) · 任意时刻的空教室、楼层和路线
 
 ---
 

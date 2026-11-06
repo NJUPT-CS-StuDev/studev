@@ -1,0 +1,28 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import RecruitmentGroup from '../../components/RecruitmentGroup.astro';
+import { PRODUCT_CONFIG } from '../../campus/app/config/product';
+
+const sections = [['study', '学习'], ['develop', '开发'], ['life', '生活']] as const;
+const lists = await Promise.all(sections.map(async ([key, label]) => {
+  const entries = (await getCollection(key)).filter((item) => item.data.status === 'published')
+    .sort((a, b) => (a.data.order ?? 1e9) - (b.data.order ?? 1e9) || (b.data.pubDate ?? '').localeCompare(a.data.pubDate ?? ''));
+  return { key, label, entries: entries.slice(0, 5) };
+}));
+---
+<SiteLayout title="社团 — studev" description="南京邮电大学计软网安学生发展中心。" active="club">
+  <div class="club-home">
+    <h1>南邮计软网安学生发展中心</h1>
+    <p>计算机学院 · 软件学院 · 网络空间安全学院</p>
+    {PRODUCT_CONFIG.SHOW_RECRUITMENT && <RecruitmentGroup />}
+    {lists.map(({ key, label, entries }) => <>
+      <h2>{label}<a href={`/${key}/`}>全部</a></h2>
+      {entries.map((entry) => <a class="art" href={`/${key}/${entry.id}/`}><b>{entry.data.shortTitle ?? entry.data.title}</b>{entry.data.description && <span>{entry.data.description}</span>}</a>)}
+    </>)}
+    <h2>组织</h2>
+    <a class="art" href="/history/"><b>历史</b><span>每个学期的成员与活动。</span></a>
+    <a class="art" href="/about/"><b>关于</b><span>我们是谁，在做什么。</span></a>
+    <a class="art" href="/forms/"><b>表单</b><span>报名和收集。</span></a>
+  </div>
+</SiteLayout>

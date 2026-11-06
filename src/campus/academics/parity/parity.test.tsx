@@ -1,67 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { renderToStaticMarkup } from 'react-dom/server';
 import golden from './golden.json';
-import spec from './spec.json';
 import { timetableCells } from '@/timetable/model/presentation';
 import { courseHash, courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
-import { toggleBuilding } from '@/classrooms/model/buildingSelection';
-import { TimetableGrid } from '@/timetable/ui/TimetableGrid';
-import { examPresentation } from '@/exams/model/presentation';
-import { roomSelectionResult, type RoomSelection } from '@/classrooms/model/roomSelection';
-import { roomMatches } from '@/classrooms/model/campusDay';
-import type { TeachingMeeting, TeachingWeek, TeachingPeriod, Exam, RoomDay } from '../facts';
-import type { ClassroomIndexFile } from '@/classrooms/model/ClassroomAvailabilityClient';
+import { attendingExams } from '@/exams/model/examAttendance';
+import { eventsOn, holidayMap, nextEvent, runProgress, type Timeline } from '@/world/events';
+import { courseName, courseShort, roomLabel } from '@/world/names';
+import { makeRoomReader } from '@/world/rooms';
+import type { CalendarTerm, MorningRun } from '@/world/data';
+import type { Exam, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
+
+const holidays = holidayMap(golden.calendar as CalendarTerm[]);
+const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], exams: [], holidays, run: { rule: golden.run as unknown as MorningRun, done: 12 } };
+const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
-    for (const schedule of golden.schedules) for (const {week,cells} of schedule.weeks) {
-        it(`${schedule.class}, week ${week}: every cell and day has the same state, room, note, colour and column`, () => {
-            const meetings = schedule.meetings as unknown as TeachingMeeting[];
-            expect(timetableCells(meetings,week)).toEqual(cells);
-            const props = {meetings,week:golden.term.weeks.find(w=>w.week===week)! as TeachingWeek, periods:golden.periods as TeachingPeriod[],tones:new Map<string,number>(),onOpen:()=>{}};
-            const full = renderToStaticMarkup(<TimetableGrid {...props} />);
-            expect((full.match(/data-meeting=/g) ?? []).length).toBe(cells.length);
-            for (const cell of cells) expect(full).toContain(`data-meeting="${cell.id}" data-state="${cell.state}" data-colour="${cell.colourIndex}" data-slot="${cell.slot}"`);
-            for (const day of spec.timetable.layout.days) {
-                const html = renderToStaticMarkup(<TimetableGrid {...props} day={day} />);
-                const expected = cells.filter(cell=>cell.day===day);
-                expect((html.match(/data-meeting=/g) ?? []).length).toBe(expected.length);
-                for (const cell of expected) expect(html).toContain(`data-meeting="${cell.id}"`);
-            }
+    for (const schedule of golden.schedules) for (const { week, cells } of schedule.weeks) {
+        it(`${schedule.class}, week ${week}: every cell has the same state, room, note, colour and column`, () => {
+            expect(timetableCells(schedule.meetings as unknown as TeachingMeeting[], week)).toEqual(cells);
         });
     }
-    it('includes the published Linux occurrence and real suspension, inactive parity, teaching note and parallel/overlap examples', () => {
-        const cells = golden.schedules.flatMap(s=>s.weeks.flatMap(w=>w.cells));
-        const week9 = golden.schedules[0]!.weeks.find(w=>w.week===9)!.cells;
-        expect(week9).toContainEqual(expect.objectContaining({course:'Linux编程',day:3,periods:[8,9],state:'suspended'}));
-        for (const state of ['active','inactive','suspended']) expect(cells.some(c=>c.state===state)).toBe(true);
-        expect(cells.some(c=>c.columns>1)).toBe(true);
-        expect(cells.some(c=>c.overlap==='parallel')).toBe(true);
+    it('covers real suspension, inactive parity and parallel examples', () => {
+        const cells = golden.schedules.flatMap(s => s.weeks.flatMap(w => w.cells));
+        for (const state of ['active', 'inactive', 'suspended']) expect(cells.some(c => c.state === state)).toBe(true);
+        expect(cells.some(c => c.columns > 1)).toBe(true);
     });
-    for (const group of golden.exams) for (const test of group.cases) {
-        it(`${group.class}, exams at ${test.now}: Shanghai countdown and end boundaries`, () => {
-            expect(group.exams.map(exam=>examPresentation(exam as Exam,new Date(test.now)))).toEqual(test.cells);
-        });
-    }
-    for (const [i,test] of golden.rooms.cases.entries()) {
-        it(`room selection ${i}: ${test.date} ${test.selection.campus}, exact matching/free IDs`, () => {
-            const day = golden.rooms.days.find(day=>day.date===test.date)!;
-            expect(roomSelectionResult(golden.rooms.index as ClassroomIndexFile,day as unknown as RoomDay,test.selection as RoomSelection)).toEqual(test.expected);
-        });
-    }
-    for (const [i, test] of golden.rooms.matchCases.entries()) {
-        it(`room query ${i}: TypeScript reference result`, () => {
-            expect(roomMatches(test.room, test.query)).toBe(test.expected);
-        });
-    }
-    it('hashes Unicode scalar values, including supplementary characters', () => {
-        expect(courseHash('😀课程')).toBe(2438769704);
+    for (const day of golden.days) it(`events on ${day.date}: lessons, holidays and 早锻炼 on one line`, () => expect(eventsOn(line, day.date).map(brief)).toEqual(day.events));
+    for (const test of golden.moments) it(`next event and 早锻炼 progress at ${test.now.date} ${test.now.min}`, () => {
+        const next = nextEvent(line, test.now);
+        expect(next && brief(next)).toEqual(test.next);
+        expect(runProgress(line.run!, holidays, test.now)).toEqual(test.run);
     });
-    it('uses the same Unicode identity, hidden-building transitions and invalid-time policy', () => {
-        for (const test of golden.edgeCases.colours) {
-            expect(courseIdentity(test)).toBe(test.identity);
-            expect(courseToneIndex(test)).toBe(test.colourIndex);
+    it('reads every sampled room at every sampled moment the same way', () => {
+        const read = makeRoomReader(golden.periods as TeachingPeriod[]);
+        for (const test of golden.rooms.cases) {
+            const state = read(golden.rooms.days.find(day => day.date === test.date) as unknown as RoomDay, test.room, test.min);
+            expect({ tier: state.tier, busy: state.busy, until: state.until, minutes: state.minutes }).toEqual({ tier: test.tier, busy: test.busy, until: test.until, minutes: test.minutes });
         }
-        for (const test of golden.edgeCases.buildingTransitions) expect(toggleBuilding(test.selected,test.all,test.toggle)).toEqual(test.expected);
-        for (const test of golden.edgeCases.invalidExams) expect(examPresentation(test.exam as Exam,new Date(test.now))).toEqual(test.expected);
+    });
+    it('hashes Unicode scalar values, including supplementary characters', () => expect(courseHash('😀课程')).toBe(2438769704));
+    it('uses the same identities, names and attendance policy', () => {
+        for (const test of golden.edgeCases.colours) { expect(courseIdentity(test)).toBe(test.identity); expect(courseToneIndex(test)).toBe(test.colourIndex); }
+        for (const test of golden.edgeCases.names) expect({ course: courseName(test.value), short: courseShort(test.value), room: roomLabel(test.value) }).toEqual({ course: test.course, short: test.short, room: test.room });
+        for (const test of golden.edgeCases.examAttendance) expect(attendingExams(golden.edgeCases.attendanceExams as Exam[], test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id)).toEqual(test.expected);
     });
 });

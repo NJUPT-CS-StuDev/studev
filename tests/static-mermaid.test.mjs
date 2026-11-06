@@ -28,8 +28,8 @@ test('Mermaid compiles into accessible dual-theme SVG with isolated IDs', async 
   assert.equal((code.match(/<svg\b/g) ?? []).length, 6);
   assert.match(code, /role="img" aria-label="图表：学习 → 动手实践 → 分享成果"/);
   assert.match(code, /aria-label="图表：同学 → StuDev"/);
-  assert.match(code, /#202124/);
-  assert.match(code, /#e8edf3/);
+  assert.match(code, /#1B1D20/i);
+  assert.match(code, /#ECEEF0/i);
   assert.match(code, /min-width:[\d.]+px/);
   assert.match(code, /const/);
   assert.doesNotMatch(code, /language-mermaid|data-language="mermaid"|Syntax error in text/);

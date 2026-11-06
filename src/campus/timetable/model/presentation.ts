@@ -1,4 +1,4 @@
-import type { TeachingMeeting } from '@/academics/timetable';
+import type { TeachingMeeting } from '@/academics/facts';
 import { courseToneIndex } from './courseColors';
 import { describeMeetingOverlap, groupOverlappingMeetings } from './overlapLayout';
 import { alternatingWeekLabel, showAsInactiveAlternating, showAsSuspended } from './weekPattern';
@@ -32,4 +32,3 @@ export function timetableCells(meetings: TeachingMeeting[], week: number) {
         }));
 }
 
-export type TimetableCell = ReturnType<typeof timetableCells>[number];
