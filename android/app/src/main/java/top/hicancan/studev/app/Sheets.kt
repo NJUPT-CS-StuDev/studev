@@ -116,6 +116,10 @@ import top.hicancan.studev.world.*
             KeyRow(null, "studev 课表", "上课前 15 分钟提醒", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
             KeyRow(null, "studev 考表", "提前 1 天和 1 小时提醒", trailing = { Toggle(settings.calendarExams) { on -> set { it.copy(calendarExams = on) } } })
             KeyRow(null, "studev 校历", "放假和校历日程，整天显示", trailing = { Toggle(settings.calendarSchool) { on -> set { it.copy(calendarSchool = on) } } })
+            val background = remember(settings) { top.hicancan.studev.me.BackgroundRunSettings.status(context) }
+            KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {
+                if (background.batteryExempt) top.hicancan.studev.me.BackgroundRunSettings.openOemStartup(context) else top.hicancan.studev.me.BackgroundRunSettings.requestBatteryExemption(context)
+            })
             KeyRow(null, "检查数据更新", state.repository?.release?.data_version, chevron = true, onClick = { model.refresh() })
             KeyRow(null, "社团", "南邮计软网安学生发展中心", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/club/"))) })
             Spacer(Modifier.height(8.dp))

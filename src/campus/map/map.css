@@ -29,6 +29,9 @@
   .campus{position:absolute;top:12px;left:12px;height:40px;width:46px;font-size:13px;font-weight:600;z-index:1;color:var(--ink);border-right:1px solid var(--line)}
   .camctl{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
   .tilt{width:36px;height:36px;border-radius:8px;background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.14);display:grid;place-items:center}
+  .ball{touch-action:none;cursor:grab}
+  .ball:active{cursor:grabbing}
+  .ball:active svg{transition:none}
   .tilt svg{width:20px;height:20px;stroke:none;transition:transform .7s var(--ease)}
   .tilt svg .n{fill:var(--now)}
   .tilt svg .s{fill:var(--faint);opacity:.45}

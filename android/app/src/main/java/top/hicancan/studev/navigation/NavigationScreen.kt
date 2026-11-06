@@ -40,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.map.CampusMapController
-import top.hicancan.studev.ui.theme.Tokens
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -120,8 +119,8 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
         if (state.active) {
             val banner = state.trip.banner
             Surface(Modifier.align(Alignment.TopCenter).fillMaxWidth().testTag("navigation-banner"),
-                shape = RoundedCornerShape(Tokens.Radius.card.dp), shadowElevation = 4.dp,
-                color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp,
+                color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         ManeuverIcon(banner?.maneuver?.type ?: "continue", banner?.maneuver?.modifier ?: "ahead", 56)
@@ -171,34 +170,33 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     Icon(Icons.Outlined.MyLocation, null); Spacer(Modifier.width(6.dp)); Text("回到当前位置")
                 }
             }
-            Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), shape = RoundedCornerShape(24.dp), shadowElevation = 3.dp) {
+            Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val update = state.trip.update
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("${minutes(update?.eta_s ?: state.route!!.duration_s)} 分钟", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                            Text("${minutes(update?.eta_s ?: state.route!!.duration_s)} 分钟", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
                             val eta = LocalTime.now().plusSeconds((update?.eta_s ?: state.route!!.duration_s).toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
                             Text("${metres(update?.distance_remaining_m ?: state.route!!.distance_m)} · $eta 到达", style = MaterialTheme.typography.bodyMedium)
                         }
-                        OutlinedButton(onClick = { runtime.stop() }) { Text("退出") }
+                        OutlinedButton(onClick = { runtime.stop() }, shape = RoundedCornerShape(8.dp)) { Text("退出") }
                     }
                     if (state.simulating) Text("模拟导航 · ${if (state.mode == "bike") "骑行" else "步行"}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else if (state.trip.phase == TripPhase.Arrived) {
-            Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().testTag("arrival-card"), shape = RoundedCornerShape(24.dp), shadowElevation = 3.dp) {
+            Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().testTag("arrival-card"), shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.tertiary)
-                    Text("已到达 ${state.destinationName}", style = MaterialTheme.typography.headlineMedium)
+                                        Text("已到达 ${state.destinationName}", style = MaterialTheme.typography.headlineMedium)
                     Text(state.route?.maneuvers?.lastOrNull()?.instruction?.let(::visibleRouteText) ?: "已到达目的地附近")
                     state.destination?.floor?.let { Text("${state.destinationName} 在 $it 楼", style = MaterialTheme.typography.titleMedium) }
-                    Button(onClick = { runtime.stop(close = true) }, Modifier.fillMaxWidth()) { Text("完成") }
+                    Button(onClick = { runtime.stop(close = true) }, Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(8.dp)) { Text("完成") }
                 }
             }
         } else {
             Surface(Modifier.align(Alignment.TopCenter).fillMaxWidth().onGloballyPositioned {
                 controller.plannerTop = (it.boundsInRoot().bottom + 24 * density).toInt()
-            }, shape = RoundedCornerShape(20.dp), shadowElevation = 4.dp) {
+            }, shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp) {
                 Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { runtime.stop(close = true) }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "关闭路线规划") }
@@ -231,7 +229,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
             }
             Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().testTag("route-planner").onGloballyPositioned {
                 controller.plannerBottom = (windowHeight - it.boundsInRoot().top + 24 * density).toInt()
-            }, shape = RoundedCornerShape(24.dp), shadowElevation = 3.dp) {
+            }, shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     when {
                         state.busy -> Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -253,18 +251,18 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                                 state.routes.forEachIndexed { index, route ->
                                     val selected = index == state.selected
                                     Surface(onClick = { runtime.choose(index) }, Modifier.weight(1f).testTag("route-card:$index"),
-                                        shape = RoundedCornerShape(12.dp), color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                                        border = if (selected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null) {
+                                        shape = RoundedCornerShape(8.dp), color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                                        border = null) {
                                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("${minutes(route.duration_s)} 分钟", style = MaterialTheme.typography.titleLarge, color = if (selected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                                            Text("${minutes(route.duration_s)} 分钟", style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
                                             Text(metres(route.distance_m), style = MaterialTheme.typography.bodyMedium)
                                             Text("经${visibleRouteText(route.via)}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
                             }
-                            Button(onClick = { start() }, Modifier.fillMaxWidth().height(52.dp)) {
-                                Icon(Icons.Outlined.Navigation, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("开始导航")
+                            Button(onClick = { start() }, Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(8.dp)) {
+                                Text("开始导航")
                             }
                         }
                     }

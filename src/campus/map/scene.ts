@@ -383,7 +383,17 @@ export class CampusScene {
         const camera = this.map.cameraForBounds(box, { padding, pitch: pitch > 0 ? 45 : 0, bearing: this.map.getBearing() });
         if (camera) this.map.flyTo({ center: camera.center, zoom: Math.min(camera.zoom ?? 17, 18), pitch: pitch > 0 ? 45 : 0, duration: 1000, essential: true });
     }
-    setPitch(pitch: number) { this.map.easeTo({ pitch: this.building ? Math.min(pitch, 44) : pitch, duration: 800, essential: true }); }
+    /** Turn the camera directly under a pointer; bearing is unbounded, pitch stays within what the scene can show. */
+    steer(turn: number, lean: number) {
+        this.map.jumpTo({ bearing: this.map.getBearing() + turn, pitch: Math.max(0, Math.min(this.building ? 44 : 72, this.map.getPitch() + lean)) });
+    }
+    /** Back to north, seen from straight above; from there, back to the raised view. Returns the pitch it heads for. */
+    square() {
+        const upright = this.map.getPitch() < 4 && Math.abs(this.map.getBearing()) < 1;
+        const pitch = upright ? (this.building ? 44 : 52) : 0;
+        this.map.easeTo({ bearing: 0, pitch, duration: 800, essential: true });
+        return pitch;
+    }
     setMe(at: Position | null) { this.meAt = at; this.placeLabels(); }
 
     /* ---- labels drawn over the model, projected at their real height ---- */

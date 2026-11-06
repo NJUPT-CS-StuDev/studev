@@ -1,5 +1,7 @@
 package top.hicancan.studev.map
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -98,7 +100,7 @@ data class RoomPaint(val id: String, val tier: String, val label: String, val na
 class Scene(private val map: MapLibreMap, private val style: Style, val model: CampusModel) {
     val buildings = model.buildings.associateBy { it.id }
     private var dark = false
-    var night = 0f; private set
+    var night by androidx.compose.runtime.mutableFloatStateOf(0f); private set
     var openBuilding: String? = null; private set
     var openFloor: Int? = null; private set
     private var level = 0.0
@@ -252,7 +254,15 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         val bearing = principalBearing(geometry)
         val shown = if (tilt > 0) min(tilt, 44.0) else 0.0
         val camera = map.getCameraForLatLngBounds(bounds, padding, bearing, shown)
-        val target = CameraPosition.Builder().target(camera?.target ?: map.cameraPosition.target).zoom(max(camera?.zoom ?: 18.0, 18.1)).bearing(bearing).tilt(shown).build()
+        val zoom = (camera?.zoom ?: 18.0).coerceIn(18.1, 19.1)
+        // The fitted camera names the middle of the bounds; shift it so they sit in the part of the screen the panels leave free.
+        val middle = camera?.target ?: map.cameraPosition.target ?: return
+        val latitude = Math.toRadians(middle.latitude)
+        val metresPerDp = 40075016.686 * kotlin.math.cos(latitude) / (512 * 2.0.pow(zoom))
+        val lift = (padding[3] - padding[1]) / 2.0 / android.content.res.Resources.getSystem().displayMetrics.density * metresPerDp / kotlin.math.cos(Math.toRadians(shown))
+        val heading = Math.toRadians(bearing)
+        val centre = LatLng(middle.latitude - lift * kotlin.math.cos(heading) / 111320, middle.longitude - lift * kotlin.math.sin(heading) / (111320 * kotlin.math.cos(latitude)))
+        val target = CameraPosition.Builder().target(centre).zoom(zoom).bearing(bearing).tilt(shown).build()
         if (instant) map.moveCamera(CameraUpdateFactory.newCameraPosition(target)) else map.animateCamera(CameraUpdateFactory.newCameraPosition(target), 1050)
     }
     fun exit() {
@@ -268,7 +278,18 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         val target = CameraPosition.Builder().target(LatLng(at[1], at[0])).zoom(max(map.cameraPosition.zoom, 17.4)).build()
         if (instant) map.moveCamera(CameraUpdateFactory.newCameraPosition(target)) else map.animateCamera(CameraUpdateFactory.newCameraPosition(target), 900)
     }
-    fun setPitch(pitch: Double) { map.animateCamera(CameraUpdateFactory.tiltTo(if (openBuilding != null) min(pitch, 44.0) else pitch), 800) }
+    private fun pitchLimit() = if (openBuilding != null) 44.0 else 60.0
+    /** Turn the camera directly under a finger; bearing is unbounded, pitch stays within what the scene can show. */
+    fun steer(turn: Double, lean: Double) {
+        val camera = map.cameraPosition
+        map.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(camera.bearing + turn).tilt((camera.tilt + lean).coerceIn(0.0, pitchLimit())).build()))
+    }
+    /** Back to north, seen from straight above; from there, back to the raised view. */
+    fun square() {
+        val camera = map.cameraPosition
+        val upright = camera.tilt < 4 && min(camera.bearing, 360 - camera.bearing) < 1
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(0.0).tilt(if (upright) min(52.0, pitchLimit()) else 0.0).build()), 800)
+    }
     fun hitRoom(point: android.graphics.PointF): String? = if (openBuilding?.let(::hasFloors) == true) map.queryRenderedFeatures(point, "sel-rooms").firstOrNull()?.getStringProperty("id") else null
     fun hitBuilding(point: android.graphics.PointF): String? = map.queryRenderedFeatures(point, "bld").firstNotNullOfOrNull { it.getStringProperty("id") }
     fun hitOpenFloor(point: android.graphics.PointF) = openBuilding?.let(::hasFloors) == true && map.queryRenderedFeatures(point, "sel-lower", "sel-slab").isNotEmpty()

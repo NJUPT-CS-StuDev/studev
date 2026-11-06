@@ -55,6 +55,8 @@ export default function MapApp() {
     const { world, error } = useWorld();
     const canvas = useRef<HTMLDivElement>(null);
     const labels = useRef<HTMLDivElement>(null);
+    const ball = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+    const dragged = useRef(false);
     const [scene, setScene] = useState<CampusScene | null>(null);
     const [now] = useState(momentNow);
     const moment = useMemo(() => parseMoment(params.get('t'), now), [now, params]);
@@ -334,6 +336,27 @@ export default function MapApp() {
     const holiday = world?.holidays.get(moment.date);
     const shiftDay = (by: number) => setMoment(addDays(moment.date, by), moment.min);
 
+    const ballDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        ball.current = { x: event.clientX, y: event.clientY, moved: false };
+    };
+    const ballMove = (event: ReactPointerEvent) => {
+        const from = ball.current;
+        if (!from || !scene) return;
+        const [dx, dy] = [event.clientX - from.x, event.clientY - from.y];
+        if (!from.moved && Math.hypot(dx, dy) < 4) return;
+        scene.steer(dx * .9, -dy * .5);
+        ball.current = { x: event.clientX, y: event.clientY, moved: true };
+    };
+    const ballUp = () => {
+        if (ball.current?.moved && scene) { dragged.current = true; set({ tilt: scene.map.getPitch() > 4 ? null : 0 }); }
+        ball.current = null;
+    };
+    const ballClick = () => {
+        if (dragged.current) { dragged.current = false; return; }
+        if (scene) set({ tilt: scene.square() ? null : 0 });
+    };
+
     return (
         <div className="sd mapview" style={{ '--peek': `${sheetPeek}px` } as React.CSSProperties}>
             <div className="canvas" ref={canvas} aria-label="校园模型" />
@@ -342,7 +365,7 @@ export default function MapApp() {
                 <a className="searchpill" href="/search/?scope=place"><Magnifier /><span>搜地点或教室</span></a>
                 <button className="campus" onClick={() => setCampusOpen(true)}>仙林</button>
                 <div className="camctl">
-                    <button className="tilt" aria-label={pitch ? '切到俯视' : '切到立体'} onClick={() => { const next = scene && scene.map.getPitch() > 4 ? 0 : 52; scene?.setPitch(next); set({ tilt: next ? null : 0 }); }}>
+                    <button className="tilt ball" aria-label="拖动旋转，点按回正" title="拖动旋转，点按回正" onPointerDown={ballDown} onPointerMove={ballMove} onPointerUp={ballUp} onPointerCancel={ballUp} onClick={ballClick}>
                         <svg viewBox="0 0 24 24" style={{ transform: scene ? `rotateX(${scene.map.getPitch() * .7}deg) rotateZ(${-scene.map.getBearing()}deg)` : undefined }} data-needle={needle}><path className="n" d="M12 3.5 15.5 12H8.5Z" /><path className="s" d="M12 20.5 8.5 12h7Z" /></svg>
                     </button>
                     {floors.length > 0 && <div className="floors">{[...floors].reverse().map(level => {

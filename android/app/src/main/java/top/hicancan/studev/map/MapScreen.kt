@@ -112,7 +112,8 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
     }
     LaunchedEffect(scene, freeBy) { scene?.setTint(freeBy.mapValues { (_, value) -> value.first.toFloat() / max(1, value.second) }) }
     LaunchedEffect(scene, moment, dark) { scene?.moment(moment, dark) }
-    val padding = remember(density) { intArrayOf((28 * density).toInt(), (70 * density).toInt(), (64 * density).toInt(), (280 * density).toInt()) }
+    val screenDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val padding = remember(density, picked != null, screenDp) { intArrayOf((28 * density).toInt(), (70 * density).toInt(), (64 * density).toInt(), ((if (picked != null) screenDp * .62f + 30 else 280f) * density).toInt()) }
     var entered by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(scene, buildingId, floor, picked?.id, route.nav, paints) {
         val active = scene ?: return@LaunchedEffect
@@ -231,10 +232,9 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             }
             Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val bearing = cameraTick.let { mapRef?.cameraPosition?.bearing ?: 0.0 }
-                val tilted = cameraTick.let { (mapRef?.cameraPosition?.tilt ?: 0.0) > 4 }
                 val needle = marks().now
                 val faint = Ink.faint
-                Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)).clickable { scene?.setPitch(if (tilted) 0.0 else 52.0) }.testTag("tilt"), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable { scene?.square() }.testTag("tilt"), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(20.dp).rotate(-bearing.toFloat()).drawBehind {
                         val path = androidx.compose.ui.graphics.Path().apply { moveTo(size.width / 2, 0f); lineTo(size.width * .68f, size.height / 2); lineTo(size.width * .32f, size.height / 2); close() }
                         drawPath(path, needle)
