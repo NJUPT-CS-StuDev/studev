@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import QRCode from 'qrcode';
-import { totpCode } from '../../src/server/platform-totp.mjs';
+import { totpCode } from '../../src/platform/server/totp.mjs';
 import { LiveClient } from './live-client.mjs';
 import { privateFile } from '../private/files.mjs';
 

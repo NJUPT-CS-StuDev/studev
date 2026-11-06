@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import tokens from '../../../../design/tokens.json';
 import { courseHash, courseIdentity, courseToneIndex, allocateCourseTones } from './courseColors';
-import { meeting } from '../../../../tests/campus-facts';
+import { meeting } from '../../world/sample-facts';
 const luminance = (hex: string) => hex.slice(1).match(/../g)!.map(v => parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i]!,0);
 describe('shared course palette', () => {
     it('uses stable Unicode-scalar FNV-1a and permits collisions without a class-dependent allocator', () => {

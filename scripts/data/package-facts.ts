@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { TeachingTerm, TeachingPeriod, TeachingClass, TeachingMeeting, Exam, ExamChange, ExamSource, Room, Building, Campus } from '../../src/campus/academics/facts.ts';
+import type { TeachingTerm, TeachingPeriod, TeachingClass, TeachingMeeting, Exam, ExamChange, ExamSource, Room, Building, Campus } from '../../src/campus/world/facts.ts';
 
 export interface FactTerms { teaching: string[]; exams: string[]; rooms?: string[] }
 const read = async <T>(path: string): Promise<T> => JSON.parse(await readFile(path, 'utf8')) as T;

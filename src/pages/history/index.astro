@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
-import SiteLayout from '../../layouts/SiteLayout.astro';
-import HistoryTermView from '../../components/history/HistoryTermView.astro';
+import SiteLayout from '../../site/SiteLayout.astro';
+import HistoryTermView from '../../site/history/HistoryTermView.astro';
 
 const entries = (await getCollection('history'))
   .filter((item) => item.data.status === 'published')

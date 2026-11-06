@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 import { alternatingWeekLabel, formatWeekNumbers, showAsInactiveAlternating } from './weekPattern';
 const value = (weekNumbers: number[]) => ({ weeks: weekNumbers } as TeachingMeeting);
 describe('teaching week patterns', () => {

@@ -1,4 +1,4 @@
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 import { courseToneIndex } from './courseColors';
 import { describeMeetingOverlap, groupOverlappingMeetings } from './overlapLayout';
 import { alternatingWeekLabel, showAsInactiveAlternating, showAsSuspended } from './weekPattern';

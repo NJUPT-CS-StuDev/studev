@@ -24,8 +24,8 @@
         android:theme="@style/Theme.StuDev">
         <service android:name=".navigation.NavigationService" android:exported="false" android:foregroundServiceType="location" />
         <service android:name=".navigation.NavigationStopService" android:exported="false" />
-        <receiver android:name=".reminders.ReminderReceiver" android:exported="false" />
-        <receiver android:name=".reminders.ReminderRestoreReceiver" android:exported="false">
+        <receiver android:name=".device.ReminderReceiver" android:exported="false" />
+        <receiver android:name=".device.ReminderRestoreReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

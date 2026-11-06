@@ -13,7 +13,7 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.*
 import top.hicancan.studev.location.location
 import top.hicancan.studev.navigation.PlannerState
-import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.app.Tokens
 
 internal fun CampusMapController.routes(state: PlannerState, dark: Boolean, density: Float, fit: Boolean) {
     val ready = map ?: return

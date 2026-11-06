@@ -1,7 +1,7 @@
 // Everything the three entries read from one campus release, fetched once per page.
-import type { Exam, Room, RoomDay, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm, TeachingWeek } from '@/academics/facts';
-import { DATA_RELEASE } from '@/app/config/constants';
-import { fetchJson } from '@/shared/lib/fetch';
+import type { Exam, Room, RoomDay, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm, TeachingWeek } from '@/world/facts';
+import { DATA_RELEASE } from '@/world/config';
+import { fetchJson } from '@/world/fetch';
 
 const base = DATA_RELEASE.base;
 const teaching = `${base}/teaching/${DATA_RELEASE.teaching}`;

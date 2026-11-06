@@ -2,7 +2,7 @@
 // Without a configured store the bundle simply serves from the site.
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { downloadStore, presignGet, signedFetch } from '../../src/server/object-store.mjs';
+import { downloadStore, presignGet, signedFetch } from '../../src/download/object-store.mjs';
 
 const WEEK = 7 * 24 * 3600;
 const KEEP = 3;

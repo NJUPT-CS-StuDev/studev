@@ -29,7 +29,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.app.Tokens
 
 /** The avatar Tencent shows for this QQ number, for checking it really is yours before registering. */
 @Composable private fun QqPreview(qq: String) {

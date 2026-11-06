@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { initialize as initializeRouting, Router, type Mode, type Route } from 'wayfind';
 import type { Position } from 'geojson';
-import type { Room, RoomDay, TeachingPeriod, TeachingTerm } from '@/academics/facts';
+import type { Room, RoomDay, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { loadCalendar, loadPeriods, loadRoomDay, loadRoomIndex, loadTerm } from '@/world/data';
 import { courseName, roomLabel } from '@/world/names';
 import { isClassroom, makeRoomReader, type RoomState } from '@/world/rooms';
@@ -15,7 +15,7 @@ import { displayName } from './model/displayName';
 import { loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
 import { visibleRouteText } from './model/routeText';
 import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from './scene';
-import { fetchJson } from '@/shared/lib/fetch';
+import { fetchJson } from '@/world/fetch';
 import { holidayMap } from '@/world/events';
 import { readAppearance } from '@/world/appearance';
 import { globe } from './ball';

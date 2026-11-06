@@ -3,8 +3,9 @@ package top.hicancan.studev.data
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
-import top.hicancan.studev.timetable.CampusEvents
-import java.time.ZoneId
+import top.hicancan.studev.world.CampusLine
+import top.hicancan.studev.world.endsAt
+import top.hicancan.studev.world.startsAt
 
 class AcademicFactsTest {
     private inline fun <reified T> read(path: String): T = Json.decodeFromString(checkNotNull(javaClass.classLoader?.getResourceAsStream("data/$path")).bufferedReader().use { it.readText() })
@@ -17,12 +18,12 @@ class AcademicFactsTest {
         val exams = runCatching { read<ClassExams>("exams/${release.exams}/classes/B240402.json") }.getOrNull() ?: ClassExams(emptyList(), emptyList())
         val rooms = read<RoomIndex>("rooms/index.json")
         assertEquals("B240402", schedule.klass.id); assertTrue(rooms.rooms.isNotEmpty())
-        val events = CampusEvents.build(term, periods, schedule, exams.exams)
+        val events = CampusLine(term, periods, schedule.meetings, exams.exams, emptyMap(), null).lessonsAndExams()
         assertEquals(schedule.meetings.sumOf { it.weeks.size } + exams.exams.size, events.size)
-        events.forEach { assertTrue(it.end > it.start) }
+        events.forEach { assertTrue(it.endsAt > it.startsAt) }
         val first = schedule.meetings.first()
-        val occurrence = events.first { it.id.contains(":${first.id}:") }
-        assertEquals(first.weekday, occurrence.start.atZone(ZoneId.of("Asia/Shanghai")).dayOfWeek.value)
+        val occurrence = events.first { it.id.startsWith("${first.id}@") }
+        assertEquals(first.weekday, occurrence.date.dayOfWeek.value)
         assertEquals(first.room, occurrence.room)
     }
     @Test fun discoverThePublishedReleaseWithoutDependingOnJavaScriptBundles() {

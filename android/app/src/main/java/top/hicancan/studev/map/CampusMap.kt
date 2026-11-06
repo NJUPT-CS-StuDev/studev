@@ -22,7 +22,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import top.hicancan.studev.location.LocationStatus
 import top.hicancan.studev.location.PlatformLocationEngine
-import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.app.Tokens
 import top.hicancan.studev.navigation.PlannerState
 
 internal enum class FollowMode { None, Follow, Heading }

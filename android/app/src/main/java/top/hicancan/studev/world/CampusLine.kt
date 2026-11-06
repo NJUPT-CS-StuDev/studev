@@ -3,6 +3,7 @@ package top.hicancan.studev.world
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import top.hicancan.studev.data.*
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
@@ -50,6 +51,8 @@ object Names {
 
 data class LineEvent(val kind: String, val id: String, val date: LocalDate, val name: String, val short: String, val start: Int, val end: Int,
                      val room: String?, val teachers: List<String>, val meeting: TeachingMeeting? = null, val exam: Exam? = null, val runMark: String? = null)
+val LineEvent.startsAt: Instant get() = date.atStartOfDay(CampusDay.zone).plusMinutes(start.toLong()).toInstant()
+val LineEvent.endsAt: Instant get() = date.atStartOfDay(CampusDay.zone).plusMinutes(end.toLong()).toInstant()
 /** Which mornings are run ("done") or planned ("plan"), and the bonus or penalty the sports office recorded. */
 data class RunPlan(val rule: MorningRun, val days: Map<String, String>, val adjust: Int)
 data class RunTally(val done: Int, val planned: Int, val count: Int, val need: Int, val nextBonus: List<Int>?)
@@ -75,6 +78,13 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
         val plan = run
         plan?.days?.get(date.toString())?.let { mark -> add(LineEvent("run", "run@$date", date, "早锻炼", "早锻炼", clock(plan.rule.time[0]), clock(plan.rule.time[1]), null, emptyList(), runMark = mark)) }
     }.sortedBy { it.start }
+    /** Every lesson and exam in order, for what lives outside the app: the calendar and reminders. */
+    fun lessonsAndExams(): List<LineEvent> {
+        val first = LocalDate.parse(term.weeks.first().start)
+        val last = LocalDate.parse(term.weeks.last().end)
+        val days = generateSequence(first) { it.plusDays(1) }.takeWhile { it <= last }.toSet() + exams.map { LocalDate.parse(it.date) }
+        return days.sorted().flatMap(::on).filter { it.kind != "run" }
+    }
     /** What comes next, not counting 早锻炼: it is optional on any given morning. */
     fun next(now: Moment, horizon: Int = 40): LineEvent? {
         for (offset in 0 until horizon) for (event in on(now.date.plusDays(offset.toLong()))) if (event.kind != "run" && (offset > 0 || event.end > now.min)) return event

@@ -1,5 +1,5 @@
 // A room at a moment: free or not, and for how long.
-import type { Room, RoomDay, RoomOccupant, TeachingPeriod } from '@/academics/facts';
+import type { Room, RoomDay, RoomOccupant, TeachingPeriod } from '@/world/facts';
 import { minutesOf } from './time';
 import { campusConfig } from '../../../campus.config';
 

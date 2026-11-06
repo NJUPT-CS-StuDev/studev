@@ -37,7 +37,7 @@ data class PersonalSettings(
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
-        if (term == null || klass == null) emptyMap() else examAttendance[top.hicancan.studev.exams.ExamAttendance.scope(term, klass)].orEmpty()
+        if (term == null || klass == null) emptyMap() else examAttendance[top.hicancan.studev.timetable.ExamAttendance.scope(term, klass)].orEmpty()
 }
 
 private val termPattern = Regex("^\\d{4}-\\d{4}-\\d$")
@@ -101,7 +101,7 @@ class CampusSettings(context: Context) {
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
         // Settings changes are data changes too: rebuild the rolling reminder
         // window through the same worker used by boot/timezone restoration.
-        top.hicancan.studev.reminders.CampusRefreshWorker.enqueue(context)
+        top.hicancan.studev.device.DeviceRefreshWorker.enqueue(context)
     }
     fun updateTimetable(term: String, change: (TimetableEdits) -> TimetableEdits) {
         update { current ->
@@ -111,7 +111,7 @@ class CampusSettings(context: Context) {
     }
     fun updateExamAttendance(term: String, klass: String, choices: Map<String, Boolean>) {
         update { current ->
-            val scope = top.hicancan.studev.exams.ExamAttendance.scope(term, klass)
+            val scope = top.hicancan.studev.timetable.ExamAttendance.scope(term, klass)
             current.copy(examAttendance = current.examAttendance + (scope to (current.examAttendance[scope].orEmpty() + choices)))
         }
     }

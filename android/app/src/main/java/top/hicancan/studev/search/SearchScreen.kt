@@ -31,8 +31,8 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.app.*
-import top.hicancan.studev.campus.AcademicState
-import top.hicancan.studev.campus.CampusModel
+import top.hicancan.studev.app.AcademicState
+import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.data.CampusPackage
 import top.hicancan.studev.data.TeachingMeeting
 import top.hicancan.studev.timetable.SearchField

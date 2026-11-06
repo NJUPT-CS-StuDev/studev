@@ -1,8 +1,8 @@
 // The timetable: pick who, unfold along time. Everything on screen is in the address.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { updateExamAttendance, updateTimetableEdits } from '@/shared/lib/preferences';
+import { updateExamAttendance, updateTimetableEdits } from '@/world/preferences';
 import { markRun, RunPlanner } from './RunPlanner';
-import { usePreferences } from '@/shared/lib/usePreferences';
+import { usePreferences } from '@/world/usePreferences';
 import { weekOfDate, type CampusEvent } from '@/world/events';
 import { roomLabel } from '@/world/names';
 import { addDays, dateLabel, momentNow, startOfWeek, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';

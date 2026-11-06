@@ -2,8 +2,8 @@
 // ranking, one set of highlights and one way to page, here and in the app.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SearchClient, type FilterOptions, type SearchFilters, type SearchResult, type SortMode } from 'wasm-search';
-import type { TeachingMeeting } from '@/academics/facts';
-import { APP_CONFIG } from '@/app/config/constants';
+import type { TeachingMeeting } from '@/world/facts';
+import { APP_CONFIG } from '@/world/config';
 import { loadMeetings, loadPeriods, loadRoomDay } from '@/world/data';
 import { courseName, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';

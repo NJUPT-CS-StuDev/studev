@@ -1,6 +1,6 @@
 // Puts a signed APK on object storage under its versioned name.
 import { readFile } from 'node:fs/promises';
-import { downloadStore, signedFetch } from '../../src/server/object-store.mjs';
+import { downloadStore, signedFetch } from '../../src/download/object-store.mjs';
 
 const [, , file, name] = process.argv;
 const store = downloadStore();

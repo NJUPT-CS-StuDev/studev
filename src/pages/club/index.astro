@@ -1,8 +1,8 @@
 ---
 import { getCollection } from 'astro:content';
-import SiteLayout from '../../layouts/SiteLayout.astro';
-import RecruitmentGroup from '../../components/RecruitmentGroup.astro';
-import { PRODUCT_CONFIG } from '../../campus/app/config/product';
+import SiteLayout from '../../site/SiteLayout.astro';
+import RecruitmentGroup from '../../site/RecruitmentGroup.astro';
+import { PRODUCT_CONFIG } from '../../campus/world/product';
 
 const sections = [['study', '学习'], ['develop', '开发'], ['life', '生活']] as const;
 const lists = await Promise.all(sections.map(async ([key, label]) => {

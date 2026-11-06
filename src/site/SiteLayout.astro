@@ -1,0 +1,103 @@
+---
+import './global.css';
+import MeApp from '../campus/me/MeApp';
+import { getImage } from 'astro:assets';
+import logo from '../assets/logo.png';
+import tokens from '../../design/tokens.json';
+import PwaPanel from '../pwa/PwaPanel.astro';
+import { PRODUCT_CONFIG } from '../campus/world/product';
+// fill: the page is one full-height application (the map) with no footer.
+interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
+const { title = 'studev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
+const tabs = [
+  { href: '/', label: '课表', key: 'timetable' },
+  { href: '/map/', label: '地图', key: 'map' },
+  { href: '/search/', label: '搜索', key: 'search' },
+];
+const clubKeys = ['club', 'study', 'develop', 'life', 'history', 'about'];
+const clubNav = [
+  { href: '/study/', label: '学习', key: 'study' },
+  { href: '/develop/', label: '开发', key: 'develop' },
+  { href: '/life/', label: '生活', key: 'life' },
+  { href: '/history/', label: '历史', key: 'history' },
+  { href: '/about/', label: '关于', key: 'about' },
+];
+const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content={tokens.color.light.paper} data-light={tokens.color.light.paper} data-dark={tokens.color.dark.paper} />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/pwa-icons/180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="studev" />
+    <script is:inline>
+      // Signed-in people see their member links from the first frame.
+      try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.authenticated = ''; } catch { /* Storage may be unavailable. */ }
+      let preference;
+      try { preference = localStorage.getItem('site-theme'); } catch { /* Storage may be unavailable. */ }
+      const root = document.documentElement;
+      const system = matchMedia('(prefers-color-scheme: dark)');
+      const paint = theme => {
+        root.dataset.theme = theme;
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        themeMeta?.setAttribute('content', themeMeta.getAttribute(`data-${theme}`));
+      };
+      root.dataset.appearance = preference === 'light' || preference === 'dark' ? preference : 'auto';
+      paint(root.dataset.appearance === 'auto' ? (system.matches ? 'dark' : 'light') : root.dataset.appearance);
+      system.addEventListener('change', () => {
+        if (root.dataset.appearance !== 'auto') return;
+        paint(system.matches ? 'dark' : 'light');
+        document.dispatchEvent(new CustomEvent('site:theme-change'));
+      });
+    </script>
+    <meta name="description" content={description} />
+    {Astro.url.pathname === '/' && <meta name="baidu-site-verification" content="codeva-J4MgSBcNRe" />}
+    {Astro.url.pathname === '/' && <meta name="msvalidate.01" content="E44C2F6A09F0A678DED98C8374E549A1" />}
+    {noindex && <meta name="robots" content="noindex" />}
+    <link rel="icon" type="image/png" href={favicon.src} />
+    {(active === 'history' || active === 'account' || active === 'forms') && <link rel="preconnect" href="https://q1.qlogo.cn" crossorigin />}
+    <link rel="canonical" href={canonical} />
+    <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
+    <slot name="head" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="wordmark" href="/" aria-label="studev 首页">studev</a>
+        <nav class="site-nav" aria-label="主导航">
+          {tabs.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
+          <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">社团</a>
+          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
+        </nav>
+        <button class="avatar" type="button" data-me aria-label="我">我</button>
+      </div>
+      {clubKeys.includes(active) && <nav class="club-nav" aria-label="社团栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
+    </header>
+    <main class:list={[fill && 'main-fill']}><slot /></main>
+    {!fill && !tabs.some((item) => item.key === active) && <footer class="site-footer">
+      <div class="footer-inner">
+        <span>© {new Date().getFullYear()} studev</span>
+        <div class="footer-actions">
+          <a href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>下载 App</a>
+          <button class="text-copy" type="button" data-copy-link title="复制当前页面网址"><span aria-live="polite" data-copy-label>分享本页</span></button>
+          <a href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+      </div>
+    </footer>}
+    <nav class="phone-tabs" aria-label="主导航">
+      {tabs.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
+    </nav>
+    <MeApp client:only="react" />
+    {!noPwa && <PwaPanel floating={false} />}
+    <script>import './copy-text';</script>
+    <script>import './diagrams';</script>
+    <script>import '../platform/client/auth-status';</script>
+  </body>
+</html>

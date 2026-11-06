@@ -1,6 +1,6 @@
 ---
 import { getCollection, render } from 'astro:content';
-import SiteLayout from '../layouts/SiteLayout.astro';
+import SiteLayout from '../site/SiteLayout.astro';
 const entries = await getCollection('about');
 const entry = entries.find((e) => e.id === 'studev') ?? entries[0];
 const { Content } = await render(entry);

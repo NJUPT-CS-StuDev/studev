@@ -25,7 +25,7 @@ abstract class DesignTokensTask : DefaultTask() {
     @TaskAction fun generate() {
         val tokens = JsonSlurper().parse(tokensFile.get().asFile) as Map<*, *>
         val source = buildString {
-            appendLine("package top.hicancan.studev.ui.theme")
+            appendLine("package top.hicancan.studev.app")
             appendLine("// Generated from design/tokens.json. Do not edit.")
             appendLine("internal object Tokens {")
             fun emit(name: String, values: Map<*, *>) {
@@ -45,7 +45,7 @@ abstract class DesignTokensTask : DefaultTask() {
             }
             appendLine("}")
         }
-        kotlinDir.file("top/hicancan/studev/ui/theme/Tokens.kt").get().asFile.apply {
+        kotlinDir.file("top/hicancan/studev/app/Tokens.kt").get().asFile.apply {
             parentFile.mkdirs(); writeText(source)
         }
         val colors = tokens["color"] as Map<*, *>
@@ -169,7 +169,6 @@ android {
         versionCode = (androidProduct["versionCode"] as Number).toInt()
         versionName = androidProduct["versionName"] as String
         manifestPlaceholders["siteHost"] = URI(productOrigin).host
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -210,7 +209,6 @@ android {
         }
         getByName("test").resources.directories.add(layout.buildDirectory.dir("generated/campus/assets").get().asFile.absolutePath)
         getByName("test").resources.directories.add(layout.buildDirectory.dir("generated/academic-test").get().asFile.absolutePath)
-        getByName("androidTest").assets.directories.add(layout.buildDirectory.dir("generated/academic-test").get().asFile.absolutePath)
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -240,10 +238,5 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.test.junit)
-    androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(platform(libs.compose.bom))
-    androidTestImplementation(libs.compose.ui.test)
-    debugImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.compose.ui.tooling)
 }

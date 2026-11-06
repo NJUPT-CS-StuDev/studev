@@ -26,9 +26,9 @@ import top.hicancan.studev.MainActivity
 import top.hicancan.studev.data.*
 import top.hicancan.studev.me.CampusSettings
 import top.hicancan.studev.timetable.*
-import top.hicancan.studev.ui.theme.Tokens
-import top.hicancan.studev.ui.theme.darkTone
-import top.hicancan.studev.ui.theme.lightTone
+import top.hicancan.studev.app.Tokens
+import top.hicancan.studev.app.darkTone
+import top.hicancan.studev.app.lightTone
 
 import top.hicancan.studev.world.*
 
@@ -49,15 +49,7 @@ open class NextLessonWidget(private val clock: Clock = Clock.systemUTC()) : Glan
         val moment = now.atZone(CampusDay.zone).let { Moment(it.toLocalDate(), it.hour * 60 + it.minute) }
         var unavailable = false
         val line = try {
-            if (settings.klass == null) null else {
-                val repo = AcademicRepository.open(context)
-                val term = repo.term()
-                val schedule = try { repo.effectiveSchedule(settings.klass, settings.timetableEdits(term.term)) }
-                    catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
-                val exams = try { repo.effectiveExams(settings.klass, settings) }
-                    catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; emptyList() }
-                CampusLine(term, repo.periods(), schedule?.meetings.orEmpty(), exams, CampusLine.holidays(repo.calendar()), null)
-            }
+            if (settings.klass == null) null else AcademicRepository.open(context).line(settings)
         } catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
         val shown = line?.let { WidgetDay.of(it, moment) }.orEmpty()
         val title = when {

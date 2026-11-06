@@ -1,5 +1,5 @@
 ---
-import PlatformShell from '../components/PlatformShell.astro';
+import PlatformShell from '../platform/PlatformShell.astro';
 ---
 <PlatformShell title="我的提交" active="submissions">
   <header class="p-heading"><div><h1>我的提交</h1><p>查看你已提交的表单记录、审核进度与回执详情。</p></div></header>
@@ -11,5 +11,5 @@ import PlatformShell from '../components/PlatformShell.astro';
     <div data-submission-content></div>
     <div data-submission-edit hidden><hr class="p-divider" /><h3>修改信息</h3><form data-submission-edit-form><div data-submission-edit-fields></div><button class="p-button" type="submit">保存修改</button></form></div>
   </section>
-  <script>import '../client/platform/platform-submissions';</script>
+  <script>import '../platform/client/submissions';</script>
 </PlatformShell>

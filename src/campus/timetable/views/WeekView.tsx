@@ -1,4 +1,4 @@
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 import { courseToneStyle } from '@/timetable/model/courseColors';
 import { timetableCells } from '@/timetable/model/presentation';
 import { eventsOn, weekOfDate, type CampusEvent, type Timeline } from '@/world/events';

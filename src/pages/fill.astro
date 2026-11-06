@@ -1,5 +1,5 @@
 ---
-import PlatformShell from '../components/PlatformShell.astro';
+import PlatformShell from '../platform/PlatformShell.astro';
 ---
 <PlatformShell title="填写表单" active="forms">
   <header class="p-heading"><div><h1 data-fill-title>填写表单</h1><p class="p-description" data-fill-description>正在加载表单内容……</p></div><a class="p-link" href="/forms/">返回表单列表</a></header>
@@ -24,5 +24,5 @@ import PlatformShell from '../components/PlatformShell.astro';
     </section>
     <div data-fill-storage-fallback hidden><span data-receipt-backup-heading hidden></span><button type="button" data-fill-save-receipt hidden></button></div>
   </section>
-  <script>import '../client/platform/platform-fill';</script>
+  <script>import '../platform/client/fill';</script>
 </PlatformShell>

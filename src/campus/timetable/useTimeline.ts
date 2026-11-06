@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Exam, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/academics/facts';
-import { attendingExams } from '@/exams/model/examAttendance';
-import { examAttendanceScope, timetableEdits, type Preferences } from '@/shared/lib/preferences';
+import type { Exam, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
+import { attendingExams } from '@/timetable/model/examAttendance';
+import { examAttendanceScope, timetableEdits, type Preferences } from '@/world/preferences';
 import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadExams, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf, holidayMap, type Timeline } from '@/world/events';
 import { courseName } from '@/world/names';

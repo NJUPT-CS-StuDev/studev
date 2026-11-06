@@ -16,8 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.hicancan.studev.app.*
-import top.hicancan.studev.campus.CampusModel
-import top.hicancan.studev.ui.theme.marks
+import top.hicancan.studev.app.CampusModel
+import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.*
 import java.time.DayOfWeek
 import java.time.LocalDate

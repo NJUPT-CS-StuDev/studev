@@ -1,6 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
-import SiteLayout from '../../layouts/SiteLayout.astro';
+import SiteLayout from '../../site/SiteLayout.astro';
 
 const entries = (await getCollection('develop'))
   .filter((item) => item.data.status === 'published')

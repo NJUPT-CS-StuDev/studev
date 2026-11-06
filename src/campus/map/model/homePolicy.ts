@@ -1,4 +1,4 @@
-import { PRODUCT_CONFIG } from '@/app/config/product';
+import { PRODUCT_CONFIG } from '@/world/product';
 import { CAMPUS_CENTRE, type Place } from './space';
 import type { Position } from 'wayfind';
 

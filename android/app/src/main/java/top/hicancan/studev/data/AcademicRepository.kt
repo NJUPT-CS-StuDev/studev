@@ -116,11 +116,19 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         }
         return published
     }
+    /** The person's lessons and exams along time. */
+    suspend fun line(settings: top.hicancan.studev.me.PersonalSettings): top.hicancan.studev.world.CampusLine {
+        val term = term()
+        val klass = settings.klass
+        val schedule = klass?.takeIf { id -> classes().any { it.id == id } }?.let { effectiveSchedule(it, settings.timetableEdits(term.term)) }
+        val exams = klass?.let { effectiveExams(it, settings) }.orEmpty()
+        return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null)
+    }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {
         val edits = settings.timetableEdits(release.teaching)
         val schedule = if (release.exams == release.teaching && classes().any { it.id == id }) effectiveSchedule(id, edits) else null
-        return top.hicancan.studev.exams.ExamAttendance.select(examCandidates(id, edits), settings.examChoices(release.exams, id),
-            top.hicancan.studev.exams.ExamAttendance.ownCodes(release, schedule))
+        return top.hicancan.studev.timetable.ExamAttendance.select(examCandidates(id, edits), settings.examChoices(release.exams, id),
+            top.hicancan.studev.timetable.ExamAttendance.ownCodes(release, schedule))
     }
     private val lenient = Json { ignoreUnknownKeys = true }
     suspend fun calendar() = lenient.decodeFromString<top.hicancan.studev.world.CalendarFile>(bytes("calendar.json").decodeToString()).terms
@@ -145,7 +153,6 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             } finally { connection.disconnect() }
         }
         suspend fun open(context: Context): AcademicRepository = withContext(Dispatchers.IO) {
-            DataRefreshWorker.schedule(context)
             val saved = File(context.filesDir, "campus/release.json")
             val release = runCatching { Json.decodeFromString<DataRelease>(saved.readText()).takeIf(::validRelease) }.getOrNull() ?: run {
                 Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() })
@@ -192,4 +199,11 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             Json { ignoreUnknownKeys = true }.decodeFromString<DataRelease>(text).takeIf(::validRelease)
         }.getOrNull()
     }
+}
+
+/** Missing downloads never erase the bundled map or another release's cache. */
+class DataUnavailableException(cause: Exception) : IOException(
+    "这份数据尚未下载，或新版本还未发布。校园地图可离线使用，请联网后重试。"
+) {
+    init { initCause(cause) }
 }

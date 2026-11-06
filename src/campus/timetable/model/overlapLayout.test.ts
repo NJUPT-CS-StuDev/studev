@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 import { describeMeetingOverlap, groupOverlappingMeetings } from './overlapLayout';
 const meeting = (meetingId: string, weekday: number, startPeriod: number, endPeriod: number, courseCode = meetingId): TeachingMeeting => ({
     course: {

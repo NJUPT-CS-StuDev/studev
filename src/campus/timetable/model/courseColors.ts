@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 import tokens from '../../../../design/tokens.json';
 
 const COURSE_TONE_COUNT = Object.keys(tokens.course.light).length;

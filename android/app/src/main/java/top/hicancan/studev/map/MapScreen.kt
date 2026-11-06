@@ -38,12 +38,12 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import top.hicancan.studev.app.*
-import top.hicancan.studev.campus.AcademicState
+import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.data.*
 import top.hicancan.studev.location.*
 import top.hicancan.studev.me.PersonalSettings
 import top.hicancan.studev.navigation.*
-import top.hicancan.studev.ui.theme.marks
+import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.*
 import java.time.DayOfWeek
 import kotlin.math.*

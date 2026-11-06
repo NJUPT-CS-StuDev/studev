@@ -1,5 +1,5 @@
 import { planRuns, runDates, runTally, type RunPlan, type Timeline } from '@/world/events';
-import { writePreferences, type RunSettings } from '@/shared/lib/preferences';
+import { writePreferences, type RunSettings } from '@/world/preferences';
 import { addDays, dateLabel, weekdayOf, type Moment } from '@/world/time';
 import { Sheet } from '@/world/ui';
 

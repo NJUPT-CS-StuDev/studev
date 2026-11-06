@@ -11,7 +11,7 @@ import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
 import { SPACE_FILES } from './space-contract.ts';
-import type { Exam, TeachingClass, TeachingMeeting } from '../../src/campus/academics/facts.ts';
+import type { Exam, TeachingClass, TeachingMeeting } from '../../src/campus/world/facts.ts';
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
 

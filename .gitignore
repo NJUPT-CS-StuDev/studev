@@ -37,7 +37,7 @@ CLAUDE.md
 # jetbrains setting folder
 .idea/
 
-# Digested campus data (scripts/digest.ts)
+# Digested campus data (scripts/data/digest.ts)
 /.data/
 /public/data/
 /src/data/campus-release.json

@@ -1,6 +1,6 @@
 package top.hicancan.studev.widget
 
-import top.hicancan.studev.timetable.CampusDay
+import top.hicancan.studev.world.CampusDay
 import top.hicancan.studev.world.CampusLine
 import top.hicancan.studev.world.LineEvent
 import top.hicancan.studev.world.Moment

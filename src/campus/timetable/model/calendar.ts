@@ -1,5 +1,5 @@
-import { PRODUCT_CONFIG } from '@/app/config/product';
-import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/academics/facts';
+import { PRODUCT_CONFIG } from '@/world/product';
+import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/world/facts';
 
 const escape = (value: string): string => value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
 const compact = (value: string): string => value.replace(/[-:]/g, '');

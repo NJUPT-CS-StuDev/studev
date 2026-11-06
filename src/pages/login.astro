@@ -1,6 +1,6 @@
 ---
-import SiteLayout from '../layouts/SiteLayout.astro';
-import '../styles/platform.css';
+import SiteLayout from '../site/SiteLayout.astro';
+import '../platform/platform.css';
 ---
 <SiteLayout title="登录 — studev" active="login" noindex={true}>
   <div class="platform">
@@ -71,5 +71,5 @@ import '../styles/platform.css';
       </form>
     </section>
   </div>
-  <script>import '../client/platform/platform-login';</script>
+  <script>import '../platform/client/login';</script>
 </SiteLayout>

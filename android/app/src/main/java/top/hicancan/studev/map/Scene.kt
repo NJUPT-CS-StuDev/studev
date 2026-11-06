@@ -27,7 +27,7 @@ import org.maplibre.android.style.light.Position
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.ImageSource
 import org.maplibre.geojson.FeatureCollection
-import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.app.Tokens
 import top.hicancan.studev.world.Moment
 import java.time.LocalDate
 import kotlin.math.*

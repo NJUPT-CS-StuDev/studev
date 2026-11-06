@@ -1,15 +1,15 @@
 // The one place for personal settings, reached from the avatar on every page.
 import { useEffect, useMemo, useState } from 'react';
-import { DATA_RELEASE } from '@/app/config/constants';
-import { PRODUCT_CONFIG } from '@/app/config/product';
-import { timetableEdits, updateTimetableEdits, writePreferences } from '@/shared/lib/preferences';
-import { usePreferences } from '@/shared/lib/usePreferences';
+import { DATA_RELEASE } from '@/world/config';
+import { PRODUCT_CONFIG } from '@/world/product';
+import { timetableEdits, updateTimetableEdits, writePreferences } from '@/world/preferences';
+import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
 import { buildClassCalendar, downloadCalendar } from '@/timetable/model/calendar';
 import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf } from '@/world/events';
 import { Chevron, Sheet, Toggle } from '@/world/ui';
-import type { TeachingClass, TeachingTerm } from '@/academics/facts';
+import type { TeachingClass, TeachingTerm } from '@/world/facts';
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
 import '../campus.css';
 

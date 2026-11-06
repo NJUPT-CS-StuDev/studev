@@ -1,10 +1,10 @@
-import { PRODUCT_CONFIG } from '@/app/config/product';
+import { PRODUCT_CONFIG } from '@/world/product';
 // The campus space comes from njupt-map; opening hours are the only place facts
 // contributed by njupt-data and are joined by canonical map id.
 import type { StyleSpecification } from 'maplibre-gl';
 import type { GraphData, Position, Endpoint } from 'wayfind';
-import { DATA_RELEASE } from '@/app/config/constants';
-import { fetchJson } from '@/shared/lib/fetch';
+import { DATA_RELEASE } from '@/world/config';
+import { fetchJson } from '@/world/fetch';
 
 const CAMPUS = PRODUCT_CONFIG.CAMPUS.id;
 export const CAMPUS_CENTRE = PRODUCT_CONFIG.CAMPUS.centre as Position;

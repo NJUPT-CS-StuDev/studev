@@ -1,4 +1,4 @@
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 import { courseIdentity } from './courseColors';
 
 interface PositionedMeeting {

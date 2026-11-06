@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { TeachingClass } from '@/academics/facts';
-import { writePreferences } from '@/shared/lib/preferences';
+import type { TeachingClass } from '@/world/facts';
+import { writePreferences } from '@/world/preferences';
 import { loadClasses } from '@/world/data';
 import { Magnifier } from '@/world/ui';
 

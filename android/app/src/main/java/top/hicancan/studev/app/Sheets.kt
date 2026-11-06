@@ -20,11 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.hicancan.studev.account.PLATFORM_ORIGIN
-import top.hicancan.studev.calendar.TimetableCalendar
-import top.hicancan.studev.campus.AcademicState
-import top.hicancan.studev.campus.CampusModel
+import top.hicancan.studev.device.TimetableCalendar
+import top.hicancan.studev.app.AcademicState
+import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.me.PersonalSettings
-import top.hicancan.studev.ui.theme.marks
+import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.*
 
 @Composable fun EventSheet(event: LineEvent, line: CampusLine, isMe: Boolean, route: Route, model: CampusModel, settings: PersonalSettings, onClose: () -> Unit) {
@@ -107,9 +107,9 @@ import top.hicancan.studev.world.*
             KeyRow(null, "studev 考表", "提前 1 天和 1 小时提醒", trailing = { Toggle(settings.calendarExams) { on -> set { it.copy(calendarExams = on) } } })
             state.run?.let { rule -> KeyRow(null, "studev 早锻炼", "只同步你计划跑的那些天，提前 30 分钟提醒", trailing = { Toggle(settings.calendarRun) { on -> withCalendar { set { it.copy(calendarRun = on) } } } }) }
             KeyRow(null, "studev 校历", "放假和校历日程，整天显示", trailing = { Toggle(settings.calendarSchool) { on -> set { it.copy(calendarSchool = on) } } })
-            val background = remember(settings) { top.hicancan.studev.me.BackgroundRunSettings.status(context) }
+            val background = remember(settings) { top.hicancan.studev.device.BackgroundSettings.status(context) }
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {
-                if (background.batteryExempt) top.hicancan.studev.me.BackgroundRunSettings.openOemStartup(context) else top.hicancan.studev.me.BackgroundRunSettings.requestBatteryExemption(context)
+                if (background.batteryExempt) top.hicancan.studev.device.BackgroundSettings.openOemStartup(context) else top.hicancan.studev.device.BackgroundSettings.requestBatteryExemption(context)
             })
             KeyRow(null, "检查数据更新", state.repository?.release?.data_version, chevron = true, onClick = { model.refresh() })
             KeyRow(null, "社团", "南邮计软网安学生发展中心", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/club/"))) })

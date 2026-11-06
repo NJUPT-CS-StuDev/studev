@@ -8,8 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import top.hicancan.studev.campus.CampusApp
-import top.hicancan.studev.ui.theme.StuDevTheme
+import top.hicancan.studev.app.CampusApp
+import top.hicancan.studev.app.StuDevTheme
 import top.hicancan.studev.account.AccountHost
 
 

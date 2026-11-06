@@ -6,14 +6,14 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import top.hicancan.studev.data.*
-import top.hicancan.studev.exams.ExamAttendance
+import top.hicancan.studev.timetable.ExamAttendance
 import top.hicancan.studev.world.*
 
-/** Every expectation comes from src/campus/academics/parity/golden.json, written by the web code. */
+/** Every expectation comes from src/campus/world/parity/golden.json, written by the web code. */
 class ParityTest {
     private val json = Json { ignoreUnknownKeys = true }
     private val golden = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }
-        .map { File(it, "src/campus/academics/parity/golden.json") }.first { it.isFile }
+        .map { File(it, "src/campus/world/parity/golden.json") }.first { it.isFile }
         .let { json.parseToJsonElement(it.readText()).jsonObject }
     private val term = json.decodeFromJsonElement<TeachingTerm>(golden.getValue("term"))
     private val periods = json.decodeFromJsonElement<List<TeachingPeriod>>(golden.getValue("periods"))

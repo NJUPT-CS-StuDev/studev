@@ -1,4 +1,4 @@
-import type { TeachingMeeting } from '@/academics/facts';
+import type { TeachingMeeting } from '@/world/facts';
 
 export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双周' | null => {
     if (meeting.weeks.length < 2) return null;

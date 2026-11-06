@@ -1,6 +1,6 @@
 ---
 import { getCollection, render } from 'astro:content';
-import SiteLayout from '../../layouts/SiteLayout.astro';
+import SiteLayout from '../../site/SiteLayout.astro';
 
 export async function getStaticPaths() {
   const entries = await getCollection('develop', ({ data }) => data.status === 'published');

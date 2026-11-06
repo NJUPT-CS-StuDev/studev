@@ -1,8 +1,8 @@
 // Local acceptance uses the production handler and injected Blob/storage adapters.
 // No cloud credentials, production requests or alternate application branches.
 import { createServer } from 'node:http';
-import { createPlatformHandler } from '../../src/server/platform-app.mjs';
-import { memoryBlob, memoryGateway, testEnvironment } from '../../tests/helpers/platform-fixtures.mjs';
+import { createPlatformHandler } from '../../src/platform/server/app.mjs';
+import { memoryBlob, memoryGateway, testEnvironment } from '../../src/platform/tests/fixtures.mjs';
 
 const origin = 'http://127.0.0.1:4319';
 const { env } = await testEnvironment();

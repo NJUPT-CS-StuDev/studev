@@ -1,5 +1,5 @@
 // A person or room unfolded along time: lessons, exams, the school calendar and 早锻炼 on one line.
-import type { Exam, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/academics/facts';
+import type { Exam, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { courseName, courseShort } from './names';
 import type { CalendarTerm, MorningRun } from './data';
 import { addDays, daysBetween, minutesOf, weekdayOf, type Moment } from './time';
