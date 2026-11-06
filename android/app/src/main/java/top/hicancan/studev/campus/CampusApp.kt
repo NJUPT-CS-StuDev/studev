@@ -1,224 +1,96 @@
 package top.hicancan.studev.campus
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import top.hicancan.studev.account.PLATFORM_ORIGIN
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.*
-import androidx.lifecycle.compose.*
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.*
-import top.hicancan.studev.data.*
-import top.hicancan.studev.location.*
-import top.hicancan.studev.me.*
+import kotlinx.coroutines.delay
+import top.hicancan.studev.account.PLATFORM_ORIGIN
+import top.hicancan.studev.app.*
+import top.hicancan.studev.data.CampusPackage
+import top.hicancan.studev.location.CampusLocation
+import top.hicancan.studev.map.MapScreen
 import top.hicancan.studev.navigation.*
-import top.hicancan.studev.rooms.RoomsScreen
-import top.hicancan.studev.search.AcademicSearchScreen
-import top.hicancan.studev.exams.ExamsScreen
-import top.hicancan.studev.timetable.*
+import top.hicancan.studev.search.SearchScreen
+import top.hicancan.studev.timetable.CampusDay
+import top.hicancan.studev.timetable.TimetableScreen
+import top.hicancan.studev.world.CampusLine
+import top.hicancan.studev.world.LineEvent
+import top.hicancan.studev.world.Moment
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Three entries over one shell, the same as the website. */
 @Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val campusPackage by produceState<CampusPackage?>(initialValue = null, context) {
-        value = runCatching { CampusPackage.load(context.assets) }.getOrNull()
-    }
     val state by model.state.collectAsStateWithLifecycle()
-    val preferences by model.settings.state.collectAsStateWithLifecycle()
+    val settings by model.settings.state.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()
+    val route = remember { Route() }
     val snackbar = remember { SnackbarHostState() }
-    var screen by rememberSaveable { mutableStateOf("home") }
-    var query by rememberSaveable { mutableStateOf("") }
-    var searchScope by rememberSaveable { mutableStateOf("web") }
-    var week by rememberSaveable { mutableStateOf<Int?>(null) }
-    var roomDate by rememberSaveable { mutableStateOf<String?>(null) }
-    var roomPeriod by rememberSaveable { mutableStateOf<Int?>(null) }
-    var classPicker by rememberSaveable { mutableStateOf(false) }
-    var courseManager by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(courseManager, state.repository) {
-        if (courseManager && state.repository != null) model.openCourseManager()
-    }
-    var lesson by remember { mutableStateOf<TeachingMeeting?>(null) }
-    val destinations = rememberSaveableStateHolder()
-    var pendingMap by rememberSaveable { mutableStateOf<String?>(null) }
-    var depart by remember { mutableStateOf(false) }
-    val runtime = remember(context) { NavigationRuntime.get(context) }
-    val route by runtime.state.collectAsStateWithLifecycle()
-    LaunchedEffect(route.active) { if (route.active) screen = "map" }
-    val (access, requestLocation) = rememberLocationPermission { }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val location = remember(context) { CampusLocation.get(context) }
-    val fix by location.fix.collectAsStateWithLifecycle()
-    DisposableEffect(access.granted, lifecycle) {
-        val owner = Any()
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START && access.granted) location.acquire(owner)
-            if (event == Lifecycle.Event.ON_STOP) location.release(owner)
-        }
-        lifecycle.addObserver(observer)
-        if (access.granted && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) location.acquire(owner)
-        onDispose { lifecycle.removeObserver(observer); location.release(owner) }
-    }
-    var now by remember { mutableStateOf(CampusDay.now()) }
-    LaunchedEffect(Unit) { while (true) { now = CampusDay.now(); delay(30_000) } }
+    var campus by remember { mutableStateOf<CampusPackage?>(null) }
+    LaunchedEffect(Unit) { campus = runCatching { CampusPackage.load(context) }.getOrNull() }
+    var now by remember { mutableStateOf(Moment.of(CampusDay.now())) }
+    LaunchedEffect(Unit) { while (true) { now = Moment.of(CampusDay.now()); delay(30_000) } }
     LaunchedEffect(notice) { notice?.let { snackbar.showSnackbar(it); model.clearNotice() } }
-    fun openScreen(target: String, text: String = "") { query = text; screen = target }
-    fun go(room: String, start: Boolean) { scope.launch {
-        val campus = CampusPackage.load(context.assets)
-        val place = campus.byId[room]
-        if (place == null) { model.tell("这个教室尚未关联校园地图"); return@launch }
-        lesson = null; pendingMap = room; openScreen("map"); runtime.open(place); depart = start
-        if (!access.granted) requestLocation()
-    } }
-    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted && route.route != null && !route.busy) runtime.start() else model.tell("可在路线页开始导航")
+    LaunchedEffect(deepLink) {
+        if (deepLink != null) { route.open(deepLink, Uri.parse(PLATFORM_ORIGIN).host.orEmpty()); onDeepLinkHandled() }
     }
-    LaunchedEffect(depart, route.busy, route.route, route.error) {
-        if (depart && !route.busy) {
-            if (route.route != null) {
-                if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                else runtime.start()
-            }
-            depart = false
+    val runtime = remember(context) { NavigationRuntime.get(context) }
+    val navigation by runtime.state.collectAsStateWithLifecycle()
+    LaunchedEffect(navigation.active) { if (navigation.active) route.tab = "map" }
+    var mapOpened by remember { mutableStateOf(false) }
+    if (route.tab == "map") mapOpened = true
+    var open by remember { mutableStateOf<Pair<LineEvent, CampusLine>?>(null) }
+    var me by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    val location = remember(context) { CampusLocation.get(context) }
+    val walk: suspend (String) -> Int? = walk@{ target ->
+        val fix = location.fix.value ?: return@walk null
+        val place = campus?.byId?.get(target) ?: return@walk null
+        runCatching { runtime.walkMinutes(Endpoint.Position(fix.position), place.endpoint) }.getOrNull()
+    }
+    BackHandler(enabled = route.tab != "timetable" || route.whoType != "me" || route.preview != null) {
+        when {
+            route.tab != "timetable" -> route.tab = "timetable"
+            route.preview != null -> route.preview = null
+            else -> { route.whoType = "me"; route.whoId = "" }
         }
     }
-    LaunchedEffect(deepLink, state.busy) {
-        if (deepLink == null || state.busy) return@LaunchedEffect
-        val uri = Uri.parse(deepLink)
-        if (uri.scheme != "https" || uri.host != Uri.parse(PLATFORM_ORIGIN).host) { onDeepLinkHandled(); return@LaunchedEffect }
-        uri.getQueryParameter("class")?.let { id -> if (state.classes.any { it.id.equals(id, true) } || id in state.examClasses) model.chooseClass(id.uppercase(java.util.Locale.ROOT)) }
-        query = uri.getQueryParameter("q") ?: uri.getQueryParameter("building").orEmpty()
-        when (uri.path?.trimEnd('/')) {
-            "/map" -> {
-                pendingMap = uri.getQueryParameter("place"); openScreen("map")
-                if (uri.getQueryParameter("route") == "true") pendingMap?.let { go(it, false) }
-            }
-            "/search/timetable" -> {
-                week = uri.getQueryParameter("week")?.toIntOrNull(); openScreen("timetable", query)
-                if (query.isNotBlank()) { courseManager = true; model.openCourseManager() }
-            }
-            "/search/exam" -> openScreen("exams")
-            "/search/classrooms" -> {
-                roomDate = uri.getQueryParameter("date"); roomPeriod = uri.getQueryParameter("period")?.toIntOrNull()
-                uri.getQueryParameter("campus")?.let { campus -> if (state.rooms?.campuses?.any { it.id == campus } == true) model.settings.update { it.copy(campus = campus) } }
-                openScreen("rooms", query)
-            }
-            "/search/web", "/search/materials", "/search/community" -> { searchScope = uri.path!!.trimEnd('/').substringAfterLast('/'); openScreen("search", query) }
-            else -> openScreen("home")
-        }
-        onDeepLinkHandled()
-    }
-    val next = state.events.firstOrNull { !it.exam && it.start > now.toInstant() }
-    var walk by remember(next?.id) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(next?.id, fix?.timestamp?.div(60_000)) {
-        val position = fix?.takeIf { SystemClock.elapsedRealtime() - it.timestamp in 0..30_000 } ?: return@LaunchedEffect
-        val room = next?.room ?: return@LaunchedEffect
-        walk = withContext(Dispatchers.IO) { runCatching {
-            val campus = CampusPackage.load(context.assets)
-            val place = campus.byId[room] ?: return@runCatching null
-            Wayfind.load(context.assets).use { engine -> engine.route(RouteRequest(Endpoint.Position(position.position), place.endpoint, alternatives = 1)).firstOrNull()?.let { minutes(it.duration_s) } }
-        }.getOrNull() }
-    }
-    val tab = when (screen) { "timetable", "exams" -> "timetable"; "map" -> "map"; "me", "calendar" -> "me"; else -> "home" }
-    BackHandler(screen != "home") { screen = when (screen) { "calendar" -> "me"; "exams" -> "timetable"; else -> "home" } }
-    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), snackbarHost = { SnackbarHost(snackbar) }, topBar = {
-        if (screen != "map") TopAppBar(title = { Text(when (screen) { "home" -> "studev"; "timetable", "exams" -> "课表"; "rooms" -> "空教室"; "search" -> "校园搜索"; "calendar" -> "日历同步"; else -> "我的" }) },
-            navigationIcon = { if (screen in listOf("rooms", "search", "calendar")) IconButton({ screen = if (screen == "calendar") "me" else "home" }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
-            actions = { if (screen == "home") TextButton({ classPicker = true }) { Text(preferences.klass ?: "选择班级") } else if (screen == "timetable" || screen == "exams") TextButton({ screen = if (screen == "exams") "timetable" else "exams" }) { Text(if (screen == "exams") "课程" else "考试") } })
-    }, bottomBar = {
-        if (!route.active) NavigationBar {
-            listOf("home" to "首页", "timetable" to "课表", "map" to "地图", "me" to "我的").forEach { (key, label) ->
-                NavigationBarItem(tab == key, { openScreen(key) }, icon = { Icon(when (key) { "home" -> Icons.Outlined.Home; "timetable" -> Icons.Outlined.CalendarMonth; "map" -> Icons.Outlined.Map; else -> Icons.Outlined.PersonOutline }, null) }, label = { Text(label) }, modifier = Modifier.testTag("tab-$key"))
-            }
-        }
-    }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-            // Save the map's camera/controller and internal routes when another tab is visible.
-            // Detaching its native SurfaceView also stops off-screen rendering and location work.
-            if (screen == "map") destinations.SaveableStateProvider("map") {
-                StudevApp(pendingMap, onDeepLinkHandled = { pendingMap = null })
-            }
-            if (screen != "map") Surface(Modifier.fillMaxSize()) {
-                if (state.busy) Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() }
-                else if (state.term == null || state.rooms == null) Column(Modifier.padding(20.dp)) { EmptyCard("校园数据暂时无法打开", state.error.orEmpty(), "重试", model::load) }
-                else Column(Modifier.fillMaxSize()) {
-                    if (state.classBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    if (state.error != null) TextButton(model::load) { Text("${state.error} · 重试") }
-                    Box(Modifier.weight(1f)) { destinations.SaveableStateProvider(screen) { when (screen) {
-                        "home" -> CampusHome(state, preferences.klass, now, walk, access.granted, requestLocation, { classPicker = true }, { openScreen(it) }, { lesson = it }, ::go, campusPackage)
-                        "timetable" -> TimetableScreen(
-                            state = state,
-                            klass = preferences.klass,
-                            requestedWeek = week,
-                            onClass = { classPicker = true },
-                            onLesson = { lesson = it },
-                            campus = campusPackage,
-                            edits = state.term?.let { preferences.timetableEdits(it.term) } ?: TimetableEdits(),
-                            onManageCourses = { courseManager = true; model.openCourseManager() },
-                        )
-                        "exams" -> ExamsScreen(state, preferences.klass, { classPicker = true }, ::go, campusPackage,
-                            preferences.examChoices(state.repository?.release?.exams, preferences.klass), model::examAttendance)
-                        "rooms" -> RoomsScreen(state.repository!!, state.rooms!!, preferences.campus, query, roomDate, roomPeriod, { value -> model.settings.update { it.copy(campus = value) } }, ::go)
-                        "search" -> AcademicSearchScreen(model.search(state.repository!!), query, model::places, { id -> pendingMap = id; openScreen("map") }, searchScope, campusPackage?.byId.orEmpty()) { target, text ->
-                            openScreen(target, text)
-                            if (target == "timetable" && text.isNotBlank()) { courseManager = true; model.openCourseManager() }
-                        }
-                        "me", "calendar" -> MeScreen(model, state, preferences, screen == "calendar", { classPicker = true }, { screen = "calendar" }, onAccount)
-                    } } }
+    Scaffold(containerColor = Ink.paper, snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
+        if (!navigation.active) Row(Modifier.fillMaxWidth().background(Ink.paper).topHairline(Ink.line).navigationBarsPadding().height(50.dp)) {
+            listOf("timetable" to "课表", "map" to "地图", "search" to "搜索").forEach { (key, label) ->
+                val on = route.tab == key
+                Box(Modifier.weight(1f).fillMaxHeight().clickable { route.tab = key }.testTag("tab-$key"), contentAlignment = Alignment.Center) {
+                    Plain(label, 14.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Medium)
                 }
             }
         }
+    }) { padding ->
+        Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+            // The native map keeps its surface while another entry is on top of it.
+            if (mapOpened) campus?.let { loaded -> MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }) }
+            when (route.tab) {
+                "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
+                "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }
+            }
+            if (route.tab != "map") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 14.dp).size(32.dp).testTag("me"), shape = CircleShape, color = Ink.sunken) {
+                Box(contentAlignment = Alignment.Center) { Plain("我", 12.5.sp, Ink.muted, FontWeight.SemiBold) }
+            }
+        }
     }
-    if (classPicker && !state.busy) ClassPicker(state, { model.chooseClass(it); classPicker = false }, { classPicker = false })
-    if (courseManager && !state.busy && preferences.klass != null && state.term != null) {
-        CourseManagerSheet(
-            className = preferences.klass!!,
-            state = state,
-            edits = preferences.timetableEdits(state.term!!.term),
-            initialQuery = query,
-            onHide = model::hideCourse,
-            onShow = model::showCourse,
-            onAdd = model::addCourse,
-            onRemoveAdded = model::removeAddedCourse,
-            onReset = model::resetTimetableEdits,
-            onRetry = model::openCourseManager,
-            onClose = { courseManager = false; query = "" },
-        )
-    }
-    lesson?.let { currentLesson ->
-        val isAdded = state.rawSchedule?.meetings?.none { it.id == currentLesson.id } == true
-        LessonDetail(
-            meeting = currentLesson,
-            periods = state.periods,
-            onClose = { lesson = null },
-            onRoute = ::go,
-            campus = campusPackage,
-            isAddedCourse = isAdded,
-            onRemoveCourse = {
-                val id = currentLesson.teaching_class.id
-                if (isAdded) model.removeAddedCourse(id) else model.hideCourse(id)
-            },
-        )
-    }
+    open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings) { open = null } }
+    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount) { me = false }
+    if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
 }

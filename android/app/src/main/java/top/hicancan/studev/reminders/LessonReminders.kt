@@ -83,7 +83,7 @@ object LessonReminders {
         if (!preferences.getStringSet("ids", emptySet()).orEmpty().contains(id) || preferences.getBoolean("sent:$id", false)) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(TAG, "课程与考试提醒", NotificationManager.IMPORTANCE_HIGH))
-        val uri = Uri.parse("$PLATFORM_ORIGIN/" + if (room == null) "search/timetable/" else "map/?place=${Uri.encode(room)}&route=true")
+        val uri = Uri.parse("$PLATFORM_ORIGIN/" + if (room == null) "" else "map/?nav=${Uri.encode(room)}")
         val open = PendingIntent.getActivity(context, id.hashCode(), Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(uri),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val roomName = top.hicancan.studev.data.roomDisplayName(room, emptyMap())

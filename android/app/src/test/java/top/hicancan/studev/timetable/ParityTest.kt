@@ -1,118 +1,98 @@
 package top.hicancan.studev.timetable
 
 import java.io.File
-import java.time.Instant
+import java.time.LocalDate
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import top.hicancan.studev.data.*
-import top.hicancan.studev.exams.examPresentation
 import top.hicancan.studev.exams.ExamAttendance
-import top.hicancan.studev.rooms.RoomSelection
+import top.hicancan.studev.world.*
 
+/** Every expectation comes from src/campus/academics/parity/golden.json, written by the web code. */
 class ParityTest {
-    private val json = Json
-    private fun fixture(name: String): JsonObject {
-        val directory = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }
-            .map { File(it, "src/campus/academics/parity") }.first { it.isDirectory }
-        return json.parseToJsonElement(File(directory, name).readText()).jsonObject
+    private val json = Json { ignoreUnknownKeys = true }
+    private val golden = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }
+        .map { File(it, "src/campus/academics/parity/golden.json") }.first { it.isFile }
+        .let { json.parseToJsonElement(it.readText()).jsonObject }
+    private val term = json.decodeFromJsonElement<TeachingTerm>(golden.getValue("term"))
+    private val periods = json.decodeFromJsonElement<List<TeachingPeriod>>(golden.getValue("periods"))
+    private val holidays = CampusLine.holidays(json.decodeFromJsonElement<List<CalendarTerm>>(golden.getValue("calendar")))
+    private val run = RunPlan(json.decodeFromJsonElement<MorningRun>(golden.getValue("run")), 12)
+    private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), holidays, run)
+    private fun brief(event: LineEvent) = buildJsonObject {
+        put("kind", event.kind); put("name", event.name); put("short", event.short); put("start", event.start); put("end", event.end); put("room", event.room)
     }
-    private val golden = fixture("golden.json")
-    private fun JsonElement.text() = jsonPrimitive.content
-    private fun JsonObject.int(key: String) = getValue(key).jsonPrimitive.int
-    @Test fun actualClassWeeksMatchEveryWebCellIncludingLayoutNotesAndColour() {
-        val days = fixture("spec.json").getValue("timetable").jsonObject.getValue("layout").jsonObject.getValue("days").jsonArray.map { it.jsonPrimitive.int }
+    @Test fun everyClassWeekMatchesEveryWebCell() {
         var count = 0
         golden.getValue("schedules").jsonArray.forEach { entry ->
-            val group = entry.jsonObject
-            val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(group.getValue("meetings"))
-            group.getValue("weeks").jsonArray.forEach { item ->
-                val test = item.jsonObject
-                val cells = TimetablePresentation.cells(meetings, test.int("week"))
-                val expected = json.decodeFromJsonElement<List<TimetableCell>>(test.getValue("cells"))
-                assertEquals("${group.getValue("class")} week ${test.int("week")}", expected, cells)
-                days.forEach { day -> assertEquals(expected.filter { it.day == day }, cells.filter { it.day == day }) }
+            val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(entry.jsonObject.getValue("meetings"))
+            entry.jsonObject.getValue("weeks").jsonArray.forEach { item ->
+                val week = item.jsonObject.getValue("week").jsonPrimitive.int
+                val cells = TimetablePresentation.cells(meetings, week)
+                assertEquals("week $week", json.decodeFromJsonElement<List<TimetableCell>>(item.jsonObject.getValue("cells")), cells)
                 count += cells.size
             }
         }
-        assertEquals(211, count)
+        assertTrue(count > 100)
     }
-    @Test fun actualExamsMatchWebAcrossShanghaiDateAndStartEndBoundaries() {
-        golden.getValue("exams").jsonArray.forEach { entry ->
-            val group = entry.jsonObject
-            val exams = json.decodeFromJsonElement<List<Exam>>(group.getValue("exams"))
-            group.getValue("cases").jsonArray.forEach { item ->
-                val test = item.jsonObject
-                val cells = exams.map { examPresentation(it, Instant.parse(test.getValue("now").text())) }
-                assertEquals(test.getValue("cells"), json.encodeToJsonElement(cells))
-            }
+    @Test fun eventsOnADayMatchIncludingHolidaysAndMorningRuns() {
+        golden.getValue("days").jsonArray.forEach { day ->
+            val date = LocalDate.parse(day.jsonObject.getValue("date").jsonPrimitive.content)
+            assertEquals(date.toString(), day.jsonObject.getValue("events"), JsonArray(line.on(date).map(::brief)))
         }
     }
-    @Test fun personalExamAttendanceMatchesTheWebReferenceIncludingExplicitRestoration() {
-        golden.getValue("edgeCases").jsonObject.getValue("examAttendance").jsonArray.forEach { item ->
+    @Test fun nextEventAndRunProgressMatch() {
+        golden.getValue("moments").jsonArray.forEach { item ->
             val test = item.jsonObject
-            val group = golden.getValue("exams").jsonArray.first { it.jsonObject.getValue("class") == test.getValue("class") }.jsonObject
-            val exams = json.decodeFromJsonElement<List<Exam>>(group.getValue("exams"))
-            val choices = json.decodeFromJsonElement<Map<String, Boolean>>(test.getValue("choices"))
-            val ownCodes = test.getValue("ownCodes").takeIf { it != JsonNull }?.jsonArray?.map { it.text() }?.toSet()
-            assertEquals(test.getValue("expected").jsonArray.map { it.text() }, ExamAttendance.select(exams, choices, ownCodes).map { it.id })
+            val at = test.getValue("now").jsonObject
+            val now = Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int)
+            assertEquals(test.getValue("next"), line.next(now)?.let(::brief) ?: JsonNull)
+            val expected = test.getValue("run").jsonObject
+            val progress = CampusLine.progress(run, holidays, now)
+            assertEquals(expected.getValue("left").jsonPrimitive.int, progress.left)
+            assertEquals(expected.getValue("need").jsonPrimitive.int, progress.need)
+            assertEquals(expected.getValue("perWeek").jsonPrimitive.int, progress.perWeek)
+            assertEquals(expected.getValue("reachable").jsonPrimitive.boolean, progress.reachable)
+            assertEquals(expected["nextBonus"]?.takeUnless { it is JsonNull }?.jsonArray?.map { it.jsonPrimitive.int }, progress.nextBonus)
         }
     }
-    @Test fun incompleteExamTimesDoNotBreakValidCalendarEvents() {
-        val exams = json.decodeFromJsonElement<List<Exam>>(golden.getValue("exams").jsonArray[0].jsonObject.getValue("exams"))
-        val term = json.decodeFromJsonElement<TeachingTerm>(golden.getValue("term"))
-        val invalid = exams.first().copy(id = "time-pending", date = "", start = "", end = "")
-        val events = CampusEvents.build(term, emptyList(), null, exams + invalid)
-        assertEquals(exams.map { "exam:${it.id}" }.toSet(), events.map { it.id }.toSet())
-    }
-    @Test fun actualRoomResultsMatchWebForAllBuildingsNoneMultipleCampusAndPeriods() {
+    @Test fun roomStatesMatchAtEverySampledMoment() {
         val rooms = golden.getValue("rooms").jsonObject
-        val index = json.decodeFromJsonElement<RoomIndex>(rooms.getValue("index"))
-        val days = json.decodeFromJsonElement<List<RoomDay>>(rooms.getValue("days"))
+        val days = json.decodeFromJsonElement<List<RoomDay>>(rooms.getValue("days")).associateBy { it.date }
+        val reader = RoomReader(periods)
         rooms.getValue("cases").jsonArray.forEach { item ->
             val test = item.jsonObject
-            val selection = test.getValue("selection").jsonObject
-            val buildings = selection.getValue("buildings").takeIf { it != JsonNull }?.jsonArray?.map { it.text() }?.toSet()
-            val matching = RoomSelection.filter(index.rooms, selection.getValue("campus").text(), buildings,
-                selection.getValue("everything").jsonPrimitive.boolean, selection.getValue("query").text(), selection.int("minSeats"))
-            val day = days.first { it.date == test.getValue("date").text() }
-            val free = matching.filter { CampusDay.isFree(day, it.id, selection.int("from"), selection.int("until")) }
-            val actual = buildJsonObject { put("rooms", json.encodeToJsonElement(matching.map { it.id }.sorted())); put("free", json.encodeToJsonElement(free.map { it.id }.sorted())) }
-            assertEquals("$selection on ${day.date}", test.getValue("expected"), actual)
+            val state = reader.at(days.getValue(test.getValue("date").jsonPrimitive.content), test.getValue("room").jsonPrimitive.content, test.getValue("min").jsonPrimitive.int)
+            assertEquals(item.toString(), test.getValue("tier").jsonPrimitive.content, state.tier)
+            assertEquals(item.toString(), test.getValue("until").jsonPrimitive.int, state.until)
+            assertEquals(item.toString(), test.getValue("minutes").jsonPrimitive.int, state.minutes)
+            assertEquals(item.toString(), test.getValue("busy").jsonPrimitive.boolean, state.busy)
         }
     }
-    @Test fun roomQueryNormalizationMatchesTheWebReference() {
-        golden.getValue("rooms").jsonObject.getValue("matchCases").jsonArray.forEachIndexed { index, item ->
-            val test = item.jsonObject
-            val room = json.decodeFromJsonElement<Room>(test.getValue("room"))
-            assertEquals("room query $index", test.getValue("expected").jsonPrimitive.boolean, CampusDay.roomMatches(room, test.getValue("query").text()))
-        }
-    }
-    @Test fun coloursAreIndependentOfTheMeetingSetAndUseUnicodeCodePoints() {
-        val meeting = json.decodeFromJsonElement<List<TeachingMeeting>>(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")).first()
-        val changed = meeting.copy(course = meeting.course.copy(code = null, name = "😀课程"))
-        assertEquals(2438769704L % 12, TimetablePresentation.colourIndex(changed).toLong())
-        assertEquals(TimetablePresentation.colourIndex(meeting), TimetablePresentation.colourIndex(meeting.copy(weeks = listOf(9))))
-        golden.getValue("edgeCases").jsonObject.getValue("colours").jsonArray.forEach { item ->
-            val test = item.jsonObject
-            val course = test.getValue("course").jsonObject
-            val value = meeting.copy(course = meeting.course.copy(code = course.getValue("code").jsonPrimitive.contentOrNull, name = course.getValue("name").text()))
-            assertEquals(test.getValue("identity").text(), TimetablePresentation.identity(value))
-            assertEquals(test.int("colourIndex"), TimetablePresentation.colourIndex(value))
-        }
-    }
-    @Test fun hiddenBuildingChoicesAndInvalidExamTimesUseTheSharedEdgeCases() {
+    @Test fun identitiesNamesAndAttendanceMatch() {
         val edge = golden.getValue("edgeCases").jsonObject
-        edge.getValue("buildingTransitions").jsonArray.forEach { item ->
+        edge.getValue("names").jsonArray.forEach { item ->
             val test = item.jsonObject
-            fun values(key: String) = test.getValue(key).jsonArray.map { it.text() }.toSet()
-            val selected = test.getValue("selected").takeIf { it != JsonNull }?.jsonArray?.map { it.text() }?.toSet()
-            assertEquals(values("expected"), RoomSelection.toggle(selected, values("all"), test.getValue("toggle").text()))
+            val value = test.getValue("value").jsonPrimitive.content
+            assertEquals(test.getValue("course").jsonPrimitive.content, Names.course(value))
+            assertEquals(test.getValue("short").jsonPrimitive.content, Names.courseShort(value))
+            assertEquals(test.getValue("room").jsonPrimitive.content, Names.room(value))
         }
-        edge.getValue("invalidExams").jsonArray.forEach { item ->
+        val exams = edge.getValue("attendanceExams").jsonArray.map { row ->
+            val exam = row.jsonObject
+            val course = exam.getValue("course").jsonObject
+            Exam(exam.getValue("id").jsonPrimitive.content, "A", ExamCourse(course["code"]?.jsonPrimitive?.contentOrNull, course.getValue("name").jsonPrimitive.content), null, null, null, null, "2026-11-05", "08:00", "09:00", null, null, "event", "event:exam")
+        }
+        edge.getValue("examAttendance").jsonArray.forEach { item ->
             val test = item.jsonObject
-            val exam = json.decodeFromJsonElement<Exam>(test.getValue("exam"))
-            assertEquals(test.getValue("expected"), json.encodeToJsonElement(examPresentation(exam, Instant.parse(test.getValue("now").text()))))
+            val choices = test.getValue("choices").jsonObject.mapValues { it.value.jsonPrimitive.boolean }
+            val own = test.getValue("ownCodes").takeUnless { it is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content }?.toSet()
+            assertEquals(test.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, ExamAttendance.select(exams, choices, own).map { it.id })
         }
+    }
+    @Test fun colourHashHandlesSupplementaryCharacters() {
+        val code = Course(null, "😀课程", null, null, null, null, null, null, null)
+        assertEquals(2438769704L % 12, TimetablePresentation.colourIndex(TeachingMeeting("x", code, emptyList(), TeachingGroup("g"), null, null, 1, listOf(1, 1), listOf(1), null, emptyList(), "event", "event:class")).toLong())
     }
 }

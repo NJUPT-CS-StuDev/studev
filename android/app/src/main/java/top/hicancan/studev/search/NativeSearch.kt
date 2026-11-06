@@ -26,8 +26,7 @@ internal class NativeSearch(private val read: suspend (String) -> ByteArray) : A
     @Volatile private var closed = false
     private suspend fun bytes(ref: JsonObject) = read(ref.getValue("path").jsonPrimitive.content)
     private fun size(ref: JsonObject) = ref.getValue("decoded_bytes").jsonPrimitive.int.toUInt()
-    suspend fun search(query: String, limit: Int): List<JsonObject> = page(query, limit).results
-    suspend fun page(query: String, limit: Int, sort: String = "relevance", filters: JsonObject = buildJsonObject {},
+        suspend fun page(query: String, limit: Int, sort: String = "relevance", filters: JsonObject = buildJsonObject {}, offset: Int = 0,
                      onRanked: suspend (Page) -> Unit = {}): Page = withContext(Dispatchers.IO) { mutex.withLock {
         coroutineContext.ensureActive()
         check(!closed) { "Search is closed" }
@@ -39,7 +38,7 @@ internal class NativeSearch(private val read: suspend (String) -> ByteArray) : A
         val lex = lexicon ?: bytes(lexiconIndex).also { lexicon = it }
         SearchEngine(docs, size(documentIndex), lex, size(lexiconIndex), m.getValue("profile").toString()).use { engine ->
             val request = buildJsonObject {
-                put("query", query.trim()); put("limit", limit); put("sort", sort); put("filters", filters)
+                put("query", query.trim()); put("offset", offset); put("limit", limit); put("sort", sort); put("filters", filters)
             }
             suspend fun load(indices: String, refs: JsonArray, consume: (UInt, ByteArray, UInt) -> Unit) {
                 val slots = Semaphore(4)
@@ -68,9 +67,9 @@ internal class NativeSearch(private val read: suspend (String) -> ByteArray) : A
             coroutineContext.ensureActive()
             onRanked(page(engine.prepareSearch()))
             coroutineContext.ensureActive()
-            load(engine.requiredContentChunks(0u, limit.toUInt()), m.getValue("content").jsonArray, engine::loadContentChunk)
+            load(engine.requiredContentChunks(offset.toUInt(), limit.toUInt()), m.getValue("content").jsonArray, engine::loadContentChunk)
             coroutineContext.ensureActive()
-            page(engine.hydrateSearch(0u, limit.toUInt()))
+            page(engine.hydrateSearch(offset.toUInt(), limit.toUInt()))
         }
     } }
     override fun close() { closed = true }

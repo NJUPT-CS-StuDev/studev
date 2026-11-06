@@ -20,19 +20,6 @@ import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
-import org.maplibre.android.style.layers.CircleLayer
-import org.maplibre.android.style.layers.Property
-import org.maplibre.android.style.layers.PropertyFactory.circleColor
-import org.maplibre.android.style.layers.PropertyFactory.circleRadius
-import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
-import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
-import org.maplibre.android.style.layers.PropertyFactory.visibility
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
-import top.hicancan.studev.data.CampusPackage
-import top.hicancan.studev.data.Place
 import top.hicancan.studev.location.LocationStatus
 import top.hicancan.studev.location.PlatformLocationEngine
 import top.hicancan.studev.ui.theme.Tokens
@@ -44,7 +31,6 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
     var follow by mutableStateOf(initialFollow)
         private set
     var threeD by mutableStateOf(initial3d)
-        private set
     var bearing by mutableDoubleStateOf(0.0)
         internal set
     var navigationFollowing by mutableStateOf(true)
@@ -60,9 +46,6 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
         if (centering) return
         follow = when (mode) { CameraMode.TRACKING -> FollowMode.Follow; CameraMode.TRACKING_COMPASS -> FollowMode.Heading; else -> FollowMode.None }
     }
-    fun north() { map?.animateCamera(CameraUpdateFactory.bearingTo(0.0), Tokens.Motion.camera) }
-    fun zoomIn() { map?.animateCamera(CameraUpdateFactory.zoomIn(), Tokens.Motion.standard) }
-    fun zoomOut() { map?.animateCamera(CameraUpdateFactory.zoomOut(), Tokens.Motion.standard) }
     fun stopFollow() { follow = FollowMode.None; applyFollow() }
     fun cycleFollow() {
         follow = when (follow) { FollowMode.None -> FollowMode.Follow; FollowMode.Follow -> FollowMode.Heading; FollowMode.Heading -> FollowMode.None }
@@ -108,74 +91,30 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
                 }
             })
     }
-    fun toggle3d() {
-        threeD = !threeD
-        applyLayers()
-        val ready = map ?: return
-        val pitch = if (threeD) 55.0 else 0.0
-        val targetZoom = if (threeD) maxOf(17.0, ready.cameraPosition.zoom) else ready.cameraPosition.zoom
-        val component = ready.locationComponent
-        if (follow != FollowMode.None && component.isLocationComponentActivated && component.isLocationComponentEnabled) {
-            if (threeD && ready.cameraPosition.zoom < 17.0) component.zoomWhileTracking(17.0, Tokens.Motion.camera.toLong())
-            component.tiltWhileTracking(pitch, Tokens.Motion.camera.toLong())
-        } else {
-            val camera = CameraPosition.Builder(ready.cameraPosition).tilt(pitch).zoom(targetZoom).build()
-            ready.animateCamera(CameraUpdateFactory.newCameraPosition(camera), Tokens.Motion.camera)
-        }
-    }
-    internal fun applyLayers() {
-        map?.style?.getLayer("building-fill")?.maxZoom = 24f
-        map?.style?.getLayer("building-extrusion")?.setProperties(visibility(if (threeD) Property.VISIBLE else Property.NONE))
-    }
-    internal fun applySelection(style: Style, campus: CampusPackage, place: Place?, dark: Boolean) {
-        val source = style.getSourceAs<GeoJsonSource>("selected-place")
-            ?: GeoJsonSource("selected-place").also(style::addSource)
-        val point = place?.let(campus::position)
-        source.setGeoJson(point?.let {
-            FeatureCollection.fromFeatures(arrayOf(Feature.fromGeometry(Point.fromLngLat(it[0], it[1]))))
-        } ?: FeatureCollection.fromFeatures(emptyArray()))
-        val color = if (dark) Tokens.Color.Dark.brand else Tokens.Color.Light.brand
-        val paper = if (dark) Tokens.Color.Dark.paper else Tokens.Color.Light.paper
-        val layer = style.getLayerAs<CircleLayer>("selected-place-marker")
-            ?: CircleLayer("selected-place-marker", "selected-place").also(style::addLayer)
-        layer.setProperties(circleRadius(8f), circleColor(color.toArgb()), circleStrokeColor(paper.toArgb()), circleStrokeWidth(2f))
-    }
-    fun select(place: Place, campus: CampusPackage, density: Float, sheetBottom: Double = 420.0) {
-        stopFollow()
-        val at = campus.position(place) ?: return
-        val ready = map ?: return
-        ready.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
-            .target(LatLng(at[1], at[0])).zoom(maxOf(17.0, ready.cameraPosition.zoom))
-            .tilt(if (threeD) 55.0 else 0.0)
-            .padding(0.0, 96.0 * density, 0.0, sheetBottom * density).build()), Tokens.Motion.camera)
-    }
 }
 
 @SuppressLint("MissingPermission")
 @Composable
 internal fun CampusMap(
     controller: CampusMapController,
-    campus: CampusPackage,
-    selected: Place?,
+    styleJson: String,
     dark: Boolean,
     locationGranted: Boolean,
-    onPlace: (Place) -> Unit,
     onLocationStatus: (LocationStatus) -> Unit,
-    onMapError: (Boolean) -> Unit,
-    onMapTap: () -> Unit,
+    onReady: (MapLibreMap, Style) -> Unit,
+    onTap: (android.graphics.PointF) -> Boolean,
+    onCamera: () -> Unit,
     routeState: PlannerState,
     onRoute: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    homeBottom: Double = 0.0,
-    sheetBottom: Double = 420.0,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val holder = rememberMapViewLifecycle()
     val statusCallback by rememberUpdatedState(onLocationStatus)
-    val errorCallback by rememberUpdatedState(onMapError)
-    val placeCallback by rememberUpdatedState(onPlace)
-    val currentSelection by rememberUpdatedState(selected)
+    val readyCallback by rememberUpdatedState(onReady)
+    val tapCallback by rememberUpdatedState(onTap)
+    val cameraCallback by rememberUpdatedState(onCamera)
     val currentRoute by rememberUpdatedState(routeState)
     val routeCallback by rememberUpdatedState(onRoute)
     val engine = remember(context) { PlatformLocationEngine(context.applicationContext) { statusCallback(it) } }
@@ -187,21 +126,15 @@ internal fun CampusMap(
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
     val brand = if (dark) Tokens.Color.Dark.brand else Tokens.Color.Light.brand
     DisposableEffect(holder, controller) {
-        val failure = org.maplibre.android.maps.MapView.OnDidFailLoadingMapListener { errorCallback(true) }
-        // GeoJSON parsing finishes after onStyleLoaded. Reapply state when the
-        // map is ready so a cold deep link/restoration highlights its building.
-        val finished = org.maplibre.android.maps.MapView.OnDidFinishLoadingMapListener {
-            if (!holder.destroyed) map?.style?.let { controller.applySelection(it, campus, selected, dark) }
-        }
-        holder.view.addOnDidFailLoadingMapListener(failure)
-        holder.view.addOnDidFinishLoadingMapListener(finished)
         holder.view.getMapAsync { ready ->
             if (!holder.destroyed) {
                 map = ready; controller.map = ready
                 if (!holder.isRestored) ready.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(top.hicancan.studev.BuildConfig.CAMPUS_LATITUDE, top.hicancan.studev.BuildConfig.CAMPUS_LONGITUDE)).zoom(15.6).build()
-                ready.setMinZoomPreference(12.0); ready.setMaxZoomPreference(21.0)
-                ready.addOnCameraMoveListener { controller.bearing = ready.cameraPosition.bearing }
+                    .target(LatLng(32.1131, 118.9286)).zoom(15.75).tilt(52.0).bearing(-24.0).build()
+                ready.setMinZoomPreference(13.5); ready.setMaxZoomPreference(21.0)
+                ready.uiSettings.isAttributionEnabled = false; ready.uiSettings.isLogoEnabled = false; ready.uiSettings.isCompassEnabled = false
+                ready.addOnCameraMoveListener { controller.bearing = ready.cameraPosition.bearing; cameraCallback() }
+                ready.addOnCameraIdleListener { cameraCallback() }
                 ready.addOnMoveListener(object : MapLibreMap.OnMoveListener {
                     override fun onMoveBegin(detector: MoveGestureDetector) {
                         controller.navigationFollowing = false
@@ -210,59 +143,29 @@ internal fun CampusMap(
                     override fun onMove(detector: MoveGestureDetector) = Unit
                     override fun onMoveEnd(detector: MoveGestureDetector) = Unit
                 })
-                ready.addOnCameraMoveStartedListener { reason ->
-                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
-                        controller.stopFollow(); controller.navigationFollowing = false
-                    }
-                }
                 ready.addOnMapClickListener { coordinate ->
-                    if (loadedStyle == null || holder.destroyed) false else {
-                        onMapTap()
-                        val point = ready.projection.toScreenLocation(coordinate)
+                    if (loadedStyle == null || holder.destroyed) return@addOnMapClickListener false
+                    val point = ready.projection.toScreenLocation(coordinate)
+                    if (currentRoute.open) {
                         val radius = 12 * density
-                        if (currentRoute.open) {
-                            val routeHit = ready.queryRenderedFeatures(RectF(point.x-radius, point.y-radius, point.x+radius, point.y+radius),
-                                "route-alternatives", "route-chosen").firstOrNull()
-                            if (routeHit != null && !currentRoute.active) routeCallback(routeHit.getNumberProperty("route").toInt())
-                            return@addOnMapClickListener routeHit != null
-                        }
-                        val hit = ready.queryRenderedFeatures(RectF(point.x-radius, point.y-radius, point.x+radius, point.y+radius),
-                            "building-fill", "building-extrusion", "building-label", "place-point", "place-label")
-                            .firstNotNullOfOrNull { feature -> feature.getStringProperty("id")?.let(campus.byId::get) }
-                        hit?.let(placeCallback)
-                        hit != null
+                        val routeHit = ready.queryRenderedFeatures(RectF(point.x-radius, point.y-radius, point.x+radius, point.y+radius), "route-alternatives", "route-chosen").firstOrNull()
+                        if (routeHit != null && !currentRoute.active) routeCallback(routeHit.getNumberProperty("route").toInt())
+                        return@addOnMapClickListener routeHit != null
                     }
+                    tapCallback(point)
                 }
             }
         }
         onDispose {
-            holder.view.removeOnDidFailLoadingMapListener(failure)
-            holder.view.removeOnDidFinishLoadingMapListener(finished)
             controller.map?.locationComponent?.removeOnCameraTrackingChangedListener(trackingListener)
             controller.map = null
         }
     }
-    LaunchedEffect(map, dark) {
+    LaunchedEffect(map, styleJson) {
         val ready = map ?: return@LaunchedEffect
-        loadedStyle = null; errorCallback(false)
-        ready.setStyle(Style.Builder().fromJson(campus.style(dark))) { style ->
-            if (!holder.destroyed) {
-                loadedStyle = style; controller.applyLayers()
-            }
-        }
-    }
-    LaunchedEffect(map, loadedStyle, selected, routeState.open, homeBottom, sheetBottom) {
-        if (loadedStyle != null) {
-            loadedStyle?.let { controller.applySelection(it, campus, selected, dark) }
-            if (selected != null) controller.select(selected, campus, density, sheetBottom)
-            else if (!routeState.open) map?.let { ready ->
-                val bottom = homeBottom * density
-                if (ready.cameraPosition.padding?.getOrNull(3) != bottom) {
-                    ready.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
-                        .tilt(if (controller.threeD) 55.0 else 0.0)
-                        .padding(0.0, 80.0 * density, 0.0, bottom).build()))
-                }
-            }
+        loadedStyle = null
+        ready.setStyle(Style.Builder().fromJson(styleJson)) { style ->
+            if (!holder.destroyed) { loadedStyle = style; readyCallback(ready, style) }
         }
     }
     LaunchedEffect(map, loadedStyle, locationGranted, routeState.active) {

@@ -1,456 +1,429 @@
 package top.hicancan.studev.timetable
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.hicancan.studev.campus.*
+import top.hicancan.studev.app.*
+import top.hicancan.studev.campus.AcademicState
+import top.hicancan.studev.campus.CampusModel
 import top.hicancan.studev.data.*
-import top.hicancan.studev.me.TimetableEdits
-import top.hicancan.studev.ui.theme.Tokens
+import top.hicancan.studev.me.PersonalSettings
+import top.hicancan.studev.ui.theme.marks
+import top.hicancan.studev.ui.theme.tone
+import top.hicancan.studev.world.*
 import java.time.LocalDate
 
-internal data class CourseColours(val bg: Color, val border: Color, val fg: Color)
-@Composable internal fun courseColours(index: Int, inactive: Boolean = false): CourseColours {
-    val dark = MaterialTheme.colorScheme.background == Tokens.Color.Dark.paper
-    if (inactive) return if (dark) Tokens.Color.Dark.let { CourseColours(it.surfaceSunken, it.line, it.muted) }
-        else Tokens.Color.Light.let { CourseColours(it.surfaceSunken, it.line, it.muted) }
-    val palette = if (dark) darkCourses else lightCourses
-    return palette[index % palette.size]
+/** Whoever is being looked at, unfolded along time. */
+@Composable fun TimetableScreen(route: Route, model: CampusModel, state: AcademicState, settings: PersonalSettings, now: Moment, walk: suspend (String) -> Int?, onEvent: (LineEvent, CampusLine) -> Unit) {
+    val term = state.term
+    if (settings.klass == null && route.whoType == "me") { ClassPicker(state) { model.chooseClass(it) }; return }
+    if (term == null) { Box(Modifier.fillMaxSize()); return }
+    val isMe = route.whoType == "me"
+    var others by remember { mutableStateOf<CampusLine?>(null) }
+    LaunchedEffect(route.whoType, route.whoId, state.repository) {
+        others = null
+        if (isMe) return@LaunchedEffect
+        val repo = state.repository ?: return@LaunchedEffect
+        val meetings = when (route.whoType) {
+            "class" -> runCatching { repo.schedule(route.whoId).meetings }.getOrDefault(emptyList())
+            "teacher" -> model.meetings().filter { row -> row.teachers.any { it.name == route.whoId } }
+            "course" -> model.meetings().filter { Names.course(it.course.name) == route.whoId }
+            "room" -> model.meetings().filter { it.room == route.whoId }
+            else -> emptyList()
+        }
+        val exams = if (route.whoType == "class") runCatching { repo.exams(route.whoId) }.getOrDefault(emptyList()) else emptyList()
+        others = CampusLine(term, state.periods, meetings, exams, state.holidays, null)
+    }
+    val line = if (isMe) model.myLine(state, settings) else others
+    if (line == null) { Box(Modifier.fillMaxSize()); return }
+    var previewRows by remember { mutableStateOf(emptyList<TeachingMeeting>()) }
+    LaunchedEffect(route.preview) { previewRows = route.preview?.let { id -> model.meetings().filter { it.teaching_class.id == id } }.orEmpty() }
+    val day = route.day ?: now.date
+    val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
+    val week = line.weekOf(day)
+    val scale = route.scale
+    val title = when {
+        !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
+        scale == "term" -> "${term.year}–${term.year + 1} 学年第${if (term.number == 1) "一" else "二"}学期"
+        scale == "week" -> if (week != null) "第 $week 周" else "假期"
+        else -> "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
+    }
+    val sub = when (scale) {
+        "term" -> "${dateLabel(LocalDate.parse(term.weeks.first().start))} – ${dateLabel(LocalDate.parse(term.weeks.last().end))} · ${term.weeks.size} 周"
+        "week" -> "${dateLabel(monday)} – ${dateLabel(monday.plusDays(6))}"
+        else -> if (week != null) "第 $week 周" else "假期"
+    }
+    val order = listOf("day", "week", "term")
+    var pinch by remember { mutableFloatStateOf(1f) }
+    Column(Modifier.fillMaxSize().pointerInput(scale) {
+        detectTransformGestures { _, _, zoom, _ ->
+            pinch *= zoom
+            val step = if (pinch < .72f) 1 else if (pinch > 1.38f) -1 else 0
+            if (step != 0) { order.getOrNull(order.indexOf(scale) + step)?.let { route.scale = it }; pinch = 1f }
+        }
+    }.statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp)) {
+        Row(Modifier.fillMaxWidth().padding(end = 40.dp, bottom = 16.dp), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                if (!isMe) Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.whoType = "me"; route.whoId = ""; route.scale = "day"; route.preview = null }.padding(bottom = 6.dp))
+                Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 2)
+                Plain(sub, 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 4.dp))
+            }
+            if (scale == "week") Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Chip("‹", { route.day = day.minusDays(7) }); Chip("今天", { route.day = null }); Chip("›", { route.day = day.plusDays(7) })
+            }
+        }
+        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期"), scale) { route.scale = it }
+        Spacer(Modifier.height(16.dp))
+        Box(Modifier.weight(1f)) {
+            when (scale) {
+                "week" -> WeekView(line, day, now, previewRows) { onEvent(it, line) }
+                "term" -> TermView(line, state, now, isMe, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
+                else -> DayView(line, day, now, isMe, route, walk) { onEvent(it, line) }
+            }
+            if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
+                onCancel = { route.preview = null },
+                onAdd = { model.addTeachingClass(route.preview!!); route.preview = null })
+        }
+    }
 }
 
-@Composable internal fun TimetableScreen(
-    state: AcademicState,
-    klass: String?,
-    requestedWeek: Int?,
-    onClass: () -> Unit,
-    onLesson: (TeachingMeeting) -> Unit,
-    campus: CampusPackage? = null,
-    edits: TimetableEdits = TimetableEdits(),
-    onManageCourses: (() -> Unit)? = null,
-) {
-    val today = CampusDay.now().toLocalDate()
-    val weeks = state.term!!.weeks
-    var number by rememberSaveable(state.term.term, requestedWeek) { mutableIntStateOf(requestedWeek?.takeIf { n -> weeks.any { it.week == n } } ?: CampusDay.weekOf(weeks, today)?.week ?: 1) }
-    var dayView by rememberSaveable { mutableStateOf(false) }
-    var day by rememberSaveable { mutableIntStateOf(today.dayOfWeek.value) }
-    val week = weeks.find { it.week == number } ?: weeks.first()
-    val meetings = state.schedule?.meetings.orEmpty()
-    val cells = remember(meetings, number) { TimetablePresentation.cells(meetings, number) }
-    val byId = remember(meetings) { meetings.associateBy { it.id } }
-    val days = if (dayView) listOf(day) else (1..7).toList()
-    val editCount = edits.hidden.size + edits.added.size
-    Column(Modifier.fillMaxSize().testTag("timetable")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClass) { Icon(Icons.Outlined.Groups, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(klass ?: "选择班级") }
-                if (klass != null && onManageCourses != null) {
-                    TextButton(onManageCourses, modifier = Modifier.testTag("manage-courses")) {
-                        Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (editCount > 0) "课程($editCount)" else "课程")
+@Composable private fun ClassPicker(state: AcademicState, onPick: (String) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val hits = remember(query, state.classes) {
+        val needle = query.trim().uppercase()
+        if (needle.isEmpty()) emptyList() else state.classes.filter { "${it.name} ${it.major.orEmpty()}".uppercase().contains(needle) }.take(30)
+    }
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 38.dp)) {
+        Plain("你在哪个班？", 26.sp, weight = FontWeight.SemiBold)
+        Plain("输入班号或专业，课表、考试和校历就都有了。", 14.sp, Ink.muted, modifier = Modifier.padding(top = 4.dp, bottom = 20.dp))
+        SearchField(query, "比如 B240402", Modifier.testTag("class-query")) { query = it }
+        LazyColumn(Modifier.padding(top = 8.dp)) {
+            items(hits, key = { it.id }) { item ->
+                Column(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { onPick(item.id) }.padding(vertical = 10.dp)) {
+                    Plain(item.name, 15.sp, weight = FontWeight.Medium)
+                    Plain(listOfNotNull(item.major, item.campus, item.students?.let { "$it 人" }).joinToString(" · "), 12.5.sp, Ink.muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable fun SearchField(value: String, hint: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    Row(modifier.fillMaxWidth().height(44.dp).border(1.dp, Ink.line, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        BasicTextField(value, onChange, Modifier.weight(1f), singleLine = true, textStyle = TextStyle(fontSize = 15.5.sp, color = Ink.text), cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.brand), decorationBox = { inner ->
+            if (value.isEmpty()) Plain(hint, 15.5.sp, Ink.faint, maxLines = 1)
+            inner()
+        })
+    }
+}
+
+@Composable private fun Tile(event: LineEvent, past: Boolean, modifier: Modifier, big: Boolean, onClick: () -> Unit) {
+    val mark = marks()
+    val tones = event.meeting?.let { tone(TimetablePresentation.colourIndex(it)) }
+    val paper = Ink.paper
+    fun faded(color: Color, amount: Float) = if (past) Color(color.red + (paper.red - color.red) * amount, color.green + (paper.green - color.green) * amount, color.blue + (paper.blue - color.blue) * amount) else color
+    val bg = when (event.kind) { "exam" -> mark.exam; "run" -> paper; else -> faded(tones?.bg ?: Ink.sunken, .35f) }
+    val fg = when (event.kind) { "exam" -> mark.onExam; "run" -> Ink.muted; else -> faded(tones?.fg ?: Ink.text, .42f) }
+    val border = when (event.kind) { "exam" -> mark.exam; "run" -> Ink.line; else -> faded(tones?.border ?: Ink.line, .55f) }
+    TileBox(if (big) event.name else event.short, if (big) "${hm(event.start)}–${hm(event.end)}${if (event.room != null) " · ${Names.room(event.room)}" else ""}" else Names.roomShort(event.room), bg, border, fg, modifier, big, onClick)
+}
+@Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?) {
+    val base = modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(1.dp, border, RoundedCornerShape(8.dp))
+    Column((if (onClick != null) base.clickable(onClick = onClick) else base).padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(name, color = fg, textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 14.5.sp else 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = if (big) 19.sp else 14.sp))
+        if (note.isNotEmpty()) Text(note, color = fg.copy(alpha = .82f), textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 12.5.sp else 10.sp, lineHeight = if (big) 17.sp else 13.sp))
+    }
+}
+
+@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, route: Route, walk: suspend (String) -> Int?, onOpen: (LineEvent) -> Unit) {
+    val today = day == now.date
+    val events = remember(line, day) { line.on(day) }
+    val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        if (isMe && today) NextBlock(line, now, route, walk)
+        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+            (0L until 7L).forEach { offset ->
+                val date = monday.plusDays(offset)
+                val hasExam = line.exams.any { it.date == date.toString() }
+                val on = date == day
+                Column(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(8.dp)).background(if (on) Ink.sunken else Color.Transparent).clickable { route.day = if (date == now.date) null else date },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Plain(WEEKDAYS[date.dayOfWeek.value].drop(1), 11.5.sp, Ink.faint)
+                    Plain(date.dayOfMonth.toString(), 15.sp, if (date == now.date) Ink.brand else Ink.text, if (date == now.date) FontWeight.SemiBold else FontWeight.Medium)
+                    if (hasExam) Box(Modifier.size(4.dp).clip(RoundedCornerShape(2.dp)).background(marks().exam))
+                }
+            }
+        }
+        if (events.isEmpty()) { Empty(line.holidays[day] ?: "这一天没有安排"); return@Column }
+        val fold = today && isMe
+        val gone = if (fold) events.filter { it.end <= now.min } else emptyList()
+        val live = if (fold) events.filter { it.end > now.min } else events
+        if (gone.isNotEmpty()) Plain("已结束 ${gone.size} 项 · ${gone.joinToString("、") { it.short }}", 13.sp, Ink.faint, maxLines = 1, modifier = Modifier.padding(bottom = 12.dp))
+        if (live.isEmpty()) { Empty("今天的课都上完了"); return@Column }
+        val from = (if (fold) minOf(now.min, live.first().start) else live.first().start) - 14
+        val to = maxOf(live.last().end + 24, if (today) now.min + 20 else 0)
+        fun y(minutes: Int): Dp = (minutes - from).dp
+        val mark = marks()
+        val hairline = Ink.line
+        Box(Modifier.fillMaxWidth().height(y(to))) {
+            var hour = (from / 60 + 1) * 60
+            while (hour <= to) {
+                val at = hour
+                if (!(today && kotlin.math.abs(at - now.min) < 16)) Plain("${at / 60}:00", 11.5.sp, Ink.faint, modifier = Modifier.offset(y = y(at) - 8.dp).width(36.dp))
+                Box(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.dp).offset(y = y(at)).background(hairline))
+                hour += 60
+            }
+            @Composable fun gap(start: Int, end: Int) = Plain("空 ${durationText(end - start)} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.map(at = day to start) })
+            if (today && live.first().start - now.min >= 25) gap(now.min, live.first().start)
+            live.forEachIndexed { index, event ->
+                Tile(event, false, Modifier.padding(start = 44.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true) { onOpen(event) }
+                val next = live.getOrNull(index + 1)
+                val start = if (today) maxOf(event.end, now.min) else event.end
+                if (next != null && next.start - start >= 30 && next.start - event.end >= 45) gap(start, next.start)
+            }
+            if (today) {
+                Box(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.5.dp).offset(y = y(now.min)).background(mark.now))
+                Plain(hm(now.min), 11.5.sp, mark.now, FontWeight.SemiBold, modifier = Modifier.offset(y = y(now.min) - 8.dp).width(40.dp))
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable private fun NextBlock(line: CampusLine, now: Moment, route: Route, walk: suspend (String) -> Int?) {
+    val event = remember(line, now) { line.next(now) } ?: return
+    var minutes by remember(event.room) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(event.room) { if (Names.placed(event.room)) minutes = walk(event.room!!) }
+    val today = event.date == now.date
+    val during = today && event.start <= now.min
+    val caption = when {
+        during -> "正在上，到 ${hm(event.end)}"
+        today -> "下一节 · 还有 ${durationText(event.start - now.min)}"
+        CampusLine.daysBetween(now.date, event.date) == 1 -> "下一节 · 明天"
+        else -> "下一节 · ${dateLabel(event.date)}"
+    }
+    val exam = line.upcomingExams(now.date).firstOrNull()
+    val mark = marks()
+    Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f)) {
+            Plain(caption, 12.5.sp, Ink.muted)
+            Plain("${hm(event.start)} ${event.name}", 19.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 2.dp))
+            Plain((if (event.room != null) Names.room(event.room) else "教室未排定") + (minutes?.takeIf { !during }?.let { " · ${hm(event.start - it - 2)} 出门，步行 $it 分钟" } ?: ""), 13.5.sp, Ink.muted)
+            if (exam != null) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                SmallTag("考试", mark.exam, mark.onExam)
+                val days = CampusLine.daysBetween(now.date, LocalDate.parse(exam.date))
+                Plain("${if (days == 0) "今天" else if (days == 1) "明天" else "$days 天后"} ${exam.course.name} ${exam.start}", 13.sp, maxLines = 1)
+            }
+        }
+        if (Names.placed(event.room)) ActionButton("去这里", go = true) { route.map(nav = event.room) }
+    }
+    HorizontalDivider(color = Ink.line, modifier = Modifier.padding(bottom = 18.dp))
+}
+
+@Composable private fun Empty(text: String) = Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(text, 14.sp, Ink.faint) }
+
+private const val DAY_END = 21 * 60 + 8
+
+@Composable private fun WeekView(line: CampusLine, day: LocalDate, now: Moment, ghosts: List<TeachingMeeting>, onOpen: (LineEvent) -> Unit) {
+    val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
+    val days = remember(monday) { (0L until 7L).map { monday.plusDays(it) } }
+    val week = line.weekOf(monday)
+    val events = remember(line, monday) { days.map(line::on) }
+    val cells = remember(line, week) { if (week != null) TimetablePresentation.cells(line.meetings, week) else emptyList() }
+    val shownGhosts = if (week != null) ghosts.filter { week in it.weeks } else emptyList()
+    var columns = 5
+    days.forEachIndexed { index, _ -> if (events[index].isNotEmpty() || cells.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
+    val period = remember(line) { line.periods.associate { it.period to (clock(it.start) to clock(it.end)) } }
+    val from = (if (events.flatten().any { it.kind == "run" }) clock(line.run!!.rule.time[0]) else 480) - 4
+    fun y(minutes: Int): Dp = ((minutes - from) * .72f).dp
+    val mark = marks()
+    val hairline = Ink.line
+    val soft = hairline.copy(alpha = .65f)
+    val paper = Ink.paper
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxWidth().border(1.dp, hairline, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))) {
+            Row(Modifier.fillMaxWidth().bottomHairline(hairline).padding(vertical = 6.dp)) {
+                Spacer(Modifier.width(32.dp))
+                days.take(columns).forEachIndexed { index, date ->
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        val color = if (date == now.date) Ink.brand else Ink.text
+                        Plain(WEEKDAYS[index + 1], 12.sp, color, FontWeight.SemiBold)
+                        Plain(line.holidays[date] ?: "${date.monthValue}/${date.dayOfMonth}", 11.sp, if (date == now.date) Ink.brand else Ink.muted, maxLines = 1)
                     }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!dayView, { dayView = false }, { Text("周视图") }, modifier = Modifier.testTag("week-view"), colors = timetableChipColours())
-                FilterChip(dayView, { dayView = true }, { Text("日视图") }, modifier = Modifier.testTag("day-view"), colors = timetableChipColours())
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ number = weeks.getOrNull(weeks.indexOf(week) - 1)?.week ?: number }, enabled = week != weeks.first()) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "上一周") }
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("第${number}周", style = MaterialTheme.typography.titleLarge)
-                Supporting("${week.start.substring(5).replace('-', '.')} — ${week.end.substring(5).replace('-', '.')}")
-            }
-            TextButton({ number = CampusDay.weekOf(weeks, today)?.week ?: 1 }) { Text("本周") }
-            IconButton({ number = weeks.getOrNull(weeks.indexOf(week) + 1)?.week ?: number }, enabled = week != weeks.last()) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "下一周") }
-        }
-        if (klass == null || state.schedule == null) {
-            Box(Modifier.padding(20.dp)) { EmptyCard(if (klass == null) "先选好你的班级" else "暂无本学期课表", "选择班级后，按学校教学周显示课程。", "选择班级", onClass) }; return
-        }
-        if (dayView) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            (1..7).forEach { d ->
-                val date = LocalDate.parse(week.start).plusDays(d - 1L)
-                FilterChip(day == d, { day = d }, { Text("${"一二三四五六日"[d - 1]}\n${date.dayOfMonth}", textAlign = TextAlign.Center, fontSize = 12.sp) }, modifier = Modifier.weight(1f).testTag("weekday-$d"), colors = timetableChipColours())
-            }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            Spacer(Modifier.width(50.dp))
-            days.forEach { d ->
-                val date = LocalDate.parse(week.start).plusDays(d - 1L)
-                Column(Modifier.weight(1f).padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("周${"一二三四五六日"[d - 1]}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = if (date == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                    Text("${date.monthValue}/${date.dayOfMonth}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth().height(y(DAY_END))) {
+                Box(Modifier.width(32.dp).fillMaxHeight().drawBehind { drawLine(hairline, Offset(size.width, 0f), Offset(size.width, size.height), 1f) }) {
+                    line.periods.forEach { item ->
+                        val (start, end) = period.getValue(item.period)
+                        Box(Modifier.fillMaxWidth().height(y(end) - y(start)).offset(y = y(start)), contentAlignment = Alignment.Center) { Plain(item.period.toString(), 11.sp, Ink.faint) }
+                    }
+                    if (now.date in days) Box(Modifier.fillMaxWidth().height(18.dp).offset(y = y(now.min) - 9.dp).background(paper), contentAlignment = Alignment.Center) { Plain(hm(now.min), 10.sp, mark.now, FontWeight.SemiBold) }
                 }
-            }
-        }
-        val rowHeight = 62.dp
-        Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).testTag(if (dayView) "timetable-day" else "timetable-week")) {
-            Column(Modifier.width(50.dp)) {
-                state.periods.forEach { period -> Column(Modifier.height(rowHeight).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(period.period.toString(), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Text(period.start, fontSize = 9.sp, lineHeight = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(period.end, fontSize = 9.sp, lineHeight = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } }
-            }
-            days.forEach { d ->
-                BoxWithConstraints(Modifier.weight(1f).height(rowHeight * state.periods.size).testTag("timetable-column-$d")) {
-                    Column { state.periods.forEach { p ->
-                        Box(Modifier.fillMaxWidth().height(rowHeight)) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            if (p.period in listOf(6,10)) Box(Modifier.fillMaxWidth().height(5.dp).background(MaterialTheme.colorScheme.surfaceContainerLow))
+                days.take(columns).forEachIndexed { index, date ->
+                    val off = date in line.holidays
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().drawBehind {
+                        if (off) { var x = -size.height; while (x < size.width) { drawLine(soft, Offset(x, size.height), Offset(x + size.height, 0f), 1f); x += 16.dp.toPx() } }
+                    }) {
+                        val width = maxWidth
+                        line.periods.forEach { item -> Box(Modifier.fillMaxWidth().height(1.dp).offset(y = y(period.getValue(item.period).first)).background(soft)) }
+                        val all = if (off) emptyList() else cells.filter { it.day == index + 1 }
+                        fun clash(a: TimetableCell, b: TimetableCell) = a !== b && a.periods.first() <= b.periods.last() && b.periods.first() <= a.periods.last()
+                        val lessons = all.filter { cell -> cell.state == "active" || all.none { it.state == "active" && clash(cell, it) } }
+                        lessons.forEach { cell ->
+                            val start = period[cell.periods.first()]?.first ?: return@forEach
+                            val end = period[cell.periods.last()]?.second ?: return@forEach
+                            val shared = lessons.any { clash(cell, it) }
+                            val slotWidth = if (shared) width / cell.columns else width
+                            val x = if (shared) slotWidth * cell.slot else 0.dp
+                            val event = events[index].firstOrNull { it.meeting?.id == cell.id }
+                            val quiet = cell.state != "active"
+                            val past = date < now.date || (date == now.date && end <= now.min)
+                            val tones = tone(cell.colourIndex)
+                            val blend = if (quiet || past) .4f else 0f
+                            fun mix(color: Color) = Color(color.red + (paper.red - color.red) * blend, color.green + (paper.green - color.green) * blend, color.blue + (paper.blue - color.blue) * blend)
+                            TileBox(Names.courseShort(cell.course), if (quiet) cell.label else Names.roomShort(cell.room), mix(tones.bg), mix(tones.border), mix(tones.fg),
+                                Modifier.padding(horizontal = 2.dp).width(slotWidth - 4.dp).offset(x = x, y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
-                    } }
-                    cells.filter { it.day == d }.forEach { cell ->
-                        val start = state.periods.indexOfFirst { it.period == cell.periods.first() }
-                        val end = state.periods.indexOfFirst { it.period == cell.periods.last() }
-                        val width = maxWidth / cell.columns
-                        if (start >= 0 && end >= start) CourseCell(cell, dayView, campus,
-                            Modifier.offset(x = width * cell.slot, y = rowHeight * start).width(width).height(rowHeight * (end-start+1)).padding(horizontal = 1.dp, vertical = 5.dp),
-                            { byId[cell.id]?.let(onLesson) })
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable private fun timetableChipColours() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-)
-
-@Composable private fun CourseCell(cell: TimetableCell, dayView: Boolean, campus: CampusPackage?, modifier: Modifier, onClick: () -> Unit) {
-    val colours = courseColours(cell.colourIndex, cell.state != "active")
-    val suspended = cell.state == "suspended"
-    val small = !dayView && cell.columns > 1
-    val dashed = suspended || cell.overlap.isNotEmpty()
-    // The week grid can have two narrow columns in one day. Let its measured
-    // interval width win; the day view gives the same items a full touch target.
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-    Surface(onClick = onClick, modifier = modifier.testTag("lesson-${cell.id}").semantics {
-        contentDescription = "${cell.course}，${cell.room}，第${cell.periods.first()}至${cell.periods.last()}节，${cell.label}，${cell.note}"
-    }.drawWithContent {
-        drawContent()
-        drawRoundRect(colours.border, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(1.dp.toPx(), pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(),3.dp.toPx())) else null))
-    }, shape = RoundedCornerShape(8.dp), color = colours.bg, contentColor = colours.fg) {
-        Column(Modifier.padding(horizontal = if (dayView) 10.dp else 2.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(cell.course, fontSize = if (dayView) 15.sp else if (small) 9.sp else 11.sp, lineHeight = if (dayView) 19.sp else if (small) 11.sp else 14.sp,
-                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = if (dayView) 2 else if (small) 3 else 5, overflow = TextOverflow.Ellipsis,
-                textDecoration = if (suspended) TextDecoration.LineThrough else TextDecoration.None)
-            if (cell.room.isNotEmpty()) Text(roomDisplayName(cell.room, campus?.byId ?: emptyMap()) ?: cell.room, fontSize = if (dayView) 12.sp else if (small) 8.sp else 9.sp, lineHeight = if (dayView) 15.sp else 11.sp, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
-            if (cell.note.isNotEmpty()) Text(cell.note, fontSize = if (dayView) 12.sp else 9.sp, lineHeight = if (dayView) 15.sp else 11.sp, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
-            if (cell.label.isNotEmpty()) Text(cell.label, fontSize = if (dayView) 12.sp else 8.sp, lineHeight = if (dayView) 15.sp else 10.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-        }
-    }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun LessonDetail(
-    meeting: TeachingMeeting,
-    periods: List<TeachingPeriod>,
-    onClose: () -> Unit,
-    onRoute: (String, Boolean) -> Unit,
-    campus: CampusPackage? = null,
-    isAddedCourse: Boolean = false,
-    onRemoveCourse: (() -> Unit)? = null,
-) {
-    val colours = courseColours(TimetablePresentation.colourIndex(meeting))
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp).testTag("lesson-detail"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Supporting("课程详情 · ${meeting.course.nature ?: "课程"}")
-            Surface(color = colours.bg, contentColor = colours.fg, shape = MaterialTheme.shapes.medium) {
-                Text(meeting.course.name, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth().padding(16.dp))
-            }
-            Text("周${"一二三四五六日"[meeting.weekday - 1]} · 第 ${meeting.periods.first()}–${meeting.periods.last()} 节", style = MaterialTheme.typography.titleMedium)
-            Supporting("${periods.find { it.period == meeting.periods.first() }?.start.orEmpty()} — ${periods.find { it.period == meeting.periods.last() }?.end.orEmpty()}")
-            HorizontalDivider()
-            DetailLine("授课教师", meeting.teachers.joinToString("、") { it.name }.ifEmpty { "待公布" })
-            DetailLine("上课地点", listOfNotNull(meeting.campus, roomDisplayName(meeting.room, campus?.byId ?: emptyMap())).joinToString(" · ").ifEmpty { "待公布" })
-            TimetablePresentation.note(meeting).takeIf { it.isNotEmpty() }?.let { DetailLine("授课方式", it) }
-            DetailLine("教学周", meeting.weeks.joinToString("、") + " 周")
-            meeting.course.credits?.let { DetailLine("学分与考核", "$it 学分 · ${meeting.course.assessment ?: "待公布"}") }
-            if (meeting.room != null) Button({ onRoute(meeting.room, false) }, Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null); Spacer(Modifier.width(8.dp)); Text("去这里 · ${roomDisplayName(meeting.room, campus?.byId ?: emptyMap())}") }
-            if (onRemoveCourse != null) {
-                OutlinedButton(
-                    onClick = { onRemoveCourse(); onClose() },
-                    modifier = Modifier.fillMaxWidth().testTag("lesson-remove"),
-                ) {
-                    Icon(if (isAddedCourse) Icons.Outlined.DeleteOutline else Icons.Outlined.VisibilityOff, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (isAddedCourse) "移出我的课表" else "我不上这门课")
-                }
-            }
-        }
-    }
-}
-@Composable private fun DetailLine(title: String, text: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Supporting(title); Text(text, style = MaterialTheme.typography.bodyLarge) }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun CourseManagerSheet(
-    className: String,
-    state: AcademicState,
-    edits: TimetableEdits,
-    initialQuery: String = "",
-    onHide: (String) -> Unit,
-    onShow: (String) -> Unit,
-    onAdd: (CatalogCourse) -> Unit,
-    onRemoveAdded: (String) -> Unit,
-    onReset: () -> Unit,
-    onRetry: () -> Unit,
-    onClose: () -> Unit,
-) {
-    var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
-    val ownMeetings = state.rawSchedule?.meetings.orEmpty()
-    val managed = remember(ownMeetings, state.catalog, edits) {
-        CourseCatalog.managedCourses(ownMeetings, state.catalog, edits)
-    }
-    val present = remember(managed) {
-        managed.filter { !it.hidden }.mapTo(HashSet()) { it.id }
-    }
-    val classCourses = remember(managed) { managed.filter { it.source == "class" } }
-    val addedCourses = remember(managed) { managed.filter { it.source == "added" } }
-    val results = remember(state.catalog, query) {
-        if (query.isBlank() || state.catalog.isEmpty()) emptyList()
-        else CourseCatalog.searchCatalog(state.catalog, query)
-    }
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp).testTag("course-manager"),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Supporting("$className · 我的课表")
-                    Text("管理课程", style = MaterialTheme.typography.headlineSmall)
-                }
-                if (edits.hidden.isNotEmpty() || edits.added.isNotEmpty()) {
-                    TextButton(onReset, modifier = Modifier.testTag("course-manager-reset")) {
-                        Text("恢复默认")
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth().testTag("course-manager-search"),
-                placeholder = { Text("搜索课程、教师、课程号或教室，加入重修与选修") },
-                leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton({ query = "" }) { Icon(Icons.Outlined.Close, "清空搜索") }
-                    }
-                },
-                singleLine = true,
-            )
-            if (query.isNotBlank()) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (state.catalogError != null) TextButton(onRetry) { Text("重试加载课程") }
-                    Text(
-                        when {
-                            state.catalogBusy -> "正在加载全校课程…"
-                            state.catalogError != null -> state.catalogError
-                            state.catalog.isEmpty() -> "正在准备课程目录…"
-                            else -> "找到 ${results.size}${if (results.size == 60) "+" else ""} 个教学班"
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    if (!state.catalogBusy && state.catalog.isNotEmpty() && results.isEmpty()) {
-                        Supporting("没有匹配的课程。可以试试只输入课程名中的几个字，或教师姓名。")
-                    }
-                    results.forEach { course ->
-                        val id = CourseCatalog.catalogId(course)
-                        val inTimetable = id in present
-                        val first = course.meetings.first()
-                        val teachers = course.meetings.flatMap { m -> m.teachers.map { it.name } }.distinct().joinToString("、").ifEmpty { "教师未定" }
-                        val suspended = CourseCatalog.suspensionNote(course.meetings)
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth().testTag("catalog-course-$id"),
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        buildString {
-                                            append(first.course.name)
-                                            first.course.code?.let { append(" · $it") }
-                                            first.course.credits?.let { append(" · $it 学分") }
-                                        },
-                                        style = MaterialTheme.typography.titleSmall,
-                                    )
-                                    Supporting(listOfNotNull(teachers, first.campus).joinToString(" · "))
-                                    course.meetings.forEach { meeting ->
-                                        Text(CourseCatalog.meetingLine(meeting), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    if (suspended != null) {
-                                        Text(suspended, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                    if (first.classes.isNotEmpty()) {
-                                        val classSummary = first.classes.take(6).joinToString("、") + if (first.classes.size > 6) " 等 ${first.classes.size} 个班" else ""
-                                        Supporting("教学班：$classSummary")
-                                    }
-                                }
-                                if (inTimetable) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            val existing = managed.find { it.id == id }
-                                            if (existing?.source == "added") onRemoveAdded(id) else onHide(id)
-                                        },
-                                        modifier = Modifier.testTag("course-toggle-$id"),
-                                    ) {
-                                        Icon(Icons.Outlined.Check, null, Modifier.size(16.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("已加入")
-                                    }
-                                } else {
-                                    FilledTonalButton(
-                                        onClick = {
-                                            val existing = managed.find { it.id == id }
-                                            if (existing?.source == "class") onShow(id) else onAdd(course)
-                                        },
-                                        modifier = Modifier.testTag("course-toggle-$id"),
-                                    ) {
-                                        Icon(Icons.Outlined.Add, null, Modifier.size(16.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("加入")
-                                    }
-                                }
-                            }
+                        events[index].filter { it.kind != "class" }.forEach { event ->
+                            Tile(event, false, Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false) { onOpen(event) }
+                        }
+                        shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->
+                            val start = period.getValue(meeting.periods.first()).first
+                            val end = period.getValue(meeting.periods.last()).second
+                            val busy = events[index].any { it.start < end && start < it.end }
+                            val color = if (busy) mark.now else mark.free
+                            TileBox(Names.courseShort(meeting.course.name), if (busy) "" else Names.roomShort(meeting.room), color.copy(alpha = .09f), color, color,
+                                Modifier.padding(start = if (busy) width * .46f else 2.dp, end = 2.dp).fillMaxWidth().offset(y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, null)
+                        }
+                        if (date == now.date) {
+                            Box(Modifier.fillMaxWidth().height(1.5.dp).offset(y = y(now.min)).background(mark.now))
+                            Box(Modifier.size(8.dp).offset(x = (-1).dp, y = y(now.min) - 3.dp).clip(RoundedCornerShape(4.dp)).background(mark.now))
                         }
                     }
                 }
-                HorizontalDivider()
             }
-            if (addedCourses.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("自己加入的课程", style = MaterialTheme.typography.titleSmall)
-                    addedCourses.forEach { course ->
-                        ManagedCourseRow(
-                            course = course,
-                            actionLabel = "移出",
-                            actionIcon = Icons.Outlined.DeleteOutline,
-                            onAction = { onRemoveAdded(course.id) },
-                        )
+        }
+        Spacer(Modifier.height(if (ghosts.isNotEmpty()) 90.dp else 24.dp))
+    }
+}
+
+@Composable private fun TermView(line: CampusLine, state: AcademicState, now: Moment, isMe: Boolean, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
+    val mark = marks()
+    val brand = Ink.brand
+    val paper = Ink.paper
+    fun level(amount: Float) = Color(paper.red + (brand.red - paper.red) * amount, paper.green + (brand.green - paper.green) * amount, paper.blue + (brand.blue - paper.blue) * amount)
+    val levels = listOf(Ink.sunken, level(.12f), level(.22f), level(.34f), level(.48f))
+    val hairline = Ink.line
+    val calendar = state.calendar.firstOrNull { it.start == line.term.weeks.firstOrNull()?.start }
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Row { Spacer(Modifier.width(28.dp)); WEEKDAYS.drop(1).forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Plain(it.drop(1), 11.5.sp, Ink.faint) } } }
+            line.term.weeks.forEach { week ->
+                val current = week.start <= now.date.toString() && now.date.toString() <= week.end
+                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(28.dp)) { Plain(week.week.toString(), 11.5.sp, if (current) Ink.brand else Ink.faint, if (current) FontWeight.SemiBold else FontWeight.Normal) }
+                    (0L until 7L).forEach { offset ->
+                        val date = LocalDate.parse(week.start).plusDays(offset)
+                        val events = line.on(date)
+                        val holiday = date in line.holidays
+                        val lessons = events.count { it.kind == "class" }.coerceAtMost(4)
+                        val fill = if (events.any { it.kind == "exam" }) mark.exam else levels[lessons]
+                        Box(Modifier.weight(1f).height(20.dp).padding(horizontal = 1.5.dp).clip(RoundedCornerShape(4.dp)).background(if (holiday) Color.Transparent else fill.copy(alpha = if (date < now.date) .5f else 1f))
+                            .then(if (date == now.date) Modifier.border(1.5.dp, mark.now, RoundedCornerShape(4.dp)) else Modifier)
+                            .drawBehind { if (holiday) { var x = -size.height; while (x < size.width) { drawLine(hairline, Offset(x, size.height), Offset(x + size.height, 0f), 1.5f); x += 4.dp.toPx() } } }
+                            .clickable { onPick(date) })
                     }
                 }
-                HorizontalDivider()
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("班级课表中的课程", style = MaterialTheme.typography.titleSmall)
-                Supporting("没有选的课点「不上」，它就不再出现在你的课表里；随时可以恢复。")
-                classCourses.forEach { course ->
-                    ManagedCourseRow(
-                        course = course,
-                        actionLabel = if (course.hidden) "恢复" else "不上",
-                        actionIcon = if (course.hidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
-                        onAction = { if (course.hidden) onShow(course.id) else onHide(course.id) },
-                    )
+            Row(Modifier.padding(top = 14.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                listOf(level(.34f) to "课", mark.exam to "考试", hairline to "放假").forEach { (color, label) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(color)); Plain(label, 12.sp, Ink.muted, modifier = Modifier.padding(start = 5.dp)) }
                 }
             }
+            val plan = line.run
+            if (isMe && plan != null) {
+                val progress = CampusLine.progress(plan, line.holidays, now)
+                Column(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 12.dp)) {
+                    Plain("早锻炼 ${plan.done} / ${plan.rule.required} 次", 17.sp, weight = FontWeight.SemiBold)
+                    Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.sunken)) {
+                        Box(Modifier.fillMaxWidth(minOf(1f, plan.done.toFloat() / plan.rule.required)).fillMaxHeight().background(brand))
+                    }
+                    Plain("距 ${dateLabel(LocalDate.parse(plan.rule.end))} 结束还有 ${progress.left} 个早锻炼日。" + when {
+                        progress.need == 0 -> "已合格。" + (progress.nextBonus?.let { "再跑 ${it[0] - plan.done} 次，体育成绩 +${it[1]}。" } ?: "")
+                        progress.reachable -> "还差 ${progress.need} 次，每周跑 ${progress.perWeek} 次，可以提前 ${progress.earlyWeeks} 周完成，给雨天留余量。"
+                        else -> "还差 ${progress.need} 次，剩下的早锻炼日已经不够了，尽快联系体育部。"
+                    }, 13.5.sp, Ink.muted)
+                }
+            }
+            val exams = line.upcomingExams(now.date)
+            if (exams.isNotEmpty()) {
+                Plain("还有 ${exams.size} 场考试", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                exams.forEach { exam ->
+                    val date = LocalDate.parse(exam.date)
+                    AheadRow("${CampusLine.daysBetween(now.date, date)} 天后", Names.course(exam.course.name), "${dateLabel(date)} ${WEEKDAYS[date.dayOfWeek.value]} ${exam.start}${exam.room?.let { " · ${Names.room(it)}" } ?: ""}") {
+                        line.on(date).firstOrNull { it.exam?.id == exam.id }?.let(onOpen)
+                    }
+                }
+            }
+            val ahead = (calendar?.holidays.orEmpty() + calendar?.events.orEmpty() + listOfNotNull(calendar?.pause)).filter { it.start >= now.date.toString() }.sortedBy { it.start }
+            if (ahead.isNotEmpty()) {
+                Plain("校历", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                ahead.forEach { item ->
+                    val start = LocalDate.parse(item.start); val end = LocalDate.parse(item.end)
+                    AheadRow("${CampusLine.daysBetween(now.date, start)} 天后", item.name, if (start == end) "${dateLabel(start)} ${WEEKDAYS[start.dayOfWeek.value]}" else "${dateLabel(start)} – ${dateLabel(end)}", null)
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
-
-@Composable private fun ManagedCourseRow(
-    course: TimetableCourse,
-    actionLabel: String,
-    actionIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    onAction: () -> Unit,
-) {
-    val first = course.meetings.first()
-    val teachers = course.meetings.flatMap { m -> m.teachers.map { it.name } }.distinct().joinToString("、").ifEmpty { "教师未定" }
-    val suspended = CourseCatalog.suspensionNote(course.meetings)
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = if (course.hidden) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().testTag("managed-course-${course.id}"),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    first.course.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    textDecoration = if (course.hidden) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (course.hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                )
-                Supporting(teachers)
-                course.meetings.forEach { meeting ->
-                    Text(CourseCatalog.meetingLine(meeting), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (suspended != null) {
-                    Text(suspended, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                }
+@Composable private fun AheadRow(lead: String, name: String, note: String, onClick: (() -> Unit)?) {
+    val base = Modifier.fillMaxWidth().topHairline(Ink.line)
+    Row((if (onClick != null) base.clickable(onClick = onClick) else base).padding(vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Plain(lead, 13.sp, Ink.muted, modifier = Modifier.width(56.dp))
+        Column { Plain(name, 14.5.sp, weight = FontWeight.Medium); Plain(note, 12.5.sp, Ink.muted) }
+    }
+}
+@Composable private fun PreviewDock(rows: List<TeachingMeeting>, mine: List<TeachingMeeting>, week: Int?, added: Boolean, modifier: Modifier, onCancel: () -> Unit, onAdd: () -> Unit) {
+    fun overlaps(a: TeachingMeeting, b: TeachingMeeting) = a.weekday == b.weekday && a.teaching_class.id != b.teaching_class.id && a.periods.first() <= b.periods.last() && b.periods.first() <= a.periods.last()
+    val clashes = rows.flatMap { row -> mine.filter { overlaps(row, it) && it.weeks.any(row.weeks::contains) } }
+    val first = clashes.firstOrNull { week != null && week in it.weeks } ?: clashes.firstOrNull()
+    val slots = rows.map { "${WEEKDAYS[it.weekday]} ${it.periods.first()}–${it.periods.last()} 节" }.distinct().take(3).joinToString("，")
+    Surface(modifier.padding(bottom = 12.dp).fillMaxWidth(), shape = RoundedCornerShape(10.dp), color = Ink.paper, border = BorderStroke(1.dp, Ink.line), shadowElevation = 4.dp) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Plain(Names.course(rows.first().course.name), 13.5.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                if (first != null) Plain("与${Names.courseShort(first.course.name)}时间冲突", 12.sp, marks().now, maxLines = 1)
+                else Plain("${rows.first().teachers.joinToString(" ") { it.name }} · $slots", 12.sp, Ink.muted, maxLines = 1)
             }
-            OutlinedButton(onClick = onAction, modifier = Modifier.testTag("managed-action-${course.id}")) {
-                Icon(actionIcon, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(actionLabel)
-            }
+            ActionButton("取消", onClick = onCancel)
+            ActionButton(if (added) "已加入" else "加入课表", go = true, enabled = !added, onClick = onAdd)
         }
     }
 }
-
-
-private val lightCourses = listOf(
-    Tokens.Course.Light.Tone0.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone1.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone2.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone3.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone4.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone5.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone6.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone7.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone8.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone9.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone10.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Light.Tone11.let { CourseColours(it.bg, it.border, it.fg) }
-)
-
-private val darkCourses = listOf(
-    Tokens.Course.Dark.Tone0.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone1.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone2.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone3.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone4.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone5.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone6.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone7.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone8.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone9.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone10.let { CourseColours(it.bg, it.border, it.fg) },
-    Tokens.Course.Dark.Tone11.let { CourseColours(it.bg, it.border, it.fg) }
-)

@@ -77,7 +77,7 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
             if (!bundleAllData.get()) {
                 include("space/**")
                 include("entities/**")
-                include("hours.json")
+                include("hours.json", "calendar.json", "morning-run.json")
                 include("search/manifest.json", "search/documents-*.bin", "search/lexicon-index.bin")
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "teaching/${metadata["teaching"]}/meetings.json", "rooms/index.json")
@@ -184,7 +184,8 @@ android {
 
     buildTypes {
         debug {
-            ndk { abiFilters += listOf("x86_64") }
+            applicationIdSuffix = ".debug"
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
             buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse(productOrigin).trimEnd('/')}\"")
             buildConfigField("String", "PLATFORM_HOST", "\"${providers.gradleProperty("studev.platformHost").getOrElse(productOrigin).trimEnd('/')}\"")
         }

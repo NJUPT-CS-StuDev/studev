@@ -36,6 +36,7 @@ data class Place(
     val levels: Int? = null,
     val houses: List<String> = emptyList(),
     val entrances: List<Entrance> = emptyList(),
+    val title: String? = null,
     val floor: String? = null,
     val seats: Int? = null,
     @SerialName("room_kinds") val roomKinds: List<String> = emptyList(),

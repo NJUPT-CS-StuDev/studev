@@ -26,6 +26,12 @@ data class PersonalSettings(
     val reminderGuidanceShown: Boolean = false,
     val timetable: Map<String, TimetableEdits> = emptyMap(),
     val examAttendance: Map<String, Map<String, Boolean>> = emptyMap(),
+    val calendarExams: Boolean = false,
+    val calendarSchool: Boolean = false,
+    /** null until someone chooses: 大一大二 see 早锻炼 by default. */
+    val runShown: Boolean? = null,
+    val runDone: Int = 0,
+    val runAlarm: Boolean = false,
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -69,6 +75,11 @@ class CampusSettings(context: Context) {
         examAttendance = store.getString("exam-attendance", null)?.let {
             runCatching { sanitizeAttendance(Json.decodeFromString<Map<String, Map<String, Boolean>>>(it)) }.getOrDefault(emptyMap())
         } ?: emptyMap(),
+        calendarExams = store.getBoolean("calendar-exams", false),
+        calendarSchool = store.getBoolean("calendar-school", false),
+        runShown = if (store.contains("run-shown")) store.getBoolean("run-shown", false) else null,
+        runDone = store.getInt("run-done", 0),
+        runAlarm = store.getBoolean("run-alarm", false),
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -80,7 +91,10 @@ class CampusSettings(context: Context) {
             .putBoolean("navigation-guidance-pending", next.navigationGuidancePending)
             .putBoolean("reminder-guidance", next.reminderGuidanceShown)
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
-            .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance)).apply()
+            .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
+            .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
+            .putInt("run-done", next.runDone).putBoolean("run-alarm", next.runAlarm)
+            .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
         // Settings changes are data changes too: rebuild the rolling reminder

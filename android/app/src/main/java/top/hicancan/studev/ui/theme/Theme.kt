@@ -53,18 +53,17 @@ internal val DarkColors = darkColorScheme(
     inverseSurface = light.paper, inverseOnSurface = light.ink, inversePrimary = light.brand,
     scrim = dark.scrim,
 )
-private fun type(size: Int, line: Int, weight: Int) = TextStyle(
-    fontFamily = FontFamily.Default, fontSize = size.sp, lineHeight = line.sp, fontWeight = FontWeight(weight),
+private fun type(size: Number, line: Int, weight: Int) = TextStyle(
+    fontFamily = FontFamily.Default, fontSize = size.toFloat().sp, lineHeight = line.sp, fontWeight = FontWeight(weight),
 )
-private val display = Tokens.Type.Display.let { type(it.size, it.line, it.weight) }
 private val title = Tokens.Type.Title.let { type(it.size, it.line, it.weight) }
 private val heading = Tokens.Type.Heading.let { type(it.size, it.line, it.weight) }
 private val body = Tokens.Type.Body.let { type(it.size, it.line, it.weight) }
 private val label = Tokens.Type.Label.let { type(it.size, it.line, it.weight) }
 private val caption = Tokens.Type.Caption.let { type(it.size, it.line, it.weight) }
 private val typography = Typography(
-    displayLarge = display, displayMedium = display, displaySmall = display,
-    headlineLarge = display, headlineMedium = title, headlineSmall = title,
+    displayLarge = title, displayMedium = title, displaySmall = title,
+    headlineLarge = title, headlineMedium = title, headlineSmall = title,
     titleLarge = title, titleMedium = heading, titleSmall = heading,
     bodyLarge = body, bodyMedium = body, bodySmall = caption,
     labelLarge = label, labelMedium = label, labelSmall = caption,

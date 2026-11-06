@@ -122,6 +122,10 @@ class NavigationRuntime private constructor(private val context: Context) {
     private suspend fun <T> native(block: () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
     private fun engine() = engine ?: Wayfind.load(context.assets).also { engine = it }
     private fun placeLabel(place: Place): String = if (place.kind == "room") roomDisplayName(place.id, placeIndex + (place.id to place)).orEmpty() else place.displayName(placeIndex)
+    /** How long the kernel says it takes to walk between two points. */
+    suspend fun walkMinutes(from: Endpoint, to: Endpoint): Int? = native {
+        engine().route(RouteRequest(from, to, "walk", false, 100.0, 1)).firstOrNull()?.let { kotlin.math.ceil(it.duration_s / 60).toInt().coerceAtLeast(1) }
+    }
     fun open(destination: Place) {
         if (state.value.active) return
         _state.value = PlannerState(open = true, destination = destination, destinationLabel = placeLabel(destination))

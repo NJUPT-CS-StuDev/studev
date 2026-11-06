@@ -16,7 +16,8 @@ class CampusRefreshWorker(context: Context, parameters: WorkerParameters) : Coro
         val repo = AcademicRepository.open(applicationContext)
         val term = repo.term()
         val events = CampusEvents.build(term, repo.periods(), settings.klass?.takeIf { id -> repo.classes().any { it.id == id } }?.let { repo.effectiveSchedule(it, settings.timetableEdits(term.term)) }, settings.klass?.let { repo.effectiveExams(it, settings) }.orEmpty())
-        DeviceSchedule.update(applicationContext, events, settings.klass, settings)
+        val facts = top.hicancan.studev.calendar.PhoneFacts(repo.calendar(), repo.runs()[term.term])
+        DeviceSchedule.update(applicationContext, events.filterNot { it.start.atZone(top.hicancan.studev.timetable.CampusDay.zone).toLocalDate() in facts.holidays && !it.exam }, settings.klass, settings, facts)
         NextLessonWidget().refreshAll(applicationContext)
         Result.success()
     } catch (e: CancellationException) { throw e } catch (_: Exception) { Result.retry() }

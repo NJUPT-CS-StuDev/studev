@@ -2,8 +2,6 @@ package top.hicancan.studev.timetable
 
 import top.hicancan.studev.data.*
 import java.time.*
-import java.text.Normalizer
-import java.util.Locale
 
 /** Presentation of published intervals. No academic dates or occupancy are inferred. */
 object CampusDay {
@@ -12,31 +10,18 @@ object CampusDay {
     fun weekOf(weeks: List<TeachingWeek>, date: LocalDate): TeachingWeek? = weeks.find { date.toString() >= it.start && date.toString() <= it.end }
     fun weekday(week: TeachingWeek, date: LocalDate) = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(week.start), date).toInt() + 1
     fun clamp(weeks: List<TeachingWeek>, date: LocalDate): LocalDate = if (weeks.isEmpty()) date else date.coerceIn(LocalDate.parse(weeks.first().start), LocalDate.parse(weeks.last().end))
-    fun periodAt(periods: List<TeachingPeriod>, time: LocalTime): Int {
-        val sorted = periods.sortedBy { it.period }
-        return (sorted.find { time >= LocalTime.parse(it.start) && time <= LocalTime.parse(it.end) }
-            ?: sorted.find { LocalTime.parse(it.start) > time } ?: sorted.lastOrNull())?.period ?: 1
-    }
-    fun isFree(day: RoomDay, room: String, from: Int, to: Int = from): Boolean = (from..to).all { p ->
-        day.free?.let { room in it[p.toString()].orEmpty() } ?: day.occupied[room].orEmpty().none { p in it.periods.first()..it.periods.last() }
-    }
-    fun occupants(day: RoomDay, room: String, period: Int): List<RoomOccupant>? = if (isFree(day, room, period)) emptyList()
-        else day.occupied[room].orEmpty().filter { period in it.periods.first()..it.periods.last() }.ifEmpty { null }
-    fun freeRun(day: RoomDay, room: String, from: Int, last: Int) = (from..last).takeWhile { isFree(day, room, it) }.size
-    private fun fold(value: String) = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT).filterNot { it == '－' || it == '—' || it == '–' || it.isWhitespace() || it == '\uFEFF' }
-    fun roomMatches(room: Room, query: String) = (listOf(room.id, room.number, room.building, room.building + room.number) + room.names).any { fold(it).contains(fold(query)) }
-    fun eligible(room: Room, everything: Boolean = false) = room.listed && (everything || room.kinds.any { kind -> listOf("多媒体", "非多媒体", "翻转课堂").any(kind::contains) })
 }
 
 data class CampusEvent(val id: String, val title: String, val start: Instant, val end: Instant, val room: String?, val description: String, val exam: Boolean)
 object CampusEvents {
-    fun build(term: TeachingTerm, periods: List<TeachingPeriod>, schedule: ClassSchedule?, exams: List<Exam>): List<CampusEvent> = buildList {
+    fun build(term: TeachingTerm, periods: List<TeachingPeriod>, schedule: ClassSchedule?, exams: List<Exam>, holidays: Set<LocalDate> = emptySet()): List<CampusEvent> = buildList {
         schedule?.meetings?.forEach { meeting ->
             val start = periods.find { it.period == meeting.periods.first() } ?: return@forEach
             val end = periods.find { it.period == meeting.periods.last() } ?: return@forEach
             meeting.weeks.forEach weeks@{ number ->
                 val week = term.weeks.find { it.week == number } ?: return@weeks
                 val date = LocalDate.parse(week.start).plusDays((meeting.weekday - 1).toLong())
+                if (date in holidays) return@weeks
                 add(CampusEvent("lesson:${term.term}:${meeting.id}:$number", meeting.course.name,
                     date.atTime(LocalTime.parse(start.start)).atZone(CampusDay.zone).toInstant(),
                     date.atTime(LocalTime.parse(end.end)).atZone(CampusDay.zone).toInstant(), meeting.room,
