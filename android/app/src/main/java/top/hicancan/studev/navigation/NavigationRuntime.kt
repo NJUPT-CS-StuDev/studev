@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -154,8 +155,15 @@ class NavigationRuntime private constructor(private val context: Context) {
         if (destination == null && !current.destinationIsMyPosition) return
         val at = location.fix.value?.takeIf { SystemClock.elapsedRealtime() - it.timestamp < 30_000 }
         if ((current.origin == null || current.destinationIsMyPosition) && at == null) {
-            _state.update { it.copy(routes = emptyList(), busy = false,
-                error = "尚未获得当前位置。请开启定位，或选择${if (current.destinationIsMyPosition) "终点" else "起点"}。") }; return
+            // The first fix often arrives moments after the map opens: wait for it before giving up.
+            _state.update { it.copy(routes = emptyList(), busy = true, error = null) }
+            planning = scope.launch {
+                val fix = withTimeoutOrNull(FIRST_FIX_MS) { location.fix.first { it != null && SystemClock.elapsedRealtime() - it.timestamp < 30_000 } }
+                if (fix != null) plan()
+                else _state.update { it.copy(busy = false,
+                    error = "尚未获得当前位置。请开启定位，或选择${if (current.destinationIsMyPosition) "终点" else "起点"}。") }
+            }
+            return
         }
         val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else destination!!.endpoint
         goal = null
@@ -257,6 +265,7 @@ class NavigationRuntime private constructor(private val context: Context) {
         fun get(context: Context): NavigationRuntime = instance ?: synchronized(this) {
             instance ?: NavigationRuntime(context.applicationContext).also { instance = it }
         }
+        const val FIRST_FIX_MS = 12_000L
         fun routeError(e: Exception, myPosition: Boolean) = when {
             e.message.orEmpty().contains("snap", true) && myPosition -> "您目前不在校园道路附近（超出 100 米吸附范围）。请选择校园内的起点。"
             e.message.orEmpty().contains("snap", true) -> "起终点附近没有可通行道路，请更换地点。"

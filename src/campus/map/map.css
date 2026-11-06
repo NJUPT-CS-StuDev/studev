@@ -128,6 +128,7 @@
   .main-fill{height:calc(100dvh - 57px)}
   .sd.mapview{
     .canvas,.labels,.mapui{left:360px;right:0;top:0;bottom:0}
+    &.sheet-closed{.canvas,.labels,.mapui{left:0}}
     .msheet{left:0;top:0;bottom:0;width:360px;border-right:1px solid var(--line)}
     .grip{display:none}
     .rulerbox{padding:16px 20px 2px}

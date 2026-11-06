@@ -87,6 +87,8 @@ export default function MapApp() {
     }, []);
     useEffect(() => { let live = true; void loadRoomDay(moment.date).then(value => { if (live) setDay(value); }); return () => { live = false; }; }, [moment.date]);
 
+    useEffect(() => { scene?.map.resize(); }, [closed, scene]);
+
     /* Scene lifecycle. */
     const handlers = useRef({ onBuilding: (_: string) => {}, onRoom: (_: string) => {}, onPlace: (_: string) => {}, onEmpty: () => {}, onView: () => {} });
     useEffect(() => {
@@ -259,6 +261,8 @@ export default function MapApp() {
         </button>;
     });
 
+    useEffect(() => { if (placeId || navId) setClosed(false); }, [placeId, navId]);
+
     /* Sheet on phones. */
     const base = navId ? 300 : pickedRoom ? 430 : placeId ? (teaching ? 230 : 260) : 190;
     const viewport = typeof innerHeight === 'number' ? innerHeight : 800;
@@ -360,7 +364,7 @@ export default function MapApp() {
     };
 
     return (
-        <div className="sd mapview" style={{ '--peek': `${sheetPeek}px` } as React.CSSProperties}>
+        <div className={`sd mapview ${closed ? 'sheet-closed' : ''}`} style={{ '--peek': `${sheetPeek}px` } as React.CSSProperties}>
             <div className="canvas" ref={canvas} aria-label="校园模型" />
             <div className="labels" ref={labels} />
             <div className="mapui">
