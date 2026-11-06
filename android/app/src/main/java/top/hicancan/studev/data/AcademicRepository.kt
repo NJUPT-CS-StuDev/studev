@@ -94,6 +94,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val catalog = if (edits.added.isNotEmpty()) catalog() else emptyList()
         return base.copy(meetings = top.hicancan.studev.timetable.CourseCatalog.effectiveMeetings(base.meetings, catalog, edits))
     }
+    suspend fun allExams(): List<Exam> = release.exams?.let { read<List<Exam>>("exams/$it/exams.json") }.orEmpty()
     suspend fun examIndex() = release.exams?.let { read<ExamIndex>("exams/$it/index.json") }
     suspend fun exams(id: String): List<Exam> {
         val term = release.exams ?: return emptyList()

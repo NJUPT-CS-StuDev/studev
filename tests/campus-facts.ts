@@ -9,7 +9,7 @@ export const meeting = (overrides: Partial<TeachingMeeting> = {}): TeachingMeeti
 });
 
 export const exam = (overrides: Partial<Exam> = {}): Exam => ({
-    id: 'exam-1', class: 'B240402', course: { code: 'JS101', name: '算法' }, teacher: '张三',
+    id: 'exam-1', classes: ['B240402'], course: { code: 'JS101', name: '算法' }, teacher: '张三',
     campus: '仙林', location: '教1-101', room: '教1-101', date: '2026-07-01',
     start: '08:00', end: '09:50', students: 30, note: null, ...overrides,
 });

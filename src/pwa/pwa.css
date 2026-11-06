@@ -16,3 +16,8 @@
 body:has(> main.main-fill) .pwa-entry { left: auto; right: 64px; }
 @media (max-width: 680px) { body:has(> main.main-fill) .pwa-entry { top: 172px; right: 12px; bottom: auto; } }
 @media (max-width: 480px) { .pwa-update { gap: 8px; padding-left: 14px; }.pwa-update .pwa-primary { padding-inline: 12px; } }
+.pwa-update { overflow: hidden; }
+.pwa-update-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line); overflow: hidden; }
+.pwa-update-bar[hidden] { display: none; }
+.pwa-update-bar i { display: block; width: 100%; height: 100%; background: var(--brand); transform-origin: left; animation: pwa-update-fill 2.5s cubic-bezier(.2,.7,.3,1) forwards; }
+@keyframes pwa-update-fill { from { transform: scaleX(.06); } to { transform: scaleX(.96); } }

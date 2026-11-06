@@ -12,6 +12,8 @@ const save = document.querySelector<HTMLButtonElement>('[data-pwa-save]');
 const help = document.querySelector<HTMLElement>('[data-pwa-install-help]');
 const update = document.querySelector<HTMLElement>('[data-pwa-update]');
 const refresh = document.querySelector<HTMLButtonElement>('[data-pwa-refresh]');
+const updateBar = document.querySelector<HTMLElement>('[data-pwa-update-bar]');
+const UPDATE_LIMIT_MS = 2500;
 let installEvent: InstallEvent | undefined;
 let registration: ServiceWorkerRegistration | undefined;
 let applying = false;
@@ -122,6 +124,9 @@ save?.addEventListener('click', () => {
 refresh?.addEventListener('click', async () => {
     applying = true;
     refresh.textContent = '正在更新…'; refresh.disabled = true;
+    if (updateBar) updateBar.hidden = false;
+    // Whatever the worker is doing, the page moves on within moments.
+    window.setTimeout(() => location.reload(), UPDATE_LIMIT_MS);
     if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
     else {
         await registration?.update();

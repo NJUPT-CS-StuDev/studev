@@ -82,7 +82,7 @@ class ParityTest {
         val exams = edge.getValue("attendanceExams").jsonArray.map { row ->
             val exam = row.jsonObject
             val course = exam.getValue("course").jsonObject
-            Exam(exam.getValue("id").jsonPrimitive.content, "A", ExamCourse(course["code"]?.jsonPrimitive?.contentOrNull, course.getValue("name").jsonPrimitive.content), null, null, null, null, "2026-11-05", "08:00", "09:00", null, null, "event", "event:exam")
+            Exam(exam.getValue("id").jsonPrimitive.content, listOf("A"), ExamCourse(course["code"]?.jsonPrimitive?.contentOrNull, course.getValue("name").jsonPrimitive.content), null, null, null, null, "2026-11-05", "08:00", "09:00", null, null, "event", "event:exam")
         }
         edge.getValue("examAttendance").jsonArray.forEach { item ->
             val test = item.jsonObject

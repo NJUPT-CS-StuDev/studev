@@ -470,8 +470,8 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
             [...slotText(rows), first.course.code ?? '', ...rows.flatMap(row => row.classes)]));
     }
     for (const exam of exams) {
-        docs.push(entity('exams', exam.id, `/?who=class:${encodeURI(exam.class)}&t=${exam.date}&scale=day`, `${plainCourse(exam.course.name)} 考试`, exam.class,
-            [`${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), exam.class, exam.teacher ?? '', exam.course.code ?? '']));
+        docs.push(entity('exams', exam.id, `/?who=course:${encodeURI(plainCourse(exam.course.name))}&t=${exam.date}&scale=day`, `${plainCourse(exam.course.name)} 考试`, exam.classes.length > 3 ? `${exam.classes.slice(0, 3).join(' ')} 等 ${exam.classes.length} 个班` : exam.classes.join(' '),
+            [`${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), ...exam.classes, exam.teacher ?? '', exam.course.code ?? '']));
     }
     const byId = new Map(places.map(place => [place.id, place]));
     for (const place of places) {
@@ -513,7 +513,7 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p5`;
+    const version = `${map.version}__${data.version}__p6`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });

@@ -56,7 +56,7 @@ import java.time.LocalDate
             "room" -> model.meetings().filter { it.room == route.whoId }
             else -> emptyList()
         }
-        val exams = if (route.whoType == "class") runCatching { repo.exams(route.whoId) }.getOrDefault(emptyList()) else emptyList()
+        val exams = if (route.whoType == "course") runCatching { repo.allExams().filter { Names.course(it.course.name) == route.whoId } }.getOrDefault(emptyList()) else if (route.whoType == "class") runCatching { repo.exams(route.whoId) }.getOrDefault(emptyList()) else emptyList()
         others = CampusLine(term, state.periods, meetings, exams, state.holidays, null)
     }
     val line = if (isMe) model.myLine(state, settings) else others

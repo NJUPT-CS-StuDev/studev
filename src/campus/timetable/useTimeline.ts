@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Exam, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/academics/facts';
 import { attendingExams } from '@/exams/model/examAttendance';
 import { examAttendanceScope, timetableEdits, type Preferences } from '@/shared/lib/preferences';
-import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
+import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadExams, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf, holidayMap, type Timeline } from '@/world/events';
 import { courseName } from '@/world/names';
 
@@ -38,8 +38,8 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         let live = true;
         const load = classId
             ? Promise.all([loadClassMeetings(classId), loadClassExams(classId)]).then(([meetings, exams]) => ({ meetings, exams }))
-            : loadMeetings().then(all => ({
-                exams: [] as Exam[],
+            : Promise.all([loadMeetings(), who.type === 'course' ? loadExams() : Promise.resolve([] as Exam[])]).then(([all, exams]) => ({
+                exams: who.type === 'course' ? exams.filter(exam => courseName(exam.course.name) === who.id) : [],
                 meetings: who.type === 'teacher' ? all.filter(meeting => meeting.teachers.some(teacher => teacher.name === who.id))
                     : who.type === 'course' ? all.filter(meeting => courseName(meeting.course.name) === who.id)
                         : who.type === 'room' ? all.filter(meeting => meeting.room === who.id) : [],

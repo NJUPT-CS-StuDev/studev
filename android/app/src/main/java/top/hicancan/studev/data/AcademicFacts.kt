@@ -19,7 +19,7 @@ import kotlinx.serialization.json.JsonObject
 @Serializable data class TeachingMeeting(val id: String, val course: Course, val teachers: List<Teacher>, val teaching_class: TeachingGroup, val campus: String?, val room: String?, val weekday: Int, val periods: List<Int>, val weeks: List<Int>, val method: String?, val classes: List<String>, val kind: String, val subtype: String)
 @Serializable data class ClassSchedule(@SerialName("class") val klass: TeachingClass, val meetings: List<TeachingMeeting>)
 @Serializable data class ExamCourse(val code: String?, val name: String)
-@Serializable data class Exam(val id: String, @SerialName("class") val klass: String, val course: ExamCourse, val teacher: String?, val campus: String?, val location: String?, val room: String?, val date: String, val start: String, val end: String, val students: Int?, val note: String?, val kind: String, val subtype: String)
+@Serializable data class Exam(val id: String, val classes: List<String>, val course: ExamCourse, val teacher: String?, val campus: String?, val location: String?, val room: String?, val date: String, val start: String, val end: String, val students: Int?, val note: String?, val kind: String, val subtype: String)
 @Serializable data class ExamSource(val file: String, val url: String, val notice: String, val title: String)
 @Serializable data class ExamIndex(val classes: List<String>, val sources: List<ExamSource>)
 @Serializable data class ClassExams(val exams: List<Exam>, val changes: List<JsonObject>)

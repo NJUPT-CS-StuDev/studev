@@ -41,6 +41,7 @@ export const loadClassMeetings = (id: string) => {
 
 const loadExamIndex = once(() => fetchJson<{ classes: string[] }>(`${base}/exams/${DATA_RELEASE.exams}/index.json`));
 /** A class's exams; a class with none has no file. */
+export const loadExams = once(() => DATA_RELEASE.exams ? fetchJson<Exam[]>(`${base}/exams/${DATA_RELEASE.exams}/exams.json`) : Promise.resolve([] as Exam[]));
 export const loadClassExams = async (id: string): Promise<Exam[]> => {
     if (!DATA_RELEASE.exams) return [];
     const { classes } = await loadExamIndex();

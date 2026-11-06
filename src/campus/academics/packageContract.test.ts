@@ -38,7 +38,7 @@ describe('the production map and data package contract', () => {
         const exams = await read<Exam[]>(join(input, `exams/${release.exams}/exams.json`));
         const changes = await read<ExamChange[]>(join(input, `exams/${release.exams}/changes.json`));
         const index = await read<{ classes: string[] }>(join(output, `exams/${release.exams}/index.json`));
-        for (const klass of index.classes) expect(JSON.stringify(await read(join(output, `exams/${release.exams}/classes/${klass}.json`)))).toBe(JSON.stringify({ exams: exams.filter(exam => exam.class === klass), changes: changes.filter(change => change.class === klass) }));
+        for (const klass of index.classes) expect(JSON.stringify(await read(join(output, `exams/${release.exams}/classes/${klass}.json`)))).toBe(JSON.stringify({ exams: exams.filter(exam => exam.classes.includes(klass)), changes: changes.filter(change => change.class === klass) }));
     });
     it('uses map parents for every room and preserves partitioned classroom numbers', async () => {
         const index = await read<{ rooms: Room[]; buildings: Building[] }>(join(output, 'rooms/index.json'));
