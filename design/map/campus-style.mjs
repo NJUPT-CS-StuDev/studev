@@ -4,7 +4,6 @@ import tokens from '../tokens.json' with { type: 'json' };
 
 const ROADS = ['secondary', 'tertiary', 'residential', 'service', 'living_street', 'unclassified'];
 const PATHS = ['path', 'footway', 'pedestrian', 'curated_path', 'track', 'crossing', 'steps'];
-export const buildingHeight = ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 4], 3.4]];
 const fill = (id, layer, color) => ({ id, type: 'fill', source: 'basemap', 'source-layer': layer, paint: { 'fill-color': color } });
 
 const form = (id, layer, minzoom) => ({
@@ -51,11 +50,6 @@ export function style() {
             {
                 id: 'context', type: 'fill-extrusion', source: 'basemap', 'source-layer': 'context_buildings',
                 paint: { 'fill-extrusion-color': c.context, 'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 3], 3.4]], 'fill-extrusion-opacity': 0.82 },
-            },
-            // The footprints stay as what a tap lands on; what is seen are the forms.
-            {
-                id: 'bld', type: 'fill-extrusion', source: 'basemap', 'source-layer': 'buildings',
-                paint: { 'fill-extrusion-color': c.model, 'fill-extrusion-height': buildingHeight, 'fill-extrusion-opacity': 0 },
             },
             form('forms', 'building_forms', 12),
             form('bands', 'building_bands', 16.6),

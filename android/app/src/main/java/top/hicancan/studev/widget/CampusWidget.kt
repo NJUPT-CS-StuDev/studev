@@ -222,19 +222,22 @@ private fun tone(index: Int, dark: Boolean) = if (dark) darkTone(index) else lig
             Column(GlanceModifier.defaultWeight().padding(horizontal = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(day.getValue("label").jsonPrimitive.content, style = TextStyle(color = if (today) paint.brand else paint.muted, fontSize = 11.sp, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal), maxLines = 1)
                 var cursor = first
+                var placedAny = false
                 // A Glance column holds at most ten children, so a full day nests.
                 day.getValue("events").jsonArray.map { it.jsonObject }.chunked(4).forEach { part ->
                     Column(GlanceModifier.fillMaxWidth()) {
                         part.forEach { event ->
                             val start = event.getValue("start").jsonPrimitive.int
                             val end = event.getValue("end").jsonPrimitive.int
-                            if (start > cursor) Spacer(GlanceModifier.height(((start - cursor) * perMinute).dp))
+                            // A tile stops 2 dp short of its end, and the next gap gives that back, so the clock stays true.
+                            if (start > cursor || placedAny) Spacer(GlanceModifier.height(((start - cursor) * perMinute + if (placedAny) 2f else 0f).dp))
                             val index = event.getValue("tone").jsonPrimitive.int
                             val mark = tone(maxOf(index, 0), paint.dark)
                             Box(GlanceModifier.fillMaxWidth().height(((end - start) * perMinute - 2).coerceAtLeast(14f).dp).cornerRadius(4.dp).background(androidx.glance.unit.ColorProvider(mark.bg)).padding(horizontal = 2.dp, vertical = 2.dp)) {
                                 Text(event.getValue("name").jsonPrimitive.content, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp), maxLines = 3)
                             }
                             cursor = maxOf(cursor, end)
+                            placedAny = true
                         }
                     }
                 }

@@ -8,7 +8,6 @@ import { Protocol } from 'pmtiles';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import tokens from '../../../design/tokens.json';
-import { buildingHeight } from '../../../design/map/campus-style.mjs';
 import type { RoomTier } from '@/world/rooms';
 import { sunAt } from './model/sun';
 
@@ -286,7 +285,6 @@ export class CampusScene {
     }
     private setFlatten(value: number) {
         this.flatten = value;
-        this.map.setPaintProperty('bld', 'fill-extrusion-height', ['*', buildingHeight, value] as never);
         for (const layer of ['forms', 'bands']) {
             this.map.setPaintProperty(layer, 'fill-extrusion-height', ['*', ['get', 'top'], value] as never);
             this.map.setPaintProperty(layer, 'fill-extrusion-base', ['*', ['get', 'base'], value] as never);
@@ -328,7 +326,6 @@ export class CampusScene {
         this.floor = level;
         const floorHeight = shape.height / shape.levels;
         const target = (level - 1) * floorHeight;
-        this.map.setFilter('bld', ['!=', ['get', 'id'], building]);
         for (const layer of ['forms', 'bands']) this.map.setFilter(layer, ['!=', ['get', 'building'], building]);
         this.paintBuildings();
         const data = this.model.floors[`${building}/${level}`];
@@ -385,7 +382,6 @@ export class CampusScene {
         this.building = null;
         this.floor = null;
         this.showSelection(false);
-        this.map.setFilter('bld', null);
         for (const layer of ['forms', 'bands']) this.map.setFilter(layer, null);
         this.paintBuildings();
         this.roomLabels.forEach(label => label.el.remove());
@@ -492,8 +488,8 @@ export class CampusScene {
             const room = this.map.queryRenderedFeatures(box, { layers: ['sel-rooms'] })[0];
             if (room) { this.handlers.onRoom(String(room.properties.id)); return; }
         }
-        const building = this.map.queryRenderedFeatures(box, { layers: ['bld'] }).find(feature => feature.properties.id);
-        if (building) { this.handlers.onBuilding(String(building.properties.id)); return; }
+        const building = this.map.queryRenderedFeatures(box, { layers: ['forms'] }).find(feature => feature.properties.building);
+        if (building) { this.handlers.onBuilding(String(building.properties.building)); return; }
         if (open && this.map.queryRenderedFeatures(box, { layers: ['sel-lower', 'sel-slab'] }).length) return;
         this.handlers.onEmpty();
     }

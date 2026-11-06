@@ -201,10 +201,8 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
             light.intensity = if (night > .55f || altitude <= 0) .26f else .2f
         }
     }
-    private fun heightExpression(): Expression = coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(4))), literal(3.4)))
     private fun setFlatten(value: Float) {
         flatten = value
-        set("bld", fillExtrusionHeight(product(heightExpression(), literal(value))))
         for (layer in listOf("forms", "bands")) set(layer, fillExtrusionHeight(product(get("top"), literal(value))), fillExtrusionBase(product(get("base"), literal(value))))
         set("context", fillExtrusionHeight(product(coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(3))), literal(3.4))), literal(value))))
     }
@@ -235,7 +233,6 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         val same = openBuilding == id
         openBuilding = id; openFloor = floor
         val target = (floor - 1) * shape.height / shape.levels
-        (style.getLayer("bld") as? FillExtrusionLayer)?.setFilter(neq(get("id"), literal(id)))
         for (layer in listOf("forms", "bands")) (style.getLayer(layer) as? FillExtrusionLayer)?.setFilter(neq(get("building"), literal(id)))
         paintBuildings()
         val data = model.floors["$id/$floor"]
@@ -282,7 +279,6 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         if (openBuilding == null) return
         openBuilding = null; openFloor = null
         showSelection(false)
-        (style.getLayer("bld") as? FillExtrusionLayer)?.setFilter(literal(true))
         for (layer in listOf("forms", "bands")) (style.getLayer(layer) as? FillExtrusionLayer)?.setFilter(literal(true))
         paintBuildings()
         val start = flatten
@@ -305,6 +301,6 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         map.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(0.0).tilt(if (upright) min(52.0, pitchLimit()) else 0.0).build()), 800)
     }
     fun hitRoom(point: android.graphics.PointF): String? = if (openBuilding?.let(::hasFloors) == true) map.queryRenderedFeatures(point, "sel-rooms").firstOrNull()?.getStringProperty("id") else null
-    fun hitBuilding(point: android.graphics.PointF): String? = map.queryRenderedFeatures(point, "bld").firstNotNullOfOrNull { it.getStringProperty("id") }
+    fun hitBuilding(point: android.graphics.PointF): String? = map.queryRenderedFeatures(point, "forms").firstNotNullOfOrNull { it.getStringProperty("building") }
     fun hitOpenFloor(point: android.graphics.PointF) = openBuilding?.let(::hasFloors) == true && map.queryRenderedFeatures(point, "sel-lower", "sel-slab").isNotEmpty()
 }
