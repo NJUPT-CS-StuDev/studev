@@ -34,6 +34,8 @@ data class PersonalSettings(
     /** The bonus or penalty entered from the sports office. */
     val runAdjust: Int = 0,
     val calendarRun: Boolean = false,
+    /** What the home-screen widget shows: "auto" follows its size. */
+    val widgetView: String = "auto",
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -82,6 +84,7 @@ class CampusSettings(context: Context) {
         runDays = store.getString("run-days", null)?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrDefault(emptyMap()) } ?: emptyMap(),
         runAdjust = store.getInt("run-adjust", 0),
         calendarRun = store.getBoolean("calendar-run", false),
+        widgetView = store.getString("widget-view", "auto")!!,
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -95,7 +98,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
-            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun)
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView)
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)

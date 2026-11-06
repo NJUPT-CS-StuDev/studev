@@ -5,7 +5,7 @@ import androidx.work.*
 import kotlinx.coroutines.CancellationException
 import top.hicancan.studev.data.AcademicRepository
 import top.hicancan.studev.me.CampusSettings
-import top.hicancan.studev.widget.NextLessonWidget
+import top.hicancan.studev.widget.CampusWidget
 import java.util.concurrent.TimeUnit
 
 /** Looks for new campus data, then rebuilds what lives outside the app from the person's line. */
@@ -16,7 +16,7 @@ class DeviceRefreshWorker(context: Context, parameters: WorkerParameters) : Coro
         val repo = AcademicRepository.open(applicationContext)
         val facts = PhoneFacts(repo.calendar(), repo.runs()[repo.term().term])
         DeviceSchedule.update(applicationContext, repo.line(settings).lessonsAndExams(), settings.klass, settings, facts)
-        NextLessonWidget().refreshAll(applicationContext)
+        CampusWidget.refreshAll(applicationContext)
         Result.success()
     } catch (e: CancellationException) { throw e } catch (_: Exception) { Result.retry() }
     companion object {

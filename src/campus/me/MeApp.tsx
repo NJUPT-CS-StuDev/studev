@@ -73,13 +73,13 @@ export default function MeApp() {
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示在课表上<small>{grade !== null && grade <= 2 ? `大${'一二'[grade - 1]}必做，本学期 ${facts.run.required} 次` : '大三大四需要补跑时打开'}</small></span><Toggle on={runOn} /></button>
-                {runOn && <a className="kv" href="/?scale=term"><span className="v">编排早锻炼<small>学期页可以点选每一天，也能自动排好</small></span><Chevron /></a>}
+                {runOn && <a className="kv" href="/?scale=term&mode=run"><span className="v">编排早锻炼<small>在学期视图里点选每一天，也能自动排好</small></span><Chevron /></a>}
             </>}
             <h3 className="sh gap">导入手机日历</h3>
             <button className="kv" onClick={() => void exportLessons()}><span className="v">studev 课表<small>下载日历文件</small></span><Chevron /></button>
             <button className="kv" onClick={() => void exportExams()}><span className="v">studev 考表<small>下载日历文件</small></span><Chevron /></button>
             <button className="kv" onClick={() => void exportCalendar()}><span className="v">studev 校历<small>放假和校历日程，整天显示</small></span><Chevron /></button>
-            <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>闹钟、提醒和桌面小组件</small></span><Chevron /></a>
+            <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>提醒和桌面小组件</small></span><Chevron /></a>
             <a className="kv club-row" href="/club/"><span className="k">社团</span><span className="v">南邮计软网安学生发展中心</span><Chevron /></a>
             <p className="fine">数据版本 {DATA_RELEASE.data_version}</p>
         </Sheet>

@@ -15,6 +15,8 @@ class Route {
     var whoType by mutableStateOf("me")
     var whoId by mutableStateOf("")
     var scale by mutableStateOf("day")
+    /** The term view shows courses, or the mornings of 早锻炼. */
+    var running by mutableStateOf(false)
     var day by mutableStateOf<LocalDate?>(null)
     var preview by mutableStateOf<String?>(null)
     var place by mutableStateOf<String?>(null)
@@ -35,6 +37,7 @@ class Route {
                 whoType = who?.substringBefore(':', "me") ?: "me"
                 whoId = who?.substringAfter(':', "").orEmpty()
                 param("scale")?.let { scale = it }
+                running = param("mode") == "run"
                 day = param("t")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 preview = param("preview")
                 tab = "timetable"

@@ -106,6 +106,17 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
             val count = done + plan.adjust
             return RunTally(done, planned, count, maxOf(0, plan.rule.required - count - planned), plan.rule.bonus.firstOrNull { it[0] > count + planned })
         }
+        /** One tap moves a morning on: ahead it can only be planned; from today back it can be run. */
+        fun nextRunMark(days: Map<String, String>, date: LocalDate, today: LocalDate): Map<String, String> {
+            val key = date.toString()
+            val mark = days[key]
+            return when {
+                date > today -> if (mark != null) days - key else days + (key to "plan")
+                mark == "done" -> days - key
+                date == today && mark == null -> days + (key to "plan")
+                else -> days + (key to "done")
+            }
+        }
         /** Every morning in the term one can run, in order. */
         fun runDates(rule: MorningRun, holidays: Map<LocalDate, String>) =
             generateSequence(LocalDate.parse(rule.start)) { it.plusDays(1) }.takeWhile { it.toString() <= rule.end }.filter { isRunDay(rule, holidays, it) }.toList()

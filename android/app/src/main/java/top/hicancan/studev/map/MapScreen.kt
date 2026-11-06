@@ -255,7 +255,6 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             val base = when { picked != null -> 430; selected != null -> if (buildingId != null && floors.isNotEmpty()) 230 else 260; else -> 190 }
             if (closed) Row(Modifier.align(Alignment.BottomStart).padding(12.dp).height(36.dp).clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)).clickable { closed = false; snap = 0 }.padding(horizontal = 12.dp).testTag("open-sheet"), verticalAlignment = Alignment.CenterVertically) {
                 Plain(hm(moment.min), 14.sp, weight = FontWeight.SemiBold)
-                Plain("  空教室", 13.sp, Ink.muted)
             } else BoxWithConstraints(Modifier.fillMaxSize()) {
                 val full = maxHeight - 90.dp
                 val target = when (snap) { 2 -> full; 1 -> maxOf(base.dp, maxHeight * .56f); else -> base.dp }

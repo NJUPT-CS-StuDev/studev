@@ -125,3 +125,5 @@ export const updateExamAttendance = (term: string, className: string, choices: R
         const scope = examAttendanceScope(term, className);
         return { ...current, examAttendance: { ...current.examAttendance, [scope]: { ...current.examAttendance?.[scope], ...choices } } };
     });
+
+export const updateRun = (patch: Partial<RunSettings>) => writePreferences(current => ({ ...current, run: { days: {}, adjust: 0, ...current.run, ...patch } }));

@@ -5,11 +5,19 @@ import top.hicancan.studev.world.CampusLine
 import top.hicancan.studev.world.LineEvent
 import top.hicancan.studev.world.Moment
 import java.time.Instant
+import java.time.LocalDate
 
 /** What the home-screen widget shows: the rest of today, or tomorrow once today is done. */
 object WidgetDay {
     fun of(line: CampusLine, now: Moment): List<LineEvent> =
         line.on(now.date).filter { it.end > now.min }.ifEmpty { line.on(now.date.plusDays(1)) }
+
+    /** Monday to Sunday around now, Saturday and Sunday only when something happens on them. */
+    fun week(line: CampusLine, now: Moment): List<Pair<LocalDate, List<LineEvent>>> {
+        val monday = now.date.minusDays(now.date.dayOfWeek.value - 1L)
+        val days = (0L until 7L).map { monday.plusDays(it) }.map { it to line.on(it) }
+        return days.filter { (date, events) -> date.dayOfWeek.value <= 5 || events.isNotEmpty() }
+    }
 
     /** The next moment the widget would read differently: a class starting or ending, or midnight. */
     fun nextChange(line: CampusLine, now: Moment): Instant {

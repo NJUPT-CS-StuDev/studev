@@ -9,15 +9,14 @@ import java.util.concurrent.TimeUnit
 /** One boundary job plus a sparse safety refresh; no GPS, polling or exact alarms. */
 class WidgetRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val boundary = listOfNotNull(NextLessonWidget().refreshAll(applicationContext, false),
-            CompactLessonWidget().refreshAll(applicationContext, false)).minOrNull()
-        // Replacing the running boundary job is the final step, after both
-        // providers have published their state.
+        val boundary = CampusWidget.refreshAll(applicationContext, false)
+        // Replacing the running boundary job is the final step, after every
+        // widget has published its state.
         if (boundary != null) at(applicationContext, boundary)
         return Result.success()
     }
     companion object {
-        private fun hasWidgets(context: Context) = listOf(NextLessonWidgetReceiver::class.java, CompactLessonWidgetReceiver::class.java).any {
+        private fun hasWidgets(context: Context) = CampusWidget.receivers.any {
             context.getSystemService(android.appwidget.AppWidgetManager::class.java)
                 .getAppWidgetIds(android.content.ComponentName(context, it)).isNotEmpty()
         }

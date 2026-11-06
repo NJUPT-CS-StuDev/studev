@@ -1,7 +1,6 @@
 // The timetable: pick who, unfold along time. Everything on screen is in the address.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { updateExamAttendance, updateTimetableEdits } from '@/world/preferences';
-import { markRun, RunPlanner } from './RunPlanner';
+import { updateExamAttendance, updateRun, updateTimetableEdits } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { weekOfDate, type CampusEvent } from '@/world/events';
 import { roomLabel } from '@/world/names';
@@ -34,7 +33,6 @@ export default function TimetableApp() {
     const preview = params.get('preview');
     const { loaded, error, previewRows } = useTimeline(who, prefs, ready, preview);
     const [open, setOpen] = useState<CampusEvent | null>(null);
-    const [planning, setPlanning] = useState(false);
 
     const page = useRef<HTMLDivElement>(null);
     // Pinching, or ctrl with the wheel, moves between day, week and term.
@@ -109,20 +107,19 @@ export default function TimetableApp() {
                     </div>
                 </header>
                 <div className="tabs" role="tablist">
-                    {SCALES.map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key })}>{label}</button>)}
+                    {SCALES.map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
                 </div>
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} previewRows={previewRows} onOpen={openEvent} />}
-                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} onPlanRun={() => setPlanning(true)} />}
+                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} running={params.get('mode') === 'run'} onMode={running => set({ mode: running ? 'run' : null })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
             </div>
-            {planning && line.run && <RunPlanner plan={line.run} line={line} now={now} onClose={() => setPlanning(false)} />}
             {open && <EventSheet event={open} isMe={isMe} run={line.run} onClose={() => setOpen(null)}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}
-                onRan={() => { markRun(line.run!, open.date); setOpen(null); }} onPlan={() => { setOpen(null); setPlanning(true); }} />}
+                onRan={() => { updateRun({ days: { ...line.run!.days, [open.date]: 'done' } }); setOpen(null); }} onPlan={() => { setOpen(null); set({ scale: 'term', mode: 'run' }, { push: true }); }} />}
         </div>
     );
 }

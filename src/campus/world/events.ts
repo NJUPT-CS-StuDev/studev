@@ -89,6 +89,16 @@ export function runTally({ rule, days, adjust }: RunPlan) {
     return { done, planned, count, need: Math.max(0, rule.required - count - planned), nextBonus: rule.bonus.find(([at]) => at > count + planned) ?? null };
 }
 
+/** One tap moves a morning on: ahead it can only be planned; from today back it can be run. */
+export function nextRunMark(days: Record<string, RunMark>, date: string, today: string): Record<string, RunMark> {
+    const mark = days[date];
+    const next = { ...days };
+    if (date > today) { if (mark) delete next[date]; else next[date] = 'plan'; }
+    else if (mark === 'done') delete next[date];
+    else next[date] = date === today && !mark ? 'plan' : 'done';
+    return next;
+}
+
 /** Every morning in the term one can run, in order. */
 export function runDates(rule: MorningRun, holidays: Map<string, string>) {
     const dates: string[] = [];

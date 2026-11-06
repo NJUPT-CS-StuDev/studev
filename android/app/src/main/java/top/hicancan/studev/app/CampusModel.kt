@@ -12,7 +12,7 @@ import top.hicancan.studev.me.PersonalSettings
 import top.hicancan.studev.me.TimetableEdits
 import top.hicancan.studev.device.*
 import top.hicancan.studev.timetable.*
-import top.hicancan.studev.widget.NextLessonWidget
+import top.hicancan.studev.widget.CampusWidget
 import top.hicancan.studev.world.*
 import top.hicancan.studev.timetable.ExamAttendance
 import top.hicancan.studev.device.PhoneFacts
@@ -192,7 +192,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             val expectedSettings = settings.state.value
             try {
                 DeviceSchedule.update(getApplication(), myLine(state.value, expectedSettings)?.lessonsAndExams().orEmpty(), expectedSettings.klass, expectedSettings, PhoneFacts(state.value.calendar, state.value.run))?.let { tell("已同步到手机日历") }
-                NextLessonWidget().refreshAll(getApplication())
+                CampusWidget.refreshAll(getApplication())
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { tell("同步未完成，请检查权限后重试") }
         }

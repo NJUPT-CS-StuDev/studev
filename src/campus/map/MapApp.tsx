@@ -388,7 +388,7 @@ export default function MapApp() {
                     <button className="tilt" aria-label="我的位置" onClick={locate}><svg viewBox="0 0 24 24" className="target"><circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="7.5" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" /></svg></button>
                 </div>
             </div>
-            {closed && <button className="sheetopen" onClick={() => { setClosed(false); setSnap(0); }}><b>{hm(moment.min)}</b> 空教室</button>}
+            {closed && <button className="sheetopen" onClick={() => { setClosed(false); setSnap(0); }}><b>{hm(moment.min)}</b></button>}
             <section className={`msheet ${peek !== null ? 'drag' : ''}`} hidden={closed}>
                 <div className="grip" onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={gripUp} onPointerCancel={gripUp} />
                 <div className="rulerbox">

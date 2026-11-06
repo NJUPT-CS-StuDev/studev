@@ -44,7 +44,7 @@ import top.hicancan.studev.world.*
                 KeyRow("路线", "${place.route.joinToString(" ↔ ")}，约 ${place.metres} 米")
                 KeyRow("刷脸", "起点 ${place.start_scan_end} 前，终点 ${place.end_scan_end} 前", if (place.male_minutes == place.female_minutes) "${place.male_minutes} 分钟内，超时无效" else "男生 ${place.male_minutes} 分钟内，女生 ${place.female_minutes} 分钟内，超时无效")
             }
-            KeyRow("次数", "${CampusLine.tally(plan).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term" })
+            KeyRow("次数", "${CampusLine.tally(plan).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term"; route.running = true; route.tab = "timetable" })
         }
         return
     }
@@ -99,8 +99,16 @@ import top.hicancan.studev.world.*
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 KeyRow(null, "显示在课表上", if (grade != null && grade <= 2) "大${"一二"[grade - 1]}必做，本学期 ${rule.required} 次" else "大三大四需要补跑时打开", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })
-                if (runOn) KeyRow(null, "编排早锻炼", "学期页可以点选每一天，也能自动排好", chevron = true, onClick = { onClose(); route.timetable("me", "", "term") })
+                if (runOn) KeyRow(null, "编排早锻炼", "在学期视图里点选每一天，也能自动排好", chevron = true, onClick = { onClose(); route.timetable("me", "", "term"); route.running = true })
             }
+            Plain("桌面小组件", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Plain("显示", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
+                Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "今天", "week" to "本周"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
+            }
+            KeyRow(null, "添加到桌面", "也可以长按桌面空白处，在窗口小工具里找 studev", chevron = true, onClick = {
+                if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 studev")
+            })
             Plain("同步到手机日历", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             fun set(change: (PersonalSettings) -> PersonalSettings) = withCalendar { model.setRun(change) }
             KeyRow(null, "studev 课表", "上课前 15 分钟提醒", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
