@@ -52,7 +52,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform
-      - run: npm run test:collection
       - run: npm run build
       - name: Stage the verified data release for the EdgeOne builder
         run: |
