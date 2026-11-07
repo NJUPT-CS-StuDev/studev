@@ -9,6 +9,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import tokens from '../../../design/tokens.json';
 import type { RoomTier } from '@/world/rooms';
+import { modelLayer, type ModelIndex, type ModelLook } from './models';
 import { sunAt } from './model/sun';
 
 interface ModelFloor { level: number; plate: Geometry; cores: { kind: string; geometry: Geometry }[]; rooms: { id: string; geometry: Geometry }[] }
@@ -26,6 +27,7 @@ export interface SceneHandlers { onBuilding: (id: string) => void; onRoom: (id: 
 const NONE = { type: 'FeatureCollection' as const, features: [] };
 const FLAT = 0.14;
 const SHADOW = { w: 118.912, e: 118.938, s: 32.102, n: 32.128, W: 1664, H: 2048 };
+const rgb = (hex: string): [number, number, number] => [parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255];
 const mix = (a: string, b: string, t: number) => '#' + [1, 3, 5].map(i => {
     const left = parseInt(a.slice(i, i + 2), 16);
     return Math.round(left + (parseInt(b.slice(i, i + 2), 16) - left) * t).toString(16).padStart(2, '0');
@@ -86,7 +88,6 @@ export class CampusScene {
     private level = 0;
     private flatten = 1;
     private animation = 0;
-    private tint = new Map<string, number>();
     private labels: (SceneLabel & { el: HTMLElement; w: number; h: number })[] = [];
     private roomLabels: { el: HTMLElement; at: Position; box: [number, number, number, number]; picked: boolean; min: number }[] = [];
     private roomTop = 0;
@@ -96,6 +97,8 @@ export class CampusScene {
     private me: HTMLElement;
     private meAt: Position | null = null;
     private roomPaint = new Map<string, string>();
+    private modelled: string[] = [];
+    private modelLook: ModelLook = { hidden: null, flatten: 1, night: 0, faded: 0, fadeTo: [0, 0, 0] };
 
     constructor(host: HTMLElement, labelHost: HTMLElement, style: StyleSpecification, model: CampusModel, center: Position, pitch: number, handlers: SceneHandlers) {
         if (!protocolAdded) { maplibregl.setWorkerUrl(workerUrl); maplibregl.addProtocol('pmtiles', new Protocol().tile); protocolAdded = true; }
@@ -193,7 +196,6 @@ export class CampusScene {
         this.labelHost.classList.toggle('scene-night', this.night > .55);
     }
     /** How free each teaching building is, as a share of its classrooms. */
-    setTint(share: Map<string, number>) { this.tint = share; if (this.ready) this.paintBuildings(); }
     private paintBuildings() {
         const palette = this.palette();
         const faded = mix(palette.model, palette.campus, .72);
@@ -202,9 +204,9 @@ export class CampusScene {
         const dim = 1 - this.night * .78;
         const own = ['to-rgba', ['to-color', ['get', 'color']]];
         const lit = this.night < .01 ? ['to-color', ['get', 'color']] : ['rgba', ['*', ['at', 0, own], dim], ['*', ['at', 1, own], dim], ['*', ['at', 2, own], dim], 1];
-        const pairs = open ? [] : [...this.tint].flatMap(([id, share]) => [id, mix(palette.model, palette.tint, Math.pow(share, .8) * .78)]);
-        this.map.setPaintProperty('forms', 'fill-extrusion-color', (open ? faded : pairs.length ? ['match', ['get', 'building'], ...pairs, lit] : lit) as never);
-        this.map.setPaintProperty('bands', 'fill-extrusion-color', (open ? faded : lit) as never);
+        this.map.setPaintProperty('plain', 'fill-extrusion-color', (open ? faded : lit) as never);
+        this.modelLook = { ...this.modelLook, hidden: open ? this.building : null, night: this.night, faded: open ? 1 : 0, fadeTo: rgb(faded) };
+        this.map.triggerRepaint();
     }
     private paintSelectionColours() {
         const palette = this.palette();
@@ -283,9 +285,25 @@ export class CampusScene {
         };
         this.animation = requestAnimationFrame(step);
     }
+    /** Puts the baked model in, under the labels; forms stay as the tap target and the plain stand-ins go. */
+    showModels(index: ModelIndex, bytes: ArrayBuffer) {
+        const add = () => {
+            this.modelled = Object.keys(index.buildings);
+            this.setFormsFilter(this.building);
+            const layers = this.map.getStyle().layers.map(layer => layer.id);
+            this.map.addLayer(modelLayer(index, bytes, () => this.modelLook), layers[layers.indexOf('plain') + 1]);
+        };
+        if (this.ready) add(); else this.queued.push(add);
+    }
+    private setFormsFilter(open: string | null) {
+        const other = ['!=', ['get', 'building'], open ?? ''];
+        this.map.setFilter('forms', open ? other as never : null);
+        this.map.setFilter('plain', ['all', other, ['!', ['in', ['get', 'building'], ['literal', this.modelled]]]] as never);
+    }
     private setFlatten(value: number) {
         this.flatten = value;
-        for (const layer of ['forms', 'bands']) {
+        this.modelLook = { ...this.modelLook, flatten: value };
+        for (const layer of ['forms', 'plain']) {
             this.map.setPaintProperty(layer, 'fill-extrusion-height', ['*', ['get', 'top'], value] as never);
             this.map.setPaintProperty(layer, 'fill-extrusion-base', ['*', ['get', 'base'], value] as never);
         }
@@ -326,7 +344,7 @@ export class CampusScene {
         this.floor = level;
         const floorHeight = shape.height / shape.levels;
         const target = (level - 1) * floorHeight;
-        for (const layer of ['forms', 'bands']) this.map.setFilter(layer, ['!=', ['get', 'building'], building]);
+        this.setFormsFilter(building);
         this.paintBuildings();
         const data = this.model.floors[`${building}/${level}`];
         (this.map.getSource('selshell') as GeoJSONSource).setData({ type: 'Feature', geometry: shape.geometry, properties: {} });
@@ -382,7 +400,7 @@ export class CampusScene {
         this.building = null;
         this.floor = null;
         this.showSelection(false);
-        for (const layer of ['forms', 'bands']) this.map.setFilter(layer, null);
+        this.setFormsFilter(null);
         this.paintBuildings();
         this.roomLabels.forEach(label => label.el.remove());
         this.roomLabels = [];

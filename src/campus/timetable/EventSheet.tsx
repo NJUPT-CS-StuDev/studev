@@ -1,5 +1,5 @@
 import { runTally, type CampusEvent, type RunPlan } from '@/world/events';
-import { courseName, roomLabel, unplaced } from '@/world/names';
+import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
 import { dateLabel, hm, momentText, WEEKDAYS, weekdayOf } from '@/world/time';
 import { Chevron, Sheet } from '@/world/ui';
 
@@ -28,7 +28,7 @@ export function EventSheet({ event, isMe, run, onClose, onHide, onSkipExam, onRa
                 <a className="btn" href={`/map/?place=${encodeURI(event.room!)}&t=${momentText({ date: event.date, min: event.start })}`}>在地图上看</a>
                 <a className="btn go" href={`/map/?nav=${encodeURI(event.room!)}`}>去这里</a>
             </div> : <div style={{ height: 12 }} />}
-            {placed && <a className="kv" href={whoLink('room', event.room!)}><span className="k">教室</span><span className="v">{name} 的课表</span><Chevron /></a>}
+            {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">教室</span><span className="v">{name} 的课表</span><Chevron /></a>}
             {event.teachers.map(teacher => <a key={teacher} className="kv" href={whoLink('teacher', teacher)}><span className="k">老师</span><span className="v">{teacher} 的课表</span><Chevron /></a>)}
             <a className="kv" href={whoLink('course', courseName(event.name))}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a>
             {isMe && event.kind === 'exam' && <button className="kv" onClick={() => onSkipExam(event)}><span className="k" /><span className="v danger">不参加这场考试</span></button>}

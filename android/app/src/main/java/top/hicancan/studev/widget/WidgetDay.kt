@@ -7,10 +7,12 @@ import top.hicancan.studev.world.Moment
 import java.time.Instant
 import java.time.LocalDate
 
-/** What the home-screen widget shows: the rest of today, or tomorrow once today is done. */
+/** What the home-screen widget shows: the rest of today, or the next day that has something. */
 object WidgetDay {
     fun of(line: CampusLine, now: Moment): List<LineEvent> =
-        line.on(now.date).filter { it.end > now.min }.ifEmpty { line.on(now.date.plusDays(1)) }
+        line.on(now.date).filter { it.end > now.min }.ifEmpty {
+            generateSequence(now.date.plusDays(1)) { it.plusDays(1) }.take(30).map(line::on).firstOrNull { it.isNotEmpty() }.orEmpty()
+        }
 
     /** Monday to Sunday around now, Saturday and Sunday only when something happens on them. */
     fun week(line: CampusLine, now: Moment): List<Pair<LocalDate, List<LineEvent>>> {

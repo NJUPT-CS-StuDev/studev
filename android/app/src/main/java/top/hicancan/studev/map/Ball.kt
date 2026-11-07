@@ -42,7 +42,7 @@ private const val RAD = Math.PI / 180
         drawCircle(body, radius, centre)
         listOf(0.0, 45.0, 90.0, 135.0).forEach { lon -> ring { lon to it } }
         listOf(-45.0, 0.0, 45.0).forEach { lat -> ring { it to lat } }
-        val (x, y, z) = project(0.0, 0.0)
-        if (z >= 0) drawCircle(north, radius * 2.6f / 15, Offset(centre.x + (x * radius).toFloat(), centre.y - (y * radius).toFloat()))
+        // Where north points on the screen, on the rim, so tilting never hides it.
+        drawCircle(north, radius * 2.6f / 15, Offset(centre.x - (sb * radius * 12.5 / 15).toFloat(), centre.y - (cb * radius * 12.5 / 15).toFloat()))
     }
 }

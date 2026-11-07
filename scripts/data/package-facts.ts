@@ -18,7 +18,15 @@ export async function packageFacts(dir: string, out: string, index: FactTerms, m
     const places = new Map(mapPlaces.map(place => [place.id, place]));
     const rooms: Room[] = rawRooms.flatMap(raw => {
         const map = places.get(raw.id);
-        if (!map || map.kind !== 'room') return [];
+        // A room the map has not drawn is still a room: the teaching office says where it is.
+        if (!map) {
+            const name = String(raw.names?.[0] ?? raw.id.slice(raw.id.indexOf(':') + 1)).replace(/[－—–]/g, '-');
+            const building = !raw.building || raw.building === '无楼号' ? '其他' : String(raw.building);
+            const number = name.startsWith(building) ? name.slice(building.length).replace(/^-/, '') || name : name;
+            return [{ id: raw.id, building, floor: String(raw.floor ?? ''), number, campus: raw.campus, kinds: raw.kinds ?? [], names: raw.names ?? [], listed: raw.listed ?? false, seats: raw.seats }];
+        }
+        if (map.kind !== 'room') throw new Error(`a teaching room is not a room on the map: ${raw.id}`);
+
         let ancestor = map.parent ? places.get(map.parent) : undefined;
         let floor = '';
         while (ancestor && ancestor.kind !== 'building') {

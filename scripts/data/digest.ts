@@ -11,7 +11,7 @@ import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
 import { SPACE_FILES } from './space-contract.ts';
-import type { Exam, TeachingClass, TeachingMeeting } from '../../src/campus/world/facts.ts';
+import type { Exam, Room, TeachingClass, TeachingMeeting } from '../../src/campus/world/facts.ts';
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
 
@@ -441,7 +441,9 @@ const entity = (source: string, id: string, url: string, title: string, section:
 });
 const WEEKDAY = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const plainCourse = (name: string) => name.replace(/[（(].*?[)）]/g, '').trim() || name.trim();
-const roomText = (room: string | null) => (room ?? '').replace(/^[^/]*\//, '');
+const roomText = (room: string | null) => (room ?? '').replace(/^[^/:]*[/:]/, '');
+/** Rooms teaching can use: not a playground, not a name the office keeps for itself. */
+const isTaught = (room: Room) => Boolean(room.listed) && !room.kinds.some(kind => /运动场|非教室|不要教室/.test(kind));
 const slotText = (rows: TeachingMeeting[]) => [...new Set(rows.map(row => `${WEEKDAY[row.weekday]} ${row.periods[0]}–${row.periods[1]} 节${row.room ? ` ${roomText(row.room)}` : ''}`))];
 const group = <T>(rows: T[], key: (row: T) => string[]) => {
     const groups = new Map<string, T[]>();
@@ -450,7 +452,7 @@ const group = <T>(rows: T[], key: (row: T) => string[]) => {
 };
 
 /** Courses, people, classes, exams and places as documents, so one index answers everything. */
-function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[]): SearchDocument[] {
+function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[], rooms: Room[]): SearchDocument[] {
     const docs: SearchDocument[] = [];
     const byId = new Map(places.map(place => [place.id, place]));
     /** An entity and everything that contains it. */
@@ -488,6 +490,12 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
         docs.push(entity(room ? 'rooms' : 'places', place.id, `/map/?place=${encodeURI(place.id)}`, title, place.category ?? null,
             [...place.names, roomTitle ?? '', place.parent, place.floor ? `${place.floor} 层` : '', place.seats ? `${place.seats} 座` : '', ...(place.room_kinds ?? []), ...(place.houses ?? [])], chain(place.id)));
     }
+    // What the map has not drawn yet is found the same way and opens as its timetable.
+    for (const room of rooms) {
+        if (room.id.includes('/') || !isTaught(room)) continue;
+        docs.push(entity('rooms', room.id, `/?who=room:${encodeURI(room.id)}&scale=day`, `${room.building === '其他' ? '' : `${room.building} `}${room.number}`, room.campus,
+            [...room.names, room.campus, room.building, room.floor ? `${room.floor} 层` : '', room.seats ? `${room.seats} 座` : '', ...room.kinds]));
+    }
     return docs;
 }
 
@@ -519,7 +527,7 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p7`;
+    const version = `${map.version}__${data.version}__p8`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });
@@ -544,7 +552,7 @@ async function main() {
     }
     const teachingDir = join(out, 'teaching', terms.teaching);
     const examRows = terms.exams ? await read<Exam[]>(join(data.dir, 'exams', terms.exams, 'exams.json')) : [];
-    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, places);
+    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, places, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms);
     for await (const doc of searchDocuments(data.dir)) {
         docs.push(doc);
     }

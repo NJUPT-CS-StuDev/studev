@@ -30,6 +30,7 @@ private val naturally = compareBy<String>({ it.takeWhile { c -> !c.isDigit() } }
     val now = remember { Moment.of(CampusDay.now()) }
     var date by remember { mutableStateOf(now.date) }
     var minute by remember { mutableIntStateOf(now.min) }
+    var campus by remember { mutableStateOf("仙林") }
     var building by remember { mutableStateOf<String?>(null) }
     var everything by remember { mutableStateOf(false) }
     var day by remember { mutableStateOf<RoomDay?>(null) }
@@ -41,8 +42,8 @@ private val naturally = compareBy<String>({ it.takeWhile { c -> !c.isDigit() } }
     val reader = remember(state.periods) { RoomReader(state.periods) }
     val free = marks().free
     val rooms = remember(index) { index.rooms.filter(RoomReader::classroom) }
-    val groups = remember(rooms, day, minute) {
-        rooms.groupBy { it.building }.toSortedMap(naturally).map { (name, inside) ->
+    val groups = remember(rooms, day, minute, campus) {
+        rooms.filter { it.campus == campus }.groupBy { it.building }.toSortedMap(naturally).map { (name, inside) ->
             val floors = inside.groupBy { it.floor }.toSortedMap(naturally).map { (floor, list) -> floor to list.sortedWith(compareBy(naturally) { it.number }).map { it to reader.at(day, it.id, minute) } }
             Triple(name, floors, inside.count { !reader.at(day, it.id, minute).busy } to inside.size)
         }
@@ -67,6 +68,8 @@ private val naturally = compareBy<String>({ it.takeWhile { c -> !c.isDigit() } }
         }
         Row(Modifier.padding(top = 12.dp, bottom = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             @Composable fun option(label: String, on: Boolean, tap: () -> Unit) = Plain(label, 13.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.clickable(onClick = tap))
+            listOf("仙林", "三牌楼", "锁金").forEach { name -> option(name, campus == name) { campus = name; building = null } }
+            Spacer(Modifier.width(6.dp))
             option("全部的楼", building == null) { building = null }
             groups.forEach { (name) -> option(name, building == name) { building = name } }
             option(if (everything) "显示全部" else "只看空的", false) { everything = !everything }
@@ -86,7 +89,7 @@ private val naturally = compareBy<String>({ it.takeWhile { c -> !c.isDigit() } }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             visible.chunked(4).forEach { line ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    line.forEach { (room, status) -> RoomTile(room, status, free, Modifier.weight(1f)) { route.map(room.id, date to minute) } }
+                                    line.forEach { (room, status) -> RoomTile(room, status, free, Modifier.weight(1f)) { if (Names.placed(room.id)) route.map(room.id, date to minute) else route.timetable("room", room.id, "day", date) } }
                                     repeat(4 - line.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }

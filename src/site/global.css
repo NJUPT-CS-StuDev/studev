@@ -36,6 +36,12 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .club-nav { display: flex; gap: 22px; padding: 0 24px; border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .club-nav a { height: 36px; line-height: 36px; font-size: 13.5px; color: var(--muted); flex: none; }
 .club-nav a.active { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+.app-entry { font-size: 14px; font-weight: 500; color: var(--muted); margin-right: 18px; }
+.app-offer { position: fixed; left: 0; right: 0; bottom: calc(50px + env(safe-area-inset-bottom, 0px)); z-index: 49; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 40px; background: var(--paper); border-top: 1px solid var(--line); font-size: 13px; }
+.app-offer[hidden] { display: none; }
+.app-offer a { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-offer a b { color: var(--ink); font-weight: 600; margin-right: 4px; }
+.app-offer button { width: 32px; height: 32px; border: 0; background: none; color: var(--faint); font-size: 18px; cursor: pointer; flex: none; }
 .phone-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; height: calc(50px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--paper); border-top: 1px solid var(--line); }
 .phone-tabs a { flex: 1; display: grid; place-items: center; font-size: 14px; font-weight: 500; color: var(--muted); }
 .phone-tabs a.active { color: var(--ink); font-weight: 600; }
@@ -45,7 +51,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 999.98px) {
   .site-header { position: static; border-bottom: 0; }
-  .site-nav, .wordmark { display: none; }
+  .site-nav, .wordmark, .app-entry { display: none; }
   .header-inner { height: 0; padding: 0; }
   .avatar { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 45; }
   body:has(.mapview) .avatar { display: none; }

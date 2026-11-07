@@ -73,7 +73,6 @@ export default function MeApp() {
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示在课表上<small>{grade !== null && grade <= 2 ? `大${'一二'[grade - 1]}必做，本学期 ${facts.run.required} 次` : '大三大四需要补跑时打开'}</small></span><Toggle on={runOn} /></button>
-                {runOn && <a className="kv" href="/?scale=term&mode=run"><span className="v">编排早锻炼<small>在学期视图里点选每一天，也能自动排好</small></span><Chevron /></a>}
             </>}
             <h3 className="sh gap">导入手机日历</h3>
             <button className="kv" onClick={() => void exportLessons()}><span className="v">studev 课表<small>下载日历文件</small></span><Chevron /></button>

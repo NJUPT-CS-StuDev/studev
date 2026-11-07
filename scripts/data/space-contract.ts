@@ -3,5 +3,7 @@ export const SPACE_FILES = [
     'network.json',
     'model.json',
     'basemap.pmtiles',
+    'models.json',
+    'models.bin',
     'style.json',
 ] as const;

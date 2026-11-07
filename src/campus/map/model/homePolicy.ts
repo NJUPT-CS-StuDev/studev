@@ -14,7 +14,7 @@ export function campusTime(date = new Date()): CampusTime {
     return { day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(get('weekday')) + 1, hour: Number(get('hour')), minute: Number(get('minute')) };
 }
 
-/** Same half-open intervals and 30-minute threshold as Android HomeRecommendations. */
+/** Half-open intervals, closing 30 minutes before the end. Android passes the same golden cases. */
 export function openingStatus(hours: Place['hours'], now: CampusTime): HoursStatus {
     if (!hours) return { state: 'unknown', today: '' };
     const minutes = (value: string) => { const [h = 0, m = 0] = value.split(':').map(Number); return h * 60 + m; };
@@ -41,15 +41,14 @@ export function openingStatus(hours: Place['hours'], now: CampusTime): HoursStat
     };
 }
 
-const moments = [
-    { title: '早安，开启校园的一天', subtitle: '上课前，找到你的下一站', categories: ['教学楼', '图书馆', '食堂'] },
-    { title: '到饭点了，好好吃饭', subtitle: '附近食堂，今天想吃哪一家', categories: ['食堂', '超市'] },
-    { title: '午后，继续探索校园', subtitle: '学习、运动，让生活更有节奏', categories: ['教学楼', '图书馆', '体育'] },
-    { title: '晚饭时间，补充能量', subtitle: '看看附近仍在营业的食堂', categories: ['食堂', '超市'] },
-    { title: '晚上好，留一点时间给自己', subtitle: '去图书馆，或找一处学习空间', categories: ['图书馆', '教学楼', '体育'] },
-    { title: '夜深了，平安回去', subtitle: '宿舍与仍在营业的便利商店', categories: ['宿舍', '超市'] },
- ] as const;
-export const momentAt = (hour: number) => moments[hour >= 5 && hour <= 10 ? 0 : hour >= 11 && hour <= 13 ? 1 : hour >= 14 && hour <= 16 ? 2 : hour >= 17 && hour <= 18 ? 3 : hour >= 19 && hour <= 21 ? 4 : 5];
+/** Where people go at each part of the day, most likely first. */
+export const momentAt = (hour: number): readonly string[] =>
+    hour >= 5 && hour <= 10 ? ['教学', '图书馆', '食堂']
+        : hour >= 11 && hour <= 13 ? ['食堂', '服务']
+            : hour >= 14 && hour <= 16 ? ['教学', '图书馆', '体育']
+                : hour >= 17 && hour <= 18 ? ['食堂', '服务']
+                    : hour >= 19 && hour <= 21 ? ['图书馆', '教学', '体育']
+                        : ['宿舍', '服务'];
 
 export function distance(a: Position, b: Position): number {
     const rad = Math.PI / 180;
@@ -58,13 +57,12 @@ export function distance(a: Position, b: Position): number {
 }
 
 export function recommendations(places: Place[], now: CampusTime, position?: Position | null, category?: string | null) {
-    const moment = momentAt(now.hour);
     const stateOrder = { open: 0, closing: 0, unknown: 1, closed: 2 };
     const shown = new Map<string | undefined, number>();
-    const order: readonly string[] = moment.categories;
+    const order = momentAt(now.hour);
     return places.filter(p => p.kind !== 'room' && p.centre && (category ? p.category === category : p.featured && order.includes(p.category ?? '')))
         .map(place => ({ place, distance: distance(position ?? CAMPUS_CENTRE, place.centre!), status: openingStatus(place.hours, now) }))
-        .filter(item => category || !(['食堂', '超市'].includes(item.place.category ?? '') && item.status.state === 'closed'))
+        .filter(item => category || !(['食堂', '服务'].includes(item.place.category ?? '') && item.status.state === 'closed'))
         .sort((a, b) => (category ? 0 : order.indexOf(a.place.category!) - order.indexOf(b.place.category!)) || stateOrder[a.status.state] - stateOrder[b.status.state] || a.distance - b.distance || (a.place.id < b.place.id ? -1 : a.place.id > b.place.id ? 1 : 0))
         .filter(({ place }) => { if (category) return true; const count = shown.get(place.category) ?? 0; shown.set(place.category, count + 1); return count < 3; });
 }

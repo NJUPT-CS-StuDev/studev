@@ -44,7 +44,7 @@ import top.hicancan.studev.world.*
                 KeyRow("路线", "${place.route.joinToString(" ↔ ")}，约 ${place.metres} 米")
                 KeyRow("刷脸", "起点 ${place.start_scan_end} 前，终点 ${place.end_scan_end} 前", if (place.male_minutes == place.female_minutes) "${place.male_minutes} 分钟内，超时无效" else "男生 ${place.male_minutes} 分钟内，女生 ${place.female_minutes} 分钟内，超时无效")
             }
-            KeyRow("次数", "${CampusLine.tally(plan).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term"; route.running = true; route.tab = "timetable" })
+            KeyRow("次数", "${CampusLine.tally(plan).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term"; route.termMode = "run"; route.tab = "timetable" })
         }
         return
     }
@@ -56,7 +56,7 @@ import top.hicancan.studev.world.*
             ActionButton("在地图上看", modifier = Modifier.weight(1f)) { onClose(); route.map(place = event.room, at = date to event.start) }
             ActionButton("去这里", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = event.room) }
         } else Spacer(Modifier.height(12.dp))
-        if (placed) KeyRow("教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
+        if (Names.isRoom(event.room)) KeyRow("教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
         event.teachers.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
         KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", event.name) })
         if (isMe && event.kind == "exam") KeyRow(null, "不参加这场考试", color = mark.now, onClick = { model.examAttendance(event.id, false); onClose() })
@@ -99,7 +99,6 @@ import top.hicancan.studev.world.*
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 KeyRow(null, "显示在课表上", if (grade != null && grade <= 2) "大${"一二"[grade - 1]}必做，本学期 ${rule.required} 次" else "大三大四需要补跑时打开", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })
-                if (runOn) KeyRow(null, "编排早锻炼", "在学期视图里点选每一天，也能自动排好", chevron = true, onClick = { onClose(); route.timetable("me", "", "term"); route.running = true })
             }
             Plain("桌面小组件", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

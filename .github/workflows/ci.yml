@@ -51,7 +51,7 @@ jobs:
           sdkmanager_path="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$sdkmanager_path" ]; then sdkmanager_path="/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager"; fi
           yes | "$sdkmanager_path" --licenses >/dev/null || true
-          "$sdkmanager_path" --channel=1 "platforms;android-37.0" "ndk;28.2.13676358"
+          "$sdkmanager_path" --channel=1 "platforms;android-37.0" "ndk;28.2.13676358" "cmake;3.22.1"
       - run: npm ci
       - run: npm run digest
       - name: Build native routing and search kernels

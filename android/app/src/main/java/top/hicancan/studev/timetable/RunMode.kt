@@ -45,11 +45,11 @@ import java.time.LocalDate
     val state = plan.days[date.toString()]
     val gone = runnable && state == null && date < now.date
     val shape = RoundedCornerShape(4.dp)
-    Box(modifier.height(32.dp).padding(horizontal = 1.5.dp).clip(shape)
-        .background(when { !runnable -> Color.Transparent; state == "done" -> free; state == "plan" -> free.copy(alpha = .22f); gone -> Color.Transparent; else -> Ink.sunken })
-        .then(if (date == now.date) Modifier.border(1.5.dp, Ink.text, shape) else if (state == "plan") Modifier.border(1.dp, free, shape) else if (gone) Modifier.border(1.dp, Ink.line, shape) else Modifier)
+    Box(modifier.height(30.dp).padding(horizontal = 1.5.dp).clip(shape)
+        .background(when { !runnable -> Color.Transparent; state == "done" -> free; state == "plan" -> free.copy(alpha = .22f); else -> Color.Transparent })
+        .then(if (date == now.date) Modifier.border(1.5.dp, marks().now, shape) else if (state == "plan") Modifier.border(1.dp, free, shape) else if (runnable && !gone && state == null) Modifier.border(1.dp, Ink.faint, shape) else Modifier)
         .then(if (runnable) Modifier.clickable { model.setRun { it.copy(runDays = CampusLine.nextRunMark(it.runDays, date, now.date)) } } else Modifier),
         contentAlignment = Alignment.Center) {
-        Plain(date.dayOfMonth.toString(), 12.5.sp, when { !runnable -> Ink.line; state == "done" -> Color.White; state == "plan" -> free; gone -> Ink.faint; else -> Ink.muted })
+        Plain(date.dayOfMonth.toString(), 12.sp, when { !runnable -> Ink.line; state == "done" -> Color.White; state == "plan" -> free; gone -> Ink.faint; else -> Ink.text })
     }
 }

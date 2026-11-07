@@ -36,9 +36,12 @@ object Names {
     private val brackets = Regex("[（(].*?[)）]")
     fun course(name: String) = brackets.replace(name, "").trim().ifEmpty { name.trim() }
     fun courseShort(name: String) = short[course(name)] ?: course(name)
-    fun room(room: String?) = room.orEmpty().replaceFirst(Regex("^[^/]*/"), "").replace("/", " ")
+    fun room(room: String?) = room.orEmpty().replaceFirst(Regex("^[^/:]*[/:]"), "").replace("/", " ")
     fun roomShort(room: String?) = room(room).removePrefix("教")
+    /** A slash means the map has it. */
     fun placed(room: String?) = !room.isNullOrEmpty() && room.contains('/')
+    /** A room in the teaching office's list, on the map or not; anything else is only a written place. */
+    fun isRoom(room: String?) = !room.isNullOrEmpty() && (room.contains('/') || room.contains(':'))
     /** The building of a room id, or the id itself when it is not a room. */
     fun building(id: String): String {
         val slash = id.indexOf('/')
@@ -71,7 +74,7 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
             val first = byPeriod[meeting.periods.first()] ?: continue
             val last = byPeriod[meeting.periods.last()] ?: continue
             add(LineEvent("class", "${meeting.id}@$date", date, Names.course(meeting.course.name), Names.courseShort(meeting.course.name),
-                clock(first.start), clock(last.end), meeting.room, meeting.teachers.map { it.name }, meeting = meeting))
+                clock(first.start), clock(last.end), meeting.room ?: meeting.location, meeting.teachers.map { it.name }, meeting = meeting))
         }
         for (exam in exams) if (exam.date == date.toString()) add(LineEvent("exam", exam.id, date, Names.course(exam.course.name), Names.courseShort(exam.course.name),
             clock(exam.start), clock(exam.end), exam.room ?: exam.location, listOfNotNull(exam.teacher), exam = exam))

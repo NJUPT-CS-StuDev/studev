@@ -19,6 +19,8 @@ const CHANNELS = campusConfig.search.channels as readonly { id: string; label: s
 const ENTITIES = new Set(Object.keys(campusConfig.search.entities));
 const CATEGORIES: Record<string, string> = { notice_article: '通知', policy: '政策制度', workflow: '办事流程', download: '下载资源', exam: '考试信息', news: '新闻动态', external: '站外链接' };
 const SINCE = [['', '全部时间'], ['3', '近三天'], ['7', '近一周'], ['30', '近一月'], ['365', '近一年'], ['ahead', '即将']] as const;
+/** A filter belongs to the dimension that shows it: time only where things have dates. */
+const hasTime = (channel: { id: string; dated?: boolean }) => Boolean(channel.dated) || channel.id === 'all';
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
 /** Marks the kernel's ranges, which count Unicode scalar values. */
@@ -89,7 +91,7 @@ export default function SearchApp() {
     const page = Math.max(1, Number(params.get('page')) || 1);
     const source = params.get('source');
     const category = params.get('type');
-    const since = params.get('since') ?? '';
+    const since = hasTime(channel) ? params.get('since') ?? '' : '';
     const within = params.get('within');
     const sort: SortMode = params.get('sort') === 'date' ? 'date_desc' : 'relevance';
     const [text, setText] = useState(query);
@@ -164,10 +166,10 @@ export default function SearchApp() {
                 <div className="sfield"><Magnifier /><input ref={input} value={text} placeholder="搜课程、老师、班级、地点、通知、资料" aria-label="搜索" autoComplete="off" enterKeyHint="search" onChange={event => type(event.target.value)} /></div>
                 {within && <button className="ib within" onClick={() => go({ within: null })}>在 {roomLabel(within)} 里 ×</button>}
                 <div className="chips" role="tablist">
-                    {CHANNELS.map(item => <button key={item.id} role="tab" aria-selected={item.id === channel.id} className={`chip ${item.id === channel.id ? 'on' : ''}`} onClick={() => go({ scope: item.id === 'all' ? null : item.id, source: null, type: null })}>{item.label}</button>)}
+                    {CHANNELS.map(item => <button key={item.id} role="tab" aria-selected={item.id === channel.id} className={`chip ${item.id === channel.id ? 'on' : ''}`} onClick={() => go({ scope: item.id === 'all' ? null : item.id, source: null, type: null, since: hasTime(item) ? since || null : null })}>{item.label}</button>)}
                 </div>
                 {live ? <RoomsBrowse /> : <>
-                    {(channel.dated || channel.id === 'all') && <div className="since">{SINCE.map(([value, label]) => <button key={value} className={since === value ? 'on' : ''} onClick={() => go({ since: value || null })}>{label}</button>)}</div>}
+                    {hasTime(channel) && <div className="since">{SINCE.map(([value, label]) => <button key={value} className={since === value ? 'on' : ''} onClick={() => go({ since: value || null })}>{label}</button>)}</div>}
                     {(sources.length > 0 || categories.length > 0 || (channel.dated && !browsing)) && <div className="refine">
                         {sources.length > 0 && <select aria-label="来源" value={source ?? ''} onChange={event => go({ source: event.target.value || null })}><option value="">全部来源</option>{sources.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>}
                         {categories.length > 0 && <select aria-label="类型" value={category ?? ''} onChange={event => go({ type: event.target.value || null })}><option value="">全部类型</option>{categories.map(item => <option key={item.id} value={item.id}>{CATEGORIES[item.id]}</option>)}</select>}

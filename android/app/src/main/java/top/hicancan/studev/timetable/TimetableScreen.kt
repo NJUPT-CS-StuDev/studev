@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -102,7 +103,7 @@ import java.time.LocalDate
         Box(Modifier.weight(1f)) {
             when (scale) {
                 "week" -> WeekView(line, day, now, previewRows) { onEvent(it, line) }
-                "term" -> TermView(line, state, model, now, isMe, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
+                "term" -> TermView(line, state, model, now, isMe, if (isMe) settings.klass else if (route.whoType == "class") route.whoId else null, settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
                 else -> DayView(line, day, now, isMe, route, walk) { onEvent(it, line) }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
@@ -333,20 +334,59 @@ private const val DAY_END = 21 * 60 + 8
     }
 }
 
-@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, route: Route, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
+private val SLOT_FIELDS: List<Pair<String, (ExamSlot) -> String?>> = listOf(
+    "时间" to { "${it.date} ${it.start}–${it.end}" }, "地点" to { it.location }, "校区" to { it.campus }, "教师" to { it.teacher }, "人数" to { it.students?.toString() },
+)
+private fun slotText(slots: List<ExamSlot>?, read: (ExamSlot) -> String?) = slots.orEmpty().map { read(it)?.takeIf(String::isNotEmpty) ?: "未填写" }.distinct().joinToString("、").ifEmpty { "未填写" }
+private fun changeLines(change: ExamChange): List<String> = when (change.change) {
+    "changed" -> SLOT_FIELDS.mapNotNull { (label, read) -> val before = slotText(change.before, read); val after = slotText(change.after, read); if (before == after) null else "$label：$before → $after" }
+    "added" -> listOf("${slotText(change.after, SLOT_FIELDS[0].second)} · ${slotText(change.after, SLOT_FIELDS[1].second)}")
+    else -> listOf("原定 ${slotText(change.before, SLOT_FIELDS[0].second)}")
+}
+
+/** Colour swatch of the legend; a shape says the same thing as the cell it stands for. */
+@Composable private fun Swatch(fill: Color, edge: Color?, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(fill).then(if (edge != null) Modifier.border(1.dp, edge, RoundedCornerShape(2.dp)) else Modifier))
+        Plain(label, 12.sp, Ink.muted, modifier = Modifier.padding(start = 5.dp))
+    }
+}
+
+@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, classId: String?, settings: PersonalSettings, route: Route, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
     val mark = marks()
-    val brand = Ink.brand
-    val paper = Ink.paper
-    fun level(amount: Float) = Color(paper.red + (brand.red - paper.red) * amount, paper.green + (brand.green - paper.green) * amount, paper.blue + (brand.blue - paper.blue) * amount)
-    val levels = listOf(Ink.sunken, level(.12f), level(.22f), level(.34f), level(.48f))
     val hairline = Ink.line
     val calendar = state.calendar.firstOrNull { it.start == line.term.weeks.firstOrNull()?.start }
     val plan = line.run.takeIf { isMe }
-    val run = plan.takeIf { route.running }
     val runnable = remember(plan, line) { plan?.let { CampusLine.runDates(it.rule, line.holidays).toSet() }.orEmpty() }
-    LazyColumn(Modifier.fillMaxSize()) {
+    val record by produceState<ExamRecord?>(null, classId, state.repository) { value = classId?.let { id -> runCatching { state.repository?.examRecord(id) }.getOrNull() } }
+    val codes = remember(line) { line.meetings.map { it.course.code.orEmpty() }.toSet() }
+    val changes = record?.changes.orEmpty().filter { !isMe || it.course.code.orEmpty() in codes }
+    val latest = changes.maxOfOrNull { it.observed }
+    val upcoming = line.upcomingExams(now.date)
+    val taken = line.exams.filter { it.date < now.date.toString() }.sortedByDescending { it.date }
+    val hasExams = upcoming.isNotEmpty() || taken.isNotEmpty() || record?.changes.orEmpty().isNotEmpty()
+    val mode = when { route.termMode == "exam" && hasExams -> "exam"; route.termMode == "run" && plan != null -> "run"; else -> "course" }
+    val run = plan.takeIf { mode == "run" }
+    LaunchedEffect(latest, mode, settings.examsSeen, isMe) {
+        // Someone arriving for the first time has nothing new to be told about.
+        if (isMe && latest != null && settings.examsSeen != latest && (mode == "exam" || settings.examsSeen == null)) model.settings.update { it.copy(examsSeen = latest) }
+    }
+    val fresh = isMe && latest != null && settings.examsSeen != null && latest > settings.examsSeen && mode != "exam"
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    var takenOpen by remember { mutableStateOf(false) }
+    @Composable fun examRow(exam: Exam, lead: String) {
+        val date = LocalDate.parse(exam.date)
+        val changed = record?.changes.orEmpty().any { it.change == "changed" && it.course.code == exam.course.code }
+        AheadRow(lead, Names.course(exam.course.name) + if (changed) " · 已调整" else "", "${dateLabel(date)} ${WEEKDAYS[date.dayOfWeek.value]} ${exam.start}${(exam.room?.let(Names::room) ?: exam.location)?.let { " · $it" } ?: ""}") {
+            line.on(date).firstOrNull { it.exam?.id == exam.id }?.let(onOpen)
+        }
+    }
+    LazyColumn(Modifier.fillMaxSize(), state = listState) {
         item {
-            if (plan != null) Box(Modifier.padding(bottom = 12.dp)) { Choice(listOf("course" to "课程", "run" to "早锻炼"), if (run != null) "run" else "course") { route.running = it == "run" } }
+            val modes = listOf("course" to "课程") + (if (hasExams) listOf("exam" to (if (fresh) "考试 •" else "考试")) else emptyList()) + (if (plan != null) listOf("run" to "早锻炼") else emptyList())
+            if (modes.size > 1) Box(Modifier.padding(bottom = 12.dp)) { Choice(modes, mode) { route.termMode = it } }
             if (run != null) RunPanel(run, line, now, model)
             Row { Spacer(Modifier.width(28.dp)); WEEKDAYS.drop(1).forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Plain(it.drop(1), 11.5.sp, Ink.faint) } } }
             line.term.weeks.forEach { week ->
@@ -356,43 +396,82 @@ private const val DAY_END = 21 * 60 + 8
                     (0L until 7L).forEach { offset ->
                         val date = LocalDate.parse(week.start).plusDays(offset)
                         if (run != null) RunCell(date, run, date in runnable, now, model, Modifier.weight(1f)) else {
-                                                val events = line.on(date)
-                        val holiday = date in line.holidays
-                        val lessons = events.count { it.kind == "class" }.coerceAtMost(4)
-                        val fill = if (events.any { it.kind == "exam" }) mark.exam else levels[lessons]
-                        Box(Modifier.weight(1f).height(20.dp).padding(horizontal = 1.5.dp).clip(RoundedCornerShape(4.dp)).background(if (holiday) Color.Transparent else fill.copy(alpha = if (date < now.date) .5f else 1f))
-                            .then(if (date == now.date) Modifier.border(1.5.dp, mark.now, RoundedCornerShape(4.dp)) else Modifier)
-                            .drawBehind { if (holiday) { var x = -size.height; while (x < size.width) { drawLine(hairline, Offset(x, size.height), Offset(x + size.height, 0f), 1.5f); x += 4.dp.toPx() } } }
-                            .clickable { onPick(date) })
-                    }
+                            val events = line.on(date)
+                            val exam = events.any { it.kind == "exam" }
+                            val holiday = date in line.holidays
+                            val past = date < now.date
+                            val shape = RoundedCornerShape(4.dp)
+                            val fill = when {
+                                exam && mode == "exam" && past -> Color.Transparent
+                                exam -> mark.exam
+                                mode == "exam" || holiday || past -> Color.Transparent
+                                events.any { it.kind == "class" } -> Ink.sunken
+                                else -> Color.Transparent
+                            }
+                            val ink = when { exam && !(mode == "exam" && past) -> mark.onExam; mode == "exam" -> Ink.line; past -> Ink.faint; holiday -> Ink.muted; events.any { it.kind == "class" } -> Ink.text; else -> Ink.faint }
+                            Box(Modifier.weight(1f).height(30.dp).padding(horizontal = 1.5.dp).clip(shape).background(fill)
+                                .then(if (date == now.date) Modifier.border(1.5.dp, mark.now, shape) else if (exam && mode == "exam" && past) Modifier.border(1.dp, Ink.faint, shape) else Modifier)
+                                .drawBehind { if (holiday && mode != "exam") { var x = -size.height; while (x < size.width) { drawLine(hairline, Offset(x, size.height), Offset(x + size.height, 0f), 1.5f); x += 4.dp.toPx() } } }
+                                .then(when {
+                                    mode == "course" -> Modifier.clickable { onPick(date) }
+                                    exam -> Modifier.clickable { scope.launch { listState.animateScrollToItem(1 + (upcoming.indexOfFirst { it.date == date.toString() }).coerceAtLeast(0)) } }
+                                    else -> Modifier
+                                }), contentAlignment = Alignment.Center) { Plain(date.dayOfMonth.toString(), 12.sp, ink) }
+                        }
                     }
                 }
             }
             Row(Modifier.padding(top = 14.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                (if (run != null) listOf(mark.free to "已跑", mark.free.copy(alpha = .22f) to "计划", Ink.sunken to "可跑，点一下排上") else listOf(level(.34f) to "课", mark.exam to "考试", hairline to "放假")).forEach { (color, label) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(color)); Plain(label, 12.sp, Ink.muted, modifier = Modifier.padding(start = 5.dp)) }
+                when (mode) {
+                    "run" -> { Swatch(mark.free, null, "已跑"); Swatch(mark.free.copy(alpha = .22f), mark.free, "计划"); Swatch(Color.Transparent, Ink.faint, "可跑，点一下排上"); Swatch(Ink.line, null, "已过") }
+                    "exam" -> { Swatch(mark.exam, null, "考试"); Swatch(Color.Transparent, Ink.faint, "已考"); Swatch(Color.Transparent, mark.now, "今天") }
+                    else -> { Swatch(mark.exam, null, "考试"); Swatch(hairline, null, "放假"); Swatch(Color.Transparent, mark.now, "今天") }
                 }
             }
-            if (run != null) return@item
+        }
+        if (mode == "exam") {
+            if (upcoming.isEmpty()) item { Plain("后面没有考试了", 13.5.sp, Ink.muted, modifier = Modifier.padding(bottom = 12.dp)) }
+            items(upcoming.size) { index -> val exam = upcoming[index]; val days = CampusLine.daysBetween(now.date, LocalDate.parse(exam.date)); examRow(exam, if (days == 0) "今天" else "$days 天后") }
+            if (taken.isNotEmpty()) item {
+                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { takenOpen = !takenOpen }.padding(vertical = 11.dp)) { Plain("已考 ${taken.size} 场", 13.5.sp, Ink.muted) }
+                if (takenOpen) taken.forEach { examRow(it, "已考") }
+            }
+            item {
+                Plain("更新记录", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                if (changes.isEmpty()) Plain("发布以来没有变动", 13.5.sp, Ink.muted)
+                changes.groupBy { it.observed }.toSortedMap(compareByDescending { it }).forEach { (day, list) ->
+                    Column(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 10.dp)) {
+                        Plain("${dateLabel(LocalDate.parse(day))} 发现 ${list.size} 处变动", 13.5.sp, Ink.muted)
+                        list.forEach { change ->
+                            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Plain(when (change.change) { "added" -> "新增"; "changed" -> "调整"; else -> "已移除" }, 11.5.sp, when (change.change) { "added" -> mark.free; "changed" -> mark.now; else -> Ink.faint }, FontWeight.Medium)
+                                Column { Plain(Names.course(change.course.name), 14.sp); changeLines(change).forEach { Plain(it, 12.5.sp, Ink.muted) } }
+                            }
+                        }
+                    }
+                }
+                record?.sources.orEmpty().takeIf { it.isNotEmpty() }?.let { sources ->
+                    Plain("来源", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                    sources.forEach { source -> Box(Modifier.fillMaxWidth().topHairline(hairline).clickable { uri.openUri(source.url) }.padding(vertical = 9.dp)) { Plain(source.file.replace(Regex("\\.[a-zA-Z]+$"), "").replace(Regex("^\\d{4}-\\d{2}-\\d{2}-"), ""), 13.sp, Ink.muted) } }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+        if (mode == "course") item {
             if (plan != null) {
                 val tally = CampusLine.tally(plan)
-                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { route.running = true }.padding(vertical = 12.dp)) {
+                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { route.termMode = "run" }.padding(vertical = 12.dp)) {
                     Plain("早锻炼 ${tally.count} / ${plan.rule.required} 次", 17.sp, weight = FontWeight.SemiBold)
                     Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.sunken)) {
-                        Box(Modifier.fillMaxWidth(tally.count.coerceIn(0, plan.rule.required).toFloat() / plan.rule.required).fillMaxHeight().background(brand))
+                        Box(Modifier.fillMaxWidth(tally.count.coerceIn(0, plan.rule.required).toFloat() / plan.rule.required).fillMaxHeight().background(Ink.brand))
                     }
                     Plain("已跑 ${tally.done}，计划 ${tally.planned}，" + if (tally.need > 0) "还差 ${tally.need} 次" else "够了", 13.5.sp, Ink.muted)
                 }
             }
-            val exams = line.upcomingExams(now.date)
-            if (exams.isNotEmpty()) {
-                Plain("还有 ${exams.size} 场考试", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-                exams.forEach { exam ->
-                    val date = LocalDate.parse(exam.date)
-                    AheadRow("${CampusLine.daysBetween(now.date, date)} 天后", Names.course(exam.course.name), "${dateLabel(date)} ${WEEKDAYS[date.dayOfWeek.value]} ${exam.start}${exam.room?.let { " · ${Names.room(it)}" } ?: ""}") {
-                        line.on(date).firstOrNull { it.exam?.id == exam.id }?.let(onOpen)
-                    }
-                }
+            if (upcoming.isNotEmpty()) {
+                Plain("考试", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                upcoming.take(2).forEach { exam -> val days = CampusLine.daysBetween(now.date, LocalDate.parse(exam.date)); examRow(exam, if (days == 0) "今天" else "$days 天后") }
+                Row(Modifier.fillMaxWidth().topHairline(hairline).clickable { route.termMode = "exam" }.padding(vertical = 11.dp)) { Plain("全部 ${upcoming.size} 场和更新记录", 13.5.sp, Ink.muted) }
             }
             val ahead = (calendar?.holidays.orEmpty() + calendar?.events.orEmpty() + listOfNotNull(calendar?.pause)).filter { it.start >= now.date.toString() }.sortedBy { it.start }
             if (ahead.isNotEmpty()) {

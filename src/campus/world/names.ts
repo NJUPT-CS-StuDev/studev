@@ -1,4 +1,4 @@
-// How names are shortened for display. Rooms are "仙林/教4-309"; floors are "仙林/教4/3".
+// How names are shortened for display. Rooms the map has are "仙林/教4-309", others "三牌楼:教学主楼301"; floors are "仙林/教4/3".
 const SHORT: Record<string, string> = {
     '习近平新时代中国特色社会主义思想概论': '习概', '毛泽东思想和中国特色社会主义理论体系概论': '毛概',
     '马克思主义基本原理': '马原', '思想道德与法治': '思修', '中国近现代史纲要': '近代史', '形势与政策': '形策',
@@ -7,8 +7,11 @@ const SHORT: Record<string, string> = {
 };
 export const courseName = (name: string) => name.replace(/[（(].*?[)）]/g, '').trim() || name.trim();
 export const courseShort = (name: string) => SHORT[courseName(name)] ?? courseName(name);
+/** A slash means the map has it. */
 export const unplaced = (room: string | null | undefined) => !room || !room.includes('/');
-export const roomLabel = (room: string | null | undefined) => (room ?? '').replace(/^[^/]*\//, '').replaceAll('/', ' ');
+/** A room in the teaching office's list, on the map or not; anything else is only a written place. */
+export const isRoom = (room: string | null | undefined) => Boolean(room) && /[/:]/.test(room!);
+export const roomLabel = (room: string | null | undefined) => (room ?? '').replace(/^[^/:]*[/:]/, '').replaceAll('/', ' ');
 export const roomShort = (room: string | null | undefined) => roomLabel(room).replace(/^教/, '');
 /** The building of a room id; the id itself when it is not a room. */
 export const buildingOf = (id: string) => {

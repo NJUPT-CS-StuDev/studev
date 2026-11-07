@@ -11,7 +11,7 @@ import { parseWho, useTimeline, type Who } from './useTimeline';
 import { ClassPicker } from './ClassPicker';
 import { DayView } from './views/DayView';
 import { WeekView } from './views/WeekView';
-import { TermView } from './views/TermView';
+import { TermView, type TermMode } from './views/TermView';
 import { EventSheet } from './EventSheet';
 import { PreviewDock } from './PreviewDock';
 import '../campus.css';
@@ -111,7 +111,7 @@ export default function TimetableApp() {
                 </div>
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} previewRows={previewRows} onOpen={openEvent} />}
-                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} running={params.get('mode') === 'run'} onMode={running => set({ mode: running ? 'run' : null })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
+                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} classId={who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}

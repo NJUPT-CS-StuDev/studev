@@ -201,6 +201,8 @@ android {
     // Target 36 is the product contract; dependency upgrades are reviewed separately.
     lint { disable += setOf("OldTargetApi", "GradleDependency", "NewerVersionAvailable") }
     buildFeatures { compose = true; buildConfig = true }
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     androidResources { noCompress += "pmtiles" }
     sourceSets {
         getByName("main") {

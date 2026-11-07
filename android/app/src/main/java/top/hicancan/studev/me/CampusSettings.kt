@@ -36,6 +36,8 @@ data class PersonalSettings(
     val calendarRun: Boolean = false,
     /** What the home-screen widget shows: "auto" follows its size. */
     val widgetView: String = "auto",
+    /** The latest exam change this person has been shown. */
+    val examsSeen: String? = null,
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -85,6 +87,7 @@ class CampusSettings(context: Context) {
         runAdjust = store.getInt("run-adjust", 0),
         calendarRun = store.getBoolean("calendar-run", false),
         widgetView = store.getString("widget-view", "auto")!!,
+        examsSeen = store.getString("exams-seen", null),
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -98,7 +101,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
-            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView)
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen)
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)

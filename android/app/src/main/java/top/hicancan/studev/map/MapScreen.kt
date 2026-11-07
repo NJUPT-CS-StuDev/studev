@@ -83,7 +83,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
     LaunchedEffect(moment.date, state.repository, rooms) {
         day = rooms?.let { index -> state.repository?.let { repo -> runCatching { repo.roomDay(index.term, moment.date.toString()) }.getOrNull() } }
     }
-    val classrooms = remember(rooms) { rooms?.rooms.orEmpty().filter(RoomReader::classroom) }
+    val classrooms = remember(rooms) { rooms?.rooms.orEmpty().filter { Names.placed(it.id) && RoomReader.classroom(it) } }
     val roomById = remember(rooms) { rooms?.rooms.orEmpty().associateBy { it.id } }
     val freeBy = remember(day, moment.min, classrooms, reader) {
         val out = mutableMapOf<String, Pair<Int, Int>>()
@@ -112,7 +112,6 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 place?.title ?: place?.names?.firstOrNull() ?: row.id.substringAfterLast('-'), place?.title != null)
         }
     }
-    LaunchedEffect(scene, freeBy) { scene?.setTint(freeBy.mapValues { (_, value) -> value.first.toFloat() / max(1, value.second) }) }
     LaunchedEffect(scene, moment, settings.theme) { scene?.moment(moment, settings.theme) }
     val screenDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     val padding = remember(density, picked != null, screenDp) { intArrayOf((28 * density).toInt(), (70 * density).toInt(), (64 * density).toInt(), ((if (picked != null) screenDp * .62f + 30 else 280f) * density).toInt()) }
@@ -170,6 +169,8 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 },
                 onCamera = { cameraTick++ }, routeState = navigation, onRoute = runtime::choose, modifier = Modifier.fillMaxSize())
             LaunchedEffect(model, mapRef) { val map = mapRef; val data = model; if (map != null && data != null && scene == null) map.style?.let { scene = Scene(map, it, data) } }
+            val assets = androidx.compose.ui.platform.LocalContext.current.assets
+            LaunchedEffect(scene) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(assets) }) } }
             // Labels are placed over the model at their real height, so they stay on the roofs when the view tilts.
             val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas) {
                 val map = mapRef; val active = scene
@@ -237,7 +238,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 val needle = marks().now
                 val faint = Ink.faint
                 val pitch = cameraTick.let { mapRef?.cameraPosition?.tilt ?: 52.0 }
-                MapBall(bearing, pitch, Ink.paper, faint.copy(alpha = .7f), needle, Modifier.size(44.dp).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(-drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
+                MapBall(bearing, pitch, Ink.paper, faint.copy(alpha = .7f), needle, Modifier.size(44.dp).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
                 if (floors.isNotEmpty()) Column(Modifier.clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp))) {
                     floors.reversed().forEach { level ->
                         val on = level == floor
@@ -434,8 +435,8 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 selected.category?.let { Plain(it, 13.5.sp, Ink.muted) }
                 selected.hours?.let { hours ->
                     val today = hours.week[moment.date.dayOfWeek.value.toString()].orEmpty()
-                    val open = today.any { clock(it[0]) <= moment.min && moment.min < (clock(it[1]).takeIf { end -> end > clock(it[0]) } ?: (clock(it[1]) + 1440)) }
-                    Plain((if (open) "营业中" else "已关闭") + " · 今日 " + (today.joinToString(" · ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }), 14.sp, if (open) mark.free else Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
+                    val open = Recommendations.status(hours, moment.date.dayOfWeek.value, moment.min)
+                    Plain(open.label + " · 今日 " + (today.joinToString(" · ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }), 14.sp, if (open == Recommendations.Open.Open) mark.free else Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
                 }
                 ActionButton("去这里", go = true, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) { route.nav = selected.id }
                 KeyRow(null, "这里的一切", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = selected.id; route.tab = "search" })
@@ -449,11 +450,21 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
         }
         return
     }
-    if (day == null) { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain("这一天没有排课数据", 14.sp, Ink.faint) }; return }
-    val free = classrooms.map { it to reader.at(day, it.id, moment.min) }.filter { !it.second.busy }.sortedWith(compareBy({ if (it.second.minutes >= 60) 0 else 1 }, { -it.second.minutes }))
+    // The moment on the ruler decides what is worth going to; rooms are one kind of place among them.
+    val weekday = moment.date.dayOfWeek.value
+    val spots = remember(campus, weekday, moment.min) { Recommendations.of(campus.byId.values, weekday, moment.min, listOf(top.hicancan.studev.BuildConfig.CAMPUS_LONGITUDE, top.hicancan.studev.BuildConfig.CAMPUS_LATITUDE)) }
+    val free = if (day == null) null else classrooms.count { !reader.at(day, it.id, moment.min).busy }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-        item { Plain("${free.size} 间空教室，能待得久的在前", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
-        items(free.take(40), key = { it.first.id }) { (room, status) -> RoomRow(room, status) { openRoom(room.id) } }
+        item { Plain("此刻可以去", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
+        items(spots, key = { it.place.id }) { spot ->
+            Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { route.place = spot.place.id; route.floor = null; onSnap(1) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Plain(spot.place.displayName(campus.byId), 14.5.sp, weight = FontWeight.Medium)
+                    Plain(listOfNotNull(spot.place.category, spot.status.label.ifEmpty { null }).joinToString(" · "), 12.5.sp, if (spot.status == Recommendations.Open.Open) mark.free else Ink.muted)
+                }
+            }
+        }
+        if (free != null) item { KeyRow(null, "$free 间空教室", chevron = true, onClick = { route.query = ""; route.scope = "room"; route.within = null; route.tab = "search" }) }
     }
 }
 

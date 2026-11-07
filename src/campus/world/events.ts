@@ -38,7 +38,7 @@ const lessonEvent = (meeting: TeachingMeeting, date: string, periods: TeachingPe
     if (!first || !last) return null;
     return {
         kind: 'class', id: `${meeting.id}@${date}`, date, name: courseName(meeting.course.name), short: courseShort(meeting.course.name),
-        start: minutesOf(first.start), end: minutesOf(last.end), room: meeting.room, teachers: meeting.teachers.map(teacher => teacher.name), meeting,
+        start: minutesOf(first.start), end: minutesOf(last.end), room: meeting.room ?? meeting.location, teachers: meeting.teachers.map(teacher => teacher.name), meeting,
     };
 };
 

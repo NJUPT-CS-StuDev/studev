@@ -146,7 +146,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
         }
         route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; page = 1 }) } }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 18.dp) { route.scope = it; source = null; since = ""; byDate = false; page = 1 }
+            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 18.dp) { next -> route.scope = next; source = null; if (next != "all" && CHANNELS.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }
         }
         if (live) { RoomsBrowse(state, route, Modifier.weight(1f)); return@Column }
         if (channel.dated || channel.id == "all") Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {

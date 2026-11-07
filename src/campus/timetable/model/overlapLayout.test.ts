@@ -24,7 +24,7 @@ const meeting = (meetingId: string, weekday: number, startPeriod: number, endPer
     periods: [startPeriod, endPeriod],
     id: meetingId,
     campus: null,
-    room: null,
+    location: null, room: null,
     weekday: weekday,
     weeks: [1],
     method: null,

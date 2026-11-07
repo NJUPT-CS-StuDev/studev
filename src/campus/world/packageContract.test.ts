@@ -40,12 +40,12 @@ describe('the production map and data package contract', () => {
         const index = await read<{ classes: string[] }>(join(output, `exams/${release.exams}/index.json`));
         for (const klass of index.classes) expect(JSON.stringify(await read(join(output, `exams/${release.exams}/classes/${klass}.json`)))).toBe(JSON.stringify({ exams: exams.filter(exam => exam.classes.includes(klass)), changes: changes.filter(change => change.class === klass) }));
     });
-    it('uses map parents for every room and preserves partitioned classroom numbers', async () => {
+    it('keeps every listed room, uses map parents where the map has it and preserves partitioned classroom numbers', async () => {
         const index = await read<{ rooms: Room[]; buildings: Building[] }>(join(output, 'rooms/index.json'));
         const source = await read<Room[]>(join(input, 'places/rooms.json'));
         const mapped = new Set(places.filter(place => place.kind === 'room').map(place => place.id));
-        expect(index.rooms.map(room => room.id).sort()).toEqual(source.filter(room => mapped.has(room.id)).map(room => room.id).sort());
-        for (const room of index.rooms) expect(index.buildings.some(building => building.id === room.building && building.campus === room.campus)).toBe(true);
+        expect(index.rooms.map(room => room.id).sort()).toEqual(source.map(room => room.id).sort());
+        for (const room of index.rooms.filter(room => mapped.has(room.id))) expect(index.buildings.some(building => building.id === room.building && building.campus === room.campus)).toBe(true);
         for (const number of ['213-1', '312-1', '412-1']) expect(index.rooms.find(room => room.id === `仙林/教3-${number}`)).toMatchObject({ building: '教3', number, floor: number.slice(0, 1) });
     });
 });

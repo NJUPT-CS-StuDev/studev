@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import top.hicancan.studev.data.*
+import top.hicancan.studev.map.Recommendations
 import top.hicancan.studev.timetable.ExamAttendance
 import top.hicancan.studev.world.*
 
@@ -22,6 +23,22 @@ class ParityTest {
     private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), holidays, run)
     private fun brief(event: LineEvent) = buildJsonObject {
         put("kind", event.kind); put("name", event.name); put("short", event.short); put("start", event.start); put("end", event.end); put("room", event.room)
+    }
+    @Test fun openingStatesMatch() {
+        golden.getValue("hoursCases").jsonArray.forEach { case ->
+            val row = case.jsonObject
+            val hours = json.decodeFromJsonElement<OpeningHours>(row.getValue("hours"))
+            assertEquals(row.toString(), row.getValue("state").jsonPrimitive.content, Recommendations.status(hours, row.getValue("day").jsonPrimitive.int, row.getValue("minute").jsonPrimitive.int).name.lowercase())
+        }
+    }
+    @Test fun recommendationsMatch() {
+        val places = json.decodeFromJsonElement<List<Place>>(golden.getValue("places"))
+        val from = json.decodeFromJsonElement<List<Double>>(golden.getValue("from"))
+        golden.getValue("recommend").jsonArray.forEach { case ->
+            val row = case.jsonObject
+            val got = Recommendations.of(places, row.getValue("day").jsonPrimitive.int, row.getValue("hour").jsonPrimitive.int * 60 + row.getValue("minute").jsonPrimitive.int, from)
+            assertEquals(row.toString(), row.getValue("expected").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("state").jsonPrimitive.content }, got.map { it.place.id to it.status.name.lowercase() })
+        }
     }
     @Test fun everyClassWeekMatchesEveryWebCell() {
         var count = 0
@@ -93,6 +110,6 @@ class ParityTest {
     }
     @Test fun colourHashHandlesSupplementaryCharacters() {
         val code = Course(null, "😀课程", null, null, null, null, null, null, null)
-        assertEquals(2438769704L % 12, TimetablePresentation.colourIndex(TeachingMeeting("x", code, emptyList(), TeachingGroup("g"), null, null, 1, listOf(1, 1), listOf(1), null, emptyList(), "event", "event:class")).toLong())
+        assertEquals(2438769704L % 12, TimetablePresentation.colourIndex(TeachingMeeting("x", code, emptyList(), TeachingGroup("g"), null, null, null, 1, listOf(1, 1), listOf(1), null, emptyList(), "event", "event:class")).toLong())
     }
 }

@@ -5,15 +5,16 @@ import { initialize as initializeRouting, Router, type Mode, type Route } from '
 import type { Position } from 'geojson';
 import type { Room, RoomDay, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { loadCalendar, loadPeriods, loadRoomDay, loadRoomIndex, loadTerm } from '@/world/data';
-import { courseName, roomLabel } from '@/world/names';
+import { courseName, roomLabel, unplaced } from '@/world/names';
 import { isClassroom, makeRoomReader, type RoomState } from '@/world/rooms';
 import { addDays, dateLabel, durationText, hm, minutesOf, momentNow, momentText, parseMoment, WEEKDAYS, weekdayOf } from '@/world/time';
 import { useUrl, useWide } from '@/world/useUrl';
 import { Back, Chevron, Cross, Magnifier, Sheet } from '@/world/ui';
-import { campusTime, openingLabel, openingStatus } from './model/homePolicy';
+import { campusTime, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { displayName } from './model/displayName';
 import { loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
 import { visibleRouteText } from './model/routeText';
+import type { ModelIndex } from './models';
 import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from './scene';
 import { fetchJson } from '@/world/fetch';
 import { holidayMap } from '@/world/events';
@@ -38,7 +39,8 @@ function useWorld() {
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
         Promise.all([loadSpace(), fetchJson<CampusModel>(`${spaceBase()}/model.json`), loadRoomIndex(), loadPeriods(), loadTerm(), loadCalendar(), initializeRouting()]).then(([space, model, index, periods, term, calendar]) => {
-            setWorld({ space, model, router: new Router(space.network), rooms: index.rooms, roomById: new Map(index.rooms.map(room => [room.id, room])), periods, term, holidays: holidayMap(calendar), read: makeRoomReader(periods) });
+            const placedRooms = index.rooms.filter(room => !unplaced(room.id));
+            setWorld({ space, model, router: new Router(space.network), rooms: placedRooms, roomById: new Map(placedRooms.map(room => [room.id, room])), periods, term, holidays: holidayMap(calendar), read: makeRoomReader(periods) });
         }).catch(reason => setError(reason instanceof Error ? reason.message : String(reason)));
     }, []);
     return { world, error };
@@ -103,6 +105,9 @@ export default function MapApp() {
                 onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
             });
             instance.whenReady(() => { if (!cancelled) setScene(instance); });
+            void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin`).then(response => { if (!response.ok) throw new Error(String(response.status)); return response.arrayBuffer(); })])
+                .then(([index, bytes]) => { if (!cancelled) instance?.showModels(index, bytes); })
+                .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
         });
         return () => { cancelled = true; instance?.destroy(); setScene(null); };
     }, [world]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -143,7 +148,6 @@ export default function MapApp() {
     }, [day, moment.min, world]);
     useEffect(() => {
         if (!scene) return;
-        scene.setTint(new Map([...freeBy].map(([id, row]) => [id, row.free / row.total])));
         scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
     }, [freeBy, scene]);
     useEffect(() => { scene?.setMoment(moment.date, moment.min, appearance); }, [appearance, moment.date, moment.min, scene]);
@@ -251,7 +255,6 @@ export default function MapApp() {
         const at = world.space.byId.get(`${room.campus}/${room.building}`)?.centre;
         return at ? Math.max(1, Math.ceil(distance(me, at) / 80)) : null;
     }, [me, world]);
-    const ranked = useMemo(() => [...freeRooms].sort((a, b) => (a.state.minutes >= 60 ? 0 : 1) - (b.state.minutes >= 60 ? 0 : 1) || (walkTo(a.room) ?? 0) - (walkTo(b.room) ?? 0) || b.state.minutes - a.state.minutes), [freeRooms, walkTo]);
     const roomRows = (items: { room: Room; state: RoomState }[]) => items.map(({ room, state }) => {
         const walk = walkTo(room);
         return <button key={room.id} className="rrow" onClick={() => handlers.current.onRoom(room.id)}>
@@ -337,9 +340,17 @@ export default function MapApp() {
             {selected.hours && <div className="hours">{Array.from({ length: 7 }, (_, index) => <div key={index}><span>{WEEKDAYS[index + 1]}</span><span>{selected.hours!.week[String(index + 1)]?.map(range => range.join('–')).join('、') || '不开放'}</span></div>)}</div>}
         </>;
     } else if (world) {
-        body = day
-            ? <><div className="msum"><b>{freeRooms.length}</b> 间空教室，{me ? '离你近的在前' : '能待得久的在前'}</div>{roomRows(ranked.slice(0, 40))}</>
-            : <div className="empty">这一天没有排课数据</div>;
+        // The moment on the ruler decides what is worth going to; rooms are one kind of place among them.
+        const at = { day: weekdayOf(moment.date), hour: Math.floor(moment.min / 60), minute: moment.min % 60 };
+        body = <>
+            <div className="msum">此刻可以去</div>
+            {recommendations(world.space.places, at, me as [number, number] | null).map(({ place, distance, status }) => (
+                <button key={place.id} className="rrow" onClick={() => set({ place: place.id }, { push: true })}>
+                    <span className="m"><span className="a">{displayName(place, world.space.byId)}</span><span className="b">{[place.category, status.state === 'unknown' ? null : openingLabel[status.state], me ? metres(distance) : null].filter(Boolean).join(' · ')}</span></span>
+                </button>
+            ))}
+            {day && <a className="kv" href={`/search/?scope=room${isNow ? '' : `&t=${momentText(moment)}`}`}><span className="v">{freeRooms.length} 间空教室</span><Chevron /></a>}
+        </>;
     }
     const holiday = world?.holidays.get(moment.date);
     const shiftDay = (by: number) => setMoment(addDays(moment.date, by), moment.min);
@@ -353,7 +364,7 @@ export default function MapApp() {
         if (!from || !scene) return;
         const [dx, dy] = [event.clientX - from.x, event.clientY - from.y];
         if (!from.moved && Math.hypot(dx, dy) < 4) return;
-        scene.steer(-dx * .9, -dy * .5);
+        scene.steer(dx * .9, -dy * .5);
         ball.current = { x: event.clientX, y: event.clientY, moved: true };
     };
     const ballUp = () => {
@@ -379,7 +390,7 @@ export default function MapApp() {
                             return <svg viewBox="-18 -18 36 36" data-needle={needle}>
                                 <circle className="ball-body" r="15" />
                                 <path className="ball-lines" d={ball.lines} />
-                                {ball.north.front && <circle className="ball-north" cx={ball.north.x} cy={ball.north.y} r="2.6" />}
+                                <circle className="ball-north" cx={ball.north.x} cy={ball.north.y} r="2.6" />
                             </svg>;
                         })()}
                     </button>

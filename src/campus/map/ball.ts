@@ -30,9 +30,9 @@ const ring = (at: (step: number) => Point, project: (point: Point) => Point) => 
 /** SVG paths in a viewBox centred on zero with radius 15, and where north sits. */
 export function globe(bearing: number, pitch: number) {
     const project = view(bearing, pitch);
-    const north = project(onSphere(0, 0));
     return {
         lines: [...MERIDIANS.map(lon => ring(angle => onSphere(lon, angle), project)), ...PARALLELS.map(lat => ring(angle => onSphere(angle, lat), project))].join(''),
-        north: { x: north[0] * 15, y: -north[1] * 15, front: north[2] >= 0 },
+        // Where north points on the screen, on the rim, so tilting never hides it.
+        north: { x: -Math.sin(bearing * rad) * 12.5, y: -Math.cos(bearing * rad) * 12.5 },
     };
 }

@@ -18,6 +18,8 @@ export interface Preferences {
     examAttendance?: Record<string, Record<string, boolean>>;
     /** 早锻炼: the count is copied by hand from the school's mini program. */
     run?: RunSettings;
+    /** The latest exam change this person has been shown. */
+    examsSeen?: string;
 }
 
 /** The mornings marked in this browser, plus the bonus or penalty entered from the sports office. */
@@ -53,6 +55,7 @@ const sanitize = (raw: unknown): Preferences => {
         }
         if (!Object.keys(result.timetable).length) delete result.timetable;
     }
+    if (typeof record.examsSeen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.examsSeen)) result.examsSeen = record.examsSeen;
     if (record.examAttendance && typeof record.examAttendance === 'object' && !Array.isArray(record.examAttendance)) {
         const attendance: NonNullable<Preferences['examAttendance']> = {};
         for (const [scope, rawChoices] of Object.entries(record.examAttendance)) {

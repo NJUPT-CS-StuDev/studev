@@ -1,3 +1,4 @@
 # Android Studio's machine-specific SDK path
 /local.properties
 /kernels/
+.cxx/

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(campusmodels CXX)
+add_library(campusmodels SHARED models.cpp)
+target_compile_features(campusmodels PRIVATE cxx_std_17)
+target_link_libraries(campusmodels PRIVATE GLESv3 log)

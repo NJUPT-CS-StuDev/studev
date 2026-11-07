@@ -7,10 +7,11 @@ export interface TeachingMeeting {
     id: string; course: { code: string | null; name: string; category: string | null; nature: string | null; credits: number | null; hours: number | null; hours_composition: string | null; assessment: string | null; exam: string | null };
     teachers: { id: string; name: string; title: string | null; role: string | null; weeks: number[] }[];
     teaching_class: { id: string; name: string | null; size: number | null; enrolled: number | null; capacity: number | null };
-    campus: string | null; room: string | null; weekday: number; periods: [number, number]; weeks: number[]; method: string | null; classes: string[];
+    campus: string | null; room: string | null; location: string | null; weekday: number; periods: [number, number]; weeks: number[]; method: string | null; classes: string[];
 }
 export interface Exam { id: string; classes: string[]; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string | null; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null }
-export interface ExamChange { observed: string; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: unknown[] | null; after: unknown[] | null }
+export interface ExamSlot { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null }
+export interface ExamChange { observed: string; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: ExamSlot[] | null; after: ExamSlot[] | null }
 export interface ExamSource { file: string; url: string; notice: string; title: string }
 export interface Room { id: string; building: string; floor: string; number: string; campus: string; kinds: string[]; names: string[]; listed?: boolean; seats?: number }
 export interface RoomDay { date: string; observed_at?: string; week: number; weekday: number; free?: Record<string, string[]>; occupied: Record<string, RoomOccupant[]> }

@@ -107,11 +107,10 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     private var level = 0.0
     var flatten = 1f; private set
     var roomTop = 0.0; private set
-    private var tint: Map<String, Float> = emptyMap()
     private var animator: ValueAnimator? = null
     private val day = Tokens.Scene.Day; private val dusk = Tokens.Scene.Night
     private fun ground() = mix(day.ground, dusk.ground, night); private fun campus() = mix(day.campus, dusk.campus, night)
-    private fun modelColor() = mix(day.model, dusk.model, night); private fun tintColor() = mix(day.tint, dusk.tint, night)
+    private fun modelColor() = mix(day.model, dusk.model, night)
     private val shadowW = 1024; private val shadowH = 1260
     private val north = 32.128; private val south = 32.102; private val west = 118.912; private val east = 118.938
     private val shadow = Bitmap.createBitmap(shadowW, shadowH, Bitmap.Config.ARGB_8888)
@@ -128,6 +127,29 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         style.addLayer(extrusion("sel-upper", "selshell"))
     }
     fun destroy() { animator?.cancel() }
+    private var modelled: Models.Index? = null
+    /** Puts the baked model in; forms stay as the tap target and the plain stand-ins go. */
+    fun showModels(loaded: Models.Loaded) {
+        modelled = loaded.index
+        setFormsFilter(openBuilding)
+        style.addLayerAbove(org.maplibre.android.style.layers.CustomLayer("models", Models.host(loaded.bytes, loaded.index.origin[0], loaded.index.origin[1], loaded.index.scale)), "plain")
+        look()
+        map.triggerRepaint()
+    }
+    private fun setFormsFilter(open: String?) {
+        val other = neq(get("building"), literal(open ?: ""))
+        (style.getLayer("forms") as? FillExtrusionLayer)?.setFilter(if (open != null) other else literal(true))
+        val drawn = modelled?.buildings?.keys.orEmpty().toTypedArray()
+        (style.getLayer("plain") as? FillExtrusionLayer)?.setFilter(all(other, not(`in`(get("building"), literal(drawn)))))
+    }
+    private fun look() {
+        val index = modelled ?: return
+        val open = openBuilding?.takeIf(::hasFloors)
+        val skip = open?.let { index.buildings[it] }
+        val fade = mix(mix(day.model, dusk.model, night), campus(), .72f)
+        Models.look(skip?.get(0) ?: -1, skip?.get(1) ?: 0, flatten, night, if (open != null) 1f else 0f, fade.red, fade.green, fade.blue)
+        map.triggerRepaint()
+    }
     fun hasFloors(id: String) = model.floors.keys.any { it.startsWith("$id/") }
     fun floorsOf(id: String) = model.floors.filterKeys { it.startsWith("$id/") }.values.map { it.level }.sorted()
     fun roomsOf(id: String, floor: Int) = model.floors["$id/$floor"]?.rooms.orEmpty()
@@ -152,7 +174,6 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         set("sel-lower", fillExtrusionColor(hex(modelColor()))); set("sel-upper", fillExtrusionColor(hex(modelColor())))
         set("sel-slab", fillExtrusionColor(hex(mix(day.slab, dusk.slab, night))))
     }
-    fun setTint(share: Map<String, Float>) { tint = share; paintBuildings() }
     /** The forms carry their own colours, dimmed as the night comes on. */
     private fun paintBuildings() {
         val base = modelColor()
@@ -162,13 +183,12 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         val lit = if (night < .01f) toColor(get("color")) else rgba(product(at(literal(0), own), dim), product(at(literal(1), own), dim), product(at(literal(2), own), dim), literal(1))
         if (open) {
             val faded = hex(mix(base, campus(), .72f))
-            set("forms", fillExtrusionColor(faded)); set("bands", fillExtrusionColor(faded))
+            set("plain", fillExtrusionColor(faded))
+            look()
             return
         }
-        set("bands", fillExtrusionColor(lit))
-        if (tint.isEmpty()) { set("forms", fillExtrusionColor(lit)); return }
-        val stops = tint.map { (id, share) -> stop(id, color(mix(base, tintColor(), share.toDouble().pow(.8).toFloat() * .78f).toArgb())) }.toTypedArray()
-        set("forms", fillExtrusionColor(match(get("building"), lit, *stops)))
+        set("plain", fillExtrusionColor(lit))
+        look()
     }
     private fun drawShadows(altitude: Double, azimuth: Double) {
         shadow.eraseColor(android.graphics.Color.TRANSPARENT)
@@ -203,7 +223,8 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     }
     private fun setFlatten(value: Float) {
         flatten = value
-        for (layer in listOf("forms", "bands")) set(layer, fillExtrusionHeight(product(get("top"), literal(value))), fillExtrusionBase(product(get("base"), literal(value))))
+        look()
+        for (layer in listOf("forms", "plain")) set(layer, fillExtrusionHeight(product(get("top"), literal(value))), fillExtrusionBase(product(get("base"), literal(value))))
         set("context", fillExtrusionHeight(product(coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(3))), literal(3.4))), literal(value))))
     }
     private fun paintLevel(lift: Double, lid: Float) {
@@ -233,7 +254,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         val same = openBuilding == id
         openBuilding = id; openFloor = floor
         val target = (floor - 1) * shape.height / shape.levels
-        for (layer in listOf("forms", "bands")) (style.getLayer(layer) as? FillExtrusionLayer)?.setFilter(neq(get("building"), literal(id)))
+        setFormsFilter(id)
         paintBuildings()
         val data = model.floors["$id/$floor"]
         style.getSourceAs<GeoJsonSource>("selshell")?.setGeoJson(collection(listOf(feature(shape.geometry))))
@@ -279,7 +300,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         if (openBuilding == null) return
         openBuilding = null; openFloor = null
         showSelection(false)
-        for (layer in listOf("forms", "bands")) (style.getLayer(layer) as? FillExtrusionLayer)?.setFilter(literal(true))
+        setFormsFilter(null)
         paintBuildings()
         val start = flatten
         animate(520) { setFlatten(start + (1 - start) * it) }

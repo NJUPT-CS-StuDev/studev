@@ -76,6 +76,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">社团</a>
           <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
+        <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>App</a>
         <button class="avatar" type="button" data-me aria-label="我">我</button>
       </div>
       {clubKeys.includes(active) && <nav class="club-nav" aria-label="社团栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
@@ -91,11 +92,16 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
         </div>
       </div>
     </footer>}
+    {!noPwa && !fill && <aside class="app-offer" data-app-offer hidden>
+      <a href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><b>安卓 App</b> 桌面小组件，下一节课在哪一眼看到</a>
+      <button type="button" aria-label="不再显示" data-app-offer-close>×</button>
+    </aside>}
     <nav class="phone-tabs" aria-label="主导航">
       {tabs.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
     </nav>
     <MeApp client:only="react" />
     {!noPwa && <PwaPanel floating={false} />}
+    <script>import './app-offer';</script>
     <script>import './copy-text';</script>
     <script>import './diagrams';</script>
     <script>import '../platform/client/auth-status';</script>

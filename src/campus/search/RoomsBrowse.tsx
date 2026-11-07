@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Room, RoomDay, TeachingPeriod } from '@/world/facts';
 import { loadPeriods, loadRoomDay, loadRoomIndex } from '@/world/data';
+import { unplaced } from '@/world/names';
 import { isClassroom, makeRoomReader } from '@/world/rooms';
 import { addDays, dateLabel, hm, minutesOf, momentNow, momentText, parseMoment, WEEKDAYS, weekdayOf } from '@/world/time';
 import { useUrl } from '@/world/useUrl';
 import { Back, Chevron } from '@/world/ui';
 
 const byNumber = new Intl.Collator('zh-CN', { numeric: true });
+const CAMPUSES = ['仙林', '三牌楼', '锁金'];
 
 export function RoomsBrowse() {
     const { params, set } = useUrl();
@@ -17,6 +19,7 @@ export function RoomsBrowse() {
     const [day, setDay] = useState<{ date: string; file: RoomDay | null } | null>(null);
     const now = momentNow();
     const moment = parseMoment(params.get('t'), now);
+    const campus = CAMPUSES.includes(params.get('campus') ?? '') ? params.get('campus')! : CAMPUSES[0]!;
     const building = params.get('in');
     const everything = params.get('all') === '1';
     useEffect(() => { void Promise.all([loadRoomIndex(), loadPeriods()]).then(([index, list]) => { setRooms(index.rooms.filter(isClassroom)); setPeriods(list); }); }, []);
@@ -27,6 +30,7 @@ export function RoomsBrowse() {
         if (!rooms || !read) return [];
         const buildings = new Map<string, Map<string, { room: Room; state: ReturnType<typeof read> }[]>>();
         for (const room of rooms) {
+            if (room.campus !== campus) continue;
             const floors = buildings.get(room.building) ?? new Map();
             buildings.set(room.building, floors);
             floors.set(room.floor, [...(floors.get(room.floor) ?? []), { room, state: read(file, room.id, moment.min) }]);
@@ -36,7 +40,7 @@ export function RoomsBrowse() {
             return { name, total: all.length, free: all.filter(row => !row.state.busy).length,
                 floors: [...floors.entries()].sort(([left], [right]) => byNumber.compare(left, right)).map(([floor, rows]) => ({ floor, rows: rows.sort((left, right) => byNumber.compare(left.room.number, right.room.number)) })) };
         });
-    }, [file, moment.min, read, rooms]);
+    }, [campus, file, moment.min, read, rooms]);
     if (!rooms || !read || !day) return <div className="empty" aria-busy="true" />;
     const go = (patch: Record<string, string | null>) => set(patch);
     const at = (date: string, min: number) => go({ t: date === now.date && min === now.min ? null : momentText({ date, min }) });
@@ -53,6 +57,7 @@ export function RoomsBrowse() {
             <div className="rooms-periods" role="group" aria-label="第几节">
                 {periods.map(period => <button key={period.period} className={running?.period === period.period ? 'on' : ''} title={`${period.start}–${period.end}`} onClick={() => at(moment.date, minutesOf(period.start))}>{period.period}</button>)}
             </div>
+            <div className="since">{CAMPUSES.map(name => <button key={name} className={campus === name ? 'on' : ''} onClick={() => go({ campus: name === CAMPUSES[0] ? null : name, in: null })}>{name}</button>)}</div>
             <div className="since">
                 <button className={!building ? 'on' : ''} onClick={() => go({ in: null })}>全部的楼</button>
                 {groups.map(group => <button key={group.name} className={building === group.name ? 'on' : ''} onClick={() => go({ in: group.name })}>{group.name}</button>)}
@@ -66,7 +71,7 @@ export function RoomsBrowse() {
                         return visible.length > 0 && <div className="rooms-f" key={floor}>
                             <span className="rooms-fn">{floor}</span>
                             <div className="rooms-g">{visible.map(({ room, state }) => (
-                                <a key={room.id} className={`rt ${state.tier}`} href={`/map/?place=${encodeURI(room.id)}&t=${momentText(moment)}`}>
+                                <a key={room.id} className={`rt ${state.tier}`} href={unplaced(room.id) ? `/?who=room:${encodeURI(room.id)}&scale=day&t=${moment.date}` : `/map/?place=${encodeURI(room.id)}&t=${momentText(moment)}`}>
                                     <b>{room.number}</b><small>{state.busy ? '有课' : `到 ${hm(state.until)}`}</small>
                                 </a>
                             ))}</div>

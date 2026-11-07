@@ -104,14 +104,14 @@ private fun placeholder(title: String, hint: String) = buildJsonObject { put("ti
 
 private fun row(event: LineEvent) = buildJsonObject {
     put("start", event.start); put("end", event.end); put("name", event.short)
-    put("room", event.room?.let(Names::room).orEmpty())
+    put("room", event.room?.let(Names::room).orEmpty()); put("place", event.room?.let(Names::roomShort).orEmpty())
     put("tone", event.meeting?.let(TimetablePresentation::colourIndex) ?: -1)
     event.room?.let { put("nav", it) }
 }
 
 private fun published(line: CampusLine, now: Moment, view: String, theme: String) = buildJsonObject {
     val shown = WidgetDay.of(line, now)
-    put("title", if (shown.isEmpty()) "这两天没有课" else (if (shown.first().date == now.date) "今天" else "明天") + " " + WEEKDAYS[shown.first().date.dayOfWeek.value])
+    put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
     put("hint", ""); put("view", view); put("theme", theme)
     put("rows", buildJsonArray { shown.take(5).forEach { add(row(it)) } })
     put("weekTitle", line.weekOf(now.date)?.let { "第 $it 周" } ?: "假期")
@@ -142,7 +142,7 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
     val view = when (line.getValue("view").jsonPrimitive.content) {
         "next" -> "next"
         "day" -> if (short) "next" else "day"
-        "week" -> "week"
+        "week" -> if (short) "next" else "week"
         else -> if (short) "next" else if (size.height < 200.dp) "day" else "week"
     }
     val shape = if (Build.VERSION.SDK_INT >= 31) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier
@@ -158,12 +158,14 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
                 val hint = line.getValue("hint").jsonPrimitive.content
                 if (hint.isNotEmpty()) Text(hint, style = TextStyle(color = paint.muted, fontSize = 12.sp), maxLines = 1)
             }
-            view == "next" -> LessonRow(context, rows.first(), paint, true)
+            view == "next" -> {
+                Text(line.getValue("title").jsonPrimitive.content, style = TextStyle(color = paint.muted, fontSize = 11.sp), maxLines = 1)
+                LessonRow(context, rows.first(), paint, true)
+            }
             view == "day" -> {
                 Text(line.getValue("title").jsonPrimitive.content, style = TextStyle(color = paint.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(bottom = 6.dp))
                 rows.take(((size.height - 44.dp) / 32.dp).toInt().coerceIn(1, 5)).forEach { LessonRow(context, it, paint, false) }
             }
-            short -> WeekStrip(week, paint)
             else -> {
                 Text(line.getValue("weekTitle").jsonPrimitive.content, style = TextStyle(color = paint.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(bottom = 6.dp))
                 WeekGrid(week, paint, size.height - 54.dp)
@@ -187,25 +189,12 @@ private fun tone(index: Int, dark: Boolean) = if (dark) darkTone(index) else lig
         Box(GlanceModifier.width(3.dp).height(if (headline) 36.dp else 26.dp).cornerRadius(2.dp).background(androidx.glance.unit.ColorProvider(bar))) {}
         Spacer(GlanceModifier.width(10.dp))
         if (headline) Column(GlanceModifier.defaultWeight()) {
-            Text(name, style = TextStyle(color = paint.ink, fontSize = 15.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-            Text("$time  $room", style = TextStyle(color = paint.muted, fontSize = 12.sp), maxLines = 1)
+            Text(room.ifEmpty { name }, style = TextStyle(color = paint.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            Text(if (room.isEmpty()) time else "$time  $name", style = TextStyle(color = paint.muted, fontSize = 12.sp), maxLines = 1)
         } else {
             Text(time, style = TextStyle(color = paint.muted, fontSize = 12.sp), maxLines = 1, modifier = GlanceModifier.width(44.dp))
             Text(name, style = TextStyle(color = paint.ink, fontSize = 13.5.sp), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-            Text(room, style = TextStyle(color = paint.muted, fontSize = 12.sp), maxLines = 1)
-        }
-    }
-}
-
-/** A week in one line: each day and how many lessons it has. */
-@Composable private fun WeekStrip(week: List<JsonObject>, paint: Paint) {
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        week.forEach { day ->
-            val today = day.getValue("today").jsonPrimitive.boolean
-            Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(day.getValue("label").jsonPrimitive.content, style = TextStyle(color = if (today) paint.brand else paint.muted, fontSize = 11.sp, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal), maxLines = 1)
-                Text(day.getValue("events").jsonArray.size.toString(), style = TextStyle(color = if (today) paint.brand else paint.ink, fontSize = 15.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-            }
+            Text(room, style = TextStyle(color = paint.ink, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1)
         }
     }
 }
@@ -234,7 +223,12 @@ private fun tone(index: Int, dark: Boolean) = if (dark) darkTone(index) else lig
                             val index = event.getValue("tone").jsonPrimitive.int
                             val mark = tone(maxOf(index, 0), paint.dark)
                             Box(GlanceModifier.fillMaxWidth().height(((end - start) * perMinute - 2).coerceAtLeast(14f).dp).cornerRadius(4.dp).background(androidx.glance.unit.ColorProvider(mark.bg)).padding(horizontal = 2.dp, vertical = 2.dp)) {
-                                Text(event.getValue("name").jsonPrimitive.content, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp), maxLines = 3)
+                                val tall = ((end - start) * perMinute - 2) >= 30f
+                                val place = event.getValue("place").jsonPrimitive.content
+                                Column {
+                                    if (tall || place.isEmpty()) Text(event.getValue("name").jsonPrimitive.content, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp), maxLines = if (place.isEmpty()) 3 else 2)
+                                    if (place.isNotEmpty()) Text(place, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                                }
                             }
                             cursor = maxOf(cursor, end)
                             placedAny = true
