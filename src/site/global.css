@@ -242,7 +242,8 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .text-copy { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 .copy-fallback { width: 100%; min-width: 0; flex-basis: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
 
-main { min-height: calc(100vh - 178px); }
+body { display: flex; flex-direction: column; min-height: 100dvh; }
+main { flex: 1 0 auto; min-width: 0; }
 .site-nav [data-account-link][hidden] { display: none; }
 html[data-authenticated] .site-nav [data-account-link][hidden] { display: inline; }
 body:has(> main.main-fill) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
