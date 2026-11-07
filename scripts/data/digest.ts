@@ -1,5 +1,6 @@
 // Build one campus package from one map release and one data release.
 import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -426,6 +427,9 @@ async function buildCampus(
         }
         if (file === 'style.json') {
             await write(join(to, file), style());
+        } else if (file === 'models.bin.gzip') {
+            // A fifth of the size, and no host has to be trusted to compress it.
+            await writeFile(join(to, file), gzipSync(await readFile(join(from, 'models.bin')), { level: 9 }));
         } else {
             await copyFile(join(from, file), join(to, file));
         }
@@ -527,7 +531,7 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p8`;
+    const version = `${map.version}__${data.version}__p9`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });

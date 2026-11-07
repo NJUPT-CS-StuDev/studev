@@ -6,8 +6,7 @@ const ROADS = ['secondary', 'tertiary', 'residential', 'service', 'living_street
 const PATHS = ['path', 'footway', 'pedestrian', 'curated_path', 'track', 'crossing', 'steps'];
 const fill = (id, layer, color) => ({ id, type: 'fill', source: 'basemap', 'source-layer': layer, paint: { 'fill-color': color } });
 
-// Forms stand where no model does, and are what a tap lands on everywhere. Android cannot query a fully
-// transparent layer, so over a model they are drawn at a hundredth of full strength, which no eye sees.
+// Forms stand where no model does, and on the web are what a tap lands on: drawn or not, they keep their shape.
 const form = (id, opacity) => ({
     id, type: 'fill-extrusion', source: 'basemap', 'source-layer': 'building_forms', minzoom: 12,
     paint: { 'fill-extrusion-color': ['to-color', ['get', 'color']], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-vertical-gradient': true, 'fill-extrusion-opacity': opacity },
@@ -53,7 +52,7 @@ export function style() {
                 id: 'context', type: 'fill-extrusion', source: 'basemap', 'source-layer': 'context_buildings',
                 paint: { 'fill-extrusion-color': c.context, 'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 3], 3.4]], 'fill-extrusion-opacity': 0.82 },
             },
-            form('forms', .01),
+            form('forms', 0),
             form('plain', 1),
             label('way-label', 'ways', 14, c, { 'symbol-placement': 'line', 'symbol-spacing': 280, 'text-max-angle': 30, 'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10, 18, 12.5] }, ['in', ['get', 'kind'], ['literal', ROADS]]),
             label('water-label', 'waters', 13.5, c),

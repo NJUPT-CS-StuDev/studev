@@ -16,7 +16,7 @@ object Models {
 
     fun load(assets: AssetManager): Loaded {
         val index = Json.decodeFromString<Index>(assets.open("${CampusPackage.BASE}/models.json").bufferedReader().use { it.readText() })
-        val raw = assets.open("${CampusPackage.BASE}/models.bin").use { it.readBytes() }
+        val raw = java.util.zip.GZIPInputStream(assets.open("${CampusPackage.BASE}/models.bin.gzip")).use { it.readBytes() }
         return Loaded(index, ByteBuffer.allocateDirect(raw.size).order(ByteOrder.LITTLE_ENDIAN).put(raw).apply { rewind() })
     }
 

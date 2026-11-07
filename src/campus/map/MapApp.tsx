@@ -105,7 +105,7 @@ export default function MapApp() {
                 onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
             });
             instance.whenReady(() => { if (!cancelled) setScene(instance); });
-            void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin`).then(response => { if (!response.ok) throw new Error(String(response.status)); return response.arrayBuffer(); })])
+            void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin.gzip`).then(response => { if (!response.ok || !response.body) throw new Error(String(response.status)); return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })])
                 .then(([index, bytes]) => { if (!cancelled) instance?.showModels(index, bytes); })
                 .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
         });

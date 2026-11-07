@@ -4,6 +4,6 @@ export const SPACE_FILES = [
     'model.json',
     'basemap.pmtiles',
     'models.json',
-    'models.bin',
+    'models.bin.gzip',
     'style.json',
 ] as const;

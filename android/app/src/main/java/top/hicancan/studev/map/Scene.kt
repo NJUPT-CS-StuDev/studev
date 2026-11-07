@@ -322,9 +322,11 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         map.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(0.0).tilt(if (upright) min(52.0, pitchLimit()) else 0.0).build()), 800)
     }
     fun hitRoom(point: android.graphics.PointF): String? = if (openBuilding?.let(::hasFloors) == true) map.queryRenderedFeatures(point, "sel-rooms").firstOrNull()?.getStringProperty("id") else null
+    private val outlines by lazy { model.buildings.associate { it.id to polygons(it.geometry) } }
     /**
-     * MapLibre Native tests a tap against a footprint on the ground, but a tilted building stands above
-     * its footprint. So look straight down the screen from the tap, as far as that building is tall.
+     * Which building a tap lands on, read from the footprints: Android cannot query a transparent layer, and
+     * a barely visible one veils the models on some GPUs. A tilted building stands above its footprint,
+     * so look straight down the screen from the tap, as far as that building is tall.
      */
     fun hitBuilding(point: android.graphics.PointF, density: Float): String? {
         val camera = map.cameraPosition
@@ -332,11 +334,26 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         val rise = kotlin.math.sin(Math.toRadians(camera.tilt)) * perMetre
         var down = 0f
         while (down <= 40 * rise) {
-            val hit = map.queryRenderedFeatures(android.graphics.PointF(point.x, point.y + down), "forms").firstNotNullOfOrNull { it.getStringProperty("building") }
+            val at = map.projection.fromScreenLocation(android.graphics.PointF(point.x, point.y + down))
+            val hit = outlines.entries.firstOrNull { (id, rings) -> id != openBuilding && rings.any { inside(it, at.longitude, at.latitude) } }?.key
             if (hit != null && down <= (buildings[hit]?.height ?: 0.0) * rise + 6 * density) return hit
             down += 6 * density
         }
         return null
+    }
+    /** Polygons as lists of rings of lon, lat; holes follow their outer ring. */
+    private fun polygons(geometry: JsonObject): List<List<List<DoubleArray>>> {
+        val coordinates = geometry.getValue("coordinates").jsonArray
+        fun polygon(rings: JsonArray) = rings.map { ring -> ring.jsonArray.map { point -> point.jsonArray.let { doubleArrayOf(it[0].jsonPrimitive.double, it[1].jsonPrimitive.double) } } }
+        return if (geometry.getValue("type").jsonPrimitive.content == "MultiPolygon") coordinates.map { polygon(it.jsonArray) } else listOf(polygon(coordinates))
+    }
+    private fun inside(rings: List<List<DoubleArray>>, x: Double, y: Double): Boolean {
+        var odd = false
+        for (ring in rings) for (i in ring.indices) {
+            val a = ring[i]; val b = ring[(i + 1) % ring.size]
+            if ((a[1] > y) != (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) odd = !odd
+        }
+        return odd
     }
     fun hitOpenFloor(point: android.graphics.PointF) = openBuilding?.let(::hasFloors) == true && map.queryRenderedFeatures(point, "sel-lower", "sel-slab").isNotEmpty()
 }
