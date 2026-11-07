@@ -34,15 +34,14 @@ jobs:
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
-          CLOUDFLARE_R2_TOKEN: ${{ secrets.CLOUDFLARE_R2_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OSCA_DOWNLOAD_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          OSCA_DOWNLOAD_BUCKET: studev-download
+          OSCA_DOWNLOAD_ACCESS_KEY: ${{ secrets.R2_DOWNLOAD_ACCESS_KEY }}
+          OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.R2_DOWNLOAD_SECRET_KEY }}
         run: |
           version=$(node -p "require('./product.json').android.versionName")
           gh release download "v$version" -R "$GITHUB_REPOSITORY" -p "studev-$version.apk" -D "$RUNNER_TEMP"
-          curl --fail-with-body -sS --retry 4 -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/studev-download/objects/studev-$version.apk" \
-            -H "Authorization: Bearer $CLOUDFLARE_R2_TOKEN" -H 'Content-Type: application/vnd.android.package-archive' \
-            --data-binary "@$RUNNER_TEMP/studev-$version.apk"
+          node scripts/release/put-apk.mjs "$RUNNER_TEMP/studev-$version.apk" "studev-$version.apk"
       - uses: actions/setup-node@v6
         with:
           node-version: 24

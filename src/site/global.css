@@ -36,6 +36,9 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .club-nav { display: flex; gap: 22px; padding: 0 24px; border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .club-nav a { height: 36px; line-height: 36px; font-size: 13.5px; color: var(--muted); flex: none; }
 .club-nav a.active { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+.avatar { padding: 0; overflow: hidden; display: grid; place-items: center; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); margin-right: 18px; }
 .app-offer { position: fixed; left: 0; right: 0; bottom: calc(50px + env(safe-area-inset-bottom, 0px)); z-index: 49; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 40px; background: var(--paper); border-top: 1px solid var(--line); font-size: 13px; }
 .app-offer[hidden] { display: none; }

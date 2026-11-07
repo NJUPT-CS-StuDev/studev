@@ -77,7 +77,23 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
         <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>App</a>
-        <button class="avatar" type="button" data-me aria-label="我">我</button>
+        <button class="avatar" type="button" data-me aria-label="我"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></button>
+        <script is:inline>
+          // Who is signed in shows from the first frame: their face, or the outline of nobody.
+          try {
+            const user = JSON.parse(localStorage.getItem('studev_auth_user') || 'null');
+            const button = document.querySelector('[data-me]');
+            if (user && button) {
+              const letter = () => { button.textContent = String(user.nickname || '我').slice(0, 1); };
+              if (/^[1-9]\d{4,11}$/.test(user.qq || '')) {
+                const face = new Image();
+                face.alt = ''; face.referrerPolicy = 'no-referrer'; face.onerror = letter;
+                face.src = `https://q1.qlogo.cn/g?b=qq&nk=${user.qq}&s=100`;
+                button.replaceChildren(face);
+              } else letter();
+            }
+          } catch { /* Storage may be unavailable; the outline stays. */ }
+        </script>
       </div>
       {clubKeys.includes(active) && <nav class="club-nav" aria-label="社团栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
     </header>

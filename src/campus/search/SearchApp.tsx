@@ -8,6 +8,7 @@ import { loadMeetings, loadPeriods, loadRoomDay } from '@/world/data';
 import { courseName, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
 import { hm, momentNow, WEEKDAYS } from '@/world/time';
+import { reloadIfGone } from '@/world/stale';
 import { useUrl } from '@/world/useUrl';
 import { Back, Chevron, Magnifier, Sheet, WeekGlyph } from '@/world/ui';
 import { campusConfig } from '../../../campus.config';
@@ -103,7 +104,7 @@ export default function SearchApp() {
     const input = useRef<HTMLInputElement>(null);
     const client = useMemo(() => new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH }), []);
     useEffect(() => () => client.dispose(), [client]);
-    useEffect(() => { void client.initialize().then(ready => setOptions(ready.filterOptions)).catch(() => setFailed(true)); }, [client]);
+    useEffect(() => { void client.initialize().then(ready => setOptions(ready.filterOptions)).catch(() => { setFailed(true); void reloadIfGone(); }); }, [client]);
 
     const filters = useMemo<SearchFilters>(() => ({
         ...(source ? { sourceIds: [source] } : channel.sources ? { sourceIds: [...channel.sources] } : {}),
@@ -130,7 +131,7 @@ export default function SearchApp() {
         });
         pending.response.then(done => {
             if (current) setAnswer(previous => ({ key, results: done.results, total: done.totalCandidates, seconds: previous?.key === key ? previous.seconds : (performance.now() - started) / 1000 }));
-        }).catch(error => { if (current && !(error instanceof DOMException && error.name === 'AbortError')) setFailed(true); });
+        }).catch(error => { if (current && !(error instanceof DOMException && error.name === 'AbortError')) { setFailed(true); void reloadIfGone(); } });
         return () => { current = false; client.cancel(pending.requestId); };
     }, [client, filters, key, live, page, query, sort]);
 

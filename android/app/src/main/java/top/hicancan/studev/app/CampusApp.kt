@@ -86,7 +86,7 @@ import top.hicancan.studev.world.Moment
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }
             }
             if (route.tab != "map") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 14.dp).size(32.dp).testTag("me"), shape = CircleShape, color = Ink.sunken) {
-                Box(contentAlignment = Alignment.Center) { Plain("我", 12.5.sp, Ink.muted, FontWeight.SemiBold) }
+                MeAvatar()
             }
         }
     }
