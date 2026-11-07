@@ -158,7 +158,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 onTap = { point ->
                     val active = scene
                     val room = active?.hitRoom(point)
-                    val building = active?.hitBuilding(point)
+                    val building = active?.hitBuilding(point, density)
                     when {
                         room != null -> { route.place = room; route.floor = null; snap = 1; true }
                         building != null && campus.byId.containsKey(building) -> { route.place = building; route.floor = null; snap = 0; true }

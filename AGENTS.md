@@ -59,6 +59,8 @@ sentence about its parent; siblings are the same kind of thing.
   `world/`, `timetable/`, `map/`, `search/`, `me/`, plus what only a phone has:
   `navigation/`, `device/`, `widget/`, `location/`. `account/` is the platform's
   client, `data/` reads releases, `app/` is the shell.
+  `android/app/src/main/cpp/` draws the baked buildings inside the map's frame, as
+  `src/campus/map/models.ts` does on the web.
 - `design/` is the shared visual language. `scripts/` is tooling by subject.
   `product.json` owns product and release metadata for both clients and tooling.
   `android/tooling/` hosts test data and replays GPS. Generated data, assets and

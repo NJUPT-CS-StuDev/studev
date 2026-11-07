@@ -322,6 +322,21 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         map.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(0.0).tilt(if (upright) min(52.0, pitchLimit()) else 0.0).build()), 800)
     }
     fun hitRoom(point: android.graphics.PointF): String? = if (openBuilding?.let(::hasFloors) == true) map.queryRenderedFeatures(point, "sel-rooms").firstOrNull()?.getStringProperty("id") else null
-    fun hitBuilding(point: android.graphics.PointF): String? = map.queryRenderedFeatures(point, "forms").firstNotNullOfOrNull { it.getStringProperty("building") }
+    /**
+     * MapLibre Native tests a tap against a footprint on the ground, but a tilted building stands above
+     * its footprint. So look straight down the screen from the tap, as far as that building is tall.
+     */
+    fun hitBuilding(point: android.graphics.PointF, density: Float): String? {
+        val camera = map.cameraPosition
+        val perMetre = density / map.projection.getMetersPerPixelAtLatitude(camera.target?.latitude ?: 32.11)
+        val rise = kotlin.math.sin(Math.toRadians(camera.tilt)) * perMetre
+        var down = 0f
+        while (down <= 40 * rise) {
+            val hit = map.queryRenderedFeatures(android.graphics.PointF(point.x, point.y + down), "forms").firstNotNullOfOrNull { it.getStringProperty("building") }
+            if (hit != null && down <= (buildings[hit]?.height ?: 0.0) * rise + 6 * density) return hit
+            down += 6 * density
+        }
+        return null
+    }
     fun hitOpenFloor(point: android.graphics.PointF) = openBuilding?.let(::hasFloors) == true && map.queryRenderedFeatures(point, "sel-lower", "sel-slab").isNotEmpty()
 }
