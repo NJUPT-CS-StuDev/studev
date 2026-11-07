@@ -40,7 +40,7 @@ import top.hicancan.studev.world.Names
 import top.hicancan.studev.world.WEEKDAYS
 
 private const val PAGE = 10
-private val SINCE = listOf("" to "全部时间", "3" to "近三天", "7" to "近一周", "30" to "近一月", "365" to "近一年", "ahead" to "即将")
+private val SINCE = listOf("" to "全部时间", "3" to "近三天", "7" to "近一周", "30" to "近一月", "365" to "近一年")
 private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places")
 private val OTHERS = listOf("njupt-general-free-exams", "njupt-survival-guide")
 private class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false)
@@ -112,9 +112,8 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
             if (only.isNotEmpty()) put("sourceIds", JsonArray(only.map(::JsonPrimitive)))
             else if (excluded.isNotEmpty()) put("excludedSourceIds", JsonArray(excluded.map(::JsonPrimitive)))
             val today = java.time.LocalDate.now(top.hicancan.studev.world.CampusDay.zone)
-            // What has happened and what is about to are different questions: words look through both.
+            // Time means when a thing was published, never later than today.
             when {
-                since == "ahead" -> { put("publishedFrom", today.plusDays(1).toString()); put("includeUndated", false) }
                 since.isNotEmpty() -> { put("publishedFrom", today.minusDays(since.toLong()).toString()); put("publishedTo", today.toString()); put("includeUndated", false) }
                 browsing -> { put("publishedTo", today.toString()); put("includeUndated", true) }
             }

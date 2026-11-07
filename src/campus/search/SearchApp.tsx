@@ -18,7 +18,7 @@ const PAGE_SIZE = 10;
 const CHANNELS = campusConfig.search.channels as readonly { id: string; label: string; sources?: readonly string[]; excluded?: readonly string[]; dated?: boolean }[];
 const ENTITIES = new Set(Object.keys(campusConfig.search.entities));
 const CATEGORIES: Record<string, string> = { notice_article: '通知', policy: '政策制度', workflow: '办事流程', download: '下载资源', exam: '考试信息', news: '新闻动态', external: '站外链接' };
-const SINCE = [['', '全部时间'], ['3', '近三天'], ['7', '近一周'], ['30', '近一月'], ['365', '近一年'], ['ahead', '即将']] as const;
+const SINCE = [['', '全部时间'], ['3', '近三天'], ['7', '近一周'], ['30', '近一月'], ['365', '近一年']] as const;
 /** A filter belongs to the dimension that shows it: time only where things have dates. */
 const hasTime = (channel: { id: string; dated?: boolean }) => Boolean(channel.dated) || channel.id === 'all';
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
@@ -110,9 +110,8 @@ export default function SearchApp() {
         // Several words can name one teaching class ("周浩 计算机通信"); one word would list them all.
         ...(!source && channel.excluded ? { excludedSourceIds: channel.id === 'all' && /\S\s+\S/.test(query) ? channel.excluded.filter(id => id !== 'teaching-classes') : [...channel.excluded] } : {}),
         ...(category ? { category } : {}),
-        // What has happened and what is about to are different questions: words look through both.
-        ...(since === 'ahead' ? { publishedFrom: daysAgo(-1), includeUndated: false }
-            : since ? { publishedFrom: daysAgo(Number(since)), publishedTo: daysAgo(0), includeUndated: false }
+        // Time means when a thing was published, never later than today.
+        ...(since ? { publishedFrom: daysAgo(Number(since)), publishedTo: daysAgo(0), includeUndated: false }
             : !query.trim() ? { publishedTo: daysAgo(0), includeUndated: true } : {}),
         ...(within ? { within } : {}),
     }), [category, channel, query, since, source, within]);

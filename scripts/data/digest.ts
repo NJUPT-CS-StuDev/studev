@@ -192,7 +192,8 @@ async function locateMap() {
     }
     const repository = process.env.MAP_REPOSITORY?.trim() || 'hicancan/njupt-map';
     const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
-        headers: { Accept: 'application/vnd.github+json' },
+        // Anonymous calls share one limit across a hosted runner's address.
+        headers: { Accept: 'application/vnd.github+json', ...(process.env.DATA_TOKEN?.trim() ? { Authorization: `Bearer ${process.env.DATA_TOKEN.trim()}` } : {}) },
     });
     if (!response.ok) {
         throw new Error(`reading latest map release: HTTP ${response.status}`);
