@@ -2,7 +2,8 @@
 
 # StuDev
 
-**Open-Source University Digital Campus & Student Development Platform — Web & Native Android**
+**Spatial-Temporal Campus Digital Twin & Open-Source Digital Campus Platform**  
+*Timetables & Exams · Indoor/Outdoor 3D Map · Client-Side Wasm Search · Unified Web & Native Android*
 
 [![Website](https://img.shields.io/badge/Live-studev.hicancan.top-2563eb?style=flat-square)](https://studev.hicancan.top/)
 [![Android](https://img.shields.io/badge/Android_APK-v2.3.4-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.hicancan.top/download/)
@@ -23,7 +24,12 @@
 
 ---
 
-**StuDev** is an open-source digital campus platform and student engineering portal developed by the **Student Development Center of the Schools of Computer Science, Software, and Cyberspace Security at Nanjing University of Posts and Telecommunications (NJUPT)**. It also serves as the real-world campus spatial-temporal digital twin and dynamic occupancy testbed for *"Carbon to the Fullest — AI-Driven Zero-Carbon Campus Energy Management System"*, a finalist flagship project in the 28th NJUPT "Innovation Cup" Extracurricular Academic and Technological Competition.
+**StuDev** is an open-source digital campus platform and student engineering portal developed by the **Student Development Center of the Schools of Computer Science, Software, and Cyberspace Security at Nanjing University of Posts and Telecommunications (NJUPT)**. Together with its companion repository [**CARBENTRA Campus (`hicancan/carbentra-campus-platform`)**](https://github.com/hicancan/carbentra-campus-platform), it forms the spatial-temporal digital twin engineering suite for *"Carbon to the Fullest — AI-Driven Zero-Carbon Campus Energy Management System"*, a finalist flagship project in the 28th NJUPT "Innovation Cup" Extracurricular Academic and Technological Competition:
+
+> **Why do a Digital Campus and an AIoT Zero-Carbon Energy Platform share the same spatial-temporal foundation?**  
+> On a university campus, lighting, HVAC, and ventilation across academic buildings account for the majority of carbon emissions—and the fundamental variable driving room-by-room energy demand is the university's live teaching schedule and classroom occupancy. Built around a shared **3D campus spatial package (3 campuses, 129 3D building models, and multi-floor classroom units) and semester timetable timeline**, the two repositories operate in tandem:
+> - **For Students & Faculty (`studev`, this repository)**: Couples the 20-week academic calendar, timetables, exams, and holiday shifts with 3D building floor cutaways to deliver local-first **timetable lookup, real-time free-classroom discovery, and indoor/outdoor pedestrian navigation**;
+> - **For AIoT Campus Energy Orchestration ([`carbentra-campus-platform`](https://github.com/hicancan/carbentra-campus-platform))**: Reuses the same 3D spatial baseline and class-schedule constraints alongside edge gateways, smart plugs, mmWave presence sensors, and smart lighting switches to perform **room- and circuit-level carbon accounting, load forecasting, policy evaluation, and explicit dispatch**.
 
 <table>
   <tr>
