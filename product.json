@@ -3,6 +3,10 @@
   "origin": "https://studev.hicancan.top",
   "repository": "NJUPT-CS-StuDev/studev",
   "timeZone": "Asia/Shanghai",
+  "filings": {
+    "icp": "苏ICP备2026038426号-1",
+    "police": { "number": "苏公网安备32011302323214号", "code": "32011302323214" }
+  },
   "android": {
     "versionName": "2.3.3",
     "versionCode": 27,

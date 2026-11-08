@@ -6,6 +6,11 @@ export const PRODUCT_CONFIG = {
     CAMPUS: product.campus,
     ORIGIN: product.origin,
     GITHUB_REPO: `https://github.com/${product.repository}`,
+    /** The site's filings, shown at the foot of every page: the ministry's ICP number and the police network number. */
+    FILINGS: {
+        ICP: { TEXT: product.filings.icp, URL: 'https://beian.miit.gov.cn/' },
+        POLICE: { TEXT: product.filings.police.number, URL: `https://beian.mps.gov.cn/#/query/webSearch?code=${product.filings.police.code}` },
+    },
     ANDROID_APP: {
         VERSION: product.android.versionName,
         DOWNLOAD_URL: '/download/',

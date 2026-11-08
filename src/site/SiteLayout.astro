@@ -1,8 +1,9 @@
 ---
 import './global.css';
 import MeApp from '../campus/me/MeApp';
-import { getImage } from 'astro:assets';
+import { getImage, Image } from 'astro:assets';
 import logo from '../assets/logo.png';
+import policeEmblem from '../assets/police-emblem.png';
 import tokens from '../../design/tokens.json';
 import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
@@ -101,8 +102,13 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <main class:list={[fill && 'main-fill']}><slot /></main>
     {!fill && <footer class="site-footer">
       <div class="footer-inner">
-        <span>© {new Date().getFullYear()} studev</span>
-        <a href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
+        <span class="footer-copy">© {new Date().getFullYear()} studev</span>
+        {/* The filings sit at the centre of the foot, where the rules put them and where the footer balances. */}
+        <span class="filings">
+          <a href={PRODUCT_CONFIG.FILINGS.ICP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.ICP.TEXT}</a>
+          <a href={PRODUCT_CONFIG.FILINGS.POLICE.URL} target="_blank" rel="noopener noreferrer"><Image src={policeEmblem} width={14} height={15} densities={[1, 2, 3]} alt="" />{PRODUCT_CONFIG.FILINGS.POLICE.TEXT}</a>
+        </span>
+        <a class="footer-code" href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
     </footer>}
     {!noPwa && !fill && <aside class="app-offer" data-app-offer hidden>

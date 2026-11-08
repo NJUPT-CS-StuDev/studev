@@ -239,9 +239,18 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 
 /* Footer */
 .site-footer { border-top: 1px solid var(--line); }
-.footer-inner { padding: 14px 24px; display: flex; justify-content: space-between; gap: 16px; color: var(--faint); font-size: 12.5px; }
+.footer-inner { padding: 14px 24px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px 16px; color: var(--faint); font-size: 12.5px; }
+.footer-code { justify-self: end; }
+.filings { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 16px; }
+.filings a { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.filings img { width: 14px; height: 15px; flex: none; }
 .footer-inner a:hover { color: var(--ink); }
-@media (max-width: 999.98px) { .footer-inner { padding-inline: 16px; } }
+@media (max-width: 999.98px) {
+  .footer-inner { padding-inline: 16px; grid-template-columns: 1fr 1fr; grid-template-areas: "copy code" "filings filings"; }
+  .footer-copy { grid-area: copy; }
+  .footer-code { grid-area: code; }
+  .filings { grid-area: filings; }
+}
 .text-copy { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 .copy-fallback { width: 100%; min-width: 0; flex-basis: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
 
