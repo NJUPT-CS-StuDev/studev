@@ -25,7 +25,7 @@ export const weekOfDate = (term: TeachingTerm, date: string) => term.weeks.find(
 /**
  * The days without lessons, by name. The school calendar writes public holidays and a few school
  * events (运动会, 校庆日); it does not say the events stop lessons, but they do, all day, by custom.
- * njupt-data keeps only such events in `events`, so every one of them is a day off here.
+ * The calendar data keeps only such events in `events`, so every one of them is a day off here.
  */
 export function holidayMap(terms: CalendarTerm[]) {
     const days = new Map<string, string>();

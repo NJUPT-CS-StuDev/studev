@@ -1,6 +1,6 @@
 import { PRODUCT_CONFIG } from '@/world/product';
 // The campus space comes from njupt-map; opening hours are the only place facts
-// contributed by njupt-data and are joined by canonical map id.
+// contributed by the campus facts release and are joined by canonical map id.
 import type { StyleSpecification } from 'maplibre-gl';
 import type { GraphData, Position, Endpoint } from 'wayfind';
 import { DATA_RELEASE } from '@/world/config';

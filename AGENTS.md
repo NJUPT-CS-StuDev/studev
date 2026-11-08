@@ -12,10 +12,10 @@ The shared campus model has five kinds: **space**, **time**, **event**,
 Validity describes when an entity, relation, or fact applies, including the
 difference between unknown and absent. `njupt-map` (public) is the single source
 of truth for campus space: an authored map we build ourselves, kept separate from
-its references and from the bindings that relate them. `njupt-data` (private)
+its references and from the bindings that relate them. The campus facts release
 holds all non-spatial campus facts (teaching, exams, rooms in use, school content,
 the calendar rule) and references njupt-map space ids. The digest merges one
-njupt-map release and one njupt-data release. Clients render and interact. The
+njupt-map release and one campus facts release. Clients render and interact. The
 only generic kernels are `wayfind` (routing, guidance) and `wasm-search` (search);
 institutional time is campus data plus interpreting code here, not a kernel.
 
@@ -89,7 +89,7 @@ cd android
 Kernels are public immutable release attachments named in `package.json`; a
 kernel change is a new version there and `android/kernels.ps1` builds the same
 tags. Versioned `/data/*` is cached forever, so a kernel that changes packaged
-output ships with a new njupt-data release.
+output ships with a new campus facts release.
 
 `main` is production and deploys the web site. Work on a branch and merge only
 after review. Release signing material and private configuration live outside

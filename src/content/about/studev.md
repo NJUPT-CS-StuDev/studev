@@ -85,6 +85,7 @@ StuDev 的底层架构被设计为**学校无关的通用高校数字校园引�
 
 ## 深度阅读与相关链接
 
-- [《StuDev 网站源码与架构手记》](/develop/platform-studev-core/)：深入了解单源双端时空引擎、跨语言黄金测试向量与构建期静态排版管道；
+- [《时空联动的高校数字孪生：StuDev 单源双端同构架构手记》](/develop/platform-studev-core/)：深入了解五元时空模型、单源双端同构、跨语言黄金测试向量与构建期静态排版管道；
+- [《从三维空间测绘到端侧 Rust 内核：南邮开源数字校园与零碳孪生基建矩阵》](/develop/campus-open-source-matrix/)：全景解析 `njupt-map`、`wasm-search`、`wayfind`、`sitegraph`、`njupt-net` 与 `carbentra-campus-platform` 六大开源工程矩阵；
 - [《从草坪与易班走来：StuDev 数字化平台的历史回响》](/about/organizational-genesis/)：2022 至 2026 年，从心理工作站、易班工作室到学生发展中心与开源平台的演进史；
 - [下载 Android 客户端](/download/) · [用户协议](/terms/) · [隐私政策](/privacy/) · [GitHub 开源仓库](https://github.com/NJUPT-CS-StuDev/studev)。

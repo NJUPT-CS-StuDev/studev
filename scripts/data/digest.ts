@@ -241,7 +241,7 @@ async function locateData(): Promise<{ dir: string; version: string; index: Data
         throw new Error(`reading latest data release: HTTP ${latestResponse.status}`);
     }
     const latest = await latestResponse.json() as { tag_name: string; assets: { id: number; name: string }[] };
-    const asset = latest.assets.find(item => item.name === 'njupt-data.tar.gz' || (item.name.endsWith('.tar.gz') && !item.name.startsWith('evidence')));
+    const asset = latest.assets.find(item => item.name.endsWith('.tar.gz') && !item.name.startsWith('evidence'));
     if (!asset) {
         throw new Error('latest data release has no facts archive');
     }

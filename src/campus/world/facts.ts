@@ -1,4 +1,4 @@
-// Current njupt-data facts, shared by the packager and the web client.
+// Current campus facts, shared by the packager and the web client.
 export interface TeachingWeek { week: number; start: string; end: string }
 export interface TeachingTerm { term: string; year: number; number: number; weeks: TeachingWeek[]; observed_at: string }
 export interface TeachingPeriod { period: number; start: string; end: string; part: string | null }
