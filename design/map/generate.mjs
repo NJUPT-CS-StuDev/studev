@@ -1,6 +1,6 @@
 // Generate the authored campus style and the small font/sprite asset set shared by web and Android.
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { style } from './campus-style.mjs';
 
@@ -14,34 +14,24 @@ const FONTS = [
 ];
 const RANGES = ['0-255', '256-511', '8192-8447', '12288-12543', '65280-65535'];
 
-async function ensureAsset(url, relative, legacyRelative) {
-    const first = join(targets[0], relative);
-    const second = join(targets[1], relative);
-    if (!existsSync(first)) {
-        const legacy = [
-            join(targets[0], legacyRelative ?? relative),
-            join(targets[1], relative),
-            join(targets[1], legacyRelative ?? relative),
-        ].find(candidate => existsSync(candidate));
-        await mkdir(join(first, '..'), { recursive: true });
-        if (legacy) {
-            await copyFile(legacy, first);
-        } else {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-            await writeFile(first, Buffer.from(await response.arrayBuffer()));
-        }
+/** Fetches an asset once into the web copy, then mirrors it into Android's. */
+async function ensureAsset(url, relative) {
+    const [web, android] = targets.map(target => join(target, relative));
+    if (!existsSync(web)) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+        await mkdir(join(web, '..'), { recursive: true });
+        await writeFile(web, Buffer.from(await response.arrayBuffer()));
     }
-    if (!existsSync(second)) {
-        await mkdir(join(second, '..'), { recursive: true });
-        await copyFile(first, second);
+    if (!existsSync(android)) {
+        await mkdir(join(android, '..'), { recursive: true });
+        await copyFile(web, android);
     }
 }
 
 for (const target of targets) {
     await mkdir(target, { recursive: true });
     await writeFile(join(target, 'style.json'), JSON.stringify(style()));
-    for (const old of ['style-light.json', 'style-dark.json']) await rm(join(target, old), { force: true });
 }
 
 for (const [remoteFont, localFont] of FONTS) {
@@ -49,11 +39,7 @@ for (const [remoteFont, localFont] of FONTS) {
         await ensureAsset(
             `${ASSETS}/fonts/${encodeURIComponent(remoteFont)}/${range}.pbf`,
             join('fonts', localFont, `${range}.pbf`),
-            join('fonts', remoteFont, `${range}.pbf`),
         );
-    }
-    for (const target of targets) {
-        await rm(join(target, 'fonts', remoteFont), { recursive: true, force: true });
     }
 }
 

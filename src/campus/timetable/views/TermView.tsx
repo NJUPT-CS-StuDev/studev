@@ -1,161 +1,199 @@
 import { useEffect, useMemo, useState } from 'react';
-import { eventsOn, nextRunMark, planRuns, runDates, runTally, upcomingExams, type CampusEvent, type RunPlan, type Timeline } from '@/world/events';
+import { eventsOn, examDays, lastLesson, planRuns, runDates, runGone, runTally, toggleRun, type CampusEvent, type RunPlan, type Timeline } from '@/world/events';
 import { updateRun, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
-import { loadCalendar, loadExamRecord, type CalendarTerm, type ExamRecord } from '@/world/data';
-import type { ExamChange, ExamSlot } from '@/world/facts';
+import { loadCalendar, type CalendarTerm, type ExamRecord } from '@/world/data';
+import type { Exam, ExamChange, Practice } from '@/world/facts';
+import { CHANGE_NAMES, changeLines, publications, publicationsAffecting, sheetName, wasChanged, weeksText } from '@/world/exams';
 import { courseName, roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { Chevron } from '@/world/ui';
 
+/** The term in three pages: the grid with everything on it, the exams as a list, and 早锻炼 to plan. */
 export type TermMode = 'course' | 'exam' | 'run';
+
+const lead = (days: number) => days === 0 ? '今天' : days === 1 ? '明天' : `${days} 天后`;
+const dayHead = (date: string) => `${dateLabel(date)} ${WEEKDAYS[weekdayOf(date)]}`;
+const placeOf = (exam: Exam) => exam.room ? roomLabel(exam.room) : exam.location ?? '考场未排定';
+const clock = (iso: string) => new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//, '月').replace(/ /, '日 ');
 
 function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Moment }) {
     const { rule, adjust } = plan;
-    const tally = runTally(plan);
+    const tally = runTally(plan, now);
     return (
         <div className="runpanel">
             <div className="runhead"><b>{tally.count}</b><span>/ {rule.required} 次</span></div>
-            <div className="meta">已跑 {tally.done}{adjust ? ` · 奖惩 ${adjust > 0 ? '+' : ''}${adjust}` : ''} · 计划 {tally.planned} · {tally.need ? `还差 ${tally.need}` : '够了'}{tally.nextBonus ? ` · 跑到 ${tally.nextBonus[0]} 次加 ${tally.nextBonus[1]} 分` : ''}</div>
+            <div className="meta">已跑 {tally.done}{adjust ? ` · 奖惩 ${adjust > 0 ? '+' : ''}${adjust}` : ''} · 排上 {tally.planned} · {tally.need ? `还差 ${tally.need}` : '够了'}{tally.nextBonus ? ` · 跑到 ${tally.nextBonus[0]} 次加 ${tally.nextBonus[1]} 分` : ''}</div>
+            <p className="meta">排上的日子过了就算跑过；哪天没跑，点一下去掉。</p>
             <div className="btns"><button className="btn go" disabled={!tally.need && !tally.planned} onClick={() => updateRun({ days: planRuns(plan, line, now) })}>自动排好剩下的</button></div>
             <div className="kv"><span className="v">奖惩次数<small>对照南邮小程序的奖惩记录</small></span><span className="stepper"><button className="ib" aria-label="减一次" onClick={() => updateRun({ adjust: adjust - 1 })}>−</button>{adjust > 0 ? `+${adjust}` : adjust}<button className="ib" aria-label="加一次" onClick={() => updateRun({ adjust: adjust + 1 })}>+</button></span></div>
         </div>
     );
 }
 
-const slotText = (slots: ExamSlot[] | null, read: (slot: ExamSlot) => string | number | null) => [...new Set((slots ?? []).map(read))].map(value => value === null || value === '' ? '未填写' : String(value)).join('、') || '未填写';
-const SLOT_FIELDS: [string, (slot: ExamSlot) => string | number | null][] = [
-    ['时间', slot => `${slot.date} ${slot.start}–${slot.end}`], ['地点', slot => slot.location], ['校区', slot => slot.campus], ['教师', slot => slot.teacher], ['人数', slot => slot.students],
-];
-const changeLines = (change: ExamChange) => change.change === 'changed'
-    ? SLOT_FIELDS.flatMap(([label, read]) => { const [before, after] = [slotText(change.before, read), slotText(change.after, read)]; return before === after ? [] : [`${label}：${before} → ${after}`]; })
-    : change.change === 'added' ? [`${slotText(change.after, SLOT_FIELDS[0]![1])} · ${slotText(change.after, SLOT_FIELDS[1]![1])}`]
-        : [`原定 ${slotText(change.before, SLOT_FIELDS[0]![1])}`];
-const CHANGE_NAMES = { added: '新增', changed: '调整', removed: '已移除' } as const;
-
-/** What the school said and when it changed its mind: nothing about an exam moves silently. */
-function ExamHistory({ record, relevant }: { record: ExamRecord; relevant: (change: ExamChange) => boolean }) {
-    const changes = record.changes.filter(relevant);
+/**
+ * Why the list can be trusted: how often the office has published and which of those touched you,
+ * when its site was last looked at, the official notices, and every change seen.
+ */
+function ExamTrust({ record, mine, changes }: { record: ExamRecord; mine: Exam[]; changes: ExamChange[] }) {
+    const published = publications(record.sources);
+    const touching = publicationsAffecting(mine, changes);
     const days = [...new Set(changes.map(change => change.observed))].sort().reverse();
     return (
-        <>
-            <h3 className="sh">更新记录</h3>
-            {days.length === 0 && <div className="meta">发布以来没有变动</div>}
-            {days.map((day, index) => (
-                <details key={day} className="xhist" open={index === 0}>
-                    <summary>{dateLabel(day)} 发现 {changes.filter(change => change.observed === day).length} 处变动</summary>
-                    {changes.filter(change => change.observed === day).map((change, at) => (
-                        <div key={at} className="xchange">
-                            <span className={`xk ${change.change}`}>{CHANGE_NAMES[change.change]}</span>
-                            <span className="m">{courseName(change.course.name)}{changeLines(change).map(text => <small key={text}>{text}</small>)}</span>
-                        </div>
-                    ))}
-                </details>
+        <div className="xtrust">
+            {published.length > 0 && <p>教务处发布过 {published.length} 版考试安排（{published.map(item => dateLabel(item.date)).join('、')}），其中 {touching.length} 版涉及你的考试。</p>}
+            {record.checked && <p>最近检查：{clock(record.checked)}</p>}
+            {published.slice().reverse().map(item => (
+                <a key={item.date} className="xsource" href={item.sheets[0]!.notice} target="_blank" rel="noopener noreferrer">
+                    {dateLabel(item.date)} 发布<small>{item.sheets.map(sheet => sheetName(sheet.file)).join('、')}</small>
+                </a>
             ))}
-            {record.sources.length > 0 && <>
-                <h3 className="sh">来源</h3>
-                {record.sources.map(source => <a key={source.url} className="xsource" href={source.url} target="_blank" rel="noopener noreferrer">{source.file.replace(/\.[a-z]+$/i, '').replace(/^\d{4}-\d{2}-\d{2}-/, '')}</a>)}
-            </>}
-        </>
+            {days.length > 0 && <details className="xhist">
+                <summary>变动明细 · {changes.length} 处</summary>
+                {days.map(day => changes.filter(change => change.observed === day).map((change, at) => (
+                    <div key={`${day}-${at}`} className="xchange">
+                        <span className={`xk ${change.change}`}>{CHANGE_NAMES[change.change]}</span>
+                        <span className="m">{courseName(change.course.name)}<small>{dateLabel(day)} 发现</small>{changeLines(change).map(text => <small key={text}>{text}</small>)}</span>
+                    </div>
+                )))}
+            </details>}
+        </div>
     );
 }
 
-export function TermView({ line, now, isMe, classId, mode, onMode, onPick, onOpen }: { line: Timeline; now: Moment; isMe: boolean; classId: string | null; mode: TermMode; onMode: (mode: TermMode) => void; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
+export function TermView({ line, now, isMe, record, practice, mode, onMode, onPick, onOpen }: {
+    line: Timeline; now: Moment; isMe: boolean; record: ExamRecord | null; practice: Practice[]; mode: TermMode;
+    onMode: (mode: TermMode) => void; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void;
+}) {
     const [terms, setTerms] = useState<CalendarTerm[]>([]);
-    const [record, setRecord] = useState<ExamRecord | null>(null);
     const { prefs } = usePreferences();
     const seen = prefs.examsSeen;
     useEffect(() => { void loadCalendar().then(setTerms); }, []);
-    useEffect(() => { let live = true; setRecord(null); if (classId) void loadExamRecord(classId).then(next => { if (live) setRecord(next); }); return () => { live = false; }; }, [classId]);
     const codes = useMemo(() => new Set(line.meetings.map(meeting => meeting.course.code ?? '')), [line.meetings]);
-    const relevant = (change: ExamChange) => !isMe || codes.has(change.course.code ?? '');
-    const latest = record?.changes.filter(relevant).map(change => change.observed).sort().at(-1) ?? null;
+    const changes = (record?.changes ?? []).filter(change => !isMe || codes.has(change.course.code ?? ''));
+    const latest = changes.map(change => change.observed).sort().at(-1) ?? null;
     useEffect(() => {
         // Someone arriving for the first time has nothing new to be told about.
         if (isMe && latest && seen !== latest && (mode === 'exam' || seen === undefined)) writePreferences(current => ({ ...current, examsSeen: latest }));
     }, [isMe, latest, mode, seen]);
     const fresh = Boolean(isMe && latest && seen && latest > seen && mode !== 'exam');
     const plan = isMe ? line.run : null;
-    const run = mode === 'run' && plan ? plan : null;
-    const exams = upcomingExams(line, now.date);
-    const taken = useMemo(() => line.exams.filter(exam => exam.date < now.date).sort((left, right) => right.date.localeCompare(left.date)), [line.exams, now.date]);
-    const hasExams = exams.length + taken.length > 0 || (record?.changes.length ?? 0) > 0;
-    const showing: TermMode = mode === 'exam' && hasExams ? 'exam' : run ? 'run' : 'course';
+    const ahead = examDays(line, now.date);
+    const taken = useMemo(() => line.exams.filter(exam => exam.date < now.date).sort((left, right) => right.date.localeCompare(left.date) || right.start.localeCompare(left.start)), [line.exams, now.date]);
+    const hasExams = line.exams.length > 0 || changes.length > 0;
+    const showing: TermMode = mode === 'exam' && hasExams ? 'exam' : mode === 'run' && plan ? 'run' : 'course';
     const modes: [TermMode, string][] = [['course', '课程'], ...(hasExams ? [['exam', '考试'] as [TermMode, string]] : []), ...(plan ? [['run', '早锻炼'] as [TermMode, string]] : [])];
-    const open = useMemo(() => new Set(plan ? runDates(plan.rule, line.holidays) : []), [plan, line.holidays]);
+    const runnable = useMemo(() => new Set(plan ? runDates(plan.rule, line.holidays) : []), [plan, line.holidays]);
     const calendar = terms.find(term => term.start === line.term.weeks[0]?.start);
-    const ahead = [...(calendar?.holidays ?? []), ...(calendar?.events ?? []), ...(calendar?.break ? [calendar.break] : [])]
-        .map(item => ({ name: item.name, start: item.start, text: item.start === item.end ? `${dateLabel(item.start)} ${WEEKDAYS[weekdayOf(item.start)]}` : `${dateLabel(item.start)} – ${dateLabel(item.end)}` })).filter(item => item.start >= now.date).sort((left, right) => left.start.localeCompare(right.start));
-    const examRow = (exam: Timeline['exams'][number], lead: string) => {
-        const event = eventsOn(line, exam.date).find(item => item.exam?.id === exam.id);
-        const changed = record?.changes.some(change => change.change === 'changed' && change.course.code === exam.course.code);
-        return <button key={exam.id} id={`exam-${exam.date}`} className="xrow" onClick={() => event && onOpen(event)}>
+    const termEnd = calendar?.end ?? line.term.weeks.at(-1)!.end;
+    const last = useMemo(() => lastLesson(line), [line]);
+    const courses = new Set(line.exams.map(exam => exam.course.code ?? exam.course.name)).size;
+    const offGrid = [...new Map(practice.map(item => [`${item.name}|${item.weeks.join()}`, item])).values()].sort((left, right) => left.weeks[0]! - right.weeks[0]! || left.name.localeCompare(right.name));
+    const shortWork = new Map<number, string[]>();
+    for (const item of offGrid) if (item.weeks.length <= 2) for (const week of item.weeks) shortWork.set(week, [...(shortWork.get(week) ?? []), item.name]);
+    const calendarAhead = [...(calendar?.holidays ?? []), ...(calendar?.events ?? []), ...(calendar?.break ? [calendar.break] : [])]
+        .map(item => ({ name: item.name, start: item.start, text: item.start === item.end ? dayHead(item.start) : `${dateLabel(item.start)} – ${dateLabel(item.end)}` }))
+        .filter(item => item.start >= now.date).sort((left, right) => left.start.localeCompare(right.start));
+    const eventOf = (exam: Exam) => eventsOn(line, exam.date).find(item => item.exam?.id === exam.id);
+    const examRow = (exam: Exam, lead: string) => (
+        <button key={exam.id} className="xrow" onClick={() => { const event = eventOf(exam); if (event) onOpen(event); }}>
             <span className="cd">{lead}</span>
-            <span className="m">{courseName(exam.course.name)}{changed && <span className="xk changed">已调整</span>}<small>{dateLabel(exam.date)} {WEEKDAYS[weekdayOf(exam.date)]} {exam.start}{exam.room ? ` · ${roomLabel(exam.room)}` : exam.location ? ` · ${exam.location}` : ''}</small></span>
-        </button>;
-    };
-    const lead = (days: number) => days === 0 ? '今天' : `${days} 天后`;
+            <span className="m">{courseName(exam.course.name)}{wasChanged(record, exam) && <span className="xk changed">改过</span>}<small>{lead === exam.start ? `到 ${exam.end}` : `${exam.start}–${exam.end}`} · {placeOf(exam)}</small></span>
+            <Chevron />
+        </button>
+    );
+    const present = new Set<string>();
     const cell = (date: string) => {
-        const day = Number(date.slice(8));
-        const past = date < now.date;
+        const label = date.slice(8) === '01' ? `${Number(date.slice(5, 7))}月` : String(Number(date.slice(8)));
         const today = date === now.date ? 'today' : '';
-        if (run) {
-            if (!open.has(date)) return <span key={date} className={`dc none ${today}`}>{day}</span>;
-            const mark = run.days[date];
-            const state = mark === 'done' ? 'rdone' : mark === 'plan' ? 'rplan' : past ? 'rgone' : 'ropen';
-            return <button key={date} className={`dc ${state} ${today}`} aria-label={`${dateLabel(date)} ${mark === 'done' ? '已跑' : mark === 'plan' ? '计划' : past ? '已过' : '可跑'}`} onClick={() => updateRun({ days: nextRunMark(run.days, date, now.date) })}>{day}</button>;
+        if (today) present.add('today');
+        if (date > termEnd || date < line.term.weeks[0]!.start) return <span key={date} className="dc out" />;
+        const past = date < now.date;
+        if (showing === 'run' && plan) {
+            if (!runnable.has(date)) return <span key={date} className={`dc none ${today}`}>{label}</span>;
+            const planned = plan.days.includes(date);
+            const state = planned ? (runGone(plan.rule, date, now) ? 'rdone' : 'rplan') : past ? 'rgone' : 'ropen';
+            present.add(state);
+            return <button key={date} className={`dc ${state} ${today}`} aria-label={`${dateLabel(date)} ${state === 'rdone' ? '已跑，点一下去掉' : state === 'rplan' ? '排上了，点一下去掉' : '点一下排上'}`} onClick={() => updateRun({ days: toggleRun(plan.days, date) })}>{label}</button>;
         }
         const events = eventsOn(line, date);
         const exam = events.some(event => event.kind === 'exam');
         const holiday = line.holidays.get(date);
-        if (showing === 'exam') return exam
-            ? <button key={date} className={`dc exam ${past ? 'taken' : ''} ${today}`} aria-label={`${dateLabel(date)} 有考试`} onClick={() => document.getElementById(`exam-${date}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>{day}</button>
-            : <span key={date} className={`dc none ${today}`}>{day}</span>;
-        const kind = exam ? 'exam' : holiday ? 'hol' : events.some(event => event.kind === 'class') ? 'has' : '';
-        return <button key={date} className={`dc ${kind} ${past ? 'past' : ''} ${today}`} title={holiday ?? undefined} aria-label={`${dateLabel(date)}${holiday ? ` ${holiday}` : ''}，${events.length} 项`} onClick={() => onPick(date)}>{day}</button>;
+        // An exam outranks a lesson: it is rarer, and it matters more.
+        const kind = exam ? (past ? 'taken' : 'exam') : holiday ? 'hol' : events.some(event => event.kind === 'class') ? (past ? 'past' : 'has') : '';
+        if (kind) present.add(kind);
+        return <button key={date} className={`dc ${kind} ${today}`} title={holiday ?? undefined} aria-label={`${dateLabel(date)}${holiday ? ` ${holiday}` : ''}${exam ? ' 有考试' : ''}`}
+            onClick={() => { const first = events.find(event => event.kind === 'exam'); if (first) onOpen(first); else onPick(date); }}>{label}</button>;
     };
-    const legend = run ? [['k-done', '已跑'], ['k-plan', '计划'], ['k-open', '可跑，点一下排上'], ['k-gone', '已过']]
-        : showing === 'exam' ? [['k-exam', '考试'], ['k-taken', '已考'], ['k-today', '今天']]
-            : [['k-exam', '考试'], ['k-hol', '放假'], ['k-today', '今天']];
+    const rows = line.term.weeks.flatMap(week => {
+        const out = [
+            <div key={`w${week.week}`} className={`wn ${week.start <= now.date && now.date <= week.end ? 'cur' : ''}`} title={shortWork.get(week.week)?.join('、')}>{week.week}{showing === 'course' && shortWork.has(week.week) && <i />}</div>,
+            ...Array.from({ length: 7 }, (_, index) => cell(addDays(week.start, index))),
+        ];
+        if (showing === 'course' && last && week.start <= last && last <= week.end && week.week < line.term.weeks.length) out.push(<div key="end" className="phase">课程结束 · {dayHead(last)}</div>);
+        return out;
+    });
+    if (calendar?.break && calendar.break.start <= addDays(line.term.weeks.at(-1)!.end, 1)) rows.push(<div key="break" className="phase">{calendar.break.name} {dateLabel(calendar.break.start)}起</div>);
+    const LEGEND: [string, string, string][] = showing === 'run'
+        ? [['rdone', 'k-done', '已跑'], ['rplan', 'k-plan', '排上'], ['ropen', 'k-open', '可跑，点一下排上'], ['today', 'k-today', '今天']]
+        : [['has', 'k-has', '上课'], ['exam', 'k-exam', '考试'], ['taken', 'k-taken', '已考'], ['hol', 'k-hol', '放假'], ['today', 'k-today', '今天']];
+    const legend = LEGEND.filter(([state]) => present.has(state) || (state === 'has' && present.has('past')));
+    const grid = (
+        <div>
+            <div className="term">
+                <div />
+                {WEEKDAYS.slice(1).map(name => <div key={name} className="th">{name.slice(1)}</div>)}
+                {rows}
+            </div>
+            <div className="legend">{legend.map(([state, swatch, text]) => <span key={state}><i className={swatch}>{state === 'hol' ? '休' : ''}</i>{text}</span>)}</div>
+        </div>
+    );
+    const tabs = modes.length > 1 && <div className="choice termmode" role="tablist">{modes.map(([key, label]) => <button key={key} role="tab" aria-selected={showing === key} className={showing === key ? 'on' : ''} onClick={() => onMode(key)}>{label}{key === 'exam' && fresh && <i className="dot" aria-label="有新变动" />}</button>)}</div>;
+
+    if (showing === 'exam') return (
+        <>
+            {tabs}
+            <div className="xlist">
+                {ahead.length === 0 && <div className="meta">后面没有考试了</div>}
+                {ahead.map(day => <section key={day.date}>
+                    <h3 className="sh">{dayHead(day.date)} · {lead(day.days)}</h3>
+                    {day.exams.map(exam => examRow(exam, exam.start))}
+                </section>)}
+                {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
+                {record && <ExamTrust record={record} mine={line.exams} changes={changes} />}
+            </div>
+        </>
+    );
     return (
         <>
-        {modes.length > 1 && <div className="choice termmode" role="tablist">{modes.map(([key, label]) => <button key={key} role="tab" aria-selected={showing === key} className={showing === key ? 'on' : ''} onClick={() => onMode(key)}>{label}{key === 'exam' && fresh && <i className="dot" aria-label="有新变动" />}</button>)}</div>}
-        <div className={`termg ${run ? 'running' : ''}`}>
-            <div>
-                <div className="term">
-                    <div />
-                    {WEEKDAYS.slice(1).map(name => <div key={name} className="th">{name.slice(1)}</div>)}
-                    {line.term.weeks.map(week => [
-                        <div key={week.week} className={`wn ${week.start <= now.date && now.date <= week.end ? 'cur' : ''}`}>{week.week}</div>,
-                        ...Array.from({ length: 7 }, (_, index) => cell(addDays(week.start, index))),
-                    ])}
-                </div>
-                <div className="legend">{legend.map(([kind, label]) => <span key={kind}><i className={kind} />{label}</span>)}</div>
-            </div>
-            <div>
-                {run && <RunPanel plan={run} line={line} now={now} />}
-                {showing === 'exam' && <>
-                    {exams.length > 0 ? <><h3 className="sh">还有 {exams.length} 场</h3>{exams.map(({ exam, days }) => examRow(exam, lead(days)))}</> : <div className="meta">后面没有考试了</div>}
-                    {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, '已考'))}</details>}
-                    {record && <ExamHistory record={record} relevant={relevant} />}
-                </>}
-                {showing === 'course' && <>
-                    {plan && (() => { const tally = runTally(plan); return (
-                        <button className="runc" onClick={() => onMode('run')}>
-                            <b>早锻炼 {tally.count} / {plan.rule.required} 次</b>
-                            <div className="bar"><i style={{ width: `${Math.min(100, tally.count / plan.rule.required * 100)}%` }} /></div>
-                            已跑 {tally.done}，计划 {tally.planned}，{tally.need ? `还差 ${tally.need} 次` : '够了'}
-                        </button>
-                    ); })()}
-                    {exams.length > 0 && <>
-                        <h3 className="sh">考试</h3>
-                        {exams.slice(0, 2).map(({ exam, days }) => examRow(exam, lead(days)))}
-                        <button className="kv xmore" onClick={() => onMode('exam')}><span className="v">全部 {exams.length} 场和更新记录</span><Chevron /></button>
+            {tabs}
+            <div className={`termg ${showing === 'run' ? 'running' : ''}`}>
+                {grid}
+                <div>
+                    {showing === 'run' && plan && <RunPanel plan={plan} line={line} now={now} />}
+                    {showing === 'course' && <>
+                        {plan && (() => { const tally = runTally(plan, now); return (
+                            <button className="runc" onClick={() => onMode('run')}>
+                                <b>早锻炼 {tally.count} / {plan.rule.required} 次</b>
+                                <div className="bar"><i style={{ width: `${Math.min(100, tally.count / plan.rule.required * 100)}%` }} /></div>
+                                已跑 {tally.done}，排上 {tally.planned}，{tally.need ? `还差 ${tally.need} 次` : '够了'}
+                            </button>
+                        ); })()}
+                        {hasExams && <button className="runc xcard" onClick={() => onMode('exam')}>
+                            <b>考试 · 已发现 {courses} 门{fresh && <i className="dot" aria-label="有新变动" />}</b>
+                            {ahead[0] ? <>
+                                <span className="xday">{dayHead(ahead[0].date)} · {lead(ahead[0].days)}</span>
+                                {ahead[0].exams.map(exam => <span key={exam.id} className="xline"><span>{courseName(exam.course.name)}</span><span>{exam.start} · {placeOf(exam)}</span></span>)}
+                            </> : <span className="xday">都考完了</span>}
+                        </button>}
+                        {offGrid.length > 0 && <>
+                            <h3 className="sh">不在课表里的课</h3>
+                            {offGrid.map(item => <div key={`${item.name}|${item.weeks.join()}`} className="xrow"><span className="m">{item.name}<small>{weeksText(item.weeks)}</small></span></div>)}
+                        </>}
+                        {calendarAhead.length > 0 && <><h3 className="sh">校历</h3>{calendarAhead.map(item => <div key={item.name + item.start} className="xrow"><span className="cd">{lead(daysBetween(now.date, item.start))}</span><span className="m">{item.name}<small>{item.text}</small></span></div>)}</>}
                     </>}
-                    {ahead.length > 0 && <><h3 className="sh">校历</h3>{ahead.map(item => <div key={item.name + item.start} className="xrow"><span className="cd">{daysBetween(now.date, item.start)} 天后</span><span className="m">{item.name}<small>{item.text}</small></span></div>)}</>}
-                </>}
+                </div>
             </div>
-        </div>
         </>
     );
 }

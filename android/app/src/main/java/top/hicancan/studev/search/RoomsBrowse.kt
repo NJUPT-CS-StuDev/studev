@@ -28,8 +28,8 @@ private val naturally = compareBy<String>({ it.takeWhile { c -> !c.isDigit() } }
 /** Every classroom at a moment: with no words, the rooms dimension of search lists them all, and being complete it falls into buildings and floors by itself. */
 @Composable fun RoomsBrowse(state: AcademicState, route: Route, modifier: Modifier = Modifier) {
     val now = remember { Moment.of(CampusDay.now()) }
-    var date by remember { mutableStateOf(now.date) }
-    var minute by remember { mutableIntStateOf(now.min) }
+    var date by remember(route.moment) { mutableStateOf(route.moment?.first ?: now.date) }
+    var minute by remember(route.moment) { mutableIntStateOf(route.moment?.second ?: now.min) }
     var campus by remember { mutableStateOf("仙林") }
     var building by remember { mutableStateOf<String?>(null) }
     var everything by remember { mutableStateOf(false) }

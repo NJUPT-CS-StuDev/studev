@@ -235,7 +235,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
             }
             Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val bearing = cameraTick.let { mapRef?.cameraPosition?.bearing ?: 0.0 }
-                val needle = marks().now
+                val needle = marks().danger
                 val faint = Ink.faint
                 val pitch = cameraTick.let { mapRef?.cameraPosition?.tilt ?: 52.0 }
                 MapBall(bearing, pitch, Ink.paper, faint.copy(alpha = .7f), needle, Modifier.size(44.dp).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))

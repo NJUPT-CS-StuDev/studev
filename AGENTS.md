@@ -53,7 +53,7 @@ sentence about its parent; siblings are the same kind of thing.
   `tests/`. Its API contract is `src/platform/README.md`.
 - `src/site/` is the shell and the written pages: layout, styles, history,
   `markdown/` transforms, `build/` Astro integrations and `tests/`.
-- `src/download/` is `/api/apk` and the object store it reads.
+- `src/download/` is the object store the APK and search packs are fetched from.
 - `src/pwa/` is offline and updates. `src/pages/` and `src/content/` are Astro's.
 - `android/app/src/main/java/top/hicancan/studev/` mirrors the campus client:
   `world/`, `timetable/`, `map/`, `search/`, `me/`, plus what only a phone has:
@@ -94,7 +94,8 @@ output ships with a new njupt-data release.
 `main` is production and deploys the web site. Work on a branch and merge only
 after review. Release signing material and private configuration live outside
 the repository. `npm run release:apk` builds and signs the Android release, puts it
-on object storage and publishes it on GitHub Releases. `/api/apk` redirects to a
-signed link for the version in `product.json`; `/download/` is the page around it.
+on object storage and publishes it on GitHub Releases. `/download/` links to the
+version in `product.json` with a week-long signed link written when the site is built;
+the only cloud function is the platform's.
 Android opens `/download/` in a browser for application updates.
 Use `astro dev --background` for development (`astro dev stop|status|logs`).

@@ -15,10 +15,7 @@ const meeting = (meetingId: string, weekday: number, startPeriod: number, endPer
     },
     teaching_class: {
         id: `teaching-class/${meetingId}`,
-        name: null,
         size: null,
-        enrolled: null,
-        capacity: null
     },
     teachers: [],
     periods: [startPeriod, endPeriod],

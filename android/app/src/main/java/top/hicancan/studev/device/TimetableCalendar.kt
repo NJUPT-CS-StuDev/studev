@@ -26,8 +26,8 @@ private class Entry(val id: String, val title: String, val start: Long, val end:
 object TimetableCalendar {
     private const val ACCOUNT = "studev"
     private data class Book(val name: String, val title: String)
-    private val lessons = Book("studev", "studev 课表")
-    private val exams = Book("studev-exams", "studev 考表")
+    private val lessons = Book("studev", "studev 课程")
+    private val exams = Book("studev-exams", "studev 考试")
     private val school = Book("studev-school", "studev 校历")
     private val runs = Book("studev-run", "studev 早锻炼")
     private fun adapter(uri: android.net.Uri) = uri.buildUpon().appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
@@ -44,7 +44,9 @@ object TimetableCalendar {
     }
     private fun write(context: Context, book: Book, entries: List<Entry>) {
         val resolver = context.contentResolver
-        val id = find(context, book) ?: resolver.insert(adapter(CalendarContract.Calendars.CONTENT_URI), ContentValues().apply {
+        val id = find(context, book)?.also { found ->
+            resolver.update(adapter(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, found)), ContentValues().apply { put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, book.title) }, null, null)
+        } ?: resolver.insert(adapter(CalendarContract.Calendars.CONTENT_URI), ContentValues().apply {
             put(CalendarContract.Calendars.ACCOUNT_NAME, ACCOUNT); put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
             put(CalendarContract.Calendars.NAME, book.name); put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, book.title)
             put(CalendarContract.Calendars.CALENDAR_COLOR, Tokens.Color.Light.brand.toArgb())
@@ -68,9 +70,17 @@ object TimetableCalendar {
                 put(CalendarContract.Events.EVENT_LOCATION, entry.room); put(CalendarContract.Events.DESCRIPTION, entry.description)
                 put(CalendarContract.Events.HAS_ALARM, if (entry.reminders.isEmpty()) 0 else 1)
             }
-            if (batch.size + 1 + entry.reminders.size > 100) flush()
+            if (batch.size + 2 + entry.reminders.size > 100) flush()
             val old = existing.remove(entry.id)
-            if (old != null) { batch += ContentProviderOperation.newUpdate(adapter(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, old))).withValues(values).build(); continue }
+            if (old != null) {
+                // Reminders follow the current choice too: the old ones go and the chosen ones are written again.
+                batch += ContentProviderOperation.newUpdate(adapter(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, old))).withValues(values).build()
+                batch += ContentProviderOperation.newDelete(adapter(CalendarContract.Reminders.CONTENT_URI)).withSelection("${CalendarContract.Reminders.EVENT_ID}=?", arrayOf(old.toString())).build()
+                for (minutes in entry.reminders) batch += ContentProviderOperation.newInsert(adapter(CalendarContract.Reminders.CONTENT_URI))
+                    .withValue(CalendarContract.Reminders.EVENT_ID, old)
+                    .withValue(CalendarContract.Reminders.MINUTES, minutes).withValue(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT).build()
+                continue
+            }
             val at = batch.size
             batch += ContentProviderOperation.newInsert(adapter(CalendarContract.Events.CONTENT_URI)).withValues(values).build()
             for (minutes in entry.reminders) batch += ContentProviderOperation.newInsert(adapter(CalendarContract.Reminders.CONTENT_URI))
@@ -88,7 +98,7 @@ object TimetableCalendar {
         fun entry(event: LineEvent, title: String, reminders: List<Int>) = Entry(event.id, title, event.startsAt.toEpochMilli(), event.endsAt.toEpochMilli(),
             Names.room(event.room), (event.teachers + listOfNotNull(event.exam?.note)).joinToString(" · "), false, reminders)
         val lessonRows = events.filter { it.kind == "class" }.map { entry(it, it.name, listOf(15)) }
-        val examRows = events.filter { it.kind == "exam" }.map { entry(it, "考试 · ${it.name}", listOf(24 * 60, 60)) }
+        val examRows = events.filter { it.kind == "exam" }.map { entry(it, "考试 · ${it.name}", settings.examReminders.map { key -> Exams.reminderMinutes(key, it.start) }) }
         if (settings.calendar) write(context, lessons, lessonRows) else remove(context, lessons)
         if (settings.calendarExams) write(context, exams, examRows) else remove(context, exams)
         if (settings.calendarSchool) {
@@ -98,7 +108,7 @@ object TimetableCalendar {
         } else remove(context, school)
         val rule = facts.run
         if (settings.calendarRun && rule != null) {
-            val rows = settings.runDays.filterValues { it == "plan" }.keys.map { day ->
+            val rows = settings.runDays.map { day ->
                 val date = LocalDate.parse(day)
                 fun at(minutes: Int) = date.atStartOfDay(CampusDay.zone).plusMinutes(minutes.toLong()).toInstant().toEpochMilli()
                 Entry("run:$day", "早锻炼", at(clock(rule.time[0])), at(clock(rule.time[1])), rule.xianlin?.route?.joinToString(" ↔ ").orEmpty(), "你排好的早锻炼", false, listOf(30))

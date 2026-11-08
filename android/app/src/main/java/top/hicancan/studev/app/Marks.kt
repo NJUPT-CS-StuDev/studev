@@ -4,9 +4,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-/** The states that have their own colour: red is now, teal is free, ink is an exam. */
-data class Marks(val now: Color, val free: Color, val exam: Color, val onExam: Color)
-@Composable fun marks() = if (isSystemInDarkTheme()) Tokens.Color.Dark.let { Marks(it.now, it.free, it.exam, it.onExam) } else Tokens.Color.Light.let { Marks(it.now, it.free, it.exam, it.onExam) }
+/** The states that have their own colour: blue is now, teal is free, amber is an exam, red is a day off
+ *  (as on a Chinese calendar) and red is also what cannot be undone. */
+data class Marks(val now: Color, val free: Color, val exam: Color, val onExam: Color, val holiday: Color, val danger: Color, val warning: Color)
+@Composable fun marks() = if (isSystemInDarkTheme()) Tokens.Color.Dark.let { Marks(it.now, it.free, it.exam, it.onExam, it.holiday, it.danger, it.warning) }
+    else Tokens.Color.Light.let { Marks(it.now, it.free, it.exam, it.onExam, it.holiday, it.danger, it.warning) }
 
 /** One course keeps one tone everywhere. */
 data class Tone(val bg: Color, val border: Color, val fg: Color)

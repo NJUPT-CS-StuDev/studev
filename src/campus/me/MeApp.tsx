@@ -5,21 +5,12 @@ import { PRODUCT_CONFIG } from '@/world/product';
 import { timetableEdits, updateTimetableEdits, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
-import { buildClassCalendar, downloadCalendar } from '@/timetable/model/calendar';
-import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
+import { loadClasses, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf } from '@/world/events';
 import { Chevron, Sheet, Toggle } from '@/world/ui';
 import type { TeachingClass, TeachingTerm } from '@/world/facts';
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
 import '../campus.css';
-
-const compact = (value: string) => value.replace(/[-:]/g, '');
-const allDay = (uid: string, name: string, start: string, end: string) => {
-    const next = new Date(`${end}T00:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    return ['BEGIN:VEVENT', `UID:${uid}@studev`, `DTSTAMP:${compact(new Date().toISOString().slice(0, 19))}Z`, `DTSTART;VALUE=DATE:${compact(start)}`, `DTEND;VALUE=DATE:${compact(next.toISOString().slice(0, 10))}`, `SUMMARY:${name}`, 'END:VEVENT'];
-};
-const wrap = (rows: string[]) => `${['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//studev//ZH-CN', ...rows, 'END:VCALENDAR'].join('\r\n')}\r\n`;
 
 export default function MeApp() {
     const [open, setOpen] = useState(false);
@@ -43,26 +34,9 @@ export default function MeApp() {
 
     const edits = facts ? timetableEdits(prefs, facts.term.term) : { hidden: [], added: [] };
     const grade = facts ? gradeOf(info?.grade, facts.term) : null;
-    const run = prefs.run ?? { days: {}, adjust: 0 };
+    const run = prefs.run ?? { days: [] as string[], adjust: 0 };
     const runOn = run.on ?? (grade !== null && grade <= 2);
-    const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { days: {}, adjust: 0, ...current.run, ...patch } }));
-    const exportLessons = async () => {
-        const [term, periods, meetings] = await Promise.all([loadTerm(), loadPeriods(), loadClassMeetings(prefs.class!)]);
-        const hidden = new Set(timetableEdits(prefs, term.term).hidden);
-        downloadCalendar(`studev 课表 ${prefs.class}.ics`, buildClassCalendar(prefs.class!, meetings.filter(meeting => !hidden.has(meeting.teaching_class.id)), term.weeks, periods));
-    };
-    const exportExams = async () => {
-        const exams = await loadClassExams(prefs.class!);
-        downloadCalendar(`studev 考表 ${prefs.class}.ics`, wrap(exams.map(exam => [
-            'BEGIN:VEVENT', `UID:${exam.id}@studev`, `DTSTAMP:${compact(new Date().toISOString().slice(0, 19))}Z`,
-            `DTSTART;TZID=Asia/Shanghai:${compact(exam.date)}T${compact(exam.start)}00`, `DTEND;TZID=Asia/Shanghai:${compact(exam.date)}T${compact(exam.end)}00`,
-            `SUMMARY:${exam.course.name} 考试`, `LOCATION:${exam.room ?? exam.location ?? ''}`, 'END:VEVENT',
-        ].join('\r\n'))));
-    };
-    const exportCalendar = async () => {
-        const terms = await loadCalendar();
-        downloadCalendar('studev 校历.ics', wrap(terms.flatMap(term => [...term.holidays, ...term.events, ...(term.break ? [term.break] : [])]).map(item => allDay(`${item.name}-${item.start}`, item.name, item.start, item.end).join('\r\n'))));
-    };
+    const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { days: [], adjust: 0, ...current.run, ...patch } }));
     return (
         <Sheet title="我" onClose={() => setOpen(false)}>
             <button className="kv" onClick={() => setPicking(true)}><span className="k">班级</span><span className="v">{prefs.class}{info?.major ? ` · ${info.major}` : ''}</span><Chevron /></button>
@@ -74,10 +48,6 @@ export default function MeApp() {
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示在课表上<small>{grade !== null && grade <= 2 ? `大${'一二'[grade - 1]}必做，本学期 ${facts.run.required} 次` : '大三大四需要补跑时打开'}</small></span><Toggle on={runOn} /></button>
             </>}
-            <h3 className="sh gap">导入手机日历</h3>
-            <button className="kv" onClick={() => void exportLessons()}><span className="v">studev 课表<small>下载日历文件</small></span><Chevron /></button>
-            <button className="kv" onClick={() => void exportExams()}><span className="v">studev 考表<small>下载日历文件</small></span><Chevron /></button>
-            <button className="kv" onClick={() => void exportCalendar()}><span className="v">studev 校历<small>放假和校历日程，整天显示</small></span><Chevron /></button>
             <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>提醒和桌面小组件</small></span><Chevron /></a>
             <a className="kv club-row" href="/club/"><span className="k">社团</span><span className="v">南邮计软网安学生发展中心</span><Chevron /></a>
             <p className="fine">数据版本 {DATA_RELEASE.data_version}</p>

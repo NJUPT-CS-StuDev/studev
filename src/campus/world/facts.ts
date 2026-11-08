@@ -2,14 +2,17 @@
 export interface TeachingWeek { week: number; start: string; end: string }
 export interface TeachingTerm { term: string; year: number; number: number; weeks: TeachingWeek[]; observed_at: string }
 export interface TeachingPeriod { period: number; start: string; end: string; part: string | null }
-export interface TeachingClass { id: string; name: string; grade: string | null; college: string | null; major: string | null; campus: string | null; students: number | null; practice: string[] }
+export interface TeachingClass { id: string; name: string; grade: string | null; college: string | null; major: string | null; campus: string | null; students: number | null; practice: Practice[] }
+/** Coursework off the timetable (课程设计, 实践): its weeks, and its name as far as the data proves it. */
+export interface Practice { name: string; weeks: number[]; text: string }
 export interface TeachingMeeting {
     id: string; course: { code: string | null; name: string; category: string | null; nature: string | null; credits: number | null; hours: number | null; hours_composition: string | null; assessment: string | null; exam: string | null };
     teachers: { id: string; name: string; title: string | null; role: string | null; weeks: number[] }[];
-    teaching_class: { id: string; name: string | null; size: number | null; enrolled: number | null; capacity: number | null };
+    /** size: how many students the whole teaching class (合班) has. */
+    teaching_class: { id: string; size: number | null };
     campus: string | null; room: string | null; location: string | null; weekday: number; periods: [number, number]; weeks: number[]; method: string | null; classes: string[];
 }
-export interface Exam { id: string; classes: string[]; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string | null; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null }
+export interface Exam { id: string; classes: string[]; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string | null; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null; source: string }
 export interface ExamSlot { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null }
 export interface ExamChange { observed: string; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: ExamSlot[] | null; after: ExamSlot[] | null }
 export interface ExamSource { file: string; url: string; notice: string; title: string }

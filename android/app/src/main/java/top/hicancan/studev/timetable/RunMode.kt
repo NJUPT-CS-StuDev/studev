@@ -19,13 +19,14 @@ import java.time.LocalDate
 
 /** The count, the bonus or penalty and the automatic plan, above the term's mornings. */
 @Composable fun RunPanel(plan: RunPlan, line: CampusLine, now: Moment, model: CampusModel) {
-    val tally = CampusLine.tally(plan)
+    val tally = CampusLine.tally(plan, now)
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Plain(tally.count.toString(), 34.sp, weight = FontWeight.SemiBold)
         Plain("/ ${plan.rule.required} 次", 14.sp, Ink.muted, modifier = Modifier.padding(bottom = 6.dp))
     }
     val adjustText = if (plan.adjust != 0) " · 奖惩 ${if (plan.adjust > 0) "+" else ""}${plan.adjust}" else ""
-    Plain("已跑 ${tally.done}$adjustText · 计划 ${tally.planned} · ${if (tally.need > 0) "还差 ${tally.need}" else "够了"}" + (tally.nextBonus?.let { " · 跑到 ${it[0]} 次加 ${it[1]} 分" } ?: ""), 13.5.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+    Plain("已跑 ${tally.done}$adjustText · 排上 ${tally.planned} · ${if (tally.need > 0) "还差 ${tally.need}" else "够了"}" + (tally.nextBonus?.let { " · 跑到 ${it[0]} 次加 ${it[1]} 分" } ?: ""), 13.5.sp, Ink.muted, modifier = Modifier.padding(bottom = 4.dp))
+    Plain("排上的日子过了就算跑过；哪天没跑，点一下去掉。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
     ActionButton("自动排好剩下的", go = true, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), enabled = tally.need > 0 || tally.planned > 0) {
         model.setRun { it.copy(runDays = CampusLine.planRuns(plan, line, now)) }
     }
@@ -39,17 +40,21 @@ import java.time.LocalDate
     Spacer(Modifier.height(12.dp))
 }
 
-/** One morning in the term grid: run, planned, open or gone. Tapping it moves it on. */
+/** One morning in the term grid: run, put down, open or gone. Tapping it puts it down or takes it off. */
 @Composable fun RunCell(date: LocalDate, plan: RunPlan, runnable: Boolean, now: Moment, model: CampusModel, modifier: Modifier = Modifier) {
     val free = marks().free
-    val state = plan.days[date.toString()]
-    val gone = runnable && state == null && date < now.date
+    val planned = date.toString() in plan.days
+    val ran = planned && CampusLine.runGone(plan.rule, date, now)
+    val gone = runnable && !planned && date < now.date
     val shape = RoundedCornerShape(4.dp)
     Box(modifier.height(30.dp).padding(horizontal = 1.5.dp).clip(shape)
-        .background(when { !runnable -> Color.Transparent; state == "done" -> free; state == "plan" -> free.copy(alpha = .22f); else -> Color.Transparent })
-        .then(if (date == now.date) Modifier.border(1.5.dp, marks().now, shape) else if (state == "plan") Modifier.border(1.dp, free, shape) else if (runnable && !gone && state == null) Modifier.border(1.dp, Ink.faint, shape) else Modifier)
-        .then(if (runnable) Modifier.clickable { model.setRun { it.copy(runDays = CampusLine.nextRunMark(it.runDays, date, now.date)) } } else Modifier),
+        .background(when { !runnable -> Color.Transparent; ran -> free; planned -> free.copy(alpha = .22f); else -> Color.Transparent })
+        .then(if (date == now.date) Modifier.border(2.dp, marks().now, shape) else if (planned && !ran) Modifier.border(1.dp, free, shape) else if (runnable && !gone && !planned) Modifier.border(1.dp, Ink.faint, shape) else Modifier)
+        .then(if (runnable) Modifier.clickable { model.setRun { it.copy(runDays = CampusLine.toggleRun(it.runDays, date)) } } else Modifier),
         contentAlignment = Alignment.Center) {
-        Plain(date.dayOfMonth.toString(), 12.sp, when { !runnable -> Ink.line; state == "done" -> Color.White; state == "plan" -> free; gone -> Ink.faint; else -> Ink.text })
+        Plain(dayLabel(date), 12.sp, when { !runnable -> Ink.line; ran -> Color.White; planned -> free; gone -> Ink.faint; else -> Ink.text })
     }
 }
+
+/** A day in the term grid: the 1st of a month says the month, so the term reads as months. */
+fun dayLabel(date: LocalDate) = if (date.dayOfMonth == 1) "${date.monthValue}月" else date.dayOfMonth.toString()

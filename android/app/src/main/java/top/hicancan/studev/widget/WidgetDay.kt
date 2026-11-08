@@ -14,9 +14,10 @@ object WidgetDay {
             generateSequence(now.date.plusDays(1)) { it.plusDays(1) }.take(30).map(line::on).firstOrNull { it.isNotEmpty() }.orEmpty()
         }
 
-    /** Monday to Sunday around now, Saturday and Sunday only when something happens on them. */
+    /** The week a "now" view shows (what is left of this one, or the next one once it is over), Monday to
+     *  Sunday, Saturday and Sunday only when something happens on them. */
     fun week(line: CampusLine, now: Moment): List<Pair<LocalDate, List<LineEvent>>> {
-        val monday = now.date.minusDays(now.date.dayOfWeek.value - 1L)
+        val monday = line.weekShown(now)
         val days = (0L until 7L).map { monday.plusDays(it) }.map { it to line.on(it) }
         return days.filter { (date, events) -> date.dayOfWeek.value <= 5 || events.isNotEmpty() }
     }

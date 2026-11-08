@@ -38,11 +38,11 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_line" />
         </receiver>
-        <receiver android:name=".widget.DayWidgetReceiver" android:exported="true" android:label="课表 · 今天">
+        <receiver android:name=".widget.DayWidgetReceiver" android:exported="true" android:label="课表 · 一天">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_day" />
         </receiver>
-        <receiver android:name=".widget.WeekWidgetReceiver" android:exported="true" android:label="课表 · 本周">
+        <receiver android:name=".widget.WeekWidgetReceiver" android:exported="true" android:label="课表 · 一周">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_week" />
         </receiver>

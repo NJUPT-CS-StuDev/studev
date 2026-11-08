@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { updateExamAttendance, updateRun, updateTimetableEdits } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
-import { weekOfDate, type CampusEvent } from '@/world/events';
+import { lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
+import { loadExamRecord, type ExamRecord } from '@/world/data';
 import { roomLabel } from '@/world/names';
-import { addDays, dateLabel, momentNow, startOfWeek, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
+import { addDays, dateLabel, daysBetween, momentNow, startOfWeek, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { useUrl, useWide } from '@/world/useUrl';
 import { Back, Chevron } from '@/world/ui';
 import { parseWho, useTimeline, type Who } from './useTimeline';
@@ -13,6 +14,7 @@ import { DayView } from './views/DayView';
 import { WeekView } from './views/WeekView';
 import { TermView, type TermMode } from './views/TermView';
 import { EventSheet } from './EventSheet';
+import { CalendarSheet } from './CalendarSheet';
 import { PreviewDock } from './PreviewDock';
 import '../campus.css';
 
@@ -29,10 +31,14 @@ export default function TimetableApp() {
 
     const who = useMemo(() => parseWho(params.get('who')), [params]);
     const scale = (params.get('scale') as Scale | null) ?? (wide ? 'week' : 'day');
-    const day = /^\d{4}-\d{2}-\d{2}$/.test(params.get('t') ?? '') ? params.get('t')! : now.date;
+    const picked = /^\d{4}-\d{2}-\d{2}$/.test(params.get('t') ?? '') ? params.get('t')! : null;
     const preview = params.get('preview');
     const { loaded, error, previewRows } = useTimeline(who, prefs, ready, preview);
     const [open, setOpen] = useState<CampusEvent | null>(null);
+    const [calendar, setCalendar] = useState(false);
+    const classId = who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null;
+    const [record, setRecord] = useState<ExamRecord | null>(null);
+    useEffect(() => { let live = true; setRecord(null); if (classId) void loadExamRecord(classId).then(next => { if (live) setRecord(next); }); return () => { live = false; }; }, [classId]);
 
     const page = useRef<HTMLDivElement>(null);
     // Pinching, or ctrl with the wheel, moves between day, week and term.
@@ -71,13 +77,19 @@ export default function TimetableApp() {
 
     const { term, line } = loaded;
     const isMe = who.type === 'me';
+    // A week opened as "now" shows what is left of this one, or the next one once this is over.
+    const day = picked ?? (scale === 'week' ? weekShown(line, now) : now.date);
+    const ahead = picked ? 0 : daysBetween(startOfWeek(now.date), startOfWeek(day)) / 7;
+    const rolled = ahead > 0;
     const week = weekOfDate(term, day);
+    const nowWeek = weekOfDate(term, now.date);
+    const last = scale === 'term' ? lastLesson(line) : null;
     const monday = startOfWeek(day);
     const termName = `${term.year}–${term.year + 1} 学年第${term.number === 1 ? '一' : '二'}学期`;
     const title = !isMe ? whoTitle(who) : scale === 'term' ? termName : scale === 'week' ? (week ? `第 ${week} 周` : '假期') : `${dateLabel(day)} ${WEEKDAYS[weekdayOf(day)]}`;
     const subtitle = scale === 'term'
-        ? `${dateLabel(term.weeks[0]!.start)} – ${dateLabel(term.weeks.at(-1)!.end)} · ${term.weeks.length} 周`
-        : scale === 'week' ? `${dateLabel(monday)} – ${dateLabel(addDays(monday, 6))}` : week ? `第 ${week} 周` : '假期';
+        ? `${dateLabel(term.weeks[0]!.start)} – ${dateLabel(term.weeks.at(-1)!.end)} · ${nowWeek ? `第 ${nowWeek} / ${term.weeks.length} 周` : `${term.weeks.length} 周`}${last ? ` · 课上到 ${dateLabel(last)}` : ''}`
+        : scale === 'week' ? `${ahead === 1 ? '下周 · ' : ahead > 1 ? `${ahead} 周后 · ` : ''}${dateLabel(monday)} – ${dateLabel(addDays(monday, 6))}` : week ? `第 ${week} 周` : '假期';
     const showShift = scale !== 'term' && !(scale === 'day' && !wide);
     const shift = (direction: number) => set({ t: addDays(day, direction * (scale === 'week' ? 7 : 1)) });
     const openEvent = (event: CampusEvent) => setOpen(event);
@@ -90,7 +102,8 @@ export default function TimetableApp() {
 
     return (
         <div className="sd page" ref={page}>
-            <div className={`wrap ${scale === 'day' ? 'narrow' : ''}`}>
+            {/* One width for every scale: the title, buttons and tabs stay put when switching. */}
+            <div className="wrap">
                 <header className="ph">
                     <div>
                         {!isMe && <button className="back" onClick={() => set({ who: null, scale: null, preview: null }, { push: true })}><Back />我的课表</button>}
@@ -100,26 +113,30 @@ export default function TimetableApp() {
                     <div className="acts">
                         {showShift && <>
                             <button className="ib" aria-label="上一个" onClick={() => shift(-1)}><Back /></button>
-                            <button className="ib" onClick={() => set({ t: null })}>今天</button>
+                            <button className="ib" onClick={() => set({ t: rolled ? now.date : null })}>今天</button>
                             <button className="ib" aria-label="下一个" onClick={() => shift(1)}><Chevron /></button>
                         </>}
+                        {isMe && prefs.class && <button className="ib" onClick={() => setCalendar(true)}>日历</button>}
                         {isMe && wide && <a className="ib" href="/search/?scope=course">加课</a>}
                     </div>
                 </header>
                 <div className="tabs" role="tablist">
                     {SCALES.map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
                 </div>
-                {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
-                {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} previewRows={previewRows} onOpen={openEvent} />}
-                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} classId={who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
+                {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
+                {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} onOpen={openEvent} />}
+                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
             </div>
-            {open && <EventSheet event={open} isMe={isMe} run={line.run} onClose={() => setOpen(null)}
+            {calendar && prefs.class && <CalendarSheet line={line} className={prefs.class} prefs={prefs} onClose={() => setCalendar(false)} />}
+            {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} onClose={() => setOpen(null)} onOpen={setOpen}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}
-                onRan={() => { updateRun({ days: { ...line.run!.days, [open.date]: 'done' } }); setOpen(null); }} onPlan={() => { setOpen(null); set({ scale: 'term', mode: 'run' }, { push: true }); }} />}
+                onUnplan={() => { updateRun({ days: toggleRun(line.run!.days, open.date) }); setOpen(null); }}
+                onPlan={() => { setOpen(null); set({ scale: 'term', mode: 'run' }, { push: true }); }}
+                onExams={() => { setOpen(null); set({ scale: 'term', mode: 'exam' }, { push: true }); }} />}
         </div>
     );
 }

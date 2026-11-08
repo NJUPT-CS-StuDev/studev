@@ -37,4 +37,8 @@ describe('preferences', () => {
         expect(readPreferences().examAttendance?.['2025-2026-2:B240402']).toEqual({ 'exam-1': true });
         expect(readPreferences().examAttendance?.['2025-2026-2:B240403']).toEqual({ 'exam-1': true });
     });
+    it('keeps 早锻炼 mornings as a sorted list of dates', () => {
+        localStorage.setItem('studev_prefs', JSON.stringify({ run: { days: ['2026-11-09', '2026-09-08', 'bad', '2026-09-08'], adjust: 2 } }));
+        expect(readPreferences().run).toEqual({ days: ['2026-09-08', '2026-11-09'], adjust: 2 });
+    });
 });

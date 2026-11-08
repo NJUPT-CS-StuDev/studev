@@ -29,6 +29,7 @@ import kotlinx.serialization.json.*
 import top.hicancan.studev.MainActivity
 import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.app.Tokens
+import top.hicancan.studev.app.Tone
 import top.hicancan.studev.app.darkTone
 import top.hicancan.studev.app.lightTone
 import top.hicancan.studev.data.AcademicRepository
@@ -106,6 +107,7 @@ private fun row(event: LineEvent) = buildJsonObject {
     put("start", event.start); put("end", event.end); put("name", event.short)
     put("room", event.room?.let(Names::room).orEmpty()); put("place", event.room?.let(Names::roomShort).orEmpty())
     put("tone", event.meeting?.let(TimetablePresentation::colourIndex) ?: -1)
+    put("exam", event.kind == "exam")
     event.room?.let { put("nav", it) }
 }
 
@@ -114,11 +116,15 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
     put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
     put("hint", ""); put("view", view); put("theme", theme)
     put("rows", buildJsonArray { shown.take(5).forEach { add(row(it)) } })
-    put("weekTitle", line.weekOf(now.date)?.let { "第 $it 周" } ?: "假期")
+    val monday = line.weekShown(now)
+    val ahead = CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7
+    put("weekTitle", (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + (line.weekOf(monday)?.let { "第 $it 周" } ?: "假期"))
     put("week", buildJsonArray { WidgetDay.week(line, now).forEach { (date, events) ->
         addJsonObject {
             put("label", WEEKDAYS[date.dayOfWeek.value].drop(1)); put("today", date == now.date)
-            put("events", buildJsonArray { events.filter { it.kind != "run" }.forEach { add(row(it)) } })
+            // An exam outranks a lesson at the same time: the widget shows the exam alone.
+            val exams = events.filter { it.kind == "exam" }
+            put("events", buildJsonArray { events.filter { it.kind == "exam" || (it.kind == "class" && exams.none { exam -> exam.start < it.end && it.start < exam.end }) }.forEach { add(row(it)) } })
         }
     } })
 }
@@ -175,11 +181,13 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
 }
 
 private fun tone(index: Int, dark: Boolean) = if (dark) darkTone(index) else lightTone(index)
+/** An exam looks the same on the home screen as in the app. */
+private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tokens.Color.Dark.exam, Tokens.Color.Dark.onExam) else Tone(Tokens.Color.Light.exam, Tokens.Color.Light.exam, Tokens.Color.Light.onExam)
 
 /** A course's colour, then its time, name and room; tapping it starts navigation there. */
 @Composable private fun LessonRow(context: Context, row: JsonObject, paint: Paint, headline: Boolean) {
     val index = row.getValue("tone").jsonPrimitive.int
-    val bar = if (index < 0) (if (paint.dark) Tokens.Color.Dark.ink else Tokens.Color.Light.ink) else tone(index, paint.dark).border
+    val bar = if (row["exam"]?.jsonPrimitive?.boolean == true) examTone(paint.dark).bg else if (index < 0) (if (paint.dark) Tokens.Color.Dark.ink else Tokens.Color.Light.ink) else tone(index, paint.dark).border
     val nav = row["nav"]?.jsonPrimitive?.content
     val tap = if (nav != null) GlanceModifier.clickable(open(context, "/map/?nav=${Uri.encode(nav)}")) else GlanceModifier
     val time = hm(row.getValue("start").jsonPrimitive.int)
@@ -221,7 +229,7 @@ private fun tone(index: Int, dark: Boolean) = if (dark) darkTone(index) else lig
                             // A tile stops 2 dp short of its end, and the next gap gives that back, so the clock stays true.
                             if (start > cursor || placedAny) Spacer(GlanceModifier.height(((start - cursor) * perMinute + if (placedAny) 2f else 0f).dp))
                             val index = event.getValue("tone").jsonPrimitive.int
-                            val mark = tone(maxOf(index, 0), paint.dark)
+                            val mark = if (event["exam"]?.jsonPrimitive?.boolean == true) examTone(paint.dark) else tone(maxOf(index, 0), paint.dark)
                             Box(GlanceModifier.fillMaxWidth().height(((end - start) * perMinute - 2).coerceAtLeast(14f).dp).cornerRadius(4.dp).background(androidx.glance.unit.ColorProvider(mark.bg)).padding(horizontal = 2.dp, vertical = 2.dp)) {
                                 val tall = ((end - start) * perMinute - 2) >= 30f
                                 val place = event.getValue("place").jsonPrimitive.content

@@ -2,12 +2,14 @@ import type { TeachingMeeting } from '@/world/facts';
 import { courseToneStyle } from '@/timetable/model/courseColors';
 import { timetableCells } from '@/timetable/model/presentation';
 import { eventsOn, weekOfDate, type CampusEvent, type Timeline } from '@/world/events';
+import type { ExamRecord } from '@/world/data';
+import { wasChanged } from '@/world/exams';
 import { courseName, courseShort, roomLabel, roomShort } from '@/world/names';
 import { addDays, hm, minutesOf, startOfWeek, WEEKDAYS, type Moment } from '@/world/time';
 
 const DAY_END = 21 * 60 + 8;
 
-export function WeekView({ line, day, now, wide, previewRows, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; previewRows: TeachingMeeting[]; onOpen: (event: CampusEvent) => void }) {
+export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index));
     const week = weekOfDate(line.term, monday);
@@ -48,7 +50,9 @@ export function WeekView({ line, day, now, wide, previewRows, onOpen }: { line: 
                             const end = clock.get(cell.periods[1])?.end;
                             if (start === undefined || end === undefined) return null;
                             const event = events[index]!.find(item => item.meeting?.id === cell.id);
-                            const quiet = cell.state !== 'active';
+                            // An exam at the same time outranks the lesson, which steps back.
+                            const underExam = events[index]!.some(item => item.kind === 'exam' && item.start < end && start < item.end);
+                            const quiet = cell.state !== 'active' || underExam;
                             const shared = lessons.some(other => clashes(cell, other));
                             const width = 100 / cell.columns;
                             return <button key={cell.id} className={`t ${quiet ? 'quiet' : ''} ${!quiet && past(end) ? 'past' : ''}`} disabled={!event}
@@ -58,7 +62,7 @@ export function WeekView({ line, day, now, wide, previewRows, onOpen }: { line: 
                             </button>;
                         })}
                         {events[index]!.filter(event => event.kind !== 'class').map(event => (
-                            <button key={event.id} className={`t ${event.kind}`} style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2) }} onClick={() => onOpen(event)}>
+                            <button key={event.id} className={`t ${event.kind} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`} style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2) }} onClick={() => onOpen(event)}>
                                 {wide ? event.name : event.short}<small>{event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : ''}</small>
                             </button>
                         ))}

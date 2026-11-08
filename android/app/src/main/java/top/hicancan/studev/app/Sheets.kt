@@ -1,17 +1,12 @@
 package top.hicancan.studev.app
 
-import android.Manifest
 import android.app.UiModeManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,51 +15,91 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.hicancan.studev.account.PLATFORM_ORIGIN
-import top.hicancan.studev.device.TimetableCalendar
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.me.PersonalSettings
 import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.*
 
-@Composable fun EventSheet(event: LineEvent, line: CampusLine, isMe: Boolean, route: Route, model: CampusModel, settings: PersonalSettings, onClose: () -> Unit) {
+/** Classes sitting or taught together, folded: "4 个班 · 102 人", open to see which. */
+@Composable private fun Together(label: String, classes: List<String>, people: Int?) {
+    if (classes.size < 2 && people == null) return
+    var open by remember { mutableStateOf(false) }
+    KeyRow(label, (if (classes.size > 1) "${classes.size} 个班" else classes.firstOrNull().orEmpty()) + (people?.let { " · $it 人" } ?: ""),
+        if (open && classes.size > 1) classes.joinToString("、") else null, onClick = if (classes.size > 1) ({ open = !open }) else null)
+}
+
+private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boolean) = course?.let {
+    listOfNotNull(it.credits?.let { c -> "${if (c % 1.0 == 0.0) c.toInt().toString() else c.toString()} 学分" }, it.nature, it.assessment?.takeIf { assessment }?.let { a -> "考核：$a" }).joinToString(" · ")
+}.orEmpty()
+
+/** One thing on the timetable, wherever it was tapped: a lesson, an exam or 早锻炼. It says what matters
+ *  for going there and preparing, and links on to the course, the people and the rest. */
+@Composable fun EventSheet(event: LineEvent, line: CampusLine, isMe: Boolean, route: Route, model: CampusModel, settings: PersonalSettings, state: AcademicState, now: Moment, onOpen: (LineEvent) -> Unit, onClose: () -> Unit) {
     val mark = marks()
     val date = event.date
     val whenText = "${WEEKDAYS[date.dayOfWeek.value]} ${dateLabel(date)} · ${hm(event.start)}–${hm(event.end)}"
     val plan = line.run
+    val classId = if (isMe) settings.klass else if (route.whoType == "class") route.whoId else null
+    val record = top.hicancan.studev.timetable.examRecordOf(state, classId)
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
     if (event.kind == "run" && plan != null) {
         val place = plan.rule.xianlin
         PlainSheet("早锻炼", onClose) {
             Plain(whenText, 13.5.sp, Ink.muted)
-            Row(Modifier.padding(top = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionButton(if (event.runMark == "done") "已记为跑过" else "记为跑过", modifier = Modifier.weight(1f)) { model.setRun { it.copy(runDays = it.runDays + (date.toString() to "done")) }; onClose() }
-                if (place != null) ActionButton("去起点", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = "仙林/${place.route[0]}") }
-            }
+            if (place != null) Row(Modifier.padding(top = 16.dp, bottom = 8.dp)) { ActionButton("去起点", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = "仙林/${place.route[0]}") } }
             if (place != null) {
                 KeyRow("路线", "${place.route.joinToString(" ↔ ")}，约 ${place.metres} 米")
-                KeyRow("刷脸", "起点 ${place.start_scan_end} 前，终点 ${place.end_scan_end} 前", if (place.male_minutes == place.female_minutes) "${place.male_minutes} 分钟内，超时无效" else "男生 ${place.male_minutes} 分钟内，女生 ${place.female_minutes} 分钟内，超时无效")
+                KeyRow("刷脸", "起点 ${place.start_scan_end} 前，终点 ${place.end_scan_end} 前", if (place.male_minutes == place.female_minutes) "${place.male_minutes} 分钟内跑完" else "男生 ${place.male_minutes} 分钟、女生 ${place.female_minutes} 分钟内跑完")
             }
-            KeyRow("次数", "${CampusLine.tally(plan).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term"; route.termMode = "run"; route.tab = "timetable" })
+            KeyRow("次数", "${CampusLine.tally(plan, now).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term"; route.termMode = "run"; route.tab = "timetable" })
+            KeyRow(null, "这天没跑", color = mark.danger, onClick = { model.setRun { it.copy(runDays = CampusLine.toggleRun(it.runDays, date)) }; onClose() })
         }
         return
     }
-    PlainSheet(if (event.kind == "exam") "考试 · ${event.name}" else event.name, onClose) {
+    val exam = event.exam
+    PlainSheet(if (exam != null) "考试 · ${event.name}" else event.name, onClose) {
         val placed = Names.placed(event.room)
         val roomName = event.room?.let(Names::room)
-        Plain(whenText + (roomName?.let { " · $it" } ?: " · 教室未排定"), 13.5.sp, Ink.muted)
+        val facts = if (exam != null) Exams.courseOf(line.meetings, exam) else event.meeting?.course
+        courseLine(facts, exam == null).takeIf { it.isNotEmpty() }?.let { Plain(it, 13.5.sp, Ink.muted) }
+        val campus = state.classes.firstOrNull { it.id == classId }?.campus
+        Plain(whenText + " · " + (roomName ?: exam?.location ?: if (exam != null) "考场未排定" else "教室未排定") + (exam?.campus?.takeIf { campus != null && it != campus }?.let { " · ${it}校区" } ?: ""), 13.5.sp, modifier = Modifier.padding(top = 2.dp))
         if (placed) Row(Modifier.padding(top = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionButton("在地图上看", modifier = Modifier.weight(1f)) { onClose(); route.map(place = event.room, at = date to event.start) }
             ActionButton("去这里", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = event.room) }
         } else Spacer(Modifier.height(12.dp))
-        if (Names.isRoom(event.room)) KeyRow("教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
-        event.teachers.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
+        if (exam != null) {
+            Exams.changesOf(record, exam).forEach { change ->
+                KeyRow(if (change.change == "added") "新发布" else "改过", "${dateLabel(java.time.LocalDate.parse(change.observed))} 发现", if (change.change == "changed") Exams.changeLines(change).joinToString("\n") else null)
+            }
+            Together("同考场", exam.classes, exam.students)
+            exam.note?.let { KeyRow("备注", it) }
+        }
+        val meeting = event.meeting
+        if (meeting != null) {
+            val left = Exams.lessonsLeft(line.term, meeting, line.holidays, now, event.end)
+            KeyRow("周次", Exams.weeksText(meeting.weeks), if (left > 0) "还剩 $left 次" else "已经上完")
+            Together("合班", meeting.classes, meeting.teaching_class.size)
+        }
+        event.teachers.flatMap { it.split("、") }.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
+        if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
         KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", event.name) })
-        if (isMe && event.kind == "exam") KeyRow(null, "不参加这场考试", color = mark.now, onClick = { model.examAttendance(event.id, false); onClose() })
-        if (isMe && event.kind == "class") KeyRow(null, "从我的课表移除", color = mark.now, onClick = { model.removeCourse(event.meeting!!.teaching_class.id); onClose() })
+        if (exam != null) {
+            KeyRow("考试", "全部考试 · ${line.exams.map { it.course.code ?: it.course.name }.distinct().size} 门", chevron = true, onClick = { onClose(); route.tab = "timetable"; route.scale = "term"; route.termMode = "exam" })
+            record?.sources?.firstOrNull { it.file == exam.source }?.let { sheet ->
+                KeyRow("来源", Exams.sheetName(sheet.file), "${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(sheet.file)))} 发布", chevron = true, onClick = { uri.openUri(sheet.notice) })
+            }
+        } else if (meeting != null) {
+            val own = line.exams.filter { (it.course.code ?: it.course.name) == (meeting.course.code ?: meeting.course.name) }.minByOrNull { it.date }
+            own?.let { found -> line.on(java.time.LocalDate.parse(found.date)).firstOrNull { it.exam?.id == found.id } }?.let { examEvent ->
+                KeyRow("考试", "${dateLabel(examEvent.date)} ${WEEKDAYS[examEvent.date.dayOfWeek.value]} ${hm(examEvent.start)}", chevron = true, onClick = { onOpen(examEvent) })
+            }
+        }
+        if (isMe && exam != null) KeyRow(null, "不参加这场考试", color = mark.danger, onClick = { model.examAttendance(event.id, false); onClose() })
+        if (isMe && event.kind == "class") KeyRow(null, "从我的课表移除", color = mark.danger, onClick = { model.removeCourse(event.meeting!!.teaching_class.id); onClose() })
     }
 }
-
-@Composable private fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) = Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = Ink.brand))
 
 @Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
@@ -73,16 +108,6 @@ import top.hicancan.studev.world.*
     val edits = term?.let { settings.timetableEdits(it.term) }
     val grade = if (term != null) CampusLine.grade(info?.grade, term) else null
     val runOn = settings.runShown ?: (grade != null && grade <= 2)
-    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val calendarAccess = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) pending?.invoke() else model.tell("需要日历权限才能同步")
-        pending = null
-    }
-    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    fun withCalendar(action: () -> Unit) {
-        if (TimetableCalendar.permitted(context)) action()
-        else { pending = action; calendarAccess.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) }
-    }
     PlainSheet("我", onClose) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             KeyRow("班级", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "还没有选" }, chevron = true, onClick = onPickClass)
@@ -103,17 +128,11 @@ import top.hicancan.studev.world.*
             Plain("桌面小组件", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Plain("显示", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
-                Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "今天", "week" to "本周"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
+                Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
             }
             KeyRow(null, "添加到桌面", "也可以长按桌面空白处，在窗口小工具里找 studev", chevron = true, onClick = {
                 if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 studev")
             })
-            Plain("同步到手机日历", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-            fun set(change: (PersonalSettings) -> PersonalSettings) = withCalendar { model.setRun(change) }
-            KeyRow(null, "studev 课表", "上课前 15 分钟提醒", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
-            KeyRow(null, "studev 考表", "提前 1 天和 1 小时提醒", trailing = { Toggle(settings.calendarExams) { on -> set { it.copy(calendarExams = on) } } })
-            state.run?.let { rule -> KeyRow(null, "studev 早锻炼", "只同步你计划跑的那些天，提前 30 分钟提醒", trailing = { Toggle(settings.calendarRun) { on -> withCalendar { set { it.copy(calendarRun = on) } } } }) }
-            KeyRow(null, "studev 校历", "放假和校历日程，整天显示", trailing = { Toggle(settings.calendarSchool) { on -> set { it.copy(calendarSchool = on) } } })
             val background = remember(settings) { top.hicancan.studev.device.BackgroundSettings.status(context) }
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {
                 if (background.batteryExempt) top.hicancan.studev.device.BackgroundSettings.openOemStartup(context) else top.hicancan.studev.device.BackgroundSettings.requestBatteryExemption(context)

@@ -90,7 +90,7 @@ import top.hicancan.studev.world.Moment
             }
         }
     }
-    open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings) { open = null } }
+    open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings, state, now, onOpen = { open = it to line }) { open = null } }
     if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount) { me = false }
     if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
 }

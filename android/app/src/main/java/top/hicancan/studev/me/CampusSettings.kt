@@ -29,8 +29,8 @@ data class PersonalSettings(
     val calendarSchool: Boolean = false,
     /** null until someone chooses: 大一大二 see 早锻炼 by default. */
     val runShown: Boolean? = null,
-    /** Mornings by date: "done" or "plan". */
-    val runDays: Map<String, String> = emptyMap(),
+    /** The mornings put down for 早锻炼; gone by counts as run. */
+    val runDays: List<String> = emptyList(),
     /** The bonus or penalty entered from the sports office. */
     val runAdjust: Int = 0,
     val calendarRun: Boolean = false,
@@ -38,6 +38,8 @@ data class PersonalSettings(
     val widgetView: String = "auto",
     /** The latest exam change this person has been shown. */
     val examsSeen: String? = null,
+    /** When exams written to the phone's calendar remind, as keys of Exams.REMINDERS. */
+    val examReminders: List<String> = top.hicancan.studev.world.Exams.DEFAULT_REMINDERS,
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -83,11 +85,12 @@ class CampusSettings(context: Context) {
         calendarExams = store.getBoolean("calendar-exams", false),
         calendarSchool = store.getBoolean("calendar-school", false),
         runShown = if (store.contains("run-shown")) store.getBoolean("run-shown", false) else null,
-        runDays = store.getString("run-days", null)?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrDefault(emptyMap()) } ?: emptyMap(),
+        runDays = store.getString("run-days", null)?.let { raw -> runCatching { Json.decodeFromString<List<String>>(raw) }.getOrNull() } ?: emptyList(),
         runAdjust = store.getInt("run-adjust", 0),
         calendarRun = store.getBoolean("calendar-run", false),
         widgetView = store.getString("widget-view", "auto")!!,
         examsSeen = store.getString("exams-seen", null),
+        examReminders = store.getString("exam-reminders", null)?.let { Json.decodeFromString<List<String>>(it) } ?: top.hicancan.studev.world.Exams.DEFAULT_REMINDERS,
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -101,7 +104,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
-            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen)
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders))
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)

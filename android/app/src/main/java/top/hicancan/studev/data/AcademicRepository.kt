@@ -102,9 +102,9 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         return read<ClassExams>("exams/$term/classes/$id.json").exams
     }
     suspend fun examRecord(id: String): ExamRecord {
-        val index = examIndex() ?: return ExamRecord(emptyList(), emptyList())
-        if (id !in index.classes) return ExamRecord(emptyList(), index.sources)
-        return ExamRecord(read<ClassExams>("exams/${release.exams}/classes/$id.json").changes, index.sources)
+        val index = examIndex() ?: return ExamRecord(emptyList(), emptyList(), null)
+        if (id !in index.classes) return ExamRecord(emptyList(), index.sources, index.checked)
+        return ExamRecord(read<ClassExams>("exams/${release.exams}/classes/$id.json").changes, index.sources, index.checked)
     }
     suspend fun examCandidates(id: String, edits: top.hicancan.studev.me.TimetableEdits, availableCatalog: List<top.hicancan.studev.timetable.CatalogCourse>? = null): List<Exam> {
         val published = exams(id).toMutableList()

@@ -39,20 +39,22 @@ export const loadClassMeetings = (id: string) => {
     return file;
 };
 
-const loadExamIndex = once(() => fetchJson<{ classes: string[] }>(`${base}/exams/${DATA_RELEASE.exams}/index.json`));
 /** A class's exams; a class with none has no file. */
 export const loadExams = once(() => DATA_RELEASE.exams ? fetchJson<Exam[]>(`${base}/exams/${DATA_RELEASE.exams}/exams.json`) : Promise.resolve([] as Exam[]));
-/** How a class's exams came to be what they are: every change seen, and the sheets it was read from. */
-export interface ExamRecord { changes: ExamChange[]; sources: ExamSource[] }
-const examIndex = once(() => DATA_RELEASE.exams ? fetchJson<{ classes: string[]; sources: ExamSource[] }>(`${base}/exams/${DATA_RELEASE.exams}/index.json`) : Promise.resolve({ classes: [], sources: [] }));
+/**
+ * How a class's exams came to be what they are: every change seen, the sheets they were read from,
+ * and when the teaching office's site was last looked at, published or not.
+ */
+export interface ExamRecord { changes: ExamChange[]; sources: ExamSource[]; checked: string | null }
+const examIndex = once(() => DATA_RELEASE.exams ? fetchJson<{ classes: string[]; sources: ExamSource[]; checked: string | null }>(`${base}/exams/${DATA_RELEASE.exams}/index.json`) : Promise.resolve({ classes: [] as string[], sources: [] as ExamSource[], checked: null as string | null }));
 export const loadExamRecord = async (id: string): Promise<ExamRecord> => {
-    const { classes, sources } = await examIndex();
-    if (!classes.includes(id)) return { changes: [], sources };
-    return { changes: (await fetchJson<{ changes: ExamChange[] }>(`${base}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).changes, sources };
+    const { classes, sources, checked } = await examIndex();
+    if (!classes.includes(id)) return { changes: [], sources, checked };
+    return { changes: (await fetchJson<{ changes: ExamChange[] }>(`${base}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).changes, sources, checked };
 };
 export const loadClassExams = async (id: string): Promise<Exam[]> => {
     if (!DATA_RELEASE.exams) return [];
-    const { classes } = await loadExamIndex();
+    const { classes } = await examIndex();
     if (!classes.includes(id)) return [];
     return (await fetchJson<{ exams: Exam[] }>(`${base}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).exams;
 };

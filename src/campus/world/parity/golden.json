@@ -4560,15 +4560,16 @@
    "state": "open"
   }
  ],
- "runDays": {
-  "2026-09-08": "done",
-  "2026-09-10": "done",
-  "2026-11-05": "plan",
-  "2026-11-09": "plan",
-  "2026-12-18": "plan"
- },
+ "runDays": [
+  "2026-09-08",
+  "2026-09-10",
+  "2026-11-05",
+  "2026-11-09",
+  "2026-12-18"
+ ],
+ "lastLesson": "2027-01-02",
  "source": {
-  "release": "map-v0.8.5__data-20261107-1127__p9",
+  "release": "map-v0.8.5__data-20261108-1216__p9",
   "teaching": "2026-2027-1"
  },
  "term": {
@@ -4677,7 +4678,7 @@
     "end": "2027-01-15"
    }
   ],
-  "observed_at": "2026-11-07T11:16:24Z"
+  "observed_at": "2026-11-08T11:54:00Z"
  },
  "periods": [
   {
@@ -4902,7 +4903,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/09842fe04256279f"
+      "id": "teaching-class/09842fe04256279f",
+      "size": 131
      },
      "campus": "仙林",
      "room": "仙林/教3-313",
@@ -4956,7 +4958,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/dccc8281d11f4d26"
+      "id": "teaching-class/dccc8281d11f4d26",
+      "size": 131
      },
      "campus": "仙林",
      "room": "仙林/教3-302",
@@ -5022,7 +5025,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/2d9596229c091fd7"
+      "id": "teaching-class/2d9596229c091fd7",
+      "size": 131
      },
      "campus": "仙林",
      "room": "仙林/教3-302",
@@ -5084,7 +5088,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/2d9596229c091fd7"
+      "id": "teaching-class/2d9596229c091fd7",
+      "size": 131
      },
      "campus": "仙林",
      "room": "仙林/教3-302",
@@ -5132,7 +5137,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/dccc8281d11f4d26"
+      "id": "teaching-class/dccc8281d11f4d26",
+      "size": 131
      },
      "campus": "仙林",
      "room": "仙林/教3-302",
@@ -5198,7 +5204,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/2d9596229c091fd7"
+      "id": "teaching-class/2d9596229c091fd7",
+      "size": 131
      },
      "campus": "仙林",
      "room": "仙林/教3-302",
@@ -5260,7 +5267,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/5a8fc4eff9672e53"
+      "id": "teaching-class/5a8fc4eff9672e53",
+      "size": 163
      },
      "campus": "仙林",
      "room": "仙林/教3-312",
@@ -5343,7 +5351,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/5a8fc4eff9672e53"
+      "id": "teaching-class/5a8fc4eff9672e53",
+      "size": 163
      },
      "campus": "仙林",
      "room": "仙林/教4-312",
@@ -5408,7 +5417,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/741da57b2f2ea2eb"
+      "id": "teaching-class/741da57b2f2ea2eb",
+      "size": 316
      },
      "campus": "仙林",
      "room": "仙林/教4-313",
@@ -5492,7 +5502,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/6df0dc6350ae9692"
+      "id": "teaching-class/6df0dc6350ae9692",
+      "size": 316
      },
      "campus": "仙林",
      "room": "仙林/教4-101",
@@ -5562,7 +5573,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/6df0dc6350ae9692"
+      "id": "teaching-class/6df0dc6350ae9692",
+      "size": 316
      },
      "campus": "仙林",
      "room": null,
@@ -5632,7 +5644,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/04467dfbb864646b"
+      "id": "teaching-class/04467dfbb864646b",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教4-312",
@@ -5713,7 +5726,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/a57b8623a5acb364"
+      "id": "teaching-class/a57b8623a5acb364",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教3-410",
@@ -5819,7 +5833,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/eb25723382c3d414"
+      "id": "teaching-class/eb25723382c3d414",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教4-312",
@@ -5900,7 +5915,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/a57b8623a5acb364"
+      "id": "teaching-class/a57b8623a5acb364",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教4-309",
@@ -5980,7 +5996,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/04467dfbb864646b"
+      "id": "teaching-class/04467dfbb864646b",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教4-313",
@@ -6057,7 +6074,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/eb25723382c3d414"
+      "id": "teaching-class/eb25723382c3d414",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教4-312",
@@ -6138,7 +6156,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/04467dfbb864646b"
+      "id": "teaching-class/04467dfbb864646b",
+      "size": 100
      },
      "campus": "仙林",
      "room": "仙林/教4-313",
@@ -6185,7 +6204,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/011519af60a5cdcc"
+      "id": "teaching-class/011519af60a5cdcc",
+      "size": 285
      },
      "campus": "仙林",
      "room": "仙林/教4-101",
@@ -6272,7 +6292,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/09c203ffcec37c56"
+      "id": "teaching-class/09c203ffcec37c56",
+      "size": 285
      },
      "campus": "仙林",
      "room": "仙林:教4-409",
@@ -6359,7 +6380,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/29d87907f30f0254"
+      "id": "teaching-class/29d87907f30f0254",
+      "size": 285
      },
      "campus": "仙林",
      "room": "仙林/教4-103",
@@ -6446,7 +6468,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/136527b0bf1077e6"
+      "id": "teaching-class/136527b0bf1077e6",
+      "size": 285
      },
      "campus": "仙林",
      "room": "仙林/教4-208",
@@ -8448,7 +8471,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/bf0bb354fd50a383"
+      "id": "teaching-class/bf0bb354fd50a383",
+      "size": 186
      },
      "campus": "仙林",
      "room": "仙林/教4-101",
@@ -8502,7 +8526,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/a834f3eaff607b46"
+      "id": "teaching-class/a834f3eaff607b46",
+      "size": 6
      },
      "campus": "仙林",
      "room": "仙林/教4-211",
@@ -8588,7 +8613,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/a834f3eaff607b46"
+      "id": "teaching-class/a834f3eaff607b46",
+      "size": 6
      },
      "campus": "仙林",
      "room": null,
@@ -8674,7 +8700,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/7fe68b3fb6024644"
+      "id": "teaching-class/7fe68b3fb6024644",
+      "size": null
      },
      "campus": "仙林",
      "room": null,
@@ -8781,7 +8808,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/72676de2d75f8bb2"
+      "id": "teaching-class/72676de2d75f8bb2",
+      "size": null
      },
      "campus": "仙林",
      "room": null,
@@ -8874,7 +8902,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/7fe68b3fb6024644"
+      "id": "teaching-class/7fe68b3fb6024644",
+      "size": null
      },
      "campus": "仙林",
      "room": null,
@@ -8949,7 +8978,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/090f9f02eaf91053"
+      "id": "teaching-class/090f9f02eaf91053",
+      "size": 33
      },
      "campus": "仙林",
      "room": null,
@@ -9010,7 +9040,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/616616dbda55b919"
+      "id": "teaching-class/616616dbda55b919",
+      "size": 33
      },
      "campus": "仙林",
      "room": "仙林/教3-226",
@@ -9081,7 +9112,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/8747e1d7c9d6096b"
+      "id": "teaching-class/8747e1d7c9d6096b",
+      "size": 33
      },
      "campus": "仙林",
      "room": "仙林/教4-211",
@@ -9152,7 +9184,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/8747e1d7c9d6096b"
+      "id": "teaching-class/8747e1d7c9d6096b",
+      "size": 33
      },
      "campus": "仙林",
      "room": null,
@@ -9209,7 +9242,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/6cb7b2311924d5f2"
+      "id": "teaching-class/6cb7b2311924d5f2",
+      "size": 128
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -9291,7 +9325,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/db1f5960f860d13c"
+      "id": "teaching-class/db1f5960f860d13c",
+      "size": 126
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -9371,7 +9406,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/cc4a936c4b9dc153"
+      "id": "teaching-class/cc4a936c4b9dc153",
+      "size": 128
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -9453,7 +9489,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/db1f5960f860d13c"
+      "id": "teaching-class/db1f5960f860d13c",
+      "size": 126
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -9535,7 +9572,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/6cb7b2311924d5f2"
+      "id": "teaching-class/6cb7b2311924d5f2",
+      "size": 128
      },
      "campus": "仙林",
      "room": "仙林/教3-208",
@@ -9583,7 +9621,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/db1f5960f860d13c"
+      "id": "teaching-class/db1f5960f860d13c",
+      "size": 126
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -9631,7 +9670,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/cc4a936c4b9dc153"
+      "id": "teaching-class/cc4a936c4b9dc153",
+      "size": 128
      },
      "campus": "仙林",
      "room": "仙林/教3-412",
@@ -9695,7 +9735,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/6cb7b2311924d5f2"
+      "id": "teaching-class/6cb7b2311924d5f2",
+      "size": 128
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -9775,7 +9816,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/adc31324166301be"
+      "id": "teaching-class/adc31324166301be",
+      "size": 128
      },
      "campus": "仙林",
      "room": "仙林/教3-409",
@@ -11586,7 +11628,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/7253ce78c1cf88fb"
+      "id": "teaching-class/7253ce78c1cf88fb",
+      "size": 143
      },
      "campus": "仙林",
      "room": "仙林/教2-101",
@@ -11636,7 +11679,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/42651bb12e800585"
+      "id": "teaching-class/42651bb12e800585",
+      "size": 143
      },
      "campus": "仙林",
      "room": "仙林/教3-310",
@@ -11702,7 +11746,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/7253ce78c1cf88fb"
+      "id": "teaching-class/7253ce78c1cf88fb",
+      "size": 143
      },
      "campus": "仙林",
      "room": "仙林/教2-101",
@@ -11752,7 +11797,8 @@
       "exam": null
      },
      "teaching_class": {
-      "id": "teaching-class/8dfde920915c5549"
+      "id": "teaching-class/8dfde920915c5549",
+      "size": 143
      },
      "campus": "仙林",
      "room": "仙林/教2-301",
@@ -12236,9 +12282,9 @@
     "room": "仙林/教4-309"
    },
    "run": {
-    "done": 2,
-    "planned": 3,
-    "count": 7,
+    "done": 3,
+    "planned": 2,
+    "count": 8,
     "need": 20,
     "nextBonus": [
      35,
@@ -12271,7 +12317,60 @@
     "2026-12-14",
     "2026-12-16",
     "2026-12-18"
-   ]
+   ],
+   "week": "2026-11-02"
+  },
+  {
+   "now": {
+    "date": "2026-11-05",
+    "min": 450
+   },
+   "next": {
+    "kind": "class",
+    "name": "计算机图形学",
+    "short": "图形学",
+    "start": 480,
+    "end": 575,
+    "room": "仙林:教4-409"
+   },
+   "run": {
+    "done": 3,
+    "planned": 2,
+    "count": 8,
+    "need": 20,
+    "nextBonus": [
+     35,
+     2
+    ]
+   },
+   "plan": [
+    "2026-09-08",
+    "2026-09-10",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-09",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-16",
+    "2026-11-17",
+    "2026-11-18",
+    "2026-11-20",
+    "2026-11-23",
+    "2026-11-25",
+    "2026-11-26",
+    "2026-11-27",
+    "2026-11-30",
+    "2026-12-02",
+    "2026-12-04",
+    "2026-12-07",
+    "2026-12-08",
+    "2026-12-10",
+    "2026-12-11",
+    "2026-12-14",
+    "2026-12-16",
+    "2026-12-18"
+   ],
+   "week": "2026-11-02"
   },
   {
    "now": {
@@ -12287,9 +12386,9 @@
     "room": "仙林/教4-208"
    },
    "run": {
-    "done": 2,
-    "planned": 3,
-    "count": 7,
+    "done": 3,
+    "planned": 2,
+    "count": 8,
     "need": 20,
     "nextBonus": [
      35,
@@ -12322,7 +12421,60 @@
     "2026-12-14",
     "2026-12-16",
     "2026-12-18"
-   ]
+   ],
+   "week": "2026-11-02"
+  },
+  {
+   "now": {
+    "date": "2026-11-08",
+    "min": 1200
+   },
+   "next": {
+    "kind": "class",
+    "name": "计算机通信与网络",
+    "short": "计网",
+    "start": 480,
+    "end": 575,
+    "room": "仙林/教4-312"
+   },
+   "run": {
+    "done": 3,
+    "planned": 2,
+    "count": 8,
+    "need": 20,
+    "nextBonus": [
+     35,
+     2
+    ]
+   },
+   "plan": [
+    "2026-09-08",
+    "2026-09-10",
+    "2026-11-05",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-16",
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20",
+    "2026-11-23",
+    "2026-11-25",
+    "2026-11-26",
+    "2026-11-30",
+    "2026-12-01",
+    "2026-12-03",
+    "2026-12-04",
+    "2026-12-07",
+    "2026-12-09",
+    "2026-12-10",
+    "2026-12-11",
+    "2026-12-14",
+    "2026-12-16",
+    "2026-12-18"
+   ],
+   "week": "2026-11-09"
   },
   {
    "now": {
@@ -12331,9 +12483,9 @@
    },
    "next": null,
    "run": {
-    "done": 2,
-    "planned": 3,
-    "count": 7,
+    "done": 5,
+    "planned": 0,
+    "count": 10,
     "need": 20,
     "nextBonus": [
      35,
@@ -12346,7 +12498,8 @@
     "2026-11-05",
     "2026-11-09",
     "2026-12-18"
-   ]
+   ],
+   "week": "2027-01-11"
   }
  ],
  "rooms": {
@@ -12355,7 +12508,7 @@
     "date": "2026-11-05",
     "week": 10,
     "weekday": 4,
-    "observed_at": "2026-11-07T11:26:44Z",
+    "observed_at": "2026-11-08T12:10:29Z",
     "free": {
      "1": [
       "三牌楼:MBA中心301室",
@@ -16518,7 +16671,7 @@
        "id": "a4a0ae490c5e5c8c",
        "course": "雷达与电子对抗",
        "teachers": [
-        "20110096/时艳玲"
+        "时艳玲"
        ],
        "classes": [
         "B230101",
@@ -17143,6 +17296,70 @@
        "periods": [
         1,
         2
+       ]
+      }
+     ],
+     "三牌楼:语音15室(有线楼304)": [
+      {
+       "kind": "class",
+       "id": "d8906732bee50a63",
+       "course": "大学英语IV",
+       "teachers": [
+        "张传东"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "55bafb1c616b5021",
+       "course": "大学英语IV",
+       "teachers": [
+        "张传东"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
+     "三牌楼:语音16室(有线楼314)": [
+      {
+       "kind": "class",
+       "id": "67739295aaef3b3a",
+       "course": "大学英语III",
+       "teachers": [
+        "朱莉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "48e34022112386de",
+       "course": "大学英语III",
+       "teachers": [
+        "朱莉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
        ]
       }
      ],
@@ -17810,87 +18027,6 @@
        ]
       }
      ],
-     "仙林/教2-103": [
-      {
-       "kind": "class",
-       "id": "d3716619b4994672",
-       "course": "大学英语II",
-       "teachers": [
-        "陈薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "c5911dccc22b0ad6",
-       "course": "大学英语II",
-       "teachers": [
-        "胡倩"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "c47a9da49e641de3",
-       "course": "大学英语II",
-       "teachers": [
-        "胡倩"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教2-104": [
-      {
-       "kind": "class",
-       "id": "5412dccab9c5221b",
-       "course": "大学英语II",
-       "teachers": [
-        "朱赟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
-     "仙林/教2-105": [
-      {
-       "kind": "class",
-       "id": "a0c1759c1a290f02",
-       "course": "大学英语II",
-       "teachers": [
-        "金鑫"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
      "仙林/教2-106": [
       {
        "kind": "class",
@@ -17914,246 +18050,11 @@
        "id": "9a66103762dd1299",
        "course": "有机功能材料与器件",
        "teachers": [
-        "20140070/冯全友,20240107/徐曼"
+        "冯全友、徐曼"
        ],
        "classes": [
         "B230701",
         "B230702"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教2-113": [
-      {
-       "kind": "class",
-       "id": "76c5c22a12272eb7",
-       "course": "大学英语I",
-       "teachers": [
-        "冯辉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "af78ffaab2de5590",
-       "course": "大学英语I",
-       "teachers": [
-        "冯辉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "5418959c4d209c3f",
-       "course": "大学英语I",
-       "teachers": [
-        "冯辉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教2-114": [
-      {
-       "kind": "class",
-       "id": "db439199746788c7",
-       "course": "大学英语I",
-       "teachers": [
-        "李智红"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "35ec2c2019fe428e",
-       "course": "大学英语I",
-       "teachers": [
-        "李智红"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "1711d37df7a7c6c8",
-       "course": "大学英语I",
-       "teachers": [
-        "李智红"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教2-115": [
-      {
-       "kind": "class",
-       "id": "84ce755489c51ed6",
-       "course": "大学英语I",
-       "teachers": [
-        "吕云霞"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "d6803091e1fad743",
-       "course": "大学英语I",
-       "teachers": [
-        "吕云霞"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "d09e056647a03fd5",
-       "course": "大学英语I",
-       "teachers": [
-        "吕云霞"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教2-116": [
-      {
-       "kind": "class",
-       "id": "165df950687473d8",
-       "course": "大学英语I",
-       "teachers": [
-        "徐丽丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "63592658740952c0",
-       "course": "大学英语I",
-       "teachers": [
-        "徐丽丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "624d8e079581b0c4",
-       "course": "大学英语I",
-       "teachers": [
-        "徐丽丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教2-117": [
-      {
-       "kind": "class",
-       "id": "461daa3edbd3b25b",
-       "course": "大学英语I",
-       "teachers": [
-        "罗奕"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "c8d58c80340a8708",
-       "course": "大学英语I",
-       "teachers": [
-        "罗奕"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "0433afa5102add14",
-       "course": "大学英语I",
-       "teachers": [
-        "罗奕"
-       ],
-       "classes": [
-        "wbj"
        ],
        "periods": [
         8,
@@ -20884,6 +20785,192 @@
        ]
       }
      ],
+     "仙林/教3-103": [
+      {
+       "kind": "class",
+       "id": "3bc55eede55ddbc9",
+       "course": "大学英语III",
+       "teachers": [
+        "杨艳"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "3e4f8c6fb668d46c",
+       "course": "大学英语IV",
+       "teachers": [
+        "康艳"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "5faf3e2f1c4b507e",
+       "course": "大学英语IV",
+       "teachers": [
+        "冯喆"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "9e896116acafb7c7",
+       "course": "大学英语IV",
+       "teachers": [
+        "冯喆"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教3-104": [
+      {
+       "kind": "class",
+       "id": "45dd6df65f888184",
+       "course": "大学英语IV",
+       "teachers": [
+        "康艳"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "e345b9253ed0bcbc",
+       "course": "大学英语III",
+       "teachers": [
+        "杨艳"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "88e6aa620da67605",
+       "course": "大学英语IV",
+       "teachers": [
+        "唐睿"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "e0e7b275d3d94a9f",
+       "course": "大学英语IV",
+       "teachers": [
+        "沈星辰"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教3-105": [
+      {
+       "kind": "class",
+       "id": "067a6fe519228eda",
+       "course": "大学英语III",
+       "teachers": [
+        "刘煜"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "68ec140458192092",
+       "course": "大学英语III",
+       "teachers": [
+        "刘煜"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "6b6ff49f5fca36fc",
+       "course": "大学英语IV",
+       "teachers": [
+        "李笑薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "8fda9aa5f685576b",
+       "course": "大学英语IV",
+       "teachers": [
+        "唐睿"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
      "仙林/教3-106": [
       {
        "kind": "class",
@@ -20898,6 +20985,36 @@
        "periods": [
         1,
         2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "592789140f8ad9ea",
+       "course": "大学英语IV",
+       "teachers": [
+        "龙翔"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "7962b868d4e9e82a",
+       "course": "大学英语IV",
+       "teachers": [
+        "李笑薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
        ]
       }
      ],
@@ -20915,6 +21032,36 @@
        "periods": [
         3,
         4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "fab3cdf8fb5f0e1e",
+       "course": "大学英语III",
+       "teachers": [
+        "卞树荣"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "8fbdbb78cb656b0d",
+       "course": "大学英语III",
+       "teachers": [
+        "卞树荣"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
        ]
       }
      ],
@@ -21378,7 +21525,7 @@
        "id": "13cd825af0f59cea",
        "course": "半导体集成电路工艺",
        "teachers": [
-        "20170075/李金泽"
+        "李金泽"
        ],
        "classes": [
         "P230005",
@@ -21521,7 +21668,7 @@
        "id": "55217f0d3583b314",
        "course": "半导体集成电路工艺",
        "teachers": [
-        "20170075/李金泽"
+        "李金泽"
        ],
        "classes": [
         "P240005",
@@ -23218,6 +23365,36 @@
         3,
         4
        ]
+      },
+      {
+       "kind": "class",
+       "id": "53b25ca99eef1a8b",
+       "course": "大学英语III",
+       "teachers": [
+        "王为毅"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "8aba4b4fa51c0ffc",
+       "course": "大学英语III",
+       "teachers": [
+        "王为毅"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
       }
      ],
      "仙林/教3-507": [
@@ -23743,21 +23920,6 @@
       },
       {
        "kind": "class",
-       "id": "728d6f0b239a5f7c",
-       "course": "大学英语II",
-       "teachers": [
-        "霍丹"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
        "id": "fea203fd8a2e97c4",
        "course": "综合英语I-B（托福上）",
        "teachers": [
@@ -23839,6 +24001,36 @@
      "仙林/教3-537": [
       {
        "kind": "class",
+       "id": "3e493cbf5acf410a",
+       "course": "大学英语IV",
+       "teachers": [
+        "王越"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "3c6ba3afaa64ea7c",
+       "course": "大学英语IV",
+       "teachers": [
+        "王越"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
        "id": "cef6305797dea5ad",
        "course": "大学英语III",
        "teachers": [
@@ -23853,13 +24045,43 @@
        ]
       }
      ],
-     "仙林/教3-601": [
+     "仙林/教3-538": [
       {
        "kind": "class",
-       "id": "d367fe033fe44963",
-       "course": "大学英语II",
+       "id": "535450f034242bc8",
+       "course": "大学英语IV",
        "teachers": [
-        "陈薇"
+        "王苗苗"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "a97afb6fa159c356",
+       "course": "大学英语IV",
+       "teachers": [
+        "杨子"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "5ae8910b506d653e",
+       "course": "大学英语IV",
+       "teachers": [
+        "毛启洪"
        ],
        "classes": [
         "wbj"
@@ -23871,10 +24093,10 @@
       },
       {
        "kind": "class",
-       "id": "17b9a4fefb8e9130",
-       "course": "大学英语II",
+       "id": "d556922f3da48f0f",
+       "course": "大学英语IV",
        "teachers": [
-        "陈薇"
+        "毛启洪"
        ],
        "classes": [
         "wbj"
@@ -23888,106 +24110,25 @@
      "仙林/教3-602": [
       {
        "kind": "class",
-       "id": "5e33e56467ffbc03",
-       "course": "大学英语II",
+       "id": "5781dae8277f5453",
+       "course": "大学英语IV",
        "teachers": [
-        "金鑫"
+        "朱彦"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        6,
-        7
+        1,
+        2
        ]
       },
       {
        "kind": "class",
-       "id": "8eb88a8574d5fb9f",
-       "course": "大学英语II",
+       "id": "3287231709357286",
+       "course": "大学英语IV",
        "teachers": [
-        "金鑫"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-603": [
-      {
-       "kind": "class",
-       "id": "0d6cd938a0070911",
-       "course": "大学英语II",
-       "teachers": [
-        "霍丹"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "c3cc33bc62e4054a",
-       "course": "大学英语II",
-       "teachers": [
-        "霍丹"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-604": [
-      {
-       "kind": "class",
-       "id": "6bba440450c7b57f",
-       "course": "大学英语II",
-       "teachers": [
-        "朱赟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "8f4b2cbe7e32cbaf",
-       "course": "大学英语II",
-       "teachers": [
-        "朱赟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-606": [
-      {
-       "kind": "class",
-       "id": "2cb15e43db9c8d36",
-       "course": "大学英语II",
-       "teachers": [
-        "胡倩"
+        "朱彦"
        ],
        "classes": [
         "wbj"
@@ -23996,7 +24137,73 @@
         3,
         4
        ]
+      }
+     ],
+     "仙林/教3-603": [
+      {
+       "kind": "class",
+       "id": "3e2d30008d400fed",
+       "course": "大学英语IV",
+       "teachers": [
+        "王晶"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
       },
+      {
+       "kind": "class",
+       "id": "1be062c8fc0b744f",
+       "course": "大学英语IV",
+       "teachers": [
+        "王晶"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
+     "仙林/教3-604": [
+      {
+       "kind": "class",
+       "id": "1dd16cbdf64cfa69",
+       "course": "大学英语IV",
+       "teachers": [
+        "张志芳"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "f0eb323ea32b544b",
+       "course": "大学英语IV",
+       "teachers": [
+        "张志芳"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
+     "仙林/教3-606": [
       {
        "kind": "class",
        "id": "f5358f1a47f3f8fc",
@@ -26085,7 +26292,7 @@
     "date": "2026-11-09",
     "week": 11,
     "weekday": 1,
-    "observed_at": "2026-11-07T11:26:44Z",
+    "observed_at": "2026-11-08T12:10:29Z",
     "free": {
      "1": [
       "三牌楼:MBA中心301室",
@@ -30341,38 +30548,6 @@
        ]
       }
      ],
-     "三牌楼:教西-102": [
-      {
-       "kind": "class",
-       "id": "09d9f437c2bdcc3b",
-       "course": "大学英语II",
-       "teachers": [
-        "许艺军"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "f7046bd91b96744b",
-       "course": "大学英语II",
-       "teachers": [
-        "许艺军"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
      "三牌楼:教西-201": [
       {
        "kind": "class",
@@ -30678,38 +30853,6 @@
        ]
       }
      ],
-     "三牌楼:语音14室(有线楼302)": [
-      {
-       "kind": "class",
-       "id": "70f9e3c811d7828f",
-       "course": "大学英语I",
-       "teachers": [
-        "尤蕾"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "6647eb1b966745c2",
-       "course": "大学英语I",
-       "teachers": [
-        "尤蕾"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
      "三牌楼:语音15室(有线楼304)": [
       {
        "kind": "class",
@@ -30724,21 +30867,6 @@
        "periods": [
         1,
         2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "37799ed672d23c17",
-       "course": "大学英语II",
-       "teachers": [
-        "朱莉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
        ]
       }
      ],
@@ -31672,147 +31800,6 @@
        ]
       }
      ],
-     "仙林/教2-103": [
-      {
-       "kind": "class",
-       "id": "c5ef0f35d150782d",
-       "course": "大学英语II",
-       "teachers": [
-        "陈薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "e7526bcbceba125f",
-       "course": "大学英语II",
-       "teachers": [
-        "陈薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "359b47243d7ad7e8",
-       "course": "大学英语II",
-       "teachers": [
-        "陈薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      }
-     ],
-     "仙林/教2-104": [
-      {
-       "kind": "class",
-       "id": "6dc955896599e1aa",
-       "course": "大学英语II",
-       "teachers": [
-        "朱赟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "8eb6db749ccc37ac",
-       "course": "大学英语II",
-       "teachers": [
-        "朱赟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "3f8e73bf96652d87",
-       "course": "大学英语II",
-       "teachers": [
-        "朱赟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      }
-     ],
-     "仙林/教2-105": [
-      {
-       "kind": "class",
-       "id": "f31d4c9be01119f6",
-       "course": "大学英语II",
-       "teachers": [
-        "李亚利"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "a2ca8d6104fc89bd",
-       "course": "大学英语II",
-       "teachers": [
-        "丁晓钟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "baf8eb007158952d",
-       "course": "大学英语II",
-       "teachers": [
-        "丁晓钟"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      }
-     ],
      "仙林/教2-106": [
       {
        "kind": "class",
@@ -31851,51 +31838,6 @@
      "仙林/教2-113": [
       {
        "kind": "class",
-       "id": "9665f67472fc6654",
-       "course": "大学英语I",
-       "teachers": [
-        "冯辉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "cebb1c6101c4e60b",
-       "course": "大学英语I",
-       "teachers": [
-        "冯辉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "2b4c8c902666ec30",
-       "course": "大学英语I",
-       "teachers": [
-        "冯辉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
        "id": "b7647c4e3e3e1c09",
        "course": "政治经济学",
        "teachers": [
@@ -31911,51 +31853,6 @@
       }
      ],
      "仙林/教2-114": [
-      {
-       "kind": "class",
-       "id": "5748c29917d7312b",
-       "course": "大学英语I",
-       "teachers": [
-        "李智红"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "7f53f4a960827bfd",
-       "course": "大学英语I",
-       "teachers": [
-        "李智红"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "2d1839407d0c969e",
-       "course": "大学英语I",
-       "teachers": [
-        "李智红"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
       {
        "kind": "class",
        "id": "119e2c715c0b8d9f",
@@ -31975,51 +31872,6 @@
      "仙林/教2-115": [
       {
        "kind": "class",
-       "id": "67e5c3907e4ff4ab",
-       "course": "大学英语I",
-       "teachers": [
-        "吕云霞"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "113f3d265543885a",
-       "course": "大学英语I",
-       "teachers": [
-        "吕云霞"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "7d8e05ee90d0456e",
-       "course": "大学英语I",
-       "teachers": [
-        "吕云霞"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
        "id": "ba09541adcd6f2a4",
        "course": "现代统计方法",
        "teachers": [
@@ -32032,100 +31884,6 @@
        "periods": [
         8,
         9
-       ]
-      }
-     ],
-     "仙林/教2-116": [
-      {
-       "kind": "class",
-       "id": "ff5eda2f17618594",
-       "course": "大学英语I",
-       "teachers": [
-        "徐丽丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "3d97b85ffb21f826",
-       "course": "大学英语I",
-       "teachers": [
-        "徐丽丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "40a8391101a1ea92",
-       "course": "大学英语I",
-       "teachers": [
-        "徐丽丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      }
-     ],
-     "仙林/教2-117": [
-      {
-       "kind": "class",
-       "id": "eb24e7d53f3003ef",
-       "course": "大学英语I",
-       "teachers": [
-        "罗奕"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "5633b9945192a6de",
-       "course": "大学英语I",
-       "teachers": [
-        "罗奕"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "d4926bc173afd02b",
-       "course": "大学英语I",
-       "teachers": [
-        "罗奕"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
        ]
       }
      ],
@@ -35135,6 +34893,192 @@
        ]
       }
      ],
+     "仙林/教3-103": [
+      {
+       "kind": "class",
+       "id": "672fc9e3eab6c8a8",
+       "course": "大学英语IV",
+       "teachers": [
+        "毛启洪"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "7a7eb8008086f043",
+       "course": "大学英语IV",
+       "teachers": [
+        "毛启洪"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "b5163dc7480f4694",
+       "course": "大学英语IV",
+       "teachers": [
+        "颜文洁"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "88014a8e987e8ed6",
+       "course": "大学英语IV",
+       "teachers": [
+        "杨丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教3-104": [
+      {
+       "kind": "class",
+       "id": "f7d66dea3da2d24a",
+       "course": "大学英语III",
+       "teachers": [
+        "卞树荣"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "61a4e58ff49a41a0",
+       "course": "大学英语III",
+       "teachers": [
+        "卞树荣"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "ff3fa62658fcad7a",
+       "course": "大学英语IV",
+       "teachers": [
+        "吴远征"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "22fd8d94ab3e008a",
+       "course": "大学英语IV",
+       "teachers": [
+        "吴远征"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教3-105": [
+      {
+       "kind": "class",
+       "id": "af57a08983454dfe",
+       "course": "大学英语III",
+       "teachers": [
+        "王为毅"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "2c2cc3ad690973b1",
+       "course": "大学英语III",
+       "teachers": [
+        "王为毅"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "7e95a2636ed80d09",
+       "course": "大学英语IV",
+       "teachers": [
+        "殷健"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "c192ff97fd735f8f",
+       "course": "大学英语IV",
+       "teachers": [
+        "殷健"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
      "仙林/教3-106": [
       {
        "kind": "class",
@@ -35149,6 +35093,36 @@
        "periods": [
         3,
         4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "6946155795df5e6f",
+       "course": "大学英语IV",
+       "teachers": [
+        "江颖"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "6fe58587d7e9642e",
+       "course": "大学英语IV",
+       "teachers": [
+        "江颖"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
        ]
       }
      ],
@@ -38406,6 +38380,70 @@
        ]
       }
      ],
+     "仙林/教3-537": [
+      {
+       "kind": "class",
+       "id": "7a051a99ba4901a8",
+       "course": "大学英语IV",
+       "teachers": [
+        "冯喆"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "94dcce6d45b29cfd",
+       "course": "大学英语IV",
+       "teachers": [
+        "冯喆"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
+     "仙林/教3-538": [
+      {
+       "kind": "class",
+       "id": "7e381c09ffc7e5c8",
+       "course": "大学英语IV",
+       "teachers": [
+        "唐睿"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "1931ea4b01250897",
+       "course": "大学英语IV",
+       "teachers": [
+        "唐睿"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
      "仙林/教3-601": [
       {
        "kind": "class",
@@ -38439,21 +38477,6 @@
       },
       {
        "kind": "class",
-       "id": "ad2f7c3b1813869a",
-       "course": "大学英语II",
-       "teachers": [
-        "霍丹"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
        "id": "71ccbbdc4931be83",
        "course": "英语语音",
        "teachers": [
@@ -38471,21 +38494,66 @@
      "仙林/教3-602": [
       {
        "kind": "class",
-       "id": "afc11bc0eea9afca",
-       "course": "大学英语II",
+       "id": "3e9fdf94a39d0988",
+       "course": "大学英语IV",
        "teachers": [
-        "胡倩"
+        "龙翔"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        6,
-        7
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "44c9f9bc44145c19",
+       "course": "大学英语IV",
+       "teachers": [
+        "龙翔"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
        ]
       }
      ],
      "仙林/教3-603": [
+      {
+       "kind": "class",
+       "id": "1601bf51907138b9",
+       "course": "大学英语IV",
+       "teachers": [
+        "李笑薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "4cdba317eb5a6e16",
+       "course": "大学英语IV",
+       "teachers": [
+        "李笑薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
       {
        "kind": "class",
        "id": "8399b714140b69ea",
@@ -38505,66 +38573,36 @@
      "仙林/教3-604": [
       {
        "kind": "class",
-       "id": "b9f52b7a2c900dea",
-       "course": "大学英语II",
+       "id": "d07d3e203c35d79f",
+       "course": "大学英语III",
        "teachers": [
-        "霍丹"
+        "刘长城"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        1,
-        2
+        6,
+        7
        ]
       },
       {
        "kind": "class",
-       "id": "dcefac4288d4aefa",
-       "course": "大学英语II",
+       "id": "a2a96f1deeaa265d",
+       "course": "大学英语III",
        "teachers": [
-        "霍丹"
+        "刘长城"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        3,
-        4
+        8,
+        9
        ]
       }
      ],
      "仙林/教3-606": [
-      {
-       "kind": "class",
-       "id": "467efea5b50454e0",
-       "course": "大学英语II",
-       "teachers": [
-        "胡倩"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "13a1913eb51a8a5a",
-       "course": "大学英语II",
-       "teachers": [
-        "胡倩"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
       {
        "kind": "class",
        "id": "4225f2a26b538706",
@@ -44493,6 +44531,83 @@
      "b",
      "c"
     ]
+   }
+  ],
+  "examReminders": [
+   {
+    "key": "week",
+    "start": 480,
+    "minutes": 10080
+   },
+   {
+    "key": "week",
+    "start": 810,
+    "minutes": 10080
+   },
+   {
+    "key": "week",
+    "start": 1110,
+    "minutes": 10080
+   },
+   {
+    "key": "days",
+    "start": 480,
+    "minutes": 4320
+   },
+   {
+    "key": "days",
+    "start": 810,
+    "minutes": 4320
+   },
+   {
+    "key": "days",
+    "start": 1110,
+    "minutes": 4320
+   },
+   {
+    "key": "eve",
+    "start": 480,
+    "minutes": 720
+   },
+   {
+    "key": "eve",
+    "start": 810,
+    "minutes": 1050
+   },
+   {
+    "key": "eve",
+    "start": 1110,
+    "minutes": 1350
+   },
+   {
+    "key": "early",
+    "start": 480,
+    "minutes": 120
+   },
+   {
+    "key": "early",
+    "start": 810,
+    "minutes": 120
+   },
+   {
+    "key": "early",
+    "start": 1110,
+    "minutes": 120
+   },
+   {
+    "key": "hour",
+    "start": 480,
+    "minutes": 60
+   },
+   {
+    "key": "hour",
+    "start": 810,
+    "minutes": 60
+   },
+   {
+    "key": "hour",
+    "start": 1110,
+    "minutes": 60
    }
   ]
  }

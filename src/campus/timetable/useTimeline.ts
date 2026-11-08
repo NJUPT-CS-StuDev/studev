@@ -76,7 +76,7 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         const exams = who.type === 'me' ? attendingExams(source.exams, choices, codes) : source.exams;
         const grade = gradeOf(classInfo?.grade, base.term);
         const runOn = who.type === 'me' && base.run && (prefs.run?.on ?? (grade !== null && grade <= 2));
-        const line: Timeline = { term: base.term, periods: base.periods, meetings, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? {}, adjust: prefs.run?.adjust ?? 0 } : null };
+        const line: Timeline = { term: base.term, periods: base.periods, meetings, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null };
         return { loaded: { ...base, line, own, added, classInfo }, error, previewRows };
     }, [base, catalogRows, classId, edits.hidden, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
 }

@@ -70,6 +70,8 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
     }
 }
 
+@Composable fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) = androidx.compose.material3.Switch(on, onChange, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Ink.brand))
+
 @Composable fun Chip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
     Surface(onClick, modifier.heightIn(min = 32.dp), shape = RoundedCornerShape(8.dp), color = Ink.paper, border = BorderStroke(1.dp, Ink.line)) {
         Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) { Plain(text, 13.sp) }

@@ -2,18 +2,20 @@
 import type { Exam, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { courseName, courseShort } from './names';
 import type { CalendarTerm, MorningRun } from './data';
-import { addDays, daysBetween, minutesOf, weekdayOf, type Moment } from './time';
+import { addDays, daysBetween, minutesOf, startOfWeek, weekdayOf, type Moment } from './time';
 
 export interface CampusEvent {
     kind: 'class' | 'exam' | 'run';
-    runMark?: RunMark;
     id: string; date: string; name: string; short: string; start: number; end: number;
     room: string | null; teachers: string[];
     meeting?: TeachingMeeting; exam?: Exam;
 }
-export type RunMark = 'done' | 'plan';
-/** Which mornings are run or planned, and the bonus or penalty the sports office recorded. */
-export interface RunPlan { rule: MorningRun; days: Record<string, RunMark>; adjust: number }
+/**
+ * The mornings someone put down for 早锻炼, and the bonus or penalty the sports office recorded.
+ * A morning put down and gone by counts as run: people mostly go, so only a missed one is touched
+ * (taken off). There is nothing to mark after the fact.
+ */
+export interface RunPlan { rule: MorningRun; days: string[]; adjust: number }
 export interface Timeline {
     term: TeachingTerm; periods: TeachingPeriod[]; meetings: TeachingMeeting[]; exams: Exam[];
     holidays: Map<string, string>; run: RunPlan | null;
@@ -61,8 +63,8 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
             start: minutesOf(exam.start), end: minutesOf(exam.end), room: exam.room ?? exam.location, teachers: exam.teacher ? [exam.teacher] : [], exam,
         });
     }
-    if (line.run?.days[date]) {
-        out.push({ kind: 'run', id: `run@${date}`, date, name: '早锻炼', short: '早锻炼', start: minutesOf(line.run.rule.time[0]), end: minutesOf(line.run.rule.time[1]), room: null, teachers: [], runMark: line.run.days[date] });
+    if (line.run?.days.includes(date)) {
+        out.push({ kind: 'run', id: `run@${date}`, date, name: '早锻炼', short: '早锻炼', start: minutesOf(line.run.rule.time[0]), end: minutesOf(line.run.rule.time[1]), room: null, teachers: [] });
     }
     return out.sort((left, right) => left.start - right.start);
 }
@@ -81,23 +83,19 @@ export function upcomingExams(line: Timeline, today: string) {
         .map(exam => ({ exam, days: daysBetween(today, exam.date) }));
 }
 
-export function runTally({ rule, days, adjust }: RunPlan) {
-    const marks = Object.values(days);
-    const done = marks.filter(mark => mark === 'done').length;
-    const planned = marks.length - done;
+/** A morning put down counts as run once its time is over. */
+export const runGone = (rule: MorningRun, date: string, now: Moment) => date < now.date || (date === now.date && now.min >= minutesOf(rule.time[1]));
+
+export function runTally({ rule, days, adjust }: RunPlan, now: Moment) {
+    const done = days.filter(date => runGone(rule, date, now)).length;
+    const planned = days.length - done;
     const count = done + adjust;
     return { done, planned, count, need: Math.max(0, rule.required - count - planned), nextBonus: rule.bonus.find(([at]) => at > count + planned) ?? null };
 }
 
-/** One tap moves a morning on: ahead it can only be planned; from today back it can be run. */
-export function nextRunMark(days: Record<string, RunMark>, date: string, today: string): Record<string, RunMark> {
-    const mark = days[date];
-    const next = { ...days };
-    if (date > today) { if (mark) delete next[date]; else next[date] = 'plan'; }
-    else if (mark === 'done') delete next[date];
-    else next[date] = date === today && !mark ? 'plan' : 'done';
-    return next;
-}
+/** One tap puts a morning down or takes it off, past or ahead. */
+export const toggleRun = (days: string[], date: string): string[] =>
+    days.includes(date) ? days.filter(day => day !== date) : [...days, date].sort();
 
 /** Every morning in the term one can run, in order. */
 export function runDates(rule: MorningRun, holidays: Map<string, string>) {
@@ -108,14 +106,14 @@ export function runDates(rule: MorningRun, holidays: Map<string, string>) {
 
 /**
  * Lays out what is still needed: evenly over the mornings left, so rain costs little, and within
- * each stretch on a day with an early class, when one is up anyway. Done mornings stay; earlier plans
- * for mornings still ahead are replaced.
+ * each stretch on a day with an early class, when one is up anyway. Mornings already begun stay;
+ * earlier plans for mornings still ahead are replaced.
  */
-export function planRuns(plan: RunPlan, line: Timeline, now: Moment): Record<string, RunMark> {
+export function planRuns(plan: RunPlan, line: Timeline, now: Moment): string[] {
     const from = now.min < minutesOf(plan.rule.time[0]) ? now.date : addDays(now.date, 1);
-    const days = Object.fromEntries(Object.entries(plan.days).filter(([date, mark]) => mark === 'done' || date < from)) as Record<string, RunMark>;
-    const open = runDates(plan.rule, line.holidays).filter(date => date >= from && !days[date]);
-    const need = Math.min(open.length, Math.max(0, runTally({ ...plan, days }).need));
+    const days = plan.days.filter(date => date < from);
+    const open = runDates(plan.rule, line.holidays).filter(date => date >= from);
+    const need = Math.min(open.length, Math.max(0, runTally({ ...plan, days }, now).need));
     let last = '';
     for (let part = 0; part < need; part++) {
         const start = Math.floor(part * open.length / need);
@@ -127,10 +125,36 @@ export function planRuns(plan: RunPlan, line: Timeline, now: Moment): Record<str
         let best = 0;
         stretch.forEach((date, position) => { if (score(date, position) > score(stretch[best]!, best)) best = position; });
         last = stretch[best]!;
-        days[last] = 'plan';
+        days.push(last);
     }
-    return days;
+    return days.sort();
 }
 
 /** The grade a class is in during the given academic year's term: 1 for 大一. */
 export const gradeOf = (classGrade: string | null | undefined, term: TeachingTerm) => classGrade ? term.year - Number(classGrade) + 1 : null;
+
+/**
+ * The week a "now" view shows: this one while something in it is still ahead, otherwise the week of
+ * the next thing. On a Sunday evening that is next week. Same rule as the day: what is left, or the
+ * next day that has something.
+ */
+export function weekShown(line: Timeline, now: Moment): string {
+    const next = nextEvent(line, now, 60);
+    return startOfWeek(next ? next.date : now.date);
+}
+
+/** The last day with a lesson on this line: where the term's teaching ends. */
+export function lastLesson(line: Timeline): string | null {
+    const first = line.term.weeks[0]?.start;
+    for (let date = line.term.weeks.at(-1)?.end; first && date && date >= first; date = addDays(date, -1)) {
+        if (eventsOn(line, date).some(event => event.kind === 'class')) return date;
+    }
+    return null;
+}
+
+/** Exams still ahead, one entry per day, in order: people prepare by the day, not by the paper. */
+export function examDays(line: Timeline, today: string) {
+    const days = new Map<string, Exam[]>();
+    for (const { exam } of upcomingExams(line, today)) days.set(exam.date, [...(days.get(exam.date) ?? []), exam]);
+    return [...days].map(([date, exams]) => ({ date, days: daysBetween(today, date), exams }));
+}

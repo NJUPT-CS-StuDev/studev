@@ -56,4 +56,6 @@ class Route {
     }
     fun timetable(type: String, id: String, newScale: String = "week", at: LocalDate? = null) { whoType = type; whoId = id; scale = newScale; day = at; preview = null; tab = "timetable" }
     fun map(place: String? = null, at: Pair<LocalDate, Int>? = null, nav: String? = null) { this.place = place; this.moment = at; this.nav = nav; floor = null; tab = "map" }
+    /** Free rooms are the rooms dimension of search, at a moment. */
+    fun rooms(at: Pair<LocalDate, Int>) { scope = "room"; moment = at; tab = "search" }
 }

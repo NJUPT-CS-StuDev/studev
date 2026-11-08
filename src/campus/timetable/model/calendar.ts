@@ -1,53 +1,126 @@
-import { PRODUCT_CONFIG } from '@/world/product';
-import type { TeachingMeeting, TeachingPeriod, TeachingWeek } from '@/world/facts';
+// The timeline written as iCalendar, once, from the person's own timetable: what they see is what
+// their calendar gets. Keeping a calendar up to date is the Android app's job.
+import type { Exam, TeachingMeeting } from '@/world/facts';
+import type { CalendarTerm } from '@/world/data';
+import { weekOfDate, type RunPlan, type Timeline } from '@/world/events';
+import { courseName, roomLabel } from '@/world/names';
+import { addDays, minutesOf } from '@/world/time';
 
-const escape = (value: string): string => value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
-const compact = (value: string): string => value.replace(/[-:]/g, '');
+/** What can go into the file; the Android app writes each as its own calendar on the phone. */
+export const CALENDARS = [
+    { kind: 'lessons', name: '课程' },
+    { kind: 'exams', name: '考试' },
+    { kind: 'run', name: '早锻炼' },
+    { kind: 'school', name: '校历' },
+] as const;
+export type CalendarKind = typeof CALENDARS[number]['kind'];
 
-const meetingDate = (week: TeachingWeek, weekday: number): string => {
-    const date = new Date(`${week.start}T00:00:00Z`);
-    date.setUTCDate(date.getUTCDate() + weekday - 1);
-    return date.toISOString().slice(0, 10);
+/** When an exam reminds: a few days to prepare, the evening before to check, an hour or two to leave. */
+export const EXAM_REMINDERS = [
+    { key: 'week', name: '一周前' },
+    { key: 'days', name: '三天前' },
+    { key: 'eve', name: '前一天 20:00' },
+    { key: 'early', name: '两小时前' },
+    { key: 'hour', name: '一小时前' },
+] as const;
+export type ExamReminder = typeof EXAM_REMINDERS[number]['key'];
+export const DEFAULT_EXAM_REMINDERS: ExamReminder[] = ['eve', 'hour'];
+/** Minutes before an exam starting at `start` (minutes into its day). */
+export const examReminderMinutes = (key: ExamReminder, start: number): number =>
+    key === 'week' ? 7 * 1440 : key === 'days' ? 3 * 1440 : key === 'eve' ? start + 240 : key === 'early' ? 120 : 60;
+export const LESSON_REMINDER = 15;
+export const RUN_REMINDER = 30;
+
+interface Entry {
+    uid: string; summary: string; location: string; description: string; date: string;
+    /** Minutes into the day; absent for a whole-day entry, which then runs to `last`. */
+    start?: number; end?: number; last?: string;
+    /** A weekly series: its final date, and the weeks it skips. */
+    until?: string; skip?: string[];
+    reminders: number[];
+}
+
+const pad = (value: number) => String(value).padStart(2, '0');
+const day = (date: string) => date.replaceAll('-', '');
+const local = (date: string, minutes: number) => `${day(date)}T${pad(Math.floor(minutes / 60))}${pad(minutes % 60)}00`;
+/** Campus time is UTC+8 all year. */
+const utc = (date: string, minutes: number) => minutes >= 480 ? `${local(date, minutes - 480)}Z` : `${local(addDays(date, -1), minutes + 960)}Z`;
+const text = (value: string) => value.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+/** Lines longer than 75 octets continue on the next line after a space. */
+const fold = (line: string) => {
+    const bytes = new TextEncoder().encode(line);
+    if (bytes.length <= 75) return line;
+    const parts: string[] = [];
+    let current = '';
+    let size = 0;
+    for (const char of line) {
+        const width = new TextEncoder().encode(char).length;
+        if (size + width > (parts.length ? 74 : 75)) { parts.push(current); current = ''; size = 0; }
+        current += char;
+        size += width;
+    }
+    return [...parts, current].join('\r\n ');
 };
+const ZONE = ['BEGIN:VTIMEZONE', 'TZID:Asia/Shanghai', 'BEGIN:STANDARD', 'DTSTART:19700101T000000', 'TZOFFSETFROM:+0800', 'TZOFFSETTO:+0800', 'TZNAME:CST', 'END:STANDARD', 'END:VTIMEZONE'];
 
-export const buildClassCalendar = (
-    className: string,
-    meetings: TeachingMeeting[],
-    weeks: TeachingWeek[],
-    periods: TeachingPeriod[],
-): string => {
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//studev//Teaching Schedule//ZH-CN', 'CALSCALE:GREGORIAN'];
-    for (const meeting of meetings) {
-        const startPeriod = periods.find(item => item.period === meeting.periods[0]);
-        const endPeriod = periods.find(item => item.period === meeting.periods[1]);
-        if (!startPeriod || !endPeriod) continue;
-        for (const weekNumber of meeting.weeks) {
-            const week = weeks.find(item => item.week === weekNumber);
-            if (!week) continue;
-            const date = meetingDate(week, meeting.weekday);
-            const uid = `${meeting.id}-${weekNumber}@${new URL(PRODUCT_CONFIG.ORIGIN).hostname}`;
-            lines.push(
-                'BEGIN:VEVENT',
-                `UID:${uid}`,
-                `DTSTAMP:${compact(new Date().toISOString().slice(0, 19))}Z`,
-                `DTSTART;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${compact(date)}T${compact(startPeriod.start)}00`,
-                `DTEND;TZID=${PRODUCT_CONFIG.TIME_ZONE}:${compact(date)}T${compact(endPeriod.end)}00`,
-                `SUMMARY:${escape(meeting.course.name)}`,
-                `LOCATION:${escape(meeting.room ?? '')}`,
-                `DESCRIPTION:${escape([className, meeting.teachers.map(t => t.name).join(',')].filter(Boolean).join(' · '))}`,
-                'END:VEVENT',
-            );
-        }
+/** One calendar file; `stamp` is when it was written. */
+export function calendarFile(name: string, entries: Entry[], stamp: Date): string {
+    const now = stamp.toISOString().replace(/[-:]|\.\d+/g, '');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//studev//ZH-CN', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${text(name)}`, 'X-WR-TIMEZONE:Asia/Shanghai', ...ZONE];
+    for (const entry of entries) {
+        lines.push('BEGIN:VEVENT', `UID:${entry.uid}@studev`, `DTSTAMP:${now}`);
+        if (entry.start === undefined) lines.push(`DTSTART;VALUE=DATE:${day(entry.date)}`, `DTEND;VALUE=DATE:${day(addDays(entry.last ?? entry.date, 1))}`);
+        else lines.push(`DTSTART;TZID=Asia/Shanghai:${local(entry.date, entry.start)}`, `DTEND;TZID=Asia/Shanghai:${local(entry.date, entry.end!)}`);
+        if (entry.until) lines.push(`RRULE:FREQ=WEEKLY;UNTIL=${utc(entry.until, entry.end!)}`);
+        if (entry.skip?.length) lines.push(`EXDATE;TZID=Asia/Shanghai:${entry.skip.map(date => local(date, entry.start!)).join(',')}`);
+        lines.push(`SUMMARY:${text(entry.summary)}`);
+        if (entry.location) lines.push(`LOCATION:${text(entry.location)}`);
+        if (entry.description) lines.push(`DESCRIPTION:${text(entry.description)}`);
+        for (const minutes of entry.reminders) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${text(entry.summary)}`, `TRIGGER:-PT${minutes}M`, 'END:VALARM');
+        lines.push('END:VEVENT');
     }
     lines.push('END:VCALENDAR');
-    return `${lines.join('\r\n')}\r\n`;
-};
+    return `${lines.map(fold).join('\r\n')}\r\n`;
+}
 
-export const downloadCalendar = (filename: string, content: string): void => {
+/** Each lesson is one weekly series over the dates the timeline holds it: its weeks, minus holidays. */
+export function lessonEntries(line: Timeline): Entry[] {
+    return line.meetings.flatMap((meeting: TeachingMeeting) => {
+        const first = line.periods.find(period => period.period === meeting.periods[0]);
+        const last = line.periods.find(period => period.period === meeting.periods[1]);
+        const dates = line.term.weeks.filter(week => meeting.weeks.includes(week.week)).map(week => addDays(week.start, meeting.weekday - 1)).filter(date => !line.holidays.has(date));
+        if (!first || !last || !dates.length) return [];
+        const skip: string[] = [];
+        for (let date = dates[0]!; date < dates.at(-1)!; date = addDays(date, 7)) if (!dates.includes(date)) skip.push(date);
+        const weeks = dates.map(date => weekOfDate(line.term, date));
+        return [{
+            uid: `${meeting.id}`, summary: courseName(meeting.course.name), location: roomLabel(meeting.room ?? meeting.location),
+            description: [`第 ${weeks[0]}–${weeks.at(-1)} 周`, meeting.teachers.map(teacher => teacher.name).join('、')].filter(Boolean).join(' · '),
+            date: dates[0]!, start: minutesOf(first.start), end: minutesOf(last.end), until: dates.at(-1)!, skip, reminders: [LESSON_REMINDER],
+        }];
+    });
+}
+
+export const examEntries = (exams: Exam[], reminders: ExamReminder[]): Entry[] => exams.map(exam => ({
+    uid: exam.id, summary: `考试 · ${courseName(exam.course.name)}`, location: roomLabel(exam.room ?? exam.location),
+    description: [exam.teacher ? `任课老师 ${exam.teacher}` : '', exam.students ? `本考场 ${exam.students} 人` : ''].filter(Boolean).join(' · '),
+    date: exam.date, start: minutesOf(exam.start), end: minutesOf(exam.end),
+    reminders: reminders.map(key => examReminderMinutes(key, minutesOf(exam.start))),
+}));
+
+export const runEntries = ({ rule, days }: RunPlan): Entry[] => days.map(date => ({
+    uid: `run-${date}`, summary: '早锻炼', location: rule.xianlin?.route.join(' ↔ ') ?? '', description: '',
+    date, start: minutesOf(rule.time[0]), end: minutesOf(rule.time[1]), reminders: [RUN_REMINDER],
+}));
+
+export const schoolEntries = (terms: CalendarTerm[]): Entry[] => terms.flatMap(term => [...term.holidays, ...term.events, ...(term.break ? [term.break] : [])])
+    .map(item => ({ uid: `school-${item.start}-${item.name}`, summary: item.name, location: '', description: '', date: item.start, last: item.end, reminders: [] }));
+
+export function downloadCalendar(filename: string, content: string): void {
     const url = URL.createObjectURL(new Blob([content], { type: 'text/calendar;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = filename;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-};
+}

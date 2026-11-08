@@ -10,7 +10,6 @@ export const PRODUCT_CONFIG = {
         VERSION: product.android.versionName,
         DOWNLOAD_URL: '/download/',
         SUMMARY: '课表、地图和搜索，桌面小组件，离线可用。',
-        FILE_URL: '/api/apk',
         BACKUP_URL: `https://dl.hicancan.top/studev-${product.android.versionName}.apk`,
         RELEASES_URL: `https://github.com/${product.repository}/releases/latest`,
     },

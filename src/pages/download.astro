@@ -1,12 +1,19 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
+import { downloadStore, presignGet, WEEK } from '../download/object-store.mjs';
+
+// Signed when the site is built; data releases redeploy it several times a day, well inside the week.
+const store = downloadStore();
+if (!store) throw new Error('the download store is not configured');
+const file = `studev-${PRODUCT_CONFIG.ANDROID_APP.VERSION}.apk`;
+const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `attachment; filename="${file}"` });
 ---
 <SiteLayout title="下载 studev" noPwa>
   <section class="download-page">
     <h1>studev Android</h1>
     <p class="download-summary">{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
-    <a class="download-button" href={PRODUCT_CONFIG.ANDROID_APP.FILE_URL} data-astro-prefetch="false" rel="nofollow">下载 {PRODUCT_CONFIG.ANDROID_APP.VERSION}</a>
+    <a class="download-button" href={signed} data-astro-prefetch="false" rel="nofollow">下载 {PRODUCT_CONFIG.ANDROID_APP.VERSION}</a>
     <p class="download-help">下载后在浏览器的下载列表中打开，按系统提示安装。微信、QQ 内请先选择“在浏览器打开”。</p>
     <p class="download-help">下载不动时换一个：<a href={PRODUCT_CONFIG.ANDROID_APP.BACKUP_URL} rel="nofollow">备用下载</a> · <a href={PRODUCT_CONFIG.ANDROID_APP.RELEASES_URL}>GitHub</a> · <a href="/">iPhone 或其他设备使用网页版</a></p>
   </section>

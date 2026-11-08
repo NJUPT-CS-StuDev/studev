@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { eventsOn, nextEvent, upcomingExams, type CampusEvent, type Timeline } from '@/world/events';
-import { buildingOf, roomLabel, unplaced } from '@/world/names';
+import { eventsOn, examDays, nextEvent, type CampusEvent, type Timeline } from '@/world/events';
+import type { ExamRecord } from '@/world/data';
+import { wasChanged } from '@/world/exams';
+import { buildingOf, courseName, roomLabel, unplaced } from '@/world/names';
 import { addDays, daysBetween, dateLabel, durationText, hm, momentText, startOfWeek, WEEKDAYS, type Moment } from '@/world/time';
 import { walkMinutes } from '@/world/walk';
 import { Chevron } from '@/world/ui';
 import { courseToneIndex, courseToneStyle } from '@/timetable/model/courseColors';
 
 const tileStyle = (event: CampusEvent) => event.meeting ? courseToneStyle(courseToneIndex(event.meeting)) : undefined;
-const tileClass = (event: CampusEvent) => event.kind === 'exam' ? 'exam' : event.kind === 'run' ? 'run' : '';
-const mapAt = (date: string, min: number) => `/map/?t=${momentText({ date, min })}`;
+const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'run' ? 'run' : '';
+/** Free rooms are the rooms dimension of search, at a moment. */
+const roomsAt = (date: string, min: number) => `/search/?scope=room&t=${momentText({ date, min })}`;
 
 function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     const event = nextEvent(line, now);
@@ -25,21 +28,21 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     const during = today && event.start <= now.min;
     const caption = during ? `正在上，到 ${hm(event.end)}` : today ? `下一节 · 还有 ${durationText(event.start - now.min)}`
         : `下一节 · ${daysBetween(now.date, event.date) === 1 ? '明天' : dateLabel(event.date)}`;
-    const exam = upcomingExams(line, now.date)[0];
+    const exam = examDays(line, now.date)[0];
     return (
         <section className="next">
             <div className="l">
                 <span className="cap">{caption}</span>
                 <b>{hm(event.start)} {event.name}</b>
                 <span className="m">{event.room ? roomLabel(event.room) : '教室未排定'}{walk !== null && !during ? ` · ${hm(event.start - walk - 2)} 出门，步行 ${walk} 分钟` : ''}</span>
-                {exam && <span className="xam"><span className="tag">考试</span>{exam.days === 0 ? '今天' : exam.days === 1 ? '明天' : `${exam.days} 天后`} {exam.exam.course.name} {exam.exam.start}</span>}
+                {exam && <span className="xam"><span className="tag">考试</span>{exam.days === 0 ? '今天' : exam.days === 1 ? '明天' : `${exam.days} 天后`} {exam.exams.map(item => `${courseName(item.course.name)} ${item.start}`).join('、')}</span>}
             </div>
             {placed && <a className="btn go" href={`/map/?nav=${encodeURI(event.room!)}`}>去这里</a>}
         </section>
     );
 }
 
-export function DayView({ line, day, now, isMe, onPick, onOpen }: { line: Timeline; day: string; now: Moment; isMe: boolean; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
+export function DayView({ line, day, now, isMe, record, onPick, onOpen }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const today = day === now.date;
     const events = eventsOn(line, day);
@@ -64,7 +67,7 @@ export function DayView({ line, day, now, isMe, onPick, onOpen }: { line: Timeli
     const y = (minutes: number) => Math.round(minutes - from);
     const hours: number[] = [];
     for (let time = Math.ceil(from / 60) * 60; time <= to; time += 60) hours.push(time);
-    const gap = (start: number, end: number, key: string) => <a key={key} className="gapbtn" style={{ top: y((start + end) / 2) }} href={mapAt(day, start)}>空 {durationText(end - start)} · 看这时的空教室<Chevron /></a>;
+    const gap = (start: number, end: number, key: string) => <a key={key} className="gapbtn" style={{ top: y((start + end) / 2) }} href={roomsAt(day, start)}>空 {durationText(end - start)} · 看这时的空教室<Chevron /></a>;
     return (
         <>
             {head}{strip}
@@ -76,7 +79,7 @@ export function DayView({ line, day, now, isMe, onPick, onOpen }: { line: Timeli
                     const next = live[index + 1];
                     const start = today ? Math.max(event.end, now.min) : event.end;
                     return <div key={event.id}>
-                        <button className={`t ${tileClass(event)}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), ...tileStyle(event) }} onClick={() => onOpen(event)}>
+                        <button className={`t ${tileClass(event, record)}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), ...tileStyle(event) }} onClick={() => onOpen(event)}>
                             {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
                         </button>
                         {next && next.start - start >= 30 && next.start - event.end >= 45 && gap(start, next.start, `gap${index}`)}

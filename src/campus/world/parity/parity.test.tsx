@@ -3,14 +3,14 @@ import golden from './golden.json';
 import { timetableCells } from '@/timetable/model/presentation';
 import { courseHash, courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
 import { attendingExams } from '@/timetable/model/examAttendance';
-import { eventsOn, holidayMap, nextEvent, planRuns, runTally, type Timeline } from '@/world/events';
+import { eventsOn, holidayMap, lastLesson, nextEvent, planRuns, runTally, weekShown, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
 import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
-const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], exams: [], holidays, run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as Record<string, 'done' | 'plan'>, adjust: 5 } };
+const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], exams: [], holidays, run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
@@ -28,9 +28,11 @@ describe('the shared web / Android real-data contract', () => {
     for (const test of golden.moments) it(`next event and 早锻炼 progress at ${test.now.date} ${test.now.min}`, () => {
         const next = nextEvent(line, test.now);
         expect(next && brief(next)).toEqual(test.next);
-        expect(runTally(line.run!)).toEqual(test.run);
-        expect(Object.keys(planRuns(line.run!, line, test.now)).sort()).toEqual(test.plan);
+        expect(runTally(line.run!, test.now)).toEqual(test.run);
+        expect(planRuns(line.run!, line, test.now)).toEqual(test.plan);
+        expect(weekShown(line, test.now)).toBe(test.week);
     });
+    it('ends the term\'s teaching on the same day', () => expect(lastLesson(line)).toBe(golden.lastLesson));
     it('reads every sampled room at every sampled moment the same way', () => {
         const read = makeRoomReader(golden.periods as TeachingPeriod[]);
         for (const test of golden.rooms.cases) {

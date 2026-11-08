@@ -20,10 +20,12 @@ export interface Preferences {
     run?: RunSettings;
     /** The latest exam change this person has been shown. */
     examsSeen?: string;
+    /** When exams in a downloaded calendar remind; absent means the default. */
+    examReminders?: string[];
 }
 
-/** The mornings marked in this browser, plus the bonus or penalty entered from the sports office. */
-export interface RunSettings { on?: boolean; days: Record<string, 'done' | 'plan'>; adjust: number }
+/** The mornings put down in this browser, plus the bonus or penalty entered from the sports office. */
+export interface RunSettings { on?: boolean; days: string[]; adjust: number }
 
 const KEY = 'studev_prefs';
 const EVENT = 'studev:preferences';
@@ -55,6 +57,7 @@ const sanitize = (raw: unknown): Preferences => {
         }
         if (!Object.keys(result.timetable).length) delete result.timetable;
     }
+    if (Array.isArray(record.examReminders)) result.examReminders = [...new Set(record.examReminders.filter((key): key is string => typeof key === 'string' && key.length < 10))];
     if (typeof record.examsSeen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.examsSeen)) result.examsSeen = record.examsSeen;
     if (record.examAttendance && typeof record.examAttendance === 'object' && !Array.isArray(record.examAttendance)) {
         const attendance: NonNullable<Preferences['examAttendance']> = {};
@@ -68,8 +71,8 @@ const sanitize = (raw: unknown): Preferences => {
     }
     if (record.run && typeof record.run === 'object' && !Array.isArray(record.run)) {
         const run = record.run as Record<string, unknown>;
-        const days: Record<string, 'done' | 'plan'> = {};
-        if (run.days && typeof run.days === 'object') for (const [date, mark] of Object.entries(run.days)) if (/^\d{4}-\d{2}-\d{2}$/.test(date) && (mark === 'done' || mark === 'plan')) days[date] = mark;
+        const listed = Array.isArray(run.days) ? run.days : [];
+        const days = [...new Set(listed.filter((date): date is string => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)))].sort();
         result.run = { days, adjust: Math.max(-200, Math.min(200, Math.trunc(Number(run.adjust)) || 0)) };
         if (typeof run.on === 'boolean') result.run.on = run.on;
     }
@@ -129,4 +132,4 @@ export const updateExamAttendance = (term: string, className: string, choices: R
         return { ...current, examAttendance: { ...current.examAttendance, [scope]: { ...current.examAttendance?.[scope], ...choices } } };
     });
 
-export const updateRun = (patch: Partial<RunSettings>) => writePreferences(current => ({ ...current, run: { days: {}, adjust: 0, ...current.run, ...patch } }));
+export const updateRun = (patch: Partial<RunSettings>) => writePreferences(current => ({ ...current, run: { days: [], adjust: 0, ...current.run, ...patch } }));

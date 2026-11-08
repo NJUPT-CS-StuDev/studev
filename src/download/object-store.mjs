@@ -30,7 +30,10 @@ export async function signedFetch(store, method, key, { body = '', headers = {},
     return fetch(url, { method, body: method === 'GET' || method === 'HEAD' ? undefined : body, headers: { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${store.accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` } });
 }
 
-/** A plain GET link to one object, good for `seconds` (at most seven days). */
+/** The longest a signed link may last. */
+export const WEEK = 7 * 24 * 3600;
+
+/** A plain GET link to one object, good for `seconds` (at most a week). */
 export function presignGet(store, key, seconds, extra = {}) {
     const url = new URL(`/${store.bucket}/${encodePath(key)}`, store.endpoint);
     const { stamp, day, scope } = clock();

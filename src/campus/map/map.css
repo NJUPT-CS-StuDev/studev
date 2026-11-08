@@ -34,9 +34,9 @@
   .ball svg{width:40px;height:40px;overflow:visible}
   .ball-body{fill:var(--paper)}
   .ball-lines{fill:none;stroke:var(--faint);stroke-width:.7;opacity:.7}
-  .ball-north{fill:var(--now)}
+  .ball-north{fill:var(--danger)}
   .tilt svg{width:20px;height:20px;stroke:none;transition:transform .7s var(--ease)}
-  .tilt svg .n{fill:var(--now)}
+  .tilt svg .n{fill:var(--danger)}
   .tilt svg .s{fill:var(--faint);opacity:.45}
   .tilt svg.target{fill:none;stroke:var(--ink);stroke-width:1.5}
   .floors{display:flex;flex-direction:column;background:var(--paper);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.14);overflow:hidden}
@@ -106,7 +106,7 @@
   .tabs.slim button{height:30px}
   .hours{margin-top:8px;font-size:13px;color:var(--muted)}
   .hours div{display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
-  .notice{display:flex;gap:8px;align-items:center;margin:10px 0 0;font-size:13px;color:var(--now)}
+  .notice{display:flex;gap:8px;align-items:center;margin:10px 0 0;font-size:13px;color:var(--warning-ink)}
   .notice button{width:20px;height:20px;flex:none;margin-left:auto}
   .notice svg{width:12px;height:12px}
   .empty.small{padding:14px}
