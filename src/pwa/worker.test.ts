@@ -69,11 +69,21 @@ describe('offline worker', () => {
         }
         expect(app.fetch).not.toHaveBeenCalled();
     });
-    it('returns the cached release while checking for and announcing fresh data', async () => {
+    it('returns the cached release while refreshing it, without offering an update itself', async () => {
         const app = harness(); await app.dispatch('install');
         app.fetch.mockResolvedValue(new Response(JSON.stringify({ version: 'next' }), { headers: { 'Content-Type': 'application/json' } }));
         const response = await app.dispatch('fetch', new Request(`${origin}/pwa-release.json`));
         expect((await response!.json()).version).toBe('fixture');
-        expect(app.messages).toContainEqual({ type: 'DATA_UPDATE', version: 'next' });
+        expect(app.messages.some(message => (message as { type: string }).type === 'DATA_UPDATE')).toBe(false);
+    });
+    it('does not install behind a newer release, nor without its core saved', async () => {
+        const behind = harness();
+        behind.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ version: 'next', core: [], all: [] }), { headers: { 'Content-Type': 'application/json' } }));
+        await expect(behind.dispatch('install')).rejects.toThrow('newer release');
+        const broken = harness();
+        const real = broken.fetch.getMockImplementation()!;
+        broken.fetch.mockImplementation(async input => new URL(typeof input === 'string' ? input : input.url, origin).pathname.endsWith('.pmtiles') ? new Response(null, { status: 503 }) : real(input));
+        await expect(broken.dispatch('install')).rejects.toThrow('not saved');
+        expect(broken.stores.get('studev-data-fixture')?.has(`${origin}/__studev_offline_ready__`)).toBe(false);
     });
 });

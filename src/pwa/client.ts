@@ -13,7 +13,6 @@ const help = document.querySelector<HTMLElement>('[data-pwa-install-help]');
 const update = document.querySelector<HTMLElement>('[data-pwa-update]');
 const refresh = document.querySelector<HTMLButtonElement>('[data-pwa-refresh]');
 const updateBar = document.querySelector<HTMLElement>('[data-pwa-update-bar]');
-const UPDATE_LIMIT_MS = 2500;
 let installEvent: InstallEvent | undefined;
 let registration: ServiceWorkerRegistration | undefined;
 let applying = false;
@@ -71,13 +70,10 @@ function connectionStatus() {
 window.addEventListener('online', connectionStatus);
 window.addEventListener('offline', connectionStatus);
 
-function showUpdate() { if (update) update.hidden = false; }
+// The update is offered only once a newer worker has installed and is waiting, so one tap switches.
+function showUpdate() { if (update && registration?.waiting && navigator.serviceWorker.controller) update.hidden = false; }
 function watchWorker(worker: ServiceWorker | null) {
-    worker?.addEventListener('statechange', () => {
-        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-            if (applying) worker.postMessage({ type: 'SKIP_WAITING' }); else showUpdate();
-        }
-    });
+    worker?.addEventListener('statechange', () => { if (worker.state === 'installed') showUpdate(); });
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
@@ -88,7 +84,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     }).catch(() => connectionStatus());
     navigator.serviceWorker.addEventListener('message', event => {
         const message = event.data;
-        if (message?.type === 'DATA_UPDATE') showUpdate();
         if (message?.type === 'OFFLINE_SAVING') { if (status) status.textContent = '正在保存，请保持页面打开…'; if (save) save.disabled = true; }
         if (message?.type === 'OFFLINE_READY') {
             ready = true; connectionStatus();
@@ -106,11 +101,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
         if (registered.waiting) showUpdate();
         watchWorker(registered.installing);
         registered.addEventListener('updatefound', () => watchWorker(registered.installing));
-        const check = () => {
-            if (!navigator.onLine) return;
-            void registered.update().catch(() => undefined);
-            void fetch('/pwa-release.json', { cache: 'no-cache' }).catch(() => undefined);
-        };
+        const check = () => { if (navigator.onLine) void registered.update().catch(() => undefined); };
         setInterval(check, 15 * 60_000);
         window.addEventListener('focus', check);
         check();
@@ -121,16 +112,12 @@ save?.addEventListener('click', () => {
     const worker = navigator.serviceWorker?.controller || registration?.active;
     if (worker) worker.postMessage({ type: 'SAVE_OFFLINE', all: true });
 });
-refresh?.addEventListener('click', async () => {
+refresh?.addEventListener('click', () => {
+    const waiting = registration?.waiting;
+    // Another tab may already have switched; then this page only needs to load again.
+    if (!waiting) { location.reload(); return; }
     applying = true;
     refresh.textContent = '正在更新…'; refresh.disabled = true;
     if (updateBar) updateBar.hidden = false;
-    // Whatever the worker is doing, the page moves on within moments.
-    window.setTimeout(() => location.reload(), UPDATE_LIMIT_MS);
-    if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    else {
-        await registration?.update();
-        if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        else if (!registration?.installing) location.reload();
-    }
+    waiting.postMessage({ type: 'SKIP_WAITING' });
 });

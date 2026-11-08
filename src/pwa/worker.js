@@ -50,27 +50,37 @@ async function saveFiles(paths, cache, recursive = false) {
     return failed;
 }
 
-async function warm(all = false) {
-    await announce({ type: 'OFFLINE_SAVING' });
+/** The published release, if it is the one this worker serves; a newer one means this worker is already behind. */
+async function ownRelease() {
     const response = await fetch('/pwa-release.json', { cache: 'no-cache' });
     if (!response.ok) throw new Error('release unavailable');
     const release = await response.clone().json();
-    // A page that is still running the previous worker must update before saving a new release.
-    if (release.version !== DATA_VERSION) {
-        await announce({ type: 'DATA_UPDATE', version: release.version });
-        return;
-    }
+    if (release.version !== DATA_VERSION) return null;
     await (await caches.open(META)).put('/pwa-release.json', response);
+    return release;
+}
+
+/** Saves the shell and the release's core (or everything) and says how it went; returns how many files failed. */
+async function save(release, all) {
+    await announce({ type: 'OFFLINE_SAVING' });
     const shell = await caches.open(SHELL);
     const shellFailed = await saveFiles([...SHELL_PATHS, '/manifest.webmanifest', '/pwa-icons/180.png', '/pwa-icons/192.png', '/pwa-icons/512.png', '/pwa-icons/512-maskable.png'], shell, true);
     const data = await caches.open(DATA);
     const failed = shellFailed + await saveFiles(all ? [...release.core, ...release.all] : release.core, data);
     if (!failed) await data.put('/__studev_offline_ready__', new Response(JSON.stringify({ version: DATA_VERSION, all }), { headers: { 'Content-Type': 'application/json' } }));
     await announce({ type: failed ? 'OFFLINE_PARTIAL' : 'OFFLINE_READY', version: DATA_VERSION, all, failed });
+    return failed;
 }
 
+// A worker is installed only with its whole shell and core saved, and only while it is the newest:
+// otherwise installing fails and the browser tries again at its next check. So a worker waiting to
+// take over is always complete, and the page offers the update only then.
 self.addEventListener('install', event => {
-    event.waitUntil(warm().catch(() => announce({ type: 'OFFLINE_PARTIAL' })));
+    event.waitUntil((async () => {
+        const release = await ownRelease();
+        if (!release) throw new Error('a newer release replaces this worker');
+        if (await save(release, false)) throw new Error('the core of this release is not saved');
+    })());
 });
 self.addEventListener('activate', event => {
     event.waitUntil((async () => {
@@ -86,7 +96,12 @@ self.addEventListener('activate', event => {
 });
 self.addEventListener('message', event => {
     if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
-    if (event.data?.type === 'SAVE_OFFLINE') event.waitUntil(warm(Boolean(event.data.all)).catch(() => announce({ type: 'OFFLINE_PARTIAL' })));
+    if (event.data?.type === 'SAVE_OFFLINE') event.waitUntil((async () => {
+        const release = await ownRelease();
+        // Behind the published release: fetch the newer worker, which saves its own data and then offers itself.
+        if (!release) return self.registration.update();
+        await save(release, Boolean(event.data.all));
+    })().catch(() => announce({ type: 'OFFLINE_PARTIAL' })));
 });
 
 async function rangeResponse(response, header) {
@@ -114,11 +129,7 @@ self.addEventListener('fetch', event => {
             const cache = await caches.open(META);
             const cached = await cache.match(path);
             const refresh = fetch(request, { cache: 'no-cache' }).then(async response => {
-                if (response.ok) {
-                    const release = await response.clone().json();
-                    await cache.put(path, response.clone());
-                    if (release.version !== DATA_VERSION) await announce({ type: 'DATA_UPDATE', version: release.version });
-                }
+                if (response.ok) await cache.put(path, response.clone());
                 return response;
             });
             event.waitUntil(refresh.catch(() => undefined));
