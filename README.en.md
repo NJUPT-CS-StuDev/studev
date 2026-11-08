@@ -2,7 +2,7 @@
 
 # StuDev
 
-**Local-First Digital Campus & Spatial-Temporal Twin for Universities — One Domain Model Across Web and Native Android**
+**Open-Source University Digital Campus & Student Development Platform — Web & Native Android**
 
 [![Website](https://img.shields.io/badge/Live-studev.hicancan.top-2563eb?style=flat-square)](https://studev.hicancan.top/)
 [![Android](https://img.shields.io/badge/Android_APK-v2.3.4-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.hicancan.top/download/)
@@ -73,10 +73,6 @@ Enter a class code—or jump directly from search to any instructor, course, or 
 - **Odd/Even Split & In-Place Off-Week Lessons**: Odd-week and even-week courses share a 50/50 split cell; courses within their active week span that do not meet in the current week remain in place in muted gray—tapping jumps straight to the next active week.
 - **Native Exam & Academic Calendar Integration**: Final exams render as amber blocks inside both the weekly timetable and the 20-week term panorama, complete with countdowns, room numbers, and provenance from academic affairs bulletins.
 
-![Weekly Timetable](./README.assets/02-timetable-week.png)
-
-![Term Panorama Grid](./README.assets/03-timetable-term.png)
-
 ### 2. 3D Campus Map, Real-Time Free Classrooms & Offline Navigation (`/map/`)
 
 A full-scale digital twin built on vector tiles, 129 hand-modeled Blender 3D buildings, and the spatial topology of 564 classrooms.
@@ -84,16 +80,12 @@ A full-scale digital twin built on vector tiles, 129 hand-modeled Blender 3D bui
 - **Indoor Floor Cutaways at Any Timestamp**: Scrub the `07:00–22:00` time ruler to inspect floor-by-floor room availability in 3D, with exact seat counts and next-occupied times.
 - **On-Device Pedestrian Routing & Voice Guidance**: Powered by [`wayfind`](https://github.com/hicancan/wayfind), a stateless Rust routing kernel running via WebAssembly on Web and CMake/JNI on Android, supporting cross-building, cross-floor pathfinding, off-route recalculation, and background voice prompts.
 
-![3D Campus Map](./README.assets/04-map-3d.png)
-
 ### 3. Zero-Backend WebAssembly Full-Text Search (`/search/`)
 
 Driven by [`wasm-search`](https://github.com/hicancan/wasm-search), a custom Rust full-text search engine running entirely on the client.
 
 - **Unified Multi-Source Ranking**: One query simultaneously searches courses, instructors, classes, live classroom availability, official notices, deep text inside Word/Excel/PDF attachments, past exam archives, and student survival guides.
 - **Content-Addressed Range Fetching**: Tokenization, synonym expansion, and BM25 ranking execute in local memory via WebAssembly, fetching only the required inverted-index byte ranges from static CDN storage. Search queries never leave the device.
-
-![Client-Side Wasm Search](./README.assets/05-search-wasm.png)
 
 ### 4. Student Development Center Portal & Zero-Trust Collaboration (`/club/` · `/forms/` · `/account/`)
 
