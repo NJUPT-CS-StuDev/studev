@@ -310,9 +310,9 @@ private const val DAY_END = 21 * 60 + 8
                     }) {
                         val width = maxWidth
                         line.periods.forEach { item -> Box(Modifier.fillMaxWidth().height(1.dp).offset(y = y(period.getValue(item.period).first)).background(soft)) }
-                        val all = if (off) emptyList() else cells.filter { it.day == index + 1 }
+                        // A lesson not on this week stays in its place, greyed, beside whatever is on: 单周 and 双周 side by side.
+                        val lessons = if (off) emptyList() else cells.filter { it.day == index + 1 }
                         fun clash(a: TimetableCell, b: TimetableCell) = a !== b && a.periods.first() <= b.periods.last() && b.periods.first() <= a.periods.last()
-                        val lessons = all.filter { cell -> cell.state == "active" || all.none { it.state == "active" && clash(cell, it) } }
                         lessons.forEach { cell ->
                             val start = period[cell.periods.first()]?.first ?: return@forEach
                             val end = period[cell.periods.last()]?.second ?: return@forEach
@@ -409,9 +409,10 @@ private const val DAY_END = 21 * 60 + 8
                 else -> {
                     val events = line.on(date)
                     when {
-                        events.any { it.kind == "exam" } -> if (past) "taken" else "exam"
+                        // The term is shown whole: what has gone by looks the same as what is to come.
+                        events.any { it.kind == "exam" } -> "exam"
                         date in line.holidays -> "hol"
-                        events.any { it.kind == "class" } -> if (past) "past" else "has"
+                        events.any { it.kind == "class" } -> "has"
                         else -> ""
                     }
                 }
@@ -490,9 +491,8 @@ private const val DAY_END = 21 * 60 + 8
                         else {
                             val shape = RoundedCornerShape(4.dp)
                             val fill = when (cell) { "exam" -> mark.exam; "has" -> Ink.sunken; else -> Color.Transparent }
-                            val ink = when (cell) { "exam" -> mark.onExam; "taken", "past", "" -> Ink.faint; "hol" -> mark.holiday; else -> Ink.text }
+                            val ink = when (cell) { "exam" -> mark.onExam; "" -> Ink.faint; "hol" -> mark.holiday; else -> Ink.text }
                             Box(Modifier.weight(1f).height(30.dp).padding(horizontal = 1.5.dp).clip(shape).background(fill)
-                                .then(if (cell == "taken") Modifier.border(1.5.dp, mark.exam.copy(alpha = .6f), shape) else Modifier)
                                 .then(if (today) Modifier.border(2.dp, mark.now, shape) else Modifier)
                                 .clickable { line.on(date).firstOrNull { it.kind == "exam" }?.let(onOpen) ?: onPick(date) },
                                 contentAlignment = Alignment.Center) { Plain(dayLabel(date), 12.sp, ink, if (cell == "exam" || cell == "hol") FontWeight.SemiBold else FontWeight.Normal) }
@@ -508,10 +508,9 @@ private const val DAY_END = 21 * 60 + 8
                     if ("rplan" in present) Swatch(mark.free.copy(alpha = .22f), mark.free, "排上")
                     if ("ropen" in present) Swatch(Color.Transparent, Ink.faint, "可跑，点一下排上")
                 } else {
-                    if ("has" in present || "past" in present) Swatch(Ink.sunken, hairline, "上课")
+                    if ("has" in present) Swatch(Ink.sunken, hairline, "上课")
                     if ("exam" in present) Swatch(mark.exam, null, "考试")
-                    if ("taken" in present) Swatch(Color.Transparent, mark.exam.copy(alpha = .6f), "已考", edgeWidth = 1.5.dp)
-                    if ("hol" in present) Swatch(Color.Transparent, null, "放假", "休", mark.holiday)
+                    if ("hol" in present) Swatch(Color.Transparent, null, "不上课", "休", mark.holiday)
                 }
                 if ("today" in present) Swatch(Color.Transparent, mark.now, "今天", edgeWidth = 2.dp)
             }
@@ -555,7 +554,8 @@ private const val DAY_END = 21 * 60 + 8
                 Plain("校历", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
                 calendarAhead.forEach { item ->
                     val start = LocalDate.parse(item.start); val end = LocalDate.parse(item.end)
-                    AheadRow(lead(CampusLine.daysBetween(now.date, start)), item.name, if (start == end) dayHead(start) else "${dateLabel(start)} – ${dateLabel(end)}", null)
+                    val custom = if (item in calendar?.events.orEmpty()) " · 按惯例全天停课" else ""
+                    AheadRow(lead(CampusLine.daysBetween(now.date, start)), item.name, (if (start == end) dayHead(start) else "${dateLabel(start)} – ${dateLabel(end)}") + custom, null)
                 }
             }
             Spacer(Modifier.height(24.dp))

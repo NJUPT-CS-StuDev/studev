@@ -108,8 +108,9 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
         return null
     }
     companion object {
+        /** The days without lessons: public holidays, and the school events (运动会, 校庆日) that stop lessons by custom. */
         fun holidays(terms: List<CalendarTerm>): Map<LocalDate, String> = buildMap {
-            for (term in terms) for (item in term.holidays) {
+            for (term in terms) for (item in term.holidays + term.events) {
                 var date = LocalDate.parse(item.start)
                 while (date <= LocalDate.parse(item.end)) { put(date, get(date)?.let { "$it、${item.name}" } ?: item.name); date = date.plusDays(1) }
             }

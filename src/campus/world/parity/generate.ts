@@ -29,7 +29,7 @@ const schedules = classes.map(id => {
 });
 const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, exams: [], holidays, run: { rule: run, days: ['2026-09-08', '2026-09-10', '2026-11-05', '2026-11-09', '2026-12-18'], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
-const days = ['2026-09-25', '2026-10-01', '2026-10-12', '2026-11-05', '2026-11-09', '2026-12-18', '2026-12-21', '2027-01-01'].map(date => ({ date, events: eventsOn(line, date).map(brief) }));
+const days = ['2026-09-25', '2026-10-01', '2026-10-12', '2026-10-23', '2026-11-05', '2026-11-09', '2026-12-18', '2026-12-21', '2027-01-01'].map(date => ({ date, events: eventsOn(line, date).map(brief) }));
 const moments = [{ date: '2026-11-05', min: 13 * 60 + 5 }, { date: '2026-11-05', min: 7 * 60 + 30 }, { date: '2026-11-07', min: 7 * 60 }, { date: '2026-11-08', min: 20 * 60 }, { date: '2027-01-14', min: 22 * 60 }].map(now => ({ now, next: (event => event && brief(event))(nextEvent(line, now)), run: runTally(line.run!, now), plan: planRuns(line.run!, line, now), week: weekShown(line, now) }));
 const lastDay = lastLesson(line);
 const index = read<RoomIndex>(`${base}/rooms/index.json`);

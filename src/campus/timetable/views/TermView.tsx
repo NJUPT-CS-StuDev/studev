@@ -91,8 +91,12 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
     const offGrid = [...new Map(practice.map(item => [`${item.name}|${item.weeks.join()}`, item])).values()].sort((left, right) => left.weeks[0]! - right.weeks[0]! || left.name.localeCompare(right.name));
     const shortWork = new Map<number, string[]>();
     for (const item of offGrid) if (item.weeks.length <= 2) for (const week of item.weeks) shortWork.set(week, [...(shortWork.get(week) ?? []), item.name]);
-    const calendarAhead = [...(calendar?.holidays ?? []), ...(calendar?.events ?? []), ...(calendar?.break ? [calendar.break] : [])]
-        .map(item => ({ name: item.name, start: item.start, text: item.start === item.end ? dayHead(item.start) : `${dateLabel(item.start)} – ${dateLabel(item.end)}` }))
+    const when = (item: { start: string; end: string }) => item.start === item.end ? dayHead(item.start) : `${dateLabel(item.start)} – ${dateLabel(item.end)}`;
+    const calendarAhead = [
+        ...(calendar?.holidays ?? []).map(item => ({ ...item, text: when(item) })),
+        ...(calendar?.events ?? []).map(item => ({ ...item, text: `${when(item)} · 按惯例全天停课` })),
+        ...(calendar?.break ? [{ ...calendar.break, text: when(calendar.break) }] : []),
+    ]
         .filter(item => item.start >= now.date).sort((left, right) => left.start.localeCompare(right.start));
     const eventOf = (exam: Exam) => eventsOn(line, exam.date).find(item => item.exam?.id === exam.id);
     const examRow = (exam: Exam, lead: string) => (
@@ -119,8 +123,8 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
         const events = eventsOn(line, date);
         const exam = events.some(event => event.kind === 'exam');
         const holiday = line.holidays.get(date);
-        // An exam outranks a lesson: it is rarer, and it matters more.
-        const kind = exam ? (past ? 'taken' : 'exam') : holiday ? 'hol' : events.some(event => event.kind === 'class') ? (past ? 'past' : 'has') : '';
+        // An exam outranks a lesson: it is rarer, and it matters more. The term is shown whole: a lesson or exam already gone by looks the same as one to come; today is marked on its own.
+        const kind = exam ? 'exam' : holiday ? 'hol' : events.some(event => event.kind === 'class') ? 'has' : '';
         if (kind) present.add(kind);
         return <button key={date} className={`dc ${kind} ${today}`} title={holiday ?? undefined} aria-label={`${dateLabel(date)}${holiday ? ` ${holiday}` : ''}${exam ? ' 有考试' : ''}`}
             onClick={() => { const first = events.find(event => event.kind === 'exam'); if (first) onOpen(first); else onPick(date); }}>{label}</button>;
@@ -136,8 +140,8 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
     if (calendar?.break && calendar.break.start <= addDays(line.term.weeks.at(-1)!.end, 1)) rows.push(<div key="break" className="phase">{calendar.break.name} {dateLabel(calendar.break.start)}起</div>);
     const LEGEND: [string, string, string][] = showing === 'run'
         ? [['rdone', 'k-done', '已跑'], ['rplan', 'k-plan', '排上'], ['ropen', 'k-open', '可跑，点一下排上'], ['today', 'k-today', '今天']]
-        : [['has', 'k-has', '上课'], ['exam', 'k-exam', '考试'], ['taken', 'k-taken', '已考'], ['hol', 'k-hol', '放假'], ['today', 'k-today', '今天']];
-    const legend = LEGEND.filter(([state]) => present.has(state) || (state === 'has' && present.has('past')));
+        : [['has', 'k-has', '上课'], ['exam', 'k-exam', '考试'], ['hol', 'k-hol', '不上课'], ['today', 'k-today', '今天']];
+    const legend = LEGEND.filter(([state]) => present.has(state));
     const grid = (
         <div>
             <div className="term">

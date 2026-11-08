@@ -38,10 +38,9 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
             </div>
             {days.slice(0, columns).map((date, index) => {
                 const past = (end: number) => date < now.date || (date === now.date && end <= now.min);
-                const all = line.holidays.has(date) ? [] : cells.filter(cell => cell.day === index + 1);
-                const clashes = (left: typeof all[number], right: typeof all[number]) => left !== right && left.periods[0] <= right.periods[1] && right.periods[0] <= left.periods[1];
-                // A lesson that is not on this week gives way to one that is.
-                const lessons = all.filter(cell => cell.state === 'active' || !all.some(other => other.state === 'active' && clashes(cell, other)));
+                // A lesson not on this week stays in its place, greyed, beside whatever is on: 单周 and 双周 side by side.
+                const lessons = line.holidays.has(date) ? [] : cells.filter(cell => cell.day === index + 1);
+                const clashes = (left: typeof lessons[number], right: typeof lessons[number]) => left !== right && left.periods[0] <= right.periods[1] && right.periods[0] <= left.periods[1];
                 return (
                     <div key={date} className={`col ${line.holidays.has(date) ? 'off' : ''}`} style={{ height }}>
                         {lines}
