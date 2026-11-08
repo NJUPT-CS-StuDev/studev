@@ -4,8 +4,8 @@
   "repository": "NJUPT-CS-StuDev/studev",
   "timeZone": "Asia/Shanghai",
   "android": {
-    "versionName": "2.3.2",
-    "versionCode": 26,
+    "versionName": "2.3.3",
+    "versionCode": 27,
     "minSdk": 26
   },
   "campus": {

@@ -114,26 +114,25 @@ test('homepage recruitment entry respects recruitment toggle', async () => {
   }
 });
 
-test('every page can share its clean canonical URL', async () => {
+test('every page shares the site, and keeps a clean canonical URL', async () => {
   for (const file of await pages(output)) {
     const html = await readFile(file, 'utf8');
     let canonical;
-    let shares = 0;
+    const shared = [];
     walk(parse(html), (node) => {
       const attr = attributes(node);
       if (node.tagName === 'link' && attr.rel === 'canonical') canonical = attr.href;
       if (node.tagName === 'button' && 'data-copy-link' in attr) {
-        shares++;
         assert.equal(attr.type, 'button');
+        shared.push(attr['data-copy-text']);
       }
     });
-    // The three entries put their whole state in the address, which is what gets shared.
-    if (![join(output, 'index.html'), join(output, 'map/index.html'), join(output, 'search/index.html')].includes(file)) assert.ok(shares > 0, `${file}: missing share action`);
+    // What is shared is studev itself, from the corner of every page.
+    assert.deepEqual(shared, ['https://studev.hicancan.top/'], `${file}: one share action for the site`);
     const url = new URL(canonical);
     assert.equal(url.origin, 'https://studev.hicancan.top');
     assert.equal(url.search, '');
     assert.equal(url.hash, '');
-    if (![join(output, 'index.html'), join(output, 'map/index.html'), join(output, 'search/index.html')].includes(file)) assert.match(html, /分享本页/);
   }
 });
 

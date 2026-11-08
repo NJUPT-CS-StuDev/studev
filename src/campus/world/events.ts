@@ -74,6 +74,14 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
     return out.sort((left, right) => left.start - right.start);
 }
 
+/** A lesson where it next meets from a date on, or else where it last met: what a lesson off that week opens. */
+export function meetingAround(line: Timeline, meetingId: string, from: string): CampusEvent | null {
+    const find = (date: string) => eventsOn(line, date).find(event => event.meeting?.id === meetingId) ?? null;
+    for (let date = from; date <= line.term.weeks.at(-1)!.end; date = addDays(date, 1)) { const found = find(date); if (found) return found; }
+    for (let date = addDays(from, -1); date >= line.term.weeks[0]!.start; date = addDays(date, -1)) { const found = find(date); if (found) return found; }
+    return null;
+}
+
 /** What comes next, not counting 早锻炼: it is optional on any given morning. */
 export function nextEvent(line: Timeline, now: Moment, horizon = 40): CampusEvent | null {
     for (let offset = 0; offset < horizon; offset++) {

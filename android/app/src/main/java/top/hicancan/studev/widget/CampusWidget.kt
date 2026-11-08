@@ -103,19 +103,20 @@ class WeekWidget : CampusWidget()
 
 private fun placeholder(title: String, hint: String) = buildJsonObject { put("title", title); put("hint", hint); put("view", "auto"); put("theme", "system") }
 
-private fun row(event: LineEvent) = buildJsonObject {
+private fun row(event: LineEvent, tones: Map<String, Int>) = buildJsonObject {
     put("start", event.start); put("end", event.end); put("name", event.short)
     put("room", event.room?.let(Names::room).orEmpty()); put("place", event.room?.let(Names::roomShort).orEmpty())
-    put("tone", event.meeting?.let(TimetablePresentation::colourIndex) ?: -1)
+    put("tone", event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: -1)
     put("exam", event.kind == "exam")
     event.room?.let { put("nav", it) }
 }
 
 private fun published(line: CampusLine, now: Moment, view: String, theme: String) = buildJsonObject {
+    val tones = TimetablePresentation.tones(line.meetings)
     val shown = WidgetDay.of(line, now)
     put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
     put("hint", ""); put("view", view); put("theme", theme)
-    put("rows", buildJsonArray { shown.take(5).forEach { add(row(it)) } })
+    put("rows", buildJsonArray { shown.take(5).forEach { add(row(it, tones)) } })
     val monday = line.weekShown(now)
     val ahead = CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7
     put("weekTitle", (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + (line.weekOf(monday)?.let { "第 $it 周" } ?: "假期"))
@@ -124,7 +125,7 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
             put("label", WEEKDAYS[date.dayOfWeek.value].drop(1)); put("today", date == now.date)
             // An exam outranks a lesson at the same time: the widget shows the exam alone.
             val exams = events.filter { it.kind == "exam" }
-            put("events", buildJsonArray { events.filter { it.kind == "exam" || (it.kind == "class" && exams.none { exam -> exam.start < it.end && it.start < exam.end }) }.forEach { add(row(it)) } })
+            put("events", buildJsonArray { events.filter { it.kind == "exam" || (it.kind == "class" && exams.none { exam -> exam.start < it.end && it.start < exam.end }) }.forEach { add(row(it, tones)) } })
         }
     } })
 }

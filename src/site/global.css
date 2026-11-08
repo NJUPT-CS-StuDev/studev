@@ -39,7 +39,10 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .avatar { padding: 0; overflow: hidden; display: grid; place-items: center; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.app-entry { font-size: 14px; font-weight: 500; color: var(--muted); margin-right: 18px; }
+.share-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); }
+.share-entry { margin-right: -10px; }
+.app-entry { margin-right: 18px; }
+.share-entry:hover, .app-entry:hover { color: var(--ink); }
 .app-offer { position: fixed; left: 0; right: 0; bottom: calc(50px + env(safe-area-inset-bottom, 0px)); z-index: 49; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 40px; background: var(--paper); border-top: 1px solid var(--line); font-size: 13px; }
 .app-offer[hidden] { display: none; }
 .app-offer a { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -54,7 +57,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 999.98px) {
   .site-header { position: static; border-bottom: 0; }
-  .site-nav, .wordmark, .app-entry { display: none; }
+  .site-nav, .wordmark, .share-entry, .app-entry { display: none; }
   .header-inner { height: 0; padding: 0; }
   .avatar { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 45; }
   body:has(.mapview) .avatar { display: none; }
@@ -236,9 +239,9 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 
 /* Footer */
 .site-footer { border-top: 1px solid var(--line); }
-.footer-inner { width: min(680px, calc(100% - 32px)); margin-inline: auto; padding-block: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; color: var(--faint); font-size: 12.5px; }
-.footer-actions { display: flex; gap: 14px; align-items: center; }
-.footer-actions a:hover, .text-copy:hover { color: var(--ink); }
+.footer-inner { padding: 14px 24px; display: flex; justify-content: space-between; gap: 16px; color: var(--faint); font-size: 12.5px; }
+.footer-inner a:hover { color: var(--ink); }
+@media (max-width: 999.98px) { .footer-inner { padding-inline: 16px; } }
 .text-copy { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 .copy-fallback { width: 100%; min-width: 0; flex-basis: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
 

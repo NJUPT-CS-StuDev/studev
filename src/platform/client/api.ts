@@ -93,7 +93,7 @@ export class PlatformError extends Error {
 }
 let currentSession: Session | null = null;
 let sessionRequest: Promise<Session | null> | null = null;
-export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', user: '同学', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '登录后填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
+export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', user: '用户', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '登录后填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
 function extractQq(user: { qq?: string; avatarUrl?: string }): string {
     if (user.qq && /^[1-9]\d{4,11}$/.test(user.qq.trim())) return user.qq.trim();
     const match = user.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);

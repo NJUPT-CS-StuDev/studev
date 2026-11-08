@@ -1,20 +1,20 @@
 import type { TeachingMeeting } from '@/world/facts';
-import { courseToneIndex } from './courseColors';
+import { courseIdentity, courseTones } from './courseColors';
 import { describeMeetingOverlap, groupOverlappingMeetings } from './overlapLayout';
-import { alternatingWeekLabel, showAsInactiveAlternating, showAsSuspended } from './weekPattern';
-import { roomDisplayName } from '@/map/model/displayName';
+import { alternatingWeekLabel, offThisWeek } from './weekPattern';
+import { roomLabel } from '@/world/names';
 
 const meetingNote = (meeting: TeachingMeeting): string => [
     meeting.room === '翻转课堂线上自学' ? '翻转课堂 · 线上自学' : '',
     meeting.method && meeting.method !== '面授讲课' ? meeting.method.trim() : '',
 ].filter(Boolean).join(' · ');
-const meetingRoom = (meeting: TeachingMeeting): string => meeting.room === '翻转课堂线上自学' ? '' : roomDisplayName(meeting.room) ?? '';
+const meetingRoom = (meeting: TeachingMeeting): string => meeting.room === '翻转课堂线上自学' ? '' : roomLabel(meeting.room);
 
-/** Display policy and its real-data examples live in academics/parity/spec.json. */
-const meetingState = (meeting: TeachingMeeting, week: number) => meeting.weeks.includes(week)
-    ? 'active' : showAsSuspended(meeting, week) ? 'suspended' : showAsInactiveAlternating(meeting, week) ? 'inactive' : 'hidden';
+/** On this week, off this week within its run of weeks (greyed in place), or not shown. */
+const meetingState = (meeting: TeachingMeeting, week: number) => meeting.weeks.includes(week) ? 'active' : offThisWeek(meeting, week) ? 'off' : 'hidden';
 
 export function timetableCells(meetings: TeachingMeeting[], week: number) {
+    const tones = courseTones(meetings);
     const active = meetings.filter(meeting => meeting.weeks.includes(week));
     return groupOverlappingMeetings(meetings.filter(meeting => meetingState(meeting, week) !== 'hidden')).flatMap(group =>
         group.positioned.map(({ meeting, slot }) => {
@@ -22,10 +22,9 @@ export function timetableCells(meetings: TeachingMeeting[], week: number) {
             const overlap = state === 'active' ? describeMeetingOverlap(meeting, active) : null;
             return {
                 id: meeting.id, day: meeting.weekday, periods: meeting.periods, course: meeting.course.name,
-                room: meetingRoom(meeting), state, colourIndex: courseToneIndex(meeting),
+                room: meetingRoom(meeting), state, colourIndex: tones.get(courseIdentity(meeting))!,
                 note: meetingNote(meeting),
-                label: state === 'suspended' ? '本周停课' : state === 'inactive'
-                    ? `${alternatingWeekLabel(meeting) ?? ''} · 本周不上课` : overlap
+                label: state === 'off' ? [alternatingWeekLabel(meeting), '本周不上课'].filter(Boolean).join(' · ') : overlap
                         ? `${overlap.kind === 'parallel' ? '并行' : '重叠'} ${overlap.count} 项` : '',
                 slot, columns: group.slotCount, overlap: overlap?.kind ?? '', overlapCount: overlap?.count ?? 0,
             };

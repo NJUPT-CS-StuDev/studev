@@ -76,6 +76,10 @@ class ParityTest {
             assertEquals(test.getValue("week").jsonPrimitive.content, line.weekShown(now).toString())
         }
     }
+    @Test fun aLessonOffItsWeekOpensWhereItNextMeets() = golden.getValue("around").jsonArray.forEach { item ->
+        val test = item.jsonObject
+        assertEquals(test["date"]?.jsonPrimitive?.contentOrNull, line.meetingAround(test.getValue("meeting").jsonPrimitive.content, LocalDate.parse(test.getValue("from").jsonPrimitive.content))?.date?.toString())
+    }
     @Test fun termTeachingEndsOnTheSameDay() = assertEquals(golden.getValue("lastLesson").jsonPrimitive.content, line.lastLesson().toString())
     @Test fun roomStatesMatchAtEverySampledMoment() {
         val rooms = golden.getValue("rooms").jsonObject
@@ -102,7 +106,7 @@ class ParityTest {
         val exams = edge.getValue("attendanceExams").jsonArray.map { row ->
             val exam = row.jsonObject
             val course = exam.getValue("course").jsonObject
-            Exam(exam.getValue("id").jsonPrimitive.content, listOf("A"), ExamCourse(course["code"]?.jsonPrimitive?.contentOrNull, course.getValue("name").jsonPrimitive.content), null, null, null, null, "2026-11-05", "08:00", "09:00", null, null, "2026-11-04-sheet.xlsx", "event", "event:exam")
+            Exam(exam.getValue("id").jsonPrimitive.content, listOf("A"), ExamCourse(course["code"]?.jsonPrimitive?.contentOrNull, course.getValue("name").jsonPrimitive.content), null, null, "教1-101", null, "2026-11-05", "08:00", "09:00", null, null, "2026-11-04-sheet.xlsx", "event", "event:exam")
         }
         edge.getValue("examAttendance").jsonArray.forEach { item ->
             val test = item.jsonObject
@@ -115,8 +119,10 @@ class ParityTest {
         val test = item.jsonObject
         assertEquals(test.getValue("minutes").jsonPrimitive.int, Exams.reminderMinutes(test.getValue("key").jsonPrimitive.content, test.getValue("start").jsonPrimitive.int))
     }
-    @Test fun colourHashHandlesSupplementaryCharacters() {
-        val code = Course(null, "😀课程", null, null, null, null, null, null, null)
-        assertEquals(2438769704L % 12, TimetablePresentation.colourIndex(TeachingMeeting("x", code, emptyList(), TeachingGroup("g"), null, null, null, 1, listOf(1, 1), listOf(1), null, emptyList(), "event", "event:class")).toLong())
+    @Test fun eachTimetableHandsOutTheSameTones() = golden.getValue("tones").jsonArray.forEach { item ->
+        val test = item.jsonObject
+        val meetings = golden.getValue("schedules").jsonArray.first { it.jsonObject.getValue("class").jsonPrimitive.content == test.getValue("class").jsonPrimitive.content }
+            .jsonObject.getValue("meetings").let { json.decodeFromJsonElement<List<TeachingMeeting>>(it) }
+        assertEquals(test.getValue("tones").jsonObject.mapValues { it.value.jsonPrimitive.int }, TimetablePresentation.tones(meetings))
     }
 }

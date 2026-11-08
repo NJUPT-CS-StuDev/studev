@@ -101,6 +101,13 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
      *  of the next thing. On a Sunday evening that is next week. */
     fun weekShown(now: Moment): LocalDate { val date = next(now, 60)?.date ?: now.date; return date.minusDays(date.dayOfWeek.value - 1L) }
     /** The last day with a lesson on this line: where the term's teaching ends. */
+    /** A lesson where it next meets from a date on, or else where it last met: what a lesson off that week opens. */
+    fun meetingAround(meetingId: String, from: LocalDate): LineEvent? {
+        val first = LocalDate.parse(term.weeks.first().start); val last = LocalDate.parse(term.weeks.last().end)
+        fun find(date: LocalDate) = on(date).firstOrNull { it.meeting?.id == meetingId }
+        return generateSequence(from) { it.plusDays(1) }.takeWhile { it <= last }.firstNotNullOfOrNull(::find)
+            ?: generateSequence(from.minusDays(1)) { it.minusDays(1) }.takeWhile { it >= first }.firstNotNullOfOrNull(::find)
+    }
     fun lastLesson(): LocalDate? {
         val first = LocalDate.parse(term.weeks.firstOrNull()?.start ?: return null)
         var date = LocalDate.parse(term.weeks.last().end)

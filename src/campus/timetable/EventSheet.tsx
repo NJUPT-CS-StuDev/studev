@@ -61,7 +61,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
         return (
             <Sheet title={<><span className="tag">考试</span>{event.name}</>} onClose={onClose}>
                 {facts && <div className="meta">{courseLine({ credits: facts.credits, nature: facts.nature })}</div>}
-                <div className="meta strong">{when} · {name ?? exam.location ?? '考场未排定'}{exam.campus && campus && exam.campus !== campus ? ` · ${exam.campus}校区` : ''}</div>
+                <div className="meta strong">{when} · {name ?? exam.location}{exam.campus && campus && exam.campus !== campus ? ` · ${exam.campus}校区` : ''}</div>
                 {go}
                 {changes.map(change => <div key={change.observed} className="kv"><span className="k">{change.change === 'added' ? '新发布' : '改过'}</span><span className="v">{dateLabel(change.observed)} 发现{change.change === 'changed' && changeLines(change).map(text => <small key={text}>{text}</small>)}</span></div>)}
                 <Together label="同考场" classes={exam.classes} people={exam.students} />
@@ -70,7 +70,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
                 {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">考场</span><span className="v">{name} 的课表</span><Chevron /></a>}
                 {course}
                 <button className="kv" onClick={onExams}><span className="k">考试</span><span className="v">全部考试 · {new Set(line.exams.map(item => item.course.code ?? item.course.name)).size} 门</span><Chevron /></button>
-                {sheet && <a className="kv" href={sheet.notice} target="_blank" rel="noopener noreferrer"><span className="k">来源</span><span className="v">{sheetName(sheet.file)}<small>{dateLabel(publishedOn(sheet.file))} 发布</small></span><Chevron /></a>}
+                {sheet && <div className="kv"><span className="k">来源</span><span className="v">{sheetName(sheet.file)}<small>{dateLabel(publishedOn(sheet.file))} 发布</small></span></div>}
                 {isMe && <button className="kv" onClick={() => onSkipExam(event)}><span className="k" /><span className="v danger">不参加这场考试</span></button>}
             </Sheet>
         );
@@ -83,7 +83,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
     return (
         <Sheet title={event.name} onClose={onClose}>
             {meeting && <div className="meta">{courseLine(meeting.course)}</div>}
-            <div className="meta strong">{when}{name ? ` · ${name}` : ' · 教室未排定'}</div>
+            <div className="meta strong">{when}{name ? ` · ${name}` : ' · 课表没写地点'}</div>
             {go}
             {meeting && <div className="kv"><span className="k">周次</span><span className="v">{weeksText(meeting.weeks)}<small>{left ? `还剩 ${left} 次` : '已经上完'}</small></span></div>}
             {meeting && <Together label="合班" classes={meeting.classes} people={meeting.teaching_class.size} />}

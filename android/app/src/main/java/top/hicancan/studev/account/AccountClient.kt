@@ -17,6 +17,8 @@ import java.io.ByteArrayOutputStream
 const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 @Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0)
+/** What a role is called: the same three names as the web. */
+val AccountUser.roleName: String get() = when (role) { "owner" -> "所有者"; "admin" -> "管理员"; else -> "用户" }
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)

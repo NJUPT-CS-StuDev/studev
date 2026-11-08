@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import golden from './golden.json';
 import { timetableCells } from '@/timetable/model/presentation';
-import { courseHash, courseIdentity, courseToneIndex } from '@/timetable/model/courseColors';
+import { courseIdentity, courseTones } from '@/timetable/model/courseColors';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { eventsOn, holidayMap, lastLesson, nextEvent, planRuns, runTally, weekShown, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
@@ -21,7 +21,7 @@ describe('the shared web / Android real-data contract', () => {
     }
     it('covers real suspension, inactive parity and parallel examples', () => {
         const cells = golden.schedules.flatMap(s => s.weeks.flatMap(w => w.cells));
-        for (const state of ['active', 'inactive', 'suspended']) expect(cells.some(c => c.state === state)).toBe(true);
+        for (const state of ['active', 'off']) expect(cells.some(c => c.state === state)).toBe(true);
         expect(cells.some(c => c.columns > 1)).toBe(true);
     });
     for (const day of golden.days) it(`events on ${day.date}: lessons, holidays and 早锻炼 on one line`, () => expect(eventsOn(line, day.date).map(brief)).toEqual(day.events));
@@ -40,9 +40,9 @@ describe('the shared web / Android real-data contract', () => {
             expect({ tier: state.tier, busy: state.busy, until: state.until, minutes: state.minutes }).toEqual({ tier: test.tier, busy: test.busy, until: test.until, minutes: test.minutes });
         }
     });
-    it('hashes Unicode scalar values, including supplementary characters', () => expect(courseHash('😀课程')).toBe(2438769704));
     it('uses the same identities, names and attendance policy', () => {
-        for (const test of golden.edgeCases.colours) { expect(courseIdentity(test)).toBe(test.identity); expect(courseToneIndex(test)).toBe(test.colourIndex); }
+        for (const test of golden.edgeCases.colours) expect(courseIdentity(test)).toBe(test.identity);
+        for (const test of golden.tones) expect(Object.fromEntries(courseTones(golden.schedules.find(schedule => schedule.class === test.class)!.meetings))).toEqual(test.tones);
         for (const test of golden.edgeCases.names) expect({ course: courseName(test.value), short: courseShort(test.value), room: roomLabel(test.value) }).toEqual({ course: test.course, short: test.short, room: test.room });
         for (const test of golden.edgeCases.examAttendance) expect(attendingExams(golden.edgeCases.attendanceExams as Exam[], test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id)).toEqual(test.expected);
     });

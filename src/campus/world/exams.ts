@@ -1,7 +1,7 @@
-// What is known about exams beyond the timetable: how each came to be, which published sheet it
-// is from, and how often the teaching office has published. Nothing about an exam moves silently.
+// What is known about exams beyond the timetable: how each came to be and which published sheet it
+// is from. Nothing about an exam moves silently.
 import type { ExamRecord } from './data';
-import type { Exam, ExamChange, ExamSlot, ExamSource, TeachingMeeting, TeachingTerm } from './facts';
+import type { Exam, ExamChange, ExamSlot, TeachingMeeting, TeachingTerm } from './facts';
 import { addDays, weekdayOf, type Moment } from './time';
 
 const sameCourse = (change: ExamChange, exam: Exam) => (change.course.code ?? change.course.name) === (exam.course.code ?? exam.course.name);
@@ -17,17 +17,6 @@ export const wasChanged = (record: ExamRecord | null, exam: Exam) => changesOf(r
 
 /** The day a sheet was published: its file name starts with it. */
 export const publishedOn = (file: string) => file.slice(0, 10);
-
-/** Each publication the office made, oldest first, with the sheets and the notice page. */
-export function publications(sources: ExamSource[]) {
-    const days = new Map<string, ExamSource[]>();
-    for (const source of sources) days.set(publishedOn(source.file), [...(days.get(publishedOn(source.file)) ?? []), source]);
-    return [...days].sort(([left], [right]) => left.localeCompare(right)).map(([date, sheets]) => ({ date, sheets }));
-}
-
-/** The publications that put or changed something in these exams. */
-export const publicationsAffecting = (exams: Exam[], changes: ExamChange[]) =>
-    [...new Set([...exams.map(exam => publishedOn(exam.source)), ...changes.map(change => change.observed)])].sort();
 
 /** A sheet's name as people would say it: no date, no school year, no file type. */
 export const sheetName = (file: string) => file.replace(/\.[a-z]+$/i, '').replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/\d{4}-\d{4}学年第[一二]学期/, '').replace(/-学生用表$/, '');

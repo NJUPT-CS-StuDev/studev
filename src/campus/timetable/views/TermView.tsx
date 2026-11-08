@@ -4,8 +4,8 @@ import { updateRun, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { loadCalendar, type CalendarTerm, type ExamRecord } from '@/world/data';
 import type { Exam, ExamChange, Practice } from '@/world/facts';
-import { CHANGE_NAMES, changeLines, publications, publicationsAffecting, sheetName, wasChanged, weeksText } from '@/world/exams';
-import { courseName, roomLabel } from '@/world/names';
+import { CHANGE_NAMES, changeLines, wasChanged, weeksText } from '@/world/exams';
+import { courseName, courseShort, roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { Chevron } from '@/world/ui';
 
@@ -14,7 +14,7 @@ export type TermMode = 'course' | 'exam' | 'run';
 
 const lead = (days: number) => days === 0 ? '今天' : days === 1 ? '明天' : `${days} 天后`;
 const dayHead = (date: string) => `${dateLabel(date)} ${WEEKDAYS[weekdayOf(date)]}`;
-const placeOf = (exam: Exam) => exam.room ? roomLabel(exam.room) : exam.location ?? '考场未排定';
+const placeOf = (exam: Exam) => exam.room ? roomLabel(exam.room) : exam.location;
 const clock = (iso: string) => new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//, '月').replace(/ /, '日 ');
 
 function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Moment }) {
@@ -32,24 +32,17 @@ function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Mom
 }
 
 /**
- * Why the list can be trusted: how often the office has published and which of those touched you,
- * when its site was last looked at, the official notices, and every change seen.
+ * Why the list can be trusted, said as something one can check: every sheet the office published has
+ * been read, and when its site was last looked at; then every change seen, on request. The office
+ * withdraws old notices, so nothing here links to them.
  */
-function ExamTrust({ record, mine, changes }: { record: ExamRecord; mine: Exam[]; changes: ExamChange[] }) {
-    const published = publications(record.sources);
-    const touching = publicationsAffecting(mine, changes);
+function ExamRecordNote({ record, changes }: { record: ExamRecord; changes: ExamChange[] }) {
     const days = [...new Set(changes.map(change => change.observed))].sort().reverse();
     return (
         <div className="xtrust">
-            {published.length > 0 && <p>教务处发布过 {published.length} 版考试安排（{published.map(item => dateLabel(item.date)).join('、')}），其中 {touching.length} 版涉及你的考试。</p>}
-            {record.checked && <p>最近检查：{clock(record.checked)}</p>}
-            {published.slice().reverse().map(item => (
-                <a key={item.date} className="xsource" href={item.sheets[0]!.notice} target="_blank" rel="noopener noreferrer">
-                    {dateLabel(item.date)} 发布<small>{item.sheets.map(sheet => sheetName(sheet.file)).join('、')}</small>
-                </a>
-            ))}
+            {record.checked && <p>已核对教务处发布的全部考试安排表 · 最近检查 {clock(record.checked)}</p>}
             {days.length > 0 && <details className="xhist">
-                <summary>变动明细 · {changes.length} 处</summary>
+                <summary>变动 {changes.length} 处 · 最近 {dateLabel(days[0]!)}</summary>
                 {days.map(day => changes.filter(change => change.observed === day).map((change, at) => (
                     <div key={`${day}-${at}`} className="xchange">
                         <span className={`xk ${change.change}`}>{CHANGE_NAMES[change.change]}</span>
@@ -89,8 +82,6 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
     const last = useMemo(() => lastLesson(line), [line]);
     const courses = new Set(line.exams.map(exam => exam.course.code ?? exam.course.name)).size;
     const offGrid = [...new Map(practice.map(item => [`${item.name}|${item.weeks.join()}`, item])).values()].sort((left, right) => left.weeks[0]! - right.weeks[0]! || left.name.localeCompare(right.name));
-    const shortWork = new Map<number, string[]>();
-    for (const item of offGrid) if (item.weeks.length <= 2) for (const week of item.weeks) shortWork.set(week, [...(shortWork.get(week) ?? []), item.name]);
     const when = (item: { start: string; end: string }) => item.start === item.end ? dayHead(item.start) : `${dateLabel(item.start)} – ${dateLabel(item.end)}`;
     const calendarAhead = [
         ...(calendar?.holidays ?? []).map(item => ({ ...item, text: when(item) })),
@@ -131,7 +122,7 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
     };
     const rows = line.term.weeks.flatMap(week => {
         const out = [
-            <div key={`w${week.week}`} className={`wn ${week.start <= now.date && now.date <= week.end ? 'cur' : ''}`} title={shortWork.get(week.week)?.join('、')}>{week.week}{showing === 'course' && shortWork.has(week.week) && <i />}</div>,
+            <div key={`w${week.week}`} className={`wn ${week.start <= now.date && now.date <= week.end ? 'cur' : ''}`}>{week.week}</div>,
             ...Array.from({ length: 7 }, (_, index) => cell(addDays(week.start, index))),
         ];
         if (showing === 'course' && last && week.start <= last && last <= week.end && week.week < line.term.weeks.length) out.push(<div key="end" className="phase">课程结束 · {dayHead(last)}</div>);
@@ -158,13 +149,19 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
         <>
             {tabs}
             <div className="xlist">
-                {ahead.length === 0 && <div className="meta">后面没有考试了</div>}
-                {ahead.map(day => <section key={day.date}>
-                    <h3 className="sh">{dayHead(day.date)} · {lead(day.days)}</h3>
-                    {day.exams.map(exam => examRow(exam, exam.start))}
+                {/* The first thing to know: how soon, and what. */}
+                <div className="xhead">{ahead[0] ? <><b>{lead(ahead[0].days)}考试</b><span>{ahead[0].exams.map(exam => courseShort(exam.course.name)).join('、')}</span></> : <b>后面没有考试了</b>}</div>
+                {ahead.map((day, at) => <section key={day.date} className="xgroup">
+                    <div className={`xdate ${at === 0 ? 'next' : ''}`}><small>{Number(day.date.slice(5, 7))}月</small><b>{Number(day.date.slice(8))}</b><small>{WEEKDAYS[weekdayOf(day.date)]}</small></div>
+                    <div className="xitems">{day.exams.map(exam => (
+                        <button key={exam.id} className="xitem" onClick={() => { const event = eventOf(exam); if (event) onOpen(event); }}>
+                            <span className="m"><b>{courseName(exam.course.name)}</b>{wasChanged(record, exam) && <span className="xk changed">改过</span>}<small>{exam.start}–{exam.end} · {placeOf(exam)}</small></span>
+                            <Chevron />
+                        </button>
+                    ))}</div>
                 </section>)}
                 {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
-                {record && <ExamTrust record={record} mine={line.exams} changes={changes} />}
+                {record && <ExamRecordNote record={record} changes={changes} />}
             </div>
         </>
     );

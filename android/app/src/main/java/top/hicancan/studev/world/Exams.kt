@@ -20,10 +20,6 @@ object Exams {
     fun wasChanged(record: ExamRecord?, exam: Exam) = changesOf(record, exam).any { it.change == "changed" }
     /** The day a sheet was published: its file name starts with it. */
     fun publishedOn(file: String) = file.take(10)
-    /** Each publication the office made, oldest first, with its sheets. */
-    fun publications(sources: List<ExamSource>) = sources.groupBy { publishedOn(it.file) }.toSortedMap().map { (date, sheets) -> date to sheets }
-    /** The publications that put or changed something in these exams. */
-    fun publicationsAffecting(exams: List<Exam>, changes: List<ExamChange>) = (exams.map { publishedOn(it.source) } + changes.map { it.observed }).distinct().sorted()
     /** A sheet's name as people would say it: no date, no school year, no file type. */
     fun sheetName(file: String) = file.replace(Regex("\\.[a-zA-Z]+$"), "").replace(Regex("^\\d{4}-\\d{2}-\\d{2}-"), "").replace(Regex("\\d{4}-\\d{4}学年第[一二]学期"), "").removeSuffix("-学生用表")
     /** The course behind an exam, as the timetable knows it. */

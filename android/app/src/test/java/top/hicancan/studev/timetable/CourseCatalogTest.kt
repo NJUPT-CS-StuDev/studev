@@ -75,12 +75,12 @@ class CourseCatalogTest {
     }
 
     @Test
-    fun formatsWeekRangesAndSuspensions() {
+    fun formatsWeekRangesAndKeepsSkippedWeeksInPlace() {
         assertEquals("第1–15周（单周）", CourseCatalog.formatWeekNumbers(listOf(1, 3, 5, 7, 9, 11, 13, 15)))
         assertEquals("第1–4、6–8周", CourseCatalog.formatWeekNumbers(listOf(1, 2, 3, 4, 6, 7, 8)))
         val m = meeting("m1", "tc-1", "线性代数", weeks = listOf(1, 2, 3, 4, 6, 7, 8))
-        assertEquals("第5周停课", CourseCatalog.suspensionNote(listOf(m)))
-        val full = meeting("m2", "tc-2", "概率论", weeks = (1..8).toList())
-        assertNull(CourseCatalog.suspensionNote(listOf(full)))
+        assertEquals("off", TimetablePresentation.state(m, 5))
+        assertEquals("active", TimetablePresentation.state(m, 6))
+        assertEquals("hidden", TimetablePresentation.state(m, 9))
     }
 }

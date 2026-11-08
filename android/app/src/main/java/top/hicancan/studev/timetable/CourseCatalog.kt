@@ -2,8 +2,8 @@ package top.hicancan.studev.timetable
 
 import top.hicancan.studev.data.CoursePlan
 import top.hicancan.studev.data.TeachingMeeting
-import top.hicancan.studev.data.roomDisplayName
 import top.hicancan.studev.me.TimetableEdits
+import top.hicancan.studev.world.Names
 import java.text.Collator
 import java.text.Normalizer
 import java.util.Locale
@@ -121,13 +121,8 @@ object CourseCatalog {
 
     fun meetingLine(meeting: TeachingMeeting): String {
         val dayName = "一二三四五六日".getOrNull(meeting.weekday - 1)?.let { "周$it" } ?: "周${meeting.weekday}"
-        val room = roomDisplayName(meeting.room, emptyMap())?.replace('－', '-') ?: "地点未定"
+        val room = meeting.room?.let(Names::room)?.replace('－', '-') ?: "地点未定"
         return "$dayName ${meeting.periods.first()}–${meeting.periods.last()}节 · $room · ${formatWeekNumbers(meeting.weeks)}"
-    }
-
-    fun suspensionNote(meetings: List<TeachingMeeting>): String? {
-        val weeks = meetings.flatMap { TimetablePresentation.suspendedWeeks(it.weeks) }.distinct().sorted()
-        return if (weeks.isNotEmpty()) "第${weeks.joinToString("、")}周停课" else null
     }
 
     fun effectiveMeetings(ownMeetings: List<TeachingMeeting>, catalog: List<CatalogCourse>, edits: TimetableEdits): List<TeachingMeeting> {

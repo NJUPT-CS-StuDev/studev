@@ -19,7 +19,7 @@ describe('the timeline as a calendar', () => {
         expect(file).toContain('LOCATION:教4-309');
     });
     it('reminds of an exam the evening before at eight and keeps every line within 75 octets', () => {
-        const exam = { id: 'e', course: { code: 'X', name: '毛泽东思想和中国特色社会主义理论体系概论' }, date: '2026-11-11', start: '13:30', end: '15:20', room: '仙林/教2-519', location: null, teacher: '甲、乙、丙、丁', students: 81 } as Exam;
+        const exam = { id: 'e', course: { code: 'X', name: '毛泽东思想和中国特色社会主义理论体系概论' }, date: '2026-11-11', start: '13:30', end: '15:20', room: '仙林/教2-519', location: '教2-519', teacher: '甲、乙、丙、丁', students: 81 } as Exam;
         const file = calendarFile('t', examEntries([exam], ['eve', 'hour']), new Date('2026-11-08T00:00:00Z'));
         expect(file).toContain('TRIGGER:-PT1050M');
         expect(file).toContain('TRIGGER:-PT60M');

@@ -21,18 +21,3 @@ export function displayName(place: DisplayPlace, byId?: ReadonlyMap<string, Disp
     }
     return `${place.category ?? place.kind} · 未命名地点`;
 }
-
-export function roomDisplayName(room: string | null | undefined, byId?: ReadonlyMap<string, DisplayPlace>): string | undefined {
-    if (!room) return undefined;
-    const place = byId?.get(room);
-    if (place) {
-        const title = displayName(place, byId);
-        if (place.kind === 'room') {
-            let parent = place.parent ? byId?.get(place.parent) : undefined;
-            while (parent && parent.kind !== 'building') parent = parent.parent ? byId?.get(parent.parent) : undefined;
-            if (parent) return `${displayName(parent, byId)}-${title}`;
-        }
-        return title;
-    }
-    return room.split('/').at(-1) || room;
-}

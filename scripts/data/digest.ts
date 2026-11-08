@@ -385,7 +385,10 @@ const round = (value: unknown): unknown => Array.isArray(value)
 async function buildModel(campus: string, from: string, layers: string, entities: MapPlace[]) {
     const features = async (name: string) => (await read<{ features: { properties: Record<string, any>; geometry: MapPlace['geometry'] }[] }>(join(layers, `${name}.geojson`))).features;
     const shape = (geometry: MapPlace['geometry']) => ({ type: geometry!.type, coordinates: round(geometry!.coordinates) });
-    const height = (row: Record<string, any>, fallback: number) => Number(row.height_m) || (Number(row.levels) || fallback) * 3.4;
+    // Campus buildings are authored with their height and storeys; one without is a broken map release.
+    const measured = (row: Record<string, any>, field: 'height_m' | 'levels') => { const value = Number(row[field]); if (!(value > 0)) throw new Error(`building ${row.id} has no ${field}`); return value; };
+    // Surrounding buildings mostly come without heights (634 of 674 in map-v0.8.5); those stand three storeys tall.
+    const surrounding = (row: Record<string, any>) => Number(row.height_m) || 3 * 3.4;
     const levels = new Map(entities.filter(place => place.kind === 'floor' && place.parent && place.level != null).map(place => [place.id, place.level!]));
     const indoor = await read<Record<string, { plate: MapPlace['geometry']; cores: { kind: string; geometry: MapPlace['geometry'] }[] }>>(join(from, 'indoor.json'));
     const floors: Record<string, unknown> = {};
@@ -399,8 +402,8 @@ async function buildModel(campus: string, from: string, layers: string, entities
     }
     return {
         campus,
-        buildings: (await features('buildings')).map(({ properties, geometry }) => ({ id: properties.id, levels: Number(properties.levels) || 3, height: height(properties, 4), geometry: shape(geometry) })),
-        context: (await features('context_buildings')).map(({ properties, geometry }) => ({ height: height(properties, 3), geometry: shape(geometry) })),
+        buildings: (await features('buildings')).map(({ properties, geometry }) => ({ id: properties.id, levels: measured(properties, 'levels'), height: measured(properties, 'height_m'), geometry: shape(geometry) })),
+        context: (await features('context_buildings')).map(({ properties, geometry }) => ({ height: surrounding(properties), geometry: shape(geometry) })),
         floors,
     };
 }

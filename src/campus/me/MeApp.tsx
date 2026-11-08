@@ -10,6 +10,7 @@ import { gradeOf } from '@/world/events';
 import { Chevron, Sheet, Toggle } from '@/world/ui';
 import type { TeachingClass, TeachingTerm } from '@/world/facts';
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
+import { labels } from '../../platform/client/api';
 import '../campus.css';
 
 export default function MeApp() {
@@ -29,6 +30,17 @@ export default function MeApp() {
         void Promise.all([loadTerm(), loadClasses(), loadRuns()]).then(([term, classes, runs]) => setFacts({ term, classes, run: runs[term.term] ?? null }));
     }, [facts, open]);
     const info = useMemo(() => facts?.classes.find(item => item.name === prefs.class) ?? null, [facts, prefs.class]);
+    const [shared, setShared] = useState(false);
+    // Who is signed in, as the account pages keep it in this browser.
+    const account = useMemo(() => {
+        try { return JSON.parse(localStorage.getItem('studev_auth_user') ?? 'null') as { nickname: string; role: string } | null; } catch { return null; }
+    }, [open]);
+    const share = async () => {
+        const url = `${PRODUCT_CONFIG.ORIGIN}/`;
+        if (navigator.share) { await navigator.share({ title: 'studev', url }).catch(() => undefined); return; }
+        await navigator.clipboard.writeText(url);
+        setShared(true);
+    };
     if (!open) return null;
     if (picking || !prefs.class) return <Sheet title="选择班级" onClose={() => { setPicking(false); setOpen(false); }}><ClassPicker onPicked={() => setPicking(false)} /></Sheet>;
 
@@ -43,12 +55,13 @@ export default function MeApp() {
             <div className="kv"><span className="k">改动</span><span className="v">加了 {edits.added.length} 门，隐藏了 {edits.hidden.length} 门</span>
                 {edits.hidden.length + edits.added.length > 0 && facts && <button className="ib" onClick={() => updateTimetableEdits(facts.term.term, () => ({ hidden: [], added: [] }))}>还原</button>}</div>
             <div className="kv"><span className="k">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{label}</button>)}</div></div>
-            <a className="kv" href="/account/"><span className="k">账号</span><span className="v">登录和社团表单</span><Chevron /></a>
+            <a className="kv" href="/account/"><span className="k">账号</span><span className="v">{account ? `${account.nickname} · ${labels[account.role] ?? account.role}` : '未登录'}</span><Chevron /></a>
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示在课表上<small>{grade !== null && grade <= 2 ? `大${'一二'[grade - 1]}必做，本学期 ${facts.run.required} 次` : '大三大四需要补跑时打开'}</small></span><Toggle on={runOn} /></button>
             </>}
             <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>提醒和桌面小组件</small></span><Chevron /></a>
+            <button className="kv" onClick={() => void share()}><span className="v">分享本站<small>{shared ? '网址已复制' : PRODUCT_CONFIG.ORIGIN.replace(/^https:\/\//, '')}</small></span><Chevron /></button>
             <a className="kv club-row" href="/club/"><span className="k">社团</span><span className="v">南邮计软网安学生发展中心</span><Chevron /></a>
             <p className="fine">数据版本 {DATA_RELEASE.data_version}</p>
         </Sheet>

@@ -12,7 +12,7 @@ export interface TeachingMeeting {
     teaching_class: { id: string; size: number | null };
     campus: string | null; room: string | null; location: string | null; weekday: number; periods: [number, number]; weeks: number[]; method: string | null; classes: string[];
 }
-export interface Exam { id: string; classes: string[]; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string | null; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null; source: string }
+export interface Exam { id: string; classes: string[]; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null; source: string }
 export interface ExamSlot { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null }
 export interface ExamChange { observed: string; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: ExamSlot[] | null; after: ExamSlot[] | null }
 export interface ExamSource { file: string; url: string; notice: string; title: string }

@@ -1,7 +1,7 @@
 import type { TeachingMeeting } from '@/world/facts';
 import { courseToneStyle } from '@/timetable/model/courseColors';
 import { timetableCells } from '@/timetable/model/presentation';
-import { eventsOn, weekOfDate, type CampusEvent, type Timeline } from '@/world/events';
+import { eventsOn, meetingAround, weekOfDate, type CampusEvent, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
 import { courseName, courseShort, roomLabel, roomShort } from '@/world/names';
@@ -48,14 +48,14 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
                             const start = clock.get(cell.periods[0])?.start;
                             const end = clock.get(cell.periods[1])?.end;
                             if (start === undefined || end === undefined) return null;
-                            const event = events[index]!.find(item => item.meeting?.id === cell.id);
+                            // Off this week or not, a lesson opens: one not on this week shows where it next meets.
+                            const event = events[index]!.find(item => item.meeting?.id === cell.id) ?? meetingAround(line, cell.id, monday);
                             // An exam at the same time outranks the lesson, which steps back.
                             const underExam = events[index]!.some(item => item.kind === 'exam' && item.start < end && start < item.end);
                             const quiet = cell.state !== 'active' || underExam;
                             const shared = lessons.some(other => clashes(cell, other));
                             const width = 100 / cell.columns;
-                            return <button key={cell.id} className={`t ${quiet ? 'quiet' : ''} ${!quiet && past(end) ? 'past' : ''}`} disabled={!event}
-                                style={{ top: y(start) + 1, height: y(end) - y(start) - 2, ...(shared ? { left: `calc(${cell.slot * width}% + 2px)`, right: 'auto', width: `calc(${width}% - 4px)` } : {}), ...courseToneStyle(cell.colourIndex) }}
+                            return <button key={cell.id} className={`t ${quiet ? 'quiet' : ''} ${!quiet && past(end) ? 'past' : ''}`}                                 style={{ top: y(start) + 1, height: y(end) - y(start) - 2, ...(shared ? { left: `calc(${cell.slot * width}% + 2px)`, right: 'auto', width: `calc(${width}% - 4px)` } : {}), ...courseToneStyle(cell.colourIndex) }}
                                 onClick={() => event && onOpen(event)}>
                                 {wide ? courseName(cell.course) : courseShort(cell.course)}<small>{quiet ? cell.label : wide ? cell.room : roomShort(cell.room)}</small>
                             </button>;

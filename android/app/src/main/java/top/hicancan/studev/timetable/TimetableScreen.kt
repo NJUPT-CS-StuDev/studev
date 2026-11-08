@@ -157,9 +157,9 @@ import java.time.LocalDate
     }
 }
 
-@Composable private fun Tile(event: LineEvent, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, onClick: () -> Unit) {
+@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, onClick: () -> Unit) {
     val mark = marks()
-    val tones = event.meeting?.let { tone(TimetablePresentation.colourIndex(it)) }
+    val tones = toneIndex?.let { tone(it) }
     val paper = Ink.paper
     fun faded(color: Color, amount: Float) = if (past) Color(color.red + (paper.red - color.red) * amount, color.green + (paper.green - color.green) * amount, color.blue + (paper.blue - color.blue) * amount) else color
     val bg = when (event.kind) { "exam" -> mark.exam; "run" -> paper; else -> faded(tones?.bg ?: Ink.sunken, .35f) }
@@ -181,6 +181,7 @@ import java.time.LocalDate
 @Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, onOpen: (LineEvent) -> Unit) {
     val today = day == now.date
     val events = remember(line, day) { line.on(day) }
+    val tones = remember(line) { TimetablePresentation.tones(line.meetings) }
     val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         if (isMe && today) NextBlock(line, now, route, walk)
@@ -203,8 +204,13 @@ import java.time.LocalDate
         val live = if (fold) events.filter { it.end > now.min } else events
         if (gone.isNotEmpty()) Plain("已结束 ${gone.size} 项 · ${gone.joinToString("、") { it.short }}", 13.sp, Ink.faint, maxLines = 1, modifier = Modifier.padding(bottom = 12.dp))
         if (live.isEmpty()) { Empty("今天的课都上完了"); return@Column }
-        val from = (if (fold) minOf(now.min, live.first().start) else live.first().start) - 14
-        val to = maxOf(live.last().end + 24, if (today) now.min + 20 else 0)
+        // The campus day opens with the first period. Before that nobody looks for a room, and the column does not
+        // stretch back to midnight: "now" joins it only within the hour before the day's first thing.
+        val opens = clock(line.periods.first().start)
+        val awake = fold && now.min >= minOf(opens, live.first().start) - 60
+        val free = maxOf(now.min, opens)
+        val from = (if (awake) minOf(now.min, live.first().start) else live.first().start) - 14
+        val to = maxOf(live.last().end + 24, if (awake) now.min + 20 else 0)
         fun y(minutes: Int): Dp = (minutes - from).dp
         val mark = marks()
         val hairline = Ink.line
@@ -212,19 +218,19 @@ import java.time.LocalDate
             var hour = (from / 60 + 1) * 60
             while (hour <= to) {
                 val at = hour
-                if (!(today && kotlin.math.abs(at - now.min) < 16)) Plain("${at / 60}:00", 11.5.sp, Ink.faint, modifier = Modifier.offset(y = y(at) - 8.dp).width(36.dp))
+                if (!(awake && kotlin.math.abs(at - now.min) < 16)) Plain("${at / 60}:00", 11.5.sp, Ink.faint, modifier = Modifier.offset(y = y(at) - 8.dp).width(36.dp))
                 Box(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.dp).offset(y = y(at)).background(hairline))
                 hour += 60
             }
             @Composable fun gap(start: Int, end: Int) = Plain("空 ${durationText(end - start)} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.rooms(day to start) })
-            if (today && live.first().start - now.min >= 25) gap(now.min, live.first().start)
+            if (awake && live.first().start - free >= 45) gap(free, live.first().start)
             live.forEachIndexed { index, event ->
-                Tile(event, false, Modifier.padding(start = 44.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
+                Tile(event, event.meeting?.let { tones[TimetablePresentation.identity(it)] }, false, Modifier.padding(start = 44.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
                 val next = live.getOrNull(index + 1)
-                val start = if (today) maxOf(event.end, now.min) else event.end
+                val start = maxOf(if (today) maxOf(event.end, now.min) else event.end, opens)
                 if (next != null && next.start - start >= 30 && next.start - event.end >= 45) gap(start, next.start)
             }
-            if (today) {
+            if (awake) {
                 Box(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.5.dp).offset(y = y(now.min)).background(mark.now))
                 Plain(hm(now.min), 11.5.sp, mark.now, FontWeight.SemiBold, modifier = Modifier.offset(y = y(now.min) - 8.dp).width(40.dp))
             }
@@ -251,7 +257,7 @@ import java.time.LocalDate
         Column(Modifier.weight(1f)) {
             Plain(caption, 12.5.sp, Ink.muted)
             Plain("${hm(event.start)} ${event.name}", 19.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 2.dp))
-            Plain((if (event.room != null) Names.room(event.room) else "教室未排定") + (minutes?.takeIf { !during }?.let { " · ${hm(event.start - it - 2)} 出门，步行 $it 分钟" } ?: ""), 13.5.sp, Ink.muted)
+            Plain((if (event.room != null) Names.room(event.room) else "课表没写地点") + (minutes?.takeIf { !during }?.let { " · ${hm(event.start - it - 2)} 出门，步行 $it 分钟" } ?: ""), 13.5.sp, Ink.muted)
             if (exam != null) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 SmallTag("考试", mark.exam, mark.onExam)
                 val days = exam.second
@@ -319,7 +325,8 @@ private const val DAY_END = 21 * 60 + 8
                             val shared = lessons.any { clash(cell, it) }
                             val slotWidth = if (shared) width / cell.columns else width
                             val x = if (shared) slotWidth * cell.slot else 0.dp
-                            val event = events[index].firstOrNull { it.meeting?.id == cell.id }
+                            // Off this week or not, a lesson opens: one not on this week shows where it next meets.
+                            val event = events[index].firstOrNull { it.meeting?.id == cell.id } ?: line.meetingAround(cell.id, monday)
                             // An exam at the same time outranks the lesson, which steps back.
                             val quiet = cell.state != "active" || events[index].any { it.kind == "exam" && it.start < end && start < it.end }
                             val past = date < now.date || (date == now.date && end <= now.min)
@@ -330,7 +337,7 @@ private const val DAY_END = 21 * 60 + 8
                                 Modifier.padding(horizontal = 2.dp).width(slotWidth - 4.dp).offset(x = x, y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
                         events[index].filter { it.kind != "class" }.forEach { event ->
-                            Tile(event, false, Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
+                            Tile(event, null, false, Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->
                             val start = period.getValue(meeting.periods.first()).first
@@ -388,13 +395,11 @@ private const val DAY_END = 21 * 60 + 8
     val last = remember(line) { line.lastLesson() }
     val courses = line.exams.map { it.course.code ?: it.course.name }.distinct().size
     val offGrid = practice.distinctBy { it.name to it.weeks }.sortedWith(compareBy({ it.weeks.first() }, { it.name }))
-    val shortWork = offGrid.filter { it.weeks.size <= 2 }.flatMap { item -> item.weeks.map { it to item.name } }.groupBy({ it.first }, { it.second })
-    val uri = androidx.compose.ui.platform.LocalUriHandler.current
     var takenOpen by remember { mutableStateOf(false) }
     var detailOpen by remember { mutableStateOf(false) }
     fun lead(days: Int) = when (days) { 0 -> "今天"; 1 -> "明天"; else -> "$days 天后" }
     fun dayHead(date: LocalDate) = "${dateLabel(date)} ${WEEKDAYS[date.dayOfWeek.value]}"
-    fun placeOf(exam: Exam) = exam.room?.let(Names::room) ?: exam.location ?: "考场未排定"
+    fun placeOf(exam: Exam) = exam.room?.let(Names::room) ?: exam.location
     fun eventOf(exam: Exam) = line.on(LocalDate.parse(exam.date)).firstOrNull { it.exam?.id == exam.id }
     @Composable fun examRow(exam: Exam, lead: String) =
         AheadRow(lead, Names.course(exam.course.name) + if (Exams.wasChanged(record, exam)) " · 改过" else "", (if (lead == exam.start) "到 ${exam.end}" else "${exam.start}–${exam.end}") + " · ${placeOf(exam)}") { eventOf(exam)?.let(onOpen) }
@@ -426,11 +431,41 @@ private const val DAY_END = 21 * 60 + 8
     if (modes.size > 1) Box(Modifier.padding(bottom = 12.dp)) { Choice(modes, mode) { route.termMode = it } }
     LazyColumn(Modifier.fillMaxSize()) {
         if (mode == "exam") {
-            if (ahead.isEmpty()) item { Plain("后面没有考试了", 13.5.sp, Ink.muted, modifier = Modifier.padding(bottom = 12.dp)) }
-            ahead.forEach { (date, days, exams) ->
+            // The first thing to know: how soon, and what.
+            item {
+                Column(Modifier.padding(top = 4.dp, bottom = 14.dp)) {
+                    val first = ahead.firstOrNull()
+                    Plain(if (first != null) "${lead(first.second)}考试" else "后面没有考试了", 22.sp, weight = FontWeight.SemiBold)
+                    if (first != null) Plain(first.third.joinToString("、") { Names.courseShort(it.course.name) }, 14.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            ahead.forEachIndexed { at, (date, _, exams) ->
                 item {
-                    Plain("${dayHead(date)} · ${lead(days)}", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
-                    exams.forEach { examRow(it, it.start) }
+                    Row(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        val next = at == 0
+                        Column(Modifier.width(52.dp).clip(RoundedCornerShape(10.dp)).background(if (next) mark.exam else Color.Transparent)
+                            .then(if (next) Modifier else Modifier.border(1.5.dp, mark.exam, RoundedCornerShape(10.dp))).padding(vertical = 5.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally) {
+                            val ink = if (next) mark.onExam else Ink.text
+                            Plain("${date.monthValue}月", 11.sp, ink)
+                            Plain("${date.dayOfMonth}", 22.sp, ink, FontWeight.SemiBold)
+                            Plain(WEEKDAYS[date.dayOfWeek.value], 11.sp, ink)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            exams.forEachIndexed { index, exam ->
+                                Row(Modifier.fillMaxWidth().then(if (index > 0) Modifier.topHairline(hairline) else Modifier).clickable { eventOf(exam)?.let(onOpen) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Plain(Names.course(exam.course.name), 16.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+                                            if (Exams.wasChanged(record, exam)) Plain("改过", 11.5.sp, mark.warning, FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+                                        }
+                                        Plain("${exam.start}–${exam.end} · ${placeOf(exam)}", 13.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp))
+                                    }
+                                    Plain("›", 16.sp, Ink.faint)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (taken.isNotEmpty()) item {
@@ -438,24 +473,15 @@ private const val DAY_END = 21 * 60 + 8
                 if (takenOpen) taken.forEach { examRow(it, dateLabel(LocalDate.parse(it.date))) }
             }
             if (record != null) item {
-                // Why the list can be trusted: how often the office published and which of those touched you,
-                // when its site was last looked at, the official notices, and every change seen.
-                val published = Exams.publications(record.sources)
-                val touching = Exams.publicationsAffecting(line.exams, changes)
+                // Why the list can be trusted, said as something one can check: every sheet the office published has been
+                // read, and when its site was last looked at; then every change seen. The office withdraws old notices, so nothing links to them.
                 Column(Modifier.padding(top = 24.dp)) {
-                    if (published.isNotEmpty()) Plain("教务处发布过 ${published.size} 版考试安排（${published.joinToString("、") { dateLabel(LocalDate.parse(it.first)) }}），其中 ${touching.size} 版涉及你的考试。", 13.sp, Ink.muted)
                     record.checked?.let { at ->
                         val local = java.time.OffsetDateTime.parse(at).atZoneSameInstant(CampusDay.zone)
-                        Plain("最近检查：${local.monthValue}月${local.dayOfMonth}日 ${hm(local.hour * 60 + local.minute)}", 13.sp, Ink.muted, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-                    }
-                    published.reversed().forEach { (date, sheets) ->
-                        Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { uri.openUri(sheets.first().notice) }.padding(vertical = 9.dp)) {
-                            Plain("${dateLabel(LocalDate.parse(date))} 发布", 13.5.sp)
-                            Plain(sheets.joinToString("、") { Exams.sheetName(it.file) }, 12.5.sp, Ink.muted)
-                        }
+                        Plain("已核对教务处发布的全部考试安排表 · 最近检查 ${local.monthValue}月${local.dayOfMonth}日 ${hm(local.hour * 60 + local.minute)}", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 12.dp))
                     }
                     if (changes.isNotEmpty()) {
-                        Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { detailOpen = !detailOpen }.padding(vertical = 10.dp)) { Plain("变动明细 · ${changes.size} 处", 13.5.sp, Ink.muted) }
+                        Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { detailOpen = !detailOpen }.padding(vertical = 10.dp)) { Plain("变动 ${changes.size} 处 · 最近 ${dateLabel(LocalDate.parse(latest!!))}", 13.5.sp, Ink.muted) }
                         if (detailOpen) changes.sortedByDescending { it.observed }.forEach { change ->
                             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Plain(Exams.changeNames.getValue(change.change), 11.5.sp, when (change.change) { "added" -> mark.free; "changed" -> mark.warning; else -> Ink.faint }, FontWeight.Medium)
@@ -480,7 +506,6 @@ private const val DAY_END = 21 * 60 + 8
                 Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.width(28.dp), verticalAlignment = Alignment.CenterVertically) {
                         Plain(week.week.toString(), 11.5.sp, if (current) Ink.brand else Ink.faint, if (current) FontWeight.SemiBold else FontWeight.Normal)
-                        if (mode == "course" && week.week in shortWork) Box(Modifier.padding(start = 3.dp).size(4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.muted))
                     }
                     (0L until 7L).forEach { offset ->
                         val date = LocalDate.parse(week.start).plusDays(offset)
