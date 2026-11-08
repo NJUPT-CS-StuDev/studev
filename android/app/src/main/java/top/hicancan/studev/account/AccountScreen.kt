@@ -1,5 +1,7 @@
 package top.hicancan.studev.account
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -65,11 +68,13 @@ import top.hicancan.studev.app.Tokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun AccountScreen(client: AccountClient, onBack: () -> Unit, onSignedIn: () -> Unit = {}) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var user by remember { mutableStateOf<AccountUser?>(null) }
     var state by remember { mutableStateOf<AccountState?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var register by rememberSaveable { mutableStateOf(false) }
+    var agreed by rememberSaveable { mutableStateOf(false) }
     var section by rememberSaveable { mutableStateOf("profile") }
     var student by rememberSaveable { mutableStateOf("") }
     var realName by rememberSaveable { mutableStateOf("") }
@@ -132,7 +137,19 @@ import top.hicancan.studev.app.Tokens
                     QqPreview(qq)
                 }
                 SecretField("密码", password, !busy) { password = it }
-                if (register) SecretField("确认密码", confirm, !busy) { confirm = it }
+                if (register) {
+                    SecretField("确认密码", confirm, !busy) { confirm = it }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = agreed, onCheckedChange = { agreed = it }, enabled = !busy)
+                        Column(Modifier.weight(1f)) {
+                            Text("我已阅读并同意《用户协议》与《隐私政策》，承诺不使用学校统一身份认证密码。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/terms/"))) }, contentPadding = PaddingValues(0.dp)) { Text("用户协议", style = MaterialTheme.typography.bodySmall) }
+                                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/privacy/"))) }, contentPadding = PaddingValues(0.dp)) { Text("隐私政策", style = MaterialTheme.typography.bodySmall) }
+                            }
+                        }
+                    }
+                }
                 else OutlinedTextField(totp, { totp = it.take(64) }, Modifier.fillMaxWidth(), label = { Text("动态验证码或恢复码") }, supportingText = { Text("已绑定认证器的账号需要填写。") }, singleLine = true, enabled = !busy)
                 Button(onClick = { run {
                     if (register) {
@@ -143,7 +160,7 @@ import top.hicancan.studev.app.Tokens
                         user = client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}")
                         password = ""; totp = ""; reload(); onSignedIn()
                     }
-                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && nickname.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank())) {
+                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && nickname.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (register) "创建账号" else "登录")
                 }
                 Text("密码需要 12–256 个字符。忘记密码或学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

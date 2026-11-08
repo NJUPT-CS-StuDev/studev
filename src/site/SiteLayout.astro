@@ -107,6 +107,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
         <span class="filings">
           <a href={PRODUCT_CONFIG.FILINGS.ICP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.ICP.TEXT}</a>
           <a href={PRODUCT_CONFIG.FILINGS.POLICE.URL} target="_blank" rel="noopener noreferrer"><Image src={policeEmblem} width={14} height={15} densities={[1, 2, 3]} alt="" />{PRODUCT_CONFIG.FILINGS.POLICE.TEXT}</a>
+          <a href="/terms/">用户协议</a>
+          <a href="/privacy/">隐私政策</a>
         </span>
         <a class="footer-code" href={PRODUCT_CONFIG.GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
