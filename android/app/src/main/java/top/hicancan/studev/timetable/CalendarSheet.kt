@@ -34,10 +34,9 @@ import top.hicancan.studev.world.Exams
     }
     PlainSheet("写入手机日历", onClose) {
         Plain("每类是手机日历里单独的一个日历，可以分别设颜色和隐藏；课表和数据变了会跟着更新。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
-        KeyRow(null, "studev 课程", "上课前 15 分钟提醒", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
+        KeyRow(null, "studev 课程", "上课前 15 分钟提醒；不上课的日子写明原因", trailing = { Toggle(settings.calendar) { on -> set { it.copy(calendar = on) } } })
         KeyRow(null, "studev 考试", "按下面选的时间提醒", trailing = { Toggle(settings.calendarExams) { on -> set { it.copy(calendarExams = on) } } })
         if (state.run != null) KeyRow(null, "studev 早锻炼", "你排上的那些天，提前 30 分钟提醒", trailing = { Toggle(settings.calendarRun) { on -> set { it.copy(calendarRun = on) } } })
-        KeyRow(null, "studev 校历", "放假和校历日程，整天显示", trailing = { Toggle(settings.calendarSchool) { on -> set { it.copy(calendarSchool = on) } } })
         Plain("考试提醒", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Exams.REMINDERS.forEach { (key, name) ->

@@ -17,7 +17,7 @@ import top.hicancan.studev.world.*
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** School facts that reach the phone beyond lessons and exams. */
+/** School facts that reach the phone beyond lessons and exams: the calendar's days without lessons, and 早锻炼. */
 class PhoneFacts(val terms: List<CalendarTerm> = emptyList(), val run: MorningRun? = null)
 
 private class Entry(val id: String, val title: String, val start: Long, val end: Long, val room: String, val description: String, val allDay: Boolean, val reminders: List<Int>)
@@ -28,7 +28,6 @@ object TimetableCalendar {
     private data class Book(val name: String, val title: String)
     private val lessons = Book("studev", "studev 课程")
     private val exams = Book("studev-exams", "studev 考试")
-    private val school = Book("studev-school", "studev 校历")
     private val runs = Book("studev-run", "studev 早锻炼")
     private fun adapter(uri: android.net.Uri) = uri.buildUpon().appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
         .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, ACCOUNT)
@@ -41,6 +40,15 @@ object TimetableCalendar {
         arrayOf(ACCOUNT, CalendarContract.ACCOUNT_TYPE_LOCAL, book.name), null)?.use { if (it.moveToFirst()) it.getLong(0) else null }
     private fun remove(context: Context, book: Book) {
         find(context, book)?.let { context.contentResolver.delete(adapter(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, it)), null, null) }
+    }
+    /** The phone holds only the calendars studev writes now; any other calendar of its account goes. */
+    private fun prune(context: Context) {
+        val kept = setOf(lessons, exams, runs).map { it.name }
+        context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.NAME),
+            "account_name=? AND account_type=?", arrayOf(ACCOUNT, CalendarContract.ACCOUNT_TYPE_LOCAL), null)?.use { cursor ->
+            while (cursor.moveToNext()) if (cursor.getString(1) !in kept)
+                context.contentResolver.delete(adapter(ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, cursor.getLong(0))), null, null)
+        }
     }
     private fun write(context: Context, book: Book, entries: List<Entry>) {
         val resolver = context.contentResolver
@@ -97,15 +105,15 @@ object TimetableCalendar {
     suspend fun sync(context: Context, events: List<LineEvent>, facts: PhoneFacts, settings: PersonalSettings): Int = withContext(Dispatchers.IO) {
         fun entry(event: LineEvent, title: String, reminders: List<Int>) = Entry(event.id, title, event.startsAt.toEpochMilli(), event.endsAt.toEpochMilli(),
             Names.room(event.room), (event.teachers + listOfNotNull(event.exam?.note)).joinToString(" · "), false, reminders)
+        prune(context)
+        // A gap among the lessons says why it is there: the term's days without lessons, whole-day. The break is left out.
+        val daysOff = facts.terms.flatMap { term -> (term.holidays + term.events).filter { it.start >= term.start && it.start <= term.end } }.map { item ->
+            Entry("off:${item.start}:${item.name}", "${item.name} · 不上课", day(LocalDate.parse(item.start)), day(LocalDate.parse(item.end).plusDays(1)), "", "", true, emptyList())
+        }
         val lessonRows = events.filter { it.kind == "class" }.map { entry(it, it.name, listOf(15)) }
         val examRows = events.filter { it.kind == "exam" }.map { entry(it, "考试 · ${it.name}", settings.examReminders.map { key -> Exams.reminderMinutes(key, it.start) }) }
-        if (settings.calendar) write(context, lessons, lessonRows) else remove(context, lessons)
+        if (settings.calendar) write(context, lessons, lessonRows + daysOff) else remove(context, lessons)
         if (settings.calendarExams) write(context, exams, examRows) else remove(context, exams)
-        if (settings.calendarSchool) {
-            write(context, school, facts.terms.flatMap { term -> term.holidays + term.events + listOfNotNull(term.pause) }.map { item ->
-                Entry("school:${item.name}:${item.start}", item.name, day(LocalDate.parse(item.start)), day(LocalDate.parse(item.end).plusDays(1)), "", "校历", true, emptyList())
-            })
-        } else remove(context, school)
         val rule = facts.run
         if (settings.calendarRun && rule != null) {
             val rows = settings.runDays.map { day ->

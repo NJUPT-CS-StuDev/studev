@@ -11,7 +11,6 @@ export const CALENDARS = [
     { kind: 'lessons', name: '课程' },
     { kind: 'exams', name: '考试' },
     { kind: 'run', name: '早锻炼' },
-    { kind: 'school', name: '校历' },
 ] as const;
 export type CalendarKind = typeof CALENDARS[number]['kind'];
 
@@ -113,8 +112,13 @@ export const runEntries = ({ rule, days }: RunPlan): Entry[] => days.map(date =>
     date, start: minutesOf(rule.time[0]), end: minutesOf(rule.time[1]), reminders: [RUN_REMINDER],
 }));
 
-export const schoolEntries = (terms: CalendarTerm[]): Entry[] => terms.flatMap(term => [...term.holidays, ...term.events, ...(term.break ? [term.break] : [])])
-    .map(item => ({ uid: `school-${item.start}-${item.name}`, summary: item.name, location: '', description: '', date: item.start, last: item.end, reminders: [] }));
+/**
+ * The days in a term without lessons, whole-day, so a gap among the lessons says why it is there.
+ * The break and holidays outside the term are left out: nobody follows lessons through them.
+ */
+export const daysOffEntries = (terms: CalendarTerm[]): Entry[] => terms.flatMap(term => [...term.holidays, ...term.events]
+    .filter(item => item.start >= term.start && item.start <= term.end)
+    .map(item => ({ uid: `off-${item.start}-${item.name}`, summary: `${item.name} · 不上课`, location: '', description: '', date: item.start, last: item.end, reminders: [] })))
 
 export function downloadCalendar(filename: string, content: string): void {
     const url = URL.createObjectURL(new Blob([content], { type: 'text/calendar;charset=utf-8' }));

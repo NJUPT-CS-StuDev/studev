@@ -26,7 +26,6 @@ data class PersonalSettings(
     val timetable: Map<String, TimetableEdits> = emptyMap(),
     val examAttendance: Map<String, Map<String, Boolean>> = emptyMap(),
     val calendarExams: Boolean = false,
-    val calendarSchool: Boolean = false,
     /** null until someone chooses: 大一大二 see 早锻炼 by default. */
     val runShown: Boolean? = null,
     /** The mornings put down for 早锻炼; gone by counts as run. */
@@ -83,7 +82,6 @@ class CampusSettings(context: Context) {
             runCatching { sanitizeAttendance(Json.decodeFromString<Map<String, Map<String, Boolean>>>(it)) }.getOrDefault(emptyMap())
         } ?: emptyMap(),
         calendarExams = store.getBoolean("calendar-exams", false),
-        calendarSchool = store.getBoolean("calendar-school", false),
         runShown = if (store.contains("run-shown")) store.getBoolean("run-shown", false) else null,
         runDays = store.getString("run-days", null)?.let { raw -> runCatching { Json.decodeFromString<List<String>>(raw) }.getOrNull() } ?: emptyList(),
         runAdjust = store.getInt("run-adjust", 0),
@@ -103,7 +101,7 @@ class CampusSettings(context: Context) {
             .putBoolean("reminder-guidance", next.reminderGuidanceShown)
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
-            .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-school", next.calendarSchool)
+            .putBoolean("calendar-exams", next.calendarExams)
             .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders))
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next

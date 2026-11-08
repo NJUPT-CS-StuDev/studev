@@ -5,20 +5,18 @@ import { writePreferences, type Preferences } from '@/world/preferences';
 import { loadCalendar } from '@/world/data';
 import type { Timeline } from '@/world/events';
 import { Sheet, Toggle } from '@/world/ui';
-import { CALENDARS, DEFAULT_EXAM_REMINDERS, EXAM_REMINDERS, calendarFile, downloadCalendar, examEntries, lessonEntries, runEntries, schoolEntries, type CalendarKind, type ExamReminder } from './model/calendar';
+import { CALENDARS, DEFAULT_EXAM_REMINDERS, EXAM_REMINDERS, calendarFile, daysOffEntries, downloadCalendar, examEntries, lessonEntries, runEntries, type CalendarKind, type ExamReminder } from './model/calendar';
 
 export function CalendarSheet({ line, className, prefs, onClose }: { line: Timeline; className: string; prefs: Preferences; onClose: () => void }) {
     const kinds = CALENDARS.filter(({ kind }) => kind !== 'run' || line.run);
-    const [picked, setPicked] = useState<CalendarKind[]>(kinds.map(({ kind }) => kind).filter(kind => kind !== 'school'));
+    const [picked, setPicked] = useState<CalendarKind[]>(kinds.map(({ kind }) => kind));
     const reminders = (prefs.examReminders ?? DEFAULT_EXAM_REMINDERS).filter((key): key is ExamReminder => EXAM_REMINDERS.some(item => item.key === key));
     const toggleReminder = (key: ExamReminder) => writePreferences(current => ({ ...current, examReminders: EXAM_REMINDERS.map(item => item.key).filter(item => (item === key) !== reminders.includes(item)) }));
     const download = async () => {
-        const terms = picked.includes('school') ? await loadCalendar() : [];
         const entries = [
-            ...(picked.includes('lessons') ? lessonEntries(line) : []),
+            ...(picked.includes('lessons') ? [...lessonEntries(line), ...daysOffEntries(await loadCalendar())] : []),
             ...(picked.includes('exams') ? examEntries(line.exams, reminders) : []),
             ...(picked.includes('run') && line.run ? runEntries(line.run) : []),
-            ...(picked.includes('school') ? schoolEntries(terms) : []),
         ];
         downloadCalendar(`studev ${className}.ics`, calendarFile(`studev ${className}`, entries, new Date()));
     };
