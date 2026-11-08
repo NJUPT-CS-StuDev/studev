@@ -77,7 +77,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">社团</a>
           <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
-        <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title="复制 studev 的网址"><span aria-live="polite" data-copy-label>分享</span></button>
+        <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title="复制 studev 的网址"><span aria-live="polite" data-copy-label>Share</span></button>
+        <a class:list={['about-entry', { active: active === 'about' }]} href="/about/">About</a>
         <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>App</a>
         <button class="avatar" type="button" data-me aria-label="我"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></button>
         <script is:inline>

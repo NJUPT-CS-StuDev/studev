@@ -39,10 +39,11 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .avatar { padding: 0; overflow: hidden; display: grid; place-items: center; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.share-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); }
-.share-entry { margin-right: -10px; }
+.share-entry.text-copy, .about-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); }
+.share-entry.text-copy, .about-entry { margin-right: -10px; }
 .app-entry { margin-right: 18px; }
-.share-entry:hover, .app-entry:hover { color: var(--ink); }
+.share-entry.text-copy:hover, .about-entry:hover, .app-entry:hover, .about-entry.active { color: var(--ink); }
+.about-entry.active { font-weight: 600; }
 .app-offer { position: fixed; left: 0; right: 0; bottom: calc(50px + env(safe-area-inset-bottom, 0px)); z-index: 49; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 40px; background: var(--paper); border-top: 1px solid var(--line); font-size: 13px; }
 .app-offer[hidden] { display: none; }
 .app-offer a { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -57,7 +58,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 999.98px) {
   .site-header { position: static; border-bottom: 0; }
-  .site-nav, .wordmark, .share-entry, .app-entry { display: none; }
+  .site-nav, .wordmark, .share-entry, .about-entry, .app-entry { display: none; }
   .header-inner { height: 0; padding: 0; }
   .avatar { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 45; }
   body:has(.mapview) .avatar { display: none; }
