@@ -1,5 +1,6 @@
 package top.hicancan.studev.app
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -93,4 +94,17 @@ import top.hicancan.studev.world.Moment
     open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings, state, now, onOpen = { open = it to line }) { open = null } }
     if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount) { me = false }
     if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
+    if (state.appRequired) AppRequired(state.app!!)
+}
+
+/** The website now publishes data this app cannot read: only the newer app can go on. */
+@Composable private fun AppRequired(app: top.hicancan.studev.data.AppRelease) {
+    val context = LocalContext.current
+    Surface(Modifier.fillMaxSize(), color = Ink.paper) {
+        Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center) {
+            Plain("请更新到 ${app.versionName}", 24.sp, weight = FontWeight.SemiBold)
+            Plain("校园数据已经更新，这个版本（${top.hicancan.studev.BuildConfig.VERSION_NAME}）读不了新的数据。下载安装新版本后，你的班级和设置都会保留。", 15.sp, Ink.muted, modifier = Modifier.padding(top = 10.dp, bottom = 24.dp))
+            ActionButton("下载 ${app.versionName}", go = true, modifier = Modifier.fillMaxWidth()) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/download/"))) }
+        }
+    }
 }

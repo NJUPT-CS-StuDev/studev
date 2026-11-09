@@ -144,6 +144,13 @@ test('profile updates are versioned and cannot mutate QQ, user ID, role or email
   await rejects(f.call('/auth/profile', 'POST', { nickname: 'Stale', revision: member.user.revision }, member), 'REVISION_CONFLICT', 409);
 });
 
+test('a blank display nickname shows the real name alone, as the profile page says', async () => {
+  const f = fixture(), member = await f.member();
+  const updated = await f.call('/auth/profile', 'POST', { nickname: '  ', signature: '一句话', revision: member.user.revision }, member);
+  assert.equal(updated.user.nickname, member.user.realName || updated.user.realName);
+  assert.equal(updated.user.signature, '一句话');
+});
+
 test('promotion revokes sessions; admin authority works without mandatory TOTP while optional TOTP is enforced when enabled', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
   const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin' }, owner);

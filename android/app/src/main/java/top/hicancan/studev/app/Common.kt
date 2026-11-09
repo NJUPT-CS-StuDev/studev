@@ -32,8 +32,8 @@ object Ink {
     val brand @Composable get() = MaterialTheme.colorScheme.primary
     val paper @Composable get() = MaterialTheme.colorScheme.background
 }
-@Composable fun Plain(text: String, size: TextUnit = 15.sp, color: Color = Ink.text, weight: FontWeight = FontWeight.Normal, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) =
-    Text(text, modifier, color = color, style = TextStyle(fontSize = size, fontWeight = weight, lineHeight = size * 1.4f), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+@Composable fun Plain(text: String, size: TextUnit = 15.sp, color: Color = Ink.text, weight: FontWeight = FontWeight.Normal, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, lineHeight: TextUnit = size * 1.4f) =
+    Text(text, modifier, color = color, style = TextStyle(fontSize = size, fontWeight = weight, lineHeight = lineHeight), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 fun Modifier.topHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1f) }
 fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), 1f) }
 

@@ -23,7 +23,10 @@ data class AcademicState(val repository: AcademicRepository? = null, val term: T
     val catalogBusy: Boolean = false, val catalogError: String? = null,
     val exams: List<Exam> = emptyList(), val rooms: RoomIndex? = null, val busy: Boolean = true, val classBusy: Boolean = false,
     val error: String? = null,
-    val calendar: List<CalendarTerm> = emptyList(), val run: MorningRun? = null) {
+    val calendar: List<CalendarTerm> = emptyList(), val run: MorningRun? = null,
+    /** The newest app the website offers, and whether this one can no longer read its data. */
+    val app: AppRelease? = null, val appRequired: Boolean = false) {
+    val appBehind get() = app != null && app.versionCode > top.hicancan.studev.BuildConfig.VERSION_CODE
     val holidays by lazy { CampusLine.holidays(calendar) }
 }
 class CampusModel(application: Application) : AndroidViewModel(application) {
@@ -51,9 +54,8 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                 try { loadRepository(repo) }
                 catch (e: CancellationException) { throw e }
                 catch (_: Exception) { loadRepository(AcademicRepository.bundled(getApplication())) }
-                // Discovery is best effort; the packaged release stays immediately usable.
-                val discovered = AcademicRepository.discover(getApplication(), settings.state.value.klass)
-                if (discovered != null && discovered.release.version != state.value.repository?.release?.version) loadRepository(discovered)
+                // The packaged release stays immediately usable while the website is checked.
+                AcademicRepository.discover(getApplication(), settings.state.value.klass)?.let { found -> take(found) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { _state.update { it.copy(busy = false, error = "校园数据暂时无法打开，请重试") } }
         }
@@ -179,11 +181,24 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         return try { loading.await() } catch (e: CancellationException) { throw e } catch (e: Exception) { allMeetings = null; throw e }
     }
     fun setRun(change: (PersonalSettings) -> PersonalSettings) { settings.update(change); syncPhone() }
+    /** Takes what a check found: the newer app, and the newer data when this app can read it. */
+    private suspend fun take(found: Discovery): Boolean {
+        _state.update { it.copy(app = found.app, appRequired = found.unreadable && found.appBehind) }
+        val repo = found.repository ?: return false
+        if (repo.release.version == state.value.repository?.release?.version) return false
+        loadRepository(repo)
+        return true
+    }
     fun refresh() { viewModelScope.launch {
-        tell("正在检查校园数据")
-        val repo = AcademicRepository.discover(getApplication(), settings.state.value.klass)
-        if (repo == null) tell("暂未发现新数据，离线数据仍可使用")
-        else try { loadRepository(repo); tell("校园数据已更新") } catch (e: CancellationException) { throw e } catch (_: Exception) { tell("新数据暂时无法读取，请稍后重试") }
+        tell("正在检查更新")
+        val found = AcademicRepository.discover(getApplication(), settings.state.value.klass)
+        if (found == null) { tell("暂时连不上，离线数据仍可使用"); return@launch }
+        val fresh = try { take(found) } catch (e: CancellationException) { throw e } catch (_: Exception) { tell("新数据暂时无法读取，请稍后重试"); return@launch }
+        tell(when {
+            found.appBehind -> "有新版本 ${found.app.versionName}" + if (fresh) "，校园数据已更新" else ""
+            fresh -> "校园数据已更新"
+            else -> "App 和校园数据都是最新的"
+        })
     } }
     fun syncPhone() {
         if (state.value.classBusy || state.value.busy) return

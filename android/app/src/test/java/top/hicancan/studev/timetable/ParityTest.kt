@@ -80,6 +80,12 @@ class ParityTest {
         val test = item.jsonObject
         assertEquals(test["date"]?.jsonPrimitive?.contentOrNull, line.meetingAround(test.getValue("meeting").jsonPrimitive.content, LocalDate.parse(test.getValue("from").jsonPrimitive.content))?.date?.toString())
     }
+    @Test fun lessonsHiddenBehindASlotAreTheSame() = golden.getValue("sharing").jsonArray.forEach { item ->
+        val test = item.jsonObject
+        val id = test.getValue("event").jsonPrimitive.content
+        val event = (0L..30L).asSequence().map { LocalDate.parse("2026-11-09").plusDays(it) }.flatMap { line.on(it) }.first { it.id == id }
+        assertEquals(test.getValue("others").jsonArray.map { it.jsonPrimitive.content }, line.sharingSlot(event).map { it.id })
+    }
     @Test fun termTeachingEndsOnTheSameDay() = assertEquals(golden.getValue("lastLesson").jsonPrimitive.content, line.lastLesson().toString())
     @Test fun roomStatesMatchAtEverySampledMoment() {
         val rooms = golden.getValue("rooms").jsonObject

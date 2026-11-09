@@ -4,6 +4,17 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
+/** The current Android app, as the website's release manifest names it. */
+@Serializable data class AppRelease(val versionName: String, val versionCode: Int)
+@Serializable private data class ReleaseManifest(val android: AppRelease)
+/**
+ * What a check of the website found: the current app; the newer data, if any could be read; and whether
+ * data was published that this app cannot read, which only a newer app can.
+ */
+class Discovery(val app: AppRelease, val repository: AcademicRepository?, val unreadable: Boolean) {
+    val appBehind get() = app.versionCode > top.hicancan.studev.BuildConfig.VERSION_CODE
+}
+internal fun appInManifest(text: String): AppRelease = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<ReleaseManifest>(text).android
 @Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null)
 @Serializable data class TeachingWeek(val week: Int, val start: String, val end: String)
 @Serializable data class TeachingTerm(val term: String, val year: Int, val number: Int, val weeks: List<TeachingWeek>, val observed_at: String)

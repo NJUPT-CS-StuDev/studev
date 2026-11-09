@@ -97,6 +97,16 @@ import java.time.LocalDate
             if (step != 0) { order.getOrNull(order.indexOf(scale) + step)?.let { route.scale = it }; pinch = 1f }
         }
     }.statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp)) {
+        // A newer app is out: said once, quietly, above the timetable, until it is installed.
+        state.app?.takeIf { state.appBehind }?.let { app ->
+            val context = androidx.compose.ui.platform.LocalContext.current
+            Row(Modifier.padding(end = 40.dp, bottom = 10.dp).clip(RoundedCornerShape(8.dp)).background(Ink.sunken).clickable {
+                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${top.hicancan.studev.account.PLATFORM_ORIGIN}/download/")))
+            }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Plain("新版本 ${app.versionName}", 13.5.sp, weight = FontWeight.Medium)
+                Plain(" · 更新 ›", 13.5.sp, Ink.brand)
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(end = 40.dp, bottom = 16.dp), verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
                 if (!isMe) Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.whoType = "me"; route.whoId = ""; route.scale = "day"; route.preview = null }.padding(bottom = 6.dp))
@@ -292,7 +302,7 @@ private const val DAY_END = 21 * 60 + 8
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().border(1.dp, hairline, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))) {
             Row(Modifier.fillMaxWidth().bottomHairline(hairline).padding(vertical = 6.dp)) {
-                Spacer(Modifier.width(32.dp))
+                Spacer(Modifier.width(38.dp))
                 days.take(columns).forEachIndexed { index, date ->
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         val color = if (date == now.date) Ink.brand else Ink.text
@@ -302,10 +312,15 @@ private const val DAY_END = 21 * 60 + 8
                 }
             }
             Row(Modifier.fillMaxWidth().height(y(DAY_END))) {
-                Box(Modifier.width(32.dp).fillMaxHeight().drawBehind { drawLine(hairline, Offset(size.width, 0f), Offset(size.width, size.height), 1f) }) {
+                Box(Modifier.width(38.dp).fillMaxHeight().drawBehind { drawLine(hairline, Offset(size.width, 0f), Offset(size.width, size.height), 1f) }) {
+                    // The period, with its start and end beneath, as the school's own timetable shows it.
                     line.periods.forEach { item ->
                         val (start, end) = period.getValue(item.period)
-                        Box(Modifier.fillMaxWidth().height(y(end) - y(start)).offset(y = y(start)), contentAlignment = Alignment.Center) { Plain(item.period.toString(), 11.sp, Ink.faint) }
+                        Column(Modifier.fillMaxWidth().height(y(end) - y(start)).offset(y = y(start)), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Plain(item.period.toString(), 11.sp, Ink.muted, FontWeight.SemiBold, lineHeight = 12.sp)
+                            Plain(item.start, 8.5.sp, Ink.faint, lineHeight = 10.sp)
+                            Plain(item.end, 8.5.sp, Ink.faint, lineHeight = 10.sp)
+                        }
                     }
                     if (now.date in days) Box(Modifier.fillMaxWidth().height(18.dp).offset(y = y(now.min) - 9.dp).background(paper), contentAlignment = Alignment.Center) { Plain(hm(now.min), 10.sp, mark.now, FontWeight.SemiBold) }
                 }
@@ -316,9 +331,11 @@ private const val DAY_END = 21 * 60 + 8
                     }) {
                         val width = maxWidth
                         line.periods.forEach { item -> Box(Modifier.fillMaxWidth().height(1.dp).offset(y = y(period.getValue(item.period).first)).background(soft)) }
-                        // A lesson not on this week stays in its place, greyed, beside whatever is on: 单周 and 双周 side by side.
-                        val lessons = if (off) emptyList() else cells.filter { it.day == index + 1 }
+                        // One block per slot: a lesson on this week takes it; one off this week shows, greyed, only in a slot
+                        // nothing else holds. The lesson it gives way to names it in its sheet.
+                        val all = if (off) emptyList() else cells.filter { it.day == index + 1 }
                         fun clash(a: TimetableCell, b: TimetableCell) = a !== b && a.periods.first() <= b.periods.last() && b.periods.first() <= a.periods.last()
+                        val lessons = all.filter { cell -> cell.state == "active" || all.none { it.state == "active" && clash(cell, it) } }
                         lessons.forEach { cell ->
                             val start = period[cell.periods.first()]?.first ?: return@forEach
                             val end = period[cell.periods.last()]?.second ?: return@forEach

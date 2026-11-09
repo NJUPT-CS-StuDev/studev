@@ -67,6 +67,17 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
     <slot name="head" />
     <title>{title}</title>
+    {/* What a link to this page looks like when shared, in WeChat and elsewhere: an opaque square image, since
+        transparent corners are drawn black there, and the page's own title and description. */}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="studev" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/pwa-icons/512.png', Astro.site)} />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <header class="site-header">
@@ -77,8 +88,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">社团</a>
           <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
-        <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title="复制 studev 的网址"><span aria-live="polite" data-copy-label>Share</span></button>
-        <a class:list={['about-entry', { active: active === 'about' }]} href="/about/">About</a>
+        <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title="复制 studev 的网址"><span aria-live="polite" data-copy-label>分享</span></button>
+        <a class:list={['about-entry', { active: active === 'about' }]} href="/about/">关于</a>
         <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>App</a>
         <button class="avatar" type="button" data-me aria-label="我"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></button>
         <script is:inline>

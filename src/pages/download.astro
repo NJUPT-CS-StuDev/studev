@@ -15,7 +15,18 @@ const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `
     <p class="download-summary">{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
     <a class="download-button" href={signed} data-astro-prefetch="false" rel="nofollow">下载 {PRODUCT_CONFIG.ANDROID_APP.VERSION}</a>
     <p class="download-help">下载后在浏览器的下载列表中打开，按系统提示安装。微信、QQ 内请先选择“在浏览器打开”。</p>
-    <p class="download-help">下载不动时换一个：<a href={PRODUCT_CONFIG.ANDROID_APP.BACKUP_URL} rel="nofollow">备用下载</a> · <a href={PRODUCT_CONFIG.ANDROID_APP.RELEASES_URL}>GitHub</a> · <a href="/">iPhone 或其他设备使用网页版</a></p>
+    {/* Each other way is a row of its own: what it is, why one would take it, and a chevron to say it opens. */}
+    <h2 class="download-more">下载不动时换一个</h2>
+    <a class="download-route" href={PRODUCT_CONFIG.ANDROID_APP.BACKUP_URL} rel="nofollow" data-astro-prefetch="false">
+      <span><b>备用下载</b><small>另一条线路，同一个安装包</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
+    </a>
+    <a class="download-route" href={PRODUCT_CONFIG.ANDROID_APP.RELEASES_URL}>
+      <span><b>GitHub</b><small>所有版本和更新说明</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
+    </a>
+    <h2 class="download-more">不是安卓手机</h2>
+    <a class="download-route" href="/">
+      <span><b>使用网页版</b><small>iPhone 和电脑都能用，可以添加到主屏幕</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
+    </a>
   </section>
 </SiteLayout>
 <style>
@@ -25,4 +36,14 @@ const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `
   .download-page .download-button { display: inline-block; padding: 10px 20px; border-radius: 8px; background: var(--brand); color: var(--on-brand); font-weight: 500; }
   .download-page .download-button:hover { color: var(--on-brand); }
   .download-help { color: var(--muted); font-size: 13.5px; margin: 20px 0 0; }
+  .download-more { margin: 40px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .download-route { display: flex; align-items: center; gap: 12px; margin: 0 -12px; padding: 12px; border-radius: 10px; color: var(--ink); text-decoration: none; }
+  .download-route { position: relative; }
+  .download-route + .download-route::before { content: ""; position: absolute; left: 12px; right: 12px; top: 0; border-top: 1px solid var(--line); }
+  .download-route:hover { background: var(--surface-sunken); color: var(--ink); }
+  .download-route:hover::before, .download-route:hover + .download-route::before { border-color: transparent; }
+  .download-route span { flex: 1; min-width: 0; }
+  .download-route b { display: block; font-size: 15px; font-weight: 500; }
+  .download-route small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+  .download-route svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 </style>

@@ -303,8 +303,9 @@
     .ph h1{font-size:22px}
     .ph{padding-right:40px}
     .search .sfield{margin-right:40px}
-    .wk .ax small{display:none}
-    .wk .ax span{font-size:11px;font-weight:400;color:var(--faint)}
+    /* Narrow: the period, with its start and end beneath, stacked as small as stays legible. */
+    .wk .ax span{flex-direction:column;gap:0;font-size:11px;font-weight:600;color:var(--muted);line-height:1.1}
+    .wk .ax small{font-size:8.5px;line-height:1.15;text-align:center}
     .nowlab{font-size:10px}
     .t{font-size:11px;padding:3px 2px}
     .t small{font-size:10px}

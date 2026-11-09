@@ -1,4 +1,4 @@
-import { eventsOn, runTally, type CampusEvent, type Timeline } from '@/world/events';
+import { eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
 import { changeLines, changesOf, courseOf, lessonsLeft, publishedOn, sheetName, weeksText } from '@/world/exams';
 import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
@@ -90,6 +90,11 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
             {teachers}
             {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">教室</span><span className="v">{name} 的课表</span><Chevron /></a>}
             {course}
+            {sharingSlot(line, event).map(other => (
+                <button key={other.id} className="kv" onClick={() => { const found = meetingAround(line, other.id, event.date); if (found) onOpen(found); }}>
+                    <span className="k">同时段</span><span className="v">{courseName(other.course.name)}<small>{weeksText(other.weeks)} · 本周不上</small></span><Chevron />
+                </button>
+            ))}
             {examEvent && <button className="kv" onClick={() => onOpen(examEvent)}><span className="k">考试</span><span className="v">{dateLabel(exam.date)} {WEEKDAYS[weekdayOf(exam.date)]} {exam.start}</span><Chevron /></button>}
             {isMe && <button className="kv" onClick={() => onHide(event)}><span className="k" /><span className="v danger">从我的课表移除</span></button>}
         </Sheet>

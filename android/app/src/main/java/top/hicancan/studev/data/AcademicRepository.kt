@@ -168,12 +168,21 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         suspend fun bundled(context: Context): AcademicRepository = withContext(Dispatchers.IO) {
             AcademicRepository(context.applicationContext, Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() }))
         }
-        /** The same stable release manifest used by the website's offline worker. */
-        suspend fun discover(context: Context, klass: String? = null): AcademicRepository? = withContext(Dispatchers.IO) {
+        /**
+         * The same stable release manifest used by the website's offline worker. Null when the website cannot be
+         * reached. Data that is published but cannot be decoded is reported, not skipped: it means this app is behind.
+         */
+        suspend fun discover(context: Context, klass: String? = null): Discovery? = withContext(Dispatchers.IO) {
+            val text = try { download("${BuildConfig.DATA_HOST}/pwa-release.json").decodeToString() } catch (e: CancellationException) { throw e } catch (_: IOException) { return@withContext null }
+            // A manifest this app cannot read says nothing it can act on: the data it has stays in use.
+            val app = try { appInManifest(text) } catch (_: kotlinx.serialization.SerializationException) { return@withContext null } catch (_: IllegalArgumentException) { return@withContext null }
             try {
-                val release = releaseFromManifest(download("${BuildConfig.DATA_HOST}/pwa-release.json").decodeToString()) ?: return@withContext null
-                activate(context, release, klass)
-            } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                val release = releaseFromManifest(text) ?: return@withContext Discovery(app, null, unreadable = true)
+                Discovery(app, activate(context, release, klass), unreadable = false)
+            } catch (e: CancellationException) { throw e }
+            catch (_: kotlinx.serialization.SerializationException) { Discovery(app, null, unreadable = true) }
+            catch (_: IllegalArgumentException) { Discovery(app, null, unreadable = true) }
+            catch (_: IOException) { Discovery(app, null, unreadable = false) }
         }
         private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && release.base == "/data/${release.version}"
         private suspend fun activate(context: Context, release: DataRelease, klass: String?): AcademicRepository {

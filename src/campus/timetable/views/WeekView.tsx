@@ -26,7 +26,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
     const inThisWeek = days.includes(now.date);
     const lines = line.periods.map(period => <div key={period.period} className="hl" style={{ top: y(minutesOf(period.start)) }} />);
     return (
-        <div className="wk" style={{ gridTemplateColumns: `${wide ? '68px' : '32px'} repeat(${columns},minmax(0,1fr))` }}>
+        <div className="wk" style={{ gridTemplateColumns: `${wide ? '68px' : '38px'} repeat(${columns},minmax(0,1fr))` }}>
             <div className="corner" />
             {days.slice(0, columns).map((date, index) => {
                 const holiday = line.holidays.get(date);
@@ -38,9 +38,11 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
             </div>
             {days.slice(0, columns).map((date, index) => {
                 const past = (end: number) => date < now.date || (date === now.date && end <= now.min);
-                // A lesson not on this week stays in its place, greyed, beside whatever is on: 单周 and 双周 side by side.
-                const lessons = line.holidays.has(date) ? [] : cells.filter(cell => cell.day === index + 1);
-                const clashes = (left: typeof lessons[number], right: typeof lessons[number]) => left !== right && left.periods[0] <= right.periods[1] && right.periods[0] <= left.periods[1];
+                // One block per slot: a lesson on this week takes it; one off this week shows, greyed, only in a slot
+                // nothing else holds. The lesson it gives way to names it in its sheet.
+                const all = line.holidays.has(date) ? [] : cells.filter(cell => cell.day === index + 1);
+                const clashes = (left: typeof all[number], right: typeof all[number]) => left !== right && left.periods[0] <= right.periods[1] && right.periods[0] <= left.periods[1];
+                const lessons = all.filter(cell => cell.state === 'active' || !all.some(other => other.state === 'active' && clashes(cell, other)));
                 return (
                     <div key={date} className={`col ${line.holidays.has(date) ? 'off' : ''}`} style={{ height }}>
                         {lines}

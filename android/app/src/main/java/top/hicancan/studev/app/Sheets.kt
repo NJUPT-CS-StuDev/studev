@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -85,6 +86,9 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         event.teachers.flatMap { it.split("、") }.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
         if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
         KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", event.name) })
+        line.sharingSlot(event).forEach { other ->
+            KeyRow("同时段", Names.course(other.course.name), "${Exams.weeksText(other.weeks)} · 本周不上", chevron = true, onClick = { line.meetingAround(other.id, event.date)?.let(onOpen) })
+        }
         if (exam != null) {
             KeyRow("考试", "全部考试 · ${line.exams.map { it.course.code ?: it.course.name }.distinct().size} 门", chevron = true, onClick = { onClose(); route.tab = "timetable"; route.scale = "term"; route.termMode = "exam" })
             record?.sources?.firstOrNull { it.file == exam.source }?.let { sheet ->
@@ -120,7 +124,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                     else (context as? android.app.Activity)?.recreate()
                 }
             }
-            val account by produceState<top.hicancan.studev.account.AccountUser?>(null) { value = top.hicancan.studev.account.Accounts.get(context).current() }
+            val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
             KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
@@ -138,7 +142,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {
                 if (background.batteryExempt) top.hicancan.studev.device.BackgroundSettings.openOemStartup(context) else top.hicancan.studev.device.BackgroundSettings.requestBatteryExemption(context)
             })
-            KeyRow(null, "检查数据更新", state.repository?.release?.data_version, chevron = true, onClick = { model.refresh() })
+            KeyRow(null, "检查更新", (if (state.appBehind) "有新版本 ${state.app!!.versionName} · " else "") + "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 数据 ${state.repository?.release?.data_version.orEmpty()}", chevron = true, onClick = { model.refresh() })
             KeyRow(null, "分享 studev", PLATFORM_ORIGIN.removePrefix("https://"), chevron = true, onClick = {
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$PLATFORM_ORIGIN/"), "分享 studev"))
             })

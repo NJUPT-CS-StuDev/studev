@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,7 +20,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,8 +32,9 @@ import top.hicancan.studev.account.Accounts
 /** Who is signed in, at a glance: their QQ face, the first letter of their name, or the outline of nobody. */
 @Composable fun MeAvatar() {
     val context = LocalContext.current
-    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle()
-    val user by produceState<AccountUser?>(null, lifecycle) { value = Accounts.get(context).current() }
+    val accounts = Accounts.get(context)
+    val user by accounts.user.collectAsStateWithLifecycle()
+    LaunchedEffect(accounts) { accounts.current() }
     val qq = user?.qq.orEmpty()
     val face by produceState<ImageBitmap?>(null, qq) {
         value = if (!Regex("[1-9]\\d{4,11}").matches(qq)) null else withContext(Dispatchers.IO) {

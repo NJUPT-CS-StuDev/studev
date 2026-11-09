@@ -117,7 +117,9 @@ test('public roster derives exclusively from admin/owner roles; forged roster fi
   const result = await f.app('/public/roster');
   for (const value of [ordinary.realName, ordinary.studentId, ordinary.qq, ordinary.nickname, ordinary.signature]) assert.ok(!JSON.stringify(result.body).includes(value));
   const selfEdit = await f.browser.call('/auth/profile', { method: 'POST', body: { revision: source.revision + 1, nickname: '', role: 'admin' } });
-  assert.equal(selfEdit.status, 400);
+  assert.equal(selfEdit.status, 200);
+  assert.equal(selfEdit.body.user.role, 'user');
+  assert.equal(selfEdit.body.user.nickname, ordinary.realName);
 });
 
 test('registration and login errors match for web/app; registering cannot claim a pre-recorded administrator', async () => {

@@ -16,7 +16,12 @@ import java.io.ByteArrayOutputStream
 
 const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-@Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0)
+@Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0,
+    val department: String = "", val title: String = "", val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true)
+/** What an account's state is called, as on the web. */
+val AccountUser.statusName: String get() = when (status) { "active" -> "启用"; "disabled" -> "停用"; "pending" -> "待注册"; else -> status }
+/** The nickname shown after the real name; blank when it only repeats the name, student ID or QQ (same rule as the web). */
+val AccountUser.displayNickname: String get() = nickname.trim().takeUnless { it.isEmpty() || it == realName || it == studentId || it == qq }.orEmpty()
 /** What a role is called: the same three names as the web. */
 val AccountUser.roleName: String get() = when (role) { "owner" -> "所有者"; "admin" -> "管理员"; else -> "用户" }
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
@@ -60,7 +65,12 @@ class HttpsPlatformTransport : PlatformTransport {
 
 class AccountClient(private val storage: AccountStorage, private val transport: PlatformTransport, private val now: () -> Long = System::currentTimeMillis) {
     private val lock = Mutex()
-    suspend fun current(): AccountUser? = lock.withLock { storage.read().session?.user }
+    private val signedIn = kotlinx.coroutines.flow.MutableStateFlow<AccountUser?>(null)
+    /** Who is signed in, updated the moment that changes: signing in or out, a refreshed session, a saved profile. */
+    val user: kotlinx.coroutines.flow.StateFlow<AccountUser?> = signedIn
+    /** Every change to the stored account goes through here, so [user] always says what is stored. */
+    private suspend fun keep(stored: StoredAccount) { storage.write(stored); signedIn.value = stored.session?.user }
+    suspend fun current(): AccountUser? = lock.withLock { storage.read().session?.user.also { signedIn.value = it } }
     private fun checked(reply: PlatformReply): JsonObject {
         if (reply.status !in 200..299) {
             val error = reply.body["error"]?.jsonObject
@@ -80,7 +90,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
             if (totp.isNotBlank()) put("totp", totp.trim())
         }, null))
         val user = accountJson.decodeFromJsonElement<AccountUser>(value.getValue("user"))
-        storage.write(stored.copy(session = tokens(value, user)))
+        keep(stored.copy(session = tokens(value, user)))
         user
     }
     suspend fun register(studentId: String, realName: String, nickname: String, qq: String, password: String) {
@@ -94,13 +104,13 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         val state = accountJson.decodeFromJsonElement<AccountState>(value)
         lock.withLock {
             val stored = storage.read()
-            if (stored.session?.user?.id == state.user.id) storage.write(stored.copy(session = stored.session.copy(user = state.user)))
+            if (stored.session?.user?.id == state.user.id) keep(stored.copy(session = stored.session.copy(user = state.user)))
         }
         return state
     }
     suspend fun devices(): List<AccountDevice> = accountJson.decodeFromJsonElement(request("/auth/devices", authenticated = true).getValue("items"))
     suspend fun revokeDevice(id: String) { request("/auth/devices/$id/revoke", buildJsonObject {}, authenticated = true) }
-    suspend fun forget() = lock.withLock { val stored = storage.read(); storage.write(stored.copy(session = null)) }
+    suspend fun forget() = lock.withLock { val stored = storage.read(); keep(stored.copy(session = null)) }
     private suspend fun access(forceFor: AccountSession? = null): AccountSession = lock.withLock {
         val stored = storage.read()
         val session = stored.session ?: throw PlatformFailure(401, "AUTH_REQUIRED", "请先登录。")
@@ -110,14 +120,14 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
             // Never retry a refresh after an ambiguous network result: rotation
             // might have committed. Persist the spent intent BEFORE sending,
             // so even process death requires sign-in rather than token replay.
-            storage.write(stored.copy(session = null))
+            keep(stored.copy(session = null))
             val value = checked(transport.send("/auth/refresh", buildJsonObject { put("refreshToken", session.refreshToken); put("deviceId", stored.deviceId) }, null))
             val fresh = tokens(value, session.user)
-            storage.write(stored.copy(session = fresh)); fresh
+            keep(stored.copy(session = fresh)); fresh
         } catch (failure: Exception) {
             // UI/navigation cancellation may arrive after the server spent the
             // ticket. Finish the durable cleanup before releasing the mutex.
-            withContext(NonCancellable) { storage.write(stored.copy(session = null)) }
+            withContext(NonCancellable) { keep(stored.copy(session = null)) }
             throw failure
         }
     }
@@ -135,7 +145,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         authenticatedRequest("/auth/logout", buildJsonObject {}, credential)
         lock.withLock {
             val stored = storage.read()
-            if (stored.session?.deviceSessionId == credential.deviceSessionId) storage.write(stored.copy(session = null))
+            if (stored.session?.deviceSessionId == credential.deviceSessionId) keep(stored.copy(session = null))
         }
     }
 }

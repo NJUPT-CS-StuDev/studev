@@ -444,7 +444,9 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const realName = body.realName === undefined && current.realName ? current.realName : normalizeRealName(body.realName);
       if ((current.studentId && studentId !== current.studentId) || (current.realName && realName !== current.realName)) fail(403, 'IDENTITY_LOCKED', '学号与真实姓名绑定后不可自行修改，请联系所有者核对。');
       const changedIdentity = studentId !== current.studentId || realName !== current.realName;
-      const nickname = body.nickname === undefined ? current.nickname : text(body.nickname, '昵称', 40, true);
+      // A blank display nickname means the real name alone, which is how a nickname equal to it reads everywhere.
+      const nickname = body.nickname === undefined ? current.nickname : text(body.nickname, '昵称', 40) || realName;
+      if (!nickname) fail(400, 'INVALID_FIELD', '昵称填写不正确。');
       const signature = body.signature === undefined ? (current.signature || '') : text(body.signature, '个性签名', 120, false);
       await bindStudent(current, studentId, realName);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });

@@ -4733,6 +4733,56 @@
    }
   }
  ],
+ "sharing": [
+  {
+   "event": "4c1486efb0efdcc0@2026-11-12",
+   "others": []
+  },
+  {
+   "event": "d0297e3cee2ec732@2026-11-12",
+   "others": []
+  },
+  {
+   "event": "54c82186383d5cbc@2026-11-12",
+   "others": [
+    "231eab9bebe39686"
+   ]
+  },
+  {
+   "event": "e7ba5e0e1e87440e@2026-11-12",
+   "others": []
+  },
+  {
+   "event": "4c1486efb0efdcc0@2026-11-19",
+   "others": []
+  },
+  {
+   "event": "d0297e3cee2ec732@2026-11-19",
+   "others": []
+  },
+  {
+   "event": "231eab9bebe39686@2026-11-19",
+   "others": [
+    "54c82186383d5cbc"
+   ]
+  },
+  {
+   "event": "e7ba5e0e1e87440e@2026-11-19",
+   "others": []
+  },
+  {
+   "event": "70421b5776f809a9@2026-11-20",
+   "others": []
+  },
+  {
+   "event": "592bce89717783d3@2026-11-20",
+   "others": []
+  },
+  {
+   "event": "4cbf73b266261374@2026-11-20",
+   "others": []
+  }
+ ],
  "source": {
   "release": "map-v0.8.5__data-20261108-1600__p9",
   "teaching": "2026-2027-1"

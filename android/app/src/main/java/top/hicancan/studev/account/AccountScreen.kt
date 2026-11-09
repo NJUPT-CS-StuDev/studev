@@ -80,6 +80,7 @@ import top.hicancan.studev.app.Tokens
     var realName by rememberSaveable { mutableStateOf("") }
     var nickname by rememberSaveable { mutableStateOf("") }
     var qq by rememberSaveable { mutableStateOf("") }
+    var signature by rememberSaveable { mutableStateOf("") }
     // Secrets are never saved in instance state, logs or ordinary preferences.
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
@@ -95,7 +96,7 @@ import top.hicancan.studev.app.Tokens
     var revoke by remember { mutableStateOf<AccountDevice?>(null) }
     suspend fun reload() {
         val fresh = client.state(); state = fresh; user = fresh.user
-        student = fresh.user.studentId; realName = fresh.user.realName; nickname = fresh.user.nickname
+        student = fresh.user.studentId; realName = fresh.user.realName; nickname = fresh.user.displayNickname; signature = fresh.user.signature
     }
     fun run(action: suspend () -> Unit) {
         scope.launch {
@@ -173,11 +174,34 @@ import top.hicancan.studev.app.Tokens
                 if (state?.passwordChangeRequired == true || state?.enrollmentRequired == true) Text("请先在「安全」中${if (state?.passwordChangeRequired == true) "修改临时密码" else "绑定认证器"}，完成账号设置。", color = MaterialTheme.colorScheme.primary)
                 when (section) {
                     "profile" -> {
-                        OutlinedTextField(student, { student = it.take(20) }, Modifier.fillMaxWidth(), label = { Text("学号") }, readOnly = user!!.studentId.isNotBlank(), singleLine = true, enabled = !busy)
-                        OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, readOnly = user!!.realName.isNotBlank(), singleLine = true, enabled = !busy)
-                        OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称") }, singleLine = true, enabled = !busy)
-                        Text("普通账号对其他同学仅显示昵称。学号有误时请联系管理员核实。", style = MaterialTheme.typography.bodySmall)
-                        Button(onClick = { run { client.request("/auth/profile", buildJsonObject { put("revision", user!!.revision); put("studentId", student); put("realName", realName); put("nickname", nickname) }, authenticated = true); reload(); notice = "资料已保存。" } }, enabled = !busy && nickname.isNotBlank()) { Text("保存资料") }
+                        // The same profile as the web: what the account is, read only; then the two things one may change.
+                        val me = user!!
+                        val incomplete = state?.profileRequired == true || !me.profileComplete
+                        val blocked = state?.passwordChangeRequired == true || state?.enrollmentRequired == true || state?.mfaRequired == true
+                        if (incomplete) {
+                            Text("请完善学号与姓名。", color = MaterialTheme.colorScheme.primary)
+                            OutlinedTextField(student, { student = it.take(20) }, Modifier.fillMaxWidth(), label = { Text("学号") }, readOnly = me.studentId.isNotBlank(), singleLine = true, enabled = !busy)
+                            OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, readOnly = me.realName.isNotBlank(), singleLine = true, enabled = !busy)
+                        }
+                        Text("个人资料", style = MaterialTheme.typography.titleSmall)
+                        listOf(
+                            "学号" to me.studentId.ifBlank { "待补充" }, "姓名" to me.realName.ifBlank { "待补充" }, "昵称" to me.displayNickname.ifBlank { "未设置" },
+                            "所属部门" to me.department.ifBlank { "暂未分配" }, "职务分工" to me.title.ifBlank { if (me.department.isNotBlank()) "部门成员" else "—" },
+                            "QQ 号" to me.qq, "联系邮箱" to me.email.ifBlank { "${me.qq}@qq.com" }, "群内角色" to me.roleName, "账号状态" to me.statusName,
+                        ).forEach { (key, value) ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                Text(key, Modifier.width(88.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                                Text(value, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                        HorizontalDivider()
+                        OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("显示昵称（选填）") }, placeholder = { Text("显示在真实姓名之后（如 hicancan）；留空则仅显示真实姓名") }, singleLine = true, enabled = !busy)
+                        OutlinedTextField(signature, { signature = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("个人签名") }, placeholder = { Text("显示在历届档案与个人名片上的一句话（选填）") }, singleLine = true, enabled = !busy)
+                        Text("保存后将实时更新公开历届档案与组织成员名录。", style = MaterialTheme.typography.bodySmall)
+                        Button(onClick = { run {
+                            client.request("/auth/profile", buildJsonObject { put("revision", me.revision); put("studentId", student); put("realName", realName); put("nickname", nickname); put("signature", signature) }, authenticated = true)
+                            reload(); notice = "资料已保存。"
+                        } }, enabled = !busy && !blocked) { Text(if (incomplete) "确认并绑定身份" else "保存个人资料") }
                     }
                     "devices" -> {
                         Text("网页与 Android 的登录设备都在这里。退出设备会同时撤销访问与刷新凭据。", style = MaterialTheme.typography.bodySmall)

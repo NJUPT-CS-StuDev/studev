@@ -74,6 +74,15 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
     return out.sort((left, right) => left.start - right.start);
 }
 
+/** Other lessons at this lesson's weekday and periods that do not meet this week: the week view shows one block per slot, these are hidden behind it. */
+export function sharingSlot(line: Timeline, event: CampusEvent): TeachingMeeting[] {
+    const own = event.meeting;
+    const week = weekOfDate(line.term, event.date);
+    if (!own || week === null) return [];
+    return line.meetings.filter(other => other.id !== own.id && other.weekday === own.weekday && !other.weeks.includes(week)
+        && other.periods[0] <= own.periods[1] && own.periods[0] <= other.periods[1] && week >= Math.min(...other.weeks) && week <= Math.max(...other.weeks));
+}
+
 /** A lesson where it next meets from a date on, or else where it last met: what a lesson off that week opens. */
 export function meetingAround(line: Timeline, meetingId: string, from: string): CampusEvent | null {
     const find = (date: string) => eventsOn(line, date).find(event => event.meeting?.id === meetingId) ?? null;

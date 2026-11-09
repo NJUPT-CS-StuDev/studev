@@ -1,3 +1,4 @@
+import product from '../../product.json';
 import { expect, it, vi } from 'vitest';
 
 vi.mock('node:fs/promises', () => ({
@@ -19,4 +20,5 @@ it('publishes measured complete download bytes and separates core map from the f
     expect(result.bytes).toBe(60);
     expect(result.core).toEqual([`${result.base}/space/entities.json`, '/map/style.json']);
     expect(result.all).toEqual([`${result.base}/space/entities.json`, `${result.base}/search/index.bin`]);
+    expect(result.android).toEqual({ versionName: product.android.versionName, versionCode: product.android.versionCode });
 });

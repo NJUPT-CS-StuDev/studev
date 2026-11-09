@@ -44,4 +44,8 @@ class AcademicFactsTest {
         assertTrue(plans.isNotEmpty())
         assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() })
     }
+    @Test fun theReleaseManifestNamesTheCurrentApp() {
+        val app = appInManifest("""{"version":"v","base":"/data/v","android":{"versionName":"2.3.5","versionCode":29},"core":[]}""")
+        org.junit.Assert.assertEquals(AppRelease("2.3.5", 29), app)
+    }
 }
