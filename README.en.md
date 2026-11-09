@@ -13,6 +13,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7f52ff?style=flat-square&logo=kotlin&logoColor=white)](https://developer.android.com/compose)
 [![Rust Wasm](https://img.shields.io/badge/Rust-WebAssembly_%26_JNI-000000?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![MapLibre](https://img.shields.io/badge/3D_GIS-MapLibre_GL_%26_PMTiles-396cb2?style=flat-square)](https://maplibre.org/)
+[![Development](https://img.shields.io/badge/History-11_Months_%7C_1%2C150%2B_Commits-10b981?style=flat-square&logo=git&logoColor=white)](https://github.com/NJUPT-CS-StuDev/studev)
 [![Tests](https://img.shields.io/badge/Verification-177_Tests_%7C_36_Golden_Vectors-0d9488?style=flat-square)](#development--verification)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-f59e0b?style=flat-square)](./LICENSE)
 
