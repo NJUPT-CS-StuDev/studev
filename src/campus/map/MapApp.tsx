@@ -90,7 +90,7 @@ export default function MapApp() {
         const timers = [
             window.setTimeout(() => { setHinting(true); scene.map.easeTo({ bearing: start + 14, duration: 650, essential: true }); }, 900),
             window.setTimeout(() => scene.map.easeTo({ bearing: start, duration: 650, essential: true }), 1600),
-            window.setTimeout(() => setHinting(false), 4200),
+            window.setTimeout(() => setHinting(false), 5200),
         ];
         return () => timers.forEach(window.clearTimeout);
     }, [scene]);
@@ -413,7 +413,7 @@ export default function MapApp() {
                             </svg>;
                         })()}
                     </button>
-                    {hinting && <div className="ball-tip" role="status">拖动旋转视角 · 点按回正</div>}
+                    {hinting && <div className="ball-tip" role="status">拖动小球旋转视角 · 点按回正<br />{matchMedia('(pointer: coarse)').matches ? '双指也能旋转，上下滑动调俯仰' : '也可以按住右键拖动地图'}</div>}
                     {floors.length > 0 && <div className="floors">{[...floors].reverse().map(level => {
                         const free = roomsInBuilding.some(room => Number(room.floor) === level && day && !stateOf(room.id)?.busy);
                         return <button key={level} className={level === floor ? 'on' : ''} onClick={() => set({ place: bId, f: level })}>{level}{free && <i />}</button>;

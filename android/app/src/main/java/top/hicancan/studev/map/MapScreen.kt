@@ -82,7 +82,7 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
         onHinted()
         kotlinx.coroutines.delay(900); hinting = true; ready.nudge(14.0, 650)
         kotlinx.coroutines.delay(700); ready.nudge(-14.0, 650)
-        kotlinx.coroutines.delay(2600); hinting = false
+        kotlinx.coroutines.delay(3600); hinting = false
     }
     var status by remember { mutableStateOf(LocationStatus.Waiting) }
     val (access, requestLocation) = rememberLocationPermission { }
@@ -244,15 +244,15 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
                 Box(Modifier.fillMaxHeight().width(1.dp).background(Ink.line))
                 Box(Modifier.weight(1f).fillMaxHeight().clickable { route.scope = "place"; route.tab = "search" }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) { Plain("搜地点或教室", 14.sp, Ink.faint) }
             }
-            if (hinting) Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 23.dp, end = 66.dp).clip(RoundedCornerShape(6.dp)).background(Ink.text).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                Plain("拖动旋转视角 · 点按回正", 12.5.sp, Ink.paper)
+            if (hinting) Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 19.dp, end = 64.dp).clip(RoundedCornerShape(6.dp)).background(Ink.text).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                Column { Plain("拖动小球旋转视角 · 点按回正", 12.5.sp, Ink.paper); Plain("双指也能旋转，上下滑动调俯仰", 12.5.sp, Ink.paper) }
             }
-            Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 3.dp, end = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val bearing = cameraTick.let { mapRef?.cameraPosition?.bearing ?: 0.0 }
                 val needle = marks().danger
                 val faint = Ink.faint
                 val pitch = cameraTick.let { mapRef?.cameraPosition?.tilt ?: 52.0 }
-                MapBall(bearing, pitch, turning || hinting, Ink.paper, Ink.text, faint.copy(alpha = .8f), Ink.muted, needle, Modifier.size(48.dp).pointerInput(Unit) { detectDragGestures(onDragStart = { turning = true }, onDragEnd = { turning = false }, onDragCancel = { turning = false }) { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
+                MapBall(bearing, pitch, turning || hinting, Ink.paper, Ink.text, faint.copy(alpha = .8f), Ink.muted, needle, Modifier.size(58.dp).pointerInput(Unit) { detectDragGestures(onDragStart = { turning = true }, onDragEnd = { turning = false }, onDragCancel = { turning = false }) { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
                 if (floors.isNotEmpty()) Column(Modifier.clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp))) {
                     floors.reversed().forEach { level ->
                         val on = level == floor
