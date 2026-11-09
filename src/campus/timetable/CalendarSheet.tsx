@@ -18,7 +18,7 @@ export function CalendarSheet({ line, className, prefs, onClose }: { line: Timel
             ...(picked.includes('exams') ? examEntries(line.exams, reminders) : []),
             ...(picked.includes('run') && line.run ? runEntries(line.run) : []),
         ];
-        downloadCalendar(`studev ${className}.ics`, calendarFile(`studev ${className}`, entries, new Date()));
+        downloadCalendar(`StuDev ${className}.ics`, calendarFile(`StuDev ${className}`, entries, new Date()));
     };
     return (
         <Sheet title="下载到日历" onClose={onClose}>

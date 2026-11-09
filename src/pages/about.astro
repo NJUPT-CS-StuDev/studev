@@ -5,7 +5,7 @@ const entries = await getCollection('about');
 const entry = entries.find((e) => e.id === 'studev') ?? entries[0];
 const { Content } = await render(entry);
 ---
-<SiteLayout title="关于 — studev" description={entry.data.description} active="about">
+<SiteLayout title="关于 — StuDev" description={entry.data.description} active="about">
   <article class="detail-wrap static-page">
     <p class="eyebrow">认识我们</p>
     <h1>About</h1>

@@ -9,7 +9,7 @@ import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
 // fill: the page is one full-height application (the map) with no footer.
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
-const { title = 'studev', description = '南京邮电大学计软网安学生发展中心。', active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
+const { title = PRODUCT_CONFIG.APP_NAME, description = PRODUCT_CONFIG.POSITIONING, active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
 const tabs = [
   { href: '/', label: '课表', key: 'timetable' },
   { href: '/map/', label: '地图', key: 'map' },
@@ -36,7 +36,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <link rel="apple-touch-icon" sizes="180x180" href="/pwa-icons/180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="studev" />
+    <meta name="apple-mobile-web-app-title" content={PRODUCT_CONFIG.APP_NAME} />
     <script is:inline>
       // Signed-in people see their member links from the first frame.
       try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.authenticated = ''; } catch { /* Storage may be unavailable. */ }
@@ -70,7 +70,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {/* What a link to this page looks like when shared, in WeChat and elsewhere: an opaque square image, since
         transparent corners are drawn black there, and the page's own title and description. */}
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="studev" />
+    <meta property="og:site_name" content={PRODUCT_CONFIG.APP_NAME} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -82,13 +82,13 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
   <body>
     <header class="site-header">
       <div class="header-inner">
-        <a class="wordmark" href="/" aria-label="studev 首页">studev</a>
+        <a class="wordmark" href="/" aria-label={`${PRODUCT_CONFIG.APP_NAME} 首页`}>{PRODUCT_CONFIG.APP_NAME}</a>
         <nav class="site-nav" aria-label="主导航">
           {tabs.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}
-          <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">社团</a>
+          <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">学生发展中心</a>
           <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
-        <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title="复制 studev 的网址"><span aria-live="polite" data-copy-label>分享</span></button>
+        <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title={`复制 ${PRODUCT_CONFIG.APP_NAME} 的网址`}><span aria-live="polite" data-copy-label>分享</span></button>
         <a class:list={['about-entry', { active: active === 'about' }]} href="/about/">关于</a>
         <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>App</a>
         <button class="avatar" type="button" data-me aria-label="我"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></button>
@@ -109,12 +109,12 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           } catch { /* Storage may be unavailable; the outline stays. */ }
         </script>
       </div>
-      {clubKeys.includes(active) && <nav class="club-nav" aria-label="社团栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
+      {clubKeys.includes(active) && <nav class="club-nav" aria-label="学生发展中心栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
     </header>
     <main class:list={[fill && 'main-fill']}><slot /></main>
     {!fill && <footer class="site-footer">
       <div class="footer-inner">
-        <span class="footer-copy">© {new Date().getFullYear()} studev</span>
+        <span class="footer-copy">© {new Date().getFullYear()} {PRODUCT_CONFIG.APP_NAME}</span>
         {/* The filings sit at the centre of the foot, where the rules put them and where the footer balances. */}
         <span class="filings">
           <a href={PRODUCT_CONFIG.FILINGS.ICP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.ICP.TEXT}</a>

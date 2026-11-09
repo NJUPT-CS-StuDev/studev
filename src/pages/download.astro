@@ -9,9 +9,9 @@ if (!store) throw new Error('the download store is not configured');
 const file = `studev-${PRODUCT_CONFIG.ANDROID_APP.VERSION}.apk`;
 const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `attachment; filename="${file}"` });
 ---
-<SiteLayout title="下载 studev" noPwa>
+<SiteLayout title="下载 StuDev" noPwa>
   <section class="download-page">
-    <h1>studev Android</h1>
+    <h1>StuDev Android</h1>
     <p class="download-summary">{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
     <a class="download-button" href={signed} data-astro-prefetch="false" rel="nofollow">下载 {PRODUCT_CONFIG.ANDROID_APP.VERSION}</a>
     <p class="download-help">下载后在浏览器的下载列表中打开，按系统提示安装。微信、QQ 内请先选择“在浏览器打开”。</p>

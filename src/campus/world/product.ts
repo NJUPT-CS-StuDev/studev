@@ -2,6 +2,11 @@ import product from '../../../product.json';
 
 export const PRODUCT_CONFIG = {
     APP_NAME: product.name,
+    /** Who StuDev is: the centre's own site and club platform, and the digital campus it makes for everyone. */
+    ORGANIZATION: product.organization,
+    POSITIONING: product.positioning,
+    /** Both identities in one breath, short enough for the three lines a WeChat card shows. */
+    SUMMARY: product.summary,
     TIME_ZONE: product.timeZone,
     CAMPUS: product.campus,
     ORIGIN: product.origin,

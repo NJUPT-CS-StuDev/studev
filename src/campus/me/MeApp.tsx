@@ -37,7 +37,7 @@ export default function MeApp() {
     }, [open]);
     const share = async () => {
         const url = `${PRODUCT_CONFIG.ORIGIN}/`;
-        if (navigator.share) { await navigator.share({ title: 'studev', url }).catch(() => undefined); return; }
+        if (navigator.share) { await navigator.share({ title: 'StuDev', url }).catch(() => undefined); return; }
         await navigator.clipboard.writeText(url);
         setShared(true);
     };
@@ -62,7 +62,7 @@ export default function MeApp() {
             </>}
             <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>提醒和桌面小组件</small></span><Chevron /></a>
             <button className="kv" onClick={() => void share()}><span className="v">分享本站<small>{shared ? '网址已复制' : PRODUCT_CONFIG.ORIGIN.replace(/^https:\/\//, '')}</small></span><Chevron /></button>
-            <a className="kv club-row" href="/club/"><span className="k">社团</span><span className="v">南邮计软网安学生发展中心</span><Chevron /></a>
+            <a className="kv club-row" href="/club/"><span className="k">学生发展中心</span><span className="v">南邮计软网安</span><Chevron /></a>
             <p className="fine">数据版本 {DATA_RELEASE.data_version} · <a href="/terms/">用户协议</a> · <a href="/privacy/">隐私政策</a></p>
         </Sheet>
     );

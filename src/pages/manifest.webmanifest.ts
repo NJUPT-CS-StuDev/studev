@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
 import tokens from '../../design/tokens.json';
+import { PRODUCT_CONFIG } from '../campus/world/product';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
-    id: '/', name: 'studev 校园助手', short_name: 'studev', lang: 'zh-CN',
-    description: '南邮的课表、考试、校历、地图和空教室。',
+    id: '/', name: `${PRODUCT_CONFIG.APP_NAME} · ${PRODUCT_CONFIG.ORGANIZATION}`, short_name: PRODUCT_CONFIG.APP_NAME, lang: 'zh-CN',
+    description: PRODUCT_CONFIG.SUMMARY,
     start_url: '/', scope: '/', display: 'standalone',
     background_color: tokens.color.light.paper, theme_color: tokens.color.light.paper,
     icons: [

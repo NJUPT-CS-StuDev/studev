@@ -1,7 +1,7 @@
 ---
 title: "关于 StuDev"
 shortTitle: "关于 StuDev"
-description: "南京邮电大学计软网安学生发展中心与开源数字校园平台。"
+description: "南邮计软网安学生发展中心的官网与社团平台，也是我们为全校同学做的时空联动数字校园。"
 pubDate: "2026-09-22"
 tags: ["组织章程", "数字校园", "开源基建"]
 order: 1

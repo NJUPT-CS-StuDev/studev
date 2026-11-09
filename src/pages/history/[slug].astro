@@ -11,6 +11,6 @@ export async function getStaticPaths() {
 
 const { entry, entries } = Astro.props;
 ---
-<SiteLayout title={`${entry.data.title} · 历史 — studev`} description={entry.data.description} active="history">
+<SiteLayout title={`${entry.data.title} · 历史 — StuDev`} description={entry.data.description} active="history">
   <HistoryTermView entry={entry} allEntries={entries} />
 </SiteLayout>

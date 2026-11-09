@@ -10,7 +10,7 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 ---
-<SiteLayout title={`${entry.data.title} — studev`} description={entry.data.description} active="life">
+<SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="life">
   <article class="detail-wrap">
     <a class="back-link" href="/life/">← 生活</a>
     {entry.data.kicker ? (

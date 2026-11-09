@@ -2,11 +2,11 @@
 
 # StuDev
 
-**Spatial-Temporal Campus Digital Twin & Open-Source Digital Campus Platform**  
-*Timetables & Exams · Indoor/Outdoor 3D Map · Client-Side Wasm Search · Unified Web & Native Android*
+**Official Site & Club Platform of the NJUPT CS Student Development Center · An Open-Source Spatial-Temporal Digital Campus**  
+*Official Site · Club Operations ｜ Spatial-Temporal Linkage · Unified Search · Digital Twin*
 
 [![Website](https://img.shields.io/badge/Live-studev.hicancan.top-2563eb?style=flat-square)](https://studev.hicancan.top/)
-[![Android](https://img.shields.io/badge/Android_APK-v2.3.4-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.hicancan.top/download/)
+[![Android](https://img.shields.io/badge/Android_APK-v2.3.8-16a34a?style=flat-square&logo=android&logoColor=white)](https://studev.hicancan.top/download/)
 [![Astro](https://img.shields.io/badge/Astro-7.4-ff5d01?style=flat-square&logo=astro&logoColor=white)](https://astro.build/)
 [![React](https://img.shields.io/badge/React-19.3-087ea4?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -25,7 +25,13 @@
 
 ---
 
-**StuDev** is an open-source digital campus platform and student engineering portal developed by the **Student Development Center of the Schools of Computer Science, Software, and Cyberspace Security at Nanjing University of Posts and Telecommunications (NJUPT)**. Together with its companion repository [**CARBENTRA Campus (`hicancan/carbentra-campus-platform`)**](https://github.com/hicancan/carbentra-campus-platform), it forms the spatial-temporal digital twin engineering suite for *"Carbon to the Fullest — AI-Driven Zero-Carbon Campus Energy Management System"*, a finalist flagship project in the 28th NJUPT "Innovation Cup" Extracurricular Academic and Technological Competition:
+**StuDev** (**Stu**dent **Dev**elopment) is built and open-sourced by the **Student Development Center of the Schools of Computer Science, Software, and Cyberspace Security at Nanjing University of Posts and Telecommunications (NJUPT)**. It has two identities:
+
+1. **The Center's official site and club platform**: who we are, the Study / Develop / Life / History collections, member rosters and activities across semesters, recruitment, plus member accounts, form collection and review, and an admin console—so the Center runs its day-to-day work and keeps its knowledge in one place.
+2. **The digital campus the Center builds for every student**, standing on three pillars:
+   - **Spatial-Temporal Linkage**: timetables, exam rooms, the academic calendar, and the 3D campus share one timeline—scrub to any moment and see which rooms are free, where the next class is, and how to walk there;
+   - **Unified Search**: courses, instructors, classes, classrooms, notices, attachment full text, and study materials in a single query, with search terms never leaving the device;
+   - **Digital Twin**: a spatial foundation of 3 campuses, 129 3D buildings, and 564 classrooms, shared with the companion repository [**CARBENTRA Campus (`hicancan/carbentra-campus-platform`)**](https://github.com/hicancan/carbentra-campus-platform). Together they form the spatial-temporal digital twin engineering suite for *"Carbon to the Fullest — AI-Driven Zero-Carbon Campus Energy Management System"*, a finalist flagship project in the 28th NJUPT "Innovation Cup" Extracurricular Academic and Technological Competition.
 
 > **Why do a Digital Campus and an AIoT Zero-Carbon Energy Platform share the same spatial-temporal foundation?**  
 > On a university campus, lighting, HVAC, and ventilation across academic buildings account for the majority of carbon emissions—and the fundamental variable driving room-by-room energy demand is the university's live teaching schedule and classroom occupancy. Built around a shared **3D campus spatial package (3 campuses, 129 3D building models, and multi-floor classroom units) and semester timetable timeline**, the two repositories operate in tandem:
@@ -61,18 +67,25 @@
 
 Across most universities, everyday academic and campus life is fragmented across disconnected legacy portals: checking timetables or exam rooms requires navigating nested HTML tables, finding an empty study room means walking floor by floor, locating syllabus attachments requires digging through dozens of departmental websites, and student organization knowledge disappears into chat logs every time leadership rotates.
 
-StuDev unifies these fragments under a single **Campus Spatial-Temporal Domain Model**:
+StuDev answers with its two identities—the Center's official site and club platform, and a single **Campus Spatial-Temporal Domain Model**:
 
-1. **Local-First & Zero-Tracking by Default**: Timetables, exam schedules, academic calendars, real-time free classrooms, 3D building maps, and full-text search work **without registration or sign-in**. Selected classes, custom lessons, morning workout check-ins, and reminders live strictly on the user's device (`localStorage` on Web, `SharedPreferences` on Android). The server never receives or logs personal query trajectories.
-2. **One Unified Timeline Across the Term**: Lectures, final exams, practical weeks, public holidays, makeup days, sports meets, university anniversaries, and morning exercises are projected onto a single continuous timeline—scalable across **Day, Week, and 20-Week Term** views and exportable to native system calendars in one tap.
-3. **Real-Time Spatial-Temporal Cutaways**: Dragging the time scrubber to any minute of the day immediately updates 3D floor cutaways across campus buildings, highlighting available classrooms in emerald green alongside seat capacities and free-until timestamps, paired with an on-device Rust routing engine for indoor-outdoor pedestrian navigation.
-4. **Git-Backed Student Organization Memory**: Study guides, engineering postmortems, community essays, and leadership archives are maintained as strongly typed Markdown collections inside the repository, turning student contributions into permanent, searchable institutional memory.
+1. **The Center's Official Site & Collaboration Platform, Passed Down Every Year**: Study guides, engineering postmortems, community essays, and leadership archives are maintained as strongly typed Markdown collections inside the repository, turning student contributions into permanent, searchable institutional memory. Member accounts, sign-ups, and form review run on the same platform, so club business no longer scatters across group chats and cloud drives.
+2. **Local-First & Zero-Tracking by Default**: Timetables, exam schedules, academic calendars, real-time free classrooms, 3D building maps, and full-text search work **without registration or sign-in**. Selected classes, custom lessons, morning workout check-ins, and reminders live strictly on the user's device (`localStorage` on Web, `SharedPreferences` on Android). The server never receives or logs personal query trajectories.
+3. **One Unified Timeline Across the Term**: Lectures, final exams, practical weeks, public holidays, makeup days, sports meets, university anniversaries, and morning exercises are projected onto a single continuous timeline—scalable across **Day, Week, and 20-Week Term** views and exportable to native system calendars in one tap.
+4. **Real-Time Spatial-Temporal Cutaways**: Dragging the time scrubber to any minute of the day immediately updates 3D floor cutaways across campus buildings, highlighting available classrooms in emerald green alongside seat capacities and free-until timestamps, paired with an on-device Rust routing engine for indoor-outdoor pedestrian navigation.
 
 ---
 
 ## Product Tour
 
-### 1. Timetables, Exams & Full-Term Calendar (`/`)
+### 1. Official Site & Club Platform (`/club/` · `/forms/` · `/account/`)
+
+- **Four Editorial Collections**: Spanning **Study** (Party Member Scientist profiles, calculus & frontier mathematics), **Develop** (architecture notes & open-source engineering), **Life** (volunteer teaching chronicles & campus humanities), and **History** (semester timelines & member rosters), with build-time dual-theme Mermaid SVG compilation, MathJax SVG equations, and per-page WenKai font subsetting.
+- **Zero-Trust Club Operations**: Authenticated club workflows and volunteer errata submissions backed by `scrypt` password hashing, `RFC 6238` TOTP two-factor authentication (`AES-256-GCM` identity-bound encryption), single-use rotating refresh tokens, and presigned object-storage uploads.
+
+![Club Portal](./README.assets/06-club-portal.png)
+
+### 2. Spatial-Temporal Linkage: Timetables, Exams & Full-Term Calendar (`/`)
 
 Enter a class code—or jump directly from search to any instructor, course, or classroom schedule—to switch seamlessly between **Day, Week, and Term** views.
 
@@ -80,26 +93,19 @@ Enter a class code—or jump directly from search to any instructor, course, or 
 - **Odd/Even Split & In-Place Off-Week Lessons**: Odd-week and even-week courses share a 50/50 split cell; courses within their active week span that do not meet in the current week remain in place in muted gray—tapping jumps straight to the next active week.
 - **Native Exam & Academic Calendar Integration**: Final exams render as amber blocks inside both the weekly timetable and the 20-week term panorama, complete with countdowns, room numbers, and provenance from academic affairs bulletins.
 
-### 2. 3D Campus Map, Real-Time Free Classrooms & Offline Navigation (`/map/`)
+### 3. Digital Twin: 3D Campus Map, Free Classrooms & Walking Navigation (`/map/`)
 
 A full-scale digital twin built on vector tiles, 129 hand-modeled Blender 3D buildings, and the spatial topology of 564 classrooms.
 
 - **Indoor Floor Cutaways at Any Timestamp**: Scrub the `07:00–22:00` time ruler to inspect floor-by-floor room availability in 3D, with exact seat counts and next-occupied times.
 - **On-Device Pedestrian Routing & Voice Guidance**: Powered by [`wayfind`](https://github.com/hicancan/wayfind), a stateless Rust routing kernel running via WebAssembly on Web and CMake/JNI on Android, supporting cross-building, cross-floor pathfinding, off-route recalculation, and background voice prompts.
 
-### 3. Zero-Backend WebAssembly Full-Text Search (`/search/`)
+### 4. Unified Search: Zero-Backend WebAssembly Full-Text Search (`/search/`)
 
 Driven by [`wasm-search`](https://github.com/hicancan/wasm-search), a custom Rust full-text search engine running entirely on the client.
 
 - **Unified Multi-Source Ranking**: One query simultaneously searches courses, instructors, classes, live classroom availability, official notices, deep text inside Word/Excel/PDF attachments, past exam archives, and student survival guides.
 - **Content-Addressed Range Fetching**: Tokenization, synonym expansion, and BM25 ranking execute in local memory via WebAssembly, fetching only the required inverted-index byte ranges from static CDN storage. Search queries never leave the device.
-
-### 4. Student Development Center Portal & Zero-Trust Collaboration (`/club/` · `/forms/` · `/account/`)
-
-- **Four Editorial Collections**: Spanning **Study** (Party Member Scientist profiles, calculus & frontier mathematics), **Develop** (architecture notes & open-source engineering), **Life** (volunteer teaching chronicles & campus humanities), and **History** (semester timelines & member rosters), with build-time dual-theme Mermaid SVG compilation, MathJax SVG equations, and per-page WenKai font subsetting.
-- **Zero-Trust Club Operations**: Authenticated club workflows and volunteer errata submissions backed by `scrypt` password hashing, `RFC 6238` TOTP two-factor authentication (`AES-256-GCM` identity-bound encryption), single-use rotating refresh tokens, and presigned object-storage uploads.
-
-![Club Portal](./README.assets/06-club-portal.png)
 
 ---
 
