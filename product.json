@@ -8,11 +8,12 @@
   "timeZone": "Asia/Shanghai",
   "filings": {
     "icp": "苏ICP备2026038426号-1",
+    "app": "苏ICP备2026038426号-2A",
     "police": { "number": "苏公网安备32011302323214号", "code": "32011302323214" }
   },
   "android": {
-    "versionName": "2.3.8",
-    "versionCode": 32,
+    "versionName": "2.3.9",
+    "versionCode": 33,
     "minSdk": 26
   },
   "campus": {

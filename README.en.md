@@ -222,6 +222,6 @@ npm run test:site      # Built HTML, dual-theme Mermaid, MathJax & link integrit
 
 - **Non-Official Disclaimer**: **StuDev is an independent student-run open-source project and is not an official administrative or academic system of Nanjing University of Posts and Telecommunications (NJUPT).** All timetables, exam rooms, calendar dates, and classroom states are compiled from publicly released university teaching schedules for personal study reference only. **Always refer to official notices from the Academic Affairs Office and your school for authoritative schedule or exam changes.**
 - **Notice & Takedown**: For errata or removal requests, please contact `studev@hicancan.top`.
-- **Filings**: [苏ICP备2026038426号-1](https://beian.miit.gov.cn/) · [苏公网安备32011302323214号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323214) · [Terms of Service](https://studev.hicancan.top/terms/) · [Privacy Policy](https://studev.hicancan.top/privacy/)
+- **Filings**: Website [苏ICP备2026038426号-1](https://beian.miit.gov.cn/) · Android app [苏ICP备2026038426号-2A](https://beian.miit.gov.cn/) · [苏公网安备32011302323214号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323214) · [Terms of Service](https://studev.hicancan.top/terms/) · [Privacy Policy](https://studev.hicancan.top/privacy/)
 - **License**: Licensed under the [GNU Affero General Public License v3.0](./LICENSE) (`AGPL-3.0`).  
   Copyright © 2026 StuDev Studio.

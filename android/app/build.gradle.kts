@@ -160,6 +160,7 @@ android {
         // emulator remains a first-class development target.
         ndk { abiFilters += listOf("arm64-v8a") }
         buildConfigField("String", "SITE_ORIGIN", "\"$productOrigin\"")
+        buildConfigField("String", "APP_FILING", "\"${(product["filings"] as Map<*, *>)["app"]}\"")
         buildConfigField("String", "CAMPUS_TIME_ZONE", "\"${product["timeZone"]}\"")
         val campus = product["campus"] as Map<*, *>
         val centre = campus["centre"] as List<*>

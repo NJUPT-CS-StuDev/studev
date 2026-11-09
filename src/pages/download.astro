@@ -27,6 +27,7 @@ const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `
     <a class="download-route" href="/">
       <span><b>使用网页版</b><small>iPhone 和电脑都能用，可以添加到主屏幕</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
     </a>
+    <p class="download-filing">App 备案号 <a href={PRODUCT_CONFIG.FILINGS.APP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.APP.TEXT}</a></p>
   </section>
 </SiteLayout>
 <style>
@@ -36,6 +37,8 @@ const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `
   .download-page .download-button { display: inline-block; padding: 10px 20px; border-radius: 8px; background: var(--brand); color: var(--on-brand); font-weight: 500; }
   .download-page .download-button:hover { color: var(--on-brand); }
   .download-help { color: var(--muted); font-size: 13.5px; margin: 20px 0 0; }
+  .download-filing { color: var(--faint); font-size: 12.5px; margin: 40px 0 0; text-align: center; }
+  .download-filing a { color: inherit; }
   .download-more { margin: 40px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
   .download-route { display: flex; align-items: center; gap: 12px; margin: 0 -12px; padding: 12px; border-radius: 10px; color: var(--ink); text-decoration: none; }
   .download-route { position: relative; }

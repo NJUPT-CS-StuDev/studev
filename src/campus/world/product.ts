@@ -11,9 +11,13 @@ export const PRODUCT_CONFIG = {
     CAMPUS: product.campus,
     ORIGIN: product.origin,
     GITHUB_REPO: `https://github.com/${product.repository}`,
-    /** The site's filings, shown at the foot of every page: the ministry's ICP number and the police network number. */
+    /**
+     * The filings: the site's ICP and police numbers sit at the foot of every page; the Android app's own ICP
+     * number is shown inside the app and where it is downloaded. The app's filing names its package and signing key.
+     */
     FILINGS: {
         ICP: { TEXT: product.filings.icp, URL: 'https://beian.miit.gov.cn/' },
+        APP: { TEXT: product.filings.app, URL: 'https://beian.miit.gov.cn/' },
         POLICE: { TEXT: product.filings.police.number, URL: `https://beian.mps.gov.cn/#/query/webSearch?code=${product.filings.police.code}` },
     },
     ANDROID_APP: {

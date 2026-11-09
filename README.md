@@ -222,6 +222,6 @@ npm run test:site      # 静态构建产物、双主题图表、数学公式与�
 
 - **非官方系统声明**：**StuDev 不是南京邮电大学的官方行政或教务系统，与学校及其各职能部门不存在行政隶属或官方授权关系。** 平台所呈现的课表、考场、校历与教室状态均整理自学校面向全体在校学生公开的教学安排，仅供日常学习规划参考；**一切调课、停课及考务安排均以学校教务处及所在学院发布的最新正式通知为准。**
 - **纠错与下线响应**：若学校相关部门、教师或同学认为某项信息存在偏差或不宜展示，请发送邮件至 `studev@hicancan.top`，我们在核实后将及时予以更正或下线。
-- **合规备案**：[苏ICP备2026038426号-1](https://beian.miit.gov.cn/) · [苏公网安备32011302323214号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323214) · [用户协议](https://studev.hicancan.top/terms/) · [隐私政策](https://studev.hicancan.top/privacy/)
+- **合规备案**：网站 [苏ICP备2026038426号-1](https://beian.miit.gov.cn/) · Android App [苏ICP备2026038426号-2A](https://beian.miit.gov.cn/) · [苏公网安备32011302323214号](https://beian.mps.gov.cn/#/query/webSearch?code=32011302323214) · [用户协议](https://studev.hicancan.top/terms/) · [隐私政策](https://studev.hicancan.top/privacy/)
 - **开源许可证**：本项目源代码采用 [GNU Affero General Public License v3.0](./LICENSE)（`AGPL-3.0`）协议开源。  
   Copyright © 2026 StuDev Studio.

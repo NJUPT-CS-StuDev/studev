@@ -4,6 +4,7 @@ import android.app.UiModeManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -135,20 +136,24 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                 Plain("显示", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
                 Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
             }
-            KeyRow(null, "添加到桌面", "也可以长按桌面空白处，在窗口小工具里找 studev", chevron = true, onClick = {
-                if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 studev")
+            KeyRow(null, "添加到桌面", "也可以长按桌面空白处，在窗口小工具里找 StuDev", chevron = true, onClick = {
+                if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev")
             })
             val background = remember(settings) { top.hicancan.studev.device.BackgroundSettings.status(context) }
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {
                 if (background.batteryExempt) top.hicancan.studev.device.BackgroundSettings.openOemStartup(context) else top.hicancan.studev.device.BackgroundSettings.requestBatteryExemption(context)
             })
             KeyRow(null, "检查更新", (if (state.appBehind) "有新版本 ${state.app!!.versionName} · " else "") + "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 数据 ${state.repository?.release?.data_version.orEmpty()}", chevron = true, onClick = { model.refresh() })
-            KeyRow(null, "分享 studev", PLATFORM_ORIGIN.removePrefix("https://"), chevron = true, onClick = {
-                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$PLATFORM_ORIGIN/"), "分享 studev"))
+            KeyRow(null, "分享 StuDev", PLATFORM_ORIGIN.removePrefix("https://"), chevron = true, onClick = {
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$PLATFORM_ORIGIN/"), "分享 StuDev"))
             })
             KeyRow(null, "学生发展中心", "南邮计软网安", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/club/"))) })
             KeyRow(null, "用户协议", "服务条款与免责声明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/terms/"))) })
             KeyRow(null, "隐私政策", "个人信息保护与权限说明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/privacy/"))) })
+            // The app's ICP filing number, which the rules want in plain sight inside the app.
+            Box(Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://beian.miit.gov.cn/"))) }.padding(top = 16.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                Plain("App 备案号：${top.hicancan.studev.BuildConfig.APP_FILING}", 12.sp, Ink.faint)
+            }
             Spacer(Modifier.height(8.dp))
         }
     }
