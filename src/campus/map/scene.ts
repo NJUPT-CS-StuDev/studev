@@ -307,7 +307,7 @@ export class CampusScene {
             this.map.setPaintProperty(layer, 'fill-extrusion-height', ['*', ['get', 'top'], value] as never);
             this.map.setPaintProperty(layer, 'fill-extrusion-base', ['*', ['get', 'base'], value] as never);
         }
-        this.map.setPaintProperty('context', 'fill-extrusion-height', ['*', ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 3], 3.4]], value] as never);
+        this.map.setPaintProperty('context', 'fill-extrusion-height', ['*', ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 0], 3.4]], value] as never);
     }
     private paintLevel(lift: number, lid: number) {
         const building = this.byId.get(this.building!)!;

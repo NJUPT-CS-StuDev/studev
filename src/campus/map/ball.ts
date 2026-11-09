@@ -1,5 +1,7 @@
-// The globe that turns the map. It is drawn from the camera itself: its lines are a real
-// sphere under the same bearing and pitch, so it looks like what dragging it does.
+// The ball that turns the map. It is a solid sphere seen under the map's own bearing and pitch: its
+// equator turns and flattens with the map, and a red mark on its rim points north, so it
+// reads as "the way the campus faces" and moves exactly as dragging it moves the map. No meridians: those
+// would make it a globe, the sign for "world" or "language".
 type Point = [number, number, number];
 
 const rad = Math.PI / 180;
@@ -12,27 +14,24 @@ const view = (bearing: number, pitch: number) => {
     };
 };
 const onSphere = (lon: number, lat: number): Point => [Math.cos(lat * rad) * Math.sin(lon * rad), Math.cos(lat * rad) * Math.cos(lon * rad), Math.sin(lat * rad)];
+const at = (x: number, y: number) => `${(x * RADIUS).toFixed(2)} ${(-y * RADIUS).toFixed(2)}`;
 
-const MERIDIANS = [0, 45, 90, 135];
-const PARALLELS = [-45, 0, 45];
-const ring = (at: (step: number) => Point, project: (point: Point) => Point) => {
-    let path = '';
+/** The ball's radius in its viewBox, which runs from -22 to 22 to leave room for the turning arrows. */
+export const RADIUS = 15;
+
+/** SVG paths for the ball under this bearing and pitch: the near half of its equator, and the north mark. */
+export function orientationBall(bearing: number, pitch: number) {
+    const project = view(bearing, pitch);
+    let ring = '';
     let pen = false;
-    for (let step = 0; step <= 72; step++) {
-        const [x, y, z] = project(at(step * 5));
+    for (let lon = 0; lon <= 360; lon += 4) {
+        const [x, y, z] = project(onSphere(lon, 0));
         if (z < 0) { pen = false; continue; }
-        path += `${pen ? 'L' : 'M'}${(x * 15).toFixed(2)} ${(-y * 15).toFixed(2)}`;
+        ring += `${pen ? 'L' : 'M'}${at(x, y)}`;
         pen = true;
     }
-    return path;
-};
-
-/** SVG paths in a viewBox centred on zero with radius 15, and where north sits. */
-export function globe(bearing: number, pitch: number) {
-    const project = view(bearing, pitch);
-    return {
-        lines: [...MERIDIANS.map(lon => ring(angle => onSphere(lon, angle), project)), ...PARALLELS.map(lat => ring(angle => onSphere(angle, lat), project))].join(''),
-        // Where north points on the screen, on the rim, so tilting never hides it.
-        north: { x: -Math.sin(bearing * rad) * 12.5, y: -Math.cos(bearing * rad) * 12.5 },
-    };
+    // North on the screen, at the rim, so no tilt ever hides it behind the ball.
+    const [dx, dy] = [-Math.sin(bearing * rad), Math.cos(bearing * rad)];
+    const tip = (r: number, side: number) => at((dx * r - dy * side) / RADIUS, (dy * r + dx * side) / RADIUS);
+    return { ring, north: `M${tip(RADIUS + 5, 0)}L${tip(RADIUS - 1.5, 3.4)}L${tip(RADIUS - 1.5, -3.4)}Z` };
 }

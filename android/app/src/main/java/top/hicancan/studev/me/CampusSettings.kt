@@ -23,6 +23,8 @@ data class PersonalSettings(
     val navigationGuidanceShown: Boolean = false,
     val navigationGuidancePending: Boolean = false,
     val reminderGuidanceShown: Boolean = false,
+    /** The map ball has turned once and said what it does. */
+    val ballHinted: Boolean = false,
     val timetable: Map<String, TimetableEdits> = emptyMap(),
     val examAttendance: Map<String, Map<String, Boolean>> = emptyMap(),
     val calendarExams: Boolean = false,
@@ -75,6 +77,7 @@ class CampusSettings(context: Context) {
         navigationGuidanceShown = store.getBoolean("navigation-guidance", false),
         navigationGuidancePending = store.getBoolean("navigation-guidance-pending", false),
         reminderGuidanceShown = store.getBoolean("reminder-guidance", false),
+        ballHinted = store.getBoolean("ball-hinted", false),
         timetable = store.getString("timetable", null)?.let {
             runCatching { sanitizeTimetable(Json.decodeFromString<Map<String, TimetableEdits>>(it)) }.getOrDefault(emptyMap())
         } ?: emptyMap(),
@@ -99,6 +102,7 @@ class CampusSettings(context: Context) {
             .putBoolean("navigation-guidance", next.navigationGuidanceShown)
             .putBoolean("navigation-guidance-pending", next.navigationGuidancePending)
             .putBoolean("reminder-guidance", next.reminderGuidanceShown)
+            .putBoolean("ball-hinted", next.ballHinted)
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams)

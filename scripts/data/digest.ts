@@ -387,8 +387,9 @@ async function buildModel(campus: string, from: string, layers: string, entities
     const shape = (geometry: MapPlace['geometry']) => ({ type: geometry!.type, coordinates: round(geometry!.coordinates) });
     // Campus buildings are authored with their height and storeys; one without is a broken map release.
     const measured = (row: Record<string, any>, field: 'height_m' | 'levels') => { const value = Number(row[field]); if (!(value > 0)) throw new Error(`building ${row.id} has no ${field}`); return value; };
-    // Surrounding buildings mostly come without heights (634 of 674 in map-v0.8.5); those stand three storeys tall.
-    const surrounding = (row: Record<string, any>) => Number(row.height_m) || 3 * 3.4;
+    // Surrounding buildings mostly come without heights (634 of 674 in map-v0.8.5). Their height is not known,
+    // so they lie flat as footprints and cast no shadow; the style draws them the same way.
+    const surrounding = (row: Record<string, any>) => Number(row.height_m) || Number(row.levels) * 3.4 || 0;
     const levels = new Map(entities.filter(place => place.kind === 'floor' && place.parent && place.level != null).map(place => [place.id, place.level!]));
     const indoor = await read<Record<string, { plate: MapPlace['geometry']; cores: { kind: string; geometry: MapPlace['geometry'] }[] }>>(join(from, 'indoor.json'));
     const floors: Record<string, unknown> = {};

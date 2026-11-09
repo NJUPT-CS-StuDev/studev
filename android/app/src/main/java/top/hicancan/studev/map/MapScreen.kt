@@ -55,7 +55,7 @@ private class LabelInfo(val id: String, val text: String, val at: DoubleArray, v
 private class Placed(val key: String, val text: String, val count: Int?, val x: Int, val y: Int, val kind: String, val tap: (() -> Unit)?)
 
 /** Pick a moment, unfold campus, building, floor and room. */
-@Composable fun MapScreen(route: Route, state: AcademicState, settings: PersonalSettings, campus: CampusPackage, now: Moment, runtime: NavigationRuntime, onPick: () -> Unit) {
+@Composable fun MapScreen(route: Route, state: AcademicState, settings: PersonalSettings, campus: CampusPackage, now: Moment, runtime: NavigationRuntime, onPick: () -> Unit, onHinted: () -> Unit) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val dark = isSystemInDarkTheme()
@@ -73,6 +73,17 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
     var dragPeek by remember { mutableStateOf<Float?>(null) }
     var picker by remember { mutableStateOf<Boolean?>(null) }
     var campusOpen by remember { mutableStateOf(false) }
+    var turning by remember { mutableStateOf(false) }
+    // Once per phone, when the map first shows: the ball turns the map a little and back, and says what it does.
+    var hinting by remember { mutableStateOf(false) }
+    LaunchedEffect(scene) {
+        val ready = scene ?: return@LaunchedEffect
+        if (settings.ballHinted) return@LaunchedEffect
+        onHinted()
+        kotlinx.coroutines.delay(900); hinting = true; ready.nudge(14.0, 650)
+        kotlinx.coroutines.delay(700); ready.nudge(-14.0, 650)
+        kotlinx.coroutines.delay(2600); hinting = false
+    }
     var status by remember { mutableStateOf(LocationStatus.Waiting) }
     val (access, requestLocation) = rememberLocationPermission { }
     val moment = route.moment?.let { Moment(it.first, it.second) } ?: now
@@ -228,17 +239,20 @@ private class Placed(val key: String, val text: String, val count: Int?, val x: 
         if (navigation.open) {
             NavigationScreen(navigation, runtime, controller, access.granted, requestLocation, pick = { origin -> picker = origin })
         } else {
-            Row(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, top = 12.dp, end = 60.dp).height(40.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, top = 12.dp, end = 68.dp).height(40.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(46.dp).fillMaxHeight().clickable { campusOpen = true }, contentAlignment = Alignment.Center) { Plain("仙林", 13.sp, weight = FontWeight.SemiBold) }
                 Box(Modifier.fillMaxHeight().width(1.dp).background(Ink.line))
                 Box(Modifier.weight(1f).fillMaxHeight().clickable { route.scope = "place"; route.tab = "search" }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) { Plain("搜地点或教室", 14.sp, Ink.faint) }
+            }
+            if (hinting) Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 23.dp, end = 66.dp).clip(RoundedCornerShape(6.dp)).background(Ink.text).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                Plain("拖动旋转视角 · 点按回正", 12.5.sp, Ink.paper)
             }
             Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val bearing = cameraTick.let { mapRef?.cameraPosition?.bearing ?: 0.0 }
                 val needle = marks().danger
                 val faint = Ink.faint
                 val pitch = cameraTick.let { mapRef?.cameraPosition?.tilt ?: 52.0 }
-                MapBall(bearing, pitch, Ink.paper, faint.copy(alpha = .7f), needle, Modifier.size(44.dp).pointerInput(Unit) { detectDragGestures { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
+                MapBall(bearing, pitch, turning || hinting, Ink.paper, Ink.text, faint.copy(alpha = .8f), Ink.muted, needle, Modifier.size(48.dp).pointerInput(Unit) { detectDragGestures(onDragStart = { turning = true }, onDragEnd = { turning = false }, onDragCancel = { turning = false }) { _, drag -> scene?.steer(drag.x / density * .9, -drag.y / density * .5) } }.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { scene?.square() }.testTag("tilt"))
                 if (floors.isNotEmpty()) Column(Modifier.clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp))) {
                     floors.reversed().forEach { level ->
                         val on = level == floor

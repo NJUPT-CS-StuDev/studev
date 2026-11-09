@@ -50,7 +50,7 @@ export function style() {
             },
             {
                 id: 'context', type: 'fill-extrusion', source: 'basemap', 'source-layer': 'context_buildings',
-                paint: { 'fill-extrusion-color': c.context, 'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 3], 3.4]], 'fill-extrusion-opacity': 0.82 },
+                paint: { 'fill-extrusion-color': c.context, 'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height_m']], ['*', ['to-number', ['get', 'levels'], 0], 3.4]], 'fill-extrusion-opacity': 0.82 },
             },
             form('forms', 0),
             form('plain', 1),

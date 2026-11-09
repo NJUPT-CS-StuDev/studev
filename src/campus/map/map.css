@@ -31,10 +31,17 @@
   .tilt{width:36px;height:36px;border-radius:8px;background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.14);display:grid;place-items:center}
   .ball{width:44px;height:44px;margin:-4px;touch-action:none;cursor:grab;display:grid;place-items:center;filter:drop-shadow(0 1px 3px rgba(0,0,0,.22))}
   .ball:active{cursor:grabbing}
-  .ball svg{width:40px;height:40px;overflow:visible}
-  .ball-body{fill:var(--paper)}
-  .ball-lines{fill:none;stroke:var(--faint);stroke-width:.7;opacity:.7}
-  .ball-north{fill:var(--danger)}
+  .ball svg{width:48px;height:48px;overflow:visible}
+  .ball-light{stop-color:var(--paper)}
+  .ball-dark{stop-color:color-mix(in srgb,var(--paper) 78%,var(--ink))}
+  .ball-body{stroke:color-mix(in srgb,var(--paper) 70%,var(--ink));stroke-width:.6}
+  .ball-gloss{stroke:none}
+  .ball-ring{fill:none;stroke:var(--faint);stroke-width:.8;opacity:.8}
+  .ball-north{fill:var(--danger);stroke:none}
+  /* The turning arrows: shown while pointed at or held, and once when the map first shows. */
+  .ball-turn{fill:none;stroke:var(--muted);stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .2s}
+  .ball:hover .ball-turn,.ball:active .ball-turn,.ball.hinting .ball-turn{opacity:1}
+  .ball-tip{position:absolute;right:52px;top:10px;white-space:nowrap;padding:6px 10px;border-radius:8px;background:var(--ink);color:var(--paper);font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,.18);animation:sd-fade .2s;pointer-events:none}
   .tilt svg{width:20px;height:20px;stroke:none;transition:transform .7s var(--ease)}
   .tilt svg .n{fill:var(--danger)}
   .tilt svg .s{fill:var(--faint);opacity:.45}

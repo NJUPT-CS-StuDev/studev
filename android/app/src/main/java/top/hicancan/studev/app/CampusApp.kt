@@ -81,7 +81,7 @@ import top.hicancan.studev.world.Moment
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
             // The native map keeps its surface while another entry is on top of it.
-            if (mapOpened) campus?.let { loaded -> MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }) }
+            if (mapOpened) campus?.let { loaded -> MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }) }
             when (route.tab) {
                 "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }

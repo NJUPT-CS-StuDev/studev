@@ -19,7 +19,7 @@ import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from '
 import { fetchJson } from '@/world/fetch';
 import { holidayMap } from '@/world/events';
 import { readAppearance } from '@/world/appearance';
-import { globe } from './ball';
+import { orientationBall } from './ball';
 import '../campus.css';
 import './map.css';
 
@@ -81,6 +81,19 @@ export default function MapApp() {
     const [appearance, setLook] = useState(readAppearance);
     const [closed, setClosed] = useState(false);
     const [needle, setNeedle] = useState(0);
+    // Once per browser, when the map first shows: the ball turns the map a little and back, and says what it does.
+    const [hinting, setHinting] = useState(false);
+    useEffect(() => {
+        if (!scene) return;
+        try { if (localStorage.getItem('studev_ball_hinted')) return; localStorage.setItem('studev_ball_hinted', '1'); } catch { return; }
+        const start = scene.map.getBearing();
+        const timers = [
+            window.setTimeout(() => { setHinting(true); scene.map.easeTo({ bearing: start + 14, duration: 650, essential: true }); }, 900),
+            window.setTimeout(() => scene.map.easeTo({ bearing: start, duration: 650, essential: true }), 1600),
+            window.setTimeout(() => setHinting(false), 4200),
+        ];
+        return () => timers.forEach(window.clearTimeout);
+    }, [scene]);
 
     useEffect(() => {
         const observer = new MutationObserver(() => setLook(readAppearance()));
@@ -384,16 +397,23 @@ export default function MapApp() {
                 <a className="searchpill" href="/search/?scope=place"><Magnifier /><span>搜地点或教室</span></a>
                 <button className="campus" onClick={() => setCampusOpen(true)}>仙林</button>
                 <div className="camctl">
-                    <button className="ball" aria-label="拖动旋转，点按回正" title="拖动旋转，点按回正" onPointerDown={ballDown} onPointerMove={ballMove} onPointerUp={ballUp} onPointerCancel={ballUp} onClick={ballClick}>
+                    <button className={`ball ${hinting ? 'hinting' : ''}`} aria-label="拖动旋转，点按回正" title="拖动旋转，点按回正" onPointerDown={ballDown} onPointerMove={ballMove} onPointerUp={ballUp} onPointerCancel={ballUp} onClick={ballClick}>
                         {(() => {
-                            const ball = globe(scene?.map.getBearing() ?? -24, scene?.map.getPitch() ?? 52);
-                            return <svg viewBox="-18 -18 36 36" data-needle={needle}>
-                                <circle className="ball-body" r="15" />
-                                <path className="ball-lines" d={ball.lines} />
-                                <circle className="ball-north" cx={ball.north.x} cy={ball.north.y} r="2.6" />
+                            const ball = orientationBall(scene?.map.getBearing() ?? -24, scene?.map.getPitch() ?? 52);
+                            return <svg viewBox="-22 -22 44 44" data-needle={needle} aria-hidden="true">
+                                <defs>
+                                    <radialGradient id="ball-shade" cx="35%" cy="30%" r="75%"><stop className="ball-light" offset="0" /><stop className="ball-dark" offset="1" /></radialGradient>
+                                    <radialGradient id="ball-gloss" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff" stopOpacity=".85" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+                                </defs>
+                                <g className="ball-turn"><path d="M-19.5 -6A20 20 0 0 0 -19.5 6" /><path d="M-21.6 3.4L-19.5 6L-17 4.2" /><path d="M19.5 6A20 20 0 0 0 19.5 -6" /><path d="M21.6 -3.4L19.5 -6L17 -4.2" /></g>
+                                <circle className="ball-body" r="15" fill="url(#ball-shade)" />
+                                <ellipse className="ball-gloss" cx="-5" cy="-6.5" rx="7" ry="5" fill="url(#ball-gloss)" transform="rotate(-30 -5 -6.5)" />
+                                <path className="ball-ring" d={ball.ring} />
+                                <path className="ball-north" d={ball.north} />
                             </svg>;
                         })()}
                     </button>
+                    {hinting && <div className="ball-tip" role="status">拖动旋转视角 · 点按回正</div>}
                     {floors.length > 0 && <div className="floors">{[...floors].reverse().map(level => {
                         const free = roomsInBuilding.some(room => Number(room.floor) === level && day && !stateOf(room.id)?.busy);
                         return <button key={level} className={level === floor ? 'on' : ''} onClick={() => set({ place: bId, f: level })}>{level}{free && <i />}</button>;

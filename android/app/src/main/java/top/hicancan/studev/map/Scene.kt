@@ -225,7 +225,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         flatten = value
         look()
         for (layer in listOf("forms", "plain")) set(layer, fillExtrusionHeight(product(get("top"), literal(value))), fillExtrusionBase(product(get("base"), literal(value))))
-        set("context", fillExtrusionHeight(product(coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(3))), literal(3.4))), literal(value))))
+        set("context", fillExtrusionHeight(product(coalesce(toNumber(get("height_m")), product(toNumber(coalesce(get("levels"), literal(0))), literal(3.4))), literal(value))))
     }
     private fun paintLevel(lift: Double, lid: Float) {
         val shape = buildings.getValue(openBuilding!!)
@@ -314,6 +314,11 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     fun steer(turn: Double, lean: Double) {
         val camera = map.cameraPosition
         map.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(camera.bearing + turn).tilt((camera.tilt + lean).coerceIn(0.0, pitchLimit())).build()))
+    }
+    /** Turn by `by` degrees over `ms`, as the ball's first-run hint does. */
+    fun nudge(by: Double, ms: Int) {
+        val camera = map.cameraPosition
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(camera).bearing(camera.bearing + by).build()), ms)
     }
     /** Back to north, seen from straight above; from there, back to the raised view. */
     fun square() {
