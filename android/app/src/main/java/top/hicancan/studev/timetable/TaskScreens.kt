@@ -22,6 +22,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -187,7 +194,15 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
 @Composable private fun Title(task: Task, modifier: Modifier = Modifier) = androidx.compose.material3.Text(task.title, modifier, maxLines = 1,
     style = TextStyle(fontSize = 15.sp, color = if (task.done != null) Ink.faint else Ink.text, textDecoration = if (task.done != null) TextDecoration.LineThrough else null))
 
-/** The line as a list: one's tasks by when they are due, the exams among them. A task is added here in one line. */
+/** Where a row or an empty group sits on the screen while a task is dragged. */
+private data class Slot(val group: String, val index: Int, val top: Float, val bottom: Float, val empty: Boolean)
+
+/**
+ * The line as a list, as src/campus/timetable/views/ListView.tsx: one's tasks by when they are due, the exams among
+ * them. A task is added in one line, what it says read back as it is typed; a task held a moment is dragged
+ * elsewhere in its group, or into today, tomorrow or no day at all.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun TaskList(line: CampusLine, now: Moment, store: TaskStore, onOpen: (LineEvent) -> Unit) {
     var draft by remember { mutableStateOf("") }
     var showDone by remember { mutableStateOf(false) }
@@ -196,55 +211,165 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
     val done = top.filter { it.done != null }.sortedByDescending { it.done }
     val exams = line.upcomingExams(now.date)
     val courses = line.meetings.associate { TimetablePresentation.identity(it) to (line.names[TimetablePresentation.identity(it)] ?: Names.course(it.course.name)) }
-    fun add() { if (draft.isBlank()) return; val quick = Tasks.parse(draft, now); store.save(Task(store.newId(), quick.title, date = quick.date, start = quick.start, due = quick.due, modified = "")); draft = "" }
-    fun whenText(task: Task): String {
-        fun day(value: String): String { val date = LocalDate.parse(value); val days = CampusLine.daysBetween(now.date, date); return if (days == 0) "今天" else if (days == 1) "明天" else "${dateLabel(date)} ${WEEKDAYS[date.dayOfWeek.value]}" }
-        return listOfNotNull(task.date?.let { "计划 ${day(it)} ${task.start?.let(::hm).orEmpty()}${task.end?.let { end -> "–${hm(end)}" }.orEmpty()}" },
-            task.due?.let { "截止 ${day(it.date)} ${it.time?.let(::hm) ?: "当天结束"}" }).joinToString(" · ")
+    val quickCourses = remember(line.meetings) { line.meetings.distinctBy { TimetablePresentation.identity(it) }.map { Tasks.QuickCourse(TimetablePresentation.identity(it), listOf(Names.course(it.course.name), Names.courseShort(it.course.name))) } }
+    val quick = if (draft.isNotBlank()) Tasks.parse(draft, now, quickCourses) else null
+    fun add() {
+        val read = quick ?: return
+        // A task just added goes first in its group, where it is seen.
+        store.save(Task(store.newId(), read.title, date = read.date, start = read.start, end = read.end, due = read.due, priority = read.priority, course = read.course, order = -System.currentTimeMillis().toDouble(), modified = ""))
+        draft = ""
     }
-    @Composable fun row(task: Task) {
-        val parts = line.tasks.filter { it.parent == task.id }
-        Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TaskCheck(task, store)
-            Column(Modifier.weight(1f).clickable { onOpen(taskEvent(task, now.date)) }) {
-                Title(task)
-                val meta = listOf(whenText(task), task.course?.let { courses[it] }.orEmpty(), if (parts.isNotEmpty()) "步骤 ${parts.count { it.done != null }}/${parts.size}" else "", if (task.note != null) "有备注" else "").filter { it.isNotEmpty() }.joinToString(" · ")
-                if (meta.isNotEmpty()) Plain(meta, 12.sp, Ink.muted, maxLines = 1)
-            }
+    fun dayWord(value: String): String {
+        val date = LocalDate.parse(value)
+        val days = CampusLine.daysBetween(now.date, date)
+        return when { days == 0 -> "今天"; days == 1 -> "明天"; days == -1 -> "昨天"; days in 2..6 -> WEEKDAYS[date.dayOfWeek.value]; else -> dateLabel(date) }
+    }
+    fun whenText(task: Task) = listOfNotNull(
+        task.date?.let { "${dayWord(it)} ${task.start?.let(::hm).orEmpty()}${task.end?.let { end -> "–${hm(end)}" }.orEmpty()}" },
+        task.due?.let { "${if (task.date != null) "截止 " else ""}${dayWord(it.date)}${it.time?.let { time -> " ${hm(time)}" }.orEmpty()}${if (task.date != null) "" else " 截止"}" },
+    ).joinToString(" · ")
+    fun grouped(key: String) = open.filter { Tasks.group(it, now) == key }
+
+    // Dragging: the task held, how far it has moved, where it would go, and where everything it could go sits.
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var dragId by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var target by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    var dragGroup by remember { mutableStateOf<String?>(null) }
+    /** A task goes back into its own group, or into one that gives it a day; the others are not where it can go. */
+    fun accepts(group: String) = dragId != null && (group == dragGroup || group in Tasks.DROP_GROUPS)
+    val slots = remember { mutableStateMapOf<String, Slot>() }
+    val tops = remember { mutableStateMapOf<String, Float>() }
+    fun nearest(y: Float): Pair<String, Int>? {
+        var best: Pair<String, Int>? = null
+        var distance = Float.MAX_VALUE
+        for (slot in slots.values.filter { accepts(it.group) }) {
+            val edges = if (slot.empty) listOf((slot.top + slot.bottom) / 2 to slot.index) else listOf(slot.top to slot.index, slot.bottom to slot.index + 1)
+            for ((edge, at) in edges) { val gap = kotlin.math.abs(y - edge); if (gap < distance) { distance = gap; best = slot.group to at } }
         }
+        return best
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Field(draft, "添加任务，如：明天 14:00 交毛概作业", Modifier.weight(1f), onDone = ::add) { draft = it }
+    var startTop by remember { mutableFloatStateOf(0f) }
+    var startY by remember { mutableFloatStateOf(0f) }
+    var listBox by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    // The gesture is the list's, not a row's: a row moves when an empty group above it opens to take a drop, and a
+    // gesture on something that moves is cancelled. It reads the tasks as they are when it ends.
+    val latestOpen by rememberUpdatedState(open)
+    val latestNow by rememberUpdatedState(now)
+    val hold = Modifier.onGloballyPositioned { listBox = it }.pointerInput(Unit) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { at ->
+                val y = listBox?.localToRoot(at)?.y ?: return@detectDragGesturesAfterLongPress
+                val (key, slot) = slots.entries.firstOrNull { (key, slot) -> key.startsWith("t:") && y >= slot.top && y <= slot.bottom } ?: return@detectDragGesturesAfterLongPress
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                startY = y; startTop = slot.top; dragGroup = slot.group; dragOffset = 0f; dragId = key.removePrefix("t:"); slots.remove(key)
+            },
+            onDrag = { change, amount -> if (dragId != null) { change.consume(); dragOffset += amount.y; target = nearest(startY + dragOffset) } },
+            onDragEnd = {
+                val goal = target
+                val task = latestOpen.firstOrNull { it.id == dragId }
+                if (goal != null && task != null) store.saveAll(Tasks.move(task, goal.first, goal.second, latestOpen.filter { Tasks.group(it, latestNow) == goal.first }, latestNow))
+                dragId = null; dragGroup = null; target = null; dragOffset = 0f
+            },
+            onDragCancel = { dragId = null; dragGroup = null; target = null; dragOffset = 0f },
+        )
+    }
+    val brand = Ink.brand
+
+    @Composable fun row(task: Task, group: String?, index: Int) {
+        val parts = line.tasks.filter { it.parent == task.id }
+        val lifted = task.id == dragId
+        val key = "t:${task.id}"
+        val dropAbove = group != null && !lifted && target == (group to index)
+        val dropBelow = group != null && !lifted && target == (group to index + 1) && grouped(group).filter { it.id != dragId }.lastOrNull()?.id == task.id
+        // The row's place in the layout, which the list reads to know what a finger holds and where it can go.
+        var modifier = Modifier.fillMaxWidth()
+        if (group != null) modifier = modifier.onGloballyPositioned { box ->
+            val top = box.positionInRoot().y
+            tops[task.id] = top
+            if (lifted) slots.remove(key) else slots[key] = Slot(group, index, top, top + box.size.height, false)
+        }
+        if (lifted) modifier = modifier.zIndex(1f)
+        // Where it is drawn follows the finger even when what is above it grows as the drag begins.
+        val drawn = if (lifted) Modifier.graphicsLayer { translationY = dragOffset + startTop - (tops[task.id] ?: startTop); shadowElevation = 16f; scaleX = 1.02f; scaleY = 1.02f; shape = RoundedCornerShape(10.dp); clip = true }
+            else if (group != null && dragId != null && !accepts(group)) Modifier.graphicsLayer { alpha = .4f } else Modifier
+        val paper = Ink.paper
+        val hair = Ink.line
+        Box(modifier) { Row(drawn.fillMaxWidth().background(paper).drawBehind {
+            if (!lifted) drawLine(hair, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), 1f)
+            if (dropAbove) drawRect(brand, androidx.compose.ui.geometry.Offset(32.dp.toPx(), -1.dp.toPx()), androidx.compose.ui.geometry.Size(size.width - 32.dp.toPx(), 2.dp.toPx()))
+            if (dropBelow) drawRect(brand, androidx.compose.ui.geometry.Offset(32.dp.toPx(), size.height - 1.dp.toPx()), androidx.compose.ui.geometry.Size(size.width - 32.dp.toPx(), 2.dp.toPx()))
+        }.padding(horizontal = if (lifted) 10.dp else 0.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TaskCheck(task, store)
+            Row(Modifier.weight(1f).clickable(enabled = dragId == null) { onOpen(taskEvent(task, now.date)) }.padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Title(task, Modifier.weight(1f))
+                task.course?.let { courses[it] }?.let { Plain(Names.courseShort(it), 12.sp, Ink.faint, maxLines = 1) }
+                if (parts.isNotEmpty()) Plain("${parts.count { it.done != null }}/${parts.size}", 12.sp, Ink.faint)
+                if (task.note != null) Plain("≡", 12.sp, Ink.faint)
+                val text = whenText(task)
+                if (text.isNotEmpty()) {
+                    val tone = when (Tasks.group(task, now)) { "overdue" -> marks().danger; "today" -> brand; else -> Ink.muted }
+                    Plain(text, 12.sp, tone, maxLines = 1)
+                }
+            }
+        } }
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState(), enabled = dragId == null).then(hold)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Field(draft, "添加任务，如：明天下午3点 交毛概作业 #毛概 !!", Modifier.weight(1f), onDone = ::add) { draft = it }
             if (draft.isNotBlank()) Chip("添加", ::add, Modifier.padding(start = 8.dp))
         }
+        quick?.let { read ->
+            val said = listOfNotNull(
+                read.date?.let { "${dayWord(it)} ${read.start?.let(::hm).orEmpty()}${read.end?.let { end -> "–${hm(end)}" }.orEmpty()}" },
+                read.due?.let { "${dayWord(it.date)}${it.time?.let { time -> " ${hm(time)}" }.orEmpty()} 截止" },
+                read.priority?.let { listOf("", "低优先级", "中优先级", "高优先级")[it] },
+                read.course?.let { courses[it] }?.let(Names::courseShort),
+            )
+            FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (said.isEmpty()) Plain("没有读出日期，会放进“还没排日期”", 12.5.sp, Ink.faint)
+                said.forEach { Box(Modifier.clip(RoundedCornerShape(6.dp)).background(brand.copy(alpha = .12f)).padding(horizontal = 8.dp, vertical = 2.dp)) { Plain(it, 12.5.sp, brand) } }
+                if (said.isNotEmpty()) Plain(read.title, 12.5.sp, Ink.muted, FontWeight.Medium)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         Tasks.GROUPS.forEach { (key, name) ->
-            val tasks = open.filter { Tasks.group(it, now) == key }
+            val tasks = grouped(key)
+            val shown = tasks.filter { it.id != dragId }
             val dated = if (key == "overdue" || key == "someday") emptyList() else exams.filter { exam ->
                 val days = CampusLine.daysBetween(now.date, LocalDate.parse(exam.date))
                 key == when { days == 0 -> "today"; days == 1 -> "tomorrow"; days <= 7 -> "week"; else -> "later" }
             }
-            if (tasks.isEmpty() && dated.isEmpty()) return@forEach
+            val dropHere = dragId != null && key in Tasks.DROP_GROUPS
+            if (tasks.isEmpty() && dated.isEmpty() && !dropHere) { slots.remove("e:$key"); return@forEach }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp)) {
                 Plain(name, 13.sp, if (key == "overdue") marks().danger else Ink.muted, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Plain("${tasks.size + dated.size}", 13.sp, Ink.faint)
+                if (shown.size + dated.size > 0) Plain("${shown.size + dated.size}", 13.sp, Ink.faint)
             }
             dated.forEach { exam ->
                 val event = line.on(LocalDate.parse(exam.date)).firstOrNull { it.exam?.id == exam.id }
-                Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { event?.let(onOpen) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { event?.let(onOpen) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     SmallTag("考试", marks().exam, marks().onExam)
-                    Column(Modifier.weight(1f)) {
-                        Plain(Names.course(exam.course.name), 15.sp, maxLines = 1)
-                        Plain("${dateLabel(LocalDate.parse(exam.date))} ${WEEKDAYS[LocalDate.parse(exam.date).dayOfWeek.value]} ${exam.start} · ${Names.room(exam.room ?: exam.location)}", 12.sp, Ink.muted, maxLines = 1)
-                    }
+                    Plain(Names.course(exam.course.name), 15.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                    Plain("${dayWord(exam.date)} ${exam.start} · ${Names.room(exam.room ?: exam.location)}", 12.sp, if (key == "today") brand else Ink.muted, maxLines = 1)
                 }
             }
-            tasks.forEach { row(it) }
+            var at = 0
+            // Keyed, so that a row keeps its gesture when an empty group above it opens to take a drop.
+            tasks.forEach { task -> val slot = if (task.id == dragId) -1 else at++; key(task.id) { row(task, key, slot) } }
+            if (shown.isEmpty() && dropHere) {
+                val active = target?.first == key
+                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 46.dp).border(1.5.dp, if (active) brand else Ink.line, RoundedCornerShape(10.dp))
+                    .onGloballyPositioned { box -> val y = box.positionInRoot().y; slots["e:$key"] = Slot(key, 0, y, y + box.size.height, true) }, contentAlignment = Alignment.Center) {
+                    Plain(if (key == "someday") "放到这里，去掉日期" else "放到这里，改到$name", 13.sp, if (active) brand else Ink.faint)
+                }
+            } else slots.remove("e:$key")
         }
         if (open.isEmpty() && exams.isEmpty()) Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain("没有要做的事。在上面输入一件，回车就加上了。", 14.sp, Ink.faint) }
         if (done.isNotEmpty()) {
             Plain("已完成 ${done.size} 项 ${if (showDone) "⌃" else "⌄"}", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).clickable { showDone = !showDone })
-            if (showDone) done.forEach { row(it) }
+            if (showDone) done.forEach { key(it.id) { row(it, null, 0) } }
         }
         Spacer(Modifier.height(24.dp))
     }

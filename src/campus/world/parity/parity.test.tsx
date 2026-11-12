@@ -59,7 +59,7 @@ describe('the shared web / Android real-data contract', () => {
         expect(list.map(task => ({ id: task.id, group: taskGroup(task, t.now) }))).toEqual(t.groups);
         expect([...list].sort(taskOrder).map(task => task.id)).toEqual(t.order);
         expect(list.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) })))).toEqual(t.reminders);
-        for (const test of t.parse) expect(parseQuickTask(test.input, { date: '2026-11-12', min: 600 })).toEqual(test.result);
+        for (const test of t.parse) expect(parseQuickTask(test.input, { date: '2026-11-12', min: 600 }, t.courses)).toEqual(test.result);
     });
     it('places labs among lessons and exams, and keeps a person\'s own', () => {
         const labs = golden.labs;

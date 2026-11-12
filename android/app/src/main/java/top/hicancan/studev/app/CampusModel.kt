@@ -161,9 +161,6 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadLabs(repo: AcademicRepository, klass: String?) {
         val effective = state.value.schedule
         val labs = if (klass != null) repo.personalLabs(klass, settings.state.value.labs) else emptyList()
-        val choices = settings.state.value.labs
-        val migrated = CourseCatalog.migrateLabChoices(labs, choices)
-        if (migrated != choices) settings.update { it.copy(labs = CourseCatalog.migrateLabChoices(labs, it.labs)) }
         _state.update { now -> if (now.repository === repo && settings.state.value.klass == klass && now.schedule === effective) now.copy(labs = labs) else now }
     }
     fun setLabs(change: (top.hicancan.studev.me.LabChoices) -> top.hicancan.studev.me.LabChoices) {

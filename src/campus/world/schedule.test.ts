@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import golden from './parity/golden.json';
 import type { Lab, TeachingMeeting, TeachingPeriod, TeachingTerm } from './facts';
 import { eventsOn, dueOn, holidayMap, layers, timeBounds, type Timeline } from './events';
-import { attendingLabs, labCourseKey, migrateLabChoices, personalLabs } from '@/timetable/model/labs';
+import { attendingLabs, labCourseKey, personalLabs } from '@/timetable/model/labs';
 import { courseIdentity } from '@/timetable/model/courseColors';
 import { availableSlots } from './planning';
 import { preferenceKey } from './schedule';
-import { migrateTaskTimes, parseQuickTask, reminderAt, type Task } from './tasks';
+import { reminderAt, type Task } from './tasks';
 import { calendarFile, taskEntries } from '@/timetable/model/calendar';
 import type { CalendarTerm } from './data';
 
@@ -24,11 +24,10 @@ describe('independent attendance, deadlines and planning', () => {
         expect(eventsOn({ ...line, meetings: kept, labs: personal }, linux[0]!.date).some(event => event.meeting && /linux/i.test(event.meeting.course.name))).toBe(false);
         expect(attendingLabs(personal, { skip: [linux[0]!.id] }).filter(lab => /linux/i.test(lab.course.name))).toHaveLength(2);
         expect(attendingLabs(personal, { drop: [labCourseKey(linux[0]!)] }).filter(lab => /linux/i.test(lab.course.name))).toHaveLength(0);
-        expect(migrateLabChoices(labs, { drop: [courseIdentity(linux[0]!)] }).drop).toEqual([labCourseKey(linux[0]!)]);
     });
     it('moves execution without moving the deadline, and emits a separate transparent calendar marker', () => {
         const task: Task = { id: 'report', title: '写报告', date: '2026-11-11', start: 840, end: 900, due: { date: '2026-11-13', time: 1439, remind: [60] }, modified: 'm' };
-        const moved = migrateTaskTimes({ ...task, date: '2026-11-12', start: 600, end: 660 });
+        const moved: Task = { ...task, date: '2026-11-12', start: 600, end: 660 };
         expect(moved.due).toEqual(task.due);
         const personal = { ...line, tasks: [moved] };
         expect(eventsOn(personal, '2026-11-12').find(event => event.task)?.start).toBe(600);
@@ -39,13 +38,6 @@ describe('independent attendance, deadlines and planning', () => {
         expect(file.match(/BEGIN:VEVENT/g)).toHaveLength(2);
         expect(file).toContain('TRANSP:TRANSPARENT');
         expect(file).toContain('SUMMARY:截止 · 写报告');
-    });
-    it('migrates the old date-only deadline once while preserving the reminder and modification stamp', () => {
-        const old: Task = { id: 'old', title: '交作业', date: '2026-11-13', remind: [480], modified: 'm' };
-        const migrated = migrateTaskTimes(old);
-        expect(migrated).toEqual({ id: 'old', title: '交作业', due: { date: '2026-11-13', remind: [480] }, modified: 'm' });
-        expect(migrateTaskTimes(migrated)).toBe(migrated);
-        expect(parseQuickTask('周五23:59前交报告', { date: '2026-11-12', min: 600 })).toEqual({ title: '交报告', due: { date: '2026-11-13', time: 1439 } });
     });
     it('blocks must-avoid, penalizes prefer-avoid and permits allowed overlap on the real two-lab morning', () => {
         const date = '2026-11-09', now = { date, min: 480 };

@@ -42,12 +42,6 @@ class ParityTest {
     }
     @Test fun attendanceDeadlineAndPlanningSemanticsMatch() {
         val s = golden.getValue("semantics").jsonObject
-        s.getValue("migration").jsonArray.forEach { item ->
-            val before = json.decodeFromJsonElement<Task>(item.jsonObject.getValue("before"))
-            val expected = json.decodeFromJsonElement<Task>(item.jsonObject.getValue("after"))
-            assertEquals(expected, Tasks.migrateTimes(before))
-            assertEquals(expected, Tasks.migrateTimes(expected))
-        }
         val tasks = json.decodeFromJsonElement<List<Task>>(golden.getValue("tasks").jsonObject.getValue("list"))
         s.getValue("dueReminders").jsonArray.forEach { item ->
             val row = item.jsonObject
@@ -58,12 +52,6 @@ class ParityTest {
         }
         val labs = golden.getValue("labs").jsonObject
         val labList = json.decodeFromJsonElement<List<Lab>>(labs.getValue("labs"))
-        s.getValue("labMigration").jsonArray.forEach { item ->
-            val before = json.decodeFromJsonElement<top.hicancan.studev.me.LabChoices>(item.jsonObject.getValue("before"))
-            val after = json.decodeFromJsonElement<top.hicancan.studev.me.LabChoices>(item.jsonObject.getValue("after"))
-            assertEquals(after, CourseCatalog.migrateLabChoices(labList, before))
-            assertEquals(after, CourseCatalog.migrateLabChoices(labList, after))
-        }
         s.getValue("frames").jsonArray.forEach { item ->
             val row = item.jsonObject
             val personal = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), labList, listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, json.decodeFromJsonElement(row.getValue("tasks")))
@@ -109,14 +97,29 @@ class ParityTest {
         assertEquals(tasks.getValue("order").jsonArray.map { it.jsonPrimitive.content }, list.sortedWith(Tasks.order).map { it.id })
         val reminders = list.flatMap { task -> task.remind.orEmpty().map { remind -> Tasks.reminderAt(task, remind)!!.let { (date, min) -> buildJsonObject { put("id", task.id); put("remind", remind); putJsonObject("at") { put("date", date.toString()); put("min", min) } } } } }
         assertEquals(tasks.getValue("reminders"), JsonArray(reminders))
+        val manual = list.mapIndexed { at, task -> if (at == 2) task.copy(order = 1.0) else if (at == 3) task.copy(order = 0.0) else task }
+        assertEquals(tasks.getValue("manual").jsonArray.map { it.jsonPrimitive.content }, manual.sortedWith(Tasks.order).map { it.id })
+        tasks.getValue("moves").jsonArray.forEach { item ->
+            val case = item.jsonObject
+            val group = case.getValue("group").jsonPrimitive.content
+            val shown = case.getValue("shown").jsonArray.map { id -> list.first { it.id == id.jsonPrimitive.content } }
+            assertEquals(shown.map { it.id }, list.filter { it.parent == null && it.done == null && Tasks.group(it, now) == group }.sortedWith(Tasks.order).map { it.id })
+            val moved = Tasks.move(list.first { it.id == case.getValue("id").jsonPrimitive.content }, group, case.getValue("index").jsonPrimitive.int, shown, now)
+            assertEquals(case.toString(), case.getValue("changed").jsonArray.map { json.decodeFromJsonElement<Task>(JsonObject(it.jsonObject + ("modified" to JsonPrimitive("")))) }, moved.map { it.copy(modified = "") })
+        }
+        val quickCourses = tasks.getValue("courses").jsonArray.map { item -> Tasks.QuickCourse(item.jsonObject.getValue("identity").jsonPrimitive.content, item.jsonObject.getValue("names").jsonArray.map { it.jsonPrimitive.content }) }
         tasks.getValue("parse").jsonArray.forEach { item ->
             val test = item.jsonObject
-            val quick = Tasks.parse(test.getValue("input").jsonPrimitive.content, Moment(LocalDate.parse("2026-11-12"), 600))
+            val quick = Tasks.parse(test.getValue("input").jsonPrimitive.content, Moment(LocalDate.parse("2026-11-12"), 600), quickCourses)
             val expected = test.getValue("result").jsonObject
             assertEquals(test.toString(), expected.getValue("title").jsonPrimitive.content, quick.title)
             assertEquals(test.toString(), expected["date"]?.jsonPrimitive?.content, quick.date)
             assertEquals(test.toString(), expected["start"]?.jsonPrimitive?.int, quick.start)
             assertEquals(test.toString(), expected["due"]?.let { json.decodeFromJsonElement<TaskDeadline>(it) }, quick.due)
+            assertEquals(test.toString(), expected["end"]?.jsonPrimitive?.int, quick.end)
+            assertEquals(test.toString(), expected["priority"]?.jsonPrimitive?.int, quick.priority)
+            assertEquals(test.toString(), expected["course"]?.jsonPrimitive?.content, quick.course)
+            assertEquals(test.toString(), expected.getValue("marks").jsonArray.map { it.jsonArray[0].jsonPrimitive.int to it.jsonArray[1].jsonPrimitive.int }, quick.marks)
         }
     }
     @Test fun ownCoursesBecomeMeetingsAndOwnNamesFollowACourse() {

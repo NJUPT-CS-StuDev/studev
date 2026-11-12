@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Exam, Lab, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import type { Task } from '@/world/tasks';
-import { attendingLabs, migrateLabChoices, personalLabs } from '@/timetable/model/labs';
+import { attendingLabs, personalLabs } from '@/timetable/model/labs';
 import { customMeetings } from '@/timetable/model/courses';
 import { attendingExams } from '@/timetable/model/examAttendance';
-import { examAttendanceScope, timetableEdits, writePreferences, type Preferences, type TimetableEdits } from '@/world/preferences';
+import { examAttendanceScope, timetableEdits, type Preferences, type TimetableEdits } from '@/world/preferences';
 import { loadCalendar, loadClasses, loadClassExams, loadClassLabs, loadClassMeetings, loadExams, loadLabs, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf, holidayMap, type Timeline } from '@/world/events';
 import { courseName } from '@/world/names';
@@ -60,11 +60,6 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
     const [catalogLabs, setCatalogLabs] = useState<Lab[]>([]);
     const needMeetings = edits.added.length > 0 || Boolean(preview);
     const needAll = needMeetings || Boolean(prefs.labs?.classes?.length);
-    useEffect(() => {
-        if (!source || !prefs.labs) return;
-        const migrated = migrateLabChoices([...source.labs, ...catalogLabs], prefs.labs);
-        if (migrated !== prefs.labs) writePreferences(current => ({ ...current, labs: migrateLabChoices([...source.labs, ...catalogLabs], current.labs ?? {}) }));
-    }, [source, catalogLabs, prefs.labs]);
     useEffect(() => {
         if (!needAll) return;
         let live = true;

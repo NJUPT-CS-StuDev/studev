@@ -147,10 +147,6 @@ object CourseCatalog {
     /** A lab sheet's name across its versions: the file name without the date it was sent. */
     fun labSheet(lab: Lab) = top.hicancan.studev.world.Exams.sheetName(lab.source)
     fun labCourseKey(lab: Lab) = labSheet(lab) + ":" + Normalizer.normalize(lab.course.name, Normalizer.Form.NFKC).trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
-    fun migrateLabChoices(labs: List<Lab>, choices: top.hicancan.studev.me.LabChoices): top.hicancan.studev.me.LabChoices {
-        val drop = choices.drop.map { key -> labs.firstOrNull { TimetablePresentation.identity(it) == key }?.let(::labCourseKey) ?: key }.distinct()
-        return if (drop == choices.drop) choices else choices.copy(drop = drop)
-    }
     /**
      * What a person chose about labs, the same as src/campus/timetable/model/labs.ts: a lab sheet comes from outside the
      * teaching office, so each is theirs to take or leave whole; then a lab course or a single sitting.

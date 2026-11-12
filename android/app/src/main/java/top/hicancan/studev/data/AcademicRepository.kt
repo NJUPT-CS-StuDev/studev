@@ -146,7 +146,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val courseMeetings = (klass?.takeIf { schedule != null }?.let { this.schedule(it).meetings }.orEmpty() + schedule?.meetings.orEmpty()).distinctBy { it.id }
         val exams = klass?.let { effectiveExams(it, settings) }.orEmpty()
         val rawLabs = if (klass != null) personalLabs(klass, settings.labs) else emptyList()
-        val labs = top.hicancan.studev.timetable.CourseCatalog.attendingLabs(rawLabs, top.hicancan.studev.timetable.CourseCatalog.migrateLabChoices(rawLabs, settings.labs))
+        val labs = top.hicancan.studev.timetable.CourseCatalog.attendingLabs(rawLabs, settings.labs)
         return top.hicancan.studev.timetable.Courses.named(top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null, tasks, courseMeetings = courseMeetings), settings.timetableEdits(term.term).names, settings.events)
     }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {

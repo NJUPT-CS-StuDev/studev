@@ -1,6 +1,5 @@
 import type { Lab } from '@/world/facts';
 import { sheetName } from '@/world/exams';
-import { courseIdentity } from './courseColors';
 
 /**
  * A person's lab sources: their class and separately selected other classes. Lecture attendance has no part
@@ -21,10 +20,5 @@ export interface LabChoices { off?: string[]; drop?: string[]; skip?: string[]; 
 export const labSheet = (lab: Lab) => sheetName(lab.source);
 /** A sheet gives projects separate codes; attendance in the whole named lab course spans those codes. */
 export const labCourseKey = (lab: Lab) => `${labSheet(lab)}:${lab.course.name.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ')}`;
-export function migrateLabChoices(labs: Lab[], choices: LabChoices): LabChoices {
-    if (!choices.drop?.length) return choices;
-    const drop = [...new Set(choices.drop.map(key => { const lab = labs.find(lab => courseIdentity(lab) === key); return lab ? labCourseKey(lab) : key; }))];
-    return drop.every((key, i) => key === choices.drop![i]) && drop.length === choices.drop.length ? choices : { ...choices, drop };
-}
 export const attendingLabs = (labs: Lab[], choices: LabChoices | undefined) => labs.filter(lab =>
     !choices?.off?.includes(labSheet(lab)) && !choices?.drop?.includes(labCourseKey(lab)) && !choices?.skip?.includes(lab.id));

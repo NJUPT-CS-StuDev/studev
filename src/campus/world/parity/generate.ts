@@ -3,10 +3,10 @@
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { courseIdentity, courseTones, linkedCourse, sameCourse, timelineTones } from '@/timetable/model/courseColors';
-import { attendingLabs, labCourseKey, labSheet, personalLabs, migrateLabChoices } from '@/timetable/model/labs';
+import { attendingLabs, labCourseKey, labSheet, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { customMeetings, parseWeeks, personalCourseName, type CustomCourse } from '@/timetable/model/courses';
-import { migrateTaskTimes, parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
+import { moveTask, parseQuickTask, reminderAt, taskGroup, taskOrder, type Task, type TaskGroup } from '@/world/tasks';
 import { availableSlots } from '@/world/planning';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds } from '@/world/events';
@@ -116,6 +116,7 @@ const taskList: Task[] = [
     { id: 'f', title: '过期的', due: { date: '2026-11-01' }, modified: 'm' },
     { id: 'g', title: '下个月', date: '2026-12-20', start: 0, remind: [60], modified: 'm' },
 ];
+const quickCourses = [...new Map(labMeetings.map(meeting => [courseIdentity(meeting), { identity: courseIdentity(meeting), names: [courseName(meeting.course.name), courseShort(meeting.course.name)] }])).values()];
 const taskLine: Timeline = { ...labLine, tasks: taskList };
 const tasks = {
     now: taskNow, list: taskList,
@@ -123,16 +124,22 @@ const tasks = {
     groups: taskList.map(task => ({ id: task.id, group: taskGroup(task, taskNow) })),
     order: [...taskList].sort(taskOrder).map(task => task.id),
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
-    parse: ['明天 14:00 交毛概作业', '下周五 毛概两个作业', '今天下午3点 复习计网', '周一晚上8点半 开会', '读论文', '周日 洗衣服', '中午12点 吃饭', '周五23:59前交报告', '明天18:00截止交作业'].map(input => ({ input, result: parseQuickTask(input, { date: '2026-11-12', min: 600 }) })),
+    courses: quickCourses,
+    manual: [{ ...taskList[2]!, order: 1 }, { ...taskList[3]!, order: 0 }, ...taskList.filter((_, at) => at !== 2 && at !== 3)].sort(taskOrder).map(task => task.id),
+    moves: ([['d', 'today', 0], ['c', 'tomorrow', 1], ['a', 'tomorrow', 0], ['b', 'someday', 0], ['a', 'later', 0], ['g', 'today', 5]] as [string, TaskGroup, number][]).map(([id, group, index]) => {
+        const shown = taskList.filter(task => !task.parent && !task.done && taskGroup(task, taskNow) === group).sort(taskOrder);
+        return { id, group, index, shown: shown.map(task => task.id), changed: moveTask(taskList.find(task => task.id === id)!, group, index, shown, taskNow) };
+    }),
+    parse: ['明天 14:00 交毛概作业', '下周五 毛概两个作业', '今天下午3点 复习计网', '周一晚上8点半 开会', '读论文', '周日 洗衣服', '中午12点 吃饭', '周五23:59前交报告', '明天18:00截止交作业',
+        '大后天交实验报告', '今晚8点 背单词', '明早7点半跑步', '3天后 还书', '两周后 期中', '下下周三 答辩', '周末 大扫除', '这周六 聚餐', '11月20日 体测', '12/1 交论文', '25号 交电费', '十二号 开会',
+        '月底前 交材料', '晚上8点到10点 自习', '14:00-16:00 实验课', '下午2点到4点半 社团', '3点15 打电话', '三点 开组会', '9am 早会', '有一点难的作业', '周五前 交作业 !!!', '复习 #计网 明天', '复习 #操作系统 !高',
+        '1个月后 续费', '2月3日 返校', '2026-12-31 跨年', '明天早上8点 签到', '周三ddl 大作业', '第3-4节 上课'].map(input => ({ input, result: parseQuickTask(input, { date: '2026-11-12', min: 600 }, quickCourses) })),
 };
-const migrationInputs: Task[] = [{ id: 'old-day', title: '交作业', date: '2026-11-13', remind: [480], modified: '2026-11-12T15:00:00Z' }, taskList[0]!];
 const scheduleDate = '2026-11-09';
 const scheduleNow = { date: scheduleDate, min: 480 };
 const scheduled = eventsOn(labLine, scheduleDate);
 const slotRequest = { from: scheduleDate, to: scheduleDate, minutes: 30, earliest: 590, latest: 685 };
 const semantics = {
-    migration: migrationInputs.map(before => ({ before, after: migrateTaskTimes(before) })),
-    labMigration: [{ drop: [courseIdentity(classLabs[0]!)] }].map(before => ({ before, after: migrateLabChoices(classLabs, before) })),
     frames: [[], [{ id: 'early', title: '早起', date: scheduleDate, start: 0, end: 30, modified: 'm' }, { id: 'late', title: '晚间复习', date: scheduleDate, start: 1410, modified: 'm' }]].map(tasks => ({ tasks, expected: timeBounds(eventsOn({ ...labLine, tasks }, scheduleDate)) })),
     dueReminders: taskList.flatMap(task => (task.due?.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind, 'due') }))),
     scheduleDate, now: scheduleNow, request: slotRequest,

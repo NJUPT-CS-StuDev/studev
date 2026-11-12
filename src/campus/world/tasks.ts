@@ -21,6 +21,8 @@ export interface Task {
     parent?: string;
     /** The course it belongs to, by course identity. */
     course?: string;
+    /** Where the person put it among the tasks of its group, by dragging it there; those never moved follow, by time. */
+    order?: number;
     /** When it was done. */
     done?: string;
     /** When it last changed, and whether it was deleted: what a later sync merges by. */
@@ -42,9 +44,9 @@ export function sanitizeTask(raw: unknown): Task | null {
     if (!id || !title || !modified) return null;
     const task: Task = { id, title, modified };
     const note = text(record.note, 4000); if (note) task.note = note;
-    if (typeof record.date === 'string' && DATE.test(record.date)) task.date = record.date;
+    // A plan is a day and a start; a day alone is not one (that is a deadline, kept in `due`).
     const start = minute(record.start), end = minute(record.end);
-    if (task.date && start !== undefined) { task.start = start; if (end !== undefined && end > start) task.end = end; }
+    if (typeof record.date === 'string' && DATE.test(record.date) && start !== undefined) { task.date = record.date; task.start = start; if (end !== undefined && end > start) task.end = end; }
     if (record.due && typeof record.due === 'object') {
         const due = record.due as Record<string, unknown>;
         if (typeof due.date === 'string' && DATE.test(due.date)) {
@@ -57,6 +59,7 @@ export function sanitizeTask(raw: unknown): Task | null {
     if (record.priority === 1 || record.priority === 2 || record.priority === 3) task.priority = record.priority;
     const parent = text(record.parent, 80); if (parent) task.parent = parent;
     const course = text(record.course, 200); if (course) task.course = course;
+    if (typeof record.order === 'number' && Number.isFinite(record.order)) task.order = record.order;
     const done = text(record.done, 40); if (done) task.done = done;
     if (record.deleted === true) task.deleted = true;
     return task;
@@ -71,17 +74,8 @@ export function readTasks(): Task[] {
     try {
         const list = JSON.parse(raw);
         if (!Array.isArray(list)) return [];
-        const tasks = list.map(sanitizeTask).filter((task): task is Task => task !== null);
-        const migrated = tasks.map(migrateTaskTimes);
-        if (tasks.some((task, index) => task !== migrated[index])) { try { storage()?.setItem(KEY, JSON.stringify(migrated)); } catch { /* Readable even when storage cannot be updated. */ } }
-        return migrated;
+        return list.map(sanitizeTask).filter((task): task is Task => task !== null);
     } catch { return []; }
-}
-/** Persist the old date-only deadline as a deadline before any current reader uses it. Timed plans stay put. */
-export function migrateTaskTimes(task: Task): Task {
-    if (!task.date || task.start !== undefined) return task;
-    const { date, start, end, remind, ...rest } = task;
-    return { ...rest, due: task.due ?? { date, ...(remind?.length ? { remind } : {}) } };
 }
 export function writeTasks(change: (tasks: Task[]) => Task[]): Task[] {
     const next = change(readTasks());
@@ -131,10 +125,40 @@ export function taskWhen(task: Task): { date: string; time: number } | null {
         task.due ? { date: task.due.date, time: task.due.time ?? 1440 } : null].filter((at): at is { date: string; time: number } => at !== null);
     return times.sort((a, b) => a.date.localeCompare(b.date) || a.time - b.time)[0] ?? null;
 }
-/** In a group: the earliest first, then the most important, then the oldest. */
+const orderOf = (left: Task, right: Task) => left.order === undefined ? (right.order === undefined ? 0 : 1) : right.order === undefined ? -1 : left.order - right.order;
+/** In a group: where the person put it, if they did; then the earliest first, the most important, the oldest. */
 export const taskOrder = (left: Task, right: Task) =>
-    (taskWhen(left)?.date ?? '9999').localeCompare(taskWhen(right)?.date ?? '9999') || (taskWhen(left)?.time ?? 1440) - (taskWhen(right)?.time ?? 1440)
+    orderOf(left, right) || (taskWhen(left)?.date ?? '9999').localeCompare(taskWhen(right)?.date ?? '9999') || (taskWhen(left)?.time ?? 1440) - (taskWhen(right)?.time ?? 1440)
     || (right.priority ?? 0) - (left.priority ?? 0) || left.id.localeCompare(right.id);
+/** The groups a task can be dragged into, and the day each gives it: none for 还没排日期. */
+export const DROP_GROUPS: TaskGroup[] = ['today', 'tomorrow', 'someday'];
+/**
+ * A task dragged to `index` among the tasks shown in `group` (`shown`, in their order, the dragged one left out):
+ * what changes. Into another group it takes that group's day — a plan moves with its time, a deadline keeps its
+ * time, one with neither becomes due that day (whichever of plan and deadline comes first is what moves); into 还没排日期 it loses its days. Every task in the group then
+ * keeps the place it now has.
+ */
+export function moveTask(task: Task, group: TaskGroup, index: number, shown: Task[], now: Moment): Omit<Task, 'modified'>[] {
+    let moved: Task = task;
+    if (group !== taskGroup(task, now)) {
+        if (!DROP_GROUPS.includes(group)) return [];
+        if (group === 'someday') { const { date, start, end, remind, due, ...rest } = task; moved = rest; }
+        else {
+            const day = addDays(now.date, group === 'today' ? 0 : 1);
+            // What gives it its place in the list moves: its plan, or its deadline when that comes first.
+            const planFirst = task.date !== undefined && (!task.due || `${task.date}${String(task.end ?? task.start ?? 1440).padStart(4, '0')}` <= `${task.due.date}${String(task.due.time ?? 1440).padStart(4, '0')}`);
+            moved = planFirst ? { ...task, date: day } : { ...task, due: { ...task.due, date: day } };
+        }
+    }
+    const list = shown.filter(item => item.id !== task.id);
+    list.splice(Math.max(0, Math.min(index, list.length)), 0, moved);
+    return list.flatMap((item, at) => item === moved || item.order !== at ? [{ ...item, order: at }] : []).map(({ modified, ...rest }) => rest);
+}
+/** Several tasks changed at once, as one write. */
+export const saveTasks = (changed: Omit<Task, 'modified'>[]) => {
+    const ids = new Set(changed.map(task => task.id));
+    return writeTasks(tasks => [...tasks.filter(item => !ids.has(item.id)), ...changed.map(task => ({ ...task, modified: stamp() }))]);
+};
 /** What reminders a task can have: for one at a time, before it starts; for one due by a day's end, a time that day. */
 export const TIMED_REMINDERS = [{ minutes: 0, name: '准时' }, { minutes: 15, name: '提前 15 分钟' }, { minutes: 60, name: '提前 1 小时' }, { minutes: 1440, name: '提前 1 天' }];
 export const DAY_REMINDERS = [{ minutes: 8 * 60, name: '当天 8:00' }, { minutes: 12 * 60, name: '当天 12:00' }, { minutes: 20 * 60, name: '当天 20:00' }];
@@ -149,36 +173,137 @@ export function reminderAt(task: Task, remind: number, anchor: 'plan' | 'due' = 
     return { date, min };
 }
 
-const WEEKDAY_WORDS = '一二三四五六日天';
+const CN_DIGITS = '零一二三四五六七八九';
+/** "3", "十二", "两", "二十五": a number written either way; NaN when it is not one. */
+export function chineseNumber(text: string): number {
+    if (/^\d+$/.test(text)) return Number(text);
+    const value = text.replace(/两/g, '二');
+    if (!/^[零一二三四五六七八九十]+$/.test(value)) return NaN;
+    const ten = value.indexOf('十');
+    if (ten < 0) return value.length === 1 ? CN_DIGITS.indexOf(value) : NaN;
+    const tens = ten === 0 ? 1 : CN_DIGITS.indexOf(value.slice(0, ten));
+    const ones = ten === value.length - 1 ? 0 : CN_DIGITS.indexOf(value.slice(ten + 1));
+    return value.length > 3 || tens < 1 || ones < 0 ? NaN : tens * 10 + ones;
+}
+const NUM = '(\\d{1,2}|[一二两三四五六七八九十]{1,3})';
+const PART = '(凌晨|早上|早晨|上午|中午|下午|傍晚|晚上)';
+const CLOCK = `(?:(\\d{1,2})[:：](\\d{2})|${NUM}点(?:(半)|(一刻)|(三刻)|(\\d{1,2})分?)?|(\\d{1,2})\\s*(am|pm|AM|PM))`;
+/** A clock's minutes into the day, read with the part of the day said before it, or an evening one said before. */
+function clockOf(match: string[], at: number, part: string | undefined): number | null {
+    let hour: number, min = 0;
+    if (match[at] !== undefined) { hour = Number(match[at]); min = Number(match[at + 1]); }
+    else if (match[at + 2] !== undefined) {
+        // 一点 alone is as often "a little" as one o'clock: it is a time only with a part of the day or minutes.
+        if (match[at + 2] === '一' && !part && !match[at + 3] && !match[at + 4] && !match[at + 5] && !match[at + 6]) return null;
+        hour = chineseNumber(match[at + 2]!);
+        min = match[at + 3] ? 30 : match[at + 4] ? 15 : match[at + 5] ? 45 : match[at + 6] ? Number(match[at + 6]) : 0;
+    } else { hour = Number(match[at + 7]); if (/pm/i.test(match[at + 8]!) && hour < 12) hour += 12; if (/am/i.test(match[at + 8]!) && hour === 12) hour = 0; }
+    if (Number.isNaN(hour) || hour > 24 || min > 59) return null;
+    if (part && /下午|傍晚|晚上/.test(part) && hour < 12) hour += 12;
+    else if (part === '中午' && hour < 6) hour += 12;
+    else if (!part && match[at + 2] !== undefined && hour >= 1 && hour <= 5) hour += 12;
+    return hour === 24 ? null : hour * 60 + min;
+}
+const weekdayOfDate = (date: string) => (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7 + 1;
+const validDate = (year: number, month: number, day: number) => {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date.toISOString().slice(0, 10) : null;
+};
+
+/** What one line typed for a task was read as. `marks` are the stretches of the line that were read, to show. */
+export interface QuickTask { title: string; date?: string; start?: number; end?: number; due?: Task['due']; priority?: Task['priority']; course?: string; marks: [number, number][] }
+
 /**
- * What a task typed in one line says of its day and time: 今天、明天、后天, 周三 (the next one, today included),
- * 下周三, and a clock such as 14:30 or 下午3点. The words are taken out of the title; anything else stays in it.
+ * What a task typed in one line says, as a person would say it: a day (今天、明晚、大后天、周三、下周五、周末、
+ * 3天后、11月20日、20号、月底), a time or a stretch of it (14:30、下午3点半、3点15、晚上8点到10点、9am), a deadline
+ * (截止、之前、ddl, or 前 right after the day), how important (!、!!、!!!) and, after #, one of the person's courses.
+ * What is read is taken out of the title. A day and a time plan when to do it; a day alone, or a deadline word, is
+ * when it is due.
  */
-export function parseQuickTask(input: string, now: Moment): { title: string; date?: string; start?: number; due?: Task['due'] } {
-    let title = input.trim();
-    let date: string | undefined;
-    let start: number | undefined;
-    const take = (pattern: RegExp, read: (match: RegExpExecArray) => void) => {
-        const match = pattern.exec(title);
-        if (!match) return;
-        read(match);
-        title = (title.slice(0, match.index) + title.slice(match.index + match[0].length)).replace(/\s+/g, ' ').trim();
+export function parseQuickTask(input: string, now: Moment, courses: { identity: string; names: string[] }[] = []): QuickTask {
+    const line = input.trim();
+    const used: [number, number][] = [];
+    const free = (from: number, to: number) => used.every(([left, right]) => to <= left || right <= from);
+    /** The first match of a pattern on what is not read yet; it is marked read when `read` accepts it. */
+    const take = (pattern: RegExp, read: (match: RegExpExecArray) => boolean | void) => {
+        const global = new RegExp(pattern.source, 'g' + pattern.flags.replace('g', ''));
+        for (let match = global.exec(line); match; match = global.exec(line)) {
+            const span: [number, number] = [match.index, match.index + match[0].length];
+            // A match on what is read already, or not accepted, may still leave one starting just after it.
+            if (!match[0] || !free(...span) || read(match) === false) { global.lastIndex = match.index + 1; continue; }
+            used.push(span);
+            return span;
+        }
+        return null;
     };
-    take(/(今天|明天|后天)/, match => { date = addDays(now.date, ['今天', '明天', '后天'].indexOf(match[1]!)); });
-    if (!date) take(/(下)?(?:周|星期|礼拜)([一二三四五六日天])/, match => {
-        const weekday = WEEKDAY_WORDS.indexOf(match[2]!) % 7 + 1;
-        const today = (new Date(`${now.date}T00:00:00Z`).getUTCDay() + 6) % 7 + 1;
-        date = match[1] ? addDays(now.date, 7 - today + weekday) : addDays(now.date, (weekday - today + 7) % 7);
+    let date: string | undefined, start: number | undefined, end: number | undefined, part: string | undefined;
+    let deadline = false, priority: Task['priority'], course: string | undefined;
+    const days = (count: number) => addDays(now.date, count);
+    // The day.
+    const daySpan = take(/(大后天|明天早上|明天晚上|后天|明天|今天|今晚|今早|明晚|明早)/, match => {
+        const word = match[1]!;
+        date = days(word.startsWith('大后') ? 3 : word.startsWith('后') ? 2 : word.startsWith('明') ? 1 : 0);
+        if (/晚/.test(word)) part = '晚上'; else if (/早/.test(word)) part = '早上';
+    }) ?? take(new RegExp(`${NUM}\\s*(天|周|个星期|星期|个月)(?:后|以后|之后)`), match => {
+        const count = chineseNumber(match[1]!);
+        if (!(count > 0 && count < 100)) return false;
+        if (match[2] === '天') date = days(count);
+        else if (match[2] === '个月') { const [year, month, day] = now.date.split('-').map(Number) as [number, number, number]; const total = month - 1 + count, last = new Date(Date.UTC(year + Math.floor(total / 12), total % 12 + 1, 0)).getUTCDate(); date = validDate(year + Math.floor(total / 12), total % 12 + 1, Math.min(day, last)) ?? undefined; }
+        else date = days(7 * count);
+    }) ?? take(/(下下|下|这|本)?(?:个)?(?:周|星期|礼拜)([一二三四五六日天末])/, match => {
+        const weekday = match[2] === '末' ? 6 : '一二三四五六日天'.indexOf(match[2]!) % 7 + 1;
+        const today = weekdayOfDate(now.date);
+        const ahead = match[1] === '下下' ? 14 : match[1] === '下' ? 7 : 0;
+        date = ahead ? days(ahead - today + weekday) : days((weekday - today + 7) % 7);
+    }) ?? take(/(?<![第\d])(?:(\d{4})\s*[年\-/.])?(\d{1,2})\s*[月\-/.]\s*(\d{1,2})(?![\d节周页章题])(?:\s*[日号])?/, match => {
+        const [year, month] = now.date.split('-').map(Number) as [number, number];
+        const wanted = Number(match[2]), day = Number(match[3]);
+        let found = validDate(match[1] ? Number(match[1]) : year, wanted, day);
+        if (found && !match[1] && found < now.date && wanted < month) found = validDate(year + 1, wanted, day);
+        if (!found) return false;
+        date = found;
+    }) ?? take(new RegExp(`${NUM}\\s*[日号]`), match => {
+        const day = chineseNumber(match[1]!);
+        const [year, month] = now.date.split('-').map(Number) as [number, number];
+        let found = validDate(year, month, day);
+        if (found && found < now.date) found = month === 12 ? validDate(year + 1, 1, day) : validDate(year, month + 1, day);
+        if (!found) return false;
+        date = found;
+    }) ?? take(/月底/, () => {
+        const [year, month] = now.date.split('-').map(Number) as [number, number];
+        date = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
     });
-    take(/(\d{1,2})[:：](\d{2})/, match => { const hour = Number(match[1]), min = Number(match[2]); if (hour < 24 && min < 60) start = hour * 60 + min; });
-    if (start === undefined) take(/(上午|中午|下午|晚上)?(\d{1,2})点(半)?/, match => {
-        let hour = Number(match[2]);
-        if ((match[1] === '下午' || match[1] === '晚上') && hour < 12) hour += 12;
-        if (match[1] === '中午' && hour < 6) hour += 12;
-        if (hour < 24) start = hour * 60 + (match[3] ? 30 : 0);
+    // The time, or a stretch of it.
+    const timeSpan = take(new RegExp(`${PART}?\\s*${CLOCK}\\s*(?:-|~|–|—|到|至)\\s*${PART}?\\s*${CLOCK}`), match => {
+        const from = clockOf(match, 2, match[1] ?? part), to = clockOf(match, 12, match[11] ?? match[1] ?? part);
+        if (from === null || to === null) return false;
+        start = from; end = to > from ? to : to + 720 > from && to + 720 < 1440 ? to + 720 : undefined;
+        if (end === undefined) return false;
+    }) ?? take(new RegExp(`${PART}?\\s*${CLOCK}`), match => {
+        const at = clockOf(match, 2, match[1] ?? part);
+        if (at === null) return false;
+        start = at;
     });
+    // A deadline: said in words, or 前 right after the day or the time.
+    take(/(截止|之前|以前|ddl|DDL)/, () => { deadline = true; });
+    const after = Math.max(daySpan?.[1] ?? -1, timeSpan?.[1] ?? -1);
+    if (after >= 0 && line[after] === '前' && free(after, after + 1)) { used.push([after, after + 1]); deadline = true; }
+    take(/[!！](高|中|低)|[!！]{1,3}/, match => {
+        priority = match[1] ? ({ 高: 3, 中: 2, 低: 1 } as const)[match[1] as '高' | '中' | '低'] : match[0].length as 1 | 2 | 3;
+    });
+    take(/[#＃](\S+)/, match => {
+        const word = match[1]!.toLowerCase();
+        const found = courses.find(item => item.names.some(name => name.toLowerCase() === word))
+            ?? courses.find(item => item.names.some(name => name.toLowerCase().includes(word)));
+        if (!found) return false;
+        course = found.identity;
+    });
+    used.sort((left, right) => left[0] - right[0]);
+    let title = '', at = 0;
+    for (const [from, to] of used) { title += line.slice(at, from) + ' '; at = to; }
+    title = (title + line.slice(at)).replace(/\s+/g, ' ').replace(/^[，,、\s]+|[，,、\s]+$/g, '').trim() || line;
     if (start !== undefined && !date) date = now.date;
-    const deadline = date && (start === undefined || /截止|之前|^前/.test(title));
-    if (deadline && date) return { title: title.replace(/截止|之前|^前/, '').trim() || input.trim(), due: { date, ...(start !== undefined ? { time: start } : {}) } };
-    return { title: title || input.trim(), ...(date ? { date } : {}), ...(start !== undefined ? { start } : {}) };
+    const extra = { ...(priority ? { priority } : {}), ...(course ? { course } : {}), marks: used };
+    if (date && (start === undefined || deadline)) return { title, due: { date, ...(start !== undefined ? { time: start } : {}) }, ...extra };
+    return { title, ...(date ? { date } : {}), ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...extra };
 }
