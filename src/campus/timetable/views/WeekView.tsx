@@ -1,5 +1,5 @@
 import type { TeachingMeeting } from '@/world/facts';
-import { courseToneStyle } from '@/timetable/model/courseColors';
+import { courseIdentity, courseToneStyle, timelineTones } from '@/timetable/model/courseColors';
 import { timetableCells } from '@/timetable/model/presentation';
 import { eventsOn, meetingAround, weekOfDate, type CampusEvent, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
@@ -14,7 +14,8 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
     const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index));
     const week = weekOfDate(line.term, monday);
     const events = days.map(date => eventsOn(line, date));
-    const cells = week ? timetableCells(line.meetings, week) : [];
+    const tones = timelineTones(line);
+    const cells = week ? timetableCells(line.meetings, week, tones) : [];
     const ghosts = week ? previewRows.filter(meeting => meeting.weeks.includes(week)) : [];
     let columns = wide ? 7 : 5;
     days.forEach((_, index) => { if (events[index]!.length || cells.some(cell => cell.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
@@ -52,9 +53,8 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
                             if (start === undefined || end === undefined) return null;
                             // Off this week or not, a lesson opens: one not on this week shows where it next meets.
                             const event = events[index]!.find(item => item.meeting?.id === cell.id) ?? meetingAround(line, cell.id, monday);
-                            // An exam at the same time outranks the lesson, which steps back.
-                            const underExam = events[index]!.some(item => item.kind === 'exam' && item.start < end && start < item.end);
-                            const quiet = cell.state !== 'active' || underExam;
+                            // A lab or an exam at the same time outranks the lesson, which steps back.
+                            const quiet = cell.state !== 'active' || Boolean(event?.covered && event.date === date);
                             const shared = lessons.some(other => clashes(cell, other));
                             const width = 100 / cell.columns;
                             return <button key={cell.id} className={`t ${quiet ? 'quiet' : ''} ${!quiet && past(end) ? 'past' : ''}`}                                 style={{ top: y(start) + 1, height: y(end) - y(start) - 2, ...(shared ? { left: `calc(${cell.slot * width}% + 2px)`, right: 'auto', width: `calc(${width}% - 4px)` } : {}), ...courseToneStyle(cell.colourIndex) }}
@@ -63,8 +63,9 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
                             </button>;
                         })}
                         {events[index]!.filter(event => event.kind !== 'class').map(event => (
-                            <button key={event.id} className={`t ${event.kind} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`} style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2) }} onClick={() => onOpen(event)}>
-                                {wide ? event.name : event.short}<small>{event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : ''}</small>
+                            <button key={event.id} className={`t ${event.kind} ${event.covered ? 'quiet' : !event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`}
+                                style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), ...(event.lab ? courseToneStyle(tones.get(courseIdentity(event.lab))!) : {}) }} onClick={() => onOpen(event)}>
+                                {wide ? event.name : event.short}<small>{event.lab ? `实验${event.room ? ` · ${wide ? roomLabel(event.room) : roomShort(event.room)}` : ''}` : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : ''}</small>
                             </button>
                         ))}
                         {ghosts.filter(meeting => meeting.weekday === index + 1).map(meeting => {

@@ -1,5 +1,5 @@
 // Everything the three entries read from one campus release, fetched once per page.
-import type { Exam, ExamChange, ExamSource, Room, RoomDay, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm, TeachingWeek } from '@/world/facts';
+import type { Exam, ExamChange, ExamSource, Lab, Room, RoomDay, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm, TeachingWeek } from '@/world/facts';
 import { DATA_RELEASE } from '@/world/config';
 import { fetchJson } from '@/world/fetch';
 
@@ -57,6 +57,15 @@ export const loadClassExams = async (id: string): Promise<Exam[]> => {
     const { classes } = await examIndex();
     if (!classes.includes(id)) return [];
     return (await fetchJson<{ exams: Exam[] }>(`${base}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).exams;
+};
+
+/** Every lab sitting of the term: for a course, a teacher or a room. */
+export const loadLabs = once(() => DATA_RELEASE.labs ? fetchJson<Lab[]>(`${base}/labs/${DATA_RELEASE.labs}/labs.json`) : Promise.resolve([] as Lab[]));
+const labIndex = once(() => DATA_RELEASE.labs ? fetchJson<{ classes: string[] }>(`${base}/labs/${DATA_RELEASE.labs}/index.json`) : Promise.resolve({ classes: [] as string[] }));
+/** A class's lab sittings; a class with none has no file. */
+export const loadClassLabs = async (id: string): Promise<Lab[]> => {
+    if (!(await labIndex()).classes.includes(id)) return [];
+    return (await fetchJson<{ labs: Lab[] }>(`${base}/labs/${DATA_RELEASE.labs}/classes/${encodeURIComponent(id)}.json`)).labs;
 };
 
 const days = new Map<string, Promise<RoomDay | null>>();

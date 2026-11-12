@@ -59,7 +59,14 @@ import java.time.LocalDate
             else -> emptyList()
         }
         val exams = if (route.whoType == "course") runCatching { repo.allExams().filter { Names.course(it.course.name) == route.whoId } }.getOrDefault(emptyList()) else if (route.whoType == "class") runCatching { repo.exams(route.whoId) }.getOrDefault(emptyList()) else emptyList()
-        others = CampusLine(term, state.periods, meetings, exams, state.holidays, null)
+        val labs = when (route.whoType) {
+            "class" -> runCatching { repo.labs(route.whoId) }.getOrDefault(emptyList())
+            "teacher" -> runCatching { repo.allLabs().filter { route.whoId in it.teachers } }.getOrDefault(emptyList())
+            "course" -> runCatching { repo.allLabs().filter { Names.course(it.course.name) == route.whoId } }.getOrDefault(emptyList())
+            "room" -> runCatching { repo.allLabs().filter { it.room == route.whoId } }.getOrDefault(emptyList())
+            else -> emptyList()
+        }
+        others = CampusLine(term, state.periods, meetings, labs, exams, state.holidays, null)
     }
     val line = if (isMe) model.myLine(state, settings) else others
     if (line == null) { Box(Modifier.fillMaxSize()); return }
@@ -176,12 +183,15 @@ import java.time.LocalDate
     val fg = when (event.kind) { "exam" -> mark.onExam; "run" -> Ink.muted; else -> faded(tones?.fg ?: Ink.text, .42f) }
     val border = when (event.kind) { "exam" -> mark.exam; "run" -> Ink.line; else -> faded(tones?.border ?: Ink.line, .55f) }
     Box(modifier) {
-        TileBox(if (big) event.name else event.short, if (big) "${hm(event.start)}–${hm(event.end)}${if (event.room != null) " · ${Names.room(event.room)}" else ""}" else Names.roomShort(event.room), bg, border, fg, Modifier.fillMaxSize(), big, onClick)
+        val lab = event.lab
+        val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
+            else if (lab != null) listOf("实验", Names.roomShort(event.room)).filter { it.isNotEmpty() }.joinToString(" · ") else Names.roomShort(event.room)
+        TileBox(if (big) event.name else event.short, note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
     }
 }
-@Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?) {
-    val base = modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(1.dp, border, RoundedCornerShape(8.dp))
+@Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?, strong: Boolean = false) {
+    val base = modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(if (strong) 2.dp else 1.dp, border, RoundedCornerShape(8.dp))
     Column((if (onClick != null) base.clickable(onClick = onClick) else base).padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(name, color = fg, textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 14.5.sp else 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = if (big) 19.sp else 14.sp))
         if (note.isNotEmpty()) Text(note, color = fg.copy(alpha = .82f), textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 12.5.sp else 10.sp, lineHeight = if (big) 17.sp else 13.sp))
@@ -190,8 +200,9 @@ import java.time.LocalDate
 
 @Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, onOpen: (LineEvent) -> Unit) {
     val today = day == now.date
-    val events = remember(line, day) { line.on(day) }
-    val tones = remember(line) { TimetablePresentation.tones(line.meetings) }
+    // What a lab or an exam covers is not drawn here: the day shows what one goes to. Its sheet names what it covers.
+    val events = remember(line, day) { line.on(day).filter { !it.covered } }
+    val tones = remember(line) { TimetablePresentation.tones(line) }
     val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         if (isMe && today) NextBlock(line, now, route, walk)
@@ -235,7 +246,7 @@ import java.time.LocalDate
             @Composable fun gap(start: Int, end: Int) = Plain("空 ${durationText(end - start)} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.rooms(day to start) })
             if (awake && live.first().start - free >= 45) gap(free, live.first().start)
             live.forEachIndexed { index, event ->
-                Tile(event, event.meeting?.let { tones[TimetablePresentation.identity(it)] }, false, Modifier.padding(start = 44.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
+                Tile(event, event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: event.lab?.let { tones[TimetablePresentation.identity(it)] }, false, Modifier.padding(start = 44.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
                 val next = live.getOrNull(index + 1)
                 val start = maxOf(if (today) maxOf(event.end, now.min) else event.end, opens)
                 if (next != null && next.start - start >= 30 && next.start - event.end >= 45) gap(start, next.start)
@@ -288,7 +299,8 @@ private const val DAY_END = 21 * 60 + 8
     val days = remember(monday) { (0L until 7L).map { monday.plusDays(it) } }
     val week = line.weekOf(monday)
     val events = remember(line, monday) { days.map(line::on) }
-    val cells = remember(line, week) { if (week != null) TimetablePresentation.cells(line.meetings, week) else emptyList() }
+    val lineTones = remember(line) { TimetablePresentation.tones(line) }
+    val cells = remember(line, week) { if (week != null) TimetablePresentation.cells(line.meetings, week, lineTones) else emptyList() }
     val shownGhosts = if (week != null) ghosts.filter { week in it.weeks } else emptyList()
     var columns = 5
     days.forEachIndexed { index, _ -> if (events[index].isNotEmpty() || cells.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
@@ -344,8 +356,8 @@ private const val DAY_END = 21 * 60 + 8
                             val x = if (shared) slotWidth * cell.slot else 0.dp
                             // Off this week or not, a lesson opens: one not on this week shows where it next meets.
                             val event = events[index].firstOrNull { it.meeting?.id == cell.id } ?: line.meetingAround(cell.id, monday)
-                            // An exam at the same time outranks the lesson, which steps back.
-                            val quiet = cell.state != "active" || events[index].any { it.kind == "exam" && it.start < end && start < it.end }
+                            // A lab or an exam at the same time outranks the lesson, which steps back.
+                            val quiet = cell.state != "active" || (event != null && event.covered && event.date == date)
                             val past = date < now.date || (date == now.date && end <= now.min)
                             val tones = tone(cell.colourIndex)
                             val blend = if (quiet || past) .4f else 0f
@@ -353,8 +365,8 @@ private const val DAY_END = 21 * 60 + 8
                             TileBox(Names.courseShort(cell.course), if (quiet) cell.label else Names.roomShort(cell.room), mix(tones.bg), mix(tones.border), mix(tones.fg),
                                 Modifier.padding(horizontal = 2.dp).width(slotWidth - 4.dp).offset(x = x, y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
-                        events[index].filter { it.kind != "class" }.forEach { event ->
-                            Tile(event, null, false, Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
+                        events[index].filter { it.kind != "class" }.sortedBy { it.covered.not() }.forEach { event ->
+                            Tile(event, event.lab?.let { lineTones[TimetablePresentation.identity(it)] }, event.lab != null && (event.covered || date < now.date || (date == now.date && event.end <= now.min)), Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->
                             val start = period.getValue(meeting.periods.first()).first
@@ -434,7 +446,7 @@ private const val DAY_END = 21 * 60 + 8
                         // The term is shown whole: what has gone by looks the same as what is to come.
                         events.any { it.kind == "exam" } -> "exam"
                         date in line.holidays -> "hol"
-                        events.any { it.kind == "class" } -> "has"
+                        events.any { it.kind == "class" || it.kind == "lab" } -> "has"
                         else -> ""
                     }
                 }

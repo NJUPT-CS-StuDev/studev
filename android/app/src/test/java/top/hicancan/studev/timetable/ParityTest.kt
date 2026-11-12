@@ -20,7 +20,7 @@ class ParityTest {
     private val periods = json.decodeFromJsonElement<List<TeachingPeriod>>(golden.getValue("periods"))
     private val holidays = CampusLine.holidays(json.decodeFromJsonElement<List<CalendarTerm>>(golden.getValue("calendar")))
     private val run = RunPlan(json.decodeFromJsonElement<MorningRun>(golden.getValue("run")), json.decodeFromJsonElement<List<String>>(golden.getValue("runDays")), 5)
-    private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), holidays, run)
+    private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), emptyList(), holidays, run)
     private fun brief(event: LineEvent) = buildJsonObject {
         put("kind", event.kind); put("name", event.name); put("short", event.short); put("start", event.start); put("end", event.end); put("room", event.room)
     }
@@ -38,6 +38,31 @@ class ParityTest {
             val row = case.jsonObject
             val got = Recommendations.of(places, row.getValue("day").jsonPrimitive.int, row.getValue("hour").jsonPrimitive.int * 60 + row.getValue("minute").jsonPrimitive.int, from)
             assertEquals(row.toString(), row.getValue("expected").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("state").jsonPrimitive.content }, got.map { it.place.id to it.status.name.lowercase() })
+        }
+    }
+    @Test fun labsTakeTheirPlaceAmongLessonsAndExams() {
+        val labs = golden.getValue("labs").jsonObject
+        val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(labs.getValue("meetings"))
+        val classLabs = json.decodeFromJsonElement<List<Lab>>(labs.getValue("labs"))
+        val labLine = CampusLine(term, periods, meetings, classLabs, listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null)
+        fun labBrief(event: LineEvent) = JsonObject(brief(event) + mapOf("covered" to JsonPrimitive(event.covered), "lab" to (event.lab?.let { JsonPrimitive(it.id) } ?: JsonNull)))
+        labs.getValue("days").jsonArray.forEach { day ->
+            val date = LocalDate.parse(day.jsonObject.getValue("date").jsonPrimitive.content)
+            assertEquals(date.toString(), day.jsonObject.getValue("events"), JsonArray(labLine.on(date).map(::labBrief)))
+        }
+        val dayOff = labs.getValue("dayOff").jsonObject
+        val off = json.decodeFromJsonElement<Lab>(dayOff.getValue("lab"))
+        assertEquals(dayOff.getValue("events"), JsonArray(CampusLine(term, periods, meetings, listOf(off), emptyList(), holidays, null).on(LocalDate.parse(off.date)).map(::labBrief)))
+        labs.getValue("moments").jsonArray.forEach { item ->
+            val at = item.jsonObject.getValue("now").jsonObject
+            assertEquals(item.jsonObject.getValue("next"), labLine.next(Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int))?.let(::labBrief) ?: JsonNull)
+        }
+        assertEquals(labs.getValue("tones").jsonObject.mapValues { it.value.jsonPrimitive.int }, TimetablePresentation.tones(labLine))
+        assertEquals(labs.getValue("last").jsonPrimitive.content, labLine.lastLesson().toString())
+        labs.getValue("personal").jsonArray.forEach { item ->
+            val kept = item.jsonObject.getValue("kept").jsonArray.map { it.jsonPrimitive.content }
+            val got = CourseCatalog.effectiveLabs(classLabs, meetings, meetings.filter { it.id in kept }, json.decodeFromJsonElement(item.jsonObject.getValue("added")), json.decodeFromJsonElement(item.jsonObject.getValue("all")))
+            assertEquals(item.jsonObject.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, got.map { it.id })
         }
     }
     @Test fun everyClassWeekMatchesEveryWebCell() {

@@ -115,7 +115,7 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
         const exam = events.some(event => event.kind === 'exam');
         const holiday = line.holidays.get(date);
         // An exam outranks a lesson: it is rarer, and it matters more. The term is shown whole: a lesson or exam already gone by looks the same as one to come; today is marked on its own.
-        const kind = exam ? 'exam' : holiday ? 'hol' : events.some(event => event.kind === 'class') ? 'has' : '';
+        const kind = exam ? 'exam' : holiday ? 'hol' : events.some(event => event.kind === 'class' || event.kind === 'lab') ? 'has' : '';
         if (kind) present.add(kind);
         return <button key={date} className={`dc ${kind} ${today}`} title={holiday ?? undefined} aria-label={`${dateLabel(date)}${holiday ? ` ${holiday}` : ''}${exam ? ' 有考试' : ''}`}
             onClick={() => { const first = events.find(event => event.kind === 'exam'); if (first) onOpen(first); else onPick(date); }}>{label}</button>;

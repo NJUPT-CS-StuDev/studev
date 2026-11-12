@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Exam, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
+import type { Exam, Lab, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
+import { personalLabs } from '@/timetable/model/labs';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { examAttendanceScope, timetableEdits, type Preferences } from '@/world/preferences';
-import { loadCalendar, loadClasses, loadClassExams, loadClassMeetings, loadExams, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
+import { loadCalendar, loadClasses, loadClassExams, loadClassLabs, loadClassMeetings, loadExams, loadLabs, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf, holidayMap, type Timeline } from '@/world/events';
 import { courseName } from '@/world/names';
 
@@ -22,7 +23,7 @@ const distinct = (meetings: TeachingMeeting[]) => [...new Map(meetings.map(meeti
 export function useTimeline(who: Who, prefs: Preferences, ready: boolean, preview: string | null) {
     const [base, setBase] = useState<Base | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [source, setSource] = useState<{ key: string; meetings: TeachingMeeting[]; exams: Exam[] } | null>(null);
+    const [source, setSource] = useState<{ key: string; meetings: TeachingMeeting[]; labs: Lab[]; exams: Exam[] } | null>(null);
     const [previewRows, setPreviewRows] = useState<TeachingMeeting[]>([]);
 
     useEffect(() => {
@@ -37,9 +38,12 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         if (!ready || (who.type === 'me' && !prefs.class)) return;
         let live = true;
         const load = classId
-            ? Promise.all([loadClassMeetings(classId), loadClassExams(classId)]).then(([meetings, exams]) => ({ meetings, exams }))
-            : Promise.all([loadMeetings(), who.type === 'course' ? loadExams() : Promise.resolve([] as Exam[])]).then(([all, exams]) => ({
+            ? Promise.all([loadClassMeetings(classId), loadClassLabs(classId), loadClassExams(classId)]).then(([meetings, labs, exams]) => ({ meetings, labs, exams }))
+            : Promise.all([loadMeetings(), loadLabs(), who.type === 'course' ? loadExams() : Promise.resolve([] as Exam[])]).then(([all, labs, exams]) => ({
                 exams: who.type === 'course' ? exams.filter(exam => courseName(exam.course.name) === who.id) : [],
+                labs: who.type === 'teacher' ? labs.filter(lab => lab.teachers.includes(who.id))
+                    : who.type === 'course' ? labs.filter(lab => courseName(lab.course.name) === who.id)
+                        : who.type === 'room' ? labs.filter(lab => lab.room === who.id) : [],
                 meetings: who.type === 'teacher' ? all.filter(meeting => meeting.teachers.some(teacher => teacher.name === who.id))
                     : who.type === 'course' ? all.filter(meeting => courseName(meeting.course.name) === who.id)
                         : who.type === 'room' ? all.filter(meeting => meeting.room === who.id) : [],
@@ -51,14 +55,16 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
     const term = base?.term.term ?? '';
     const edits = useMemo(() => who.type === 'me' ? timetableEdits(prefs, term) : { hidden: [] as string[], added: [] as string[] }, [prefs, term, who.type]);
     const [catalogRows, setCatalogRows] = useState<TeachingMeeting[]>([]);
+    const [catalogLabs, setCatalogLabs] = useState<Lab[]>([]);
     const needAll = edits.added.length > 0 || Boolean(preview);
     useEffect(() => {
         if (!needAll) return;
         let live = true;
-        loadMeetings().then(all => {
+        Promise.all([loadMeetings(), edits.added.length ? loadLabs() : Promise.resolve([] as Lab[])]).then(([all, labs]) => {
             if (!live) return;
             const wanted = new Set(edits.added);
             setCatalogRows(all.filter(meeting => wanted.has(meeting.teaching_class.id)));
+            setCatalogLabs(labs);
             setPreviewRows(preview ? all.filter(meeting => meeting.teaching_class.id === preview) : []);
         }).catch(() => undefined);
         return () => { live = false; };
@@ -76,7 +82,8 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         const exams = who.type === 'me' ? attendingExams(source.exams, choices, codes) : source.exams;
         const grade = gradeOf(classInfo?.grade, base.term);
         const runOn = who.type === 'me' && base.run && (prefs.run?.on ?? (grade !== null && grade <= 2));
-        const line: Timeline = { term: base.term, periods: base.periods, meetings, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null };
+        const labs = who.type === 'me' ? personalLabs(source.labs, source.meetings, own, added, catalogLabs) : source.labs;
+        const line: Timeline = { term: base.term, periods: base.periods, meetings, labs, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null };
         return { loaded: { ...base, line, own, added, classInfo }, error, previewRows };
-    }, [base, catalogRows, classId, edits.hidden, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
+    }, [base, catalogLabs, catalogRows, classId, edits.hidden, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
 }

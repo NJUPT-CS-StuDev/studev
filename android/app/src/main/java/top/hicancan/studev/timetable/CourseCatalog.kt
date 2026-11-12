@@ -1,6 +1,7 @@
 package top.hicancan.studev.timetable
 
 import top.hicancan.studev.data.CoursePlan
+import top.hicancan.studev.data.Lab
 import top.hicancan.studev.data.TeachingMeeting
 import top.hicancan.studev.me.TimetableEdits
 import top.hicancan.studev.world.Names
@@ -133,6 +134,18 @@ object CourseCatalog {
         val addedMeetings = catalog.filter { catalogId(it) in wanted }.flatMap { it.meetings }
         val ownIds = own.mapTo(HashSet()) { it.id }
         return own + addedMeetings.filter { it.id !in ownIds }
+    }
+
+    /**
+     * A person's labs, the same answer as src/campus/timetable/model/labs.ts. They are their class's, less those of
+     * a course they took off their timetable, plus those a course added from other classes brings: that course's
+     * labs for those classes. `kept` are the class's own lessons still on the timetable, `added` the lessons brought in.
+     */
+    fun effectiveLabs(classLabs: List<Lab>, classMeetings: List<TeachingMeeting>, kept: List<TeachingMeeting>, added: List<TeachingMeeting>, allLabs: List<Lab>): List<Lab> {
+        val still = kept.map { TimetablePresentation.identity(it) }.toSet()
+        val dropped = classMeetings.map { TimetablePresentation.identity(it) }.filter { it !in still }.toSet()
+        val brought = allLabs.filter { lab -> added.any { meeting -> TimetablePresentation.identity(meeting) == TimetablePresentation.identity(lab) && meeting.classes.any { it in lab.classes } } }
+        return (classLabs.filter { TimetablePresentation.identity(it) !in dropped } + brought).distinctBy { it.id }.sortedWith(compareBy({ it.date }, { it.start }, { it.id }))
     }
 
     private fun groupCourses(meetings: List<TeachingMeeting>, source: String, hidden: Set<String>): List<TimetableCourse> {

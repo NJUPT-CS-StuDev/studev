@@ -16,8 +16,9 @@ object TimetablePresentation {
     private const val whitespaceClass = "[\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]"
     private val whitespace = Regex("$whitespaceClass+")
     private val trimWhitespace = Regex("^$whitespaceClass+|$whitespaceClass+$")
-    fun identity(meeting: TeachingMeeting): String = meeting.course.code?.replace(trimWhitespace, "")?.uppercase(Locale.ROOT)?.takeIf { it.isNotEmpty() }
-        ?: meeting.course.name.replace(whitespace, " ").trim(' ')
+    fun identity(code: String?, name: String): String = code?.replace(trimWhitespace, "")?.uppercase(Locale.ROOT)?.takeIf { it.isNotEmpty() } ?: name.replace(whitespace, " ").trim(' ')
+    fun identity(meeting: TeachingMeeting): String = identity(meeting.course.code, meeting.course.name)
+    fun identity(lab: top.hicancan.studev.data.Lab): String = identity(lab.course.code, lab.course.name)
     /** Where each tone sits on the hue circle, in 30° steps; same as src/campus/timetable/model/courseColors.ts. */
     private val tonePosition = listOf(7, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 6)
     /** Which tone to prefer when all else is equal: the first three 120° apart, the first six 60° apart. */
@@ -25,8 +26,11 @@ object TimetablePresentation {
     private fun apart(left: Int, right: Int) = kotlin.math.abs(tonePosition[left] - tonePosition[right]).let { minOf(it, tonePosition.size - it) }
     /** One timetable's colours: courses meeting on the same day get different tones, at least one tone apart
      *  where they can; a tone is shared only by courses that never meet on the same day. */
-    fun tones(meetings: List<TeachingMeeting>): Map<String, Int> {
-        val days = meetings.groupBy(::identity).mapValues { (_, rows) -> rows.map { it.weekday }.toSet() }
+    fun tones(meetings: List<TeachingMeeting>): Map<String, Int> = allot(meetings.map { identity(it) to it.weekday })
+    /** One timeline's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
+    fun tones(line: top.hicancan.studev.world.CampusLine): Map<String, Int> = allot(line.meetings.map { identity(it) to it.weekday } + line.labs.map { identity(it) to it.weekday })
+    private fun allot(courses: List<Pair<String, Int>>): Map<String, Int> {
+        val days = courses.groupBy({ it.first }, { it.second }).mapValues { (_, rows) -> rows.toSet() }
         val ids = days.keys.sorted()
         val neighbours = ids.associateWith { id -> ids.filter { other -> other != id && days.getValue(id).any { it in days.getValue(other) } } }
         val tones = mutableMapOf<String, Int>()
@@ -60,8 +64,8 @@ object TimetablePresentation {
     ).joinToString(" · ")
     fun room(meeting: TeachingMeeting): String = if (meeting.room == "翻转课堂线上自学") "" else meeting.room?.let(top.hicancan.studev.world.Names::room).orEmpty()
     private fun intersects(a: TeachingMeeting, b: TeachingMeeting) = a.weekday == b.weekday && a.periods.first() <= b.periods.last() && a.periods.last() >= b.periods.first()
-    fun cells(meetings: List<TeachingMeeting>, week: Int): List<TimetableCell> = buildList {
-        val tones = tones(meetings)
+    /** The lessons of a week as cells. `tones` are the timetable's colours when it holds more than these lessons. */
+    fun cells(meetings: List<TeachingMeeting>, week: Int, tones: Map<String, Int> = tones(meetings)): List<TimetableCell> = buildList {
         val active = meetings.filter { week in it.weeks }
         (1..7).forEach { day ->
             val sorted = meetings.filter { it.weekday == day && state(it, week) != "hidden" }

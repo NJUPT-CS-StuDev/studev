@@ -1,15 +1,24 @@
-// A person or room unfolded along time: lessons, exams, the school calendar and 早锻炼 on one line.
-import type { Exam, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
+// A person or room unfolded along time: lessons, labs, exams, the school calendar and 早锻炼 on one line.
+import type { Exam, Lab, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { courseName, courseShort } from './names';
 import type { CalendarTerm, MorningRun } from './data';
 import { addDays, daysBetween, minutesOf, startOfWeek, weekdayOf, type Moment } from './time';
 
 export interface CampusEvent {
-    kind: 'class' | 'exam' | 'run';
+    kind: 'class' | 'lab' | 'exam' | 'run';
     id: string; date: string; name: string; short: string; start: number; end: number;
     room: string | null; teachers: string[];
-    meeting?: TeachingMeeting; exam?: Exam;
+    meeting?: TeachingMeeting; lab?: Lab; exam?: Exam;
+    /** Something that outranks it sits at the same time, so it steps back wherever it shows. */
+    covered?: true;
 }
+/**
+ * What gives way when two things share a time: an exam is set for that hour alone, a lab is set for
+ * that date, a lesson only repeats by the week. So an exam covers a lab and a lesson, a lab covers a lesson.
+ */
+const RANK = { class: 1, lab: 2, exam: 3 } as const;
+const outranks = (over: CampusEvent, under: CampusEvent) => over.kind !== 'run' && under.kind !== 'run'
+    && RANK[over.kind] > RANK[under.kind] && over.start < under.end && under.start < over.end;
 /**
  * The mornings someone put down for 早锻炼, and the bonus or penalty the sports office recorded.
  * A morning put down and gone by counts as run: people mostly go, so only a missed one is touched
@@ -17,7 +26,7 @@ export interface CampusEvent {
  */
 export interface RunPlan { rule: MorningRun; days: string[]; adjust: number }
 export interface Timeline {
-    term: TeachingTerm; periods: TeachingPeriod[]; meetings: TeachingMeeting[]; exams: Exam[];
+    term: TeachingTerm; periods: TeachingPeriod[]; meetings: TeachingMeeting[]; labs: Lab[]; exams: Exam[];
     holidays: Map<string, string>; run: RunPlan | null;
 }
 
@@ -61,6 +70,16 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
             if (event) out.push(event);
         }
     }
+    // A lab sheet is drawn up before the holidays are known; like a lesson, a lab does not sit on a day off.
+    if (!line.holidays.has(date)) {
+        for (const lab of line.labs) {
+            if (lab.date !== date) continue;
+            out.push({
+                kind: 'lab', id: lab.id, date, name: courseName(lab.course.name), short: courseShort(lab.course.name),
+                start: minutesOf(lab.start), end: minutesOf(lab.end), room: lab.room ?? lab.place, teachers: lab.teachers, lab,
+            });
+        }
+    }
     for (const exam of line.exams) {
         if (exam.date !== date) continue;
         out.push({
@@ -71,8 +90,14 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
     if (line.run?.days.includes(date)) {
         out.push({ kind: 'run', id: `run@${date}`, date, name: '早锻炼', short: '早锻炼', start: minutesOf(line.run.rule.time[0]), end: minutesOf(line.run.rule.time[1]), room: null, teachers: [] });
     }
+    for (const event of out) if (out.some(other => outranks(other, event))) event.covered = true;
     return out.sort((left, right) => left.start - right.start);
 }
+
+/** What an event covers on its day: the lesson a lab takes the place of, what an exam sits over. */
+export const coveredBy = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => outranks(event, other));
+/** What covers an event on its day. */
+export const covering = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => outranks(other, event));
 
 /** Other lessons at this lesson's weekday and periods that do not meet this week: the week view shows one block per slot, these are hidden behind it. */
 export function sharingSlot(line: Timeline, event: CampusEvent): TeachingMeeting[] {
@@ -91,11 +116,11 @@ export function meetingAround(line: Timeline, meetingId: string, from: string): 
     return null;
 }
 
-/** What comes next, not counting 早锻炼: it is optional on any given morning. */
+/** What comes next, not counting 早锻炼, optional on any given morning, nor anything covered. */
 export function nextEvent(line: Timeline, now: Moment, horizon = 40): CampusEvent | null {
     for (let offset = 0; offset < horizon; offset++) {
         const date = addDays(now.date, offset);
-        for (const event of eventsOn(line, date)) if (event.kind !== 'run' && (offset > 0 || event.end > now.min)) return event;
+        for (const event of eventsOn(line, date)) if (event.kind !== 'run' && !event.covered && (offset > 0 || event.end > now.min)) return event;
     }
     return null;
 }
@@ -142,7 +167,7 @@ export function planRuns(plan: RunPlan, line: Timeline, now: Moment): string[] {
         const stretch = open.slice(start, Math.floor((part + 1) * open.length / need));
         const middle = (stretch.length - 1) / 2;
         const score = (date: string, position: number) =>
-            (eventsOn(line, date).some(event => event.kind === 'class' && event.start <= 8 * 60) ? 4 : 0)
+            (eventsOn(line, date).some(event => (event.kind === 'class' || event.kind === 'lab') && event.start <= 8 * 60) ? 4 : 0)
             + (last && daysBetween(last, date) < 2 ? -3 : 0) - Math.abs(position - middle) / Math.max(1, stretch.length);
         let best = 0;
         stretch.forEach((date, position) => { if (score(date, position) > score(stretch[best]!, best)) best = position; });
@@ -165,11 +190,11 @@ export function weekShown(line: Timeline, now: Moment): string {
     return startOfWeek(next ? next.date : now.date);
 }
 
-/** The last day with a lesson on this line: where the term's teaching ends. */
+/** The last day with a lesson or a lab on this line: where the term's teaching ends. */
 export function lastLesson(line: Timeline): string | null {
     const first = line.term.weeks[0]?.start;
     for (let date = line.term.weeks.at(-1)?.end; first && date && date >= first; date = addDays(date, -1)) {
-        if (eventsOn(line, date).some(event => event.kind === 'class')) return date;
+        if (eventsOn(line, date).some(event => event.kind === 'class' || event.kind === 'lab')) return date;
     }
     return null;
 }

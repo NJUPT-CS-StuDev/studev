@@ -21,6 +21,8 @@ data class AcademicState(val repository: AcademicRepository? = null, val term: T
     val classes: List<TeachingClass> = emptyList(), val coursePlans: List<CoursePlan> = emptyList(), val examClasses: List<String> = emptyList(),
     val rawSchedule: ClassSchedule? = null, val schedule: ClassSchedule? = null, val catalog: List<CatalogCourse> = emptyList(),
     val catalogBusy: Boolean = false, val catalogError: String? = null,
+    /** The person's labs: their class's, as their own timetable takes them. */
+    val labs: List<Lab> = emptyList(),
     val exams: List<Exam> = emptyList(), val rooms: RoomIndex? = null, val busy: Boolean = true, val classBusy: Boolean = false,
     val error: String? = null,
     val calendar: List<CalendarTerm> = emptyList(), val run: MorningRun? = null,
@@ -76,7 +78,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadClass(id: String?) {
         val current = state.value
         val repo = current.repository ?: return
-        _state.update { it.copy(rawSchedule = null, schedule = null, exams = emptyList(), error = null, classBusy = true) }
+        _state.update { it.copy(rawSchedule = null, schedule = null, labs = emptyList(), exams = emptyList(), error = null, classBusy = true) }
         try {
             val rawSchedule = if (id != null && current.classes.any { it.id == id }) repo.schedule(id) else null
             val edits = current.term?.let { settings.state.value.timetableEdits(it.term) } ?: TimetableEdits()
@@ -93,6 +95,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                 val effective = rawSchedule?.copy(meetings = CourseCatalog.effectiveMeetings(rawSchedule.meetings, availableCatalog, settings.state.value.timetableEdits(checkNotNull(now.term).term)))
                 now.copy(rawSchedule = rawSchedule, schedule = effective, catalog = availableCatalog, exams = exams, classBusy = false)
             }
+            loadLabs(repo, id)
             syncPhone()
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { _state.update { if (settings.state.value.klass == id && it.repository === repo) it.copy(classBusy = false, error = if (e is DataUnavailableException) e.message else "班级数据暂时无法打开，请重试") else it } }
@@ -146,10 +149,17 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                     exams = exams,
                 )
             }
+            loadLabs(repo, klass)
             syncPhone()
           } catch (e: CancellationException) { throw e }
           catch (_: Exception) { tell("课程目录尚未下载，修改已保存；请联网打开课表后重试。现有日历和提醒保持不变。") }
         }
+    }
+    /** The labs follow the timetable just settled: whatever was taken off or added decides them. */
+    private suspend fun loadLabs(repo: AcademicRepository, klass: String?) {
+        val (raw, effective) = state.value.let { it.rawSchedule to it.schedule }
+        val labs = if (klass != null && raw != null && effective != null) repo.personalLabs(klass, raw, effective) else emptyList()
+        _state.update { now -> if (now.repository === repo && settings.state.value.klass == klass && now.schedule === effective) now.copy(labs = labs) else now }
     }
     fun addTeachingClass(id: String) = applyTimetableChange { it.copy(added = (it.added + id).distinct()) }
     fun removeCourse(id: String) = applyTimetableChange { if (id in it.added) it.copy(added = it.added - id) else it.copy(hidden = it.hidden + id) }
@@ -170,7 +180,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val repo = state.repository ?: return null
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
-        return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), personalExams(repo, state.schedule, state.exams), state.holidays,
+        return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), state.labs, personalExams(repo, state.schedule, state.exams), state.holidays,
             state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) })
     }
     private var allMeetings: Deferred<List<TeachingMeeting>>? = null

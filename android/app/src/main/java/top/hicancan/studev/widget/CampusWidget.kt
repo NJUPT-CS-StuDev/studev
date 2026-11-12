@@ -106,13 +106,13 @@ private fun placeholder(title: String, hint: String) = buildJsonObject { put("ti
 private fun row(event: LineEvent, tones: Map<String, Int>) = buildJsonObject {
     put("start", event.start); put("end", event.end); put("name", event.short)
     put("room", event.room?.let(Names::room).orEmpty()); put("place", event.room?.let(Names::roomShort).orEmpty())
-    put("tone", event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: -1)
+    put("tone", event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: event.lab?.let { tones[TimetablePresentation.identity(it)] } ?: -1)
     put("exam", event.kind == "exam")
     event.room?.let { put("nav", it) }
 }
 
 private fun published(line: CampusLine, now: Moment, view: String, theme: String) = buildJsonObject {
-    val tones = TimetablePresentation.tones(line.meetings)
+    val tones = TimetablePresentation.tones(line)
     val shown = WidgetDay.of(line, now)
     put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
     put("hint", ""); put("view", view); put("theme", theme)
@@ -123,9 +123,8 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
     put("week", buildJsonArray { WidgetDay.week(line, now).forEach { (date, events) ->
         addJsonObject {
             put("label", WEEKDAYS[date.dayOfWeek.value].drop(1)); put("today", date == now.date)
-            // An exam outranks a lesson at the same time: the widget shows the exam alone.
-            val exams = events.filter { it.kind == "exam" }
-            put("events", buildJsonArray { events.filter { it.kind == "exam" || (it.kind == "class" && exams.none { exam -> exam.start < it.end && it.start < exam.end }) }.forEach { add(row(it, tones)) } })
+            // What a lab or an exam covers steps back: the widget shows what one goes to.
+            put("events", buildJsonArray { events.filter { it.kind != "run" && !it.covered }.forEach { add(row(it, tones)) } })
         }
     } })
 }

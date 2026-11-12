@@ -42,6 +42,7 @@ interface DataIndex {
     content: string[];
     teaching: string[];
     exams: string[];
+    labs: string[];
     rooms?: string[];
     map?: { resolved_map_version?: string; map_version?: string };
 }
@@ -359,7 +360,7 @@ async function verifyReferences(data: { dir: string; index: DataIndex }, mapIds:
         return [];
     };
     const references = scan(data.index);
-    for (const folder of ['teaching', 'exams', 'rooms', 'places', 'entities']) {
+    for (const folder of ['teaching', 'exams', 'labs', 'rooms', 'places', 'entities']) {
         const path = join(data.dir, folder);
         if (!existsSync(path)) {
             continue;
@@ -536,7 +537,7 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p9`;
+    const version = `${map.version}__${data.version}__p10`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });

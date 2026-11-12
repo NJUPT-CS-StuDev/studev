@@ -13,8 +13,8 @@ const meetingRoom = (meeting: TeachingMeeting): string => meeting.room === 'ç¿»è
 /** On this week, off this week within its run of weeks (greyed in place), or not shown. */
 const meetingState = (meeting: TeachingMeeting, week: number) => meeting.weeks.includes(week) ? 'active' : offThisWeek(meeting, week) ? 'off' : 'hidden';
 
-export function timetableCells(meetings: TeachingMeeting[], week: number) {
-    const tones = courseTones(meetings);
+/** The lessons of a week as cells. `tones` are the timetable's colours when it holds more than these lessons. */
+export function timetableCells(meetings: TeachingMeeting[], week: number, tones = courseTones(meetings)) {
     const active = meetings.filter(meeting => meeting.weeks.includes(week));
     return groupOverlappingMeetings(meetings.filter(meeting => meetingState(meeting, week) !== 'hidden')).flatMap(group =>
         group.positioned.map(({ meeting, slot }) => {

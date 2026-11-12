@@ -3,7 +3,8 @@
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { timetableCells } from '@/timetable/model/presentation';
-import { courseIdentity, courseTones } from '@/timetable/model/courseColors';
+import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
+import { personalLabs } from '@/timetable/model/labs';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { eventsOn, holidayMap, lastLesson, meetingAround, nextEvent, sharingSlot, planRuns, runTally, weekShown, type Timeline } from '@/world/events';
@@ -12,10 +13,10 @@ import { isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
 import type { Place } from '../../map/model/space';
 import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
-import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, RoomDay } from '@/world/facts';
+import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, Lab, RoomDay } from '@/world/facts';
 
 const read = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
-const release = read<{ version: string; teaching: string; exams?: string }>('src/data/campus-release.json');
+const release = read<{ version: string; teaching: string; exams?: string; labs: string }>('src/data/campus-release.json');
 const base = `public/data/${release.version}`;
 const term = read<TeachingTerm>(`${base}/teaching/${release.teaching}/term.json`);
 const periods = read<TeachingPeriod[]>(`${base}/teaching/${release.teaching}/periods.json`);
@@ -27,7 +28,7 @@ const schedules = classes.map(id => {
     const { meetings } = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${id}.json`);
     return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: timetableCells(meetings, week) })) };
 });
-const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, exams: [], holidays, run: { rule: run, days: ['2026-09-08', '2026-09-10', '2026-11-05', '2026-11-09', '2026-12-18'], adjust: 5 } };
+const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, labs: [], exams: [], holidays, run: { rule: run, days: ['2026-09-08', '2026-09-10', '2026-11-05', '2026-11-09', '2026-12-18'], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 const days = ['2026-09-25', '2026-10-01', '2026-10-12', '2026-10-23', '2026-11-05', '2026-11-09', '2026-12-18', '2026-12-21', '2027-01-01'].map(date => ({ date, events: eventsOn(line, date).map(brief) }));
 const moments = [{ date: '2026-11-05', min: 13 * 60 + 5 }, { date: '2026-11-05', min: 7 * 60 + 30 }, { date: '2026-11-07', min: 7 * 60 }, { date: '2026-11-08', min: 20 * 60 }, { date: '2027-01-14', min: 22 * 60 }].map(now => ({ now, next: (event => event && brief(event))(nextEvent(line, now)), run: runTally(line.run!, now), plan: planRuns(line.run!, line, now), week: weekShown(line, now) }));
@@ -60,5 +61,33 @@ const places = placeRows.filter(place => place.featured).map(place => ({ ...plac
 const from: [number, number] = [118.9262, 32.1146];
 const recommend = [1, 3, 6, 7].flatMap(day => [6, 8, 12, 15, 17, 18, 20, 23].map(hour => ({ day, hour, minute: 30, expected: recommendations(places, { day, hour, minute: 30 }, from).map(({ place, status }) => ({ id: place.id, state: status.state })) })));
 const hoursCases = [{ week: { '5': [['08:00', '12:00'], ['13:30', '17:00']] } }, { week: { '7': [['22:00', '02:00']] } }, { week: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(day => [String(day), [['00:00', '00:00']]])) }].flatMap(hours => [[5, 8, 0], [5, 11, 40], [5, 12, 0], [5, 13, 30], [1, 1, 50], [1, 2, 0], [7, 22, 0], [3, 12, 0]].map(([day, hour, minute]) => ({ hours, day, minute: hour! * 60 + minute!, state: openingStatus(hours as Place['hours'], { day: day!, hour: hour!, minute: minute! }).state })));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// Labs: a class whose lab takes a lecture's slot, one on a day off, and what hiding or adding a course does to them.
+const labClass = 'B251103';
+const labMeetings = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${labClass}.json`).meetings;
+const classLabs = read<{ labs: Lab[] }>(`${base}/labs/${release.labs}/classes/${labClass}.json`).labs;
+const everyLab = read<Lab[]>(`${base}/labs/${release.labs}/labs.json`);
+const examined = classLabs.filter(lab => !holidays.has(lab.date))[1]!;
+const labExam = { id: 'x', classes: [labClass], course: examined.course, teacher: null, campus: null, location: '教3－303', room: null, date: examined.date, start: examined.start, end: examined.end, students: null, note: null, source: 'x.xlsx', kind: 'event', subtype: 'exam' } as unknown as Exam;
+const labLine: Timeline = { term, periods, meetings: labMeetings, labs: classLabs, exams: [labExam], holidays, run: null };
+const labBrief = (event: ReturnType<typeof eventsOn>[number]) => ({ ...brief(event), covered: event.covered ?? false, lab: event.lab?.id ?? null });
+const dayOff = everyLab.find(lab => holidays.has(lab.date))!;
+const offLine: Timeline = { ...labLine, labs: [dayOff], exams: [] };
+// A course taken with another class: its lessons, and that class's labs among others'.
+const other = 'B260424';
+const added = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${other}.json`).meetings.filter(meeting => everyLab.some(lab => courseIdentity(lab) === courseIdentity(meeting) && lab.classes.includes(other)));
+const nearby = everyLab.filter(lab => lab.classes.some(name => name.startsWith('B2604'))).slice(0, 80);
+const labCourse = courseIdentity(classLabs[0]!);
+const labs = {
+    class: labClass, meetings: labMeetings, labs: classLabs, exam: labExam,
+    days: [...new Set(classLabs.map(lab => lab.date))].map(date => ({ date, events: eventsOn(labLine, date).map(labBrief) })),
+    dayOff: { lab: dayOff, events: eventsOn(offLine, dayOff.date).map(labBrief) },
+    moments: classLabs.slice(0, 3).map(lab => ({ date: lab.date, min: 7 * 60 })).map(now => ({ now, next: (event => event ? labBrief(event) : null)(nextEvent(labLine, now)) })),
+    tones: Object.fromEntries(timelineTones(labLine)), last: lastLesson(labLine),
+    personal: [
+        { kept: labMeetings.map(meeting => meeting.id), added: [] as TeachingMeeting[], all: [] as Lab[] },
+        { kept: labMeetings.filter(meeting => courseIdentity(meeting) !== labCourse).map(meeting => meeting.id), added: [] as TeachingMeeting[], all: [] as Lab[] },
+        { kept: labMeetings.map(meeting => meeting.id), added, all: nearby },
+    ].map(test => ({ ...test, expected: personalLabs(classLabs, labMeetings, labMeetings.filter(meeting => test.kept.includes(meeting.id)), test.added, test.all).map(lab => lab.id) })),
+};
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

@@ -60,11 +60,13 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         return
     }
     val exam = event.exam
-    PlainSheet(if (exam != null) "考试 · ${event.name}" else event.name, onClose) {
+    val lab = event.lab
+    val kinds = mapOf("class" to "课", "lab" to "实验", "exam" to "考试")
+    PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else event.name, onClose) {
         val placed = Names.placed(event.room)
         val roomName = event.room?.let(Names::room)
-        val facts = if (exam != null) Exams.courseOf(line.meetings, exam) else event.meeting?.course
-        courseLine(facts, exam == null).takeIf { it.isNotEmpty() }?.let { Plain(it, 13.5.sp, Ink.muted) }
+        val facts = if (exam != null) Exams.courseOf(line.meetings, exam.course) else if (lab != null) Exams.courseOf(line.meetings, lab.course) else event.meeting?.course
+        courseLine(facts, exam == null && lab == null).takeIf { it.isNotEmpty() }?.let { Plain(it, 13.5.sp, Ink.muted) }
         val campus = state.classes.firstOrNull { it.id == classId }?.campus
         Plain(whenText + " · " + (roomName ?: exam?.location ?: "课表没写地点") + (exam?.campus?.takeIf { campus != null && it != campus }?.let { " · ${it}校区" } ?: ""), 13.5.sp, modifier = Modifier.padding(top = 2.dp))
         if (placed) Row(Modifier.padding(top = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -78,6 +80,14 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             Together("同考场", exam.classes, exam.students)
             exam.note?.let { KeyRow("备注", it) }
         }
+        if (lab != null) {
+            KeyRow("项目", lab.project, lab.group?.let { "第 $it 组" })
+            if (lab.location != lab.place) KeyRow("座位", lab.location.replace(",", "、"))
+            Together("一起上", lab.classes, lab.students)
+        }
+        // What this takes the place of, and what takes its place: each opens.
+        line.covering(event).forEach { other -> KeyRow("同时段", "${other.name} ${kinds[other.kind]}", "这次${kinds[event.kind]}让给它", chevron = true, onClick = { onOpen(other) }) }
+        line.coveredBy(event).forEach { other -> KeyRow("同时段", other.name, "这次${kinds[other.kind]}不上，让给这场${kinds[event.kind]}", chevron = true, onClick = { onOpen(other) }) }
         val meeting = event.meeting
         if (meeting != null) {
             val left = Exams.lessonsLeft(line.term, meeting, line.holidays, now, event.end)
@@ -85,6 +95,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             Together("合班", meeting.classes, meeting.teaching_class.size)
         }
         event.teachers.flatMap { it.split("、") }.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
+        if (lab != null) KeyRow("来源", Exams.sheetName(lab.source), "实验中心排课表，${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本；调整以老师通知为准")
         if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
         KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", event.name) })
         line.sharingSlot(event).forEach { other ->

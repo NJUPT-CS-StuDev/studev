@@ -1,8 +1,8 @@
 import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { TeachingTerm, TeachingPeriod, TeachingClass, TeachingMeeting, Exam, ExamChange, ExamSource, Room, Building, Campus } from '../../src/campus/world/facts.ts';
+import type { TeachingTerm, TeachingPeriod, TeachingClass, TeachingMeeting, Exam, ExamChange, ExamSource, Lab, Room, Building, Campus } from '../../src/campus/world/facts.ts';
 
-export interface FactTerms { teaching: string[]; exams: string[]; rooms?: string[] }
+export interface FactTerms { teaching: string[]; exams: string[]; labs: string[]; rooms?: string[] }
 const read = async <T>(path: string): Promise<T> => JSON.parse(await readFile(path, 'utf8')) as T;
 const write = async (path: string, value: unknown) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, JSON.stringify(value)); };
 interface MapPlace { id: string; kind: string; parent?: string; name?: string; names?: readonly string[] }
@@ -14,6 +14,9 @@ export async function packageFacts(dir: string, out: string, index: FactTerms, m
     for (const file of ['term.json', 'periods.json', 'classes.json', 'meetings.json']) await copyFile(join(from, file), join(to, file));
     const classes = await read<TeachingClass[]>(join(from, 'classes.json')); const meetings = await read<TeachingMeeting[]>(join(from, 'meetings.json')); const byClass = new Map(classes.map(c => [c.id, [] as TeachingMeeting[]])); for (const meeting of meetings) for (const id of meeting.classes) byClass.get(id)?.push(meeting); for (const c of classes) await write(join(to, 'classes', c.id + '.json'), { class: c, meetings: byClass.get(c.id) });
     const examTerm = index.exams.at(-1); if (examTerm) { const examFrom = join(dir, 'exams', examTerm); const exams = await read<Exam[]>(join(examFrom, 'exams.json')); const changes = await read<ExamChange[]>(join(examFrom, 'changes.json')); const sources = await read<ExamSource[]>(join(examFrom, 'sources.json')); const { at: checked } = await read<{ at: string }>(join(examFrom, 'checked.json')); const examTo = join(out, 'exams', examTerm); await mkdir(examTo, { recursive: true }); await copyFile(join(examFrom, 'changes.json'), join(examTo, 'changes.json')); await copyFile(join(examFrom, 'exams.json'), join(examTo, 'exams.json')); const examClasses = [...new Set([...exams.flatMap(e => e.classes), ...changes.map(c => c.class)])]; await write(join(examTo, 'index.json'), { classes: examClasses, sources, checked }); for (const c of examClasses) await write(join(examTo, 'classes', c + '.json'), { exams: exams.filter(e => e.classes.includes(c)), changes: changes.filter(change => change.class === c) }); }
+    // Labs sit on the teaching term's own weeks, so only that term's are packaged: one file for all, one per class.
+    const labTerm = index.labs.includes(teachingTerm) ? teachingTerm : undefined;
+    if (labTerm) { const labs = await read<Lab[]>(join(dir, 'labs', labTerm, 'labs.json')); const labTo = join(out, 'labs', labTerm); await write(join(labTo, 'labs.json'), labs); const labClasses = [...new Set(labs.flatMap(lab => lab.classes))]; await write(join(labTo, 'index.json'), { classes: labClasses }); for (const c of labClasses) await write(join(labTo, 'classes', c + '.json'), { labs: labs.filter(lab => lab.classes.includes(c)) }); }
     const roomTerm = index.rooms?.at(-1); if (!roomTerm) throw new Error('the data release has no rooms term'); const term = await read<TeachingTerm>(join(dir, 'teaching', roomTerm, 'term.json')); const rawRooms = await read<any[]>(join(dir, 'places', 'rooms.json'));
     const places = new Map(mapPlaces.map(place => [place.id, place]));
     const rooms: Room[] = rawRooms.flatMap(raw => {
@@ -52,5 +55,5 @@ export async function packageFacts(dir: string, out: string, index: FactTerms, m
     }
     await write(join(out, 'rooms', 'index.json'), { term: roomTerm, weeks: term.weeks, periods: await read<TeachingPeriod[]>(join(dir, 'teaching', roomTerm, 'periods.json')), rooms, buildings: [...buildingsById.values()], campuses: [...new Set(rooms.map(room => room.campus))].map(id => ({ id, aliases: [] } satisfies Campus)) });
     const roomFrom = join(dir, 'rooms', roomTerm); const roomTo = join(out, 'rooms', roomTerm); await mkdir(roomTo, { recursive: true }); for (const file of await readdir(roomFrom)) await copyFile(join(roomFrom, file), join(roomTo, file));
-    return { teaching: teachingTerm, ...(examTerm ? { exams: examTerm } : {}), rooms: roomTerm };
+    return { teaching: teachingTerm, ...(examTerm ? { exams: examTerm } : {}), ...(labTerm ? { labs: labTerm } : {}), rooms: roomTerm };
 }

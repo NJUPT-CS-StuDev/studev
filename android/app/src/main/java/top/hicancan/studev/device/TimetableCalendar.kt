@@ -104,13 +104,14 @@ object TimetableCalendar {
     private fun day(date: LocalDate) = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
     suspend fun sync(context: Context, events: List<LineEvent>, facts: PhoneFacts, settings: PersonalSettings): Int = withContext(Dispatchers.IO) {
         fun entry(event: LineEvent, title: String, reminders: List<Int>) = Entry(event.id, title, event.startsAt.toEpochMilli(), event.endsAt.toEpochMilli(),
-            Names.room(event.room), (event.teachers + listOfNotNull(event.exam?.note)).joinToString(" · "), false, reminders)
+            Names.room(event.room), (listOfNotNull(event.lab?.project) + event.teachers + listOfNotNull(event.exam?.note)).joinToString(" · "), false, reminders)
         prune(context)
         // A gap among the lessons says why it is there: the term's days without lessons, whole-day. The break is left out.
         val daysOff = facts.terms.flatMap { term -> (term.holidays + term.events).filter { it.start >= term.start && it.start <= term.end } }.map { item ->
             Entry("off:${item.start}:${item.name}", "${item.name} · 不上课", day(LocalDate.parse(item.start)), day(LocalDate.parse(item.end).plusDays(1)), "", "", true, emptyList())
         }
-        val lessonRows = events.filter { it.kind == "class" }.map { entry(it, it.name, listOf(15)) }
+        val lessonRows = events.filter { it.kind == "class" }.map { entry(it, it.name, listOf(15)) } +
+            events.filter { it.kind == "lab" }.map { entry(it, "实验 · ${it.name}", listOf(15)) }
         val examRows = events.filter { it.kind == "exam" }.map { entry(it, "考试 · ${it.name}", settings.examReminders.map { key -> Exams.reminderMinutes(key, it.start) }) }
         if (settings.calendar) write(context, lessons, lessonRows + daysOff) else remove(context, lessons)
         if (settings.calendarExams) write(context, exams, examRows) else remove(context, exams)

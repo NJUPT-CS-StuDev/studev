@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import golden from './golden.json';
 import { timetableCells } from '@/timetable/model/presentation';
-import { courseIdentity, courseTones } from '@/timetable/model/courseColors';
+import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
+import { personalLabs } from '@/timetable/model/labs';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { eventsOn, holidayMap, lastLesson, nextEvent, planRuns, runTally, weekShown, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
 import type { CalendarTerm, MorningRun } from '@/world/data';
-import type { Exam, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
+import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
-const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], exams: [], holidays, run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
+const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], labs: [], exams: [], holidays, run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
@@ -45,5 +46,18 @@ describe('the shared web / Android real-data contract', () => {
         for (const test of golden.tones) expect(Object.fromEntries(courseTones(golden.schedules.find(schedule => schedule.class === test.class)!.meetings))).toEqual(test.tones);
         for (const test of golden.edgeCases.names) expect({ course: courseName(test.value), short: courseShort(test.value), room: roomLabel(test.value) }).toEqual({ course: test.course, short: test.short, room: test.room });
         for (const test of golden.edgeCases.examAttendance) expect(attendingExams(golden.edgeCases.attendanceExams as Exam[], test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id)).toEqual(test.expected);
+    });
+    it('places labs among lessons and exams, and keeps a person\'s own', () => {
+        const labs = golden.labs;
+        const meetings = labs.meetings as unknown as TeachingMeeting[];
+        const classLabs = labs.labs as unknown as Lab[];
+        const labLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings, labs: classLabs, exams: [labs.exam as unknown as Exam], holidays, run: null };
+        const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room, covered: event.covered ?? false, lab: event.lab?.id ?? null });
+        for (const day of labs.days) expect(eventsOn(labLine, day.date).map(brief)).toEqual(day.events);
+        expect(eventsOn({ ...labLine, labs: [labs.dayOff.lab as unknown as Lab], exams: [] }, labs.dayOff.lab.date).map(brief)).toEqual(labs.dayOff.events);
+        for (const test of labs.moments) { const next = nextEvent(labLine, test.now); expect(next ? brief(next) : null).toEqual(test.next); }
+        expect(Object.fromEntries(timelineTones(labLine))).toEqual(labs.tones);
+        expect(lastLesson(labLine)).toBe(labs.last);
+        for (const test of labs.personal) expect(personalLabs(classLabs, meetings, meetings.filter(meeting => test.kept.includes(meeting.id)), test.added as unknown as TeachingMeeting[], test.all as unknown as Lab[]).map(lab => lab.id)).toEqual(test.expected);
     });
 });

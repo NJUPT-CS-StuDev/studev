@@ -18,7 +18,7 @@ class AcademicFactsTest {
         val exams = runCatching { read<ClassExams>("exams/${release.exams}/classes/B240402.json") }.getOrNull() ?: ClassExams(emptyList(), emptyList())
         val rooms = read<RoomIndex>("rooms/index.json")
         assertEquals("B240402", schedule.klass.id); assertTrue(rooms.rooms.isNotEmpty())
-        val events = CampusLine(term, periods, schedule.meetings, exams.exams, emptyMap(), null).lessonsAndExams()
+        val events = CampusLine(term, periods, schedule.meetings, emptyList(), exams.exams, emptyMap(), null).lessonsAndExams()
         assertEquals(schedule.meetings.sumOf { it.weeks.size } + exams.exams.size, events.size)
         events.forEach { assertTrue(it.endsAt > it.startsAt) }
         val first = schedule.meetings.first()

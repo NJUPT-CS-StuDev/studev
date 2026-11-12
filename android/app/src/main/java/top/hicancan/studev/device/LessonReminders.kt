@@ -57,7 +57,7 @@ object LessonReminders {
         val mode = ReminderTimes.mode(exact(context))
         plans.forEach { plan ->
             val event = plan.event
-            val title = "${if (event.kind == "exam") "考试" else "上课"}还有 $lead 分钟 · ${event.name}"
+            val title = "${when (event.kind) { "exam" -> "考试"; "lab" -> "实验"; else -> "上课" }}还有 $lead 分钟 · ${event.name}"
             when (mode) {
                 ReminderScheduleMode.ExactAlarm -> try {
                     alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, plan.at.toEpochMilli(), pending(context, event.id, title, event.room))

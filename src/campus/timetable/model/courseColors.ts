@@ -37,6 +37,8 @@ export const courseTones = (meetings: (CourseIdentityInput & { weekday: number }
     }
     return tones;
 };
+/** One timetable's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
+export const timelineTones = (line: { meetings: (CourseIdentityInput & { weekday: number })[]; labs: (CourseIdentityInput & { weekday: number })[] }) => courseTones([...line.meetings, ...line.labs]);
 export const courseToneStyle = (index: number): CSSProperties => {
     const key = `tone${index % COURSE_TONE_COUNT}` as keyof typeof tokens.course.light;
     return Object.fromEntries(['light', 'dark'].flatMap(theme => Object.entries(tokens.course[theme as 'light' | 'dark'][key]).map(([part, value]) => [`--course-${theme}-${part}`, value]))) as CSSProperties;

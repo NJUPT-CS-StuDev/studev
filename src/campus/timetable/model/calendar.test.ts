@@ -7,7 +7,7 @@ import { calendarFile, daysOffEntries, examEntries, lessonEntries } from './cale
 const term = { term: '2026-2027-1', weeks: [1, 2, 3, 4, 5].map(week => ({ week, start: `2026-09-${String(7 * week - 6).padStart(2, '0')}`, end: `2026-09-${String(7 * week).padStart(2, '0')}` })) } as TeachingTerm;
 const periods = [{ period: 1, start: '08:00', end: '08:45' }, { period: 2, start: '08:50', end: '09:35' }] as TeachingPeriod[];
 const meeting = { id: 'm', weekday: 1, periods: [1, 2], weeks: [1, 2, 4, 5], course: { code: 'X', name: '操作系统基础' }, room: '仙林/教4-309', location: null, teachers: [{ name: '某老师' }] } as unknown as TeachingMeeting;
-const line: Timeline = { term, periods, meetings: [meeting], exams: [], holidays: new Map([['2026-09-29', '国庆']]), run: null };
+const line: Timeline = { term, periods, meetings: [meeting], labs: [], exams: [], holidays: new Map([['2026-09-29', '国庆']]), run: null };
 
 describe('the timeline as a calendar', () => {
     it('writes a lesson as one weekly series that skips its off weeks and holidays', () => {

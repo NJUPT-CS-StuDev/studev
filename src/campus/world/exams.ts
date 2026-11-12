@@ -21,8 +21,8 @@ export const publishedOn = (file: string) => file.slice(0, 10);
 /** A sheet's name as people would say it: no date, no school year, no file type. */
 export const sheetName = (file: string) => file.replace(/\.[a-z]+$/i, '').replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/\d{4}-\d{4}学年第[一二]学期/, '').replace(/-学生用表$/, '');
 
-/** The course behind an exam, as the timetable knows it: credits and whether it is required. */
-export const courseOf = (meetings: TeachingMeeting[], exam: Exam) => meetings.find(meeting => (meeting.course.code ?? meeting.course.name) === (exam.course.code ?? exam.course.name))?.course ?? null;
+/** The course behind an exam or a lab, as the timetable knows it: credits and whether it is required. */
+export const courseOf = (meetings: TeachingMeeting[], exam: Pick<Exam, 'course'>) => meetings.find(meeting => (meeting.course.code ?? meeting.course.name) === (exam.course.code ?? exam.course.name))?.course ?? null;
 
 /** "1–16 周", "1–17 周（单）", "2、5、9 周": the weeks of a lesson or of coursework off the timetable. */
 export function weeksText(weeks: number[]) {

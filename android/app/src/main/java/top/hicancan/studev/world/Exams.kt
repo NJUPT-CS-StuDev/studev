@@ -23,7 +23,7 @@ object Exams {
     /** A sheet's name as people would say it: no date, no school year, no file type. */
     fun sheetName(file: String) = file.replace(Regex("\\.[a-zA-Z]+$"), "").replace(Regex("^\\d{4}-\\d{2}-\\d{2}-"), "").replace(Regex("\\d{4}-\\d{4}学年第[一二]学期"), "").removeSuffix("-学生用表")
     /** The course behind an exam, as the timetable knows it. */
-    fun courseOf(meetings: List<TeachingMeeting>, exam: Exam) = meetings.firstOrNull { key(it.course.code, it.course.name) == key(exam.course.code, exam.course.name) }?.course
+    fun courseOf(meetings: List<TeachingMeeting>, course: ExamCourse) = meetings.firstOrNull { key(it.course.code, it.course.name) == key(course.code, course.name) }?.course
     /** "1–16 周", "1–17 周（单）", "2、5、9 周". */
     fun weeksText(weeks: List<Int>): String {
         val sorted = weeks.sorted()

@@ -101,6 +101,20 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         if (examIndex()?.classes?.contains(id) != true) return emptyList()
         return read<ClassExams>("exams/$term/classes/$id.json").exams
     }
+    suspend fun allLabs(): List<Lab> = release.labs?.let { read<List<Lab>>("labs/$it/labs.json") }.orEmpty()
+    suspend fun labIndex() = release.labs?.let { read<LabIndex>("labs/$it/index.json") }
+    /** A class's lab sittings; a class with none has no file. */
+    suspend fun labs(id: String): List<Lab> {
+        val term = release.labs ?: return emptyList()
+        if (labIndex()?.classes?.contains(id) != true) return emptyList()
+        return read<ClassLabs>("labs/$term/classes/$id.json").labs
+    }
+    /** The labs of a class as one person takes it: `raw` is the class's timetable, `effective` theirs. */
+    suspend fun personalLabs(id: String, raw: ClassSchedule, effective: ClassSchedule): List<Lab> {
+        val own = raw.meetings.mapTo(mutableSetOf()) { it.id }
+        val (kept, added) = effective.meetings.partition { it.id in own }
+        return top.hicancan.studev.timetable.CourseCatalog.effectiveLabs(labs(id), raw.meetings, kept, added, if (added.isEmpty()) emptyList() else allLabs())
+    }
     suspend fun examRecord(id: String): ExamRecord {
         val index = examIndex() ?: return ExamRecord(emptyList(), emptyList(), null)
         if (id !in index.classes) return ExamRecord(emptyList(), index.sources, index.checked)
@@ -127,7 +141,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val klass = settings.klass
         val schedule = klass?.takeIf { id -> classes().any { it.id == id } }?.let { effectiveSchedule(it, settings.timetableEdits(term.term)) }
         val exams = klass?.let { effectiveExams(it, settings) }.orEmpty()
-        return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null)
+        val labs = if (klass != null && schedule != null) personalLabs(klass, schedule(klass), schedule) else emptyList()
+        return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null)
     }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {
         val edits = settings.timetableEdits(release.teaching)
@@ -189,7 +204,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             require(validRelease(release))
             val repository = AcademicRepository(context.applicationContext, release)
             val term = repository.term()
-            repository.periods(); val classes = repository.classes(); repository.rooms(); repository.examIndex()
+            repository.periods(); val classes = repository.classes(); repository.rooms(); repository.examIndex(); repository.labIndex()
             repository.coursePlans(); repository.teachingClasses()
             if (klass != null) {
                 if (classes.any { it.id == klass }) {
@@ -198,6 +213,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
                     if (edits.added.isNotEmpty()) repository.catalog()
                 }
                 repository.exams(klass)
+                repository.labs(klass)
             }
             val index = File(context.filesDir, "campus/release.json")
             index.parentFile!!.mkdirs()

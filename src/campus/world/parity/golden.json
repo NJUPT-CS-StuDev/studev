@@ -1,4 +1,4885 @@
 {
+ "labs": {
+  "class": "B251103",
+  "meetings": [
+   {
+    "id": "9781755761474d5f",
+    "course": {
+     "code": "大学英语单学期(板块)",
+     "name": "大学英语单学期(板块)",
+     "category": "无",
+     "nature": "无",
+     "credits": null,
+     "hours": null,
+     "hours_composition": null,
+     "assessment": "未安排",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/7fe68b3fb6024644",
+     "size": null
+    },
+    "campus": "仙林",
+    "room": null,
+    "location": null,
+    "weekday": 4,
+    "periods": [
+     8,
+     9
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": null,
+    "teachers": [],
+    "classes": [
+     "B250201",
+     "B250202",
+     "B250203",
+     "B250204",
+     "B250205",
+     "B250206",
+     "B250207",
+     "B250208",
+     "B250209",
+     "B250210",
+     "B250211",
+     "B250223",
+     "B250224",
+     "B250225",
+     "B250914",
+     "B250915",
+     "B251000",
+     "B251001",
+     "B251002",
+     "B251003",
+     "B251004",
+     "B251005",
+     "B251006",
+     "B251007",
+     "B251101",
+     "B251102",
+     "B251103",
+     "B251104",
+     "B251105",
+     "B260401",
+     "B260402",
+     "B260403",
+     "B260404",
+     "B260405",
+     "B260406",
+     "B260407",
+     "B260408",
+     "B260409",
+     "B260410",
+     "B260411",
+     "B260412",
+     "B261101",
+     "B261102",
+     "B261103",
+     "B261104",
+     "B261105"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "11da7bdcbf8c2d0b",
+    "course": {
+     "code": "大二体育板块课(板块)",
+     "name": "大二体育板块课(板块)",
+     "category": "无",
+     "nature": "无",
+     "credits": null,
+     "hours": null,
+     "hours_composition": null,
+     "assessment": "未安排",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/72676de2d75f8bb2",
+     "size": null
+    },
+    "campus": "仙林",
+    "room": null,
+    "location": null,
+    "weekday": 2,
+    "periods": [
+     6,
+     7
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": null,
+    "teachers": [],
+    "classes": [
+     "B250500",
+     "B250501",
+     "B250502",
+     "B250503",
+     "B250504",
+     "B250505",
+     "B250506",
+     "B250507",
+     "B250508",
+     "B250509",
+     "B250510",
+     "B250511",
+     "B250512",
+     "B250513",
+     "B250514",
+     "B250515",
+     "B250601",
+     "B250602",
+     "B250603",
+     "B250604",
+     "B250605",
+     "B250606",
+     "B250607",
+     "B250608",
+     "B250609",
+     "B250610",
+     "B250611",
+     "B250612",
+     "B251101",
+     "B251102",
+     "B251103",
+     "B251104",
+     "B251105",
+     "B251305",
+     "B251306",
+     "B251307",
+     "B251400",
+     "B251401",
+     "B251402",
+     "B251403",
+     "B251404",
+     "B251405"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "2e7d419a15c9b31c",
+    "course": {
+     "code": "大学英语单学期(板块)",
+     "name": "大学英语单学期(板块)",
+     "category": "无",
+     "nature": "无",
+     "credits": null,
+     "hours": null,
+     "hours_composition": null,
+     "assessment": "未安排",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/7fe68b3fb6024644",
+     "size": null
+    },
+    "campus": "仙林",
+    "room": null,
+    "location": null,
+    "weekday": 2,
+    "periods": [
+     3,
+     4
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": null,
+    "teachers": [],
+    "classes": [
+     "B250914",
+     "B250915",
+     "B251000",
+     "B251001",
+     "B251002",
+     "B251003",
+     "B251004",
+     "B251005",
+     "B251006",
+     "B251007",
+     "B251101",
+     "B251102",
+     "B251103",
+     "B251104",
+     "B251105",
+     "B251305",
+     "B251306",
+     "B251307",
+     "B260413",
+     "B260414",
+     "B260415",
+     "B260416",
+     "B260417",
+     "B260418",
+     "B260419",
+     "B260420",
+     "B260421",
+     "B260422",
+     "B260423",
+     "B260901",
+     "B260902",
+     "B260903",
+     "B260904"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "3f82f2f3cc5ace33",
+    "course": {
+     "code": "JS1157X0C",
+     "name": "JAVA程序设计",
+     "category": "专业基础课",
+     "nature": "限选",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:26,上机:6",
+     "assessment": "考查",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/1c8da297b733ad84",
+     "size": 82
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-203",
+    "location": "教3－203",
+    "weekday": 5,
+    "periods": [
+     8,
+     9
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "撒同良",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/a9e576a355f60edf"
+     }
+    ],
+    "classes": [
+     "B251101",
+     "B251102",
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "014042c57600c147",
+    "course": {
+     "code": "MY1007T0C",
+     "name": "形势与政策III",
+     "category": "通识教育课",
+     "nature": "必修",
+     "credits": 0,
+     "hours": 9,
+     "hours_composition": "理论:8",
+     "assessment": "考查",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/6742e13db40d825b",
+     "size": 167
+    },
+    "campus": "仙林",
+    "room": "仙林/教4-102",
+    "location": "教4－102",
+    "weekday": 4,
+    "periods": [
+     10,
+     12
+    ],
+    "weeks": [
+     10,
+     11,
+     12
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "陶新宏",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       10,
+       11,
+       12
+      ],
+      "id": "teacher/e595905621048e3c"
+     }
+    ],
+    "classes": [
+     "B251101",
+     "B251102",
+     "B251103",
+     "B251104",
+     "B251105",
+     "B251701"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "bfc7549d439bac2d",
+    "course": {
+     "code": "LX1032X1S",
+     "name": "概率论与数理统计",
+     "category": "通识教育课",
+     "nature": "必修",
+     "credits": 3,
+     "hours": 54,
+     "hours_composition": "理论:48",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/9fa1d0ecff1539d3",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-405",
+    "location": "教3－405",
+    "weekday": 1,
+    "periods": [
+     1,
+     2
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "吴岳禹",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/5d5806ee44aadaa7"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "b5fb9263ea58ec68",
+    "course": {
+     "code": "YZ140400S",
+     "name": "管理信息系统 A",
+     "category": "专业基础课",
+     "nature": "限选",
+     "credits": 3,
+     "hours": 54,
+     "hours_composition": "理论:32,上机:16",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/bb3d9542f6e2fd2b",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-213-1",
+    "location": "教3－213－1",
+    "weekday": 1,
+    "periods": [
+     3,
+     4
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "葛军",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/18fc5f2b54b1e843"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "37281824189577eb",
+    "course": {
+     "code": "GL1902T0C",
+     "name": "公司人力资源管理",
+     "category": "专业基础课",
+     "nature": "限选",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:32",
+     "assessment": "考查",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/120b3934c645f2d7",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教2-205",
+    "location": "教2－205",
+    "weekday": 1,
+    "periods": [
+     8,
+     9
+    ],
+    "weeks": [
+     9
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "周文成",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       9
+      ],
+      "id": "teacher/8a903ab8e8c9046d"
+     },
+     {
+      "name": "陶卓",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       9
+      ],
+      "id": "teacher/9220e38abf3a9fd0"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "39612f070960e67b",
+    "course": {
+     "code": "GL1902T0C",
+     "name": "公司人力资源管理",
+     "category": "专业基础课",
+     "nature": "限选",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:32",
+     "assessment": "考查",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/120b3934c645f2d7",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-312-1",
+    "location": "教3－312－1",
+    "weekday": 2,
+    "periods": [
+     1,
+     2
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "周文成",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/8a903ab8e8c9046d"
+     },
+     {
+      "name": "陶卓",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/9220e38abf3a9fd0"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "7522b26202190316",
+    "course": {
+     "code": "GL1902T0C",
+     "name": "公司人力资源管理",
+     "category": "专业基础课",
+     "nature": "限选",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:32",
+     "assessment": "考查",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/120b3934c645f2d7",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-213-1",
+    "location": "教3－213－1",
+    "weekday": 2,
+    "periods": [
+     8,
+     9
+    ],
+    "weeks": [
+     10
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "周文成",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       10
+      ],
+      "id": "teacher/8a903ab8e8c9046d"
+     },
+     {
+      "name": "陶卓",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       10
+      ],
+      "id": "teacher/9220e38abf3a9fd0"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "43bf5bff1a778bb1",
+    "course": {
+     "code": "LX1032X1S",
+     "name": "概率论与数理统计",
+     "category": "通识教育课",
+     "nature": "必修",
+     "credits": 3,
+     "hours": 54,
+     "hours_composition": "理论:48",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/9fa1d0ecff1539d3",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-405",
+    "location": "教3－405",
+    "weekday": 3,
+    "periods": [
+     3,
+     4
+    ],
+    "weeks": [
+     1,
+     3,
+     5,
+     7,
+     9,
+     11,
+     13,
+     15,
+     17
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "吴岳禹",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       3,
+       5,
+       7,
+       9,
+       11,
+       13,
+       15,
+       17
+      ],
+      "id": "teacher/5d5806ee44aadaa7"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "6e8aca28c1e2952b",
+    "course": {
+     "code": "YZ110200S",
+     "name": "现代物流管理",
+     "category": "专业基础课",
+     "nature": "必修",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:32",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/c585466f7d5d8835",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林:教3-213-2",
+    "location": "教3－213－2",
+    "weekday": 4,
+    "periods": [
+     3,
+     4
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "郑彬双",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/a37d0726697e65be"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "2a76d734b2ce7479",
+    "course": {
+     "code": "TX1040X6S",
+     "name": "人工智能概论B",
+     "category": "通识教育课",
+     "nature": "必修",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:32",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/b1cc9c2d40823ae9",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-312-1",
+    "location": "教3－312－1",
+    "weekday": 4,
+    "periods": [
+     6,
+     7
+    ],
+    "weeks": [
+     8
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "胡云琴",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       8
+      ],
+      "id": "teacher/cdd2cac3af1a2663"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "e437e76357c27483",
+    "course": {
+     "code": "YZ140400S",
+     "name": "管理信息系统 A",
+     "category": "专业基础课",
+     "nature": "限选",
+     "credits": 3,
+     "hours": 54,
+     "hours_composition": "理论:32,上机:16",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/bb3d9542f6e2fd2b",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-106",
+    "location": "教3－106",
+    "weekday": 5,
+    "periods": [
+     3,
+     4
+    ],
+    "weeks": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     12,
+     14,
+     16,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "葛军",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       2,
+       4,
+       6,
+       8,
+       10,
+       12,
+       14,
+       16,
+       18
+      ],
+      "id": "teacher/18fc5f2b54b1e843"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "31b41b4eca05de85",
+    "course": {
+     "code": "TX1040X6S",
+     "name": "人工智能概论B",
+     "category": "通识教育课",
+     "nature": "必修",
+     "credits": 2,
+     "hours": 36,
+     "hours_composition": "理论:32",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/b1cc9c2d40823ae9",
+     "size": 25
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-108",
+    "location": "教3－108",
+    "weekday": 5,
+    "periods": [
+     6,
+     7
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "胡云琴",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/cdd2cac3af1a2663"
+     },
+     {
+      "name": "张晖",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/364ff44d95da945f"
+     }
+    ],
+    "classes": [
+     "B251103"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "cd5ad181061ff444",
+    "course": {
+     "code": "JS1005YZS",
+     "name": "数据结构",
+     "category": "专业基础课",
+     "nature": "必修",
+     "credits": 3.5,
+     "hours": 72,
+     "hours_composition": "理论:48,上机:8",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/67d2e70c46b1c812",
+     "size": 82
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-303",
+    "location": "教3－303",
+    "weekday": 1,
+    "periods": [
+     6,
+     7
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "曹浩彤",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/1bdd9a089e2e210e"
+     }
+    ],
+    "classes": [
+     "B251103",
+     "B251104",
+     "B251105"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   },
+   {
+    "id": "cb882f957729f504",
+    "course": {
+     "code": "JS1005YZS",
+     "name": "数据结构",
+     "category": "专业基础课",
+     "nature": "必修",
+     "credits": 3.5,
+     "hours": 72,
+     "hours_composition": "理论:48,上机:8",
+     "assessment": "考试",
+     "exam": null
+    },
+    "teaching_class": {
+     "id": "teaching-class/67d2e70c46b1c812",
+     "size": 82
+    },
+    "campus": "仙林",
+    "room": "仙林/教3-303",
+    "location": "教3－303",
+    "weekday": 4,
+    "periods": [
+     1,
+     2
+    ],
+    "weeks": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18
+    ],
+    "method": "面授讲课",
+    "teachers": [
+     {
+      "name": "曹浩彤",
+      "title": null,
+      "role": "主讲",
+      "weeks": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "id": "teacher/1bdd9a089e2e210e"
+     }
+    ],
+    "classes": [
+     "B251103",
+     "B251104",
+     "B251105"
+    ],
+    "kind": "event",
+    "subtype": "meeting"
+   }
+  ],
+  "labs": [
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251103",
+     "B251104",
+     "B251105"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1005YZS",
+     "name": "数据结构"
+    },
+    "project": "实验一：线性表及多项式的运算",
+    "teachers": [
+     "曹浩彤"
+    ],
+    "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排",
+    "place": "计算机学科楼 102、104",
+    "room": null,
+    "week": 4,
+    "weekday": 4,
+    "periods": [
+     1,
+     2
+    ],
+    "date": "2026-09-24",
+    "start": "08:00",
+    "end": "09:35",
+    "students": 89,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "b36e6c29173dbb44"
+   },
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251101",
+     "B251102",
+     "B251103"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1157X0C",
+     "name": "JAVA程序设计"
+    },
+    "project": "课内实验（请补充具体实验名称）",
+    "teachers": [
+     "撒同良"
+    ],
+    "location": "计算机学科楼102-后4排,计算机学科楼102-前4排,计算机学科楼104-后4排",
+    "place": "计算机学科楼 102、104",
+    "room": null,
+    "week": 4,
+    "weekday": 5,
+    "periods": [
+     8,
+     9
+    ],
+    "date": "2026-09-25",
+    "start": "15:35",
+    "end": "17:10",
+    "students": 100,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "ae507789467a49db"
+   },
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251101",
+     "B251102",
+     "B251103"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1157X0C",
+     "name": "JAVA程序设计"
+    },
+    "project": "课内实验（请补充具体实验名称）",
+    "teachers": [
+     "撒同良"
+    ],
+    "location": "计算机学科楼104-前4排,计算机学科楼104-后4排,计算机学科楼102-后4排",
+    "place": "计算机学科楼 104、102",
+    "room": null,
+    "week": 8,
+    "weekday": 5,
+    "periods": [
+     8,
+     9
+    ],
+    "date": "2026-10-23",
+    "start": "15:35",
+    "end": "17:10",
+    "students": 100,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "ce90e9c7ead6cbda"
+   },
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251103",
+     "B251104",
+     "B251105"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1005YZS",
+     "name": "数据结构"
+    },
+    "project": "实验二：二叉树的基本操作及哈夫曼编码/译码系统的实现",
+    "teachers": [
+     "曹浩彤"
+    ],
+    "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
+    "place": "计算机学科楼 202",
+    "room": null,
+    "week": 12,
+    "weekday": 4,
+    "periods": [
+     1,
+     2
+    ],
+    "date": "2026-11-19",
+    "start": "08:00",
+    "end": "09:35",
+    "students": 89,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "95aa4b776717ef15"
+   },
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251103",
+     "B251104",
+     "B251105"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1005YZS",
+     "name": "数据结构"
+    },
+    "project": "实验三：图的基本运算及最佳路径选择问题",
+    "teachers": [
+     "曹浩彤"
+    ],
+    "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-后4排",
+    "place": "计算机学科楼 102、104",
+    "room": null,
+    "week": 15,
+    "weekday": 4,
+    "periods": [
+     1,
+     2
+    ],
+    "date": "2026-12-10",
+    "start": "08:00",
+    "end": "09:35",
+    "students": 89,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "874074ddffcea027"
+   },
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251103",
+     "B251104",
+     "B251105"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1005YZS",
+     "name": "数据结构"
+    },
+    "project": "实验四：各种内排序算法的实现及性能比较",
+    "teachers": [
+     "曹浩彤"
+    ],
+    "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排",
+    "place": "计算机学科楼 102、104",
+    "room": null,
+    "week": 16,
+    "weekday": 4,
+    "periods": [
+     1,
+     2
+    ],
+    "date": "2026-12-17",
+    "start": "08:00",
+    "end": "09:35",
+    "students": 89,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "9085bf4c476adade"
+   },
+   {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B251101",
+     "B251102",
+     "B251103"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS1157X0C",
+     "name": "JAVA程序设计"
+    },
+    "project": "实验三：GUI设计",
+    "teachers": [
+     "撒同良"
+    ],
+    "location": "计算机学科楼206-前4排,计算机学科楼206-后4排",
+    "place": "计算机学科楼 206",
+    "room": null,
+    "week": 17,
+    "weekday": 5,
+    "periods": [
+     8,
+     9
+    ],
+    "date": "2026-12-25",
+    "start": "15:35",
+    "end": "17:10",
+    "students": 100,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "df79dc1fb0aa929d"
+   }
+  ],
+  "exam": {
+   "id": "x",
+   "classes": [
+    "B251103"
+   ],
+   "course": {
+    "code": "JS1005YZS",
+    "name": "数据结构"
+   },
+   "teacher": null,
+   "campus": null,
+   "location": "教3－303",
+   "room": null,
+   "date": "2026-11-19",
+   "start": "08:00",
+   "end": "09:35",
+   "students": null,
+   "note": null,
+   "source": "x.xlsx",
+   "kind": "event",
+   "subtype": "exam"
+  },
+  "days": [
+   {
+    "date": "2026-09-24",
+    "events": [
+     {
+      "kind": "class",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "仙林/教3-303",
+      "covered": true,
+      "lab": null
+     },
+     {
+      "kind": "lab",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "计算机学科楼 102、104",
+      "covered": false,
+      "lab": "b36e6c29173dbb44"
+     },
+     {
+      "kind": "class",
+      "name": "现代物流管理",
+      "short": "现代物流管理",
+      "start": 590,
+      "end": 685,
+      "room": "仙林:教3-213-2",
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "大学英语单学期",
+      "short": "大学英语单学期",
+      "start": 935,
+      "end": 1030,
+      "room": null,
+      "covered": false,
+      "lab": null
+     }
+    ]
+   },
+   {
+    "date": "2026-09-25",
+    "events": []
+   },
+   {
+    "date": "2026-10-23",
+    "events": []
+   },
+   {
+    "date": "2026-11-19",
+    "events": [
+     {
+      "kind": "class",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "仙林/教3-303",
+      "covered": true,
+      "lab": null
+     },
+     {
+      "kind": "lab",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "计算机学科楼 202",
+      "covered": true,
+      "lab": "95aa4b776717ef15"
+     },
+     {
+      "kind": "exam",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "教3－303",
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "现代物流管理",
+      "short": "现代物流管理",
+      "start": 590,
+      "end": 685,
+      "room": "仙林:教3-213-2",
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "大学英语单学期",
+      "short": "大学英语单学期",
+      "start": 935,
+      "end": 1030,
+      "room": null,
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "形势与政策III",
+      "short": "形势与政策III",
+      "start": 1110,
+      "end": 1265,
+      "room": "仙林/教4-102",
+      "covered": false,
+      "lab": null
+     }
+    ]
+   },
+   {
+    "date": "2026-12-10",
+    "events": [
+     {
+      "kind": "class",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "仙林/教3-303",
+      "covered": true,
+      "lab": null
+     },
+     {
+      "kind": "lab",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "计算机学科楼 102、104",
+      "covered": false,
+      "lab": "874074ddffcea027"
+     },
+     {
+      "kind": "class",
+      "name": "现代物流管理",
+      "short": "现代物流管理",
+      "start": 590,
+      "end": 685,
+      "room": "仙林:教3-213-2",
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "大学英语单学期",
+      "short": "大学英语单学期",
+      "start": 935,
+      "end": 1030,
+      "room": null,
+      "covered": false,
+      "lab": null
+     }
+    ]
+   },
+   {
+    "date": "2026-12-17",
+    "events": [
+     {
+      "kind": "class",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "仙林/教3-303",
+      "covered": true,
+      "lab": null
+     },
+     {
+      "kind": "lab",
+      "name": "数据结构",
+      "short": "数据结构",
+      "start": 480,
+      "end": 575,
+      "room": "计算机学科楼 102、104",
+      "covered": false,
+      "lab": "9085bf4c476adade"
+     },
+     {
+      "kind": "class",
+      "name": "现代物流管理",
+      "short": "现代物流管理",
+      "start": 590,
+      "end": 685,
+      "room": "仙林:教3-213-2",
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "大学英语单学期",
+      "short": "大学英语单学期",
+      "start": 935,
+      "end": 1030,
+      "room": null,
+      "covered": false,
+      "lab": null
+     }
+    ]
+   },
+   {
+    "date": "2026-12-25",
+    "events": [
+     {
+      "kind": "class",
+      "name": "人工智能概论B",
+      "short": "人工智能概论B",
+      "start": 825,
+      "end": 920,
+      "room": "仙林/教3-108",
+      "covered": false,
+      "lab": null
+     },
+     {
+      "kind": "class",
+      "name": "JAVA程序设计",
+      "short": "JAVA程序设计",
+      "start": 935,
+      "end": 1030,
+      "room": "仙林/教3-203",
+      "covered": true,
+      "lab": null
+     },
+     {
+      "kind": "lab",
+      "name": "JAVA程序设计",
+      "short": "JAVA程序设计",
+      "start": 935,
+      "end": 1030,
+      "room": "计算机学科楼 206",
+      "covered": false,
+      "lab": "df79dc1fb0aa929d"
+     }
+    ]
+   }
+  ],
+  "dayOff": {
+   "lab": {
+    "kind": "event",
+    "subtype": "lab",
+    "classes": [
+     "B240704"
+    ],
+    "group": null,
+    "course": {
+     "code": "JS113102C",
+     "name": "计算机图形学（全英文）"
+    },
+    "project": "平台配置及图形绘制",
+    "teachers": [
+     "黄睿"
+    ],
+    "location": "教2-214",
+    "place": "教2-214",
+    "room": "仙林/教2-214",
+    "week": 4,
+    "weekday": 5,
+    "periods": [
+     1,
+     2
+    ],
+    "date": "2026-09-25",
+    "start": "08:00",
+    "end": "09:35",
+    "students": 30,
+    "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+    "id": "77fd12defd95b28a"
+   },
+   "events": []
+  },
+  "moments": [
+   {
+    "now": {
+     "date": "2026-09-24",
+     "min": 420
+    },
+    "next": {
+     "kind": "lab",
+     "name": "数据结构",
+     "short": "数据结构",
+     "start": 480,
+     "end": 575,
+     "room": "计算机学科楼 102、104",
+     "covered": false,
+     "lab": "b36e6c29173dbb44"
+    }
+   },
+   {
+    "now": {
+     "date": "2026-09-25",
+     "min": 420
+    },
+    "next": {
+     "kind": "class",
+     "name": "概率论与数理统计",
+     "short": "概率论与数理统计",
+     "start": 480,
+     "end": 575,
+     "room": "仙林/教3-405",
+     "covered": false,
+     "lab": null
+    }
+   },
+   {
+    "now": {
+     "date": "2026-10-23",
+     "min": 420
+    },
+    "next": {
+     "kind": "class",
+     "name": "概率论与数理统计",
+     "short": "概率论与数理统计",
+     "start": 480,
+     "end": 575,
+     "room": "仙林/教3-405",
+     "covered": false,
+     "lab": null
+    }
+   }
+  ],
+  "tones": {
+   "JS1005YZS": 0,
+   "TX1040X6S": 7,
+   "大学英语单学期(板块)": 3,
+   "GL1902T0C": 9,
+   "YZ140400S": 5,
+   "MY1007T0C": 1,
+   "YZ110200S": 9,
+   "LX1032X1S": 2,
+   "JS1157X0C": 10,
+   "大二体育板块课(板块)": 6
+  },
+  "last": "2026-12-31",
+  "personal": [
+   {
+    "kept": [
+     "9781755761474d5f",
+     "11da7bdcbf8c2d0b",
+     "2e7d419a15c9b31c",
+     "3f82f2f3cc5ace33",
+     "014042c57600c147",
+     "bfc7549d439bac2d",
+     "b5fb9263ea58ec68",
+     "37281824189577eb",
+     "39612f070960e67b",
+     "7522b26202190316",
+     "43bf5bff1a778bb1",
+     "6e8aca28c1e2952b",
+     "2a76d734b2ce7479",
+     "e437e76357c27483",
+     "31b41b4eca05de85",
+     "cd5ad181061ff444",
+     "cb882f957729f504"
+    ],
+    "added": [],
+    "all": [],
+    "expected": [
+     "b36e6c29173dbb44",
+     "ae507789467a49db",
+     "ce90e9c7ead6cbda",
+     "95aa4b776717ef15",
+     "874074ddffcea027",
+     "9085bf4c476adade",
+     "df79dc1fb0aa929d"
+    ]
+   },
+   {
+    "kept": [
+     "9781755761474d5f",
+     "11da7bdcbf8c2d0b",
+     "2e7d419a15c9b31c",
+     "3f82f2f3cc5ace33",
+     "014042c57600c147",
+     "bfc7549d439bac2d",
+     "b5fb9263ea58ec68",
+     "37281824189577eb",
+     "39612f070960e67b",
+     "7522b26202190316",
+     "43bf5bff1a778bb1",
+     "6e8aca28c1e2952b",
+     "2a76d734b2ce7479",
+     "e437e76357c27483",
+     "31b41b4eca05de85"
+    ],
+    "added": [],
+    "all": [],
+    "expected": [
+     "ae507789467a49db",
+     "ce90e9c7ead6cbda",
+     "df79dc1fb0aa929d"
+    ]
+   },
+   {
+    "kept": [
+     "9781755761474d5f",
+     "11da7bdcbf8c2d0b",
+     "2e7d419a15c9b31c",
+     "3f82f2f3cc5ace33",
+     "014042c57600c147",
+     "bfc7549d439bac2d",
+     "b5fb9263ea58ec68",
+     "37281824189577eb",
+     "39612f070960e67b",
+     "7522b26202190316",
+     "43bf5bff1a778bb1",
+     "6e8aca28c1e2952b",
+     "2a76d734b2ce7479",
+     "e437e76357c27483",
+     "31b41b4eca05de85",
+     "cd5ad181061ff444",
+     "cb882f957729f504"
+    ],
+    "added": [
+     {
+      "id": "44e51b43c801b2f0",
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言",
+       "category": "通识教育课",
+       "nature": "必修",
+       "credits": 3.5,
+       "hours": 60,
+       "hours_composition": "理论:44,实验:12",
+       "assessment": "考试",
+       "exam": null
+      },
+      "teaching_class": {
+       "id": "teaching-class/1c33b147fbc0b545",
+       "size": 124
+      },
+      "campus": "仙林",
+      "room": "仙林/教2-313",
+      "location": "教2－313",
+      "weekday": 2,
+      "periods": [
+       6,
+       7
+      ],
+      "weeks": [
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "method": "面授讲课",
+      "teachers": [
+       {
+        "name": "蔡惠",
+        "title": null,
+        "role": "主讲",
+        "weeks": [
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12,
+         13,
+         14,
+         15,
+         16,
+         17,
+         18
+        ],
+        "id": "teacher/358a91fd647bdfc2"
+       }
+      ],
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "kind": "event",
+      "subtype": "meeting"
+     },
+     {
+      "id": "33dde5b7af0f11ea",
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言",
+       "category": "通识教育课",
+       "nature": "必修",
+       "credits": 3.5,
+       "hours": 60,
+       "hours_composition": "理论:44,实验:12",
+       "assessment": "考试",
+       "exam": null
+      },
+      "teaching_class": {
+       "id": "teaching-class/1c33b147fbc0b545",
+       "size": 124
+      },
+      "campus": "仙林",
+      "room": "仙林/教2-520",
+      "location": "教2－520",
+      "weekday": 4,
+      "periods": [
+       6,
+       7
+      ],
+      "weeks": [
+       4,
+       5,
+       6,
+       7,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18
+      ],
+      "method": "面授讲课",
+      "teachers": [
+       {
+        "name": "蔡惠",
+        "title": null,
+        "role": "主讲",
+        "weeks": [
+         4,
+         5,
+         6,
+         7,
+         9,
+         10,
+         11,
+         12,
+         13,
+         14,
+         15,
+         16,
+         17,
+         18
+        ],
+        "id": "teacher/358a91fd647bdfc2"
+       }
+      ],
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "kind": "event",
+      "subtype": "meeting"
+     },
+     {
+      "id": "4792d0a9e73bfb4f",
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言",
+       "category": "通识教育课",
+       "nature": "必修",
+       "credits": 3.5,
+       "hours": 60,
+       "hours_composition": "理论:44,实验:12",
+       "assessment": "考试",
+       "exam": null
+      },
+      "teaching_class": {
+       "id": "teaching-class/1c33b147fbc0b545",
+       "size": 124
+      },
+      "campus": "仙林",
+      "room": "仙林/教2-520",
+      "location": "教2－520",
+      "weekday": 5,
+      "periods": [
+       6,
+       7
+      ],
+      "weeks": [
+       9
+      ],
+      "method": "面授讲课",
+      "teachers": [
+       {
+        "name": "蔡惠",
+        "title": null,
+        "role": "主讲",
+        "weeks": [
+         9
+        ],
+        "id": "teacher/358a91fd647bdfc2"
+       }
+      ],
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "kind": "event",
+      "subtype": "meeting"
+     }
+    ],
+    "all": [
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260401",
+       "B260402"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 7,
+      "weekday": 1,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-10-12",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "06226c827b224825"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260403",
+       "B260404"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 7,
+      "weekday": 1,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-10-12",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "9e1c16992738a5d9"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260417",
+       "B260418",
+       "B260419",
+       "B260420"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "王烟濛",
+       "研究生",
+       "赵璐",
+       "研究生"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 204、206",
+      "room": null,
+      "week": 7,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-10-12",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "b4402cd593070107"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260421"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼202-前4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 7,
+      "weekday": 2,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-10-13",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "843f3a5db053d43d"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260422"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼202-后4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 7,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-10-13",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "1f5c05d5dac697b1"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260423"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼202-前4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 7,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-10-13",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "4829f2e8068440f9"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260405",
+       "B260406",
+       "B260407",
+       "B260408"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "赵璐",
+       "研究生",
+       "王烟濛",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 7,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-10-13",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "9203718e8c51e5cd"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260400",
+       "B260500"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "孙杰"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 7,
+      "weekday": 4,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-10-15",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "66d5a525a76de9a3"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260428",
+       "B260429",
+       "B260430"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "毛毅"
+      ],
+      "location": "计算机学科楼106-后4排,计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 106、108",
+      "room": null,
+      "week": 8,
+      "weekday": 2,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-10-20",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 92,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "aedfbf3a0c93da45"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260411",
+       "B260412"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：用C语言编写简单程序",
+      "teachers": [
+       "韩崇",
+       "研究生"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼202-前4排",
+      "place": "计算机学科楼 108、202",
+      "room": null,
+      "week": 8,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-10-21",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "1b1c093c0e8b4416"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260409",
+       "B260410"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验一：用C语言编写简单程序",
+      "teachers": [
+       "郭剑",
+       "研究生"
+      ],
+      "location": "计算机学科楼106-前4排,计算机学科楼106-后4排",
+      "place": "计算机学科楼 106",
+      "room": null,
+      "week": 8,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-10-21",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "f7eac7fbc408e499"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260413",
+       "B260414"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 104",
+      "room": null,
+      "week": 8,
+      "weekday": 4,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-10-22",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "de7f731592839855"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260415",
+       "B260416"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验一：顺序结构实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 104",
+      "room": null,
+      "week": 8,
+      "weekday": 4,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-10-22",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "4d99e0f2a21f5b1f"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用c语言"
+      },
+      "project": "实验一：用C语言编写简单程序",
+      "teachers": [
+       "蔡惠",
+       "田逸非",
+       "周剑",
+       "张飞燕"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 204、206",
+      "room": null,
+      "week": 8,
+      "weekday": 4,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-10-22",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "2778d02708efc49c"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260428",
+       "B260429",
+       "B260430"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环实验",
+      "teachers": [
+       "毛毅"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼204-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 202、204、206",
+      "room": null,
+      "week": 9,
+      "weekday": 1,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-10-26",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 92,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "e0959bf553be9233"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260401",
+       "B260402"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 10,
+      "weekday": 1,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-11-02",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "5ec7532700af0083"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260403",
+       "B260404"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 10,
+      "weekday": 1,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-11-02",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "d1a510805a8b268b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260421"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼108-前4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 10,
+      "weekday": 2,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-11-03",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "72a8a99a247a91f9"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260422"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼202-前4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 10,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-11-03",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "754d238c5029a6e6"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260423"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼202-后4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 10,
+      "weekday": 2,
+      "periods": [
+       10,
+       12
+      ],
+      "date": "2026-11-03",
+      "start": "18:30",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "c82f5692be0d42c9"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用c语言"
+      },
+      "project": "实验二：选择与循环结构编程练习",
+      "teachers": [
+       "蔡惠",
+       "田逸非",
+       "周剑",
+       "张飞燕"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼104-前4排,计算机学科楼104-后4排,计算机学科楼106-前4排",
+      "place": "计算机学科楼 102、104、106",
+      "room": null,
+      "week": 10,
+      "weekday": 3,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-11-04",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "97e5a67159c8fd6b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260413",
+       "B260414"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼106-后4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 106、108",
+      "room": null,
+      "week": 10,
+      "weekday": 4,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-11-05",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "2fdc696be2c32ac5"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260415",
+       "B260416"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼106-后4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 106、108",
+      "room": null,
+      "week": 10,
+      "weekday": 4,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-11-05",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "4bd81e4ec38c8731"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260400",
+       "B260500"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环实验",
+      "teachers": [
+       "孙杰"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排",
+      "place": "计算机学科楼 102",
+      "room": null,
+      "week": 10,
+      "weekday": 4,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-05",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "30fcd3810ab8b2f3"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260409",
+       "B260410"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构编程练习；实验三：函数实验",
+      "teachers": [
+       "郭剑",
+       "研究生"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 11,
+      "weekday": 3,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-11-11",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "49e912dce66c7b36"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260411",
+       "B260412"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构编程练习；实验三：函数实验",
+      "teachers": [
+       "韩崇",
+       "研究生"
+      ],
+      "location": "计算机学科楼202-后4排,计算机学科楼208（自带笔记本电脑）",
+      "place": "计算机学科楼 202、208",
+      "room": null,
+      "week": 11,
+      "weekday": 3,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-11-11",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "de72ee88f0e319a7"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用c语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "蔡惠",
+       "田逸非",
+       "周剑",
+       "张飞燕"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼202-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 202、206",
+      "room": null,
+      "week": 11,
+      "weekday": 5,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-13",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "e8fc7e0cdd2a0ef1"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260401",
+       "B260402"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼104-后4排",
+      "place": "计算机学科楼 104",
+      "room": null,
+      "week": 12,
+      "weekday": 1,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-11-16",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "b7325039d098e268"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260403",
+       "B260404"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 12,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-16",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "384e8ecf84be23b5"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260400",
+       "B260500"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "孙杰"
+      ],
+      "location": "计算机学科楼106-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 106、108",
+      "room": null,
+      "week": 12,
+      "weekday": 4,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-19",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "7a600a47643b7cf0"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260413",
+       "B260414"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 13,
+      "weekday": 1,
+      "periods": [
+       1,
+       2
+      ],
+      "date": "2026-11-23",
+      "start": "08:00",
+      "end": "09:35",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "4948530e7e3f790d"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260417",
+       "B260418",
+       "B260419",
+       "B260420"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环实验",
+      "teachers": [
+       "王烟濛",
+       "研究生",
+       "赵璐",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 13,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-23",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "b4a0086ddbee1241"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260415",
+       "B260416"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 13,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-23",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "e9349e278c59ce96"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用c语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "蔡惠",
+       "田逸非",
+       "周剑",
+       "张飞燕"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼202-后4排,计算机学科楼204-前4排,计算机学科楼204-后4排",
+      "place": "计算机学科楼 202、204",
+      "room": null,
+      "week": 13,
+      "weekday": 2,
+      "periods": [
+       1,
+       2
+      ],
+      "date": "2026-11-24",
+      "start": "08:00",
+      "end": "09:35",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "8e27fb2fdc1b9926"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260421"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼206-前4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 13,
+      "weekday": 2,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-11-24",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "dd4d57a066b83c4b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260422"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼106-前4排",
+      "place": "计算机学科楼 106",
+      "room": null,
+      "week": 13,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-11-24",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "93d14c01b424414b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260405",
+       "B260406",
+       "B260407",
+       "B260408"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验二：选择与循环结构实验",
+      "teachers": [
+       "赵璐",
+       "研究生",
+       "王烟濛",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼202-前4排,计算机学科楼204-前4排",
+      "place": "计算机学科楼 102、202、204",
+      "room": null,
+      "week": 13,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-24",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "995bb3a01a89cff5"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260423"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼106-后4排",
+      "place": "计算机学科楼 106",
+      "room": null,
+      "week": 13,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-24",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "f4b3bbdfbb740557"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260417",
+       "B260418",
+       "B260419",
+       "B260420"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "王烟濛",
+       "研究生",
+       "赵璐",
+       "研究生"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼204-前4排,计算机学科楼208（自带笔记本电脑）",
+      "place": "计算机学科楼 202、204、208",
+      "room": null,
+      "week": 14,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-11-30",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "30e26c9c60572b70"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260421"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼206-前4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 14,
+      "weekday": 2,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-01",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "1dd77e0b1ac345dc"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260423"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 14,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-12-01",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "b32c85493d9178bd"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260422"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 14,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-12-01",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "b491ca81f609c2a0"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260405",
+       "B260406",
+       "B260407",
+       "B260408"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "赵璐",
+       "研究生",
+       "王烟濛",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 14,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-01",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "99c9b52588733ae8"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260401",
+       "B260402"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼206-前4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 14,
+      "weekday": 3,
+      "periods": [
+       1,
+       2
+      ],
+      "date": "2026-12-02",
+      "start": "08:00",
+      "end": "09:35",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "9a8880df35035c28"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260409",
+       "B260410"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "郭剑",
+       "研究生"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 14,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-02",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "337bf2c476c1dd57"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260411",
+       "B260412"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "韩崇",
+       "研究生"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 14,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-02",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "ba05ceb2fbbf1b2f"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260413",
+       "B260414"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 14,
+      "weekday": 4,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-12-03",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "069fd2faf4731f0d"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260403",
+       "B260404"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼102-后4排",
+      "place": "计算机学科楼 102",
+      "room": null,
+      "week": 14,
+      "weekday": 4,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-12-03",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "58a99f13431179fa"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260415",
+       "B260416"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 14,
+      "weekday": 4,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-03",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "7a41a6e803fd1b7b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260400",
+       "B260500"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "孙杰"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 14,
+      "weekday": 4,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-03",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "6c4f8cc4550cfbb7"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260428",
+       "B260429",
+       "B260430"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验三：函数实验",
+      "teachers": [
+       "毛毅"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排",
+      "place": "计算机学科楼 204、206",
+      "room": null,
+      "week": 15,
+      "weekday": 1,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-12-07",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 92,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "7a3b8b6cd4d52286"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260417",
+       "B260418",
+       "B260419",
+       "B260420"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "王烟濛",
+       "研究生",
+       "赵璐",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 15,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-07",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "f4e233bb904d1f01"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260405",
+       "B260406",
+       "B260407",
+       "B260408"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "赵璐",
+       "研究生",
+       "王烟濛",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 15,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-08",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "8eb2eaaaf0a0001a"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用c语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "蔡惠",
+       "田逸非",
+       "周剑",
+       "张飞燕"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 204、206",
+      "room": null,
+      "week": 15,
+      "weekday": 3,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-12-09",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "3810608434c53594"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260411",
+       "B260412"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "韩崇",
+       "研究生"
+      ],
+      "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
+      "place": "计算机学科楼 202",
+      "room": null,
+      "week": 15,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-09",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "66ed881c6903b458"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260409",
+       "B260410"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "郭剑",
+       "研究生"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 15,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-09",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "82ea6fab7e9177ee"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260428",
+       "B260429",
+       "B260430"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验四：数组实验",
+      "teachers": [
+       "毛毅"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼204-前4排,计算机学科楼204-后4排",
+      "place": "计算机学科楼 108、204",
+      "room": null,
+      "week": 16,
+      "weekday": 1,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-12-14",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 92,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "05b4fa0c6bc7b557"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260415",
+       "B260416"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 16,
+      "weekday": 1,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-12-14",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "e3156fa798640c02"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260401",
+       "B260402"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 16,
+      "weekday": 1,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-14",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "54c8e9b11b0509b7"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260403",
+       "B260404"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 16,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-14",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "04fc0ab22c950c8b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260417",
+       "B260418",
+       "B260419",
+       "B260420"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "王烟濛",
+       "研究生",
+       "赵璐",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 16,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-14",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "635efa66652d32d0"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260413",
+       "B260414"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
+      "place": "计算机学科楼 108",
+      "room": null,
+      "week": 16,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-14",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "c48eb6500625bd7b"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260421"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼206-前4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 16,
+      "weekday": 2,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-15",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "9df17769347227bb"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260423"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 16,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-12-15",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "217e977dcc03cb03"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260422"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 16,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-12-15",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "8d32f69a788a468d"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260405",
+       "B260406",
+       "B260407",
+       "B260408"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "赵璐",
+       "研究生",
+       "王烟濛",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼106-前4排,计算机学科楼106-后4排",
+      "place": "计算机学科楼 102、106",
+      "room": null,
+      "week": 16,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-15",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "a7d8ae7b506a83cf"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260424",
+       "B260425",
+       "B260426",
+       "B260427"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用c语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "蔡惠",
+       "田逸非",
+       "周剑",
+       "张飞燕"
+      ],
+      "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
+      "place": "计算机学科楼 204、206",
+      "room": null,
+      "week": 16,
+      "weekday": 3,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-12-16",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "dcadabb5a6cf325e"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260409",
+       "B260410"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "郭剑",
+       "研究生"
+      ],
+      "location": "计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 104",
+      "room": null,
+      "week": 16,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-16",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "29e6756c52a81b9e"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260411",
+       "B260412"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "韩崇",
+       "研究生"
+      ],
+      "location": "计算机学科楼106-前4排,计算机学科楼106-后4排",
+      "place": "计算机学科楼 106",
+      "room": null,
+      "week": 16,
+      "weekday": 3,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-16",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "d309248bfe795fc1"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260400",
+       "B260500"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "孙杰"
+      ],
+      "location": "计算机学科楼104-后4排,计算机学科楼104-前4排",
+      "place": "计算机学科楼 104",
+      "room": null,
+      "week": 16,
+      "weekday": 4,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-17",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "7a50e446e1cbe3b1"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260428",
+       "B260429",
+       "B260430"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验五：指针及字符串实验",
+      "teachers": [
+       "毛毅"
+      ],
+      "location": "计算机学科楼106-前4排,计算机学科楼106-后4排,计算机学科楼202-前4排",
+      "place": "计算机学科楼 106、202",
+      "room": null,
+      "week": 17,
+      "weekday": 1,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-12-21",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 92,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "a9acffa04e3dc058"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260428",
+       "B260429",
+       "B260430"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数据实验",
+      "teachers": [
+       "毛毅"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 18,
+      "weekday": 1,
+      "periods": [
+       3,
+       4
+      ],
+      "date": "2026-12-28",
+      "start": "09:50",
+      "end": "11:25",
+      "students": 92,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "474ed93364445487"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260401",
+       "B260402"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 18,
+      "weekday": 1,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-28",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "f9acda27c007b082"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260403",
+       "B260404"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "肖欣欣",
+       "王藤遇"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 18,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-28",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 60,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "b7107d335a35d6c9"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260417",
+       "B260418",
+       "B260419",
+       "B260420"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数据实验",
+      "teachers": [
+       "王烟濛",
+       "研究生",
+       "赵璐",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 18,
+      "weekday": 1,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-28",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "c225353cc16be556"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260421"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼206-前4排",
+      "place": "计算机学科楼 206",
+      "room": null,
+      "week": 18,
+      "weekday": 2,
+      "periods": [
+       8,
+       9
+      ],
+      "date": "2026-12-29",
+      "start": "15:35",
+      "end": "17:10",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "9137e6ae9c9dc9ed"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260422"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼204-前4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 18,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-12-29",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "3dece471905209ff"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260423"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "许棣华"
+      ],
+      "location": "计算机学科楼204-后4排",
+      "place": "计算机学科楼 204",
+      "room": null,
+      "week": 18,
+      "weekday": 2,
+      "periods": [
+       9,
+       12
+      ],
+      "date": "2026-12-29",
+      "start": "16:25",
+      "end": "21:05",
+      "students": 35,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "53900fabfe513fbb"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260405",
+       "B260406",
+       "B260407",
+       "B260408"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "赵璐",
+       "研究生",
+       "王烟濛",
+       "研究生"
+      ],
+      "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
+      "place": "计算机学科楼 102、104",
+      "room": null,
+      "week": 18,
+      "weekday": 2,
+      "periods": [
+       10,
+       11
+      ],
+      "date": "2026-12-29",
+      "start": "18:30",
+      "end": "20:10",
+      "students": 120,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "f725014eeabaa169"
+     },
+     {
+      "kind": "event",
+      "subtype": "lab",
+      "classes": [
+       "B260413",
+       "B260414"
+      ],
+      "group": null,
+      "course": {
+       "code": "JS150200S",
+       "name": "计算机问题求解：使用C 语言"
+      },
+      "project": "实验六：文件与结构数组实验",
+      "teachers": [
+       "吴家皋",
+       "苏怡婷"
+      ],
+      "location": "计算机学科楼106-前4排,计算机学科楼106-后4排",
+      "place": "计算机学科楼 106",
+      "room": null,
+      "week": 18,
+      "weekday": 4,
+      "periods": [
+       6,
+       7
+      ],
+      "date": "2026-12-31",
+      "start": "13:45",
+      "end": "15:20",
+      "students": 70,
+      "source": "2026-09-20-实验实践课程上机安排（1、2、3、4楼）.xlsx",
+      "id": "28ecfa4dac5f9964"
+     }
+    ],
+    "expected": [
+     "b36e6c29173dbb44",
+     "ae507789467a49db",
+     "2778d02708efc49c",
+     "ce90e9c7ead6cbda",
+     "97e5a67159c8fd6b",
+     "e8fc7e0cdd2a0ef1",
+     "95aa4b776717ef15",
+     "8e27fb2fdc1b9926",
+     "3810608434c53594",
+     "874074ddffcea027",
+     "dcadabb5a6cf325e",
+     "9085bf4c476adade",
+     "df79dc1fb0aa929d"
+    ]
+   }
+  ]
+ },
  "places": [
   {
    "id": "仙林/一食堂",
@@ -4784,7 +9665,7 @@
   }
  ],
  "source": {
-  "release": "map-v0.8.5__data-20261108-1600__p9",
+  "release": "map-v0.8.5__data-20261112-0907__p10",
   "teaching": "2026-2027-1"
  },
  "term": {
@@ -4893,7 +9774,7 @@
     "end": "2027-01-15"
    }
   ],
-  "observed_at": "2026-11-08T11:54:00Z"
+  "observed_at": "2026-11-11T02:18:51Z"
  },
  "periods": [
   {
@@ -17428,70 +22309,6 @@
        ]
       }
      ],
-     "三牌楼:语音15室(有线楼304)": [
-      {
-       "kind": "class",
-       "id": "d8906732bee50a63",
-       "course": "大学英语IV",
-       "teachers": [
-        "张传东"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "55bafb1c616b5021",
-       "course": "大学英语IV",
-       "teachers": [
-        "张传东"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
-     "三牌楼:语音16室(有线楼314)": [
-      {
-       "kind": "class",
-       "id": "67739295aaef3b3a",
-       "course": "大学英语III",
-       "teachers": [
-        "朱莉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "48e34022112386de",
-       "course": "大学英语III",
-       "teachers": [
-        "朱莉"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
      "仙林/教1-106": [
       {
        "kind": "class",
@@ -18156,6 +22973,87 @@
        ]
       }
      ],
+     "仙林/教2-103": [
+      {
+       "kind": "class",
+       "id": "d3716619b4994672",
+       "course": "大学英语II",
+       "teachers": [
+        "陈薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "c5911dccc22b0ad6",
+       "course": "大学英语II",
+       "teachers": [
+        "胡倩"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "c47a9da49e641de3",
+       "course": "大学英语II",
+       "teachers": [
+        "胡倩"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教2-104": [
+      {
+       "kind": "class",
+       "id": "5412dccab9c5221b",
+       "course": "大学英语II",
+       "teachers": [
+        "朱赟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
+     "仙林/教2-105": [
+      {
+       "kind": "class",
+       "id": "a0c1759c1a290f02",
+       "course": "大学英语II",
+       "teachers": [
+        "金鑫"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
      "仙林/教2-106": [
       {
        "kind": "class",
@@ -18184,6 +23082,241 @@
        "classes": [
         "B230701",
         "B230702"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教2-113": [
+      {
+       "kind": "class",
+       "id": "76c5c22a12272eb7",
+       "course": "大学英语I",
+       "teachers": [
+        "冯辉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "af78ffaab2de5590",
+       "course": "大学英语I",
+       "teachers": [
+        "冯辉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "5418959c4d209c3f",
+       "course": "大学英语I",
+       "teachers": [
+        "冯辉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教2-114": [
+      {
+       "kind": "class",
+       "id": "db439199746788c7",
+       "course": "大学英语I",
+       "teachers": [
+        "李智红"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "35ec2c2019fe428e",
+       "course": "大学英语I",
+       "teachers": [
+        "李智红"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "1711d37df7a7c6c8",
+       "course": "大学英语I",
+       "teachers": [
+        "李智红"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教2-115": [
+      {
+       "kind": "class",
+       "id": "84ce755489c51ed6",
+       "course": "大学英语I",
+       "teachers": [
+        "吕云霞"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "d6803091e1fad743",
+       "course": "大学英语I",
+       "teachers": [
+        "吕云霞"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "d09e056647a03fd5",
+       "course": "大学英语I",
+       "teachers": [
+        "吕云霞"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教2-116": [
+      {
+       "kind": "class",
+       "id": "165df950687473d8",
+       "course": "大学英语I",
+       "teachers": [
+        "徐丽丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "63592658740952c0",
+       "course": "大学英语I",
+       "teachers": [
+        "徐丽丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "624d8e079581b0c4",
+       "course": "大学英语I",
+       "teachers": [
+        "徐丽丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教2-117": [
+      {
+       "kind": "class",
+       "id": "461daa3edbd3b25b",
+       "course": "大学英语I",
+       "teachers": [
+        "罗奕"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "c8d58c80340a8708",
+       "course": "大学英语I",
+       "teachers": [
+        "罗奕"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "0433afa5102add14",
+       "course": "大学英语I",
+       "teachers": [
+        "罗奕"
+       ],
+       "classes": [
+        "wbj"
        ],
        "periods": [
         8,
@@ -20914,192 +26047,6 @@
        ]
       }
      ],
-     "仙林/教3-103": [
-      {
-       "kind": "class",
-       "id": "3bc55eede55ddbc9",
-       "course": "大学英语III",
-       "teachers": [
-        "杨艳"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "3e4f8c6fb668d46c",
-       "course": "大学英语IV",
-       "teachers": [
-        "康艳"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "5faf3e2f1c4b507e",
-       "course": "大学英语IV",
-       "teachers": [
-        "冯喆"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "9e896116acafb7c7",
-       "course": "大学英语IV",
-       "teachers": [
-        "冯喆"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-104": [
-      {
-       "kind": "class",
-       "id": "45dd6df65f888184",
-       "course": "大学英语IV",
-       "teachers": [
-        "康艳"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "e345b9253ed0bcbc",
-       "course": "大学英语III",
-       "teachers": [
-        "杨艳"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "88e6aa620da67605",
-       "course": "大学英语IV",
-       "teachers": [
-        "唐睿"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "e0e7b275d3d94a9f",
-       "course": "大学英语IV",
-       "teachers": [
-        "沈星辰"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-105": [
-      {
-       "kind": "class",
-       "id": "067a6fe519228eda",
-       "course": "大学英语III",
-       "teachers": [
-        "刘煜"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "68ec140458192092",
-       "course": "大学英语III",
-       "teachers": [
-        "刘煜"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "6b6ff49f5fca36fc",
-       "course": "大学英语IV",
-       "teachers": [
-        "李笑薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "8fda9aa5f685576b",
-       "course": "大学英语IV",
-       "teachers": [
-        "唐睿"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
      "仙林/教3-106": [
       {
        "kind": "class",
@@ -21114,36 +26061,6 @@
        "periods": [
         1,
         2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "592789140f8ad9ea",
-       "course": "大学英语IV",
-       "teachers": [
-        "龙翔"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "7962b868d4e9e82a",
-       "course": "大学英语IV",
-       "teachers": [
-        "李笑薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
        ]
       }
      ],
@@ -21161,36 +26078,6 @@
        "periods": [
         3,
         4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "fab3cdf8fb5f0e1e",
-       "course": "大学英语III",
-       "teachers": [
-        "卞树荣"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "8fbdbb78cb656b0d",
-       "course": "大学英语III",
-       "teachers": [
-        "卞树荣"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
        ]
       }
      ],
@@ -23494,36 +28381,6 @@
         3,
         4
        ]
-      },
-      {
-       "kind": "class",
-       "id": "53b25ca99eef1a8b",
-       "course": "大学英语III",
-       "teachers": [
-        "王为毅"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "8aba4b4fa51c0ffc",
-       "course": "大学英语III",
-       "teachers": [
-        "王为毅"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
       }
      ],
      "仙林/教3-507": [
@@ -24049,6 +28906,21 @@
       },
       {
        "kind": "class",
+       "id": "728d6f0b239a5f7c",
+       "course": "大学英语II",
+       "teachers": [
+        "霍丹"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
        "id": "fea203fd8a2e97c4",
        "course": "综合英语I-B（托福上）",
        "teachers": [
@@ -24130,36 +29002,6 @@
      "仙林/教3-537": [
       {
        "kind": "class",
-       "id": "3e493cbf5acf410a",
-       "course": "大学英语IV",
-       "teachers": [
-        "王越"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "3c6ba3afaa64ea7c",
-       "course": "大学英语IV",
-       "teachers": [
-        "王越"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
        "id": "cef6305797dea5ad",
        "course": "大学英语III",
        "teachers": [
@@ -24174,43 +29016,13 @@
        ]
       }
      ],
-     "仙林/教3-538": [
+     "仙林/教3-601": [
       {
        "kind": "class",
-       "id": "535450f034242bc8",
-       "course": "大学英语IV",
+       "id": "d367fe033fe44963",
+       "course": "大学英语II",
        "teachers": [
-        "王苗苗"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "a97afb6fa159c356",
-       "course": "大学英语IV",
-       "teachers": [
-        "杨子"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "5ae8910b506d653e",
-       "course": "大学英语IV",
-       "teachers": [
-        "毛启洪"
+        "陈薇"
        ],
        "classes": [
         "wbj"
@@ -24222,10 +29034,10 @@
       },
       {
        "kind": "class",
-       "id": "d556922f3da48f0f",
-       "course": "大学英语IV",
+       "id": "17b9a4fefb8e9130",
+       "course": "大学英语II",
        "teachers": [
-        "毛启洪"
+        "陈薇"
        ],
        "classes": [
         "wbj"
@@ -24239,89 +29051,106 @@
      "仙林/教3-602": [
       {
        "kind": "class",
-       "id": "5781dae8277f5453",
-       "course": "大学英语IV",
+       "id": "5e33e56467ffbc03",
+       "course": "大学英语II",
        "teachers": [
-        "朱彦"
+        "金鑫"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        1,
-        2
+        6,
+        7
        ]
       },
       {
        "kind": "class",
-       "id": "3287231709357286",
-       "course": "大学英语IV",
+       "id": "8eb88a8574d5fb9f",
+       "course": "大学英语II",
        "teachers": [
-        "朱彦"
+        "金鑫"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        3,
-        4
+        8,
+        9
        ]
       }
      ],
      "仙林/教3-603": [
       {
        "kind": "class",
-       "id": "3e2d30008d400fed",
-       "course": "大学英语IV",
+       "id": "0d6cd938a0070911",
+       "course": "大学英语II",
        "teachers": [
-        "王晶"
+        "霍丹"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        1,
-        2
+        6,
+        7
        ]
       },
       {
        "kind": "class",
-       "id": "1be062c8fc0b744f",
-       "course": "大学英语IV",
+       "id": "c3cc33bc62e4054a",
+       "course": "大学英语II",
        "teachers": [
-        "王晶"
+        "霍丹"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        3,
-        4
+        8,
+        9
        ]
       }
      ],
      "仙林/教3-604": [
       {
        "kind": "class",
-       "id": "1dd16cbdf64cfa69",
-       "course": "大学英语IV",
+       "id": "6bba440450c7b57f",
+       "course": "大学英语II",
        "teachers": [
-        "张志芳"
+        "朱赟"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        1,
-        2
+        6,
+        7
        ]
       },
       {
        "kind": "class",
-       "id": "f0eb323ea32b544b",
-       "course": "大学英语IV",
+       "id": "8f4b2cbe7e32cbaf",
+       "course": "大学英语II",
        "teachers": [
-        "张志芳"
+        "朱赟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        8,
+        9
+       ]
+      }
+     ],
+     "仙林/教3-606": [
+      {
+       "kind": "class",
+       "id": "2cb15e43db9c8d36",
+       "course": "大学英语II",
+       "teachers": [
+        "胡倩"
        ],
        "classes": [
         "wbj"
@@ -24330,9 +29159,7 @@
         3,
         4
        ]
-      }
-     ],
-     "仙林/教3-606": [
+      },
       {
        "kind": "class",
        "id": "f5358f1a47f3f8fc",
@@ -26421,7 +31248,7 @@
     "date": "2026-11-09",
     "week": 11,
     "weekday": 1,
-    "observed_at": "2026-11-08T12:10:29Z",
+    "observed_at": "2026-11-11T11:55:22Z",
     "free": {
      "1": [
       "三牌楼:MBA中心301室",
@@ -26581,6 +31408,7 @@
       "仙林/教4-201",
       "仙林/教4-202",
       "仙林/教4-204",
+      "仙林/教4-205",
       "仙林/教4-208",
       "仙林/教4-209",
       "仙林/教4-211",
@@ -26869,6 +31697,7 @@
       "仙林/教4-201",
       "仙林/教4-202",
       "仙林/教4-204",
+      "仙林/教4-205",
       "仙林/教4-208",
       "仙林/教4-209",
       "仙林/教4-211",
@@ -27117,6 +31946,7 @@
       "仙林/教2-415",
       "仙林/教2-420",
       "仙林/教2-508",
+      "仙林/教2-518",
       "仙林/教3-109",
       "仙林/教3-208",
       "仙林/教3-310",
@@ -27369,6 +32199,7 @@
       "仙林/教2-415",
       "仙林/教2-420",
       "仙林/教2-508",
+      "仙林/教2-518",
       "仙林/教3-109",
       "仙林/教3-208",
       "仙林/教3-310",
@@ -27671,6 +32502,7 @@
       "仙林/教2-508",
       "仙林/教2-509",
       "仙林/教2-510",
+      "仙林/教2-518",
       "仙林/教2-519",
       "仙林/教3-101",
       "仙林/教3-102",
@@ -27991,6 +32823,7 @@
       "仙林/教1-201",
       "仙林/教1-206",
       "仙林/教1-207",
+      "仙林/教1-300",
       "仙林/教1-301",
       "仙林/教1-302",
       "仙林/教1-303",
@@ -28015,6 +32848,7 @@
       "仙林/教2-420",
       "仙林/教2-507",
       "仙林/教2-508",
+      "仙林/教3-304",
       "仙林/教3-323",
       "仙林/教3-400",
       "仙林/教3-401",
@@ -28250,6 +33084,7 @@
       "仙林/教1-201",
       "仙林/教1-206",
       "仙林/教1-207",
+      "仙林/教1-300",
       "仙林/教1-301",
       "仙林/教1-302",
       "仙林/教1-303",
@@ -28274,6 +33109,7 @@
       "仙林/教2-420",
       "仙林/教2-507",
       "仙林/教2-508",
+      "仙林/教3-304",
       "仙林/教3-323",
       "仙林/教3-400",
       "仙林/教3-401",
@@ -28514,6 +33350,7 @@
       "仙林/教1-201",
       "仙林/教1-206",
       "仙林/教1-207",
+      "仙林/教1-300",
       "仙林/教1-301",
       "仙林/教1-302",
       "仙林/教1-303",
@@ -29205,7 +34042,6 @@
       "仙林/教3-208",
       "仙林/教3-213",
       "仙林/教3-213-1",
-      "仙林/教3-302",
       "仙林/教3-303",
       "仙林/教3-305",
       "仙林/教3-308",
@@ -29603,7 +34439,6 @@
       "仙林/教3-208",
       "仙林/教3-213",
       "仙林/教3-213-1",
-      "仙林/教3-302",
       "仙林/教3-303",
       "仙林/教3-305",
       "仙林/教3-308",
@@ -30001,7 +34836,6 @@
       "仙林/教3-208",
       "仙林/教3-213",
       "仙林/教3-213-1",
-      "仙林/教3-302",
       "仙林/教3-303",
       "仙林/教3-304",
       "仙林/教3-305",
@@ -30677,6 +35511,38 @@
        ]
       }
      ],
+     "三牌楼:教西-102": [
+      {
+       "kind": "class",
+       "id": "09d9f437c2bdcc3b",
+       "course": "大学英语II",
+       "teachers": [
+        "许艺军"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "f7046bd91b96744b",
+       "course": "大学英语II",
+       "teachers": [
+        "许艺军"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
      "三牌楼:教西-201": [
       {
        "kind": "class",
@@ -30982,6 +35848,38 @@
        ]
       }
      ],
+     "三牌楼:语音14室(有线楼302)": [
+      {
+       "kind": "class",
+       "id": "70f9e3c811d7828f",
+       "course": "大学英语I",
+       "teachers": [
+        "尤蕾"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "6647eb1b966745c2",
+       "course": "大学英语I",
+       "teachers": [
+        "尤蕾"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      }
+     ],
      "三牌楼:语音15室(有线楼304)": [
       {
        "kind": "class",
@@ -30996,6 +35894,21 @@
        "periods": [
         1,
         2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "37799ed672d23c17",
+       "course": "大学英语II",
+       "teachers": [
+        "朱莉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
        ]
       }
      ],
@@ -31229,24 +36142,6 @@
        "periods": [
         3,
         5
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "a9c8664c95cb86f2",
-       "course": "中国近现代史纲要",
-       "teachers": [
-        "邓依晴"
-       ],
-       "classes": [
-        "C260001",
-        "C260002",
-        "C260003",
-        "C260004"
-       ],
-       "periods": [
-        6,
-        8
        ]
       }
      ],
@@ -31929,6 +36824,147 @@
        ]
       }
      ],
+     "仙林/教2-103": [
+      {
+       "kind": "class",
+       "id": "c5ef0f35d150782d",
+       "course": "大学英语II",
+       "teachers": [
+        "陈薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "e7526bcbceba125f",
+       "course": "大学英语II",
+       "teachers": [
+        "陈薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "359b47243d7ad7e8",
+       "course": "大学英语II",
+       "teachers": [
+        "陈薇"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      }
+     ],
+     "仙林/教2-104": [
+      {
+       "kind": "class",
+       "id": "6dc955896599e1aa",
+       "course": "大学英语II",
+       "teachers": [
+        "朱赟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "8eb6db749ccc37ac",
+       "course": "大学英语II",
+       "teachers": [
+        "朱赟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "3f8e73bf96652d87",
+       "course": "大学英语II",
+       "teachers": [
+        "朱赟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      }
+     ],
+     "仙林/教2-105": [
+      {
+       "kind": "class",
+       "id": "f31d4c9be01119f6",
+       "course": "大学英语II",
+       "teachers": [
+        "李亚利"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "a2ca8d6104fc89bd",
+       "course": "大学英语II",
+       "teachers": [
+        "丁晓钟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "baf8eb007158952d",
+       "course": "大学英语II",
+       "teachers": [
+        "丁晓钟"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      }
+     ],
      "仙林/教2-106": [
       {
        "kind": "class",
@@ -31967,6 +37003,51 @@
      "仙林/教2-113": [
       {
        "kind": "class",
+       "id": "9665f67472fc6654",
+       "course": "大学英语I",
+       "teachers": [
+        "冯辉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "cebb1c6101c4e60b",
+       "course": "大学英语I",
+       "teachers": [
+        "冯辉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "2b4c8c902666ec30",
+       "course": "大学英语I",
+       "teachers": [
+        "冯辉"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
        "id": "b7647c4e3e3e1c09",
        "course": "政治经济学",
        "teachers": [
@@ -31982,6 +37063,51 @@
       }
      ],
      "仙林/教2-114": [
+      {
+       "kind": "class",
+       "id": "5748c29917d7312b",
+       "course": "大学英语I",
+       "teachers": [
+        "李智红"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "7f53f4a960827bfd",
+       "course": "大学英语I",
+       "teachers": [
+        "李智红"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "2d1839407d0c969e",
+       "course": "大学英语I",
+       "teachers": [
+        "李智红"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
       {
        "kind": "class",
        "id": "119e2c715c0b8d9f",
@@ -32001,6 +37127,51 @@
      "仙林/教2-115": [
       {
        "kind": "class",
+       "id": "67e5c3907e4ff4ab",
+       "course": "大学英语I",
+       "teachers": [
+        "吕云霞"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "113f3d265543885a",
+       "course": "大学英语I",
+       "teachers": [
+        "吕云霞"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "7d8e05ee90d0456e",
+       "course": "大学英语I",
+       "teachers": [
+        "吕云霞"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
        "id": "ba09541adcd6f2a4",
        "course": "现代统计方法",
        "teachers": [
@@ -32013,6 +37184,100 @@
        "periods": [
         8,
         9
+       ]
+      }
+     ],
+     "仙林/教2-116": [
+      {
+       "kind": "class",
+       "id": "ff5eda2f17618594",
+       "course": "大学英语I",
+       "teachers": [
+        "徐丽丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "3d97b85ffb21f826",
+       "course": "大学英语I",
+       "teachers": [
+        "徐丽丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "40a8391101a1ea92",
+       "course": "大学英语I",
+       "teachers": [
+        "徐丽丽"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      }
+     ],
+     "仙林/教2-117": [
+      {
+       "kind": "class",
+       "id": "eb24e7d53f3003ef",
+       "course": "大学英语I",
+       "teachers": [
+        "罗奕"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "5633b9945192a6de",
+       "course": "大学英语I",
+       "teachers": [
+        "罗奕"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "d4926bc173afd02b",
+       "course": "大学英语I",
+       "teachers": [
+        "罗奕"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
        ]
       }
      ],
@@ -34659,23 +39924,6 @@
       },
       {
        "kind": "class",
-       "id": "059d228190011359",
-       "course": "中国近现代史纲要",
-       "teachers": [
-        "邓依晴"
-       ],
-       "classes": [
-        "B260417",
-        "B260418",
-        "B260419"
-       ],
-       "periods": [
-        3,
-        5
-       ]
-      },
-      {
-       "kind": "class",
        "id": "ffba737110c7da50",
        "course": "计算机网络",
        "teachers": [
@@ -35022,192 +40270,6 @@
        ]
       }
      ],
-     "仙林/教3-103": [
-      {
-       "kind": "class",
-       "id": "672fc9e3eab6c8a8",
-       "course": "大学英语IV",
-       "teachers": [
-        "毛启洪"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "7a7eb8008086f043",
-       "course": "大学英语IV",
-       "teachers": [
-        "毛启洪"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "b5163dc7480f4694",
-       "course": "大学英语IV",
-       "teachers": [
-        "颜文洁"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "88014a8e987e8ed6",
-       "course": "大学英语IV",
-       "teachers": [
-        "杨丽"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-104": [
-      {
-       "kind": "class",
-       "id": "f7d66dea3da2d24a",
-       "course": "大学英语III",
-       "teachers": [
-        "卞树荣"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "61a4e58ff49a41a0",
-       "course": "大学英语III",
-       "teachers": [
-        "卞树荣"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "ff3fa62658fcad7a",
-       "course": "大学英语IV",
-       "teachers": [
-        "吴远征"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "22fd8d94ab3e008a",
-       "course": "大学英语IV",
-       "teachers": [
-        "吴远征"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
-     "仙林/教3-105": [
-      {
-       "kind": "class",
-       "id": "af57a08983454dfe",
-       "course": "大学英语III",
-       "teachers": [
-        "王为毅"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "2c2cc3ad690973b1",
-       "course": "大学英语III",
-       "teachers": [
-        "王为毅"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "7e95a2636ed80d09",
-       "course": "大学英语IV",
-       "teachers": [
-        "殷健"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "c192ff97fd735f8f",
-       "course": "大学英语IV",
-       "teachers": [
-        "殷健"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
-       ]
-      }
-     ],
      "仙林/教3-106": [
       {
        "kind": "class",
@@ -35222,36 +40284,6 @@
        "periods": [
         3,
         4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "6946155795df5e6f",
-       "course": "大学英语IV",
-       "teachers": [
-        "江颖"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        6,
-        7
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "6fe58587d7e9642e",
-       "course": "大学英语IV",
-       "teachers": [
-        "江颖"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        8,
-        9
        ]
       }
      ],
@@ -36487,6 +41519,24 @@
         6,
         7
        ]
+      },
+      {
+       "kind": "class",
+       "id": "c4b788cd035837de",
+       "course": "中国近现代史纲要",
+       "teachers": [
+        "朱奎泽"
+       ],
+       "classes": [
+        "B260409",
+        "B260410",
+        "B260411",
+        "B260412"
+       ],
+       "periods": [
+        10,
+        12
+       ]
       }
      ],
      "仙林/教3-303": [
@@ -36596,24 +41646,6 @@
        "periods": [
         3,
         4
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "3a95dfb8c7169903",
-       "course": "微纳光电器件及其应用",
-       "teachers": [
-        "郭艳东",
-        "曾红丽"
-       ],
-       "classes": [
-        "B240204",
-        "B240205",
-        "B240206"
-       ],
-       "periods": [
-        6,
-        7
        ]
       },
       {
@@ -38509,70 +43541,6 @@
        ]
       }
      ],
-     "仙林/教3-537": [
-      {
-       "kind": "class",
-       "id": "7a051a99ba4901a8",
-       "course": "大学英语IV",
-       "teachers": [
-        "冯喆"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "94dcce6d45b29cfd",
-       "course": "大学英语IV",
-       "teachers": [
-        "冯喆"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
-     "仙林/教3-538": [
-      {
-       "kind": "class",
-       "id": "7e381c09ffc7e5c8",
-       "course": "大学英语IV",
-       "teachers": [
-        "唐睿"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "1931ea4b01250897",
-       "course": "大学英语IV",
-       "teachers": [
-        "唐睿"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      }
-     ],
      "仙林/教3-601": [
       {
        "kind": "class",
@@ -38606,6 +43574,21 @@
       },
       {
        "kind": "class",
+       "id": "ad2f7c3b1813869a",
+       "course": "大学英语II",
+       "teachers": [
+        "霍丹"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        6,
+        7
+       ]
+      },
+      {
+       "kind": "class",
        "id": "71ccbbdc4931be83",
        "course": "英语语音",
        "teachers": [
@@ -38623,66 +43606,21 @@
      "仙林/教3-602": [
       {
        "kind": "class",
-       "id": "3e9fdf94a39d0988",
-       "course": "大学英语IV",
+       "id": "afc11bc0eea9afca",
+       "course": "大学英语II",
        "teachers": [
-        "龙翔"
+        "胡倩"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "44c9f9bc44145c19",
-       "course": "大学英语IV",
-       "teachers": [
-        "龙翔"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
+        6,
+        7
        ]
       }
      ],
      "仙林/教3-603": [
-      {
-       "kind": "class",
-       "id": "1601bf51907138b9",
-       "course": "大学英语IV",
-       "teachers": [
-        "李笑薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
-      {
-       "kind": "class",
-       "id": "4cdba317eb5a6e16",
-       "course": "大学英语IV",
-       "teachers": [
-        "李笑薇"
-       ],
-       "classes": [
-        "wbj"
-       ],
-       "periods": [
-        3,
-        4
-       ]
-      },
       {
        "kind": "class",
        "id": "8399b714140b69ea",
@@ -38702,36 +43640,66 @@
      "仙林/教3-604": [
       {
        "kind": "class",
-       "id": "d07d3e203c35d79f",
-       "course": "大学英语III",
+       "id": "b9f52b7a2c900dea",
+       "course": "大学英语II",
        "teachers": [
-        "刘长城"
+        "霍丹"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        6,
-        7
+        1,
+        2
        ]
       },
       {
        "kind": "class",
-       "id": "a2a96f1deeaa265d",
-       "course": "大学英语III",
+       "id": "dcefac4288d4aefa",
+       "course": "大学英语II",
        "teachers": [
-        "刘长城"
+        "霍丹"
        ],
        "classes": [
         "wbj"
        ],
        "periods": [
-        8,
-        9
+        3,
+        4
        ]
       }
      ],
      "仙林/教3-606": [
+      {
+       "kind": "class",
+       "id": "467efea5b50454e0",
+       "course": "大学英语II",
+       "teachers": [
+        "胡倩"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        1,
+        2
+       ]
+      },
+      {
+       "kind": "class",
+       "id": "13a1913eb51a8a5a",
+       "course": "大学英语II",
+       "teachers": [
+        "胡倩"
+       ],
+       "classes": [
+        "wbj"
+       ],
+       "periods": [
+        3,
+        4
+       ]
+      },
       {
        "kind": "class",
        "id": "4225f2a26b538706",
@@ -39403,25 +44371,6 @@
       }
      ],
      "仙林/教4-205": [
-      {
-       "kind": "class",
-       "id": "40fd05109aca4fea",
-       "course": "微纳光电器件及其应用",
-       "teachers": [
-        "郭艳东",
-        "曾红丽"
-       ],
-       "classes": [
-        "B240200",
-        "B240201",
-        "B240202",
-        "B240203"
-       ],
-       "periods": [
-        1,
-        2
-       ]
-      },
       {
        "kind": "class",
        "id": "f46b0f827d06dc2b",

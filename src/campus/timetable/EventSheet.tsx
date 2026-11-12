@@ -1,4 +1,4 @@
-import { eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type Timeline } from '@/world/events';
+import { coveredBy, covering, eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
 import { changeLines, changesOf, courseOf, lessonsLeft, publishedOn, sheetName, weeksText } from '@/world/exams';
 import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
@@ -21,7 +21,7 @@ function Together({ label, classes, people }: { label: string; classes: string[]
 }
 
 /**
- * One thing on the timetable, wherever it was tapped: a lesson, an exam or 早锻炼. It says what
+ * One thing on the timetable, wherever it was tapped: a lesson, a lab, an exam or 早锻炼. It says what
  * matters for going there and preparing, and links on to the course, the people and the rest.
  */
 export function EventSheet({ event, line, now, isMe, record, campus, onClose, onOpen, onHide, onSkipExam, onUnplan, onPlan, onExams }: {
@@ -53,6 +53,35 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
     const teachers = event.teachers.flatMap(teacher => teacher.split('、')).map(teacher => <a key={teacher} className="kv" href={whoLink('teacher', teacher)}><span className="k">老师</span><span className="v">{teacher} 的课表</span><Chevron /></a>);
     const course = <a className="kv" href={whoLink('course', courseName(event.name))}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a>;
 
+    const KIND = { class: '课', lab: '实验', exam: '考试', run: '早锻炼' } as const;
+    // What this takes the place of, and what takes its place: each opens.
+    const under = coveredBy(line, event).map(other => (
+        <button key={other.id} className="kv" onClick={() => onOpen(other)}><span className="k">同时段</span><span className="v">{other.name}<small>这次{KIND[other.kind]}不上，让给这场{KIND[event.kind]}</small></span><Chevron /></button>
+    ));
+    const over = covering(line, event).map(other => (
+        <button key={other.id} className="kv" onClick={() => onOpen(other)}><span className="k">同时段</span><span className="v">{other.name} {KIND[other.kind]}<small>这次{KIND[event.kind]}让给它</small></span><Chevron /></button>
+    ));
+
+    if (event.kind === 'lab' && event.lab) {
+        const lab = event.lab;
+        const facts = courseOf(line.meetings, lab);
+        return (
+            <Sheet title={<><span className="tag lab">实验</span>{event.name}</>} onClose={onClose}>
+                {facts && <div className="meta">{courseLine({ credits: facts.credits, nature: facts.nature })}</div>}
+                <div className="meta strong">{when} · {name ?? lab.place}</div>
+                {go}
+                <div className="kv"><span className="k">项目</span><span className="v">{lab.project}{lab.group !== null && <small>第 {lab.group} 组</small>}</span></div>
+                {lab.location !== lab.place && <div className="kv"><span className="k">座位</span><span className="v">{lab.location.replaceAll(',', '、')}</span></div>}
+                <Together label="一起上" classes={lab.classes} people={lab.students} />
+                {over}{under}
+                {teachers}
+                {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">教室</span><span className="v">{name} 的课表</span><Chevron /></a>}
+                {course}
+                <div className="kv"><span className="k">来源</span><span className="v">{sheetName(lab.source)}<small>实验中心排课表，{dateLabel(publishedOn(lab.source))} 的版本；调整以老师通知为准</small></span></div>
+            </Sheet>
+        );
+    }
+
     if (event.kind === 'exam' && event.exam) {
         const exam = event.exam;
         const facts = courseOf(line.meetings, exam);
@@ -65,6 +94,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
                 {go}
                 {changes.map(change => <div key={change.observed} className="kv"><span className="k">{change.change === 'added' ? '新发布' : '改过'}</span><span className="v">{dateLabel(change.observed)} 发现{change.change === 'changed' && changeLines(change).map(text => <small key={text}>{text}</small>)}</span></div>)}
                 <Together label="同考场" classes={exam.classes} people={exam.students} />
+                {under}
                 {exam.note && <div className="kv"><span className="k">备注</span><span className="v">{exam.note}</span></div>}
                 {teachers}
                 {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">考场</span><span className="v">{name} 的课表</span><Chevron /></a>}
@@ -87,6 +117,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, onClose, on
             {go}
             {meeting && <div className="kv"><span className="k">周次</span><span className="v">{weeksText(meeting.weeks)}<small>{left ? `还剩 ${left} 次` : '已经上完'}</small></span></div>}
             {meeting && <Together label="合班" classes={meeting.classes} people={meeting.teaching_class.size} />}
+            {over}
             {teachers}
             {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">教室</span><span className="v">{name} 的课表</span><Chevron /></a>}
             {course}

@@ -15,7 +15,7 @@ class Discovery(val app: AppRelease, val repository: AcademicRepository?, val un
     val appBehind get() = app.versionCode > top.hicancan.studev.BuildConfig.VERSION_CODE
 }
 internal fun appInManifest(text: String): AppRelease = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<ReleaseManifest>(text).android
-@Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null)
+@Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val labs: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null)
 @Serializable data class TeachingWeek(val week: Int, val start: String, val end: String)
 @Serializable data class TeachingTerm(val term: String, val year: Int, val number: Int, val weeks: List<TeachingWeek>, val observed_at: String)
 @Serializable data class TeachingPeriod(val period: Int, val start: String, val end: String, val part: String?)
@@ -33,6 +33,10 @@ internal fun appInManifest(text: String): AppRelease = kotlinx.serialization.jso
 @Serializable data class ClassSchedule(@SerialName("class") val klass: TeachingClass, val meetings: List<TeachingMeeting>)
 @Serializable data class ExamCourse(val code: String?, val name: String)
 @Serializable data class Exam(val id: String, val classes: List<String>, val course: ExamCourse, val teacher: String?, val campus: String?, val location: String, val room: String?, val date: String, val start: String, val end: String, val students: Int?, val note: String?, val source: String, val kind: String, val subtype: String)
+/** One lab sitting a laboratory centre scheduled: a course's project, on one date, over a run of periods. */
+@Serializable data class Lab(val id: String, val classes: List<String>, val group: Int?, val course: ExamCourse, val project: String, val teachers: List<String>, val location: String, val place: String, val room: String?, val week: Int, val weekday: Int, val periods: List<Int>, val date: String, val start: String, val end: String, val students: Int?, val source: String, val kind: String, val subtype: String)
+@Serializable data class LabIndex(val classes: List<String>)
+@Serializable data class ClassLabs(val labs: List<Lab>)
 @Serializable data class ExamSource(val file: String, val url: String, val notice: String, val title: String)
 @Serializable data class ExamIndex(val classes: List<String>, val sources: List<ExamSource>, val checked: String)
 @Serializable data class ExamSlot(val date: String, val start: String, val end: String, val campus: String? = null, val location: String? = null, val teacher: String? = null, val students: Int? = null)

@@ -7,7 +7,7 @@ import type { Exam, ExamChange, Room, Building, TeachingClass, TeachingMeeting }
 const tempRoot = process.platform === 'win32' ? 'D:/Temp/codex' : '/tmp/codex';
 const read = async <T>(path: string): Promise<T> => JSON.parse(await readFile(path, 'utf8')) as T;
 let taskDir: string, input: string, output: string;
-let release: { version: string; data_version: string; teaching: string; exams: string; rooms: string };
+let release: { version: string; data_version: string; teaching: string; exams: string; labs: string; rooms: string };
 let places: Array<{ id: string; kind: string; parent?: string; names?: string[] }>;
 beforeAll(async () => {
     await mkdir(tempRoot, { recursive: true });
@@ -16,7 +16,7 @@ beforeAll(async () => {
     release = await read('src/data/campus-release.json');
     input = join('.data', release.data_version);
     places = await read(join('public/data', release.version, 'space/仙林/entities.json'));
-    await packageFacts(input, output, { teaching: [release.teaching], exams: [release.exams], rooms: [release.rooms] }, places);
+    await packageFacts(input, output, { teaching: [release.teaching], exams: [release.exams], labs: [release.labs], rooms: [release.rooms] }, places);
 });
 afterAll(async () => {
     if (taskDir && resolve(taskDir).startsWith(resolve(tempRoot) + sep)) await rm(taskDir, { recursive: true, force: true });

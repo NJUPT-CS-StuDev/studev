@@ -6,10 +6,10 @@ import { buildingOf, courseName, roomLabel, unplaced } from '@/world/names';
 import { addDays, daysBetween, dateLabel, durationText, hm, minutesOf, momentText, startOfWeek, WEEKDAYS, type Moment } from '@/world/time';
 import { walkMinutes } from '@/world/walk';
 import { Chevron } from '@/world/ui';
-import { courseIdentity, courseTones, courseToneStyle } from '@/timetable/model/courseColors';
+import { courseIdentity, courseToneStyle, timelineTones } from '@/timetable/model/courseColors';
 
-const tileStyle = (event: CampusEvent, tones: Map<string, number>) => event.meeting ? courseToneStyle(tones.get(courseIdentity(event.meeting))!) : undefined;
-const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'run' ? 'run' : '';
+const tileStyle = (event: CampusEvent, tones: Map<string, number>) => { const course = event.meeting ?? event.lab; return course ? courseToneStyle(tones.get(courseIdentity(course))!) : undefined; };
+const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'run' ? 'run' : event.kind === 'lab' ? 'lab' : '';
 /** Free rooms are the rooms dimension of search, at a moment. */
 const roomsAt = (date: string, min: number) => `/search/?scope=room&t=${momentText({ date, min })}`;
 
@@ -45,8 +45,9 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
 export function DayView({ line, day, now, isMe, record, onPick, onOpen }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const today = day === now.date;
-    const events = eventsOn(line, day);
-    const tones = courseTones(line.meetings);
+    // What a lab or an exam covers is not drawn here: the day shows what one goes to. Its sheet names what it covers.
+    const events = eventsOn(line, day).filter(event => !event.covered);
+    const tones = timelineTones(line);
     const strip = (
         <div className="days">
             {Array.from({ length: 7 }, (_, index) => {
@@ -86,7 +87,7 @@ export function DayView({ line, day, now, isMe, record, onPick, onOpen }: { line
                     const start = Math.max(today ? Math.max(event.end, now.min) : event.end, opens);
                     return <div key={event.id}>
                         <button className={`t ${tileClass(event, record)}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), ...tileStyle(event, tones) }} onClick={() => onOpen(event)}>
-                            {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
+                            {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.lab ? ` · ${event.lab.project}` : ''}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
                         </button>
                         {next && next.start - start >= 30 && next.start - event.end >= 45 && gap(start, next.start, `gap${index}`)}
                     </div>;

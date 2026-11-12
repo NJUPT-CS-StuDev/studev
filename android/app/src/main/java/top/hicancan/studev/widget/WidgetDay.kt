@@ -10,8 +10,8 @@ import java.time.LocalDate
 /** What the home-screen widget shows: the rest of today, or the next day that has something. */
 object WidgetDay {
     fun of(line: CampusLine, now: Moment): List<LineEvent> =
-        line.on(now.date).filter { it.end > now.min }.ifEmpty {
-            generateSequence(now.date.plusDays(1)) { it.plusDays(1) }.take(30).map(line::on).firstOrNull { it.isNotEmpty() }.orEmpty()
+        line.on(now.date).filter { it.end > now.min && !it.covered }.ifEmpty {
+            generateSequence(now.date.plusDays(1)) { it.plusDays(1) }.take(30).map { day -> line.on(day).filter { !it.covered } }.firstOrNull { it.isNotEmpty() }.orEmpty()
         }
 
     /** The week a "now" view shows (what is left of this one, or the next one once it is over), Monday to
