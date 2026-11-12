@@ -52,7 +52,7 @@ export default function MeApp() {
     };
     if (!open) return null;
     const order = prefs.layers ?? LAYER_ORDER;
-    const KIND_NAMES: Record<EventKind, string> = { exam: '考试', lab: '实验', class: '课程', run: '早锻炼' };
+    const KIND_NAMES: Record<EventKind, string> = { exam: '考试', task: '任务', lab: '实验', class: '课程', run: '早锻炼' };
     // Moving one up a step swaps it with the one before: the whole order is always written.
     const raise = (kind: EventKind) => writePreferences(current => {
         const next = [...(current.layers ?? LAYER_ORDER)];

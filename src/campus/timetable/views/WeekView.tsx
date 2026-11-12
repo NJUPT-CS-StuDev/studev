@@ -1,7 +1,8 @@
 import type { TeachingMeeting } from '@/world/facts';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
-import { eventsOn, layers, meetingAround, weekOfDate, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
+import { dueOn, eventsOn, layers, meetingAround, weekOfDate, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
+import type { Task } from '@/world/tasks';
 import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
 import { courseName, courseShort, roomLabel, roomShort } from '@/world/names';
@@ -16,7 +17,7 @@ const tileNote = (event: CampusEvent, wide: boolean) => event.lab
     ? `${wide ? '实验 · ' : ''}${event.lab.room ? roomShort(event.lab.room) : event.lab.short}`
     : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
 
-export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void }) {
+export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen, onTask }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void; onTask: (task: Task) => void }) {
     const monday = startOfWeek(day);
     const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index));
     const week = weekOfDate(line.term, monday);
@@ -32,6 +33,8 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
     const y = (minutes: number) => Math.round((minutes - from) * scale);
     const height = y(DAY_END);
     const inThisWeek = days.includes(now.date);
+    // Tasks due by the end of a day, with no time of their own, sit in a row under the day they are due.
+    const dues = days.map(date => dueOn(line, date));
     const lines = line.periods.map(period => <div key={period.period} className="hl" style={{ top: y(minutesOf(period.start)) }} />);
     return (
         <div className="wk" style={{ gridTemplateColumns: `${wide ? '68px' : '38px'} repeat(${columns},minmax(0,1fr))` }}>
@@ -40,6 +43,13 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                 const holiday = line.holidays.get(date);
                 return <div key={date} className={`dh ${date === now.date ? 'today' : ''}`}>{WEEKDAYS[index + 1]}<small>{holiday ?? `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`}</small></div>;
             })}
+            {dues.slice(0, columns).some(list => list.length) && <>
+                <div className="due-k">截止</div>
+                {dues.slice(0, columns).map((list, index) => <div key={index} className="due">
+                    {list.slice(0, 3).map(task => <button key={task.id} className={task.done ? 'task-done' : ''} onClick={() => onTask(task)}>{task.title}</button>)}
+                    {list.length > 3 && <small>+{list.length - 3}</small>}
+                </div>)}
+            </>}
             <div className="ax" style={{ height }}>
                 {line.periods.map(period => <span key={period.period} style={{ top: y(minutesOf(period.start)), height: y(minutesOf(period.end)) - y(minutesOf(period.start)) }}>{period.period}<small>{period.start}<br />{period.end}</small></span>)}
                 {inThisWeek && <b className="nowlab" style={{ top: y(now.min) }}>{hm(now.min)}</b>}
@@ -67,7 +77,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                         {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
                         {layers(today, order).map(({ event, under, over }) => {
                             const tone = eventTone(tones, event, line.meetings);
-                            return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`}
+                            return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''} ${event.task?.done ? 'done' : ''}`}
                                 style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(tone !== undefined ? courseToneStyle(tone) : {}) }} onClick={() => onOpen(event)}>
                                 {wide ? event.name : event.short}<small>{tileNote(event, wide)}</small>
                                 {over === 0 && under > 0 && <i className="more">+{under}</i>}

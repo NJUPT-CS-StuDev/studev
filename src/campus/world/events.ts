@@ -1,23 +1,27 @@
-// A person or room unfolded along time: lessons, labs, exams, the school calendar and 早锻炼 on one line.
+// A person or room unfolded along time: lessons, labs, exams, the school calendar, 早锻炼 and one's own tasks on one line.
 import type { Exam, Lab, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { courseName, courseShort } from './names';
 import type { CalendarTerm, MorningRun } from './data';
+import type { Task } from './tasks';
 import { addDays, daysBetween, minutesOf, startOfWeek, weekdayOf, type Moment } from './time';
 
 export interface CampusEvent {
-    kind: 'class' | 'lab' | 'exam' | 'run';
+    kind: 'class' | 'lab' | 'exam' | 'run' | 'task';
     id: string; date: string; name: string; short: string; start: number; end: number;
     room: string | null; teachers: string[];
-    meeting?: TeachingMeeting; lab?: Lab; exam?: Exam;
+    meeting?: TeachingMeeting; lab?: Lab; exam?: Exam; task?: Task;
 }
 export type EventKind = CampusEvent['kind'];
 
 /**
  * Things on the line may share a time: a lab during a lecture, two labs at once, later one's own task during a
  * lesson. Sharing a time says only that they clash; neither is called off. Which one shows in front is a choice
- * of the person looking, front first. By default an exam, then a lab, then a lesson, then 早锻炼.
+ * of the person looking, front first. By default an exam; then one's own task, a plan made for that time; then a
+ * lab, a lesson, 早锻炼.
  */
-export const LAYER_ORDER: readonly EventKind[] = ['exam', 'lab', 'class', 'run'];
+export const LAYER_ORDER: readonly EventKind[] = ['exam', 'task', 'lab', 'class', 'run'];
+/** A task given a time but no end takes this long on the line. */
+export const TASK_MINUTES = 30;
 const clash = (left: CampusEvent, right: CampusEvent) => left !== right && left.date === right.date && left.start < right.end && right.start < left.end;
 const frontFirst = (order: readonly EventKind[]) => (left: CampusEvent, right: CampusEvent) =>
     order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
@@ -56,6 +60,8 @@ export interface RunPlan { rule: MorningRun; days: string[]; adjust: number }
 export interface Timeline {
     term: TeachingTerm; periods: TeachingPeriod[]; meetings: TeachingMeeting[]; labs: Lab[]; exams: Exam[];
     holidays: Map<string, string>; run: RunPlan | null;
+    /** One's own tasks, steps included; only someone's own line has any. */
+    tasks: Task[];
 }
 
 export const weekOfDate = (term: TeachingTerm, date: string) => term.weeks.find(week => week.start <= date && date <= week.end)?.week ?? null;
@@ -114,11 +120,19 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
             start: minutesOf(exam.start), end: minutesOf(exam.end), room: exam.room ?? exam.location, teachers: exam.teacher ? [exam.teacher] : [], exam,
         });
     }
+    // A task with a time stands at it; its steps go with it, not on the line.
+    for (const task of line.tasks) {
+        if (task.parent || task.date !== date || task.start === undefined) continue;
+        out.push({ kind: 'task', id: task.id, date, name: task.title, short: task.title, start: task.start, end: task.end ?? Math.min(1440, task.start + TASK_MINUTES), room: null, teachers: [], task });
+    }
     if (line.run?.days.includes(date)) {
         out.push({ kind: 'run', id: `run@${date}`, date, name: '早锻炼', short: '早锻炼', start: minutesOf(line.run.rule.time[0]), end: minutesOf(line.run.rule.time[1]), room: null, teachers: [] });
     }
     return out.sort((left, right) => left.start - right.start || frontFirst(LAYER_ORDER)(left, right));
 }
+
+/** The tasks due by the end of a day, with no time of their own. */
+export const dueOn = (line: Timeline, date: string) => line.tasks.filter(task => !task.parent && task.date === date && task.start === undefined);
 
 /** What else is on at the same time as an event. */
 export const overlapping = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => other.id !== event.id && clash(other, event));
@@ -140,11 +154,11 @@ export function meetingAround(line: Timeline, meetingId: string, from: string): 
     return null;
 }
 
-/** What comes next, not counting 早锻炼: it is optional on any given morning. Of two starting together, the one in front. */
+/** The next lesson, lab or exam: not 早锻炼, optional on any given morning, nor one's own task. Of two starting together, the one in front. */
 export function nextEvent(line: Timeline, now: Moment, horizon = 40): CampusEvent | null {
     for (let offset = 0; offset < horizon; offset++) {
         const date = addDays(now.date, offset);
-        for (const event of eventsOn(line, date)) if (event.kind !== 'run' && (offset > 0 || event.end > now.min)) return event;
+        for (const event of eventsOn(line, date)) if (event.kind !== 'run' && event.kind !== 'task' && (offset > 0 || event.end > now.min)) return event;
     }
     return null;
 }

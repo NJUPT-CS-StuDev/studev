@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { clusters, eventsOn, examDays, layers, nextEvent, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
+import { clusters, dueOn, eventsOn, examDays, layers, nextEvent, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
+import { toggleDone, type Task } from '@/world/tasks';
 import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
 import { buildingOf, courseName, roomLabel, unplaced } from '@/world/names';
@@ -9,7 +10,7 @@ import { Chevron } from '@/world/ui';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 
 const tileStyle = (event: CampusEvent, tones: Map<string, number>, line: Timeline) => { const tone = eventTone(tones, event, line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
-const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'run' ? 'run' : event.kind === 'lab' ? 'lab' : '';
+const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'class' ? '' : event.kind;
 /** Free rooms are the rooms dimension of search, at a moment. */
 const roomsAt = (date: string, min: number) => `/search/?scope=room&t=${momentText({ date, min })}`;
 
@@ -42,7 +43,7 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     );
 }
 
-export function DayView({ line, day, now, isMe, record, order, onPick, onOpen }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; order: readonly EventKind[]; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
+export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, onTask }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; order: readonly EventKind[]; onTask: (task: Task) => void; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const today = day === now.date;
     const events = eventsOn(line, day);
@@ -58,11 +59,20 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen }:
         </div>
     );
     const head = isMe && today ? <NextBlock line={line} now={now} /> : null;
-    if (!events.length) return <>{head}{strip}<div className="empty">{line.holidays.get(day) ?? '这一天没有安排'}</div></>;
+    // What is due by the end of the day, with no time of its own, is listed above the day's hours.
+    const due = dueOn(line, day);
+    const dues = due.length > 0 && <div className="dues">
+        <h3 className="sh">今天截止</h3>
+        {due.map(task => <div key={task.id} className={`trow-i p${task.priority ?? 0}`}>
+            <button className={`tcheck ${task.done ? 'on' : ''}`} aria-label={task.done ? '标为未完成' : '完成'} onClick={() => toggleDone(task)} />
+            <button className="tmain" onClick={() => onTask(task)}><b className={task.done ? 'task-done' : ''}>{task.title}</b></button>
+        </div>)}
+    </div>;
+    if (!events.length) return <>{head}{strip}{dues}{!due.length && <div className="empty">{line.holidays.get(day) ?? '这一天没有安排'}</div>}</>;
     const fold = today && isMe;
     const gone = fold ? events.filter(event => event.end <= now.min) : [];
     const live = fold ? events.filter(event => event.end > now.min) : events;
-    if (!live.length) return <>{head}{strip}{gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {gone.map(event => event.short).join('、')}</div>}<div className="empty">今天的课都上完了</div></>;
+    if (!live.length) return <>{head}{strip}{dues}{gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {gone.map(event => event.short).join('、')}</div>}<div className="empty">今天的课都上完了</div></>;
     // The campus day opens with the first period. Before that nobody looks for a room, and the column does not
     // stretch back to midnight: "now" joins it only within the hour before the day's first thing.
     const opens = minutesOf(line.periods[0]!.start);
@@ -76,14 +86,14 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen }:
     const gap = (start: number, end: number, key: string) => <a key={key} className="gapbtn" style={{ top: y((start + end) / 2) }} href={roomsAt(day, start)}>空 {durationText(end - start)} · 看这时的空教室<Chevron /></a>;
     return (
         <>
-            {head}{strip}
+            {head}{strip}{dues}
             {gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {gone.map(event => event.short).join('、')}</div>}
             <div className="tl" style={{ height: y(to) }}>
                 {hours.map(time => <div key={time}><div className="hl" style={{ top: y(time) }} />{!(awake && Math.abs(time - now.min) < 16) && <div className="hn" style={{ top: y(time) }}>{time / 60}:00</div>}</div>)}
                 {awake && live[0]!.start - free >= 45 && gap(free, live[0]!.start, 'first')}
                 {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
                 {layers(live, order).map(({ event, under, over }) => (
-                    <button key={event.id} className={`t ${tileClass(event, record)}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), right: under * 8, ...tileStyle(event, tones, line) }} onClick={() => onOpen(event)}>
+                    <button key={event.id} className={`t ${tileClass(event, record)} ${event.task?.done ? 'done' : ''}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), right: under * 8, ...tileStyle(event, tones, line) }} onClick={() => onOpen(event)}>
                         {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.lab ? ` · ${event.lab.project}` : ''}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
                         {over === 0 && under > 0 && <i className="more">同时段另有 {under} 项</i>}
                     </button>

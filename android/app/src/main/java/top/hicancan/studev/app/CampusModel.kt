@@ -33,6 +33,8 @@ data class AcademicState(val repository: AcademicRepository? = null, val term: T
 }
 class CampusModel(application: Application) : AndroidViewModel(application) {
     val settings = CampusSettings(application)
+    /** One's own tasks, on this device. */
+    val tasks = top.hicancan.studev.me.TaskStore(application)
     private val _state = MutableStateFlow(AcademicState())
     val state = _state.asStateFlow()
     private val _notice = MutableStateFlow<String?>(null)
@@ -175,13 +177,13 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         syncPhone()
     }
     /** The visitor's own timeline, the same line the web draws. */
-    fun myLine(state: AcademicState, settings: PersonalSettings): CampusLine? {
+    fun myLine(state: AcademicState, settings: PersonalSettings, tasks: List<top.hicancan.studev.world.Task> = top.hicancan.studev.me.TaskStore.live(this.tasks.all.value)): CampusLine? {
         val term = state.term ?: return null
         val repo = state.repository ?: return null
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
         return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.schedule, state.exams), state.holidays,
-            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) })
+            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) }, tasks)
     }
     private var allMeetings: Deferred<List<TeachingMeeting>>? = null
     /** Every meeting of the term, for viewing a teacher, a course or a room. */

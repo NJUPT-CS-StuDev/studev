@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { updateExamAttendance, updateRun, updateTimetableEdits, writePreferences } from '@/world/preferences';
 import { courseIdentity } from '@/timetable/model/courseColors';
 import { usePreferences } from '@/world/usePreferences';
+import { useTasks } from '@/world/useTasks';
 import { LAYER_ORDER, lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
 import { loadExamRecord, type ExamRecord } from '@/world/data';
 import { roomLabel } from '@/world/names';
@@ -17,9 +18,14 @@ import { TermView, type TermMode } from './views/TermView';
 import { EventSheet } from './EventSheet';
 import { CalendarSheet } from './CalendarSheet';
 import { PreviewDock } from './PreviewDock';
+import { TaskSheet } from './TaskSheet';
+import { ListView } from './views/ListView';
+import { courseName } from '@/world/names';
+import type { Task } from '@/world/tasks';
 import '../campus.css';
 
-const SCALES = [['day', '天'], ['week', '周'], ['term', '学期']] as const;
+// The list is one's own: tasks by when they are due, exams among them.
+const SCALES = [['day', '天'], ['week', '周'], ['term', '学期'], ['list', '清单']] as const;
 type Scale = typeof SCALES[number][0];
 const whoTitle = (who: Exclude<Who, { type: 'me' }>) => who.type === 'teacher' ? `${who.id} 老师` : who.type === 'room' ? roomLabel(who.id) : who.id;
 
@@ -34,8 +40,11 @@ export default function TimetableApp() {
     const scale = (params.get('scale') as Scale | null) ?? (wide ? 'week' : 'day');
     const picked = /^\d{4}-\d{2}-\d{2}$/.test(params.get('t') ?? '') ? params.get('t')! : null;
     const preview = params.get('preview');
-    const { loaded, error, previewRows } = useTimeline(who, prefs, ready, preview);
+    const tasks = useTasks();
+    const { loaded, error, previewRows } = useTimeline(who, prefs, ready, preview, tasks);
     const [open, setOpen] = useState<CampusEvent | null>(null);
+    // A task is opened by its id, so the sheet always shows it as it now is.
+    const [taskId, setTaskId] = useState<string | null>(null);
     const [calendar, setCalendar] = useState(false);
     const classId = who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null;
     const [record, setRecord] = useState<ExamRecord | null>(null);
@@ -87,13 +96,17 @@ export default function TimetableApp() {
     const last = scale === 'term' ? lastLesson(line) : null;
     const monday = startOfWeek(day);
     const termName = `${term.year}–${term.year + 1} 学年第${term.number === 1 ? '一' : '二'}学期`;
-    const title = !isMe ? whoTitle(who) : scale === 'term' ? termName : scale === 'week' ? (week ? `第 ${week} 周` : '假期') : `${dateLabel(day)} ${WEEKDAYS[weekdayOf(day)]}`;
-    const subtitle = scale === 'term'
+    const title = !isMe ? whoTitle(who) : scale === 'list' ? '清单' : scale === 'term' ? termName : scale === 'week' ? (week ? `第 ${week} 周` : '假期') : `${dateLabel(day)} ${WEEKDAYS[weekdayOf(day)]}`;
+    const pending = line.tasks.filter(task => !task.parent && !task.done).length;
+    const subtitle = scale === 'list' ? (pending ? `${pending} 件要做` : '没有要做的事') : scale === 'term'
         ? `${dateLabel(term.weeks[0]!.start)} – ${dateLabel(term.weeks.at(-1)!.end)} · ${nowWeek ? `第 ${nowWeek} / ${term.weeks.length} 周` : `${term.weeks.length} 周`}${last ? ` · 课上到 ${dateLabel(last)}` : ''}`
         : scale === 'week' ? `${ahead === 1 ? '下周 · ' : ahead > 1 ? `${ahead} 周后 · ` : ''}${dateLabel(monday)} – ${dateLabel(addDays(monday, 6))}` : week ? `第 ${week} 周` : '假期';
-    const showShift = scale !== 'term' && !(scale === 'day' && !wide);
+    const showShift = scale !== 'term' && scale !== 'list' && !(scale === 'day' && !wide);
     const shift = (direction: number) => set({ t: addDays(day, direction * (scale === 'week' ? 7 : 1)) });
-    const openEvent = (event: CampusEvent) => setOpen(event);
+    const openEvent = (event: CampusEvent) => event.task ? setTaskId(event.task.id) : setOpen(event);
+    const openTask = (task: Task) => setTaskId(task.id);
+    const editing = taskId ? line.tasks.find(task => task.id === taskId) ?? null : null;
+    const courses = new Map(line.meetings.map(meeting => [courseIdentity(meeting), courseName(meeting.course.name)]));
 
     const mine = {
         hideCourse: (id: string) => updateTimetableEdits(term.term, edits => edits.added.includes(id)
@@ -123,16 +136,18 @@ export default function TimetableApp() {
                     </div>
                 </header>
                 <div className="tabs" role="tablist">
-                    {SCALES.map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
+                    {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
                 </div>
-                {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
-                {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} />}
+                {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} onTask={openTask} />}
+                {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} onTask={openTask} />}
+                {scale === 'list' && isMe && <ListView line={line} now={now} courses={courses} onTask={openTask} onOpen={openEvent} />}
                 {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
             </div>
             {calendar && prefs.class && <CalendarSheet line={line} className={prefs.class} prefs={prefs} onClose={() => setCalendar(false)} />}
+            {editing && <TaskSheet key={editing.id} task={editing} line={line} onClose={() => setTaskId(null)} />}
             {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} order={prefs.layers ?? LAYER_ORDER} onClose={() => setOpen(null)} onOpen={setOpen}
                 onSkipLab={event => { mine.labs('skip', event.lab!.id); setOpen(null); }}
                 onDropLab={event => { mine.labs('drop', courseIdentity(event.lab!)); setOpen(null); }}

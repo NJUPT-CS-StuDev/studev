@@ -78,7 +78,7 @@ open class CampusWidget : GlanceAppWidget() {
             val moment = now.atZone(CampusDay.zone).let { Moment(it.toLocalDate(), it.hour * 60 + it.minute) }
             var unavailable = false
             val line = try {
-                if (settings.klass == null) null else AcademicRepository.open(context).line(settings)
+                if (settings.klass == null) null else AcademicRepository.open(context).line(settings, top.hicancan.studev.me.TaskStore.live(top.hicancan.studev.me.TaskStore(context).all.value))
             } catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
             val json = when {
                 settings.klass == null -> placeholder("StuDev", "打开 StuDev 选择班级")

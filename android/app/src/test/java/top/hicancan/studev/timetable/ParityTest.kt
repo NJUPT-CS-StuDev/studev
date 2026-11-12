@@ -40,6 +40,34 @@ class ParityTest {
             assertEquals(row.toString(), row.getValue("expected").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("state").jsonPrimitive.content }, got.map { it.place.id to it.status.name.lowercase() })
         }
     }
+    @Test fun tasksStandOnTheLineAndAreGroupedOrderedAndRead() {
+        val tasks = golden.getValue("tasks").jsonObject
+        val labs = golden.getValue("labs").jsonObject
+        val list = json.decodeFromJsonElement<List<Task>>(tasks.getValue("list"))
+        val taskLine = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, list)
+        fun taskBrief(event: LineEvent) = JsonObject(brief(event) + mapOf("id" to JsonPrimitive(event.id), "lab" to (event.lab?.let { JsonPrimitive(it.id) } ?: JsonNull)))
+        tasks.getValue("days").jsonArray.forEach { item ->
+            val day = item.jsonObject
+            val date = LocalDate.parse(day.getValue("date").jsonPrimitive.content)
+            assertEquals(day.getValue("events"), JsonArray(taskLine.on(date).map(::taskBrief)))
+            assertEquals(day.getValue("due").jsonArray.map { it.jsonPrimitive.content }, taskLine.dueOn(date).map { it.id })
+            assertEquals(day.getValue("layers"), JsonArray(CampusLine.layers(taskLine.on(date)).map { buildJsonObject { put("id", it.event.id); put("under", it.under); put("over", it.over) } }))
+        }
+        val at = tasks.getValue("now").jsonObject
+        val now = Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int)
+        assertEquals(tasks.getValue("groups").jsonArray.map { it.jsonObject.getValue("group").jsonPrimitive.content }, list.map { Tasks.group(it, now) })
+        assertEquals(tasks.getValue("order").jsonArray.map { it.jsonPrimitive.content }, list.sortedWith(Tasks.order).map { it.id })
+        val reminders = list.flatMap { task -> task.remind.orEmpty().map { remind -> Tasks.reminderAt(task, remind)!!.let { (date, min) -> buildJsonObject { put("id", task.id); put("remind", remind); putJsonObject("at") { put("date", date.toString()); put("min", min) } } } } }
+        assertEquals(tasks.getValue("reminders"), JsonArray(reminders))
+        tasks.getValue("parse").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            val quick = Tasks.parse(test.getValue("input").jsonPrimitive.content, Moment(LocalDate.parse("2026-11-12"), 600))
+            val expected = test.getValue("result").jsonObject
+            assertEquals(test.toString(), expected.getValue("title").jsonPrimitive.content, quick.title)
+            assertEquals(test.toString(), expected["date"]?.jsonPrimitive?.content, quick.date)
+            assertEquals(test.toString(), expected["start"]?.jsonPrimitive?.int, quick.start)
+        }
+    }
     @Test fun labsTakeTheirPlaceAmongLessonsAndExams() {
         val labs = golden.getValue("labs").jsonObject
         val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(labs.getValue("meetings"))

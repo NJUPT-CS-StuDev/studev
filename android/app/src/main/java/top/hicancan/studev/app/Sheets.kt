@@ -57,12 +57,12 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     val tones = remember(line) { top.hicancan.studev.timetable.TimetablePresentation.tones(line) }
     @Composable fun colours(item: LineEvent): Pair<Color, Color> = when (item.kind) {
         "exam" -> mark.exam to mark.onExam
-        "run" -> Ink.sunken to Ink.text
+        "run", "task" -> Ink.sunken to Ink.text
         else -> top.hicancan.studev.timetable.TimetablePresentation.toneOf(item, tones, line.meetings)?.let { tone(it) }?.let { it.bg to it.fg } ?: (Ink.sunken to Ink.text)
     }
     val group = CampusLine.clusters(line.on(date), settings.layers).firstOrNull { run -> run.events.any { it.id == event.id } }
     val together = group?.events?.takeIf { it.size > 1 }?.sortedWith(compareBy<LineEvent> { settings.layers.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }).orEmpty()
-    val kindNames = mapOf("class" to "课", "lab" to "实验", "exam" to "考试", "run" to "早锻炼")
+    val kindNames = mapOf("class" to "课", "lab" to "实验", "exam" to "考试", "run" to "早锻炼", "task" to "任务")
     val strip: (@Composable () -> Unit)? = if (together.isEmpty()) null else ({
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             together.forEach { item ->
@@ -77,6 +77,12 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         }
     })
     val head = colours(event)
+    event.task?.let { opened ->
+        val tasks by model.tasks.all.collectAsStateWithLifecycle()
+        val task = tasks.firstOrNull { it.id == opened.id && it.deleted != true } ?: run { LaunchedEffect(opened.id) { onClose() }; return }
+        top.hicancan.studev.timetable.TaskSheet(task, line, model.tasks, strip, onClose)
+        return
+    }
     if (event.kind == "run" && plan != null) {
         val place = plan.rule.xianlin
         PlainSheet("早锻炼", onClose, strip, head) {
@@ -152,7 +158,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     }
 }
 
-private val KIND_NAMES = mapOf("exam" to "考试", "lab" to "实验", "class" to "课程", "run" to "早锻炼")
+private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to "实验", "class" to "课程", "run" to "早锻炼")
 
 /** Which kind shows in front when things overlap. Moving one up a step swaps it with the one before. */
 @Composable fun LayerSheet(settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {

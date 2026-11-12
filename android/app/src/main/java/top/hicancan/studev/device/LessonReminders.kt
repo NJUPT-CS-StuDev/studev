@@ -18,14 +18,29 @@ import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.world.LineEvent
 import top.hicancan.studev.world.startsAt
 import java.time.Instant
+import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
-data class ReminderPlan(val event: LineEvent, val at: Instant)
+/** One reminder to deliver: what it says, where it leads, and when. */
+data class ReminderPlan(val id: String, val title: String, val room: String?, val at: Instant, val start: Instant)
 enum class ReminderScheduleMode { ExactAlarm, WorkManager }
 object ReminderTimes {
+    /** Lessons, labs and exams remind a set time before they start, when lesson reminders are on. */
     fun plans(events: List<LineEvent>, leadMinutes: Int, now: Instant): List<ReminderPlan> = events.map {
-        ReminderPlan(it, it.startsAt.minusSeconds(leadMinutes.coerceIn(1, 120) * 60L))
-    }.filter { it.at > now }.distinctBy { it.event.id }
+        val lead = leadMinutes.coerceIn(1, 120)
+        val title = "${when (it.kind) { "exam" -> "考试"; "lab" -> "实验"; else -> "上课" }}还有 $lead 分钟 · ${it.name}"
+        ReminderPlan(it.id, title, it.room, it.startsAt.minusSeconds(lead * 60L), it.startsAt)
+    }.filter { it.at > now }.distinctBy { it.id }
+    /** One's own tasks remind when each was asked to: they are theirs, so they do not wait for lesson reminders to be on. */
+    fun taskPlans(tasks: List<top.hicancan.studev.world.Task>, now: Instant): List<ReminderPlan> = tasks.filter { it.parent == null && it.done == null }.flatMap { task ->
+        task.remind.orEmpty().mapNotNull { remind ->
+            val (date, min) = top.hicancan.studev.world.Tasks.reminderAt(task, remind) ?: return@mapNotNull null
+            val at = date.atStartOfDay(top.hicancan.studev.world.CampusDay.zone).plusMinutes(min.toLong()).toInstant()
+            val start = LocalDate.parse(task.date).atStartOfDay(top.hicancan.studev.world.CampusDay.zone).plusMinutes((task.start ?: 1439).toLong()).toInstant()
+            val title = if (task.start != null) (if (remind == 0) "任务开始 · ${task.title}" else "任务 · ${task.title}") else "今天截止 · ${task.title}"
+            ReminderPlan("task:${task.id}:$remind", title, null, at, start)
+        }
+    }.filter { it.at > now }
 
     fun mode(exactAllowed: Boolean): ReminderScheduleMode =
         if (exactAllowed) ReminderScheduleMode.ExactAlarm else ReminderScheduleMode.WorkManager
@@ -38,44 +53,39 @@ object LessonReminders {
         Intent(context, ReminderReceiver::class.java).setAction("studev.reminder").setData(Uri.parse("studev-reminder://event/" + Uri.encode(id)))
             .putExtra("title", title).putExtra("room", room), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     @SuppressLint("ScheduleExactAlarm")
-    suspend fun sync(context: Context, events: List<LineEvent>, enabled: Boolean, lead: Int) = withContext(Dispatchers.IO) {
+    suspend fun sync(context: Context, events: List<LineEvent>, tasks: List<top.hicancan.studev.world.Task>, enabled: Boolean, lead: Int) = withContext(Dispatchers.IO) {
         val alarms = context.getSystemService(AlarmManager::class.java)
         val work = WorkManager.getInstance(context)
         val preferences = prefs(context)
         preferences.getStringSet("ids", emptySet()).orEmpty().forEach { alarms.cancel(pending(context, it)) }
         work.cancelAllWorkByTag(TAG).result.get()
         if (!enabled) context.getSystemService(NotificationManager::class.java).let { manager ->
-            manager.activeNotifications.filter { it.notification.channelId == TAG }.forEach { manager.cancel(it.id) }
+            manager.activeNotifications.filter { it.notification.channelId == TAG && it.tag == null }.forEach { manager.cancel(it.id) }
         }
         // A rolling seven-day window stays below the platform's per-app alarm limit.
         // The persisted maintenance worker replenishes it twice daily and after boot.
-        val plans = if (enabled) ReminderTimes.plans(events, lead, Instant.now()).filter { it.at < Instant.now().plusSeconds(7 * 86400L) } else emptyList()
-        val edit = preferences.edit().putStringSet("ids", plans.map { it.event.id }.toSet())
-        plans.forEach { edit.remove("sent:${it.event.id}") }
+        val now = Instant.now()
+        val plans = ((if (enabled) ReminderTimes.plans(events, lead, now) else emptyList()) + ReminderTimes.taskPlans(tasks, now)).filter { it.at < now.plusSeconds(7 * 86400L) }
+        val edit = preferences.edit().putStringSet("ids", plans.map { it.id }.toSet())
+        plans.forEach { edit.remove("sent:${it.id}") }
         edit.apply()
-        if (!enabled) return@withContext
         val mode = ReminderTimes.mode(exact(context))
         plans.forEach { plan ->
-            val event = plan.event
-            val title = "${when (event.kind) { "exam" -> "考试"; "lab" -> "实验"; else -> "上课" }}还有 $lead 分钟 · ${event.name}"
             when (mode) {
                 ReminderScheduleMode.ExactAlarm -> try {
-                    alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, plan.at.toEpochMilli(), pending(context, event.id, title, event.room))
+                    alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, plan.at.toEpochMilli(), pending(context, plan.id, plan.title, plan.room))
                 } catch (_: SecurityException) {
                     // Permission may have been revoked between the decision and
                     // the call. Rebuild once through the same fallback policy.
-                    val fallback = fallback(event, title, plan.at)
-                    work.enqueueUniqueWork("$TAG:${event.id}", ExistingWorkPolicy.REPLACE, fallback)
+                    work.enqueueUniqueWork("$TAG:${plan.id}", ExistingWorkPolicy.REPLACE, fallback(plan))
                 }
-                ReminderScheduleMode.WorkManager -> {
-                    work.enqueueUniqueWork("$TAG:${event.id}", ExistingWorkPolicy.REPLACE, fallback(event, title, plan.at))
-                }
+                ReminderScheduleMode.WorkManager -> work.enqueueUniqueWork("$TAG:${plan.id}", ExistingWorkPolicy.REPLACE, fallback(plan))
             }
         }
     }
-    private fun fallback(event: LineEvent, title: String, at: Instant): OneTimeWorkRequest =
-        OneTimeWorkRequestBuilder<ReminderWorker>().setInputData(workDataOf("id" to event.id, "title" to title,
-            "room" to event.room, "start" to event.startsAt.toEpochMilli())).setInitialDelay((at.toEpochMilli() - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
+    private fun fallback(plan: ReminderPlan): OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<ReminderWorker>().setInputData(workDataOf("id" to plan.id, "title" to plan.title,
+            "room" to plan.room, "start" to plan.start.toEpochMilli())).setInitialDelay((plan.at.toEpochMilli() - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
             .addTag(TAG).build()
     @SuppressLint("MissingPermission")
     @Synchronized fun notify(context: Context, id: String, title: String, room: String?) {
@@ -83,7 +93,7 @@ object LessonReminders {
         val preferences = prefs(context)
         if (!preferences.getStringSet("ids", emptySet()).orEmpty().contains(id) || preferences.getBoolean("sent:$id", false)) return
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(TAG, "课程与考试提醒", NotificationManager.IMPORTANCE_HIGH))
+        manager.createNotificationChannel(NotificationChannel(TAG, "课程、考试与任务提醒", NotificationManager.IMPORTANCE_HIGH))
         val uri = Uri.parse("$PLATFORM_ORIGIN/" + if (room == null) "" else "map/?nav=${Uri.encode(room)}")
         val open = PendingIntent.getActivity(context, id.hashCode(), Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(uri),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

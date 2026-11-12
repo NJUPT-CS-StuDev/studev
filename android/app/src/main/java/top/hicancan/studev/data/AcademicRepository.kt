@@ -140,13 +140,13 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         return published
     }
     /** The person's lessons and exams along time. */
-    suspend fun line(settings: top.hicancan.studev.me.PersonalSettings): top.hicancan.studev.world.CampusLine {
+    suspend fun line(settings: top.hicancan.studev.me.PersonalSettings, tasks: List<top.hicancan.studev.world.Task> = emptyList()): top.hicancan.studev.world.CampusLine {
         val term = term()
         val klass = settings.klass
         val schedule = klass?.takeIf { id -> classes().any { it.id == id } }?.let { effectiveSchedule(it, settings.timetableEdits(term.term)) }
         val exams = klass?.let { effectiveExams(it, settings) }.orEmpty()
         val labs = if (klass != null && schedule != null) top.hicancan.studev.timetable.CourseCatalog.attendingLabs(personalLabs(klass, schedule(klass), schedule), settings.labs) else emptyList()
-        return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null)
+        return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null, tasks)
     }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {
         val edits = settings.timetableEdits(release.teaching)

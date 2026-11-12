@@ -55,6 +55,40 @@
   /* One in front of others names how many are behind it. */
   .t .more{position:absolute;right:3px;bottom:2px;font-style:normal;font-size:10px;line-height:13px;padding:0 3px;border-radius:3px;background:var(--paper);color:var(--ink);font-weight:600;box-shadow:0 0 0 1px var(--line)}
   .tl .t .more{font-size:11px;line-height:15px;padding:0 5px;bottom:4px;right:4px}
+  /* One's own task: paper with the brand's edge, struck through once done. */
+  .t.task{background:var(--paper);box-shadow:inset 3px 0 0 var(--brand),inset 0 0 0 1px color-mix(in srgb,var(--brand) 45%,var(--line));color:var(--ink);padding-left:6px}
+  .t.task.done{color:var(--faint);text-decoration:line-through;box-shadow:inset 3px 0 0 var(--line),inset 0 0 0 1px var(--line)}
+  .task-done{text-decoration:line-through;color:var(--faint)}
+  .wk .due-k{grid-column:1;font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line)}
+  .wk .due{border-bottom:1px solid var(--line);padding:3px 2px;display:flex;flex-direction:column;gap:2px;min-width:0}
+  .wk .due button{font-size:11px;text-align:left;padding:1px 4px;border-radius:4px;background:color-mix(in srgb,var(--brand) 9%,var(--paper));color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wk .due small{font-size:10px;color:var(--muted);padding-left:4px}
+  .dues{margin-bottom:14px}
+  .tlist .sh{display:flex;justify-content:space-between}
+  .tlist .sh span{font-weight:500;color:var(--faint)}
+  .tgroup{margin-bottom:10px}
+  .tgroup.overdue .sh{color:var(--danger)}
+  .trow-i{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;border-bottom:1px solid var(--line);text-align:left}
+  .trow-i .tmain{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;padding:7px 0;text-align:left}
+  .trow-i .tmain b{font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .trow-i .tmain small{font-size:12px;color:var(--muted)}
+  .trow-i svg{width:14px;height:14px;color:var(--faint);flex:none}
+  .trow-i.exam .tag{margin:0}
+  /* A task's box takes its importance as its edge colour. */
+  .tcheck{flex:none;width:20px;height:20px;border-radius:5px;box-shadow:inset 0 0 0 1.5px var(--faint);position:relative}
+  .p1 .tcheck{box-shadow:inset 0 0 0 1.5px #4f8cff}.p2 .tcheck{box-shadow:inset 0 0 0 1.5px #e8a33a}.p3 .tcheck{box-shadow:inset 0 0 0 1.5px var(--danger)}
+  .tcheck.on{background:var(--faint);box-shadow:none}
+  .tcheck.on:after{content:"";position:absolute;left:6px;top:2px;width:6px;height:11px;border:solid var(--paper);border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .tdone-h{display:flex;align-items:center;gap:4px;background:none;color:var(--muted)}
+  .tdone-h svg{width:12px;height:12px}
+  .tadd{margin-bottom:16px}
+  .tf{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14.5px;background:var(--paper);color:var(--ink)}
+  .tf.big{font-size:17px;font-weight:600;margin-bottom:10px}
+  textarea.tf{resize:vertical}
+  .trow{display:flex;gap:10px;flex-wrap:wrap}
+  .trow label{flex:1;min-width:120px;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .tstep{gap:10px}
+  .sheet.toned.task .card-h{background:var(--paper);color:var(--ink);box-shadow:inset 3px 0 0 var(--brand),inset 0 -1px 0 var(--line)}
   .t.run{background:var(--paper);box-shadow:inset 0 0 0 1px var(--line);color:var(--muted);font-weight:500}
   .runhead{display:flex;align-items:baseline;gap:6px;margin-top:2px}
   .runhead b{font-size:34px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}

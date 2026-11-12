@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -68,7 +69,8 @@ import java.time.LocalDate
         }
         others = CampusLine(term, state.periods, meetings, labs, exams, state.holidays, null)
     }
-    val line = if (isMe) model.myLine(state, settings) else others
+    val tasks by model.tasks.all.collectAsStateWithLifecycle()
+    val line = if (isMe) model.myLine(state, settings, top.hicancan.studev.me.TaskStore.live(tasks)) else others
     if (line == null) { Box(Modifier.fillMaxSize()); return }
     var previewRows by remember { mutableStateOf(emptyList<TeachingMeeting>()) }
     LaunchedEffect(route.preview) { previewRows = route.preview?.let { id -> model.meetings().filter { it.teaching_class.id == id } }.orEmpty() }
@@ -82,12 +84,15 @@ import java.time.LocalDate
     val record = examRecordOf(state, classId)
     val title = when {
         !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
+        scale == "list" -> "清单"
         scale == "term" -> "${term.year}–${term.year + 1} 学年第${if (term.number == 1) "一" else "二"}学期"
         scale == "week" -> if (week != null) "第 $week 周" else "假期"
         else -> "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
     }
     val lastDay = remember(line) { line.lastLesson() }
+    val pending = line.tasks.count { it.parent == null && it.done == null }
     val sub = when (scale) {
+        "list" -> if (pending > 0) "$pending 件要做" else "没有要做的事"
         "term" -> "${dateLabel(LocalDate.parse(term.weeks.first().start))} – ${dateLabel(LocalDate.parse(term.weeks.last().end))} · " +
             (line.weekOf(now.date)?.let { "第 $it / ${term.weeks.size} 周" } ?: "${term.weeks.size} 周") + (lastDay?.let { " · 课上到 ${dateLabel(it)}" } ?: "")
         "week" -> (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + "${dateLabel(monday)} – ${dateLabel(monday.plusDays(6))}"
@@ -125,13 +130,15 @@ import java.time.LocalDate
                 if (isMe && scale != "week") Chip("日历", { calendar = true })
             }
         }
-        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期"), scale) { route.scale = it }
+        // The list is one's own: tasks by when they are due, exams among them.
+        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期") + if (isMe) listOf("list" to "清单") else emptyList(), scale) { route.scale = it }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
             when (scale) {
+                "list" -> TaskList(line, now, model.tasks) { onEvent(it, line) }
                 "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
                 "term" -> TermView(line, state, model, now, isMe, record, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
-                else -> DayView(line, day, now, isMe, record, route, walk, settings.layers) { onEvent(it, line) }
+                else -> DayView(line, day, now, isMe, record, route, walk, settings.layers, model.tasks) { onEvent(it, line) }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
                 onCancel = { route.preview = null },
@@ -180,14 +187,15 @@ import java.time.LocalDate
     val tones = toneIndex?.let { tone(it) }
     val paper = Ink.paper
     fun faded(color: Color, amount: Float) = if (past) Color(color.red + (paper.red - color.red) * amount, color.green + (paper.green - color.green) * amount, color.blue + (paper.blue - color.blue) * amount) else color
-    val bg = when (event.kind) { "exam" -> mark.exam; "run" -> paper; else -> faded(tones?.bg ?: Ink.sunken, .35f) }
-    val fg = when (event.kind) { "exam" -> mark.onExam; "run" -> Ink.muted; else -> faded(tones?.fg ?: Ink.text, .42f) }
-    val border = when (event.kind) { "exam" -> mark.exam; "run" -> Ink.line; else -> faded(tones?.border ?: Ink.line, .55f) }
+    val done = event.task?.done != null
+    val bg = when (event.kind) { "exam" -> mark.exam; "run", "task" -> paper; else -> faded(tones?.bg ?: Ink.sunken, .35f) }
+    val fg = when (event.kind) { "exam" -> mark.onExam; "run" -> Ink.muted; "task" -> if (done) Ink.faint else Ink.text; else -> faded(tones?.fg ?: Ink.text, .42f) }
+    val border = when (event.kind) { "exam" -> mark.exam; "run" -> Ink.line; "task" -> if (done) Ink.line else Ink.brand; else -> faded(tones?.border ?: Ink.line, .55f) }
     Box(modifier) {
         val lab = event.lab
         val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
             else if (lab != null) lab.room?.let(Names::roomShort) ?: lab.short else Names.roomShort(event.room)
-        TileBox(if (big) event.name else event.short, note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null)
+        TileBox(if (big) event.name else event.short, if (event.task != null) (if (big) "${hm(event.start)}–${hm(event.end)}" else "") else note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null || event.task != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
         if (behind > 0) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).border(1.dp, Ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 3.dp)) {
             Plain(if (big) "同时段另有 $behind 项" else "+$behind", if (big) 11.sp else 10.sp, Ink.text, FontWeight.SemiBold)
@@ -202,7 +210,7 @@ import java.time.LocalDate
     }
 }
 
-@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, order: List<String>, onOpen: (LineEvent) -> Unit) {
+@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, order: List<String>, store: top.hicancan.studev.me.TaskStore, onOpen: (LineEvent) -> Unit) {
     val today = day == now.date
     val events = remember(line, day) { line.on(day) }
     val tones = remember(line) { TimetablePresentation.tones(line) }
@@ -222,7 +230,19 @@ import java.time.LocalDate
                 }
             }
         }
-        if (events.isEmpty()) { Empty(line.holidays[day] ?: "这一天没有安排"); return@Column }
+        // What is due by the end of the day, with no time of its own, is listed above the day's hours.
+        val due = line.dueOn(day)
+        if (due.isNotEmpty()) {
+            Plain("今天截止", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
+            due.forEach { task ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TaskCheck(task, store)
+                    Plain(task.title, 15.sp, if (task.done != null) Ink.faint else Ink.text, maxLines = 1, modifier = Modifier.weight(1f).clickable { onOpen(taskEvent(task, day)) })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        if (events.isEmpty()) { if (due.isEmpty()) Empty(line.holidays[day] ?: "这一天没有安排"); return@Column }
         val fold = today && isMe
         val gone = if (fold) events.filter { it.end <= now.min } else emptyList()
         val live = if (fold) events.filter { it.end > now.min } else events
@@ -329,6 +349,18 @@ private const val DAY_END = 21 * 60 + 8
                         val color = if (date == now.date) Ink.brand else Ink.text
                         Plain(WEEKDAYS[index + 1], 12.sp, color, FontWeight.SemiBold)
                         Plain(line.holidays[date] ?: "${date.monthValue}/${date.dayOfMonth}", 11.sp, if (date == now.date) Ink.brand else Ink.muted, maxLines = 1)
+                    }
+                }
+            }
+            // Tasks due by the end of a day, with no time of their own, sit in a row under the day they are due.
+            val dues = days.take(columns).map(line::dueOn)
+            if (dues.any { it.isNotEmpty() }) Row(Modifier.fillMaxWidth().bottomHairline(hairline).padding(vertical = 3.dp)) {
+                Box(Modifier.width(38.dp), contentAlignment = Alignment.Center) { Plain("截止", 10.sp, Ink.muted) }
+                dues.forEachIndexed { index, list ->
+                    Column(Modifier.weight(1f).padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        list.take(3).forEach { task -> Plain(task.title, 10.sp, if (task.done != null) Ink.faint else Ink.text, maxLines = 1,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Ink.brand.copy(alpha = .09f)).clickable { onOpen(taskEvent(task, days[index])) }.padding(horizontal = 3.dp, vertical = 1.dp)) }
+                        if (list.size > 3) Plain("+${list.size - 3}", 9.5.sp, Ink.muted)
                     }
                 }
             }

@@ -3,6 +3,8 @@ import golden from './golden.json';
 import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
 import { attendingLabs, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
+import { parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
+import { dueOn } from '@/world/events';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
@@ -11,7 +13,7 @@ import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
-const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], labs: [], exams: [], holidays, run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
+const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], labs: [], exams: [], holidays, tasks: [], run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
@@ -44,11 +46,26 @@ describe('the shared web / Android real-data contract', () => {
         for (const test of golden.edgeCases.names) expect({ course: courseName(test.value), short: courseShort(test.value), room: roomLabel(test.value) }).toEqual({ course: test.course, short: test.short, room: test.room });
         for (const test of golden.edgeCases.examAttendance) expect(attendingExams(golden.edgeCases.attendanceExams as Exam[], test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id)).toEqual(test.expected);
     });
+    it('places tasks on the line, groups and orders them, and reads a task typed in one line', () => {
+        const t = golden.tasks;
+        const list = t.list as unknown as Task[];
+        const taskLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.labs.meetings as unknown as TeachingMeeting[], labs: golden.labs.labs as unknown as Lab[], exams: [golden.labs.exam as unknown as Exam], holidays, run: null, tasks: list };
+        const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room, id: event.id, lab: event.lab?.id ?? null });
+        for (const day of t.days) {
+            expect(eventsOn(taskLine, day.date).map(brief)).toEqual(day.events);
+            expect(dueOn(taskLine, day.date).map(task => task.id)).toEqual(day.due);
+            expect(layers(eventsOn(taskLine, day.date)).map(item => ({ id: item.event.id, under: item.under, over: item.over }))).toEqual(day.layers);
+        }
+        expect(list.map(task => ({ id: task.id, group: taskGroup(task, t.now) }))).toEqual(t.groups);
+        expect([...list].sort(taskOrder).map(task => task.id)).toEqual(t.order);
+        expect(list.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) })))).toEqual(t.reminders);
+        for (const test of t.parse) expect(parseQuickTask(test.input, { date: '2026-11-12', min: 600 })).toEqual(test.result);
+    });
     it('places labs among lessons and exams, and keeps a person\'s own', () => {
         const labs = golden.labs;
         const meetings = labs.meetings as unknown as TeachingMeeting[];
         const classLabs = labs.labs as unknown as Lab[];
-        const labLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings, labs: classLabs, exams: [labs.exam as unknown as Exam], holidays, run: null };
+        const labLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings, labs: classLabs, exams: [labs.exam as unknown as Exam], holidays, tasks: [], run: null };
         const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room, id: event.id, lab: event.lab?.id ?? null });
         const orders: (readonly EventKind[])[] = [['exam', 'lab', 'class', 'run'], ['class', 'run', 'exam', 'lab']];
         for (const day of labs.days) {

@@ -6,8 +6,9 @@ import { changeLines, changesOf, courseOf, lessonsLeft, publishedOn, sheetName, 
 import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
 import { dateLabel, hm, momentText, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { Chevron, Sheet } from '@/world/ui';
+import { TaskSheet } from './TaskSheet';
 
-const KIND = { class: '课', lab: '实验', exam: '考试', run: '早锻炼' } as const;
+const KIND = { class: '课', lab: '实验', exam: '考试', run: '早锻炼', task: '任务' } as const;
 const whoLink = (type: string, id: string) => `/?who=${type}:${encodeURI(id)}&scale=week`;
 const courseLine = (course: { credits: number | null; nature: string | null; assessment?: string | null } | null) =>
     course ? [course.credits !== null ? `${course.credits} 学分` : null, course.nature, course.assessment ? `考核：${course.assessment}` : null].filter(Boolean).join(' · ') : '';
@@ -51,6 +52,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
         </div>
     );
     const dress = { top: strip || undefined, className: `toned ${event.kind}`, style: toneOf(event) };
+    if (event.task) { const task = line.tasks.find(item => item.id === event.task!.id) ?? event.task; return <TaskSheet key={task.id} task={task} line={line} top={dress.top} onClose={onClose} />; }
     const when = `${WEEKDAYS[weekdayOf(event.date)]} ${dateLabel(event.date)} · ${hm(event.start)}–${hm(event.end)}`;
     const run = line.run;
     if (event.kind === 'run' && run) {
