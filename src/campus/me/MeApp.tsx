@@ -119,6 +119,7 @@ export default function MeApp() {
             <a className="kv" href={formLink('feedback', { where: '网页 · 我' })}><span className="k">反馈</span><span className="v">哪里不顺手、哪里不对<small>写一句就行，我们会看每一条</small></span><Chevron /></a>
             <a className="kv" href={formLink('data')}><span className="k">补充数据</span><span className="v">实验课表、讲座、校车、营业时间<small>教务系统里没有的，审核后放进课表和地图</small></span><Chevron /></a>
             <a className="kv" href="/account/"><span className="k">账号</span><span className="v">{account ? `${account.nickname} · ${labels[account.role] ?? account.role}` : '未登录'}</span><Chevron /></a>
+            <div className="kv"><span className="k">同步</span><span className="v">{account ? '任务在你登录的手机和电脑间自动同步' : '登录后，任务在手机和电脑间自动同步'}<small>课表设置仍只在这台设备上</small></span></div>
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示在课表上<small>{grade !== null && grade <= 2 ? `大${'一二'[grade - 1]}必做，本学期 ${facts.run.required} 次` : '大三大四需要补跑时打开'}</small></span><Toggle on={runOn} /></button>

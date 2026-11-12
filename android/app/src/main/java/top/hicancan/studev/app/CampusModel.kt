@@ -35,6 +35,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     val settings = CampusSettings(application)
     /** One's own tasks, on this device. */
     val tasks = top.hicancan.studev.me.TaskStore(application)
+    init { top.hicancan.studev.me.TaskSync(tasks, top.hicancan.studev.account.Accounts.get(application), viewModelScope) }
     private val _state = MutableStateFlow(AcademicState())
     val state = _state.asStateFlow()
     private val _notice = MutableStateFlow<String?>(null)

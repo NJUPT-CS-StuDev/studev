@@ -24,13 +24,15 @@ class TaskStore(context: Context) {
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
         top.hicancan.studev.device.DeviceRefreshWorker.enqueue(context)
     }
-    private fun stamp() = Instant.now().toString()
+    private fun stamp() = top.hicancan.studev.world.Tasks.stamp(Instant.now())
     fun newId() = UUID.randomUUID().toString()
     /** Adds a task, or changes one: the change is stamped so that the newer side wins a merge. */
     fun save(task: Task) {
         require(task.date == null || task.start != null) { "执行安排需要开始时间；截止日期请填写在截止时间中。" }
         write(_all.value.filter { it.id != task.id } + task.copy(modified = stamp()))
     }
+    /** What a sync brought back, taken as it is: those changes were stamped where they were made. */
+    fun adopt(merged: List<Task>) = write(merged)
     /** Several tasks changed at once, as one write. */
     fun saveAll(changed: List<Task>) {
         val ids = changed.mapTo(HashSet()) { it.id }

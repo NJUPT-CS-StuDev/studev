@@ -134,3 +134,19 @@ test('student login, owner verification and submission identity preserve a priva
   const publicForms = await f.client().call('/forms');
   assert.ok(!JSON.stringify(publicForms.body).includes(member.user.studentId));
 });
+
+test('tasks sync per person: the later change of a task wins, a deletion travels, and nobody else sees them', async () => {
+  const f = await fixture(); const a = await f.member('100002', '成员甲'), b = await f.member('100003', '成员乙');
+  assert.equal((await f.client().call('/sync', { method: 'POST', body: { tasks: [] } })).status, 401);
+  const first = { id: 't1', title: '交报告', modified: '2026-11-13T01:00:00.000Z', due: { date: '2026-11-14' } };
+  const phone = await a.client.call('/sync', { method: 'POST', body: { tasks: [first, { id: 't2', title: '复习', modified: '2026-11-13T01:00:00.000Z' }] } });
+  assert.equal(phone.status, 200); assert.deepEqual(phone.body.tasks.map((task) => task.id), ['t1', 't2']);
+  // The laptop knew an older t1 and a newer t2, deleted.
+  const laptop = await a.client.call('/sync', { method: 'POST', body: { tasks: [{ ...first, title: '旧标题', modified: '2026-11-13T00:00:00.000Z' }, { id: 't2', title: '复习', modified: '2026-11-13T02:00:00.000Z', deleted: true }] } });
+  assert.equal(laptop.status, 200);
+  assert.equal(laptop.body.tasks.find((task) => task.id === 't1').title, '交报告');
+  assert.equal(laptop.body.tasks.find((task) => task.id === 't2').deleted, true);
+  assert.deepEqual((await a.client.call('/sync', { method: 'POST', body: { tasks: [] } })).body.tasks, laptop.body.tasks);
+  assert.deepEqual((await b.client.call('/sync', { method: 'POST', body: { tasks: [] } })).body.tasks, []);
+  for (const tasks of [[{ id: 't1' }], [first, first], 'x', [{ ...first, note: 'x'.repeat(9000) }]]) assert.ok([400, 413].includes((await a.client.call('/sync', { method: 'POST', body: { tasks } })).status));
+});

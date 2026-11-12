@@ -5,6 +5,7 @@ import { createFormsService } from './forms.mjs';
 import { metadataStore, oscaGateway } from './storage.mjs';
 import { hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { createAiService } from './ai.mjs';
+import { createSyncService } from './sync.mjs';
 
 export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now } = {}) {
   return async function handle(context) {
@@ -27,6 +28,8 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (identityResponse) return identityResponse;
       const aiResponse = await createAiService({ identity, repo, env, now })(context, path);
       if (aiResponse) return aiResponse;
+      const syncResponse = await createSyncService({ identity, repo })(context, path);
+      if (syncResponse) return syncResponse;
       const forms = createFormsService({ repo, identity, env, now, getGateway });
       const formsResponse = await forms.handle(context, path);
       if (formsResponse) return formsResponse;

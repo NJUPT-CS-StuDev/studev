@@ -267,6 +267,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             KeyRow("反馈", "哪里不顺手、哪里不对", "写一句就行，我们会看每一条", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
             KeyRow("补充数据", "实验课表、讲座、校车、营业时间", "教务系统里没有的，审核后放进课表和地图", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
             KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
+            KeyRow("同步", if (account != null) "任务在你登录的手机和电脑间自动同步" else "登录后，任务在手机和电脑间自动同步", "课表设置仍只在这台设备上")
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 KeyRow(null, "显示在课表上", if (grade != null && grade <= 2) "大${"一二"[grade - 1]}必做，本学期 ${rule.required} 次" else "大三大四需要补跑时打开", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })

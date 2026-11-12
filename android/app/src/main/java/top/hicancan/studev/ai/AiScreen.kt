@@ -105,7 +105,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 Button(enabled = proposal.key !in saved && !busy, onClick = {
                     val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
                     if (proposal.id != null && current?.modified != proposal.expected) error = "任务已经改变，请重新生成草案。"
-                    else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") java.time.Instant.now().toString() else task.done)); saved = saved + proposal.key }
+                    else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + proposal.key }
                 }) { Text(if (proposal.key in saved) "已保存到本机" else "确认保存") }
                 if (proposal.key !in saved) TextButton(onClick = { proposals = proposals.filter { it.key != proposal.key } }, enabled = !busy) { Text("放弃") }
             } } }

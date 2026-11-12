@@ -132,6 +132,10 @@ class ParityTest {
                 got.map { Triple(it.task.title, it.task.course, it.task.due!!.date) })
         }
         tasks.getValue("buildings").jsonArray.forEach { item -> assertEquals(item.toString(), item.jsonObject.getValue("word").jsonPrimitive.content, buildingWord(item.jsonObject.getValue("said").jsonPrimitive.content)) }
+        val sync = tasks.getValue("sync").jsonObject
+        fun tasksOf(key: String) = json.decodeFromJsonElement<List<Task>>(sync.getValue(key))
+        assertEquals(tasksOf("merged"), Tasks.merge(tasksOf("mine"), tasksOf("theirs")))
+        sync.getValue("stamps").jsonArray.forEach { item -> assertEquals(item.jsonObject.getValue("stamp").jsonPrimitive.content, Tasks.stamp(java.time.Instant.parse(item.jsonObject.getValue("at").jsonPrimitive.content))) }
         val quickCourses = tasks.getValue("courses").jsonArray.map { item -> Tasks.QuickCourse(item.jsonObject.getValue("identity").jsonPrimitive.content, item.jsonObject.getValue("names").jsonArray.map { it.jsonPrimitive.content }) }
         tasks.getValue("parse").jsonArray.forEach { item ->
             val test = item.jsonObject

@@ -1,6 +1,7 @@
 package top.hicancan.studev.world
 
 import kotlinx.serialization.Serializable
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -36,6 +37,15 @@ import java.time.LocalDate
 )
 
 object Tasks {
+    private val STAMP = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(java.time.ZoneOffset.UTC)
+    /** When something changed, written as the web writes it (Date.toISOString): later changes compare later as text. */
+    fun stamp(at: Instant): String = STAMP.format(at)
+    /** Of two versions of a task the later change wins, a deletion included, as mergeTasks in src/campus/world/sync.ts. */
+    fun merge(mine: List<Task>, theirs: List<Task>): List<Task> {
+        val merged = LinkedHashMap<String, Task>().apply { mine.forEach { put(it.id, it) } }
+        for (task in theirs) { val kept = merged[task.id]; if (kept == null || task.modified > kept.modified) merged[task.id] = task }
+        return merged.values.sortedBy { it.id }
+    }
     /** A task given a time but no end takes this long on the line. */
     const val MINUTES = 30
     val GROUPS = listOf("overdue" to "待补做", "today" to "今天", "tomorrow" to "明天", "week" to "未来 7 天", "later" to "更晚", "someday" to "还没排日期")

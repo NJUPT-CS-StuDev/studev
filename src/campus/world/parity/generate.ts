@@ -9,6 +9,7 @@ import { customMeetings, parseWeeks, personalCourseName, type CustomCourse } fro
 import { moveTask, parseQuickTask, reminderAt, taskGroup, taskOrder, type Task, type TaskGroup } from '@/world/tasks';
 import { availableSlots } from '@/world/planning';
 import { reportTitle, suggestTasks } from '@/world/suggestions';
+import { mergeTasks } from '@/world/sync';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds } from '@/world/events';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
@@ -128,6 +129,12 @@ const tasks = {
     order: [...taskList].sort(taskOrder).map(task => task.id),
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
     courses: quickCourses,
+    sync: {
+        mine: [{ id: 'a', title: '本机较新', modified: '2026-11-13T02:00:00.000Z' }, { id: 'b', title: '本机较旧', modified: '2026-11-13T01:00:00.000Z' }, { id: 'c', title: '同时', modified: '2026-11-13T01:00:00.000Z' }],
+        theirs: [{ id: 'a', title: '别处较旧', modified: '2026-11-13T01:00:00.000Z' }, { id: 'b', title: '别处删了', modified: '2026-11-13T03:00:00.000Z', deleted: true as const }, { id: 'c', title: '别处同时', modified: '2026-11-13T01:00:00.000Z' }, { id: '0', title: '别处新加', modified: '2026-11-13T00:00:00.000Z' }],
+        merged: [] as Task[],
+        stamps: ['2026-11-13T01:00:00Z', '2026-11-13T01:00:00.5Z', '2026-11-13T01:00:00.123456Z'].map(at => ({ at, stamp: new Date(at).toISOString() })),
+    },
     buildings: ['教三', '教三楼', '教3', '教学楼', '图科楼', '楼', '教十'].map(said => ({ said, word: buildingWord(said) })),
     suggestions: [{ now: { date: '2026-09-10', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-10-01', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: ['lab:' + classLabs.filter(lab => lab.date >= '2026-11-09')[0]!.id] }]
         .map(test => ({ ...test, expected: suggestTasks(taskLine, test.now, test.setAside) })),
@@ -142,6 +149,7 @@ const tasks = {
         '月底前 交材料', '晚上8点到10点 自习', '14:00-16:00 实验课', '下午2点到4点半 社团', '3点15 打电话', '三点 开组会', '9am 早会', '有一点难的作业', '周五前 交作业 !!!', '复习 #计网 明天', '复习 #操作系统 !高',
         '1个月后 续费', '2月3日 返校', '2026-12-31 跨年', '明天早上8点 签到', '周三ddl 大作业', '第3-4节 上课'].map(input => ({ input, result: parseQuickTask(input, { date: '2026-11-12', min: 600 }, quickCourses) })),
 };
+tasks.sync.merged = mergeTasks(tasks.sync.mine, tasks.sync.theirs);
 const scheduleDate = '2026-11-09';
 const scheduleNow = { date: scheduleDate, min: 480 };
 const scheduled = eventsOn(labLine, scheduleDate);
