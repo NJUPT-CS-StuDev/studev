@@ -131,6 +131,7 @@ class ParityTest {
             assertEquals(case.toString(), case.getValue("expected").jsonArray.map { val task = it.jsonObject.getValue("task").jsonObject; Triple(task.getValue("title").jsonPrimitive.content, task.getValue("course").jsonPrimitive.content, task.getValue("due").jsonObject.getValue("date").jsonPrimitive.content) },
                 got.map { Triple(it.task.title, it.task.course, it.task.due!!.date) })
         }
+        tasks.getValue("buildings").jsonArray.forEach { item -> assertEquals(item.toString(), item.jsonObject.getValue("word").jsonPrimitive.content, buildingWord(item.jsonObject.getValue("said").jsonPrimitive.content)) }
         val quickCourses = tasks.getValue("courses").jsonArray.map { item -> Tasks.QuickCourse(item.jsonObject.getValue("identity").jsonPrimitive.content, item.jsonObject.getValue("names").jsonArray.map { it.jsonPrimitive.content }) }
         tasks.getValue("parse").jsonArray.forEach { item ->
             val test = item.jsonObject

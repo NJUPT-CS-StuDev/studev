@@ -2,7 +2,7 @@ import { SearchClient } from 'wasm-search';
 import { initialize, Router, type Mode } from 'wayfind';
 import { APP_CONFIG } from './config';
 import { loadPeriods, loadRoomDay, loadRoomIndex } from './data';
-import { isClassroom, makeRoomReader } from './rooms';
+import { buildingWord, isClassroom, makeRoomReader } from './rooms';
 import { loadSpace, type Space } from '@/map/model/space';
 import { toolDate } from './tools';
 
@@ -22,7 +22,7 @@ export class CampusTools {
         const [index, periods, day] = await Promise.all([loadRoomIndex(), loadPeriods(), loadRoomDay(date)]);
         if (!day) return { date, known: false, rooms: [] };
         const read = makeRoomReader(periods);
-        return { date, known: true, rooms: index.rooms.filter(isClassroom).filter(room => !args.building || room.building.includes(String(args.building))).map(room => ({ room: room.id, ...read(day, room.id, args.minute as number) })).filter(room => !room.busy && room.minutes >= (args.minutes as number)).sort((a, b) => b.minutes - a.minutes || a.room.localeCompare(b.room)).slice(0, 12).map(room => ({ room: room.room, until: room.until, minutes: room.minutes })) };
+        return { date, known: true, rooms: index.rooms.filter(isClassroom).filter(room => !args.building || room.building.includes(buildingWord(String(args.building)))).map(room => ({ room: room.id, ...read(day, room.id, args.minute as number) })).filter(room => !room.busy && room.minutes >= (args.minutes as number)).sort((a, b) => b.minutes - a.minutes || a.room.localeCompare(b.room)).slice(0, 12).map(room => ({ room: room.room, until: room.until, minutes: room.minutes })) };
     }
     async route(args: Record<string, unknown>) {
         const space = await this.places(), from = space.byId.get(String(args.from)), to = space.byId.get(String(args.to));

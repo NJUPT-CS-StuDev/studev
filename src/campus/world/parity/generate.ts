@@ -17,7 +17,7 @@ import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
-import { isClassroom, makeRoomReader } from '@/world/rooms';
+import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
 import type { Place } from '../../map/model/space';
 import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
@@ -128,6 +128,7 @@ const tasks = {
     order: [...taskList].sort(taskOrder).map(task => task.id),
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
     courses: quickCourses,
+    buildings: ['教三', '教三楼', '教3', '教学楼', '图科楼', '楼', '教十'].map(said => ({ said, word: buildingWord(said) })),
     suggestions: [{ now: { date: '2026-09-10', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-10-01', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: ['lab:' + classLabs.filter(lab => lab.date >= '2026-11-09')[0]!.id] }]
         .map(test => ({ ...test, expected: suggestTasks(taskLine, test.now, test.setAside) })),
     reportTitles: ['实验二：组网与路由器配置', 'Cachelab实验(上)', '数据库设计', '实验3: 进程调度'].map(project => ({ project, title: reportTitle(project) })),

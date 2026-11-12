@@ -10,6 +10,9 @@ import top.hicancan.studev.search.NativeSearch
 data class TaskProposal(val task: Task, val id: String? = null, val expected: String? = null, val key: String = java.util.UUID.randomUUID().toString())
 
 /** Device-local tools over the same interpreters and immutable kernels as the visual entries. */
+/** A building as said, as the room data writes it: 教三楼 → 教3, as buildingWord in src/campus/world/campusTools.ts. */
+fun buildingWord(said: String): String = said.trim().map { c -> "一二三四五六七八九".indexOf(c).let { if (it >= 0) ('1' + it) else c } }.joinToString("").let { if (it.length > 1 && it.endsWith("楼")) it.dropLast(1) else it }
+
 class CampusTools(private val context: android.content.Context, private val repository: () -> AcademicRepository?, private val line: () -> CampusLine?, private val tasks: TaskStore, private val propose: (TaskProposal) -> Unit) : AutoCloseable {
     private var search: NativeSearch? = null
     private var wayfind: Wayfind? = null
@@ -42,7 +45,7 @@ class CampusTools(private val context: android.content.Context, private val repo
             val date = date(args.getValue("date").jsonPrimitive.content); val index = repo.rooms(); val day = repo.roomDay(index.term, date.toString())
             if (day == null) return buildJsonObject { put("date", date.toString()); put("known", false); put("rooms", JsonArray(emptyList())) }
             val reader = RoomReader(repo.periods()); val min = args.getValue("minute").jsonPrimitive.int; val minutes = args.getValue("minutes").jsonPrimitive.int
-            val rooms = index.rooms.filter(RoomReader::classroom).filter { args["building"]?.jsonPrimitive?.content?.let(it.building::contains) ?: true }
+            val rooms = index.rooms.filter(RoomReader::classroom).filter { args["building"]?.jsonPrimitive?.content?.let { said -> it.building.contains(buildingWord(said)) } ?: true }
                 .map { it.id to reader.at(day, it.id, min) }.filter { !it.second.busy && it.second.minutes >= minutes }.sortedWith(compareByDescending<Pair<String, RoomState>> { it.second.minutes }.thenBy { it.first }).take(12)
             return buildJsonObject { put("date", date.toString()); put("known", true); put("rooms", JsonArray(rooms.map { (room, state) -> buildJsonObject { put("room", room); put("until", state.until); put("minutes", state.minutes) } })) }
         }

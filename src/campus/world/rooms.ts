@@ -38,3 +38,6 @@ export const makeRoomReader = (periods: TeachingPeriod[]) => {
         return { tier: minutes >= 180 ? 'long' : minutes >= 60 ? 'mid' : 'short', busy: false, until, minutes, occupants, current: null };
     };
 };
+
+/** A building as said, as the room data writes it: 教三楼 → 教3. */
+export const buildingWord = (said: string) => said.trim().replace(/[一二三四五六七八九]/g, digit => String('一二三四五六七八九'.indexOf(digit) + 1)).replace(/(?<=.)楼$/, '');
