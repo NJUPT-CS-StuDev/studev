@@ -4,6 +4,7 @@ import { createIdentity } from './identity.mjs';
 import { createFormsService } from './forms.mjs';
 import { metadataStore, oscaGateway } from './storage.mjs';
 import { hasAuthorization, bearerBootstrap } from './sessions.mjs';
+import { createAiService } from './ai.mjs';
 
 export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now } = {}) {
   return async function handle(context) {
@@ -24,6 +25,8 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (hasAuthorization(request)) await identity.authenticate(request, { required: true, allowEnrollment: true });
       const identityResponse = await identity.handle(context, path);
       if (identityResponse) return identityResponse;
+      const aiResponse = await createAiService({ identity, repo, env, now })(context, path);
+      if (aiResponse) return aiResponse;
       const forms = createFormsService({ repo, identity, env, now, getGateway });
       const formsResponse = await forms.handle(context, path);
       if (formsResponse) return formsResponse;

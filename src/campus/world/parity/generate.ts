@@ -11,6 +11,8 @@ import { availableSlots } from '@/world/planning';
 import { reportTitle, suggestTasks } from '@/world/suggestions';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds } from '@/world/events';
+import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
+import tools from '@/world/tools.json';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
@@ -144,6 +146,15 @@ const scheduleNow = { date: scheduleDate, min: 480 };
 const scheduled = eventsOn(labLine, scheduleDate);
 const slotRequest = { from: scheduleDate, to: scheduleDate, minutes: 30, earliest: 590, latest: 685 };
 const semantics = {
+    tools,
+    toolTimeline: readTimeline(taskLine, scheduleDate, '2026-11-13'),
+    toolSlots: schedulingTool(taskLine, { from: scheduleDate, to: scheduleDate, minutes: 30, task_id: 'b' }, scheduleNow),
+    proposals: [
+        { title: '新增报告', date: '2026-11-12', start: 1410, end: 1440, due_date: '2026-11-13', due_time: 1439 },
+        { id: 'b', title: '移动复习', date: '2026-11-12', start: 600, end: 660 },
+        { title: '仅截止', due_date: '2026-11-14' },
+        { id: 'b', title: '标为完成', done: true },
+    ].map(args => ({ args, expected: taskProposal(toolArguments('propose_task', args), taskLine) })),
     frames: [[], [{ id: 'early', title: '早起', date: scheduleDate, start: 0, end: 30, modified: 'm' }, { id: 'late', title: '晚间复习', date: scheduleDate, start: 1410, modified: 'm' }]].map(tasks => ({ tasks, expected: timeBounds(eventsOn({ ...labLine, tasks }, scheduleDate)) })),
     dueReminders: taskList.flatMap(task => (task.due?.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind, 'due') }))),
     scheduleDate, now: scheduleNow, request: slotRequest,

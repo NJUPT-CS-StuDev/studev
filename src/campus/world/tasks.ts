@@ -45,7 +45,8 @@ export function sanitizeTask(raw: unknown): Task | null {
     const task: Task = { id, title, modified };
     const note = text(record.note, 4000); if (note) task.note = note;
     // A plan is a day and a start; a day alone is not one (that is a deadline, kept in `due`).
-    const start = minute(record.start), end = minute(record.end);
+    // A plan may end at midnight (1440), the end of its day.
+    const start = minute(record.start), end = record.end === 1440 ? 1440 : minute(record.end);
     if (typeof record.date === 'string' && DATE.test(record.date) && start !== undefined) { task.date = record.date; task.start = start; if (end !== undefined && end > start) task.end = end; }
     if (record.due && typeof record.due === 'object') {
         const due = record.due as Record<string, unknown>;

@@ -78,6 +78,21 @@ class ParityTest {
             assertEquals(row.getValue("slots"), JsonArray(slots))
         }
     }
+    @Test fun aiToolsUseTheSameTimelinePlanningAndTaskProposalContract() {
+        val s = golden.getValue("semantics").jsonObject
+        val labs = golden.getValue("labs").jsonObject
+        val taskLine = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, json.decodeFromJsonElement(golden.getValue("tasks").jsonObject.getValue("list")))
+        assertEquals(s.getValue("toolTimeline"), CampusTools.timeline(taskLine, "2026-11-09", "2026-11-13"))
+        assertEquals(s.getValue("toolSlots"), CampusTools.slots(taskLine, buildJsonObject { put("from", "2026-11-09"); put("to", "2026-11-09"); put("minutes", 30); put("task_id", "b") }, Moment(LocalDate.parse("2026-11-09"), 480)))
+        s.getValue("proposals").jsonArray.forEach { item ->
+            val row = item.jsonObject; val expected = row.getValue("expected").jsonObject
+            val result = CampusTools.proposal(row.getValue("args").jsonObject, taskLine)
+            val expectedTask = json.decodeFromJsonElement<Task>(JsonObject(expected.getValue("task").jsonObject + mapOf("id" to JsonPrimitive("proposal"), "modified" to JsonPrimitive("proposal"))))
+            assertEquals(expectedTask, result.task.copy(id = "proposal", modified = "proposal"))
+            assertEquals(expected["id"]?.jsonPrimitive?.content, result.id)
+            assertEquals(expected["expected"]?.jsonPrimitive?.content, result.expected)
+        }
+    }
     @Test fun tasksStandOnTheLineAndAreGroupedOrderedAndRead() {
         val tasks = golden.getValue("tasks").jsonObject
         val labs = golden.getValue("labs").jsonObject

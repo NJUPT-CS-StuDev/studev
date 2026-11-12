@@ -44,7 +44,7 @@ class HttpsPlatformTransport : PlatformTransport {
         require(path.startsWith('/') && !path.startsWith("//") && !path.contains('\\'))
         val connection = URI(BuildConfig.PLATFORM_HOST + "/api/platform" + path).toURL().openConnection() as HttpURLConnection
         try {
-            connection.connectTimeout = 15_000; connection.readTimeout = 15_000
+            connection.connectTimeout = 15_000; connection.readTimeout = if (path == "/ai") 60_000 else 15_000
             connection.instanceFollowRedirects = false
             connection.requestMethod = if (body == null) "GET" else "POST"
             connection.setRequestProperty("Accept", "application/json")
