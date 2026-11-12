@@ -103,12 +103,14 @@ class WeekWidget : CampusWidget()
 
 private fun placeholder(title: String, hint: String) = buildJsonObject { put("title", title); put("hint", hint); put("view", "auto"); put("theme", "system") }
 
-private fun row(event: LineEvent, tones: Map<String, Int>) = buildJsonObject {
+/** One thing for the widget: a lab's place is said short, and only a place on the map can be navigated to. */
+private fun row(event: LineEvent, tones: Map<String, Int>, meetings: List<top.hicancan.studev.data.TeachingMeeting>) = buildJsonObject {
+    val short = event.lab?.let { lab -> lab.room?.let(Names::roomShort) ?: lab.short } ?: event.room?.let(Names::roomShort).orEmpty()
     put("start", event.start); put("end", event.end); put("name", event.short)
-    put("room", event.room?.let(Names::room).orEmpty()); put("place", event.room?.let(Names::roomShort).orEmpty())
-    put("tone", event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: event.lab?.let { tones[TimetablePresentation.identity(it)] } ?: -1)
-    put("exam", event.kind == "exam")
-    event.room?.let { put("nav", it) }
+    put("room", event.lab?.short ?: event.room?.let(Names::room).orEmpty()); put("place", short)
+    put("tone", TimetablePresentation.toneOf(event, tones, meetings) ?: -1)
+    put("kind", event.kind)
+    event.room?.takeIf(Names::placed)?.let { put("nav", it) }
 }
 
 private fun published(line: CampusLine, now: Moment, view: String, theme: String, order: List<String>) = buildJsonObject {
@@ -116,7 +118,7 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
     val shown = WidgetDay.of(line, now)
     put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
     put("hint", ""); put("view", view); put("theme", theme)
-    put("rows", buildJsonArray { shown.take(5).forEach { add(row(it, tones)) } })
+    put("rows", buildJsonArray { shown.take(5).forEach { add(row(it, tones, line.meetings)) } })
     val monday = line.weekShown(now)
     val ahead = CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7
     put("weekTitle", (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + (line.weekOf(monday)?.let { "第 $it 周" } ?: "假期"))
@@ -126,7 +128,7 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
             // What a lab or an exam covers steps back: the widget shows what one goes to.
             // No room to stack them: a run of things that overlap is one tile, named by the one in front, with how many more.
             put("events", buildJsonArray { CampusLine.clusters(events.filter { it.kind != "run" }, order).forEach { run ->
-                add(JsonObject(row(run.front, tones) + mapOf("start" to JsonPrimitive(run.start), "end" to JsonPrimitive(run.end), "more" to JsonPrimitive(run.events.size - 1))))
+                add(JsonObject(row(run.front, tones, line.meetings) + mapOf("start" to JsonPrimitive(run.start), "end" to JsonPrimitive(run.end), "more" to JsonPrimitive(run.events.size - 1))))
             } })
         }
     } })
@@ -190,7 +192,7 @@ private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tok
 /** A course's colour, then its time, name and room; tapping it starts navigation there. */
 @Composable private fun LessonRow(context: Context, row: JsonObject, paint: Paint, headline: Boolean) {
     val index = row.getValue("tone").jsonPrimitive.int
-    val bar = if (row["exam"]?.jsonPrimitive?.boolean == true) examTone(paint.dark).bg else if (index < 0) (if (paint.dark) Tokens.Color.Dark.ink else Tokens.Color.Light.ink) else tone(index, paint.dark).border
+    val bar = if (row["kind"]?.jsonPrimitive?.content == "exam") examTone(paint.dark).bg else if (index < 0) (if (paint.dark) Tokens.Color.Dark.ink else Tokens.Color.Light.ink) else tone(index, paint.dark).border
     val nav = row["nav"]?.jsonPrimitive?.content
     val tap = if (nav != null) GlanceModifier.clickable(open(context, "/map/?nav=${Uri.encode(nav)}")) else GlanceModifier
     val time = hm(row.getValue("start").jsonPrimitive.int)
@@ -232,7 +234,7 @@ private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tok
                             // A tile stops 2 dp short of its end, and the next gap gives that back, so the clock stays true.
                             if (start > cursor || placedAny) Spacer(GlanceModifier.height(((start - cursor) * perMinute + if (placedAny) 2f else 0f).dp))
                             val index = event.getValue("tone").jsonPrimitive.int
-                            val mark = if (event["exam"]?.jsonPrimitive?.boolean == true) examTone(paint.dark) else tone(maxOf(index, 0), paint.dark)
+                            val mark = if (event["kind"]?.jsonPrimitive?.content == "exam") examTone(paint.dark) else tone(maxOf(index, 0), paint.dark)
                             Box(GlanceModifier.fillMaxWidth().height(((end - start) * perMinute - 2).coerceAtLeast(14f).dp).cornerRadius(4.dp).background(androidx.glance.unit.ColorProvider(mark.bg)).padding(horizontal = 2.dp, vertical = 2.dp)) {
                                 val tall = ((end - start) * perMinute - 2) >= 30f
                                 val place = event.getValue("place").jsonPrimitive.content

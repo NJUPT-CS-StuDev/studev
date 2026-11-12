@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { TeachingMeeting } from '@/world/facts';
 import tokens from '../../../../design/tokens.json';
+import { courseName } from '@/world/names';
 
 const COURSE_TONE_COUNT = Object.keys(tokens.course.light).length;
 type CourseIdentityInput = { course: Pick<TeachingMeeting['course'], 'code' | 'name'> };
@@ -37,8 +38,20 @@ export const courseTones = (meetings: (CourseIdentityInput & { weekday: number }
     }
     return tones;
 };
+/**
+ * A lab belongs to a lesson's course when the two carry the same course code, or the same name: the lab sheet
+ * often gives a lab its own code (Linux 编程 labs are B0301371S, its lessons JS113701S), never a different name.
+ */
+export const sameCourse = (left: CourseIdentityInput, right: CourseIdentityInput) =>
+    courseIdentity(left) === courseIdentity(right) || courseName(left.course.name).toLowerCase() === courseName(right.course.name).toLowerCase();
+/** The course a lab's colour and links follow: that of the lesson it belongs to, or its own. */
+export const linkedCourse = (lab: CourseIdentityInput, meetings: CourseIdentityInput[]) => meetings.find(meeting => sameCourse(lab, meeting)) ?? lab;
 /** One timetable's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
-export const timelineTones = (line: { meetings: (CourseIdentityInput & { weekday: number })[]; labs: (CourseIdentityInput & { weekday: number })[] }) => courseTones([...line.meetings, ...line.labs]);
+export const timelineTones = (line: { meetings: (CourseIdentityInput & { weekday: number })[]; labs: (CourseIdentityInput & { weekday: number })[] }) =>
+    courseTones([...line.meetings, ...line.labs.map(lab => ({ course: linkedCourse(lab, line.meetings).course, weekday: lab.weekday }))]);
+/** The tone of something on a timeline: a lesson's own, a lab its course's. */
+export const eventTone = (tones: Map<string, number>, event: { meeting?: CourseIdentityInput; lab?: CourseIdentityInput }, meetings: CourseIdentityInput[]) =>
+    event.meeting ? tones.get(courseIdentity(event.meeting)) : event.lab ? tones.get(courseIdentity(linkedCourse(event.lab, meetings))) : undefined;
 export const courseToneStyle = (index: number): CSSProperties => {
     const key = `tone${index % COURSE_TONE_COUNT}` as keyof typeof tokens.course.light;
     return Object.fromEntries(['light', 'dark'].flatMap(theme => Object.entries(tokens.course[theme as 'light' | 'dark'][key]).map(([part, value]) => [`--course-${theme}-${part}`, value]))) as CSSProperties;

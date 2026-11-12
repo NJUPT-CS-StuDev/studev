@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Exam, Lab, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
-import { personalLabs } from '@/timetable/model/labs';
+import { attendingLabs, personalLabs } from '@/timetable/model/labs';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { examAttendanceScope, timetableEdits, type Preferences } from '@/world/preferences';
 import { loadCalendar, loadClasses, loadClassExams, loadClassLabs, loadClassMeetings, loadExams, loadLabs, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
@@ -82,8 +82,8 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         const exams = who.type === 'me' ? attendingExams(source.exams, choices, codes) : source.exams;
         const grade = gradeOf(classInfo?.grade, base.term);
         const runOn = who.type === 'me' && base.run && (prefs.run?.on ?? (grade !== null && grade <= 2));
-        const labs = who.type === 'me' ? personalLabs(source.labs, source.meetings, own, added, catalogLabs) : source.labs;
+        const labs = who.type === 'me' ? attendingLabs(personalLabs(source.labs, source.meetings, own, added, catalogLabs), prefs.labs) : source.labs;
         const line: Timeline = { term: base.term, periods: base.periods, meetings, labs, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null };
         return { loaded: { ...base, line, own, added, classInfo }, error, previewRows };
-    }, [base, catalogLabs, catalogRows, classId, edits.hidden, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
+    }, [base, catalogLabs, catalogRows, classId, prefs.labs, edits.hidden, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
 }

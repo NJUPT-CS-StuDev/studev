@@ -180,7 +180,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val repo = state.repository ?: return null
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
-        return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), state.labs, personalExams(repo, state.schedule, state.exams), state.holidays,
+        return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.schedule, state.exams), state.holidays,
             state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) })
     }
     private var allMeetings: Deferred<List<TeachingMeeting>>? = null

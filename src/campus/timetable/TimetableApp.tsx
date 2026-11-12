@@ -1,6 +1,7 @@
 // The timetable: pick who, unfold along time. Everything on screen is in the address.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { updateExamAttendance, updateRun, updateTimetableEdits } from '@/world/preferences';
+import { updateExamAttendance, updateRun, updateTimetableEdits, writePreferences } from '@/world/preferences';
+import { courseIdentity } from '@/timetable/model/courseColors';
 import { usePreferences } from '@/world/usePreferences';
 import { LAYER_ORDER, lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
 import { loadExamRecord, type ExamRecord } from '@/world/data';
@@ -98,6 +99,7 @@ export default function TimetableApp() {
         hideCourse: (id: string) => updateTimetableEdits(term.term, edits => edits.added.includes(id)
             ? { ...edits, added: edits.added.filter(item => item !== id) } : { ...edits, hidden: [...edits.hidden, id] }),
         skipExam: (id: string) => { if (prefs.class) updateExamAttendance(term.term, prefs.class, { [id]: false }); },
+        labs: (key: 'skip' | 'drop', value: string) => writePreferences(current => ({ ...current, labs: { ...current.labs, [key]: [...new Set([...(current.labs?.[key] ?? []), value])] } })),
     };
 
     return (
@@ -131,7 +133,9 @@ export default function TimetableApp() {
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
             </div>
             {calendar && prefs.class && <CalendarSheet line={line} className={prefs.class} prefs={prefs} onClose={() => setCalendar(false)} />}
-            {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} onClose={() => setOpen(null)} onOpen={setOpen}
+            {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} order={prefs.layers ?? LAYER_ORDER} onClose={() => setOpen(null)} onOpen={setOpen}
+                onSkipLab={event => { mine.labs('skip', event.lab!.id); setOpen(null); }}
+                onDropLab={event => { mine.labs('drop', courseIdentity(event.lab!)); setOpen(null); }}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}
                 onUnplan={() => { updateRun({ days: toggleRun(line.run!.days, open.date) }); setOpen(null); }}

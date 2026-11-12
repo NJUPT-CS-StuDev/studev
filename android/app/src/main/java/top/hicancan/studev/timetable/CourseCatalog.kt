@@ -142,11 +142,18 @@ object CourseCatalog {
      * labs for those classes. `kept` are the class's own lessons still on the timetable, `added` the lessons brought in.
      */
     fun effectiveLabs(classLabs: List<Lab>, classMeetings: List<TeachingMeeting>, kept: List<TeachingMeeting>, added: List<TeachingMeeting>, allLabs: List<Lab>): List<Lab> {
-        val still = kept.map { TimetablePresentation.identity(it) }.toSet()
-        val dropped = classMeetings.map { TimetablePresentation.identity(it) }.filter { it !in still }.toSet()
-        val brought = allLabs.filter { lab -> added.any { meeting -> TimetablePresentation.identity(meeting) == TimetablePresentation.identity(lab) && meeting.classes.any { it in lab.classes } } }
-        return (classLabs.filter { TimetablePresentation.identity(it) !in dropped } + brought).distinctBy { it.id }.sortedWith(compareBy({ it.date }, { it.start }, { it.id }))
+        fun dropped(lab: Lab) = classMeetings.any { TimetablePresentation.sameCourse(lab, it) } && kept.none { TimetablePresentation.sameCourse(lab, it) }
+        val brought = allLabs.filter { lab -> added.any { meeting -> TimetablePresentation.sameCourse(lab, meeting) && meeting.classes.any { it in lab.classes } } }
+        return (classLabs.filterNot(::dropped) + brought).distinctBy { it.id }.sortedWith(compareBy({ it.date }, { it.start }, { it.id }))
     }
+    /** A lab sheet's name across its versions: the file name without the date it was sent. */
+    fun labSheet(lab: Lab) = top.hicancan.studev.world.Exams.sheetName(lab.source)
+    /**
+     * What a person chose about labs, the same as src/campus/timetable/model/labs.ts: a lab sheet comes from outside the
+     * teaching office, so each is theirs to take or leave whole; then a lab course or a single sitting.
+     */
+    fun attendingLabs(labs: List<Lab>, choices: top.hicancan.studev.me.LabChoices) =
+        labs.filter { labSheet(it) !in choices.off && TimetablePresentation.identity(it) !in choices.drop && it.id !in choices.skip }
 
     private fun groupCourses(meetings: List<TeachingMeeting>, source: String, hidden: Set<String>): List<TimetableCourse> {
         val groups = LinkedHashMap<String, MutableList<TeachingMeeting>>()

@@ -175,9 +175,6 @@ import java.time.LocalDate
 }
 
 /** One thing on the line. `behind` is how many it overlaps lie behind it; one in front names the count. */
-/** A lesson or a lab takes its course's colour. */
-private fun toneOf(event: LineEvent, tones: Map<String, Int>) = event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: event.lab?.let { tones[TimetablePresentation.identity(it)] }
-
 @Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, behind: Int = 0, onClick: () -> Unit) {
     val mark = marks()
     val tones = toneIndex?.let { tone(it) }
@@ -189,7 +186,7 @@ private fun toneOf(event: LineEvent, tones: Map<String, Int>) = event.meeting?.l
     Box(modifier) {
         val lab = event.lab
         val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
-            else if (lab != null) listOf("实验", Names.roomShort(event.room)).filter { it.isNotEmpty() }.joinToString(" · ") else Names.roomShort(event.room)
+            else if (lab != null) "实验 · ${lab.room?.let(Names::roomShort) ?: lab.short}" else Names.roomShort(event.room)
         TileBox(if (big) event.name else event.short, note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
         if (behind > 0) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).border(1.dp, Ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 3.dp)) {
@@ -253,7 +250,7 @@ private fun toneOf(event: LineEvent, tones: Map<String, Int>) = event.meeting?.l
             if (awake && live.first().start - free >= 45) gap(free, live.first().start)
             // Everything on, at its own time, back to front: what is behind shows beside what is in front.
             CampusLine.layers(live, order).forEach { (event, under, over) ->
-                Tile(event, toneOf(event, tones), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
+                Tile(event, TimetablePresentation.toneOf(event, tones, line.meetings), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
                     event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
             }
             // Free time is between runs of things that overlap, not between any two of them.
@@ -369,7 +366,7 @@ private const val DAY_END = 21 * 60 + 8
                         // Everything on, at its own time, back to front: what is behind shows beside what is in front.
                         CampusLine.layers(events[index], order).forEach { (event, under, over) ->
                             val past = event.kind != "exam" && (date < now.date || (date == now.date && event.end <= now.min))
-                            Tile(event, toneOf(event, lineTones), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
+                            Tile(event, TimetablePresentation.toneOf(event, lineTones, line.meetings), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
                                 event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->

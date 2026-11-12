@@ -298,8 +298,23 @@
   &.sheet-wrap{position:fixed;inset:0;z-index:60}
   .scrim{position:absolute;inset:0;background:rgba(0,0,0,.24);width:100%;height:100%;animation:sd-fade .2s}
   .sheet{position:absolute;overflow:auto;background:var(--paper);padding:18px 20px 20px;outline:0;scrollbar-width:thin}
+  /* A sheet opened from a tile wears its colour: the head is the tile, enlarged. */
+  .sheet.toned{--bg:var(--course-light-bg,var(--surface-sunken));--bd:var(--course-light-border,var(--line));--fg:var(--course-light-fg,var(--ink))}
+  .sheet.toned .card-h{margin:-18px -20px 14px;padding:18px 20px 14px;background:var(--bg);color:var(--fg);box-shadow:inset 0 -1px 0 var(--bd)}
+  .sheet.toned.exam .card-h{background:var(--exam);color:var(--on-exam);box-shadow:none}
+  .sheet.toned.run .card-h{background:var(--paper);color:var(--ink);box-shadow:inset 0 -1px 0 var(--line)}
+  .sheet.toned .card-h .tag{background:var(--paper);color:var(--fg);box-shadow:none}
+  .sheet.toned .card-h .x{color:inherit}
+  /* What else is on at the same time, stacked order left to right; the one shown is raised. */
+  .sw{display:flex;gap:6px;margin:-6px -4px 12px;overflow-x:auto;padding:2px 4px;touch-action:pan-y}
+  .sw-i{--bg:var(--course-light-bg,var(--surface-sunken));--bd:var(--course-light-border,var(--line));--fg:var(--course-light-fg,var(--ink));flex:0 0 auto;min-width:76px;max-width:46%;text-align:left;padding:6px 9px;border-radius:8px;background:var(--bg);color:var(--fg);box-shadow:inset 0 0 0 1px var(--bd);opacity:.62}
+  .sw-i.exam{background:var(--exam);color:var(--on-exam);box-shadow:none}
+  .sw-i.on{opacity:1;box-shadow:inset 0 0 0 2px var(--bd)}
+  .sw-i.exam.on{box-shadow:inset 0 0 0 2px var(--on-exam)}
+  .sw-i b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sw-i small{display:block;font-size:11px;opacity:.85;font-variant-numeric:tabular-nums}
 }
-:root[data-theme=dark] .sd .t{--bg:var(--course-dark-bg,var(--surface-sunken));--bd:var(--course-dark-border,var(--line));--fg:var(--course-dark-fg,var(--ink))}
+:root[data-theme=dark] .sd :is(.t,.sheet.toned,.sw-i){--bg:var(--course-dark-bg,var(--surface-sunken));--bd:var(--course-dark-border,var(--line));--fg:var(--course-dark-fg,var(--ink))}
 @keyframes sd-fade{from{opacity:0}}
 @keyframes sd-rise{from{transform:translateY(102%)}}
 @media (max-width:999.98px){

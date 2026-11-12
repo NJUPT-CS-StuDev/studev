@@ -83,11 +83,18 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
 @Composable fun SmallTag(text: String, bg: Color, fg: Color) =
     Box(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp)) { Plain(text, 11.sp, fg, FontWeight.SemiBold) }
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun PlainSheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+/**
+ * A sheet over the page. `top` sits above the title; `head` colours the title band (background, ink), as a tile's colour
+ * dresses the sheet it opens.
+ */
+@Composable fun PlainSheet(title: String, onClose: () -> Unit, top: (@Composable () -> Unit)? = null, head: Pair<Color, Color>? = null, content: @Composable ColumnScope.() -> Unit) {
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Ink.paper, shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp), dragHandle = null, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 18.dp, bottom = 24.dp).navigationBarsPadding()) {
-            Plain(title, 20.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
-            content()
+        Column(Modifier.fillMaxWidth().padding(top = if (top != null) 12.dp else if (head != null) 0.dp else 18.dp, bottom = 24.dp).navigationBarsPadding()) {
+            if (top != null) Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp)) { top() }
+            Box(Modifier.fillMaxWidth().then(if (head != null) Modifier.background(head.first).padding(vertical = 14.dp) else Modifier).padding(horizontal = 20.dp)) {
+                Plain(title, 20.sp, head?.second ?: Ink.text, weight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
+            }
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = if (head != null) 12.dp else 0.dp)) { content() }
         }
     }
 }

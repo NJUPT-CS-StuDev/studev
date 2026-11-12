@@ -66,6 +66,10 @@ class ParityTest {
         }
         assertEquals(labs.getValue("tones").jsonObject.mapValues { it.value.jsonPrimitive.int }, TimetablePresentation.tones(labLine))
         assertEquals(labs.getValue("last").jsonPrimitive.content, labLine.lastLesson().toString())
+        labs.getValue("choices").jsonArray.forEach { item ->
+            val choices = json.decodeFromJsonElement<top.hicancan.studev.me.LabChoices>(item.jsonObject.getValue("choices"))
+            assertEquals(item.jsonObject.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, CourseCatalog.attendingLabs(classLabs, choices).map { it.id })
+        }
         labs.getValue("personal").jsonArray.forEach { item ->
             val kept = item.jsonObject.getValue("kept").jsonArray.map { it.jsonPrimitive.content }
             val got = CourseCatalog.effectiveLabs(classLabs, meetings, meetings.filter { it.id in kept }, json.decodeFromJsonElement(item.jsonObject.getValue("added")), json.decodeFromJsonElement(item.jsonObject.getValue("all")))

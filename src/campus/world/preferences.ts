@@ -25,6 +25,8 @@ export interface Preferences {
     examReminders?: string[];
     /** Which kind shows in front when things overlap, front first; absent means the default. */
     layers?: EventKind[];
+    /** Lab sheets left out, lab courses not taken and single sittings missed. */
+    labs?: { off?: string[]; drop?: string[]; skip?: string[] };
 }
 
 /** The mornings put down in this browser, plus the bonus or penalty entered from the sports office. */
@@ -63,6 +65,11 @@ const sanitize = (raw: unknown): Preferences => {
     if (Array.isArray(record.examReminders)) result.examReminders = [...new Set(record.examReminders.filter((key): key is string => typeof key === 'string' && key.length < 10))];
     // Only a whole ordering of every kind is kept: a partial one would leave some kind nowhere.
     if (Array.isArray(record.layers) && record.layers.length === LAYER_ORDER.length && LAYER_ORDER.every(kind => (record.layers as unknown[]).includes(kind))) result.layers = record.layers as EventKind[];
+    if (record.labs && typeof record.labs === 'object' && !Array.isArray(record.labs)) {
+        const labs = record.labs as Record<string, unknown>;
+        const kept = Object.fromEntries((['off', 'drop', 'skip'] as const).map(key => [key, ids(labs[key])] as const).filter(([, value]) => value.length > 0));
+        if (Object.keys(kept).length) result.labs = kept;
+    }
     if (typeof record.examsSeen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.examsSeen)) result.examsSeen = record.examsSeen;
     if (record.examAttendance && typeof record.examAttendance === 'object' && !Array.isArray(record.examAttendance)) {
         const attendance: NonNullable<Preferences['examAttendance']> = {};

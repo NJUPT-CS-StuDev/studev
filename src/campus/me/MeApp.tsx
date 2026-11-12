@@ -5,10 +5,15 @@ import { PRODUCT_CONFIG } from '@/world/product';
 import { timetableEdits, updateTimetableEdits, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
-import { loadClasses, loadRuns, loadTerm, type MorningRun } from '@/world/data';
+import { loadClasses, loadClassLabs, loadRuns, loadTerm, type MorningRun } from '@/world/data';
+import { labSheet } from '@/timetable/model/labs';
+import { courseIdentity } from '@/timetable/model/courseColors';
+import { publishedOn } from '@/world/exams';
+import { courseName } from '@/world/names';
+import { dateLabel, hm, minutesOf } from '@/world/time';
 import { gradeOf, LAYER_ORDER, type EventKind } from '@/world/events';
 import { Chevron, Sheet, Toggle } from '@/world/ui';
-import type { TeachingClass, TeachingTerm } from '@/world/facts';
+import type { Lab, TeachingClass, TeachingTerm } from '@/world/facts';
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
 import { labels } from '../../platform/client/api';
 import '../campus.css';
@@ -19,6 +24,9 @@ export default function MeApp() {
     const [appearance, setLook] = useState<Appearance>(() => typeof document === 'undefined' ? 'auto' : readAppearance());
     const [picking, setPicking] = useState(false);
     const [layering, setLayering] = useState(false);
+    const [classLabs, setClassLabs] = useState<Lab[] | null>(null);
+    const [labsOpen, setLabsOpen] = useState(false);
+    useEffect(() => { setClassLabs(null); if (open && prefs.class) void loadClassLabs(prefs.class).then(setClassLabs).catch(() => setClassLabs([])); }, [open, prefs.class]);
     const [facts, setFacts] = useState<{ term: TeachingTerm; classes: TeachingClass[]; run: MorningRun | null } | null>(null);
     useEffect(() => {
         const button = document.querySelector<HTMLElement>('[data-me]');
@@ -52,6 +60,30 @@ export default function MeApp() {
         if (at > 0) [next[at - 1], next[at]] = [next[at]!, next[at - 1]!];
         return { ...current, layers: next };
     });
+    const choices = prefs.labs ?? {};
+    const sheets = [...new Map((classLabs ?? []).map(lab => [labSheet(lab), lab])).values()];
+    const setChoice = (key: 'off' | 'drop' | 'skip', value: string, on: boolean) => writePreferences(current => {
+        const list = new Set(current.labs?.[key] ?? []);
+        if (on) list.add(value); else list.delete(value);
+        return { ...current, labs: { ...current.labs, [key]: [...list] } };
+    });
+    if (labsOpen) {
+        const dropped = [...new Map((classLabs ?? []).filter(lab => choices.drop?.includes(courseIdentity(lab))).map(lab => [courseIdentity(lab), lab])).values()];
+        const skipped = (classLabs ?? []).filter(lab => choices.skip?.includes(lab.id));
+        return (
+            <Sheet title="实验安排" onClose={() => setLabsOpen(false)}>
+                <p className="fine lead">实验表来自学院实验中心，不在教务系统里。每份表由你决定要不要放进自己的课表；放进来之后，还可以单独去掉某门实验或某一次。</p>
+                {sheets.map(lab => <button key={labSheet(lab)} className="kv" onClick={() => setChoice('off', labSheet(lab), !choices.off?.includes(labSheet(lab)))}>
+                    <span className="v">{labSheet(lab)}<small>{dateLabel(publishedOn(lab.source))} 的版本 · 你的班有 {(classLabs ?? []).filter(other => labSheet(other) === labSheet(lab)).length} 次</small></span><Toggle on={!choices.off?.includes(labSheet(lab))} />
+                </button>)}
+                {classLabs && !sheets.length && <p className="fine">你的班级不在已收到的实验表里。</p>}
+                {dropped.length > 0 && <h3 className="sh gap">去掉的实验</h3>}
+                {dropped.map(lab => <div key={courseIdentity(lab)} className="kv"><span className="v">{courseName(lab.course.name)}<small>整门实验</small></span><button className="ib" onClick={() => setChoice('drop', courseIdentity(lab), false)}>恢复</button></div>)}
+                {skipped.length > 0 && <h3 className="sh gap">不上的几次</h3>}
+                {skipped.map(lab => <div key={lab.id} className="kv"><span className="v">{courseName(lab.course.name)}<small>{dateLabel(lab.date)} {hm(minutesOf(lab.start))} · {lab.project}</small></span><button className="ib" onClick={() => setChoice('skip', lab.id, false)}>恢复</button></div>)}
+            </Sheet>
+        );
+    }
     if (layering) return (
         <Sheet title="叠放顺序" onClose={() => setLayering(false)}>
             <p className="fine lead">同一时间有几件事时，靠前的显示在前面，后面的露出一条边，点开任何一件都能看到同时段的其他安排。这只改变显示，不会让哪件事消失。</p>
@@ -72,6 +104,7 @@ export default function MeApp() {
             <div className="kv"><span className="k">改动</span><span className="v">加了 {edits.added.length} 门，隐藏了 {edits.hidden.length} 门</span>
                 {edits.hidden.length + edits.added.length > 0 && facts && <button className="ib" onClick={() => updateTimetableEdits(facts.term.term, () => ({ hidden: [], added: [] }))}>还原</button>}</div>
             <div className="kv"><span className="k">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{label}</button>)}</div></div>
+            {classLabs && classLabs.length > 0 && <button className="kv" onClick={() => setLabsOpen(true)}><span className="k">实验</span><span className="v">{sheets.filter(lab => !choices.off?.includes(labSheet(lab))).length ? '已放进课表' : '没有放进课表'}<small>{[choices.drop?.length ? `去掉 ${choices.drop.length} 门` : '', choices.skip?.length ? `不上 ${choices.skip.length} 次` : ''].filter(Boolean).join('，') || '学院实验中心的上机安排'}</small></span><Chevron /></button>}
             <button className="kv" onClick={() => setLayering(true)}><span className="k">叠放</span><span className="v">{order.map(kind => KIND_NAMES[kind]).join(' › ')}<small>同一时间有几件事时谁在前面</small></span><Chevron /></button>
             <a className="kv" href="/account/"><span className="k">账号</span><span className="v">{account ? `${account.nickname} · ${labels[account.role] ?? account.role}` : '未登录'}</span><Chevron /></a>
             {facts?.run && <>

@@ -109,8 +109,12 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         if (labIndex()?.classes?.contains(id) != true) return emptyList()
         return read<ClassLabs>("labs/$term/classes/$id.json").labs
     }
-    /** The labs of a class as one person takes it: `raw` is the class's timetable, `effective` theirs. */
-    suspend fun personalLabs(id: String, raw: ClassSchedule, effective: ClassSchedule): List<Lab> {
+    /**
+     * The labs of a class as one person takes it: `raw` is the class's timetable, `effective` theirs. Labs are an extra
+     * layer from outside the teaching office: when their files cannot be fetched, the timetable stands without them.
+     */
+    suspend fun personalLabs(id: String, raw: ClassSchedule, effective: ClassSchedule): List<Lab> = try { labsOf(id, raw, effective) } catch (_: DataUnavailableException) { emptyList() }
+    private suspend fun labsOf(id: String, raw: ClassSchedule, effective: ClassSchedule): List<Lab> {
         val own = raw.meetings.mapTo(mutableSetOf()) { it.id }
         val (kept, added) = effective.meetings.partition { it.id in own }
         return top.hicancan.studev.timetable.CourseCatalog.effectiveLabs(labs(id), raw.meetings, kept, added, if (added.isEmpty()) emptyList() else allLabs())
@@ -141,7 +145,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val klass = settings.klass
         val schedule = klass?.takeIf { id -> classes().any { it.id == id } }?.let { effectiveSchedule(it, settings.timetableEdits(term.term)) }
         val exams = klass?.let { effectiveExams(it, settings) }.orEmpty()
-        val labs = if (klass != null && schedule != null) personalLabs(klass, schedule(klass), schedule) else emptyList()
+        val labs = if (klass != null && schedule != null) top.hicancan.studev.timetable.CourseCatalog.attendingLabs(personalLabs(klass, schedule(klass), schedule), settings.labs) else emptyList()
         return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null)
     }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {

@@ -1,5 +1,5 @@
 import type { TeachingMeeting } from '@/world/facts';
-import { courseIdentity, courseToneStyle, timelineTones } from '@/timetable/model/courseColors';
+import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { eventsOn, layers, meetingAround, weekOfDate, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
@@ -11,11 +11,10 @@ const DAY_END = 21 * 60 + 8;
 /** How far each thing behind shows beside the one in front of it. */
 const EDGE = 5;
 
-/** What a tile says under its name: where, and for a lab that it is one. */
-const tileNote = (event: CampusEvent, wide: boolean) => {
-    const room = event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
-    return event.lab ? ['实验', room].filter(Boolean).join(' · ') : room;
-};
+/** What a tile says under its name: where, and for a lab that it is one, its place said short. */
+const tileNote = (event: CampusEvent, wide: boolean) => event.lab
+    ? `实验 · ${event.lab.room ? roomShort(event.lab.room) : event.lab.short}`
+    : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
 
 export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
@@ -67,9 +66,9 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                         })}
                         {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
                         {layers(today, order).map(({ event, under, over }) => {
-                            const course = event.meeting ?? event.lab;
+                            const tone = eventTone(tones, event, line.meetings);
                             return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`}
-                                style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(course ? courseToneStyle(tones.get(courseIdentity(course))!) : {}) }} onClick={() => onOpen(event)}>
+                                style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(tone !== undefined ? courseToneStyle(tone) : {}) }} onClick={() => onOpen(event)}>
                                 {wide ? event.name : event.short}<small>{tileNote(event, wide)}</small>
                                 {over === 0 && under > 0 && <i className="more">+{under}</i>}
                             </button>;

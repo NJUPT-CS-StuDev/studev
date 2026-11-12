@@ -3,7 +3,7 @@
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
-import { personalLabs } from '@/timetable/model/labs';
+import { attendingLabs, labSheet, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
@@ -98,6 +98,9 @@ const labs = {
         { kept: labMeetings.filter(meeting => courseIdentity(meeting) !== labCourse).map(meeting => meeting.id), added: [] as TeachingMeeting[], all: [] as Lab[] },
         { kept: labMeetings.map(meeting => meeting.id), added, all: nearby },
     ].map(test => ({ ...test, expected: personalLabs(classLabs, labMeetings, labMeetings.filter(meeting => test.kept.includes(meeting.id)), test.added, test.all).map(lab => lab.id) })),
+    choices: [
+        {}, { off: [labSheet(classLabs[0]!)] }, { drop: [courseIdentity(classLabs[0]!)] }, { skip: classLabs.slice(0, 3).map(lab => lab.id) },
+    ].map(choices => ({ choices, expected: attendingLabs(classLabs, choices).map(lab => lab.id) })),
 };
 writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

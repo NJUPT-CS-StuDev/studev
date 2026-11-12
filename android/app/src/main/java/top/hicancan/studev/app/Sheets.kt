@@ -4,7 +4,11 @@ import android.app.UiModeManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,6 +16,9 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,9 +52,34 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     val plan = line.run
     val classId = if (isMe) settings.klass else if (route.whoType == "class") route.whoId else null
     val record = top.hicancan.studev.timetable.examRecordOf(state, classId)
+    // The sheet is the tile it opened from, enlarged: the same colour. Things on at the same time sit in a strip above
+    // it, in the order they are stacked, and switch in place.
+    val tones = remember(line) { top.hicancan.studev.timetable.TimetablePresentation.tones(line) }
+    @Composable fun colours(item: LineEvent): Pair<Color, Color> = when (item.kind) {
+        "exam" -> mark.exam to mark.onExam
+        "run" -> Ink.sunken to Ink.text
+        else -> top.hicancan.studev.timetable.TimetablePresentation.toneOf(item, tones, line.meetings)?.let { tone(it) }?.let { it.bg to it.fg } ?: (Ink.sunken to Ink.text)
+    }
+    val group = CampusLine.clusters(line.on(date), settings.layers).firstOrNull { run -> run.events.any { it.id == event.id } }
+    val together = group?.events?.takeIf { it.size > 1 }?.sortedWith(compareBy<LineEvent> { settings.layers.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }).orEmpty()
+    val kindNames = mapOf("class" to "课", "lab" to "实验", "exam" to "考试", "run" to "早锻炼")
+    val strip: (@Composable () -> Unit)? = if (together.isEmpty()) null else ({
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            together.forEach { item ->
+                val (bg, fg) = colours(item)
+                val on = item.id == event.id
+                Column(Modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(if (on) 2.dp else 0.dp, if (on) fg.copy(alpha = .5f) else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable { onOpen(item) }.padding(horizontal = 10.dp, vertical = 6.dp).alpha(if (on) 1f else .62f)) {
+                    Plain(item.short, 13.sp, fg, FontWeight.SemiBold, maxLines = 1)
+                    Plain("${kindNames[item.kind]} · ${hm(item.start)}", 11.sp, fg.copy(alpha = .85f), maxLines = 1)
+                }
+            }
+        }
+    })
+    val head = colours(event)
     if (event.kind == "run" && plan != null) {
         val place = plan.rule.xianlin
-        PlainSheet("早锻炼", onClose) {
+        PlainSheet("早锻炼", onClose, strip, head) {
             Plain(whenText, 13.5.sp, Ink.muted)
             if (place != null) Row(Modifier.padding(top = 16.dp, bottom = 8.dp)) { ActionButton("去起点", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = "仙林/${place.route[0]}") } }
             if (place != null) {
@@ -62,7 +94,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     val exam = event.exam
     val lab = event.lab
     val kinds = mapOf("class" to "课", "lab" to "实验", "exam" to "考试")
-    PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else event.name, onClose) {
+    PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else event.name, onClose, strip, head) {
         val placed = Names.placed(event.room)
         val roomName = event.room?.let(Names::room)
         val facts = if (exam != null) Exams.courseOf(line.meetings, exam.course) else if (lab != null) Exams.courseOf(line.meetings, lab.course) else event.meeting?.course
@@ -83,12 +115,8 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         }
         if (lab != null) {
             KeyRow("项目", lab.project, lab.group?.let { "第 $it 组" })
-            if (lab.location != lab.place) KeyRow("座位", lab.location.replace(",", "、"))
+            if (Regex("排|[（(]").containsMatchIn(lab.location)) KeyRow("座位", lab.location.replace(",", "、"))
             Together("一起上", lab.classes, lab.students)
-        }
-        // Whatever else is on at the same time: both stand, and each opens.
-        line.overlapping(event).forEach { other ->
-            KeyRow("同时段", "${other.name} · ${kinds[other.kind] ?: "早锻炼"}", "${hm(other.start)}–${hm(other.end)}${other.room?.let { " · ${Names.room(it)}" } ?: ""}", chevron = true, onClick = { onOpen(other) })
         }
         val meeting = event.meeting
         if (meeting != null) {
@@ -116,6 +144,11 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         }
         if (isMe && exam != null) KeyRow(null, "不参加这场考试", color = mark.danger, onClick = { model.examAttendance(event.id, false); onClose() })
         if (isMe && event.kind == "class") KeyRow(null, "从我的课表移除", color = mark.danger, onClick = { model.removeCourse(event.meeting!!.teaching_class.id); onClose() })
+        if (isMe && lab != null) {
+            KeyRow(null, "不上这次实验", color = mark.danger, onClick = { model.settings.update { it.copy(labs = it.labs.copy(skip = (it.labs.skip + lab.id).distinct())) }; onClose() })
+            KeyRow(null, "不上这门实验", "共 ${line.labs.count { it.course == lab.course }} 次，可在“我 · 实验”里恢复", color = mark.danger,
+                onClick = { model.settings.update { it.copy(labs = it.labs.copy(drop = (it.labs.drop + top.hicancan.studev.timetable.TimetablePresentation.identity(lab)).distinct())) }; onClose() })
+        }
     }
 }
 
@@ -134,9 +167,39 @@ private val KIND_NAMES = mapOf("exam" to "考试", "lab" to "实验", "class" to
     }
 }
 
+/**
+ * Lab sheets come from a college's laboratory centre, not the teaching office: each is the person's to take or leave
+ * whole, and what they took off one lab or one sitting at a time comes back from here.
+ */
+@Composable fun LabSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {
+    val choices = settings.labs
+    val catalog = top.hicancan.studev.timetable.CourseCatalog
+    val sheets = state.labs.distinctBy(catalog::labSheet)
+    fun update(change: (top.hicancan.studev.me.LabChoices) -> top.hicancan.studev.me.LabChoices) = model.settings.update { it.copy(labs = change(it.labs)) }
+    PlainSheet("实验安排", onClose) {
+        Plain("实验表来自学院实验中心，不在教务系统里。每份表由你决定要不要放进自己的课表；放进来之后，还可以单独去掉某门实验或某一次。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+        sheets.forEach { lab ->
+            val name = catalog.labSheet(lab)
+            val on = name !in choices.off
+            KeyRow(null, name, "${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本 · 你的班有 ${state.labs.count { catalog.labSheet(it) == name }} 次",
+                trailing = { Toggle(on) { next -> update { if (next) it.copy(off = it.off - name) else it.copy(off = (it.off + name).distinct()) } } })
+        }
+        if (sheets.isEmpty()) Plain("你的班级不在已收到的实验表里。", 13.sp, Ink.faint)
+        val dropped = state.labs.filter { top.hicancan.studev.timetable.TimetablePresentation.identity(it) in choices.drop }.distinctBy { top.hicancan.studev.timetable.TimetablePresentation.identity(it) }
+        if (dropped.isNotEmpty()) Plain("去掉的实验", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+        dropped.forEach { lab -> val key = top.hicancan.studev.timetable.TimetablePresentation.identity(lab)
+            KeyRow(null, Names.course(lab.course.name), "整门实验", trailing = { Chip("恢复", { update { it.copy(drop = it.drop - key) } }) }) }
+        val skipped = state.labs.filter { it.id in choices.skip }
+        if (skipped.isNotEmpty()) Plain("不上的几次", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+        skipped.forEach { lab -> KeyRow(null, Names.course(lab.course.name), "${dateLabel(java.time.LocalDate.parse(lab.date))} ${lab.start} · ${lab.project}", trailing = { Chip("恢复", { update { it.copy(skip = it.skip - lab.id) } }) }) }
+    }
+}
+
 @Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onClose: () -> Unit) {
     var layering by remember { mutableStateOf(false) }
+    var labsOpen by remember { mutableStateOf(false) }
     if (layering) { LayerSheet(settings, model) { layering = false }; return }
+    if (labsOpen) { LabSheet(state, settings, model) { labsOpen = false }; return }
     val context = LocalContext.current
     val term = state.term
     val info = state.classes.find { it.id == settings.klass }
@@ -156,6 +219,10 @@ private val KIND_NAMES = mapOf("exam" to "考试", "lab" to "实验", "class" to
                 }
             }
             val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
+            if (state.labs.isNotEmpty()) {
+                val on = state.labs.any { top.hicancan.studev.timetable.CourseCatalog.labSheet(it) !in settings.labs.off }
+                KeyRow("实验", if (on) "已放进课表" else "没有放进课表", listOfNotNull(settings.labs.drop.size.takeIf { it > 0 }?.let { "去掉 $it 门" }, settings.labs.skip.size.takeIf { it > 0 }?.let { "不上 $it 次" }).joinToString("，").ifEmpty { "学院实验中心的上机安排" }, chevron = true, onClick = { labsOpen = true })
+            }
             KeyRow("叠放", settings.layers.joinToString(" › ") { KIND_NAMES.getValue(it) }, "同一时间有几件事时谁在前面", chevron = true, onClick = { layering = true })
             KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
             state.run?.let { rule ->

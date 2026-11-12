@@ -25,7 +25,18 @@ object TimetablePresentation {
      *  where they can; a tone is shared only by courses that never meet on the same day. */
     fun tones(meetings: List<TeachingMeeting>): Map<String, Int> = allot(meetings.map { identity(it) to it.weekday })
     /** One timeline's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
-    fun tones(line: top.hicancan.studev.world.CampusLine): Map<String, Int> = allot(line.meetings.map { identity(it) to it.weekday } + line.labs.map { identity(it) to it.weekday })
+    fun tones(line: top.hicancan.studev.world.CampusLine): Map<String, Int> = allot(line.meetings.map { identity(it) to it.weekday } + line.labs.map { linked(it, line.meetings) to it.weekday })
+    /**
+     * A lab belongs to a lesson's course when the two carry the same course code, or the same name: the lab sheet often
+     * gives a lab its own code (Linux 编程 labs are B0301371S, its lessons JS113701S), never a different name.
+     */
+    fun sameCourse(lab: top.hicancan.studev.data.Lab, meeting: TeachingMeeting) = identity(lab) == identity(meeting) ||
+        top.hicancan.studev.world.Names.course(lab.course.name).lowercase(Locale.ROOT) == top.hicancan.studev.world.Names.course(meeting.course.name).lowercase(Locale.ROOT)
+    /** The course a lab's colour and links follow: that of the lesson it belongs to, or its own. */
+    fun linked(lab: top.hicancan.studev.data.Lab, meetings: List<TeachingMeeting>) = meetings.firstOrNull { sameCourse(lab, it) }?.let(::identity) ?: identity(lab)
+    /** The tone of something on a timeline: a lesson's own, a lab its course's. */
+    fun toneOf(event: top.hicancan.studev.world.LineEvent, tones: Map<String, Int>, meetings: List<TeachingMeeting>) =
+        event.meeting?.let { tones[identity(it)] } ?: event.lab?.let { tones[linked(it, meetings)] }
     private fun allot(courses: List<Pair<String, Int>>): Map<String, Int> {
         val days = courses.groupBy({ it.first }, { it.second }).mapValues { (_, rows) -> rows.toSet() }
         val ids = days.keys.sorted()

@@ -14,7 +14,7 @@ export interface TeachingMeeting {
 }
 export interface Exam { id: string; classes: string[]; course: { code: string | null; name: string }; teacher: string | null; campus: string | null; location: string; room: string | null; date: string; start: string; end: string; students: number | null; note: string | null; source: string }
 /** One lab sitting a laboratory centre scheduled: a course's project, on one date, over a run of periods. */
-export interface Lab { id: string; classes: string[]; group: number | null; course: { code: string | null; name: string }; project: string; teachers: string[]; location: string; place: string; room: string | null; week: number; weekday: number; periods: [number, number]; date: string; start: string; end: string; students: number | null; source: string }
+export interface Lab { id: string; classes: string[]; group: number | null; course: { code: string | null; name: string }; project: string; teachers: string[]; location: string; place: string; short: string; room: string | null; week: number; weekday: number; periods: [number, number]; date: string; start: string; end: string; students: number | null; source: string }
 export interface ExamSlot { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null }
 export interface ExamChange { observed: string; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: ExamSlot[] | null; after: ExamSlot[] | null }
 export interface ExamSource { file: string; url: string; notice: string; title: string }

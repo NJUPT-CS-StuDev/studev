@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import golden from './golden.json';
 import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
-import { personalLabs } from '@/timetable/model/labs';
+import { attendingLabs, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
@@ -64,6 +64,7 @@ describe('the shared web / Android real-data contract', () => {
         for (const test of labs.moments) { const next = nextEvent(labLine, test.now); expect(next ? brief(next) : null).toEqual(test.next); }
         expect(Object.fromEntries(timelineTones(labLine))).toEqual(labs.tones);
         expect(lastLesson(labLine)).toBe(labs.last);
+        for (const test of labs.choices) expect(attendingLabs(classLabs, test.choices).map(lab => lab.id)).toEqual(test.expected);
         for (const test of labs.personal) expect(personalLabs(classLabs, meetings, meetings.filter(meeting => test.kept.includes(meeting.id)), test.added as unknown as TeachingMeeting[], test.all as unknown as Lab[]).map(lab => lab.id)).toEqual(test.expected);
     });
 });
