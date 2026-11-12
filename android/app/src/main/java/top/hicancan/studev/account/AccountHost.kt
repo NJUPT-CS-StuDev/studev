@@ -19,11 +19,11 @@ import androidx.compose.ui.platform.testTag
     LaunchedEffect(campusLink) { if (campusLink != null) Forms.fromLink(campusLink)?.let { open = false; form = it } }
     Box(Modifier.fillMaxSize()) {
         content({ open = true }, { form = it })
-        form?.let { request -> Surface(Modifier.fillMaxSize()) { key(request) { FormScreen(client, request) { form = null } } } }
+        // Each layer takes back over the campus beneath it; what opens within it (signing in over a form) takes it first.
+        form?.let { request -> Surface(Modifier.fillMaxSize()) { BackHandler { form = null }; key(request) { FormScreen(client, request) { form = null } } } }
         if (open) Surface(Modifier.fillMaxSize().testTag("account-host")) {
+            BackHandler { open = false }
             AccountScreen(client, onBack = { open = false })
         }
     }
-    BackHandler(enabled = open) { open = false }
-    BackHandler(enabled = form != null && !open) { form = null }
 }

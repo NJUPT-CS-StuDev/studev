@@ -144,6 +144,7 @@ private fun JsonObject.str(key: String) = this[key]?.jsonPrimitive?.contentOrNul
         camera.launch(shot!!)
     }
 
+    androidx.activity.compose.BackHandler(enabled = signingIn) { signingIn = false }
     if (signingIn) {
         AccountScreen(client, onBack = { signingIn = false }, onSignedIn = { scope.launch { user = client.current(); signingIn = false; if (user != null) attempt { send() } } })
         return
