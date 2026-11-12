@@ -150,3 +150,4 @@ test('tasks sync per person: the later change of a task wins, a deletion travels
   assert.deepEqual((await b.client.call('/sync', { method: 'POST', body: { tasks: [] } })).body.tasks, []);
   for (const tasks of [[{ id: 't1' }], [first, first], 'x', [{ ...first, note: 'x'.repeat(9000) }]]) assert.ok([400, 413].includes((await a.client.call('/sync', { method: 'POST', body: { tasks } })).status));
 });
+
