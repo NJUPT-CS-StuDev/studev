@@ -23,7 +23,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
     const week = weekOfDate(line.term, monday);
     const events = days.map(date => eventsOn(line, date));
     const tones = timelineTones(line);
-    const hints = week ? offWeekLessons(line.meetings, week, tones) : [];
+    const hints = week ? offWeekLessons(line.meetings, week) : [];
     const ghosts = week ? previewRows.filter(meeting => meeting.weeks.includes(week)) : [];
     let columns = wide ? 7 : 5;
     days.forEach((_, index) => { if (events[index]!.length || hints.some(hint => hint.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
@@ -70,7 +70,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                             const start = clock.get(hint.periods[0])!.start;
                             const end = clock.get(hint.periods[1])!.end;
                             const event = meetingAround(line, hint.id, monday);
-                            return <button key={hint.id} className="t quiet" style={{ top: y(start) + 1, height: y(end) - y(start) - 2, ...courseToneStyle(hint.colourIndex) }} onClick={() => event && onOpen(event)}>
+                            return <button key={hint.id} className="t quiet" style={{ top: y(start) + 1, height: y(end) - y(start) - 2 }} onClick={() => event && onOpen(event)}>
                                 {wide ? courseName(hint.course) : courseShort(hint.course)}<small>{hint.label}</small>
                             </button>;
                         })}

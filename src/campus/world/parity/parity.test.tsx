@@ -20,7 +20,7 @@ describe('the shared web / Android real-data contract', () => {
     for (const schedule of golden.schedules) for (const { week, cells } of schedule.weeks) {
         it(`${schedule.class}, week ${week}: the same lessons off this week, greyed in place`, () => {
             const meetings = schedule.meetings as unknown as TeachingMeeting[];
-            expect(offWeekLessons(meetings, week, courseTones(meetings))).toEqual(cells);
+            expect(offWeekLessons(meetings, week)).toEqual(cells);
         });
     }
     it('has real lessons off their week to show', () => expect(golden.schedules.some(s => s.weeks.some(w => w.cells.length > 0))).toBe(true));

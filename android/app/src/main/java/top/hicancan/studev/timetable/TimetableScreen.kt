@@ -329,7 +329,7 @@ private const val DAY_END = 21 * 60 + 8
     val week = line.weekOf(monday)
     val events = remember(line, monday) { days.map(line::on) }
     val lineTones = remember(line) { TimetablePresentation.tones(line) }
-    val hints = remember(line, week) { if (week != null) TimetablePresentation.offWeekLessons(line.meetings, week, lineTones) else emptyList() }
+    val hints = remember(line, week) { if (week != null) TimetablePresentation.offWeekLessons(line.meetings, week) else emptyList() }
     val shownGhosts = if (week != null) ghosts.filter { week in it.weeks } else emptyList()
     var columns = 5
     days.forEachIndexed { index, _ -> if (events[index].isNotEmpty() || hints.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
@@ -384,15 +384,13 @@ private const val DAY_END = 21 * 60 + 8
                     }) {
                         val width = maxWidth
                         line.periods.forEach { item -> Box(Modifier.fillMaxWidth().height(1.dp).offset(y = y(period.getValue(item.period).first)).background(soft)) }
-                        // A lesson off this week keeps its place, greyed, only where nothing is on that week.
+                        // A lesson off this week keeps its place in grey, not its course's colour, only where nothing is on that week.
                         hints.filter { hint -> hint.day == index + 1 && !off }.forEach { hint ->
                             val start = period[hint.periods.first()]?.first ?: return@forEach
                             val end = period[hint.periods.last()]?.second ?: return@forEach
                             if (events[index].any { it.start < end && start < it.end }) return@forEach
                             val event = line.meetingAround(hint.id, monday)
-                            val tones = tone(hint.colourIndex)
-                            fun mix(color: Color) = Color(color.red + (paper.red - color.red) * .4f, color.green + (paper.green - color.green) * .4f, color.blue + (paper.blue - color.blue) * .4f)
-                            TileBox(Names.courseShort(hint.course), hint.label, mix(tones.bg), mix(tones.border), mix(tones.fg),
+                            TileBox(Names.courseShort(hint.course), hint.label, Ink.sunken, Ink.line, Ink.faint,
                                 Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
                         // Everything on, at its own time, back to front: what is behind shows beside what is in front.

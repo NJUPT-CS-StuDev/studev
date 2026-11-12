@@ -131,7 +131,7 @@ class ParityTest {
             val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(entry.jsonObject.getValue("meetings"))
             entry.jsonObject.getValue("weeks").jsonArray.forEach { item ->
                 val week = item.jsonObject.getValue("week").jsonPrimitive.int
-                val cells = TimetablePresentation.offWeekLessons(meetings, week, TimetablePresentation.tones(meetings))
+                val cells = TimetablePresentation.offWeekLessons(meetings, week)
                 assertEquals("week $week", json.decodeFromJsonElement<List<OffWeekLesson>>(item.jsonObject.getValue("cells")), cells)
                 count += cells.size
             }

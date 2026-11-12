@@ -29,7 +29,7 @@ const holidays = holidayMap(calendar);
 const classes = ['B240402', 'B250105', 'B230402'];
 const schedules = classes.map(id => {
     const { meetings } = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${id}.json`);
-    return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: offWeekLessons(meetings, week, courseTones(meetings)) })) };
+    return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: offWeekLessons(meetings, week) })) };
 });
 const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, labs: [], exams: [], holidays, tasks: [], run: { rule: run, days: ['2026-09-08', '2026-09-10', '2026-11-05', '2026-11-09', '2026-12-18'], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });

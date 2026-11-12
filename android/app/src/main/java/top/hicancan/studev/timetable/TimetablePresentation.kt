@@ -6,7 +6,7 @@ import java.util.Locale
 
 /** The same answers as src/campus/timetable/model/presentation.ts, checked against src/campus/world/parity/golden.json. */
 /** A lesson off its week, as src/campus/timetable/model/weekPattern.ts offWeekLessons gives it. */
-@Serializable data class OffWeekLesson(val id: String, val day: Int, val periods: List<Int>, val course: String, val room: String, val colourIndex: Int, val label: String)
+@Serializable data class OffWeekLesson(val id: String, val day: Int, val periods: List<Int>, val course: String, val room: String, val label: String)
 
 object TimetablePresentation {
     // Exactly ECMAScript \s, rather than the JVM's different whitespace set.
@@ -69,14 +69,14 @@ object TimetablePresentation {
      * greyed in place. One that would overlap an earlier one is left out; the view leaves out any that would overlap
      * something on that week, and the lesson in front names it in its sheet.
      */
-    fun offWeekLessons(meetings: List<TeachingMeeting>, week: Int, tones: Map<String, Int>): List<OffWeekLesson> {
+    fun offWeekLessons(meetings: List<TeachingMeeting>, week: Int): List<OffWeekLesson> {
         val kept = mutableListOf<TeachingMeeting>()
         meetings.filter { offThisWeek(it, week) }
             .sortedWith(compareBy<TeachingMeeting> { it.weekday }.thenBy { it.periods.first() }.thenBy { it.periods.last() }.thenBy { it.id })
             .forEach { meeting -> if (kept.none { it.weekday == meeting.weekday && it.periods.first() <= meeting.periods.last() && meeting.periods.first() <= it.periods.last() }) kept += meeting }
         return kept.map { meeting ->
             OffWeekLesson(meeting.id, meeting.weekday, meeting.periods, meeting.course.name, meeting.room?.let(top.hicancan.studev.world.Names::room).orEmpty(),
-                tones.getValue(identity(meeting)), listOfNotNull(alternating(meeting.weeks), "本周不上课").joinToString(" · "))
+                listOfNotNull(alternating(meeting.weeks), "本周不上课").joinToString(" · "))
         }
     }
 }
