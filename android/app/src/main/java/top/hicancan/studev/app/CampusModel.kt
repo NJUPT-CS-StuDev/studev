@@ -164,8 +164,20 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         _state.update { now -> if (now.repository === repo && settings.state.value.klass == klass && now.schedule === effective) now.copy(labs = labs) else now }
     }
     fun addTeachingClass(id: String) = applyTimetableChange { it.copy(added = (it.added + id).distinct()) }
-    fun removeCourse(id: String) = applyTimetableChange { if (id in it.added) it.copy(added = it.added - id) else it.copy(hidden = it.hidden + id) }
-    fun resetTimetableEdits() = applyTimetableChange { TimetableEdits() }
+    fun removeCourse(id: String) = applyTimetableChange { edits ->
+        when {
+            Courses.isCustom(id) -> edits.copy(custom = edits.custom.filter { "custom:${it.id}" != id })
+            id in edits.added -> edits.copy(added = edits.added - id)
+            else -> edits.copy(hidden = edits.hidden + id)
+        }
+    }
+    /** A name of one's own for a course, or back to its own name when `name` is blank. */
+    fun renameCourse(identity: String, name: String) = applyTimetableChange { edits ->
+        edits.copy(names = if (name.isBlank()) edits.names - identity else edits.names + (identity to name.trim().take(60)))
+    }
+    fun saveCustomCourse(course: CustomCourse) = applyTimetableChange { edits -> edits.copy(custom = edits.custom.filter { it.id != course.id } + course) }
+    /** Undoes what was changed about the class's timetable; one's own courses stay, since they are deleted one by one. */
+    fun resetTimetableEdits() = applyTimetableChange { TimetableEdits(custom = it.custom) }
     private fun personalExams(repo: AcademicRepository, schedule: ClassSchedule?, exams: List<Exam>) =
         ExamAttendance.select(exams, settings.state.value.examChoices(repo.release.exams, settings.state.value.klass), ExamAttendance.ownCodes(repo.release, schedule))
     fun examAttendance(id: String, attending: Boolean) {
@@ -182,8 +194,8 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val repo = state.repository ?: return null
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
-        return CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.schedule, state.exams), state.holidays,
-            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) }, tasks)
+        return Courses.named(CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.schedule, state.exams), state.holidays,
+            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) }, tasks), settings.timetableEdits(term.term).names)
     }
     private var allMeetings: Deferred<List<TeachingMeeting>>? = null
     /** Every meeting of the term, for viewing a teacher, a course or a room. */

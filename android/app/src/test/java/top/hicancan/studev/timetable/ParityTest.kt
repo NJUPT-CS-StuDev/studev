@@ -68,6 +68,27 @@ class ParityTest {
             assertEquals(test.toString(), expected["start"]?.jsonPrimitive?.int, quick.start)
         }
     }
+    @Test fun ownCoursesBecomeMeetingsAndOwnNamesFollowACourse() {
+        val courses = golden.getValue("courses").jsonObject
+        val labs = golden.getValue("labs").jsonObject
+        val own = json.decodeFromJsonElement<CustomCourse>(courses.getValue("custom"))
+        assertEquals(courses.getValue("meetings"), JsonArray(Courses.meetings(own).map { meeting -> buildJsonObject {
+            put("id", meeting.id); put("teachingClass", meeting.teaching_class.id); put("name", meeting.course.name); put("weekday", meeting.weekday)
+            put("periods", JsonArray(meeting.periods.map(::JsonPrimitive))); put("weeks", JsonArray(meeting.weeks.map(::JsonPrimitive))); put("room", meeting.room)
+            put("teachers", JsonArray(meeting.teachers.map { JsonPrimitive(it.name) }))
+        } }))
+        val names = json.decodeFromJsonElement<Map<String, String>>(courses.getValue("names"))
+        val named = Courses.named(CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null), names)
+        val expected = courses.getValue("renamed").jsonObject
+        fun pairs(key: String) = expected.getValue(key).jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("name").jsonPrimitive.content }
+        assertEquals(pairs("meetings"), named.meetings.map { it.id to it.course.name })
+        assertEquals(pairs("labs"), named.labs.map { it.id to it.course.name })
+        assertEquals(pairs("exams"), named.exams.map { it.id to it.course.name })
+        courses.getValue("weeks").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            assertEquals(test.toString(), (test.getValue("weeks") as? JsonArray)?.map { it.jsonPrimitive.int }, Courses.parseWeeks(test.getValue("text").jsonPrimitive.content, 18))
+        }
+    }
     @Test fun labsTakeTheirPlaceAmongLessonsAndExams() {
         val labs = golden.getValue("labs").jsonObject
         val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(labs.getValue("meetings"))

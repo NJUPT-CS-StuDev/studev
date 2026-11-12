@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { clusters, eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import type { ExamRecord } from '@/world/data';
@@ -28,10 +28,10 @@ function Together({ label, classes, people }: { label: string; classes: string[]
  * One thing on the timetable, wherever it was tapped: a lesson, a lab, an exam or 早锻炼. It says what
  * matters for going there and preparing, and links on to the course, the people and the rest.
  */
-export function EventSheet({ event, line, now, isMe, record, campus, order, onClose, onOpen, onHide, onSkipExam, onSkipLab, onDropLab, onUnplan, onPlan, onExams }: {
+export function EventSheet({ event, line, now, isMe, record, campus, order, onClose, onOpen, onHide, onSkipExam, onSkipLab, onDropLab, onRename, onUnplan, onPlan, onExams }: {
     event: CampusEvent; line: Timeline; now: Moment; isMe: boolean; record: ExamRecord | null; campus: string | null; order: readonly EventKind[];
     onClose: () => void; onOpen: (event: CampusEvent) => void; onHide: (event: CampusEvent) => void; onSkipExam: (event: CampusEvent) => void;
-    onSkipLab: (event: CampusEvent) => void; onDropLab: (event: CampusEvent) => void;
+    onSkipLab: (event: CampusEvent) => void; onDropLab: (event: CampusEvent) => void; onRename: (event: CampusEvent, name: string | null) => void;
     onUnplan: () => void; onPlan: () => void; onExams: () => void;
 }) {
     // The sheet is the tile it opened from, enlarged: the same colour. Things on at the same time sit in a strip
@@ -42,6 +42,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
     const together = group && group.events.length > 1 ? [...group.events].sort((left, right) => order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : 1)) : [];
     const at = together.findIndex(item => item.id === event.id);
     const swipe = useRef<number | null>(null);
+    const [naming, setNaming] = useState<string | null>(null);
     const strip = together.length > 1 && (
         <div className="sw" role="tablist" aria-label="同时段"
             onPointerDown={pointer => { swipe.current = pointer.clientX; }}
@@ -144,7 +145,15 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 </button>
             ))}
             {examEvent && <button className="kv" onClick={() => onOpen(examEvent)}><span className="k">考试</span><span className="v">{dateLabel(exam.date)} {WEEKDAYS[weekdayOf(exam.date)]} {exam.start}</span><Chevron /></button>}
-            {isMe && <button className="kv" onClick={() => onHide(event)}><span className="k" /><span className="v danger">从我的课表移除</span></button>}
+            {/* A name of one's own for the course: 板块课 becomes the sport actually taken. One's own course is named where it was added. */}
+            {isMe && meeting && !meeting.teaching_class.id.startsWith('custom:') && (naming === null
+                ? <button className="kv" onClick={() => setNaming(courseName(meeting.course.name))}><span className="k">名称</span><span className="v">改名<small>比如把板块课改成具体上的课</small></span><Chevron /></button>
+                : <div className="kv rename">
+                    <input className="tf" autoFocus value={naming} onChange={change => setNaming(change.target.value)} onKeyDown={key => { if (key.key === 'Enter' && naming.trim()) { onRename(event, naming.trim()); setNaming(null); } }} />
+                    <button className="ib" disabled={!naming.trim()} onClick={() => { onRename(event, naming.trim()); setNaming(null); }}>保存</button>
+                    <button className="ib" onClick={() => { onRename(event, null); setNaming(null); }}>原名</button>
+                </div>)}
+            {isMe && <button className="kv" onClick={() => onHide(event)}><span className="k" /><span className="v danger">{meeting?.teaching_class.id.startsWith('custom:') ? '删除这门课' : '从我的课表移除'}</span></button>}
         </Sheet>
     );
 }

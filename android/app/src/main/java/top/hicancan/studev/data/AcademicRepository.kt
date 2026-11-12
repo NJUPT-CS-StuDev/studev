@@ -90,7 +90,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     }
     suspend fun effectiveSchedule(id: String, edits: top.hicancan.studev.me.TimetableEdits): ClassSchedule {
         val base = schedule(id)
-        if (edits.hidden.isEmpty() && edits.added.isEmpty()) return base
+        if (edits.hidden.isEmpty() && edits.added.isEmpty() && edits.custom.isEmpty()) return base
         val catalog = if (edits.added.isNotEmpty()) catalog() else emptyList()
         return base.copy(meetings = top.hicancan.studev.timetable.CourseCatalog.effectiveMeetings(base.meetings, catalog, edits))
     }
@@ -146,7 +146,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val schedule = klass?.takeIf { id -> classes().any { it.id == id } }?.let { effectiveSchedule(it, settings.timetableEdits(term.term)) }
         val exams = klass?.let { effectiveExams(it, settings) }.orEmpty()
         val labs = if (klass != null && schedule != null) top.hicancan.studev.timetable.CourseCatalog.attendingLabs(personalLabs(klass, schedule(klass), schedule), settings.labs) else emptyList()
-        return top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null, tasks)
+        return top.hicancan.studev.timetable.Courses.named(top.hicancan.studev.world.CampusLine(term, periods(), schedule?.meetings.orEmpty(), labs, exams, top.hicancan.studev.world.CampusLine.holidays(calendar()), null, tasks), settings.timetableEdits(term.term).names)
     }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {
         val edits = settings.timetableEdits(release.teaching)

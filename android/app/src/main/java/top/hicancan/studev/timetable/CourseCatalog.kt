@@ -129,11 +129,11 @@ object CourseCatalog {
     fun effectiveMeetings(ownMeetings: List<TeachingMeeting>, catalog: List<CatalogCourse>, edits: TimetableEdits): List<TeachingMeeting> {
         val hidden = edits.hidden.toSet()
         val own = ownMeetings.filter { it.teaching_class.id !in hidden }
-        if (edits.added.isEmpty() || catalog.isEmpty()) return own
         val wanted = edits.added.toSet()
         val addedMeetings = catalog.filter { catalogId(it) in wanted }.flatMap { it.meetings }
         val ownIds = own.mapTo(HashSet()) { it.id }
-        return own + addedMeetings.filter { it.id !in ownIds }
+        // One's own courses join as meetings; their names are a matter of display, given on the timeline.
+        return own + addedMeetings.filter { it.id !in ownIds } + edits.custom.flatMap(Courses::meetings)
     }
 
     /**

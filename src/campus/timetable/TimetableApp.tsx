@@ -109,7 +109,7 @@ export default function TimetableApp() {
     const courses = new Map(line.meetings.map(meeting => [courseIdentity(meeting), courseName(meeting.course.name)]));
 
     const mine = {
-        hideCourse: (id: string) => updateTimetableEdits(term.term, edits => edits.added.includes(id)
+        hideCourse: (id: string) => id.startsWith('custom:') ? updateTimetableEdits(term.term, edits => ({ ...edits, custom: (edits.custom ?? []).filter(course => `custom:${course.id}` !== id) })) : updateTimetableEdits(term.term, edits => edits.added.includes(id)
             ? { ...edits, added: edits.added.filter(item => item !== id) } : { ...edits, hidden: [...edits.hidden, id] }),
         skipExam: (id: string) => { if (prefs.class) updateExamAttendance(term.term, prefs.class, { [id]: false }); },
         labs: (key: 'skip' | 'drop', value: string) => writePreferences(current => ({ ...current, labs: { ...current.labs, [key]: [...new Set([...(current.labs?.[key] ?? []), value])] } })),
@@ -150,6 +150,7 @@ export default function TimetableApp() {
             {editing && <TaskSheet key={editing.id} task={editing} line={line} onClose={() => setTaskId(null)} />}
             {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} order={prefs.layers ?? LAYER_ORDER} onClose={() => setOpen(null)} onOpen={setOpen}
                 onSkipLab={event => { mine.labs('skip', event.lab!.id); setOpen(null); }}
+                onRename={(event, name) => { const id = courseIdentity(event.meeting!); updateTimetableEdits(term.term, edits => { const names = { ...edits.names }; if (name) names[id] = name; else delete names[id]; return { ...edits, names: Object.keys(names).length ? names : undefined }; }); setOpen(null); }}
                 onDropLab={event => { mine.labs('drop', courseIdentity(event.lab!)); setOpen(null); }}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}

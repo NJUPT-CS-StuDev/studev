@@ -11,7 +11,13 @@ import kotlinx.serialization.json.Json
 data class TimetableEdits(
     val hidden: List<String> = emptyList(),
     val added: List<String> = emptyList(),
-)
+    /** A name of one's own for a course, by course identity. */
+    val names: Map<String, String> = emptyMap(),
+    /** Courses of one's own. */
+    val custom: List<top.hicancan.studev.timetable.CustomCourse> = emptyList(),
+) {
+    val isEmpty get() = hidden.isEmpty() && added.isEmpty() && names.isEmpty() && custom.isEmpty()
+}
 
 /** Lab sheets left out, lab courses not taken and single sittings missed. */
 @Serializable
@@ -61,9 +67,17 @@ private fun sanitizeIds(ids: List<String>): List<String> =
 private fun sanitizeTimetable(raw: Map<String, TimetableEdits>): Map<String, TimetableEdits> = buildMap {
     for ((term, edits) in raw) {
         if (!termPattern.matches(term)) continue
-        val hidden = sanitizeIds(edits.hidden)
-        val added = sanitizeIds(edits.added)
-        if (hidden.isNotEmpty() || added.isNotEmpty()) put(term, TimetableEdits(hidden, added))
+        val names = edits.names.filter { (key, name) -> key.length < 200 && name.isNotBlank() }.mapValues { it.value.trim().take(60) }
+        val custom = edits.custom.mapNotNull { item ->
+            val days = item.days.filter { it in 1..7 }.distinct().sorted()
+            val periods = item.periods.takeIf { it.size == 2 && it.all { period -> period in 1..14 } && it[0] <= it[1] }
+            val weeks = item.weeks.filter { it in 1..30 }.distinct().sorted()
+            if (item.name.isBlank() || days.isEmpty() || periods == null || weeks.isEmpty()) null
+            else top.hicancan.studev.timetable.CustomCourse(item.id.take(60), item.name.trim().take(60), days, periods, weeks,
+                item.room?.trim()?.takeIf { it.isNotEmpty() }?.take(60), item.teacher?.trim()?.takeIf { it.isNotEmpty() }?.take(40))
+        }
+        val next = TimetableEdits(sanitizeIds(edits.hidden), sanitizeIds(edits.added), names, custom)
+        if (!next.isEmpty) put(term, next)
     }
 }
 

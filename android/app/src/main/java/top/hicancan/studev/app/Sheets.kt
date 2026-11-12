@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -148,8 +149,22 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                 KeyRow("考试", "${dateLabel(examEvent.date)} ${WEEKDAYS[examEvent.date.dayOfWeek.value]} ${hm(examEvent.start)}", chevron = true, onClick = { onOpen(examEvent) })
             }
         }
+        // A name of one's own for the course: 板块课 becomes the sport actually taken. One's own course is named where it was added.
+        if (isMe && meeting != null && !top.hicancan.studev.timetable.Courses.isCustom(meeting.teaching_class.id)) {
+            var naming by remember(event.id) { mutableStateOf<String?>(null) }
+            val typed = naming
+            if (typed == null) KeyRow("名称", "改名", "比如把板块课改成具体上的课", chevron = true, onClick = { naming = Names.course(meeting.course.name) })
+            else Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val id = top.hicancan.studev.timetable.TimetablePresentation.identity(meeting)
+                val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                top.hicancan.studev.timetable.Field(typed, "这门课叫什么", Modifier.weight(1f).focusRequester(focus), onDone = { if (typed.isNotBlank()) { model.renameCourse(id, typed); onClose() } }) { naming = it.take(60) }
+                Chip("保存", { if (typed.isNotBlank()) { model.renameCourse(id, typed); onClose() } })
+                Chip("原名", { model.renameCourse(id, ""); onClose() })
+            }
+        }
         if (isMe && exam != null) KeyRow(null, "不参加这场考试", color = mark.danger, onClick = { model.examAttendance(event.id, false); onClose() })
-        if (isMe && event.kind == "class") KeyRow(null, "从我的课表移除", color = mark.danger, onClick = { model.removeCourse(event.meeting!!.teaching_class.id); onClose() })
+        if (isMe && meeting != null) KeyRow(null, if (top.hicancan.studev.timetable.Courses.isCustom(meeting.teaching_class.id)) "删除这门课" else "从我的课表移除", color = mark.danger, onClick = { model.removeCourse(meeting.teaching_class.id); onClose() })
         if (isMe && lab != null) {
             KeyRow(null, "不上这次实验", color = mark.danger, onClick = { model.settings.update { it.copy(labs = it.labs.copy(skip = (it.labs.skip + lab.id).distinct())) }; onClose() })
             KeyRow(null, "不上这门实验", "共 ${line.labs.count { it.course == lab.course }} 次，可在“我 · 实验”里恢复", color = mark.danger,
@@ -205,7 +220,12 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
     if (layering) { LayerSheet(settings, model) { layering = false }; return }
+    var coursesOpen by remember { mutableStateOf(false) }
     if (labsOpen) { LabSheet(state, settings, model) { labsOpen = false }; return }
+    if (coursesOpen && state.term != null) {
+        top.hicancan.studev.timetable.CustomCourseSheet(settings.timetableEdits(state.term.term), state.term.weeks.size, state.periods.size, model) { coursesOpen = false }
+        return
+    }
     val context = LocalContext.current
     val term = state.term
     val info = state.classes.find { it.id == settings.klass }
@@ -215,7 +235,11 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     PlainSheet("我", onClose) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             KeyRow("班级", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "还没有选" }, chevron = true, onClick = onPickClass)
-            if (edits != null) KeyRow("改动", "加了 ${edits.added.size} 门，隐藏了 ${edits.hidden.size} 门", trailing = if (edits.added.size + edits.hidden.size > 0) ({ Chip("还原", { model.resetTimetableEdits() }) }) else null)
+            if (edits != null) {
+                KeyRow("改动", listOfNotNull("加了 ${edits.added.size} 门", "隐藏了 ${edits.hidden.size} 门", edits.names.size.takeIf { it > 0 }?.let { "改名 $it 门" }).joinToString("，"),
+                    trailing = if (edits.added.size + edits.hidden.size + edits.names.size > 0) ({ Chip("还原", { model.resetTimetableEdits() }) }) else null)
+                KeyRow("自己的课", if (edits.custom.isEmpty()) "没有" else "${edits.custom.size} 门", "任选课、实验、整周实习，教务课表里没有的", chevron = true, onClick = { coursesOpen = true })
+            }
             Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Plain("外观", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
                 Choice(listOf("system" to "自动", "light" to "浅色", "dark" to "深色"), settings.theme) { next ->

@@ -2,9 +2,10 @@
 // node_modules/.bin/esbuild src/campus/world/parity/generate.ts --bundle --platform=node --format=esm --packages=external --alias:@=./src/campus --loader:.json=json --outfile=D:/Temp/claude-wsl/parity/generate.mjs
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
-import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
+import { courseIdentity, courseTones, linkedCourse, sameCourse, timelineTones } from '@/timetable/model/courseColors';
 import { attendingLabs, labSheet, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
+import { customMeetings, parseWeeks, renamed, renamedAlong, type CustomCourse } from '@/timetable/model/courses';
 import { parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
 import { dueOn } from '@/world/events';
 import { attendingExams } from '@/timetable/model/examAttendance';
@@ -124,5 +125,19 @@ const tasks = {
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
     parse: ['明天 14:00 交毛概作业', '下周五 毛概两个作业', '今天下午3点 复习计网', '周一晚上8点半 开会', '读论文', '周日 洗衣服', '中午12点 吃饭'].map(input => ({ input, result: parseQuickTask(input, { date: '2026-11-12', min: 600 }) })),
 };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// One's own courses become meetings; a name of one's own follows a course into its labs and exams.
+const ownCourse: CustomCourse = { id: 'x1', name: '金工实习', days: [1, 3], periods: [1, 4], weeks: [16], room: '工程训练中心', teacher: '王老师' };
+const ownNames = { [courseIdentity(linkedCourse(classLabs[0]!, labMeetings))]: '自己起的名', [courseIdentity(labMeetings.find(meeting => !sameCourse(classLabs[0]!, meeting))!)]: '另一个名' };
+const courses = {
+    custom: ownCourse,
+    meetings: customMeetings(ownCourse).map(meeting => ({ id: meeting.id, teachingClass: meeting.teaching_class.id, name: meeting.course.name, weekday: meeting.weekday, periods: meeting.periods, weeks: meeting.weeks, room: meeting.room, teachers: meeting.teachers.map(teacher => teacher.name) })),
+    names: ownNames,
+    renamed: {
+        meetings: labMeetings.map(meeting => ({ id: meeting.id, name: renamed(meeting, ownNames).course.name })),
+        labs: classLabs.map(lab => ({ id: lab.id, name: renamedAlong(lab, labMeetings, ownNames).course.name })),
+        exams: [labExam].map(exam => ({ id: exam.id, name: renamedAlong(exam, labMeetings, ownNames).course.name })),
+    },
+    weeks: ['1-16', '1-8,10,12-14', '单1-15', '双 2-16', '3，5、7周', '0-3', '1-20', '9-3', '第一周', '', '16'].map(text => ({ text, weeks: parseWeeks(text, 18) })),
+};
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

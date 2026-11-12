@@ -45,14 +45,14 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
     }
 }
 
-@Composable private fun Field(value: String, hint: String, modifier: Modifier = Modifier, big: Boolean = false, single: Boolean = true, onDone: () -> Unit = {}, onChange: (String) -> Unit) {
+@Composable internal fun Field(value: String, hint: String, modifier: Modifier = Modifier, big: Boolean = false, single: Boolean = true, onDone: () -> Unit = {}, onChange: (String) -> Unit) {
     BasicTextField(value, onChange, modifier.fillMaxWidth().border(1.dp, Ink.line, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 10.dp),
         singleLine = single, textStyle = TextStyle(fontSize = if (big) 17.sp else 14.5.sp, fontWeight = if (big) FontWeight.SemiBold else FontWeight.Normal, color = Ink.text),
         keyboardOptions = KeyboardOptions(imeAction = if (single) ImeAction.Done else ImeAction.Default), keyboardActions = KeyboardActions(onDone = { onDone() }),
         cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.text), decorationBox = { inner -> if (value.isEmpty()) Plain(hint, if (big) 17.sp else 14.5.sp, Ink.faint); inner() })
 }
 
-@Composable private fun Picks(items: List<Pair<Int, String>>, on: (Int) -> Boolean, onTap: (Int) -> Unit) {
+@Composable internal fun Picks(items: List<Pair<Int, String>>, on: (Int) -> Boolean, onTap: (Int) -> Unit) {
     @OptIn(ExperimentalLayoutApi::class)
     FlowRow(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { (value, name) ->

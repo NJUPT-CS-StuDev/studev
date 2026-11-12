@@ -30,10 +30,12 @@ object TimetablePresentation {
      * A lab belongs to a lesson's course when the two carry the same course code, or the same name: the lab sheet often
      * gives a lab its own code (Linux 编程 labs are B0301371S, its lessons JS113701S), never a different name.
      */
-    fun sameCourse(lab: top.hicancan.studev.data.Lab, meeting: TeachingMeeting) = identity(lab) == identity(meeting) ||
-        top.hicancan.studev.world.Names.course(lab.course.name).lowercase(Locale.ROOT) == top.hicancan.studev.world.Names.course(meeting.course.name).lowercase(Locale.ROOT)
-    /** The course a lab's colour and links follow: that of the lesson it belongs to, or its own. */
-    fun linked(lab: top.hicancan.studev.data.Lab, meetings: List<TeachingMeeting>) = meetings.firstOrNull { sameCourse(lab, it) }?.let(::identity) ?: identity(lab)
+    fun sameCourse(lab: top.hicancan.studev.data.Lab, meeting: TeachingMeeting) = sameCourse(lab.course.code, lab.course.name, meeting)
+    fun sameCourse(code: String?, name: String, meeting: TeachingMeeting) = identity(code, name) == identity(meeting) ||
+        top.hicancan.studev.world.Names.course(name).lowercase(Locale.ROOT) == top.hicancan.studev.world.Names.course(meeting.course.name).lowercase(Locale.ROOT)
+    /** The course a lab's (or an exam's) colour, links and name follow: that of the lesson it belongs to, or its own. */
+    fun linked(lab: top.hicancan.studev.data.Lab, meetings: List<TeachingMeeting>) = linked(lab.course.code, lab.course.name, meetings)
+    fun linked(code: String?, name: String, meetings: List<TeachingMeeting>) = meetings.firstOrNull { sameCourse(code, name, it) }?.let(::identity) ?: identity(code, name)
     /** The tone of something on a timeline: a lesson's own, a lab its course's. */
     fun toneOf(event: top.hicancan.studev.world.LineEvent, tones: Map<String, Int>, meetings: List<TeachingMeeting>) =
         event.meeting?.let { tones[identity(it)] } ?: event.lab?.let { tones[linked(it, meetings)] }

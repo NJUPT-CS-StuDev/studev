@@ -2,12 +2,17 @@
 // campus, and the changes they made to their class timetable. One record, so the
 // account page and every campus tool read and write the same thing.
 import { LAYER_ORDER, type EventKind } from './events';
+import type { CustomCourse } from '@/timetable/model/courses';
 
 export interface TimetableEdits {
     /** Teaching classes of the class timetable this person does not attend. */
     hidden: string[];
     /** Teaching classes added from course search (retakes, electives). */
     added: string[];
+    /** Names of one's own for courses, by course identity. */
+    names?: Record<string, string>;
+    /** Courses of one's own. */
+    custom?: CustomCourse[];
 }
 
 export interface Preferences {
@@ -57,8 +62,26 @@ const sanitize = (raw: unknown): Preferences => {
         for (const [term, edits] of Object.entries(record.timetable as Record<string, unknown>)) {
             if (!/^\d{4}-\d{4}-\d$/.test(term) || !edits || typeof edits !== 'object') continue;
             const value = edits as Record<string, unknown>;
-            const next = { hidden: ids(value.hidden), added: ids(value.added) };
-            if (next.hidden.length || next.added.length) result.timetable[term] = next;
+            const next: TimetableEdits = { hidden: ids(value.hidden), added: ids(value.added) };
+            if (value.names && typeof value.names === 'object' && !Array.isArray(value.names)) {
+                const names = Object.fromEntries(Object.entries(value.names as Record<string, unknown>).filter((entry): entry is [string, string] => entry[0].length < 200 && typeof entry[1] === 'string' && entry[1].trim().length > 0).map(([key, name]) => [key, name.trim().slice(0, 60)]));
+                if (Object.keys(names).length) next.names = names;
+            }
+            if (Array.isArray(value.custom)) {
+                const custom = value.custom.flatMap((raw): CustomCourse[] => {
+                    if (!raw || typeof raw !== 'object') return [];
+                    const item = raw as Record<string, unknown>;
+                    const days = Array.isArray(item.days) ? [...new Set(item.days.filter((day): day is number => Number.isInteger(day) && day >= 1 && day <= 7))].sort() : [];
+                    const periods = Array.isArray(item.periods) && item.periods.length === 2 && item.periods.every(period => Number.isInteger(period) && period >= 1 && period <= 14) && item.periods[0] <= item.periods[1] ? item.periods as [number, number] : null;
+                    const weeks = Array.isArray(item.weeks) ? [...new Set(item.weeks.filter((week): week is number => Number.isInteger(week) && week >= 1 && week <= 30))].sort((a, b) => a - b) : [];
+                    if (typeof item.id !== 'string' || typeof item.name !== 'string' || !item.name.trim() || !days.length || !periods || !weeks.length) return [];
+                    return [{ id: item.id.slice(0, 60), name: item.name.trim().slice(0, 60), days, periods, weeks,
+                        ...(typeof item.room === 'string' && item.room.trim() ? { room: item.room.trim().slice(0, 60) } : {}),
+                        ...(typeof item.teacher === 'string' && item.teacher.trim() ? { teacher: item.teacher.trim().slice(0, 40) } : {}) }];
+                });
+                if (custom.length) next.custom = custom;
+            }
+            if (next.hidden.length || next.added.length || next.names || next.custom) result.timetable[term] = next;
         }
         if (!Object.keys(result.timetable).length) delete result.timetable;
     }

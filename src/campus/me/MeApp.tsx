@@ -5,7 +5,8 @@ import { PRODUCT_CONFIG } from '@/world/product';
 import { timetableEdits, updateTimetableEdits, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
-import { loadClasses, loadClassLabs, loadRuns, loadTerm, type MorningRun } from '@/world/data';
+import { CustomCourses } from '@/timetable/CustomCourses';
+import { loadClasses, loadClassLabs, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { labSheet } from '@/timetable/model/labs';
 import { courseIdentity } from '@/timetable/model/courseColors';
 import { publishedOn } from '@/world/exams';
@@ -26,6 +27,9 @@ export default function MeApp() {
     const [layering, setLayering] = useState(false);
     const [classLabs, setClassLabs] = useState<Lab[] | null>(null);
     const [labsOpen, setLabsOpen] = useState(false);
+    const [coursesOpen, setCoursesOpen] = useState(false);
+    const [periods, setPeriods] = useState(12);
+    useEffect(() => { if (open) void loadPeriods().then(list => setPeriods(list.length)); }, [open]);
     useEffect(() => { setClassLabs(null); if (open && prefs.class) void loadClassLabs(prefs.class).then(setClassLabs).catch(() => setClassLabs([])); }, [open, prefs.class]);
     const [facts, setFacts] = useState<{ term: TeachingTerm; classes: TeachingClass[]; run: MorningRun | null } | null>(null);
     useEffect(() => {
@@ -67,6 +71,7 @@ export default function MeApp() {
         if (on) list.add(value); else list.delete(value);
         return { ...current, labs: { ...current.labs, [key]: [...list] } };
     });
+    if (coursesOpen && facts) return <CustomCourses term={facts.term.term} weeks={facts.term.weeks.length} periods={periods} edits={timetableEdits(prefs, facts.term.term)} onClose={() => setCoursesOpen(false)} />;
     if (labsOpen) {
         const dropped = [...new Map((classLabs ?? []).filter(lab => choices.drop?.includes(courseIdentity(lab))).map(lab => [courseIdentity(lab), lab])).values()];
         const skipped = (classLabs ?? []).filter(lab => choices.skip?.includes(lab.id));
@@ -101,8 +106,9 @@ export default function MeApp() {
     return (
         <Sheet title="我" onClose={() => setOpen(false)}>
             <button className="kv" onClick={() => setPicking(true)}><span className="k">班级</span><span className="v">{prefs.class}{info?.major ? ` · ${info.major}` : ''}</span><Chevron /></button>
-            <div className="kv"><span className="k">改动</span><span className="v">加了 {edits.added.length} 门，隐藏了 {edits.hidden.length} 门</span>
-                {edits.hidden.length + edits.added.length > 0 && facts && <button className="ib" onClick={() => updateTimetableEdits(facts.term.term, () => ({ hidden: [], added: [] }))}>还原</button>}</div>
+            <div className="kv"><span className="k">改动</span><span className="v">{[`加了 ${edits.added.length} 门`, `隐藏了 ${edits.hidden.length} 门`, edits.names ? `改名 ${Object.keys(edits.names).length} 门` : ''].filter(Boolean).join('，')}</span>
+                {edits.hidden.length + edits.added.length + Object.keys(edits.names ?? {}).length > 0 && facts && <button className="ib" onClick={() => updateTimetableEdits(facts.term.term, current => ({ hidden: [], added: [], ...(current.custom ? { custom: current.custom } : {}) }))}>还原</button>}</div>
+            {facts && <button className="kv" onClick={() => setCoursesOpen(true)}><span className="k">自己的课</span><span className="v">{edits.custom?.length ? `${edits.custom.length} 门` : '没有'}<small>任选课、实验、整周实习，教务课表里没有的</small></span><Chevron /></button>}
             <div className="kv"><span className="k">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{label}</button>)}</div></div>
             {classLabs && classLabs.length > 0 && <button className="kv" onClick={() => setLabsOpen(true)}><span className="k">实验</span><span className="v">{sheets.filter(lab => !choices.off?.includes(labSheet(lab))).length ? '已放进课表' : '没有放进课表'}<small>{[choices.drop?.length ? `去掉 ${choices.drop.length} 门` : '', choices.skip?.length ? `不上 ${choices.skip.length} 次` : ''].filter(Boolean).join('，') || '学院实验中心的上机安排'}</small></span><Chevron /></button>}
             <button className="kv" onClick={() => setLayering(true)}><span className="k">叠放</span><span className="v">{order.map(kind => KIND_NAMES[kind]).join(' › ')}<small>同一时间有几件事时谁在前面</small></span><Chevron /></button>
