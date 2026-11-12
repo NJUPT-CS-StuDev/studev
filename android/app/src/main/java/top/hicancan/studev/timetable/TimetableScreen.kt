@@ -186,7 +186,7 @@ import java.time.LocalDate
     Box(modifier) {
         val lab = event.lab
         val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
-            else if (lab != null) "实验 · ${lab.room?.let(Names::roomShort) ?: lab.short}" else Names.roomShort(event.room)
+            else if (lab != null) lab.room?.let(Names::roomShort) ?: lab.short else Names.roomShort(event.room)
         TileBox(if (big) event.name else event.short, note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
         if (behind > 0) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).border(1.dp, Ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 3.dp)) {

@@ -11,9 +11,9 @@ const DAY_END = 21 * 60 + 8;
 /** How far each thing behind shows beside the one in front of it. */
 const EDGE = 5;
 
-/** What a tile says under its name: where, and for a lab that it is one, its place said short. */
+/** What a tile says under its name: where, a lab's said short, and where there is room that it is a lab (its edge says so too). */
 const tileNote = (event: CampusEvent, wide: boolean) => event.lab
-    ? `实验 · ${event.lab.room ? roomShort(event.lab.room) : event.lab.short}`
+    ? `${wide ? '实验 · ' : ''}${event.lab.room ? roomShort(event.lab.room) : event.lab.short}`
     : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
 
 export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void }) {
