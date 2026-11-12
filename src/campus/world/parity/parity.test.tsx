@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import golden from './golden.json';
-import { timetableCells } from '@/timetable/model/presentation';
 import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
 import { personalLabs } from '@/timetable/model/labs';
+import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { attendingExams } from '@/timetable/model/examAttendance';
-import { eventsOn, holidayMap, lastLesson, nextEvent, planRuns, runTally, weekShown, type Timeline } from '@/world/events';
+import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
 import type { CalendarTerm, MorningRun } from '@/world/data';
@@ -16,15 +16,12 @@ const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kin
 
 describe('the shared web / Android real-data contract', () => {
     for (const schedule of golden.schedules) for (const { week, cells } of schedule.weeks) {
-        it(`${schedule.class}, week ${week}: every cell has the same state, room, note, colour and column`, () => {
-            expect(timetableCells(schedule.meetings as unknown as TeachingMeeting[], week)).toEqual(cells);
+        it(`${schedule.class}, week ${week}: the same lessons off this week, greyed in place`, () => {
+            const meetings = schedule.meetings as unknown as TeachingMeeting[];
+            expect(offWeekLessons(meetings, week, courseTones(meetings))).toEqual(cells);
         });
     }
-    it('covers real suspension, inactive parity and parallel examples', () => {
-        const cells = golden.schedules.flatMap(s => s.weeks.flatMap(w => w.cells));
-        for (const state of ['active', 'off']) expect(cells.some(c => c.state === state)).toBe(true);
-        expect(cells.some(c => c.columns > 1)).toBe(true);
-    });
+    it('has real lessons off their week to show', () => expect(golden.schedules.some(s => s.weeks.some(w => w.cells.length > 0))).toBe(true));
     for (const day of golden.days) it(`events on ${day.date}: lessons, holidays and 早锻炼 on one line`, () => expect(eventsOn(line, day.date).map(brief)).toEqual(day.events));
     for (const test of golden.moments) it(`next event and 早锻炼 progress at ${test.now.date} ${test.now.min}`, () => {
         const next = nextEvent(line, test.now);
@@ -52,8 +49,17 @@ describe('the shared web / Android real-data contract', () => {
         const meetings = labs.meetings as unknown as TeachingMeeting[];
         const classLabs = labs.labs as unknown as Lab[];
         const labLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings, labs: classLabs, exams: [labs.exam as unknown as Exam], holidays, run: null };
-        const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room, covered: event.covered ?? false, lab: event.lab?.id ?? null });
-        for (const day of labs.days) expect(eventsOn(labLine, day.date).map(brief)).toEqual(day.events);
+        const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room, id: event.id, lab: event.lab?.id ?? null });
+        const orders: (readonly EventKind[])[] = [['exam', 'lab', 'class', 'run'], ['class', 'run', 'exam', 'lab']];
+        for (const day of labs.days) {
+            const events = eventsOn(labLine, day.date);
+            expect(events.map(brief)).toEqual(day.events);
+            expect(events.map(event => overlapping(labLine, event).map(other => other.id))).toEqual(day.alongside);
+            expect(orders.map(order => layers(events, order).map(item => ({ id: item.event.id, under: item.under, over: item.over })))).toEqual(day.layers);
+            expect(orders.map(order => clusters(events, order).map(run => ({ front: run.front.id, events: run.events.map(event => event.id), start: run.start, end: run.end })))).toEqual(day.clusters);
+        }
+        // Two labs at once, and a lab over part of a lecture: both stand, neither is called off.
+        expect(labs.days.some(day => day.layers[0]!.some(item => item.under > 0 && item.over === 0))).toBe(true);
         expect(eventsOn({ ...labLine, labs: [labs.dayOff.lab as unknown as Lab], exams: [] }, labs.dayOff.lab.date).map(brief)).toEqual(labs.dayOff.events);
         for (const test of labs.moments) { const next = nextEvent(labLine, test.now); expect(next ? brief(next) : null).toEqual(test.next); }
         expect(Object.fromEntries(timelineTones(labLine))).toEqual(labs.tones);

@@ -9,16 +9,44 @@ export interface CampusEvent {
     id: string; date: string; name: string; short: string; start: number; end: number;
     room: string | null; teachers: string[];
     meeting?: TeachingMeeting; lab?: Lab; exam?: Exam;
-    /** Something that outranks it sits at the same time, so it steps back wherever it shows. */
-    covered?: true;
+}
+export type EventKind = CampusEvent['kind'];
+
+/**
+ * Things on the line may share a time: a lab during a lecture, two labs at once, later one's own task during a
+ * lesson. Sharing a time says only that they clash; neither is called off. Which one shows in front is a choice
+ * of the person looking, front first. By default an exam, then a lab, then a lesson, then 早锻炼.
+ */
+export const LAYER_ORDER: readonly EventKind[] = ['exam', 'lab', 'class', 'run'];
+const clash = (left: CampusEvent, right: CampusEvent) => left !== right && left.date === right.date && left.start < right.end && right.start < left.end;
+const frontFirst = (order: readonly EventKind[]) => (left: CampusEvent, right: CampusEvent) =>
+    order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+/**
+ * A day's events as layers, back to front, the order they are drawn in. `under` is how many it overlaps lie
+ * behind it, `over` how many in front: one in front shows the count of those behind; those behind show their
+ * edges beside it and whatever part of them it does not reach.
+ */
+export function layers(events: CampusEvent[], order: readonly EventKind[] = LAYER_ORDER) {
+    const front = [...events].sort(frontFirst(order));
+    return front.map((event, rank) => ({
+        event,
+        over: front.slice(0, rank).filter(other => clash(other, event)).length,
+        under: front.slice(rank + 1).filter(other => clash(other, event)).length,
+    })).reverse();
 }
 /**
- * What gives way when two things share a time: an exam is set for that hour alone, a lab is set for
- * that date, a lesson only repeats by the week. So an exam covers a lab and a lesson, a lab covers a lesson.
+ * Where there is no room to stack them, a day's events in runs that overlap one another: each run is one tile
+ * from its first start to its last end, named by the one in front.
  */
-const RANK = { class: 1, lab: 2, exam: 3 } as const;
-const outranks = (over: CampusEvent, under: CampusEvent) => over.kind !== 'run' && under.kind !== 'run'
-    && RANK[over.kind] > RANK[under.kind] && over.start < under.end && under.start < over.end;
+export function clusters(events: CampusEvent[], order: readonly EventKind[] = LAYER_ORDER) {
+    const runs: CampusEvent[][] = [];
+    for (const event of [...events].sort((left, right) => left.start - right.start || left.end - right.end)) {
+        const last = runs.at(-1);
+        if (last && event.start < Math.max(...last.map(item => item.end))) last.push(event);
+        else runs.push([event]);
+    }
+    return runs.map(run => ({ front: [...run].sort(frontFirst(order))[0]!, events: run, start: run[0]!.start, end: Math.max(...run.map(item => item.end)) }));
+}
 /**
  * The mornings someone put down for 早锻炼, and the bonus or penalty the sports office recorded.
  * A morning put down and gone by counts as run: people mostly go, so only a missed one is touched
@@ -70,15 +98,14 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
             if (event) out.push(event);
         }
     }
-    // A lab sheet is drawn up before the holidays are known; like a lesson, a lab does not sit on a day off.
-    if (!line.holidays.has(date)) {
-        for (const lab of line.labs) {
-            if (lab.date !== date) continue;
-            out.push({
-                kind: 'lab', id: lab.id, date, name: courseName(lab.course.name), short: courseShort(lab.course.name),
-                start: minutesOf(lab.start), end: minutesOf(lab.end), room: lab.room ?? lab.place, teachers: lab.teachers, lab,
-            });
-        }
+    // A lab is set for its date, so it stands even on a day the school calendar stops lessons: the sheet does not
+    // say it moved, and the day's name shows beside it for the person to judge.
+    for (const lab of line.labs) {
+        if (lab.date !== date) continue;
+        out.push({
+            kind: 'lab', id: lab.id, date, name: courseName(lab.course.name), short: courseShort(lab.course.name),
+            start: minutesOf(lab.start), end: minutesOf(lab.end), room: lab.room ?? lab.place, teachers: lab.teachers, lab,
+        });
     }
     for (const exam of line.exams) {
         if (exam.date !== date) continue;
@@ -90,14 +117,11 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
     if (line.run?.days.includes(date)) {
         out.push({ kind: 'run', id: `run@${date}`, date, name: '早锻炼', short: '早锻炼', start: minutesOf(line.run.rule.time[0]), end: minutesOf(line.run.rule.time[1]), room: null, teachers: [] });
     }
-    for (const event of out) if (out.some(other => outranks(other, event))) event.covered = true;
-    return out.sort((left, right) => left.start - right.start);
+    return out.sort((left, right) => left.start - right.start || frontFirst(LAYER_ORDER)(left, right));
 }
 
-/** What an event covers on its day: the lesson a lab takes the place of, what an exam sits over. */
-export const coveredBy = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => outranks(event, other));
-/** What covers an event on its day. */
-export const covering = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => outranks(other, event));
+/** What else is on at the same time as an event. */
+export const overlapping = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => other.id !== event.id && clash(other, event));
 
 /** Other lessons at this lesson's weekday and periods that do not meet this week: the week view shows one block per slot, these are hidden behind it. */
 export function sharingSlot(line: Timeline, event: CampusEvent): TeachingMeeting[] {
@@ -116,11 +140,11 @@ export function meetingAround(line: Timeline, meetingId: string, from: string): 
     return null;
 }
 
-/** What comes next, not counting 早锻炼, optional on any given morning, nor anything covered. */
+/** What comes next, not counting 早锻炼: it is optional on any given morning. Of two starting together, the one in front. */
 export function nextEvent(line: Timeline, now: Moment, horizon = 40): CampusEvent | null {
     for (let offset = 0; offset < horizon; offset++) {
         const date = addDays(now.date, offset);
-        for (const event of eventsOn(line, date)) if (event.kind !== 'run' && !event.covered && (offset > 0 || event.end > now.min)) return event;
+        for (const event of eventsOn(line, date)) if (event.kind !== 'run' && (offset > 0 || event.end > now.min)) return event;
     }
     return null;
 }

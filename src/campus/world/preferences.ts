@@ -1,6 +1,7 @@
 // A visitor's own settings, kept in this browser only: their class, their usual
 // campus, and the changes they made to their class timetable. One record, so the
 // account page and every campus tool read and write the same thing.
+import { LAYER_ORDER, type EventKind } from './events';
 
 export interface TimetableEdits {
     /** Teaching classes of the class timetable this person does not attend. */
@@ -22,6 +23,8 @@ export interface Preferences {
     examsSeen?: string;
     /** When exams in a downloaded calendar remind; absent means the default. */
     examReminders?: string[];
+    /** Which kind shows in front when things overlap, front first; absent means the default. */
+    layers?: EventKind[];
 }
 
 /** The mornings put down in this browser, plus the bonus or penalty entered from the sports office. */
@@ -58,6 +61,8 @@ const sanitize = (raw: unknown): Preferences => {
         if (!Object.keys(result.timetable).length) delete result.timetable;
     }
     if (Array.isArray(record.examReminders)) result.examReminders = [...new Set(record.examReminders.filter((key): key is string => typeof key === 'string' && key.length < 10))];
+    // Only a whole ordering of every kind is kept: a partial one would leave some kind nowhere.
+    if (Array.isArray(record.layers) && record.layers.length === LAYER_ORDER.length && LAYER_ORDER.every(kind => (record.layers as unknown[]).includes(kind))) result.layers = record.layers as EventKind[];
     if (typeof record.examsSeen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.examsSeen)) result.examsSeen = record.examsSeen;
     if (record.examAttendance && typeof record.examAttendance === 'object' && !Array.isArray(record.examAttendance)) {
         const attendance: NonNullable<Preferences['examAttendance']> = {};

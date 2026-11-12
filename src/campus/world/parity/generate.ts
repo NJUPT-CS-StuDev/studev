@@ -2,12 +2,12 @@
 // node_modules/.bin/esbuild src/campus/world/parity/generate.ts --bundle --platform=node --format=esm --packages=external --alias:@=./src/campus --loader:.json=json --outfile=D:/Temp/claude-wsl/parity/generate.mjs
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
-import { timetableCells } from '@/timetable/model/presentation';
 import { courseIdentity, courseTones, timelineTones } from '@/timetable/model/courseColors';
 import { personalLabs } from '@/timetable/model/labs';
+import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
-import { eventsOn, holidayMap, lastLesson, meetingAround, nextEvent, sharingSlot, planRuns, runTally, weekShown, type Timeline } from '@/world/events';
+import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
@@ -26,7 +26,7 @@ const holidays = holidayMap(calendar);
 const classes = ['B240402', 'B250105', 'B230402'];
 const schedules = classes.map(id => {
     const { meetings } = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${id}.json`);
-    return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: timetableCells(meetings, week) })) };
+    return { class: id, meetings, weeks: [1, 3, 8, 9, 10, 16].map(week => ({ week, cells: offWeekLessons(meetings, week, courseTones(meetings)) })) };
 });
 const line: Timeline = { term, periods, meetings: schedules[0]!.meetings, labs: [], exams: [], holidays, run: { rule: run, days: ['2026-09-08', '2026-09-10', '2026-11-05', '2026-11-09', '2026-12-18'], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
@@ -62,14 +62,16 @@ const from: [number, number] = [118.9262, 32.1146];
 const recommend = [1, 3, 6, 7].flatMap(day => [6, 8, 12, 15, 17, 18, 20, 23].map(hour => ({ day, hour, minute: 30, expected: recommendations(places, { day, hour, minute: 30 }, from).map(({ place, status }) => ({ id: place.id, state: status.state })) })));
 const hoursCases = [{ week: { '5': [['08:00', '12:00'], ['13:30', '17:00']] } }, { week: { '7': [['22:00', '02:00']] } }, { week: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(day => [String(day), [['00:00', '00:00']]])) }].flatMap(hours => [[5, 8, 0], [5, 11, 40], [5, 12, 0], [5, 13, 30], [1, 1, 50], [1, 2, 0], [7, 22, 0], [3, 12, 0]].map(([day, hour, minute]) => ({ hours, day, minute: hour! * 60 + minute!, state: openingStatus(hours as Place['hours'], { day: day!, hour: hour!, minute: minute! }).state })));
 // Labs: a class whose lab takes a lecture's slot, one on a day off, and what hiding or adding a course does to them.
-const labClass = 'B251103';
+// B240402 has two labs at once on 11-09 and a lab starting halfway through a lecture on 12-07.
+const labClass = 'B240402';
 const labMeetings = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${labClass}.json`).meetings;
 const classLabs = read<{ labs: Lab[] }>(`${base}/labs/${release.labs}/classes/${labClass}.json`).labs;
 const everyLab = read<Lab[]>(`${base}/labs/${release.labs}/labs.json`);
 const examined = classLabs.filter(lab => !holidays.has(lab.date))[1]!;
 const labExam = { id: 'x', classes: [labClass], course: examined.course, teacher: null, campus: null, location: '教3－303', room: null, date: examined.date, start: examined.start, end: examined.end, students: null, note: null, source: 'x.xlsx', kind: 'event', subtype: 'exam' } as unknown as Exam;
 const labLine: Timeline = { term, periods, meetings: labMeetings, labs: classLabs, exams: [labExam], holidays, run: null };
-const labBrief = (event: ReturnType<typeof eventsOn>[number]) => ({ ...brief(event), covered: event.covered ?? false, lab: event.lab?.id ?? null });
+const labBrief = (event: ReturnType<typeof eventsOn>[number]) => ({ ...brief(event), id: event.id, lab: event.lab?.id ?? null });
+const orders: (readonly EventKind[])[] = [['exam', 'lab', 'class', 'run'], ['class', 'run', 'exam', 'lab']];
 const dayOff = everyLab.find(lab => holidays.has(lab.date))!;
 const offLine: Timeline = { ...labLine, labs: [dayOff], exams: [] };
 // A course taken with another class: its lessons, and that class's labs among others'.
@@ -79,7 +81,15 @@ const nearby = everyLab.filter(lab => lab.classes.some(name => name.startsWith('
 const labCourse = courseIdentity(classLabs[0]!);
 const labs = {
     class: labClass, meetings: labMeetings, labs: classLabs, exam: labExam,
-    days: [...new Set(classLabs.map(lab => lab.date))].map(date => ({ date, events: eventsOn(labLine, date).map(labBrief) })),
+    days: [...new Set(classLabs.map(lab => lab.date))].map(date => {
+        const events = eventsOn(labLine, date);
+        return {
+            date, events: events.map(labBrief),
+            alongside: events.map(event => overlapping(labLine, event).map(other => other.id)),
+            layers: orders.map(order => layers(events, order).map(item => ({ id: item.event.id, under: item.under, over: item.over }))),
+            clusters: orders.map(order => clusters(events, order).map(run => ({ front: run.front.id, events: run.events.map(event => event.id), start: run.start, end: run.end }))),
+        };
+    }),
     dayOff: { lab: dayOff, events: eventsOn(offLine, dayOff.date).map(labBrief) },
     moments: classLabs.slice(0, 3).map(lab => ({ date: lab.date, min: 7 * 60 })).map(now => ({ now, next: (event => event ? labBrief(event) : null)(nextEvent(labLine, now)) })),
     tones: Object.fromEntries(timelineTones(labLine)), last: lastLesson(labLine),

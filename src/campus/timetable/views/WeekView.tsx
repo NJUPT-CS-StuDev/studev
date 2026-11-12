@@ -1,24 +1,32 @@
 import type { TeachingMeeting } from '@/world/facts';
 import { courseIdentity, courseToneStyle, timelineTones } from '@/timetable/model/courseColors';
-import { timetableCells } from '@/timetable/model/presentation';
-import { eventsOn, meetingAround, weekOfDate, type CampusEvent, type Timeline } from '@/world/events';
+import { offWeekLessons } from '@/timetable/model/weekPattern';
+import { eventsOn, layers, meetingAround, weekOfDate, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
 import { courseName, courseShort, roomLabel, roomShort } from '@/world/names';
 import { addDays, hm, minutesOf, startOfWeek, WEEKDAYS, type Moment } from '@/world/time';
 
 const DAY_END = 21 * 60 + 8;
+/** How far each thing behind shows beside the one in front of it. */
+const EDGE = 5;
 
-export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; onOpen: (event: CampusEvent) => void }) {
+/** What a tile says under its name: where, and for a lab that it is one. */
+const tileNote = (event: CampusEvent, wide: boolean) => {
+    const room = event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
+    return event.lab ? ['实验', room].filter(Boolean).join(' · ') : room;
+};
+
+export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index));
     const week = weekOfDate(line.term, monday);
     const events = days.map(date => eventsOn(line, date));
     const tones = timelineTones(line);
-    const cells = week ? timetableCells(line.meetings, week, tones) : [];
+    const hints = week ? offWeekLessons(line.meetings, week, tones) : [];
     const ghosts = week ? previewRows.filter(meeting => meeting.weeks.includes(week)) : [];
     let columns = wide ? 7 : 5;
-    days.forEach((_, index) => { if (events[index]!.length || cells.some(cell => cell.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
+    days.forEach((_, index) => { if (events[index]!.length || hints.some(hint => hint.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
     const clock = new Map(line.periods.map(period => [period.period, { start: minutesOf(period.start), end: minutesOf(period.end) }]));
     const scale = wide ? 1.02 : .72;
     const from = (events.flat().some(event => event.kind === 'run') ? minutesOf(line.run!.rule.time[0]) : 480) - 4;
@@ -39,39 +47,37 @@ export function WeekView({ line, day, now, wide, record, previewRows, onOpen }: 
             </div>
             {days.slice(0, columns).map((date, index) => {
                 const past = (end: number) => date < now.date || (date === now.date && end <= now.min);
-                // One block per slot: a lesson on this week takes it; one off this week shows, greyed, only in a slot
-                // nothing else holds. The lesson it gives way to names it in its sheet.
-                const all = line.holidays.has(date) ? [] : cells.filter(cell => cell.day === index + 1);
-                const clashes = (left: typeof all[number], right: typeof all[number]) => left !== right && left.periods[0] <= right.periods[1] && right.periods[0] <= left.periods[1];
-                const lessons = all.filter(cell => cell.state === 'active' || !all.some(other => other.state === 'active' && clashes(cell, other)));
+                const today = events[index]!;
+                // A lesson off this week keeps its place, greyed, only where nothing is on that week.
+                const quiet = line.holidays.has(date) ? [] : hints.filter(hint => {
+                    if (hint.day !== index + 1) return false;
+                    const [start, end] = [clock.get(hint.periods[0])?.start, clock.get(hint.periods[1])?.end];
+                    return start !== undefined && end !== undefined && !today.some(event => event.start < end && start < event.end);
+                });
                 return (
                     <div key={date} className={`col ${line.holidays.has(date) ? 'off' : ''}`} style={{ height }}>
                         {lines}
-                        {lessons.map(cell => {
-                            const start = clock.get(cell.periods[0])?.start;
-                            const end = clock.get(cell.periods[1])?.end;
-                            if (start === undefined || end === undefined) return null;
-                            // Off this week or not, a lesson opens: one not on this week shows where it next meets.
-                            const event = events[index]!.find(item => item.meeting?.id === cell.id) ?? meetingAround(line, cell.id, monday);
-                            // A lab or an exam at the same time outranks the lesson, which steps back.
-                            const quiet = cell.state !== 'active' || Boolean(event?.covered && event.date === date);
-                            const shared = lessons.some(other => clashes(cell, other));
-                            const width = 100 / cell.columns;
-                            return <button key={cell.id} className={`t ${quiet ? 'quiet' : ''} ${!quiet && past(end) ? 'past' : ''}`}                                 style={{ top: y(start) + 1, height: y(end) - y(start) - 2, ...(shared ? { left: `calc(${cell.slot * width}% + 2px)`, right: 'auto', width: `calc(${width}% - 4px)` } : {}), ...courseToneStyle(cell.colourIndex) }}
-                                onClick={() => event && onOpen(event)}>
-                                {wide ? courseName(cell.course) : courseShort(cell.course)}<small>{quiet ? cell.label : wide ? cell.room : roomShort(cell.room)}</small>
+                        {quiet.map(hint => {
+                            const start = clock.get(hint.periods[0])!.start;
+                            const end = clock.get(hint.periods[1])!.end;
+                            const event = meetingAround(line, hint.id, monday);
+                            return <button key={hint.id} className="t quiet" style={{ top: y(start) + 1, height: y(end) - y(start) - 2, ...courseToneStyle(hint.colourIndex) }} onClick={() => event && onOpen(event)}>
+                                {wide ? courseName(hint.course) : courseShort(hint.course)}<small>{hint.label}</small>
                             </button>;
                         })}
-                        {events[index]!.filter(event => event.kind !== 'class').map(event => (
-                            <button key={event.id} className={`t ${event.kind} ${event.covered ? 'quiet' : !event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`}
-                                style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), ...(event.lab ? courseToneStyle(tones.get(courseIdentity(event.lab))!) : {}) }} onClick={() => onOpen(event)}>
-                                {wide ? event.name : event.short}<small>{event.lab ? `实验${event.room ? ` · ${wide ? roomLabel(event.room) : roomShort(event.room)}` : ''}` : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : ''}</small>
-                            </button>
-                        ))}
+                        {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
+                        {layers(today, order).map(({ event, under, over }) => {
+                            const course = event.meeting ?? event.lab;
+                            return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}`}
+                                style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(course ? courseToneStyle(tones.get(courseIdentity(course))!) : {}) }} onClick={() => onOpen(event)}>
+                                {wide ? event.name : event.short}<small>{tileNote(event, wide)}</small>
+                                {over === 0 && under > 0 && <i className="more">+{under}</i>}
+                            </button>;
+                        })}
                         {ghosts.filter(meeting => meeting.weekday === index + 1).map(meeting => {
                             const start = clock.get(meeting.periods[0])!.start;
                             const end = clock.get(meeting.periods[1])!.end;
-                            const clash = events[index]!.some(event => event.start < end && start < event.end);
+                            const clash = today.some(event => event.start < end && start < event.end);
                             return <div key={meeting.id} className={`t ${clash ? 'clash' : 'ghost'}`} style={{ top: y(start) + 1, height: y(end) - y(start) - 2 }}>{courseShort(meeting.course.name)}<small>{roomShort(meeting.room)}</small></div>;
                         })}
                         {date === now.date && <div className="wnow" style={{ top: y(now.min) }} />}

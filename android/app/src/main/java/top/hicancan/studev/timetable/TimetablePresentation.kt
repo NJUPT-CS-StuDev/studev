@@ -5,11 +5,8 @@ import top.hicancan.studev.data.TeachingMeeting
 import java.util.Locale
 
 /** The same answers as src/campus/timetable/model/presentation.ts, checked against src/campus/world/parity/golden.json. */
-@Serializable data class TimetableCell(
-    val id: String, val day: Int, val periods: List<Int>, val course: String, val room: String,
-    val state: String, val colourIndex: Int, val note: String, val label: String,
-    val slot: Int, val columns: Int, val overlap: String, val overlapCount: Int,
-)
+/** A lesson off its week, as src/campus/timetable/model/weekPattern.ts offWeekLessons gives it. */
+@Serializable data class OffWeekLesson(val id: String, val day: Int, val periods: List<Int>, val course: String, val room: String, val colourIndex: Int, val label: String)
 
 object TimetablePresentation {
     // Exactly ECMAScript \s, rather than the JVM's different whitespace set.
@@ -49,54 +46,24 @@ object TimetablePresentation {
         }
         return tones
     }
-    fun alternating(weeks: List<Int>): String? = if (weeks.size >= 2 && weeks.all { it % 2 == weeks.first() % 2 }) {
+    private fun alternating(weeks: List<Int>): String? = if (weeks.size >= 2 && weeks.all { it % 2 == weeks.first() % 2 }) {
         if (weeks.first() % 2 == 1) "单周" else "双周"
     } else null
-    /** On this week, off this week within its run of weeks (greyed in place), or not shown. */
-    fun state(meeting: TeachingMeeting, week: Int): String = when {
-        week in meeting.weeks -> "active"
-        week in meeting.weeks.min()..meeting.weeks.max() -> "off"
-        else -> "hidden"
-    }
-    fun note(meeting: TeachingMeeting): String = listOfNotNull(
-        if (meeting.room == "翻转课堂线上自学") "翻转课堂 · 线上自学" else null,
-        meeting.method?.takeIf { it != "面授讲课" }?.trim()?.takeIf { it.isNotEmpty() },
-    ).joinToString(" · ")
-    fun room(meeting: TeachingMeeting): String = if (meeting.room == "翻转课堂线上自学") "" else meeting.room?.let(top.hicancan.studev.world.Names::room).orEmpty()
-    private fun intersects(a: TeachingMeeting, b: TeachingMeeting) = a.weekday == b.weekday && a.periods.first() <= b.periods.last() && a.periods.last() >= b.periods.first()
-    /** The lessons of a week as cells. `tones` are the timetable's colours when it holds more than these lessons. */
-    fun cells(meetings: List<TeachingMeeting>, week: Int, tones: Map<String, Int> = tones(meetings)): List<TimetableCell> = buildList {
-        val active = meetings.filter { week in it.weeks }
-        (1..7).forEach { day ->
-            val sorted = meetings.filter { it.weekday == day && state(it, week) != "hidden" }
-                .sortedWith(compareBy<TeachingMeeting> { it.periods.first() }.thenBy { it.periods.last() }.thenBy { it.id })
-            val component = mutableListOf<TeachingMeeting>()
-            var componentEnd = 0
-            fun flush() {
-                if (component.isEmpty()) return
-                val slotEnds = mutableListOf<Int>()
-                val positioned = component.map { meeting ->
-                    val slot = slotEnds.indexOfFirst { it < meeting.periods.first() }.let { if (it < 0) slotEnds.size else it }
-                    if (slot == slotEnds.size) slotEnds.add(meeting.periods.last()) else slotEnds[slot] = meeting.periods.last()
-                    meeting to slot
-                }
-                positioned.forEach { (meeting, slot) ->
-                    val state = state(meeting, week)
-                    val overlap = if (state == "active") active.filter { intersects(it, meeting) } else emptyList()
-                    val kind = if (overlap.size <= 1) "" else if (overlap.all { identity(it) == identity(meeting) }) "parallel" else "overlap"
-                    val count = if (kind.isEmpty()) 0 else overlap.size
-                    val label = if (state == "off") listOfNotNull(alternating(meeting.weeks), "本周不上课").joinToString(" · ")
-                        else if (kind.isNotEmpty()) "${if (kind == "parallel") "并行" else "重叠"} $count 项" else ""
-                    add(TimetableCell(meeting.id, day, meeting.periods, meeting.course.name, room(meeting), state,
-                        tones.getValue(identity(meeting)), note(meeting), label, slot, slotEnds.size, kind, count))
-                }
-                component.clear(); componentEnd = 0
-            }
-            sorted.forEach { meeting ->
-                if (component.isNotEmpty() && meeting.periods.first() > componentEnd) flush()
-                component.add(meeting); componentEnd = maxOf(componentEnd, meeting.periods.last())
-            }
-            flush()
+    /** A lesson within its run of weeks that does not meet this week: it keeps its place, greyed. */
+    private fun offThisWeek(meeting: TeachingMeeting, week: Int) = week !in meeting.weeks && week in meeting.weeks.min()..meeting.weeks.max()
+    /**
+     * The lessons of a week that do not meet that week, within their run of weeks: a hint of what is usually there,
+     * greyed in place. One that would overlap an earlier one is left out; the view leaves out any that would overlap
+     * something on that week, and the lesson in front names it in its sheet.
+     */
+    fun offWeekLessons(meetings: List<TeachingMeeting>, week: Int, tones: Map<String, Int>): List<OffWeekLesson> {
+        val kept = mutableListOf<TeachingMeeting>()
+        meetings.filter { offThisWeek(it, week) }
+            .sortedWith(compareBy<TeachingMeeting> { it.weekday }.thenBy { it.periods.first() }.thenBy { it.periods.last() }.thenBy { it.id })
+            .forEach { meeting -> if (kept.none { it.weekday == meeting.weekday && it.periods.first() <= meeting.periods.last() && meeting.periods.first() <= it.periods.last() }) kept += meeting }
+        return kept.map { meeting ->
+            OffWeekLesson(meeting.id, meeting.weekday, meeting.periods, meeting.course.name, meeting.room?.let(top.hicancan.studev.world.Names::room).orEmpty(),
+                tones.getValue(identity(meeting)), listOfNotNull(alternating(meeting.weeks), "本周不上课").joinToString(" · "))
         }
     }
 }

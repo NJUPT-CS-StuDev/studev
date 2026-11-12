@@ -6,7 +6,7 @@ import { timetableEdits, updateTimetableEdits, writePreferences } from '@/world/
 import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
 import { loadClasses, loadRuns, loadTerm, type MorningRun } from '@/world/data';
-import { gradeOf } from '@/world/events';
+import { gradeOf, LAYER_ORDER, type EventKind } from '@/world/events';
 import { Chevron, Sheet, Toggle } from '@/world/ui';
 import type { TeachingClass, TeachingTerm } from '@/world/facts';
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
@@ -18,6 +18,7 @@ export default function MeApp() {
     const { prefs } = usePreferences();
     const [appearance, setLook] = useState<Appearance>(() => typeof document === 'undefined' ? 'auto' : readAppearance());
     const [picking, setPicking] = useState(false);
+    const [layering, setLayering] = useState(false);
     const [facts, setFacts] = useState<{ term: TeachingTerm; classes: TeachingClass[]; run: MorningRun | null } | null>(null);
     useEffect(() => {
         const button = document.querySelector<HTMLElement>('[data-me]');
@@ -42,6 +43,22 @@ export default function MeApp() {
         setShared(true);
     };
     if (!open) return null;
+    const order = prefs.layers ?? LAYER_ORDER;
+    const KIND_NAMES: Record<EventKind, string> = { exam: '考试', lab: '实验', class: '课程', run: '早锻炼' };
+    // Moving one up a step swaps it with the one before: the whole order is always written.
+    const raise = (kind: EventKind) => writePreferences(current => {
+        const next = [...(current.layers ?? LAYER_ORDER)];
+        const at = next.indexOf(kind);
+        if (at > 0) [next[at - 1], next[at]] = [next[at]!, next[at - 1]!];
+        return { ...current, layers: next };
+    });
+    if (layering) return (
+        <Sheet title="叠放顺序" onClose={() => setLayering(false)}>
+            <p className="fine lead">同一时间有几件事时，靠前的显示在前面，后面的露出一条边，点开任何一件都能看到同时段的其他安排。这只改变显示，不会让哪件事消失。</p>
+            {order.map((kind, at) => <div key={kind} className="kv"><span className="k">第 {at + 1} 层</span><span className="v">{KIND_NAMES[kind]}</span>{at > 0 && <button className="ib" onClick={() => raise(kind)}>上移</button>}</div>)}
+            {prefs.layers && <button className="btn wide" onClick={() => writePreferences(current => { const { layers: _, ...rest } = current; return rest; })}>恢复默认</button>}
+        </Sheet>
+    );
     if (picking || !prefs.class) return <Sheet title="选择班级" onClose={() => { setPicking(false); setOpen(false); }}><ClassPicker onPicked={() => setPicking(false)} /></Sheet>;
 
     const edits = facts ? timetableEdits(prefs, facts.term.term) : { hidden: [], added: [] };
@@ -55,6 +72,7 @@ export default function MeApp() {
             <div className="kv"><span className="k">改动</span><span className="v">加了 {edits.added.length} 门，隐藏了 {edits.hidden.length} 门</span>
                 {edits.hidden.length + edits.added.length > 0 && facts && <button className="ib" onClick={() => updateTimetableEdits(facts.term.term, () => ({ hidden: [], added: [] }))}>还原</button>}</div>
             <div className="kv"><span className="k">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{label}</button>)}</div></div>
+            <button className="kv" onClick={() => setLayering(true)}><span className="k">叠放</span><span className="v">{order.map(kind => KIND_NAMES[kind]).join(' › ')}<small>同一时间有几件事时谁在前面</small></span><Chevron /></button>
             <a className="kv" href="/account/"><span className="k">账号</span><span className="v">{account ? `${account.nickname} · ${labels[account.role] ?? account.role}` : '未登录'}</span><Chevron /></a>
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>

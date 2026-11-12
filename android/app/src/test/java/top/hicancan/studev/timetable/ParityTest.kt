@@ -45,10 +45,17 @@ class ParityTest {
         val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(labs.getValue("meetings"))
         val classLabs = json.decodeFromJsonElement<List<Lab>>(labs.getValue("labs"))
         val labLine = CampusLine(term, periods, meetings, classLabs, listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null)
-        fun labBrief(event: LineEvent) = JsonObject(brief(event) + mapOf("covered" to JsonPrimitive(event.covered), "lab" to (event.lab?.let { JsonPrimitive(it.id) } ?: JsonNull)))
-        labs.getValue("days").jsonArray.forEach { day ->
-            val date = LocalDate.parse(day.jsonObject.getValue("date").jsonPrimitive.content)
-            assertEquals(date.toString(), day.jsonObject.getValue("events"), JsonArray(labLine.on(date).map(::labBrief)))
+        fun labBrief(event: LineEvent) = JsonObject(brief(event) + mapOf("id" to JsonPrimitive(event.id), "lab" to (event.lab?.let { JsonPrimitive(it.id) } ?: JsonNull)))
+        val orders = listOf(listOf("exam", "lab", "class", "run"), listOf("class", "run", "exam", "lab"))
+        labs.getValue("days").jsonArray.forEach { item ->
+            val day = item.jsonObject
+            val date = LocalDate.parse(day.getValue("date").jsonPrimitive.content)
+            val events = labLine.on(date)
+            assertEquals(date.toString(), day.getValue("events"), JsonArray(events.map(::labBrief)))
+            assertEquals(day.getValue("alongside").jsonArray.map { row -> row.jsonArray.map { it.jsonPrimitive.content } }, events.map { event -> labLine.overlapping(event).map { it.id } })
+            assertEquals(day.getValue("layers"), JsonArray(orders.map { order -> JsonArray(CampusLine.layers(events, order).map { buildJsonObject { put("id", it.event.id); put("under", it.under); put("over", it.over) } }) }))
+            assertEquals(day.getValue("clusters"), JsonArray(orders.map { order -> JsonArray(CampusLine.clusters(events, order).map { run ->
+                buildJsonObject { put("front", run.front.id); put("events", JsonArray(run.events.map { JsonPrimitive(it.id) })); put("start", run.start); put("end", run.end) } }) }))
         }
         val dayOff = labs.getValue("dayOff").jsonObject
         val off = json.decodeFromJsonElement<Lab>(dayOff.getValue("lab"))
@@ -65,18 +72,18 @@ class ParityTest {
             assertEquals(item.jsonObject.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, got.map { it.id })
         }
     }
-    @Test fun everyClassWeekMatchesEveryWebCell() {
+    @Test fun everyClassWeekGreysTheSameLessonsOffTheirWeek() {
         var count = 0
         golden.getValue("schedules").jsonArray.forEach { entry ->
             val meetings = json.decodeFromJsonElement<List<TeachingMeeting>>(entry.jsonObject.getValue("meetings"))
             entry.jsonObject.getValue("weeks").jsonArray.forEach { item ->
                 val week = item.jsonObject.getValue("week").jsonPrimitive.int
-                val cells = TimetablePresentation.cells(meetings, week)
-                assertEquals("week $week", json.decodeFromJsonElement<List<TimetableCell>>(item.jsonObject.getValue("cells")), cells)
+                val cells = TimetablePresentation.offWeekLessons(meetings, week, TimetablePresentation.tones(meetings))
+                assertEquals("week $week", json.decodeFromJsonElement<List<OffWeekLesson>>(item.jsonObject.getValue("cells")), cells)
                 count += cells.size
             }
         }
-        assertTrue(count > 100)
+        assertTrue(count > 0)
     }
     @Test fun eventsOnADayMatchIncludingHolidaysAndMorningRuns() {
         golden.getValue("days").jsonArray.forEach { day ->

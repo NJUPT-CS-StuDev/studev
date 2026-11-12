@@ -79,8 +79,9 @@ class CourseCatalogTest {
         assertEquals("第1–15周（单周）", CourseCatalog.formatWeekNumbers(listOf(1, 3, 5, 7, 9, 11, 13, 15)))
         assertEquals("第1–4、6–8周", CourseCatalog.formatWeekNumbers(listOf(1, 2, 3, 4, 6, 7, 8)))
         val m = meeting("m1", "tc-1", "线性代数", weeks = listOf(1, 2, 3, 4, 6, 7, 8))
-        assertEquals("off", TimetablePresentation.state(m, 5))
-        assertEquals("active", TimetablePresentation.state(m, 6))
-        assertEquals("hidden", TimetablePresentation.state(m, 9))
+        val tones = TimetablePresentation.tones(listOf(m))
+        assertEquals(listOf("m1"), TimetablePresentation.offWeekLessons(listOf(m), 5, tones).map { it.id })
+        assertEquals(emptyList<String>(), TimetablePresentation.offWeekLessons(listOf(m), 6, tones).map { it.id })
+        assertEquals(emptyList<String>(), TimetablePresentation.offWeekLessons(listOf(m), 9, tones).map { it.id })
     }
 }

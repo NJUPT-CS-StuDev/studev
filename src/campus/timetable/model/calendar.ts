@@ -2,7 +2,7 @@
 // their calendar gets. Keeping a calendar up to date is the Android app's job.
 import type { Exam, Lab, TeachingMeeting } from '@/world/facts';
 import type { CalendarTerm } from '@/world/data';
-import { eventsOn, weekOfDate, type RunPlan, type Timeline } from '@/world/events';
+import { weekOfDate, type RunPlan, type Timeline } from '@/world/events';
 import { courseName, roomLabel } from '@/world/names';
 import { addDays, minutesOf } from '@/world/time';
 
@@ -82,13 +82,12 @@ export function calendarFile(name: string, entries: Entry[], stamp: Date): strin
     return `${lines.map(fold).join('\r\n')}\r\n`;
 }
 
-/** Each lesson is one weekly series over the dates the timeline holds it: its weeks, minus holidays and the times a lab or an exam takes its place. */
+/** Each lesson is one weekly series over the dates the timeline holds it: its weeks, minus holidays. */
 export function lessonEntries(line: Timeline): Entry[] {
     return line.meetings.flatMap((meeting: TeachingMeeting) => {
         const first = line.periods.find(period => period.period === meeting.periods[0]);
         const last = line.periods.find(period => period.period === meeting.periods[1]);
-        const dates = line.term.weeks.filter(week => meeting.weeks.includes(week.week)).map(week => addDays(week.start, meeting.weekday - 1))
-            .filter(date => !line.holidays.has(date) && !eventsOn(line, date).find(event => event.meeting?.id === meeting.id)?.covered);
+        const dates = line.term.weeks.filter(week => meeting.weeks.includes(week.week)).map(week => addDays(week.start, meeting.weekday - 1)).filter(date => !line.holidays.has(date));
         if (!first || !last || !dates.length) return [];
         const skip: string[] = [];
         for (let date = dates[0]!; date < dates.at(-1)!; date = addDays(date, 7)) if (!dates.includes(date)) skip.push(date);
@@ -101,8 +100,8 @@ export function lessonEntries(line: Timeline): Entry[] {
     });
 }
 
-/** Each lab sitting the timeline holds, on its own date; one an exam covers is left out. */
-export const labEntries = (line: Timeline): Entry[] => line.labs.filter(lab => eventsOn(line, lab.date).some(event => event.lab?.id === lab.id && !event.covered)).map((lab: Lab) => ({
+/** Each lab sitting the timeline holds, on its own date. */
+export const labEntries = (line: Timeline): Entry[] => line.labs.map((lab: Lab) => ({
     uid: lab.id, summary: `实验 · ${courseName(lab.course.name)}`, location: roomLabel(lab.room ?? lab.place),
     description: [lab.project, lab.teachers.join('、')].filter(Boolean).join(' · '),
     date: lab.date, start: minutesOf(lab.start), end: minutesOf(lab.end), reminders: [LESSON_REMINDER],

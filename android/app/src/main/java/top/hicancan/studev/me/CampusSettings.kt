@@ -41,6 +41,8 @@ data class PersonalSettings(
     val examsSeen: String? = null,
     /** When exams written to the phone's calendar remind, as keys of Exams.REMINDERS. */
     val examReminders: List<String> = top.hicancan.studev.world.Exams.DEFAULT_REMINDERS,
+    /** Which kind shows in front when things overlap, front first. */
+    val layers: List<String> = top.hicancan.studev.world.CampusLine.LAYER_ORDER,
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -92,6 +94,8 @@ class CampusSettings(context: Context) {
         widgetView = store.getString("widget-view", "auto")!!,
         examsSeen = store.getString("exams-seen", null),
         examReminders = store.getString("exam-reminders", null)?.let { Json.decodeFromString<List<String>>(it) } ?: top.hicancan.studev.world.Exams.DEFAULT_REMINDERS,
+        // Only a whole ordering of every kind is kept: a partial one would leave some kind nowhere.
+        layers = store.getString("layers", null)?.let { Json.decodeFromString<List<String>>(it) }?.takeIf { it.sorted() == top.hicancan.studev.world.CampusLine.LAYER_ORDER.sorted() } ?: top.hicancan.studev.world.CampusLine.LAYER_ORDER,
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -106,7 +110,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams)
-            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders))
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders)).putString("layers", Json.encodeToString(next.layers))
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)

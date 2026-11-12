@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { updateExamAttendance, updateRun, updateTimetableEdits } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
-import { lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
+import { LAYER_ORDER, lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
 import { loadExamRecord, type ExamRecord } from '@/world/data';
 import { roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, momentNow, startOfWeek, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
@@ -123,8 +123,8 @@ export default function TimetableApp() {
                 <div className="tabs" role="tablist">
                     {SCALES.map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
                 </div>
-                {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
-                {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} onOpen={openEvent} />}
+                {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} />}
+                {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} />}
                 {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}

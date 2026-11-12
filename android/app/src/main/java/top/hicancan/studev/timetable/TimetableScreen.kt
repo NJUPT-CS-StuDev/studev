@@ -129,9 +129,9 @@ import java.time.LocalDate
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
             when (scale) {
-                "week" -> WeekView(line, day, now, record, previewRows) { onEvent(it, line) }
+                "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
                 "term" -> TermView(line, state, model, now, isMe, record, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
-                else -> DayView(line, day, now, isMe, record, route, walk) { onEvent(it, line) }
+                else -> DayView(line, day, now, isMe, record, route, walk, settings.layers) { onEvent(it, line) }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
                 onCancel = { route.preview = null },
@@ -174,7 +174,11 @@ import java.time.LocalDate
     }
 }
 
-@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, onClick: () -> Unit) {
+/** One thing on the line. `behind` is how many it overlaps lie behind it; one in front names the count. */
+/** A lesson or a lab takes its course's colour. */
+private fun toneOf(event: LineEvent, tones: Map<String, Int>) = event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: event.lab?.let { tones[TimetablePresentation.identity(it)] }
+
+@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, behind: Int = 0, onClick: () -> Unit) {
     val mark = marks()
     val tones = toneIndex?.let { tone(it) }
     val paper = Ink.paper
@@ -188,6 +192,9 @@ import java.time.LocalDate
             else if (lab != null) listOf("实验", Names.roomShort(event.room)).filter { it.isNotEmpty() }.joinToString(" · ") else Names.roomShort(event.room)
         TileBox(if (big) event.name else event.short, note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
+        if (behind > 0) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).border(1.dp, Ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 3.dp)) {
+            Plain(if (big) "同时段另有 $behind 项" else "+$behind", if (big) 11.sp else 10.sp, Ink.text, FontWeight.SemiBold)
+        }
     }
 }
 @Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?, strong: Boolean = false) {
@@ -198,10 +205,9 @@ import java.time.LocalDate
     }
 }
 
-@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, onOpen: (LineEvent) -> Unit) {
+@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, order: List<String>, onOpen: (LineEvent) -> Unit) {
     val today = day == now.date
-    // What a lab or an exam covers is not drawn here: the day shows what one goes to. Its sheet names what it covers.
-    val events = remember(line, day) { line.on(day).filter { !it.covered } }
+    val events = remember(line, day) { line.on(day) }
     val tones = remember(line) { TimetablePresentation.tones(line) }
     val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -231,7 +237,7 @@ import java.time.LocalDate
         val awake = fold && now.min >= minOf(opens, live.first().start) - 60
         val free = maxOf(now.min, opens)
         val from = (if (awake) minOf(now.min, live.first().start) else live.first().start) - 14
-        val to = maxOf(live.last().end + 24, if (awake) now.min + 20 else 0)
+        val to = maxOf(live.maxOf { it.end } + 24, if (awake) now.min + 20 else 0)
         fun y(minutes: Int): Dp = (minutes - from).dp
         val mark = marks()
         val hairline = Ink.line
@@ -245,11 +251,17 @@ import java.time.LocalDate
             }
             @Composable fun gap(start: Int, end: Int) = Plain("空 ${durationText(end - start)} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.rooms(day to start) })
             if (awake && live.first().start - free >= 45) gap(free, live.first().start)
-            live.forEachIndexed { index, event ->
-                Tile(event, event.meeting?.let { tones[TimetablePresentation.identity(it)] } ?: event.lab?.let { tones[TimetablePresentation.identity(it)] }, false, Modifier.padding(start = 44.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
-                val next = live.getOrNull(index + 1)
-                val start = maxOf(if (today) maxOf(event.end, now.min) else event.end, opens)
-                if (next != null && next.start - start >= 30 && next.start - event.end >= 45) gap(start, next.start)
+            // Everything on, at its own time, back to front: what is behind shows beside what is in front.
+            CampusLine.layers(live, order).forEach { (event, under, over) ->
+                Tile(event, toneOf(event, tones), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
+                    event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
+            }
+            // Free time is between runs of things that overlap, not between any two of them.
+            val runs = CampusLine.clusters(live, order)
+            runs.forEachIndexed { index, run ->
+                val next = runs.getOrNull(index + 1)
+                val start = maxOf(if (today) maxOf(run.end, now.min) else run.end, opens)
+                if (next != null && next.start - start >= 30 && next.start - run.end >= 45) gap(start, next.start)
             }
             if (awake) {
                 Box(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.5.dp).offset(y = y(now.min)).background(mark.now))
@@ -294,16 +306,16 @@ import java.time.LocalDate
 
 private const val DAY_END = 21 * 60 + 8
 
-@Composable private fun WeekView(line: CampusLine, day: LocalDate, now: Moment, record: ExamRecord?, ghosts: List<TeachingMeeting>, onOpen: (LineEvent) -> Unit) {
+@Composable private fun WeekView(line: CampusLine, day: LocalDate, now: Moment, record: ExamRecord?, ghosts: List<TeachingMeeting>, order: List<String>, onOpen: (LineEvent) -> Unit) {
     val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
     val days = remember(monday) { (0L until 7L).map { monday.plusDays(it) } }
     val week = line.weekOf(monday)
     val events = remember(line, monday) { days.map(line::on) }
     val lineTones = remember(line) { TimetablePresentation.tones(line) }
-    val cells = remember(line, week) { if (week != null) TimetablePresentation.cells(line.meetings, week, lineTones) else emptyList() }
+    val hints = remember(line, week) { if (week != null) TimetablePresentation.offWeekLessons(line.meetings, week, lineTones) else emptyList() }
     val shownGhosts = if (week != null) ghosts.filter { week in it.weeks } else emptyList()
     var columns = 5
-    days.forEachIndexed { index, _ -> if (events[index].isNotEmpty() || cells.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
+    days.forEachIndexed { index, _ -> if (events[index].isNotEmpty() || hints.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
     val period = remember(line) { line.periods.associate { it.period to (clock(it.start) to clock(it.end)) } }
     val from = (if (events.flatten().any { it.kind == "run" }) clock(line.run!!.rule.time[0]) else 480) - 4
     fun y(minutes: Int): Dp = ((minutes - from) * .72f).dp
@@ -343,30 +355,22 @@ private const val DAY_END = 21 * 60 + 8
                     }) {
                         val width = maxWidth
                         line.periods.forEach { item -> Box(Modifier.fillMaxWidth().height(1.dp).offset(y = y(period.getValue(item.period).first)).background(soft)) }
-                        // One block per slot: a lesson on this week takes it; one off this week shows, greyed, only in a slot
-                        // nothing else holds. The lesson it gives way to names it in its sheet.
-                        val all = if (off) emptyList() else cells.filter { it.day == index + 1 }
-                        fun clash(a: TimetableCell, b: TimetableCell) = a !== b && a.periods.first() <= b.periods.last() && b.periods.first() <= a.periods.last()
-                        val lessons = all.filter { cell -> cell.state == "active" || all.none { it.state == "active" && clash(cell, it) } }
-                        lessons.forEach { cell ->
-                            val start = period[cell.periods.first()]?.first ?: return@forEach
-                            val end = period[cell.periods.last()]?.second ?: return@forEach
-                            val shared = lessons.any { clash(cell, it) }
-                            val slotWidth = if (shared) width / cell.columns else width
-                            val x = if (shared) slotWidth * cell.slot else 0.dp
-                            // Off this week or not, a lesson opens: one not on this week shows where it next meets.
-                            val event = events[index].firstOrNull { it.meeting?.id == cell.id } ?: line.meetingAround(cell.id, monday)
-                            // A lab or an exam at the same time outranks the lesson, which steps back.
-                            val quiet = cell.state != "active" || (event != null && event.covered && event.date == date)
-                            val past = date < now.date || (date == now.date && end <= now.min)
-                            val tones = tone(cell.colourIndex)
-                            val blend = if (quiet || past) .4f else 0f
-                            fun mix(color: Color) = Color(color.red + (paper.red - color.red) * blend, color.green + (paper.green - color.green) * blend, color.blue + (paper.blue - color.blue) * blend)
-                            TileBox(Names.courseShort(cell.course), if (quiet) cell.label else Names.roomShort(cell.room), mix(tones.bg), mix(tones.border), mix(tones.fg),
-                                Modifier.padding(horizontal = 2.dp).width(slotWidth - 4.dp).offset(x = x, y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
+                        // A lesson off this week keeps its place, greyed, only where nothing is on that week.
+                        hints.filter { hint -> hint.day == index + 1 && !off }.forEach { hint ->
+                            val start = period[hint.periods.first()]?.first ?: return@forEach
+                            val end = period[hint.periods.last()]?.second ?: return@forEach
+                            if (events[index].any { it.start < end && start < it.end }) return@forEach
+                            val event = line.meetingAround(hint.id, monday)
+                            val tones = tone(hint.colourIndex)
+                            fun mix(color: Color) = Color(color.red + (paper.red - color.red) * .4f, color.green + (paper.green - color.green) * .4f, color.blue + (paper.blue - color.blue) * .4f)
+                            TileBox(Names.courseShort(hint.course), hint.label, mix(tones.bg), mix(tones.border), mix(tones.fg),
+                                Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
-                        events[index].filter { it.kind != "class" }.sortedBy { it.covered.not() }.forEach { event ->
-                            Tile(event, event.lab?.let { lineTones[TimetablePresentation.identity(it)] }, event.lab != null && (event.covered || date < now.date || (date == now.date && event.end <= now.min)), Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false, event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
+                        // Everything on, at its own time, back to front: what is behind shows beside what is in front.
+                        CampusLine.layers(events[index], order).forEach { (event, under, over) ->
+                            val past = event.kind != "exam" && (date < now.date || (date == now.date && event.end <= now.min))
+                            Tile(event, toneOf(event, lineTones), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
+                                event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->
                             val start = period.getValue(meeting.periods.first()).first

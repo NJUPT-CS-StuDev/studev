@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { eventsOn, examDays, nextEvent, type CampusEvent, type Timeline } from '@/world/events';
+import { clusters, eventsOn, examDays, layers, nextEvent, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
 import { buildingOf, courseName, roomLabel, unplaced } from '@/world/names';
@@ -42,11 +42,10 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     );
 }
 
-export function DayView({ line, day, now, isMe, record, onPick, onOpen }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
+export function DayView({ line, day, now, isMe, record, order, onPick, onOpen }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; order: readonly EventKind[]; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const today = day === now.date;
-    // What a lab or an exam covers is not drawn here: the day shows what one goes to. Its sheet names what it covers.
-    const events = eventsOn(line, day).filter(event => !event.covered);
+    const events = eventsOn(line, day);
     const tones = timelineTones(line);
     const strip = (
         <div className="days">
@@ -70,7 +69,7 @@ export function DayView({ line, day, now, isMe, record, onPick, onOpen }: { line
     const awake = fold && now.min >= Math.min(opens, live[0]!.start) - 60;
     const free = Math.max(now.min, opens);
     const from = (awake ? Math.min(now.min, live[0]!.start) : live[0]!.start) - 14;
-    const to = Math.max(live.at(-1)!.end + 24, awake ? now.min + 20 : 0);
+    const to = Math.max(Math.max(...live.map(event => event.end)) + 24, awake ? now.min + 20 : 0);
     const y = (minutes: number) => Math.round(minutes - from);
     const hours: number[] = [];
     for (let time = Math.ceil(from / 60) * 60; time <= to; time += 60) hours.push(time);
@@ -82,15 +81,18 @@ export function DayView({ line, day, now, isMe, record, onPick, onOpen }: { line
             <div className="tl" style={{ height: y(to) }}>
                 {hours.map(time => <div key={time}><div className="hl" style={{ top: y(time) }} />{!(awake && Math.abs(time - now.min) < 16) && <div className="hn" style={{ top: y(time) }}>{time / 60}:00</div>}</div>)}
                 {awake && live[0]!.start - free >= 45 && gap(free, live[0]!.start, 'first')}
-                {live.map((event, index) => {
-                    const next = live[index + 1];
-                    const start = Math.max(today ? Math.max(event.end, now.min) : event.end, opens);
-                    return <div key={event.id}>
-                        <button className={`t ${tileClass(event, record)}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), ...tileStyle(event, tones) }} onClick={() => onOpen(event)}>
-                            {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.lab ? ` · ${event.lab.project}` : ''}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
-                        </button>
-                        {next && next.start - start >= 30 && next.start - event.end >= 45 && gap(start, next.start, `gap${index}`)}
-                    </div>;
+                {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
+                {layers(live, order).map(({ event, under, over }) => (
+                    <button key={event.id} className={`t ${tileClass(event, record)}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), right: under * 8, ...tileStyle(event, tones) }} onClick={() => onOpen(event)}>
+                        {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.lab ? ` · ${event.lab.project}` : ''}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
+                        {over === 0 && under > 0 && <i className="more">同时段另有 {under} 项</i>}
+                    </button>
+                ))}
+                {/* Free time is between runs of things that overlap, not between any two of them. */}
+                {clusters(live, order).map((run, index, runs) => {
+                    const next = runs[index + 1];
+                    const start = Math.max(today ? Math.max(run.end, now.min) : run.end, opens);
+                    return next && next.start - start >= 30 && next.start - run.end >= 45 ? gap(start, next.start, `gap${index}`) : null;
                 })}
                 {awake && <div className="nowl" style={{ top: y(now.min) }}><b>{hm(now.min)}</b></div>}
             </div>

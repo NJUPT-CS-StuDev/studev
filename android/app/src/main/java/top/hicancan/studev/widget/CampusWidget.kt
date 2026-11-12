@@ -52,7 +52,7 @@ open class CampusWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) = provideContent {
         val state = currentState<Preferences>()
-        val line = state[KEY]?.let { Json.parseToJsonElement(it).jsonObject } ?: placeholder("studev", "打开 studev 选择班级")
+        val line = state[KEY]?.let { Json.parseToJsonElement(it).jsonObject } ?: placeholder("StuDev", "打开 StuDev 选择班级")
         Body(context, line)
     }
 
@@ -81,9 +81,9 @@ open class CampusWidget : GlanceAppWidget() {
                 if (settings.klass == null) null else AcademicRepository.open(context).line(settings)
             } catch (e: CancellationException) { throw e } catch (_: Exception) { unavailable = true; null }
             val json = when {
-                settings.klass == null -> placeholder("studev", "打开 studev 选择班级")
+                settings.klass == null -> placeholder("StuDev", "打开 StuDev 选择班级")
                 line == null || unavailable -> placeholder("课表还没下载", "联网打开一次就有了")
-                else -> published(line, moment, settings.widgetView, settings.theme)
+                else -> published(line, moment, settings.widgetView, settings.theme, settings.layers)
             }.toString()
             for ((widget, id) in placed) {
                 updateAppWidgetState(context, id) { it[KEY] = json }
@@ -111,7 +111,7 @@ private fun row(event: LineEvent, tones: Map<String, Int>) = buildJsonObject {
     event.room?.let { put("nav", it) }
 }
 
-private fun published(line: CampusLine, now: Moment, view: String, theme: String) = buildJsonObject {
+private fun published(line: CampusLine, now: Moment, view: String, theme: String, order: List<String>) = buildJsonObject {
     val tones = TimetablePresentation.tones(line)
     val shown = WidgetDay.of(line, now)
     put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
@@ -124,7 +124,10 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
         addJsonObject {
             put("label", WEEKDAYS[date.dayOfWeek.value].drop(1)); put("today", date == now.date)
             // What a lab or an exam covers steps back: the widget shows what one goes to.
-            put("events", buildJsonArray { events.filter { it.kind != "run" && !it.covered }.forEach { add(row(it, tones)) } })
+            // No room to stack them: a run of things that overlap is one tile, named by the one in front, with how many more.
+            put("events", buildJsonArray { CampusLine.clusters(events.filter { it.kind != "run" }, order).forEach { run ->
+                add(JsonObject(row(run.front, tones) + mapOf("start" to JsonPrimitive(run.start), "end" to JsonPrimitive(run.end), "more" to JsonPrimitive(run.events.size - 1))))
+            } })
         }
     } })
 }
@@ -236,6 +239,8 @@ private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tok
                                 Column {
                                     if (tall || place.isEmpty()) Text(event.getValue("name").jsonPrimitive.content, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp), maxLines = if (place.isEmpty()) 3 else 2)
                                     if (place.isNotEmpty()) Text(place, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                                    val more = event["more"]?.jsonPrimitive?.int ?: 0
+                                    if (more > 0) Text("+$more", style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
                                 }
                             }
                             cursor = maxOf(cursor, end)

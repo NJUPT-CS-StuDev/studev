@@ -1,4 +1,6 @@
 import type { TeachingMeeting } from '@/world/facts';
+import { roomLabel } from '@/world/names';
+import { courseIdentity } from './courseColors';
 
 export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双周' | null => {
     if (meeting.weeks.length < 2) return null;
@@ -12,26 +14,18 @@ export const alternatingWeekLabel = (meeting: TeachingMeeting): '单周' | '双�
 export const offThisWeek = (meeting: TeachingMeeting, week: number): boolean =>
     !meeting.weeks.includes(week) && week >= Math.min(...meeting.weeks) && week <= Math.max(...meeting.weeks);
 
-export const formatWeekNumbers = (weeks: number[]): string => {
-    if (!weeks.length) return '未注明';
-    const sorted = [...new Set(weeks)].sort((left, right) => left - right);
-    const first = sorted[0];
-    if (first === undefined) return '未注明';
-    const parity = sorted.length >= 2 && sorted.every(week => week % 2 === first % 2)
-        ? (first % 2 === 1 ? '单周' : '双周')
-        : null;
-    if (parity) return `第${first}–${sorted[sorted.length - 1] ?? first}周（${parity}）`;
-    const ranges: string[] = [];
-    let start = first;
-    let end = first;
-    for (const week of sorted.slice(1)) {
-        if (week === end + 1) end = week;
-        else {
-            ranges.push(start === end ? String(start) : `${start}–${end}`);
-            start = week;
-            end = week;
-        }
-    }
-    ranges.push(start === end ? String(start) : `${start}–${end}`);
-    return `第${ranges.join('、')}周`;
-};
+/**
+ * The lessons of a week that do not meet that week, within their run of weeks: a hint of what is usually
+ * there, greyed in place. One that would overlap an earlier one is left out; the view leaves out any that
+ * would overlap something on that week, and the lesson in front names it in its sheet.
+ */
+export function offWeekLessons(meetings: TeachingMeeting[], week: number, tones: Map<string, number>) {
+    const off = meetings.filter(meeting => offThisWeek(meeting, week))
+        .sort((left, right) => left.weekday - right.weekday || left.periods[0] - right.periods[0] || left.periods[1] - right.periods[1] || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+    const kept: TeachingMeeting[] = [];
+    for (const meeting of off) if (!kept.some(other => other.weekday === meeting.weekday && other.periods[0] <= meeting.periods[1] && meeting.periods[0] <= other.periods[1])) kept.push(meeting);
+    return kept.map(meeting => ({
+        id: meeting.id, day: meeting.weekday, periods: meeting.periods, course: meeting.course.name, room: roomLabel(meeting.room),
+        colourIndex: tones.get(courseIdentity(meeting))!, label: [alternatingWeekLabel(meeting), '本周不上课'].filter(Boolean).join(' · '),
+    }));
+}

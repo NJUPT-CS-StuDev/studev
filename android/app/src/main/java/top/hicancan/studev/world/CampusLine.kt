@@ -53,9 +53,11 @@ object Names {
 }
 
 data class LineEvent(val kind: String, val id: String, val date: LocalDate, val name: String, val short: String, val start: Int, val end: Int,
-                     val room: String?, val teachers: List<String>, val meeting: TeachingMeeting? = null, val lab: Lab? = null, val exam: Exam? = null,
-                     /** Something that outranks it sits at the same time, so it steps back wherever it shows. */
-                     val covered: Boolean = false)
+                     val room: String?, val teachers: List<String>, val meeting: TeachingMeeting? = null, val lab: Lab? = null, val exam: Exam? = null)
+/** An event as drawn among those it shares a time with: how many lie behind it and how many in front. */
+data class Layer(val event: LineEvent, val under: Int, val over: Int)
+/** Where there is no room to stack them, a run of events that overlap one another, named by the one in front. */
+data class Cluster(val front: LineEvent, val events: List<LineEvent>, val start: Int, val end: Int)
 val LineEvent.startsAt: Instant get() = date.atStartOfDay(CampusDay.zone).plusMinutes(start.toLong()).toInstant()
 val LineEvent.endsAt: Instant get() = date.atStartOfDay(CampusDay.zone).plusMinutes(end.toLong()).toInstant()
 /** The mornings put down for 早锻炼, and the bonus or penalty the sports office recorded. A morning put down
@@ -79,28 +81,27 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
             add(LineEvent("class", "${meeting.id}@$date", date, Names.course(meeting.course.name), Names.courseShort(meeting.course.name),
                 clock(first.start), clock(last.end), meeting.room ?: meeting.location, meeting.teachers.map { it.name }, meeting = meeting))
         }
-        // A lab sheet is drawn up before the holidays are known; like a lesson, a lab does not sit on a day off.
-        if (date !in holidays) for (lab in labs) if (lab.date == date.toString()) add(LineEvent("lab", lab.id, date, Names.course(lab.course.name), Names.courseShort(lab.course.name),
+        // A lab is set for its date, so it stands even on a day the school calendar stops lessons: the sheet does not
+        // say it moved, and the day's name shows beside it for the person to judge.
+        for (lab in labs) if (lab.date == date.toString()) add(LineEvent("lab", lab.id, date, Names.course(lab.course.name), Names.courseShort(lab.course.name),
             clock(lab.start), clock(lab.end), lab.room ?: lab.place, lab.teachers, lab = lab))
         for (exam in exams) if (exam.date == date.toString()) add(LineEvent("exam", exam.id, date, Names.course(exam.course.name), Names.courseShort(exam.course.name),
             clock(exam.start), clock(exam.end), exam.room ?: exam.location, listOfNotNull(exam.teacher), exam = exam))
         val plan = run
         if (plan != null && date.toString() in plan.days) add(LineEvent("run", "run@$date", date, "早锻炼", "早锻炼", clock(plan.rule.time[0]), clock(plan.rule.time[1]), null, emptyList()))
-    }.let { all -> all.map { event -> if (all.any { outranks(it, event) }) event.copy(covered = true) else event } }.sortedBy { it.start }
-    /** What an event covers on its day: the lesson a lab takes the place of, what an exam sits over. */
-    fun coveredBy(event: LineEvent) = on(event.date).filter { outranks(event, it) }
-    /** What covers an event on its day. */
-    fun covering(event: LineEvent) = on(event.date).filter { outranks(it, event) }
+    }.sortedWith(compareBy<LineEvent> { it.start }.then(frontFirst(LAYER_ORDER)))
+    /** What else is on at the same time as an event. */
+    fun overlapping(event: LineEvent) = on(event.date).filter { it.id != event.id && clash(it, event) }
     /** Every lesson, lab and exam one goes to, in order, for what lives outside the app: the calendar and reminders. */
     fun lessonsAndExams(): List<LineEvent> {
         val first = LocalDate.parse(term.weeks.first().start)
         val last = LocalDate.parse(term.weeks.last().end)
         val days = generateSequence(first) { it.plusDays(1) }.takeWhile { it <= last }.toSet() + exams.map { LocalDate.parse(it.date) } + labs.map { LocalDate.parse(it.date) }
-        return days.sorted().flatMap(::on).filter { it.kind != "run" && !it.covered }
+        return days.sorted().flatMap(::on).filter { it.kind != "run" }
     }
-    /** What comes next, not counting 早锻炼, optional on any given morning, nor anything covered. */
+    /** What comes next, not counting 早锻炼: it is optional on any given morning. Of two starting together, the one in front. */
     fun next(now: Moment, horizon: Int = 40): LineEvent? {
-        for (offset in 0 until horizon) for (event in on(now.date.plusDays(offset.toLong()))) if (event.kind != "run" && !event.covered && (offset > 0 || event.end > now.min)) return event
+        for (offset in 0 until horizon) for (event in on(now.date.plusDays(offset.toLong()))) if (event.kind != "run" && (offset > 0 || event.end > now.min)) return event
         return null
     }
     fun upcomingExams(today: LocalDate) = exams.filter { it.date >= today.toString() }.sortedWith(compareBy({ it.date }, { it.start }))
@@ -132,14 +133,26 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
     }
     companion object {
         /**
-         * What gives way when two things share a time: an exam is set for that hour alone, a lab is set for that
-         * date, a lesson only repeats by the week. So an exam covers a lab and a lesson, a lab covers a lesson.
+         * Things on the line may share a time: a lab during a lecture, two labs at once, later one's own task during a
+         * lesson. Sharing a time says only that they clash; neither is called off. Which one shows in front is a choice
+         * of the person looking, front first. By default an exam, then a lab, then a lesson, then 早锻炼.
          */
-        private val rank = mapOf("class" to 1, "lab" to 2, "exam" to 3)
-        private fun outranks(over: LineEvent, under: LineEvent): Boolean {
-            val high = rank[over.kind] ?: return false
-            val low = rank[under.kind] ?: return false
-            return high > low && over.start < under.end && under.start < over.end
+        val LAYER_ORDER = listOf("exam", "lab", "class", "run")
+        private fun clash(left: LineEvent, right: LineEvent) = left !== right && left.date == right.date && left.start < right.end && right.start < left.end
+        private fun frontFirst(order: List<String>) = compareBy<LineEvent> { order.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }
+        /** A day's events as layers, back to front, the order they are drawn in; the same answer as src/campus/world/events.ts. */
+        fun layers(events: List<LineEvent>, order: List<String> = LAYER_ORDER): List<Layer> {
+            val front = events.sortedWith(frontFirst(order))
+            return front.mapIndexed { rank, event -> Layer(event, front.drop(rank + 1).count { clash(it, event) }, front.take(rank).count { clash(it, event) }) }.reversed()
+        }
+        /** A day's events in runs that overlap one another, each one tile from its first start to its last end. */
+        fun clusters(events: List<LineEvent>, order: List<String> = LAYER_ORDER): List<Cluster> {
+            val runs = mutableListOf<MutableList<LineEvent>>()
+            for (event in events.sortedWith(compareBy<LineEvent> { it.start }.thenBy { it.end })) {
+                val last = runs.lastOrNull()
+                if (last != null && event.start < last.maxOf { it.end }) last += event else runs += mutableListOf(event)
+            }
+            return runs.map { run -> Cluster(run.sortedWith(frontFirst(order)).first(), run, run.first().start, run.maxOf { it.end }) }
         }
         /** The days without lessons: public holidays, and the school events (运动会, 校庆日) that stop lessons by custom. */
         fun holidays(terms: List<CalendarTerm>): Map<LocalDate, String> = buildMap {

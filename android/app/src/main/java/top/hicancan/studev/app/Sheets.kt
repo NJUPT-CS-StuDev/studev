@@ -73,6 +73,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             ActionButton("在地图上看", modifier = Modifier.weight(1f)) { onClose(); route.map(place = event.room, at = date to event.start) }
             ActionButton("去这里", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = event.room) }
         } else Spacer(Modifier.height(12.dp))
+        if (lab != null) line.holidays[date]?.let { Plain("这天是$it，实验表照常排了这一次，以老师通知为准", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp)) }
         if (exam != null) {
             Exams.changesOf(record, exam).forEach { change ->
                 KeyRow(if (change.change == "added") "新发布" else "改过", "${dateLabel(java.time.LocalDate.parse(change.observed))} 发现", if (change.change == "changed") Exams.changeLines(change).joinToString("\n") else null)
@@ -85,9 +86,10 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             if (lab.location != lab.place) KeyRow("座位", lab.location.replace(",", "、"))
             Together("一起上", lab.classes, lab.students)
         }
-        // What this takes the place of, and what takes its place: each opens.
-        line.covering(event).forEach { other -> KeyRow("同时段", "${other.name} ${kinds[other.kind]}", "这次${kinds[event.kind]}让给它", chevron = true, onClick = { onOpen(other) }) }
-        line.coveredBy(event).forEach { other -> KeyRow("同时段", other.name, "这次${kinds[other.kind]}不上，让给这场${kinds[event.kind]}", chevron = true, onClick = { onOpen(other) }) }
+        // Whatever else is on at the same time: both stand, and each opens.
+        line.overlapping(event).forEach { other ->
+            KeyRow("同时段", "${other.name} · ${kinds[other.kind] ?: "早锻炼"}", "${hm(other.start)}–${hm(other.end)}${other.room?.let { " · ${Names.room(it)}" } ?: ""}", chevron = true, onClick = { onOpen(other) })
+        }
         val meeting = event.meeting
         if (meeting != null) {
             val left = Exams.lessonsLeft(line.term, meeting, line.holidays, now, event.end)
@@ -117,7 +119,24 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     }
 }
 
+private val KIND_NAMES = mapOf("exam" to "考试", "lab" to "实验", "class" to "课程", "run" to "早锻炼")
+
+/** Which kind shows in front when things overlap. Moving one up a step swaps it with the one before. */
+@Composable fun LayerSheet(settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {
+    PlainSheet("叠放顺序", onClose) {
+        Plain("同一时间有几件事时，靠前的显示在前面，后面的露出一条边，点开任何一件都能看到同时段的其他安排。这只改变显示，不会让哪件事消失。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+        settings.layers.forEachIndexed { at, kind ->
+            KeyRow("第 ${at + 1} 层", KIND_NAMES.getValue(kind), trailing = if (at > 0) ({ Chip("上移", { model.settings.update { current ->
+                val next = current.layers.toMutableList(); next[at] = next[at - 1].also { next[at - 1] = next[at] }; current.copy(layers = next)
+            } }) }) else null)
+        }
+        if (settings.layers != CampusLine.LAYER_ORDER) KeyRow(null, "恢复默认", onClick = { model.settings.update { it.copy(layers = CampusLine.LAYER_ORDER) } })
+    }
+}
+
 @Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onClose: () -> Unit) {
+    var layering by remember { mutableStateOf(false) }
+    if (layering) { LayerSheet(settings, model) { layering = false }; return }
     val context = LocalContext.current
     val term = state.term
     val info = state.classes.find { it.id == settings.klass }
@@ -137,6 +156,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                 }
             }
             val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
+            KeyRow("叠放", settings.layers.joinToString(" › ") { KIND_NAMES.getValue(it) }, "同一时间有几件事时谁在前面", chevron = true, onClick = { layering = true })
             KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
