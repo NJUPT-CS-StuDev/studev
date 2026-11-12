@@ -53,3 +53,19 @@ an authenticated submitter's identity or contact details to their holder.
 
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
 output and function together.
+
+Campus contributions use the member form named in `product.json` under
+`contributions.form`, with the existing immutable attachments and review service.
+The web and native Android entry read that form. Review does not directly change
+public campus facts. Export approved material with `STUDEV_PRIVATE_DIR` pointing
+to the existing external private storage:
+
+```powershell
+node scripts/platform/export-contributions.mjs --output D:\code\github\hicancan\njupt-suite\njupt-data\evidence\contributions
+```
+
+The export includes public answers, original files and review provenance; account
+identity and signed download credentials stay out of the acquisition evidence.
+An explicit `njupt-data acquire contributions` selection places a reviewed lab
+sheet in the normal `evidence/labs/<term>/` path. The normal evidence parser and
+release pipeline then apply, including stopping on undecided cells.

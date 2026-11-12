@@ -27,7 +27,8 @@ val AccountUser.roleName: String get() = when (role) { "owner" -> "所有者"; "
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
-@Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null)
+@Serializable data class UploadReceipt(val userId: String, val token: String)
+@Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null, val uploads: Map<String, UploadReceipt> = emptyMap())
 interface AccountStorage { suspend fun read(): StoredAccount; suspend fun write(value: StoredAccount) }
 data class PlatformReply(val status: Int, val body: JsonObject)
 class PlatformFailure(val status: Int, val code: String, message: String) : Exception(message)
@@ -71,6 +72,15 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     /** Every change to the stored account goes through here, so [user] always says what is stored. */
     private suspend fun keep(stored: StoredAccount) { storage.write(stored); signedIn.value = stored.session?.user }
     suspend fun current(): AccountUser? = lock.withLock { storage.read().session?.user.also { signedIn.value = it } }
+    /** Upload receipts share the account's encrypted storage and are available only to their original account. */
+    suspend fun keepUpload(id: String, token: String, owner: String) = lock.withLock {
+        val stored = storage.read()
+        val user = stored.session?.user ?: throw PlatformFailure(401, "LOGIN_REQUIRED", "请先登录。")
+        require(user.id == owner) { "登录账号已更改，请回到原账号确认上传。" }
+        keep(stored.copy(uploads = stored.uploads + (id to UploadReceipt(user.id, token))))
+    }
+    suspend fun uploadReceipt(id: String): String? = lock.withLock { val stored = storage.read(); stored.uploads[id]?.takeIf { it.userId == stored.session?.user?.id }?.token }
+    suspend fun forgetUpload(id: String) = lock.withLock { val stored = storage.read(); keep(stored.copy(uploads = stored.uploads - id)) }
     private fun checked(reply: PlatformReply): JsonObject {
         if (reply.status !in 200..299) {
             val error = reply.body["error"]?.jsonObject

@@ -25,6 +25,21 @@ class AccountClientTest {
         put("accessToken", access); put("refreshToken", refresh); put("expiresIn", 600); put("deviceSessionId", family)
         put("user", buildJsonObject { put("id", "user-id"); put("nickname", "测试成员"); put("studentId", "TEST123456"); put("totpEnabled", true) })
     })
+    @Test fun uploadReceiptsSurviveRestartAndAreIsolatedByAccount() = runBlocking {
+        val storage = Storage()
+        val transport = PlatformTransport { _, _, _ -> reply() }
+        val first = AccountClient(storage, transport)
+        first.signIn("TEST123456", "password", "", "device")
+        first.keepUpload("submission-id", "private-upload-receipt", "user-id")
+        val restarted = AccountClient(storage, transport)
+        assertEquals("private-upload-receipt", restarted.uploadReceipt("submission-id"))
+        storage.value = storage.value.copy(session = storage.value.session!!.copy(user = storage.value.session!!.user.copy(id = "other-user")))
+        assertNull(restarted.uploadReceipt("submission-id"))
+        storage.value = storage.value.copy(session = storage.value.session!!.copy(user = storage.value.session!!.user.copy(id = "user-id")))
+        assertEquals("private-upload-receipt", restarted.uploadReceipt("submission-id"))
+        restarted.forgetUpload("submission-id")
+        assertNull(restarted.uploadReceipt("submission-id"))
+    }
     @Test fun signInPersistsTokensAndDeviceButNeverPasswordOrFactor() = runBlocking {
         val storage = Storage()
         val client = AccountClient(storage, PlatformTransport { path, body, bearer ->

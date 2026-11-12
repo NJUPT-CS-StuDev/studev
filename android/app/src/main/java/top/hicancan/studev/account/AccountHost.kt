@@ -10,16 +10,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 
-@Composable fun AccountHost(campusLink: String?, content: @Composable (onAccount: () -> Unit) -> Unit) {
+@Composable fun AccountHost(campusLink: String?, content: @Composable (onAccount: () -> Unit, onContribute: () -> Unit) -> Unit) {
     val context = LocalContext.current
     val client = remember { Accounts.get(context) }
     var open by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(campusLink) { if (campusLink != null) open = false }
+    var contribute by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(campusLink) { if (campusLink != null) { open = false; contribute = android.net.Uri.parse(campusLink).path == "/contribute/" } }
     Box(Modifier.fillMaxSize()) {
-        content { open = true }
+        content({ open = true }, { contribute = true })
+        if (contribute) Surface(Modifier.fillMaxSize()) { ContributionScreen(client) { contribute = false } }
         if (open) Surface(Modifier.fillMaxSize().testTag("account-host")) {
             AccountScreen(client, onBack = { open = false })
         }
     }
     BackHandler(enabled = open) { open = false }
+    BackHandler(enabled = contribute && !open) { contribute = false }
 }

@@ -225,7 +225,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     }
 }
 
-@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onClose: () -> Unit) {
+@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onContribute: () -> Unit, onClose: () -> Unit) {
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
     if (layering) { LayerSheet(settings, model) { layering = false }; return }
@@ -263,6 +263,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 KeyRow("实验", if (on) "已放进课表" else "没有放进课表", listOfNotNull(settings.labs.drop.size.takeIf { it > 0 }?.let { "去掉 $it 门" }, settings.labs.skip.size.takeIf { it > 0 }?.let { "不上 $it 次" }).joinToString("，").ifEmpty { "学院实验中心的上机安排" }, chevron = true, onClick = { labsOpen = true })
             }
             KeyRow("叠放", settings.layers.joinToString(" › ") { KIND_NAMES.getValue(it) }, "同一时间有几件事时谁在前面", chevron = true, onClick = { layering = true })
+            KeyRow("贡献资料", "实验安排与校园勘误", "登录后提交，审核通过后整理发布", chevron = true, onClick = { onClose(); onContribute() })
             KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))

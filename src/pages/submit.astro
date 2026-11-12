@@ -1,11 +1,14 @@
 ---
 import PlatformShell from '../platform/PlatformShell.astro';
+import product from '../../product.json';
 ---
 <PlatformShell title="表单" active="forms">
   <section class="p-card">
-    <h2>在线表单</h2>
+    <h2>校园公共资料与勘误</h2>
+    <p>贡献实验安排、校园服务资料，或指出现有信息的错误。登录后提交，学生发展中心审核后整理发布。</p>
     <div class="p-actions" style="margin-top:16px">
-      <a class="p-button" href="/forms/">浏览全部表单</a>
+      <a class="p-button" href={`/fill/?id=${product.contributions.form}`}>贡献资料</a>
+      <a class="p-button secondary" href="/forms/">浏览全部表单</a>
       <a class="p-button secondary" href="/submissions/">查看我的提交</a>
     </div>
   </section>

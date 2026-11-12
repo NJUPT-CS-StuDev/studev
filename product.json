@@ -6,14 +6,15 @@
   "origin": "https://studev.hicancan.top",
   "repository": "NJUPT-CS-StuDev/studev",
   "timeZone": "Asia/Shanghai",
+  "contributions": { "form": "6156a5d3-8ae2-41d5-bd6b-3673fb39a7a6" },
   "filings": {
     "icp": "苏ICP备2026038426号-1",
     "app": "苏ICP备2026038426号-2A",
     "police": { "number": "苏公网安备32011302323214号", "code": "32011302323214" }
   },
   "android": {
-    "versionName": "2.5.3",
-    "versionCode": 40,
+    "versionName": "2.6.0",
+    "versionCode": 41,
     "minSdk": 26
   },
   "campus": {

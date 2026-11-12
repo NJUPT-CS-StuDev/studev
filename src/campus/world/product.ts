@@ -8,6 +8,7 @@ export const PRODUCT_CONFIG = {
     /** Both identities in one breath, short enough for the three lines a WeChat card shows. */
     SUMMARY: product.summary,
     TIME_ZONE: product.timeZone,
+    CONTRIBUTION_URL: `/fill/?id=${product.contributions.form}`,
     CAMPUS: product.campus,
     ORIGIN: product.origin,
     GITHUB_REPO: `https://github.com/${product.repository}`,
