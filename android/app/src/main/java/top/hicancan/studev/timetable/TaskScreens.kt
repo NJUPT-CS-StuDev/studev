@@ -80,6 +80,19 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
 
 /** One's own task: everything about it changed in place and kept at once. The same as src/campus/timetable/TaskSheet.tsx. */
 @OptIn(ExperimentalLayoutApi::class)
+/** The days most often meant, as quickDays in src/campus/timetable/TaskSheet.tsx: today, tomorrow, the day after, this Friday, next Monday. */
+private fun quickDays(today: LocalDate): List<Pair<String, LocalDate>> {
+    val weekday = today.dayOfWeek.value
+    val friday = today.plusDays(((5 - weekday + 7) % 7).toLong())
+    return listOfNotNull("今天" to today, "明天" to today.plusDays(1), "后天" to today.plusDays(2), ("周五" to friday).takeIf { friday > today.plusDays(2) }, "下周一" to today.plusDays((8 - weekday).toLong()))
+}
+
+/**
+ * One's own task, as src/campus/timetable/TaskSheet.tsx: its title edited where it stands; when it is planned, when it
+ * is due, how important it is and its course in one row, each opening its own few choices in place; then its steps
+ * and a note. Everything is kept as it is changed.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun TaskSheet(task: Task, line: CampusLine, store: TaskStore, settings: top.hicancan.studev.me.CampusSettings, top: (@Composable () -> Unit)?, onClose: () -> Unit) {
     val context = LocalContext.current
     var permissionDenied by remember { mutableStateOf(false) }
@@ -91,100 +104,111 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
     var title by remember(task.id) { mutableStateOf(task.title) }
     var note by remember(task.id) { mutableStateOf(task.note.orEmpty()) }
     var step by remember(task.id) { mutableStateOf("") }
-    var duration by remember(task.id, task.start, task.end) { mutableStateOf(if (task.start != null && task.end != null) task.end - task.start else 30) }
+    var panel by remember(task.id) { mutableStateOf<String?>(null) }
     var slots by remember(task, line.preferences) { mutableStateOf<List<TimeSlot>?>(null) }
     fun save(change: (Task) -> Task) = store.save(change(task))
     // Steps are read from the store, so a step added here shows at once.
     val all by store.all.collectAsStateWithLifecycle()
     val steps = TaskStore.live(all).filter { it.parent == task.id }
-    val courses = line.meetings.associate { TimetablePresentation.identity(it) to (line.names[TimetablePresentation.identity(it)] ?: Names.courseShort(it.course.name)) }
-    val timed = task.start != null
-    PlainSheet(task.title, { if (title.isNotBlank() && title.trim() != task.title) save { it.copy(title = title.trim()) }; onClose() }, top, Ink.paper to Ink.text) {
+    val courses = line.meetings.associate { TimetablePresentation.identity(it) to (line.names[TimetablePresentation.identity(it)] ?: Names.course(it.course.name)) }
+    val at = CampusDay.now()
+    val now = Moment(at.toLocalDate(), at.hour * 60 + at.minute)
+    fun day(value: String): String { val date = LocalDate.parse(value); val days = CampusLine.daysBetween(now.date, date); return when { days == 0 -> "今天"; days == 1 -> "明天"; days == -1 -> "昨天"; days in 2..6 -> WEEKDAYS[date.dayOfWeek.value]; else -> dateLabel(date) } }
+    val duration = if (task.start != null && task.end != null) task.end - task.start else 30
+    fun planOn(date: LocalDate) = save { it.copy(date = date.toString(), start = it.start ?: 540, end = it.end ?: ((it.start ?: 540) + duration)) }
+    fun toggle(list: List<Int>?, minutes: Int) = (if (minutes in list.orEmpty()) list.orEmpty() - minutes else list.orEmpty() + minutes).sorted().ifEmpty { null }
+    val late = task.due != null && task.done == null && (task.due.date < now.date.toString() || (task.due.date == now.date.toString() && (task.due.time ?: 1440) <= now.min))
+    val brand = Ink.brand
+    @Composable fun TagChip(text: String, set: Boolean, key: String, color: Color = Ink.text) {
+        val open = panel == key
+        Box(Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, if (open) brand else if (late && key == "due") marks().danger else if (set) Ink.faint else Ink.line, RoundedCornerShape(16.dp))
+            .clickable { panel = if (open) null else key }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Plain(text, 13.5.sp, if (open) brand else if (late && key == "due") marks().danger else if (set) color else Ink.muted)
+        }
+    }
+    @Composable fun Panel(content: @Composable ColumnScope.() -> Unit) = Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(12.dp)).background(Ink.sunken).padding(12.dp), content = content)
+    PlainSheet("", { if (title.isNotBlank() && title.trim() != task.title) save { it.copy(title = title.trim()) }; onClose() }, top) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            Field(title, "任务", big = true, onDone = { if (title.isNotBlank()) save { it.copy(title = title.trim()) } }) { title = it }
-            Plain("计划执行", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
-            FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val date = task.date?.let(LocalDate::parse)
-                Chip(date?.let { "${dateLabel(it)} ${WEEKDAYS[it.dayOfWeek.value]}" } ?: "选日期", {
-                    val at = date ?: LocalDate.now(CampusDay.zone)
-                    DatePickerDialog(context, { _, y, m, d -> save { it.copy(date = LocalDate.of(y, m + 1, d).toString(), start = it.start ?: 540) } }, at.year, at.monthValue - 1, at.dayOfMonth).show()
-                })
-                if (date != null) Chip(task.start?.let { hm(it) } ?: "加时间", {
-                    val at = task.start ?: (9 * 60)
-                    TimePickerDialog(context, { _, h, m -> save { it.copy(start = h * 60 + m, end = it.end?.takeIf { end -> end > h * 60 + m }) } }, at / 60, at % 60, true).show()
-                })
-                if (timed) Chip(task.end?.let { "到 ${hm(it)}" } ?: "加结束", {
-                    val at = (task.end ?: (task.start!! + 60)).coerceAtMost(1439)
-                    TimePickerDialog(context, { _, h, m -> val end = h * 60 + m; save { it.copy(end = end.takeIf { it > task.start!! }) } }, (at / 60) % 24, at % 60, true).show()
-                })
-                if (date != null) Chip("清除", { save { it.copy(date = null, start = null, end = null, remind = null) } })
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TaskCheck(task, store)
+                Field(title, "任务", Modifier.weight(1f), big = true, onDone = { if (title.isNotBlank()) save { it.copy(title = title.trim()) } }) { title = it }
             }
-            Picks(listOf(15 to "15 分钟", 30 to "30 分钟", 60 to "1 小时", 90 to "1.5 小时", 120 to "2 小时"), { it == duration }) { duration = it; slots = null }
-            Chip("找合适时间", {
-                val at = CampusDay.now()
-                val now = Moment(at.toLocalDate(), at.hour * 60 + at.minute)
-                val all = Planning.available(line, SlotRequest(now.date, now.date.plusDays(6), duration, exclude = task.id, due = task.due), now)
-                slots = all.take(6)
-            })
-            slots?.let { choices ->
-                if (choices.isEmpty()) Plain("截止前的未来七天内没有合适时段，可以调整用时或排程偏好。", 13.sp, Ink.muted)
-                choices.forEach { slot -> KeyRow(null, "${dateLabel(slot.date)} ${hm(slot.start)}–${hm(slot.end)}", if (slot.penalty > 0) "与 ${slot.clashes.size} 项尽量避开的安排重叠" else "符合排程偏好", onClick = { save { it.copy(date = slot.date.toString(), start = slot.start, end = slot.end) } }) }
+            FlowRow(Modifier.padding(top = 12.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TagChip(task.date?.let { "${day(it)} ${task.start?.let(::hm).orEmpty()}${task.end?.let { end -> "–${hm(end)}" }.orEmpty()}" } ?: "安排时间", task.date != null, "plan")
+                TagChip(task.due?.let { "${day(it.date)}${it.time?.let { time -> " ${hm(time)}" }.orEmpty()} 截止" } ?: "截止", task.due != null, "due")
+                TagChip(task.priority?.let { listOf("", "低", "中", "高")[it] + "优先级" } ?: "优先级", task.priority != null, "priority", task.priority?.let { if (it == 3) marks().danger else PRIORITY_COLORS[it] } ?: Ink.text)
+                if (courses.isNotEmpty()) TagChip(task.course?.let { courses[it] }?.let(Names::courseShort) ?: "课程", task.course != null, "course")
             }
-            if (task.date != null) {
-                Plain("执行提醒", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-                Picks(Tasks.TIMED_REMINDERS, { it in task.remind.orEmpty() }) { minutes ->
-                    if (minutes !in task.remind.orEmpty()) ensureNotifications()
-                    save { it.copy(remind = (if (minutes in it.remind.orEmpty()) it.remind.orEmpty() - minutes else it.remind.orEmpty() + minutes).sorted().ifEmpty { null }) }
+            when (panel) {
+                "plan" -> Panel {
+                    Picks(quickDays(now.date).mapIndexed { index, (name, _) -> index to name }, { quickDays(now.date)[it].second.toString() == task.date }) { planOn(quickDays(now.date)[it].second) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip(task.date?.let { "${dateLabel(LocalDate.parse(it))} ${WEEKDAYS[LocalDate.parse(it).dayOfWeek.value]}" } ?: "选日期", {
+                            val start = task.date?.let(LocalDate::parse) ?: now.date
+                            DatePickerDialog(context, { _, y, m, d -> planOn(LocalDate.of(y, m + 1, d)) }, start.year, start.monthValue - 1, start.dayOfMonth).show()
+                        })
+                        if (task.date != null) Chip("开始 ${hm(task.start!!)}", {
+                            TimePickerDialog(context, { _, h, m -> val start = h * 60 + m; save { it.copy(start = start, end = (start + duration).coerceAtMost(1440)) } }, task.start / 60, task.start % 60, true).show()
+                        })
+                    }
+                    if (task.date != null) {
+                        Plain("用时", 12.5.sp, Ink.muted, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
+                        Picks(listOf(15 to "15 分钟", 30 to "30 分钟", 60 to "1 小时", 90 to "1.5 小时", 120 to "2 小时"), { it == duration }) { minutes -> save { it.copy(end = (it.start!! + minutes).coerceAtMost(1440)) } }
+                        Plain("提醒", 12.5.sp, Ink.muted, modifier = Modifier.padding(bottom = 4.dp))
+                        Picks(Tasks.TIMED_REMINDERS, { it in task.remind.orEmpty() }) { minutes -> if (minutes !in task.remind.orEmpty()) ensureNotifications(); save { it.copy(remind = toggle(it.remind, minutes)) } }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip("找一段空闲", { slots = Planning.available(line, SlotRequest(now.date, now.date.plusDays(6), duration, exclude = task.id, due = task.due), now).take(6) })
+                        if (task.date != null) Chip("不安排时间", { save { it.copy(date = null, start = null, end = null, remind = null) } })
+                    }
+                    slots?.let { choices ->
+                        if (choices.isEmpty()) Plain("截止前的七天里没有合适的空闲，可以缩短用时。", 13.sp, Ink.muted, modifier = Modifier.padding(top = 8.dp))
+                        choices.forEach { slot -> KeyRow(null, "${day(slot.date.toString())} ${hm(slot.start)}–${hm(slot.end)}", if (slot.penalty > 0) "与 ${slot.clashes.size} 项尽量避开的安排重叠" else "这段时间没有别的安排", chevron = true, onClick = { save { it.copy(date = slot.date.toString(), start = slot.start, end = slot.end) }; slots = null }) }
+                    }
+                }
+                "due" -> Panel {
+                    Picks(quickDays(now.date).mapIndexed { index, (name, _) -> index to name }, { quickDays(now.date)[it].second.toString() == task.due?.date }) { index -> save { it.copy(due = (it.due ?: TaskDeadline("")).copy(date = quickDays(now.date)[index].second.toString())) } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip(task.due?.date?.let { dateLabel(LocalDate.parse(it)) } ?: "选日期", {
+                            val start = task.due?.date?.let(LocalDate::parse) ?: now.date
+                            DatePickerDialog(context, { _, y, m, d -> save { it.copy(due = (it.due ?: TaskDeadline("")).copy(date = LocalDate.of(y, m + 1, d).toString())) } }, start.year, start.monthValue - 1, start.dayOfMonth).show()
+                        })
+                        if (task.due != null) Chip(task.due.time?.let { "时间 ${hm(it)}" } ?: "当天结束前", {
+                            val time = task.due.time ?: (18 * 60)
+                            TimePickerDialog(context, { _, h, m -> save { it.copy(due = it.due?.copy(time = h * 60 + m, remind = null)) } }, time / 60, time % 60, true).show()
+                        })
+                    }
+                    task.due?.let { due ->
+                        Plain("提醒", 12.5.sp, Ink.muted, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
+                        Picks(if (due.time == null) Tasks.DAY_REMINDERS else Tasks.TIMED_REMINDERS, { it in due.remind.orEmpty() }) { minutes -> if (minutes !in due.remind.orEmpty()) ensureNotifications(); save { it.copy(due = it.due?.copy(remind = toggle(it.due.remind, minutes))) } }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (due.time != null) Chip("改为当天结束前", { save { it.copy(due = it.due?.copy(time = null, remind = null)) } })
+                            Chip("不设截止", { save { it.copy(due = null) } })
+                        }
+                    }
+                }
+                "priority" -> Panel { Picks(listOf(0 to "无", 1 to "低", 2 to "中", 3 to "高"), { (task.priority ?: 0) == it }) { value -> save { it.copy(priority = value.takeIf { it > 0 }) }; panel = null } }
+                "course" -> Panel {
+                    val keys = courses.keys.toList()
+                    Picks(listOf(-1 to "不属于哪门课") + keys.mapIndexed { index, key -> index to Names.courseShort(courses.getValue(key)) }, { if (it < 0) task.course == null else task.course == keys[it] }) { index -> save { it.copy(course = if (index < 0) null else keys[index]) }; panel = null }
                 }
             }
-            Plain("截止时间", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val date = task.due?.date?.let(LocalDate::parse)
-                Chip(date?.let { dateLabel(it) } ?: "选截止日期", {
-                    val at = date ?: LocalDate.now(CampusDay.zone)
-                    DatePickerDialog(context, { _, y, m, d -> save { it.copy(due = (it.due ?: TaskDeadline("")).copy(date = LocalDate.of(y, m + 1, d).toString())) } }, at.year, at.monthValue - 1, at.dayOfMonth).show()
-                })
-                if (date != null) {
-                    Chip(task.due?.time?.let(::hm) ?: "当天结束", {
-                        val at = task.due?.time ?: 18 * 60
-                        TimePickerDialog(context, { _, h, m -> save { it.copy(due = it.due?.copy(time = h * 60 + m, remind = null)) } }, at / 60, at % 60, true).show()
-                    })
-                    if (task.due?.time != null) Chip("改为当天结束", { save { it.copy(due = it.due?.copy(time = null, remind = null)) } })
-                    Chip("清除截止", { save { it.copy(due = null) } })
-                }
-            }
-            task.due?.let { due ->
-                Plain("截止提醒", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-                Picks(if (due.time == null) Tasks.DAY_REMINDERS else Tasks.TIMED_REMINDERS, { it in due.remind.orEmpty() }) { minutes ->
-                    if (minutes !in due.remind.orEmpty()) ensureNotifications()
-                    save { it.copy(due = it.due?.copy(remind = (if (minutes in due.remind.orEmpty()) due.remind.orEmpty() - minutes else due.remind.orEmpty() + minutes).sorted().ifEmpty { null })) }
-                }
-            }
-            EventChoices(taskEvent(task, LocalDate.now(CampusDay.zone)), line, settings)
             if (permissionDenied) Plain("通知权限尚未开启，请在系统设置中允许 StuDev 通知。", 13.sp, marks().danger)
-            Plain("优先级", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
-            Picks(listOf(0 to "无", 1 to "低", 2 to "中", 3 to "高"), { (task.priority ?: 0) == it }) { value -> save { it.copy(priority = value.takeIf { it > 0 }) } }
-            if (courses.isNotEmpty()) {
-                Plain("课程", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
-                val keys = courses.keys.toList()
-                Picks(listOf(-1 to "不属于哪门课") + keys.mapIndexed { index, key -> index to courses.getValue(key) }, { if (it < 0) task.course == null else task.course == keys[it] }) { index ->
-                    save { it.copy(course = if (index < 0) null else keys[index]) }
-                }
-            }
-            Plain("步骤", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
             steps.forEach { item ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().bottomHairline(Ink.line).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TaskCheck(item, store)
                     Title(item, Modifier.weight(1f))
-                    Plain("删除", 13.sp, Ink.muted, modifier = Modifier.clickable { store.delete(item.id) })
+                    Plain("×", 16.sp, Ink.faint, modifier = Modifier.clickable { store.delete(item.id) }.padding(horizontal = 6.dp))
                 }
             }
-            Field(step, "加一个步骤，回车", onDone = { if (step.isNotBlank()) { store.save(Task(store.newId(), step.trim(), parent = task.id, modified = "")); step = "" } }) { step = it }
-            Plain("备注", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-            Field(note, "", single = false, modifier = Modifier.heightIn(min = 72.dp)) { note = it; save { current -> current.copy(note = it.trim().ifEmpty { null }) } }
+            Field(step, "+ 添加步骤", Modifier.padding(top = 6.dp), onDone = { if (step.isNotBlank()) { store.save(Task(store.newId(), step.trim(), parent = task.id, modified = "")); step = "" } }) { step = it }
+            Field(note, "备注", Modifier.padding(top = 10.dp).heightIn(min = 72.dp), single = false) { note = it; save { current -> current.copy(note = it.trim().ifEmpty { null }) } }
+            var more by remember(task.id) { mutableStateOf(false) }
+            Plain(if (more) "更多 ⌃" else "更多 ⌄", 13.sp, Ink.muted, modifier = Modifier.padding(top = 12.dp).clickable { more = !more })
+            if (more) EventChoices(taskEvent(task, now.date), line, settings)
             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("删除", modifier = Modifier.weight(1f)) { store.delete(task.id); onClose() }
-                ActionButton(if (task.done != null) "标为未完成" else "完成", go = true, modifier = Modifier.weight(1f)) { store.toggleDone(task) }
+                ActionButton(if (task.done != null) "标为未完成" else "完成", go = true, modifier = Modifier.weight(1f)) { store.toggleDone(task); if (task.done == null) onClose() }
             }
         }
     }

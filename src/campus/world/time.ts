@@ -14,6 +14,11 @@ export const hm = (minutes: number) => `${pad(Math.floor(minutes / 60))}:${pad(m
 export const minutesOf = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
 export const WEEKDAYS = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const;
 export const dateLabel = (date: string) => `${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日`;
+/** A day as a list says it, seen from `today`: 今天, 明天, 昨天, 周五 within the week ahead, 11月20日 beyond it. */
+export const dayWord = (date: string, today: string) => {
+    const days = daysBetween(today, date);
+    return days === 0 ? '今天' : days === 1 ? '明天' : days === -1 ? '昨天' : days > 1 && days < 7 ? WEEKDAYS[weekdayOf(date)]! : dateLabel(date);
+};
 export const durationText = (minutes: number) => minutes >= 60
     ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分` : ''}`
     : `${minutes} 分钟`;

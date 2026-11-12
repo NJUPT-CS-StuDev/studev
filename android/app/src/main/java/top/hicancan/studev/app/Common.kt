@@ -91,10 +91,11 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Ink.paper, shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp), dragHandle = null, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(top = if (top != null) 12.dp else if (head != null) 0.dp else 18.dp, bottom = 24.dp).navigationBarsPadding()) {
             if (top != null) Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp)) { top() }
-            Box(Modifier.fillMaxWidth().then(if (head != null) Modifier.background(head.first).padding(vertical = 14.dp) else Modifier).padding(horizontal = 20.dp)) {
+            // A sheet whose content names itself (a task, its title editable) has no title row.
+            if (title.isNotEmpty()) Box(Modifier.fillMaxWidth().then(if (head != null) Modifier.background(head.first).padding(vertical = 14.dp) else Modifier).padding(horizontal = 20.dp)) {
                 Plain(title, 20.sp, head?.second ?: Ink.text, weight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
             }
-            Column(Modifier.padding(horizontal = 20.dp).padding(top = if (head != null) 12.dp else 0.dp)) { content() }
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = if (head != null && title.isNotEmpty()) 12.dp else 0.dp)) { content() }
         }
     }
 }

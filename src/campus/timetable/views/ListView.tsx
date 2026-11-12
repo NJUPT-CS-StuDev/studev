@@ -6,7 +6,7 @@ import { eventsOn, upcomingExams, type CampusEvent, type Timeline } from '@/worl
 import { courseIdentity } from '@/timetable/model/courseColors';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { DROP_GROUPS, moveTask, newTaskId, parseQuickTask, saveTask, saveTasks, taskGroup, taskOrder, TASK_GROUPS, toggleDone, type QuickTask, type Task, type TaskGroup } from '@/world/tasks';
-import { dateLabel, daysBetween, hm, minutesOf, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
+import { dayWord as dayOf, daysBetween, hm, minutesOf, type Moment } from '@/world/time';
 import { Chevron } from '@/world/ui';
 import { readHints, suggestTasks, TASK_EXAMPLES, writeHints } from '@/world/suggestions';
 
@@ -14,11 +14,7 @@ const examGroup = (date: string, now: Moment): TaskGroup => {
     const days = daysBetween(now.date, date);
     return days === 0 ? 'today' : days === 1 ? 'tomorrow' : days <= 7 ? 'week' : 'later';
 };
-/** A day as a list says it: 今天, 明天, 周五 within the week, 11/20 beyond it. */
-const dayWord = (date: string, now: Moment) => {
-    const days = daysBetween(now.date, date);
-    return days === 0 ? '今天' : days === 1 ? '明天' : days === -1 ? '昨天' : days > 1 && days < 7 ? WEEKDAYS[weekdayOf(date)]! : dateLabel(date);
-};
+const dayWord = (date: string, now: Moment) => dayOf(date, now.date);
 /** What a row says on its right: when it is planned, and when it is due; red once it is late. */
 function whenOf(task: Task, now: Moment): { text: string; tone: '' | 'late' | 'today' } {
     const parts: string[] = [];
