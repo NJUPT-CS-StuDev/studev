@@ -43,7 +43,7 @@ $sha1 = ($sha1Match.Groups[1].Value -replace '[^0-9A-Fa-f]', '').ToUpperInvarian
 if ($sha1.Length -eq 40) { $sha1 = ($sha1 -split '(?<=\G..)(?=.)') -join ':' }
 if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificate SHA-1 prefix: $sha1" }
 
-$tempBase = [System.IO.Path]::GetFullPath('D:\Temp\claude-wsl')
+$tempBase = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd([char[]]'\/')
 $tempRoot = Join-Path $tempBase ("studev-apk-release-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 $fullApk = Join-Path $tempRoot "studev-$versionName.apk"

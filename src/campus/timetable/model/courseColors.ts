@@ -47,8 +47,8 @@ export const sameCourse = (left: CourseIdentityInput, right: CourseIdentityInput
 /** The course a lab's colour and links follow: that of the lesson it belongs to, or its own. */
 export const linkedCourse = (lab: CourseIdentityInput, meetings: CourseIdentityInput[]) => meetings.find(meeting => sameCourse(lab, meeting)) ?? lab;
 /** One timetable's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
-export const timelineTones = (line: { meetings: (CourseIdentityInput & { weekday: number })[]; labs: (CourseIdentityInput & { weekday: number })[] }) =>
-    courseTones([...line.meetings, ...line.labs.map(lab => ({ course: linkedCourse(lab, line.meetings).course, weekday: lab.weekday }))]);
+export const timelineTones = (line: { meetings: (CourseIdentityInput & { weekday: number })[]; labs: (CourseIdentityInput & { weekday: number })[]; courseMeetings?: CourseIdentityInput[] }) =>
+    courseTones([...line.meetings, ...line.labs.map(lab => ({ course: linkedCourse(lab, line.courseMeetings ?? line.meetings).course, weekday: lab.weekday }))]);
 /** The tone of something on a timeline: a lesson's own, a lab its course's. */
 export const eventTone = (tones: Map<string, number>, event: { meeting?: CourseIdentityInput; lab?: CourseIdentityInput }, meetings: CourseIdentityInput[]) =>
     event.meeting ? tones.get(courseIdentity(event.meeting)) : event.lab ? tones.get(courseIdentity(linkedCourse(event.lab, meetings))) : undefined;

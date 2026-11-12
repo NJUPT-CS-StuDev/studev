@@ -13,6 +13,8 @@ export const unplaced = (room: string | null | undefined) => !room || !room.incl
 export const isRoom = (room: string | null | undefined) => Boolean(room) && /[/:]/.test(room!);
 export const roomLabel = (room: string | null | undefined) => (room ?? '').replace(/^[^/:]*[/:]/, '').replaceAll('/', ' ');
 export const roomShort = (room: string | null | undefined) => roomLabel(room).replace(/^教/, '');
+/** Tight tiles keep the building and the first room; the detail keeps every room. */
+export const compactPlace = (place: string) => place.replace(/\d+(?:\/\d+){2,}/g, rooms => `${rooms.split('/')[0]}等${rooms.split('/').length}间`);
 /** The building of a room id; the id itself when it is not a room. */
 export const buildingOf = (id: string) => {
     const slash = id.indexOf('/');

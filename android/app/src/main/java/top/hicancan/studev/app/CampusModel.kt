@@ -157,11 +157,18 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
           catch (_: Exception) { tell("课程目录尚未下载，修改已保存；请联网打开课表后重试。现有日历和提醒保持不变。") }
         }
     }
-    /** The labs follow the timetable just settled: whatever was taken off or added decides them. */
+    /** Lab sources are selected independently of lecture attendance. */
     private suspend fun loadLabs(repo: AcademicRepository, klass: String?) {
-        val (raw, effective) = state.value.let { it.rawSchedule to it.schedule }
-        val labs = if (klass != null && raw != null && effective != null) repo.personalLabs(klass, raw, effective) else emptyList()
+        val effective = state.value.schedule
+        val labs = if (klass != null) repo.personalLabs(klass, settings.state.value.labs) else emptyList()
+        val choices = settings.state.value.labs
+        val migrated = CourseCatalog.migrateLabChoices(labs, choices)
+        if (migrated != choices) settings.update { it.copy(labs = CourseCatalog.migrateLabChoices(labs, it.labs)) }
         _state.update { now -> if (now.repository === repo && settings.state.value.klass == klass && now.schedule === effective) now.copy(labs = labs) else now }
+    }
+    fun setLabs(change: (top.hicancan.studev.me.LabChoices) -> top.hicancan.studev.me.LabChoices) {
+        settings.update { it.copy(labs = change(it.labs)) }
+        viewModelScope.launch { state.value.repository?.let { loadLabs(it, settings.state.value.klass) }; syncPhone() }
     }
     fun addTeachingClass(id: String) = applyTimetableChange { it.copy(added = (it.added + id).distinct()) }
     fun removeCourse(id: String) = applyTimetableChange { edits ->
@@ -195,7 +202,8 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
         return Courses.named(CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.schedule, state.exams), state.holidays,
-            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) }, tasks), settings.timetableEdits(term.term).names)
+            state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) }, tasks,
+            courseMeetings = (state.rawSchedule?.meetings.orEmpty() + state.schedule?.meetings.orEmpty()).distinctBy { it.id }), settings.timetableEdits(term.term).names, settings.events)
     }
     private var allMeetings: Deferred<List<TeachingMeeting>>? = null
     /** Every meeting of the term, for viewing a teacher, a course or a room. */

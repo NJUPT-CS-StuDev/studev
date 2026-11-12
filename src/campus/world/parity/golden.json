@@ -1,4 +1,499 @@
 {
+ "semantics": {
+  "migration": [
+   {
+    "before": {
+     "id": "old-day",
+     "title": "交作业",
+     "date": "2026-11-13",
+     "remind": [
+      480
+     ],
+     "modified": "2026-11-12T15:00:00Z"
+    },
+    "after": {
+     "id": "old-day",
+     "title": "交作业",
+     "modified": "2026-11-12T15:00:00Z",
+     "due": {
+      "date": "2026-11-13",
+      "remind": [
+       480
+      ]
+     }
+    }
+   },
+   {
+    "before": {
+     "id": "a",
+     "title": "交毛概作业",
+     "date": "2026-11-10",
+     "start": 840,
+     "remind": [
+      15,
+      1440
+     ],
+     "modified": "m"
+    },
+    "after": {
+     "id": "a",
+     "title": "交毛概作业",
+     "date": "2026-11-10",
+     "start": 840,
+     "remind": [
+      15,
+      1440
+     ],
+     "modified": "m"
+    }
+   }
+  ],
+  "labMigration": [
+   {
+    "before": {
+     "drop": [
+      "JS102K03C"
+     ]
+    },
+    "after": {
+     "drop": [
+      "实验实践课程上机安排（1、2、3、4楼）:云计算"
+     ]
+    }
+   }
+  ],
+  "frames": [
+   {
+    "tasks": [],
+    "expected": [
+     476,
+     1268
+    ]
+   },
+   {
+    "tasks": [
+     {
+      "id": "early",
+      "title": "早起",
+      "date": "2026-11-09",
+      "start": 0,
+      "end": 30,
+      "modified": "m"
+     },
+     {
+      "id": "late",
+      "title": "晚间复习",
+      "date": "2026-11-09",
+      "start": 1410,
+      "modified": "m"
+     }
+    ],
+    "expected": [
+     0,
+     1440
+    ]
+   }
+  ],
+  "dueReminders": [
+   {
+    "id": "b",
+    "remind": 60,
+    "at": {
+     "date": "2026-11-13",
+     "min": 1379
+    }
+   },
+   {
+    "id": "b",
+    "remind": 1440,
+    "at": {
+     "date": "2026-11-12",
+     "min": 1439
+    }
+   },
+   {
+    "id": "c",
+    "remind": 480,
+    "at": {
+     "date": "2026-11-13",
+     "min": 480
+    }
+   }
+  ],
+  "scheduleDate": "2026-11-09",
+  "now": {
+   "date": "2026-11-09",
+   "min": 480
+  },
+  "request": {
+   "from": "2026-11-09",
+   "to": "2026-11-09",
+   "minutes": 30,
+   "earliest": 590,
+   "latest": 685
+  },
+  "cases": [
+   {
+    "mode": "must",
+    "preferences": {
+     "2026-2027-1:class:6ef4c8163aff1b19@2026-11-09": {
+      "avoid": "must"
+     },
+     "2026-2027-1:lab:e2bd2b7ca6169f11": {
+      "avoid": "must"
+     },
+     "2026-2027-1:lab:e45f70a06b9af869": {
+      "avoid": "must"
+     },
+     "2026-2027-1:class:513d8d51f8a241b3@2026-11-09": {
+      "avoid": "must"
+     }
+    },
+    "events": [
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "avoid": "must",
+      "layer": 0
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "avoid": "must",
+      "layer": 0
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "avoid": "must",
+      "layer": 0
+     },
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "avoid": "must",
+      "layer": 0
+     }
+    ],
+    "layers": [
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "under": 0,
+      "over": 1
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "under": 1,
+      "over": 0
+     }
+    ],
+    "slots": []
+   },
+   {
+    "mode": "prefer",
+    "preferences": {
+     "2026-2027-1:class:6ef4c8163aff1b19@2026-11-09": {
+      "avoid": "prefer"
+     },
+     "2026-2027-1:lab:e2bd2b7ca6169f11": {
+      "avoid": "prefer"
+     },
+     "2026-2027-1:lab:e45f70a06b9af869": {
+      "avoid": "prefer"
+     },
+     "2026-2027-1:class:513d8d51f8a241b3@2026-11-09": {
+      "avoid": "prefer"
+     }
+    },
+    "events": [
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "avoid": "prefer",
+      "layer": 0
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "avoid": "prefer",
+      "layer": 0
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "avoid": "prefer",
+      "layer": 0
+     },
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "avoid": "prefer",
+      "layer": 0
+     }
+    ],
+    "layers": [
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "under": 0,
+      "over": 1
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "under": 1,
+      "over": 0
+     }
+    ],
+    "slots": [
+     {
+      "date": "2026-11-09",
+      "start": 590,
+      "end": 620,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     },
+     {
+      "date": "2026-11-09",
+      "start": 600,
+      "end": 630,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     },
+     {
+      "date": "2026-11-09",
+      "start": 615,
+      "end": 645,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     },
+     {
+      "date": "2026-11-09",
+      "start": 630,
+      "end": 660,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     }
+    ]
+   },
+   {
+    "mode": "allow",
+    "preferences": {
+     "2026-2027-1:class:6ef4c8163aff1b19@2026-11-09": {
+      "avoid": "allow"
+     },
+     "2026-2027-1:lab:e2bd2b7ca6169f11": {
+      "avoid": "allow"
+     },
+     "2026-2027-1:lab:e45f70a06b9af869": {
+      "avoid": "allow"
+     },
+     "2026-2027-1:class:513d8d51f8a241b3@2026-11-09": {
+      "avoid": "allow"
+     }
+    },
+    "events": [
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "avoid": "allow",
+      "layer": 0
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "avoid": "allow",
+      "layer": 0
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "avoid": "allow",
+      "layer": 0
+     },
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "avoid": "allow",
+      "layer": 0
+     }
+    ],
+    "layers": [
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "under": 0,
+      "over": 1
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "under": 1,
+      "over": 0
+     }
+    ],
+    "slots": [
+     {
+      "date": "2026-11-09",
+      "start": 590,
+      "end": 620,
+      "clashes": [],
+      "penalty": 0
+     },
+     {
+      "date": "2026-11-09",
+      "start": 600,
+      "end": 630,
+      "clashes": [],
+      "penalty": 0
+     },
+     {
+      "date": "2026-11-09",
+      "start": 615,
+      "end": 645,
+      "clashes": [],
+      "penalty": 0
+     },
+     {
+      "date": "2026-11-09",
+      "start": 630,
+      "end": 660,
+      "clashes": [],
+      "penalty": 0
+     }
+    ]
+   },
+   {
+    "mode": "layer-only",
+    "preferences": {
+     "2026-2027-1:class:6ef4c8163aff1b19@2026-11-09": {
+      "layer": 1
+     },
+     "2026-2027-1:lab:e2bd2b7ca6169f11": {
+      "layer": 2
+     },
+     "2026-2027-1:lab:e45f70a06b9af869": {
+      "layer": 3
+     },
+     "2026-2027-1:class:513d8d51f8a241b3@2026-11-09": {
+      "layer": 4
+     }
+    },
+    "events": [
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "avoid": "prefer",
+      "layer": 1
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "avoid": "prefer",
+      "layer": 3
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "avoid": "prefer",
+      "layer": 2
+     },
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "avoid": "prefer",
+      "layer": 4
+     }
+    ],
+    "layers": [
+     {
+      "id": "6ef4c8163aff1b19@2026-11-09",
+      "under": 0,
+      "over": 0
+     },
+     {
+      "id": "e2bd2b7ca6169f11",
+      "under": 0,
+      "over": 1
+     },
+     {
+      "id": "e45f70a06b9af869",
+      "under": 1,
+      "over": 0
+     },
+     {
+      "id": "513d8d51f8a241b3@2026-11-09",
+      "under": 0,
+      "over": 0
+     }
+    ],
+    "slots": [
+     {
+      "date": "2026-11-09",
+      "start": 590,
+      "end": 620,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     },
+     {
+      "date": "2026-11-09",
+      "start": 600,
+      "end": 630,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     },
+     {
+      "date": "2026-11-09",
+      "start": 615,
+      "end": 645,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     },
+     {
+      "date": "2026-11-09",
+      "start": 630,
+      "end": 660,
+      "clashes": [
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869"
+      ],
+      "penalty": 60
+     }
+    ]
+   }
+  ]
+ },
  "courses": {
   "custom": {
    "id": "x1",
@@ -56,6 +551,1561 @@
   "names": {
    "JS102K03C": "自己起的名",
    "ZJ1001T0C": "另一个名"
+  },
+  "hidden": {
+   "meetings": [
+    {
+     "id": "cb6ab3f78e0c81e0",
+     "course": {
+      "code": "ZJ1001T0C",
+      "name": "就业指导",
+      "category": "通识教育课",
+      "nature": "必修",
+      "credits": 0.5,
+      "hours": 8,
+      "hours_composition": "理论:8,实验:8",
+      "assessment": "考查",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/09842fe04256279f",
+      "size": 131
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-313",
+     "location": "教3－313",
+     "weekday": 1,
+     "periods": [
+      6,
+      7
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "檀军",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4
+       ],
+       "id": "teacher/f57fe6f49f250ecd"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "2c56bb4a8bcfe5f0",
+     "course": {
+      "code": "MY1021T0S",
+      "name": "习近平新时代中国特色社会主义思想概论",
+      "category": "通识教育课",
+      "nature": "必修",
+      "credits": 2,
+      "hours": 40,
+      "hours_composition": "理论:32",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/dccc8281d11f4d26",
+      "size": 131
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-302",
+     "location": "教3－302",
+     "weekday": 2,
+     "periods": [
+      8,
+      9
+     ],
+     "weeks": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "张振亮",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/bf3dc7309f922583"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "a393da8e8ef19d19",
+     "course": {
+      "code": "MY1002T0S",
+      "name": "毛泽东思想和中国特色社会主义理论体系概论",
+      "category": "通识教育课",
+      "nature": "必修",
+      "credits": 2,
+      "hours": 32,
+      "hours_composition": "理论:32",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/2d9596229c091fd7",
+      "size": 131
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-302",
+     "location": "教3－302",
+     "weekday": 2,
+     "periods": [
+      8,
+      9
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "张振亮",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "id": "teacher/bf3dc7309f922583"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "9b5883de9f12eb8f",
+     "course": {
+      "code": "MY1002T0S",
+      "name": "毛泽东思想和中国特色社会主义理论体系概论",
+      "category": "通识教育课",
+      "nature": "必修",
+      "credits": 2,
+      "hours": 32,
+      "hours_composition": "理论:32",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/2d9596229c091fd7",
+      "size": 131
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-302",
+     "location": "教3－302",
+     "weekday": 3,
+     "periods": [
+      6,
+      7
+     ],
+     "weeks": [
+      8
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "张振亮",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        8
+       ],
+       "id": "teacher/bf3dc7309f922583"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "4cbf73b266261374",
+     "course": {
+      "code": "MY1021T0S",
+      "name": "习近平新时代中国特色社会主义思想概论",
+      "category": "通识教育课",
+      "nature": "必修",
+      "credits": 2,
+      "hours": 40,
+      "hours_composition": "理论:32",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/dccc8281d11f4d26",
+      "size": 131
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-302",
+     "location": "教3－302",
+     "weekday": 5,
+     "periods": [
+      6,
+      7
+     ],
+     "weeks": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "张振亮",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/bf3dc7309f922583"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "da330f6d4593e420",
+     "course": {
+      "code": "MY1002T0S",
+      "name": "毛泽东思想和中国特色社会主义理论体系概论",
+      "category": "通识教育课",
+      "nature": "必修",
+      "credits": 2,
+      "hours": 32,
+      "hours_composition": "理论:32",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/2d9596229c091fd7",
+      "size": 131
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-302",
+     "location": "教3－302",
+     "weekday": 5,
+     "periods": [
+      6,
+      7
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "张振亮",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "id": "teacher/bf3dc7309f922583"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "513d8d51f8a241b3",
+     "course": {
+      "code": "JS112300S",
+      "name": "Web技术（双语）",
+      "category": "专业基础课",
+      "nature": "限选",
+      "credits": 2.5,
+      "hours": 54,
+      "hours_composition": "理论:32,实验:8",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/5a8fc4eff9672e53",
+      "size": 163
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-312",
+     "location": "教3－312",
+     "weekday": 1,
+     "periods": [
+      8,
+      9
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "李莉",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/c9f134c05b374de5"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "70421b5776f809a9",
+     "course": {
+      "code": "JS112300S",
+      "name": "Web技术（双语）",
+      "category": "专业基础课",
+      "nature": "限选",
+      "credits": 2.5,
+      "hours": 54,
+      "hours_composition": "理论:32,实验:8",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/5a8fc4eff9672e53",
+      "size": 163
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-312",
+     "location": "教4－312",
+     "weekday": 5,
+     "periods": [
+      1,
+      2
+     ],
+     "weeks": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "李莉",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18
+       ],
+       "id": "teacher/c9f134c05b374de5"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "d3dc484de95aa201",
+     "course": {
+      "code": "JS113701S",
+      "name": "Linux编程",
+      "category": "专业基础课",
+      "nature": "限选",
+      "credits": 2,
+      "hours": 36,
+      "hours_composition": "理论:26,实验:6",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/741da57b2f2ea2eb",
+      "size": 316
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-313",
+     "location": "教4－313",
+     "weekday": 3,
+     "periods": [
+      8,
+      9
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "王磊",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/69732714fec99932"
+      }
+     ],
+     "classes": [
+      "B240400",
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404",
+      "B240405",
+      "B240406",
+      "B240407",
+      "B240408",
+      "B240409"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "6ef4c8163aff1b19",
+     "course": {
+      "code": "JS160201S",
+      "name": "计算机通信与网络（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3.5,
+      "hours": 72,
+      "hours_composition": "理论:48,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/04467dfbb864646b",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-312",
+     "location": "教4－312",
+     "weekday": 1,
+     "periods": [
+      1,
+      2
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "周浩",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/78ec9b024e5c09dc"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "a3aabb82f960bc3d",
+     "course": {
+      "code": "JS140301S",
+      "name": "操作系统基础（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3,
+      "hours": 54,
+      "hours_composition": "理论:40,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/a57b8623a5acb364",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教3-410",
+     "location": "教3－410",
+     "weekday": 2,
+     "periods": [
+      6,
+      7
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "窦轶",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/c0d5e58512565852"
+      },
+      {
+       "name": "陈靓",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/de17173df638c24b"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "30d5a6ba07fa58a1",
+     "course": {
+      "code": "JS140801S",
+      "name": "计算机组成原理（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3.5,
+      "hours": 72,
+      "hours_composition": "理论:48,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/eb25723382c3d414",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-312",
+     "location": "教4－312",
+     "weekday": 3,
+     "periods": [
+      1,
+      2
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "业苇渡",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/828868d04ce3cec2"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "231eab9bebe39686",
+     "course": {
+      "code": "JS140301S",
+      "name": "操作系统基础（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3,
+      "hours": 54,
+      "hours_composition": "理论:40,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/a57b8623a5acb364",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-309",
+     "location": "教4－309",
+     "weekday": 4,
+     "periods": [
+      6,
+      7
+     ],
+     "weeks": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "窦轶",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18
+       ],
+       "id": "teacher/c0d5e58512565852"
+      },
+      {
+       "name": "陈靓",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18
+       ],
+       "id": "teacher/de17173df638c24b"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "e7ba5e0e1e87440e",
+     "course": {
+      "code": "JS160201S",
+      "name": "计算机通信与网络（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3.5,
+      "hours": 72,
+      "hours_composition": "理论:48,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/04467dfbb864646b",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-313",
+     "location": "教4－313",
+     "weekday": 4,
+     "periods": [
+      8,
+      9
+     ],
+     "weeks": [
+      1,
+      2,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "周浩",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/78ec9b024e5c09dc"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "592bce89717783d3",
+     "course": {
+      "code": "JS140801S",
+      "name": "计算机组成原理（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3.5,
+      "hours": 72,
+      "hours_composition": "理论:48,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/eb25723382c3d414",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-312",
+     "location": "教4－312",
+     "weekday": 5,
+     "periods": [
+      3,
+      4
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "业苇渡",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/828868d04ce3cec2"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "24f803fa46753b50",
+     "course": {
+      "code": "JS160201S",
+      "name": "计算机通信与网络（混合式）",
+      "category": "专业基础课",
+      "nature": "必修",
+      "credits": 3.5,
+      "hours": 72,
+      "hours_composition": "理论:48,实验:8,线上:16",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/04467dfbb864646b",
+      "size": 100
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-313",
+     "location": "教4－313",
+     "weekday": 5,
+     "periods": [
+      8,
+      9
+     ],
+     "weeks": [
+      3
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "周浩",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        3
+       ],
+       "id": "teacher/78ec9b024e5c09dc"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "c882dbfbe1d6270c",
+     "course": {
+      "code": "JS114201S",
+      "name": "信息安全技术",
+      "category": "专业课",
+      "nature": "限选",
+      "credits": 2,
+      "hours": 36,
+      "hours_composition": "理论:28,实验:4",
+      "assessment": "考试",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/011519af60a5cdcc",
+      "size": 285
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-101",
+     "location": "教4－101",
+     "weekday": 2,
+     "periods": [
+      1,
+      2
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "张波",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/b2fce3c6b18d2a06"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404",
+      "B240405",
+      "B240406",
+      "B240407",
+      "B240408",
+      "B240409"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "4c1486efb0efdcc0",
+     "course": {
+      "code": "JS113102C",
+      "name": "计算机图形学（全英文）",
+      "category": "专业基础课",
+      "nature": "限选",
+      "credits": 2,
+      "hours": 36,
+      "hours_composition": "理论:28,实验:4",
+      "assessment": "考查",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/09c203ffcec37c56",
+      "size": 285
+     },
+     "campus": "仙林",
+     "room": "仙林:教4-409",
+     "location": "教4－409",
+     "weekday": 4,
+     "periods": [
+      1,
+      2
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "黄睿",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/50bfc4bd4ff7857e"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404",
+      "B240405",
+      "B240406",
+      "B240407",
+      "B240408",
+      "B240409"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "d0297e3cee2ec732",
+     "course": {
+      "code": "JS115301C",
+      "name": "单片机原理及系统设计",
+      "category": "专业课",
+      "nature": "限选",
+      "credits": 2,
+      "hours": 36,
+      "hours_composition": "理论:28,实验:4",
+      "assessment": "考查",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/29d87907f30f0254",
+      "size": 285
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-103",
+     "location": "教4－103",
+     "weekday": 4,
+     "periods": [
+      3,
+      4
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "倪晓军",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+       ],
+       "id": "teacher/01af4cfc00699581"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404",
+      "B240405",
+      "B240406",
+      "B240407",
+      "B240408",
+      "B240409"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    },
+    {
+     "id": "93aa8dcca112a51c",
+     "course": {
+      "code": "JS116K01C",
+      "name": "嵌入式手机终端开发技术",
+      "category": "专业课",
+      "nature": "限选",
+      "credits": 2,
+      "hours": 48,
+      "hours_composition": "理论:14,实验:18",
+      "assessment": "考查",
+      "exam": null
+     },
+     "teaching_class": {
+      "id": "teaching-class/136527b0bf1077e6",
+      "size": 285
+     },
+     "campus": "仙林",
+     "room": "仙林/教4-208",
+     "location": "教4－208",
+     "weekday": 6,
+     "periods": [
+      1,
+      4
+     ],
+     "weeks": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ],
+     "method": "面授讲课",
+     "teachers": [
+      {
+       "name": "易云山",
+       "title": null,
+       "role": "主讲",
+       "weeks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+       ],
+       "id": "teacher/8f5d86f722645430"
+      }
+     ],
+     "classes": [
+      "B240401",
+      "B240402",
+      "B240403",
+      "B240404",
+      "B240405",
+      "B240406",
+      "B240407",
+      "B240408",
+      "B240409"
+     ],
+     "kind": "event",
+     "subtype": "meeting"
+    }
+   ],
+   "names": {
+    "JS102K03C": "自己的名（老师）"
+   },
+   "date": "2026-09-17",
+   "events": [
+    {
+     "kind": "class",
+     "name": "计算机图形学",
+     "short": "图形学",
+     "start": 480,
+     "end": 575,
+     "room": "仙林:教4-409",
+     "id": "4c1486efb0efdcc0@2026-09-17",
+     "lab": null
+    },
+    {
+     "kind": "class",
+     "name": "单片机原理及系统设计",
+     "short": "单片机",
+     "start": 590,
+     "end": 685,
+     "room": "仙林/教4-103",
+     "id": "d0297e3cee2ec732@2026-09-17",
+     "lab": null
+    },
+    {
+     "kind": "lab",
+     "name": "自己的名（老师）",
+     "short": "自己的名（老师）",
+     "start": 825,
+     "end": 920,
+     "room": "计算机学科楼 401、403、405、407",
+     "id": "03027b8f14ec66a6",
+     "lab": "03027b8f14ec66a6"
+    }
+   ],
+   "tones": {
+    "JS194901C": 0,
+    "JS140301S": 7,
+    "JS160201S": 3,
+    "MY1002T0S": 9,
+    "JS140801S": 5,
+    "MY1021T0S": 1,
+    "JS112300S": 7,
+    "JS102K03C": 9,
+    "JS113102C": 5,
+    "JS115301C": 1,
+    "JS113701S": 2,
+    "JS114201S": 4,
+    "ZJ1001T0C": 9,
+    "JS116K01C": 10
+   }
   },
   "renamed": {
    "meetings": [
@@ -457,16 +2507,26 @@
     "date": "2026-11-09",
     "start": 600,
     "end": 690,
+    "due": {
+     "date": "2026-11-13",
+     "time": 1439,
+     "remind": [
+      60,
+      1440
+     ]
+    },
     "priority": 3,
     "modified": "m"
    },
    {
     "id": "c",
     "title": "毛概两个作业",
-    "date": "2026-11-13",
-    "remind": [
-     480
-    ],
+    "due": {
+     "date": "2026-11-13",
+     "remind": [
+      480
+     ]
+    },
     "priority": 2,
     "modified": "m"
    },
@@ -486,7 +2546,9 @@
    {
     "id": "f",
     "title": "过期的",
-    "date": "2026-11-01",
+    "due": {
+     "date": "2026-11-01"
+    },
     "modified": "m"
    },
    {
@@ -687,6 +2749,7 @@
      }
     ],
     "due": [
+     "b",
      "c"
     ],
     "layers": [
@@ -765,14 +2828,6 @@
     }
    },
    {
-    "id": "c",
-    "remind": 480,
-    "at": {
-     "date": "2026-11-13",
-     "min": 480
-    }
-   },
-   {
     "id": "g",
     "remind": 60,
     "at": {
@@ -794,7 +2849,9 @@
     "input": "下周五 毛概两个作业",
     "result": {
      "title": "毛概两个作业",
-     "date": "2026-11-20"
+     "due": {
+      "date": "2026-11-20"
+     }
     }
    },
    {
@@ -823,7 +2880,9 @@
     "input": "周日 洗衣服",
     "result": {
      "title": "洗衣服",
-     "date": "2026-11-15"
+     "due": {
+      "date": "2026-11-15"
+     }
     }
    },
    {
@@ -832,6 +2891,26 @@
      "title": "吃饭",
      "date": "2026-11-12",
      "start": 720
+    }
+   },
+   {
+    "input": "周五23:59前交报告",
+    "result": {
+     "title": "交报告",
+     "due": {
+      "date": "2026-11-13",
+      "time": 1439
+     }
+    }
+   },
+   {
+    "input": "明天18:00截止交作业",
+    "result": {
+     "title": "交作业",
+     "due": {
+      "date": "2026-11-13",
+      "time": 1080
+     }
     }
    }
   ]
@@ -2508,7 +4587,7 @@
     ],
     "location": "计算机学科楼401、403、405、407",
     "place": "计算机学科楼 401、403、405、407",
-    "short": "CS-401/403/405/407",
+    "short": "计科楼-401/403/405/407",
     "room": null,
     "week": 3,
     "weekday": 4,
@@ -2584,7 +4663,7 @@
     ],
     "location": "计算机学科楼302、304",
     "place": "计算机学科楼 302、304",
-    "short": "CS-302/304",
+    "short": "计科楼-302/304",
     "room": null,
     "week": 5,
     "weekday": 1,
@@ -2629,7 +4708,7 @@
     ],
     "location": "计算机学科楼302，304，306",
     "place": "计算机学科楼 302、304、306",
-    "short": "CS-302/304/306",
+    "short": "计科楼-302/304/306",
     "room": null,
     "week": 6,
     "weekday": 3,
@@ -2662,7 +4741,7 @@
     ],
     "location": "计算机学科楼405",
     "place": "计算机学科楼 405",
-    "short": "CS-405",
+    "short": "计科楼-405",
     "room": null,
     "week": 7,
     "weekday": 1,
@@ -2697,7 +4776,7 @@
     ],
     "location": "计算机学科楼306",
     "place": "计算机学科楼 306",
-    "short": "CS-306",
+    "short": "计科楼-306",
     "room": null,
     "week": 7,
     "weekday": 1,
@@ -2730,7 +4809,7 @@
     ],
     "location": "计算机学科楼405",
     "place": "计算机学科楼 405",
-    "short": "CS-405",
+    "short": "计科楼-405",
     "room": null,
     "week": 7,
     "weekday": 2,
@@ -2763,7 +4842,7 @@
     ],
     "location": "计算机学科楼405",
     "place": "计算机学科楼 405",
-    "short": "CS-405",
+    "short": "计科楼-405",
     "room": null,
     "week": 7,
     "weekday": 2,
@@ -2798,7 +4877,7 @@
     ],
     "location": "计算机学科楼405、407",
     "place": "计算机学科楼 405、407",
-    "short": "CS-405/407",
+    "short": "计科楼-405/407",
     "room": null,
     "week": 7,
     "weekday": 3,
@@ -2831,7 +4910,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 7,
     "weekday": 4,
@@ -2872,7 +4951,7 @@
     ],
     "location": "计算机学科楼401、403、405、407",
     "place": "计算机学科楼 401、403、405、407",
-    "short": "CS-401/403/405/407",
+    "short": "计科楼-401/403/405/407",
     "room": null,
     "week": 7,
     "weekday": 4,
@@ -2907,7 +4986,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 7,
     "weekday": 5,
@@ -2981,7 +5060,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 8,
     "weekday": 1,
@@ -3013,8 +5092,8 @@
      "吴思睿"
     ],
     "location": "计算机学科楼403、401",
-    "place": "计算机学科楼 403、401",
-    "short": "CS-403/401",
+    "place": "计算机学科楼 401、403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 8,
     "weekday": 2,
@@ -3047,7 +5126,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 8,
     "weekday": 4,
@@ -3082,7 +5161,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 9,
     "weekday": 3,
@@ -3117,7 +5196,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 9,
     "weekday": 3,
@@ -3277,7 +5356,7 @@
     ],
     "location": "计算机学科楼302、304",
     "place": "计算机学科楼 302、304",
-    "short": "CS-302/304",
+    "short": "计科楼-302/304",
     "room": null,
     "week": 11,
     "weekday": 1,
@@ -3312,7 +5391,7 @@
     ],
     "location": "计算机学科楼306",
     "place": "计算机学科楼 306",
-    "short": "CS-306",
+    "short": "计科楼-306",
     "room": null,
     "week": 11,
     "weekday": 1,
@@ -3347,7 +5426,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 11,
     "weekday": 3,
@@ -3392,7 +5471,7 @@
     ],
     "location": "计算机学科楼302，304，306",
     "place": "计算机学科楼 302、304、306",
-    "short": "CS-302/304/306",
+    "short": "计科楼-302/304/306",
     "room": null,
     "week": 11,
     "weekday": 3,
@@ -3433,7 +5512,7 @@
     ],
     "location": "计算机学科楼401、403、405、407",
     "place": "计算机学科楼 401、403、405、407",
-    "short": "CS-401/403/405/407",
+    "short": "计科楼-401/403/405/407",
     "room": null,
     "week": 11,
     "weekday": 4,
@@ -3468,7 +5547,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 11,
     "weekday": 5,
@@ -3505,7 +5584,7 @@
     ],
     "location": "计算机学科楼306、308",
     "place": "计算机学科楼 306、308",
-    "short": "CS-306/308",
+    "short": "计科楼-306/308",
     "room": null,
     "week": 12,
     "weekday": 1,
@@ -3542,7 +5621,7 @@
     ],
     "location": "计算机学科楼306、308",
     "place": "计算机学科楼 306、308",
-    "short": "CS-306/308",
+    "short": "计科楼-306/308",
     "room": null,
     "week": 13,
     "weekday": 1,
@@ -3577,7 +5656,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 13,
     "weekday": 3,
@@ -3614,7 +5693,7 @@
     ],
     "location": "计算机学科楼302、304",
     "place": "计算机学科楼 302、304",
-    "short": "CS-302/304",
+    "short": "计科楼-302/304",
     "room": null,
     "week": 14,
     "weekday": 1,
@@ -3654,8 +5733,8 @@
      "张平"
     ],
     "location": "计算机学科楼308、306、314",
-    "place": "计算机学科楼 308、306、314",
-    "short": "CS-308/306/314",
+    "place": "计算机学科楼 306、308、314",
+    "short": "计科楼-306/308/314",
     "room": null,
     "week": 14,
     "weekday": 2,
@@ -3690,7 +5769,7 @@
     ],
     "location": "计算机学科楼401、403",
     "place": "计算机学科楼 401、403",
-    "short": "CS-401/403",
+    "short": "计科楼-401/403",
     "room": null,
     "week": 14,
     "weekday": 5,
@@ -3722,7 +5801,7 @@
     ],
     "location": "计算机学科楼407",
     "place": "计算机学科楼 407",
-    "short": "CS-407",
+    "short": "计科楼-407",
     "room": null,
     "week": 15,
     "weekday": 1,
@@ -3754,7 +5833,7 @@
     ],
     "location": "计算机学科楼403",
     "place": "计算机学科楼 403",
-    "short": "CS-403",
+    "short": "计科楼-403",
     "room": null,
     "week": 15,
     "weekday": 1,
@@ -3786,7 +5865,7 @@
     ],
     "location": "计算机学科楼403",
     "place": "计算机学科楼 403",
-    "short": "CS-403",
+    "short": "计科楼-403",
     "room": null,
     "week": 15,
     "weekday": 4,
@@ -3818,7 +5897,7 @@
     ],
     "location": "计算机学科楼405",
     "place": "计算机学科楼 405",
-    "short": "CS-405",
+    "short": "计科楼-405",
     "room": null,
     "week": 15,
     "weekday": 4,
@@ -3850,7 +5929,7 @@
     ],
     "location": "计算机学科楼405",
     "place": "计算机学科楼 405",
-    "short": "CS-405",
+    "short": "计科楼-405",
     "room": null,
     "week": 16,
     "weekday": 3,
@@ -3882,7 +5961,7 @@
     ],
     "location": "计算机学科楼407",
     "place": "计算机学科楼 407",
-    "short": "CS-407",
+    "short": "计科楼-407",
     "room": null,
     "week": 16,
     "weekday": 3,
@@ -3927,7 +6006,7 @@
     ],
     "location": "计算机学科楼304，306，308",
     "place": "计算机学科楼 304、306、308",
-    "short": "CS-304/306/308",
+    "short": "计科楼-304/306/308",
     "room": null,
     "week": 16,
     "weekday": 3,
@@ -3959,7 +6038,7 @@
     ],
     "location": "计算机学科楼314",
     "place": "计算机学科楼 314",
-    "short": "CS-314",
+    "short": "计科楼-314",
     "room": null,
     "week": 16,
     "weekday": 4,
@@ -3991,7 +6070,7 @@
     ],
     "location": "计算机学科楼405",
     "place": "计算机学科楼 405",
-    "short": "CS-405",
+    "short": "计科楼-405",
     "room": null,
     "week": 16,
     "weekday": 4,
@@ -4032,7 +6111,7 @@
     ],
     "location": "计算机学科楼306、308、314",
     "place": "计算机学科楼 306、308、314",
-    "short": "CS-306/308/314",
+    "short": "计科楼-306/308/314",
     "room": null,
     "week": 17,
     "weekday": 2,
@@ -4073,7 +6152,7 @@
     ],
     "location": "计算机学科楼302、304、306",
     "place": "计算机学科楼 302、304、306",
-    "short": "CS-302/304/306",
+    "short": "计科楼-302/304/306",
     "room": null,
     "week": 17,
     "weekday": 4,
@@ -5632,7 +7711,7 @@
       "short": "专业课程设计Ⅱ",
       "start": 480,
       "end": 735,
-      "room": "计算机学科楼 403、401",
+      "room": "计算机学科楼 401、403",
       "id": "98c5818fdc0e53c7",
       "lab": "98c5818fdc0e53c7"
      },
@@ -7395,7 +9474,7 @@
       "short": "信息安全",
       "start": 480,
       "end": 575,
-      "room": "计算机学科楼 308、306、314",
+      "room": "计算机学科楼 306、308、314",
       "id": "684fd42ddac248f1",
       "lab": "684fd42ddac248f1"
      },
@@ -8887,31 +10966,7 @@
   "last": "2027-01-02",
   "personal": [
    {
-    "kept": [
-     "cb6ab3f78e0c81e0",
-     "2c56bb4a8bcfe5f0",
-     "a393da8e8ef19d19",
-     "9b5883de9f12eb8f",
-     "4cbf73b266261374",
-     "da330f6d4593e420",
-     "513d8d51f8a241b3",
-     "70421b5776f809a9",
-     "d3dc484de95aa201",
-     "54c82186383d5cbc",
-     "a7ba546bcffd7c4c",
-     "6ef4c8163aff1b19",
-     "a3aabb82f960bc3d",
-     "30d5a6ba07fa58a1",
-     "231eab9bebe39686",
-     "e7ba5e0e1e87440e",
-     "592bce89717783d3",
-     "24f803fa46753b50",
-     "c882dbfbe1d6270c",
-     "4c1486efb0efdcc0",
-     "d0297e3cee2ec732",
-     "93aa8dcca112a51c"
-    ],
-    "added": [],
+    "extraClasses": [],
     "all": [],
     "expected": [
      "03027b8f14ec66a6",
@@ -8961,300 +11016,11 @@
     ]
    },
    {
-    "kept": [
-     "cb6ab3f78e0c81e0",
-     "2c56bb4a8bcfe5f0",
-     "a393da8e8ef19d19",
-     "9b5883de9f12eb8f",
-     "4cbf73b266261374",
-     "da330f6d4593e420",
-     "513d8d51f8a241b3",
-     "70421b5776f809a9",
-     "d3dc484de95aa201",
-     "6ef4c8163aff1b19",
-     "a3aabb82f960bc3d",
-     "30d5a6ba07fa58a1",
-     "231eab9bebe39686",
-     "e7ba5e0e1e87440e",
-     "592bce89717783d3",
-     "24f803fa46753b50",
-     "c882dbfbe1d6270c",
-     "4c1486efb0efdcc0",
-     "d0297e3cee2ec732",
-     "93aa8dcca112a51c"
-    ],
-    "added": [],
-    "all": [],
-    "expected": [
-     "f788c73f2327e194",
-     "8fdbce85f8d7420f",
-     "66dafe956393c5f8",
-     "5238476c17993583",
-     "9fc48884fcbb3e80",
-     "0c244ebe38784fb1",
-     "774ebb97e6b10393",
-     "6eb732b9a13dae24",
-     "3828f14bbc71a05d",
-     "1ed3a7b5cf262c2d",
-     "b21c8c755f470e04",
-     "da5c6c7cee32dcbb",
-     "98c5818fdc0e53c7",
-     "77d21d26bf7d832e",
-     "490f8e62135159aa",
-     "df4285010730c70e",
-     "f7d849e99a779287",
-     "5c7712d959fef61b",
-     "63a5b0c45d50bc85",
-     "e2bd2b7ca6169f11",
-     "e45f70a06b9af869",
-     "674f9ea2fc63f680",
-     "6e718d41aa0444f2",
-     "42da801b639e1f19",
-     "66754bd478833ce8",
-     "66dc5026dfe70e89",
-     "5e67f05eac766632",
-     "2f0d90fe4b19cabf",
-     "684fd42ddac248f1",
-     "65c69d1aecb5684b",
-     "164b086cad37dc0b",
-     "a32827cf371bb94d",
-     "724f64f75b35c8fa",
-     "6933a1103157d0fa",
-     "da1b0cd1ed20c1c8",
-     "5e3bf67ed4c6f6d3",
-     "e65e5cca6eba4b18",
-     "ffb1a1a3a5bf3ffd",
-     "649633178c3cf4bd",
-     "a23759e840a9da47"
-    ]
-   },
-   {
-    "kept": [
-     "cb6ab3f78e0c81e0",
-     "2c56bb4a8bcfe5f0",
-     "a393da8e8ef19d19",
-     "9b5883de9f12eb8f",
-     "4cbf73b266261374",
-     "da330f6d4593e420",
-     "513d8d51f8a241b3",
-     "70421b5776f809a9",
-     "d3dc484de95aa201",
-     "54c82186383d5cbc",
-     "a7ba546bcffd7c4c",
-     "6ef4c8163aff1b19",
-     "a3aabb82f960bc3d",
-     "30d5a6ba07fa58a1",
-     "231eab9bebe39686",
-     "e7ba5e0e1e87440e",
-     "592bce89717783d3",
-     "24f803fa46753b50",
-     "c882dbfbe1d6270c",
-     "4c1486efb0efdcc0",
-     "d0297e3cee2ec732",
-     "93aa8dcca112a51c"
-    ],
-    "added": [
-     {
-      "id": "44e51b43c801b2f0",
-      "course": {
-       "code": "JS150200S",
-       "name": "计算机问题求解：使用C语言",
-       "category": "通识教育课",
-       "nature": "必修",
-       "credits": 3.5,
-       "hours": 60,
-       "hours_composition": "理论:44,实验:12",
-       "assessment": "考试",
-       "exam": null
-      },
-      "teaching_class": {
-       "id": "teaching-class/1c33b147fbc0b545",
-       "size": 124
-      },
-      "campus": "仙林",
-      "room": "仙林/教2-313",
-      "location": "教2－313",
-      "weekday": 2,
-      "periods": [
-       6,
-       7
-      ],
-      "weeks": [
-       4,
-       5,
-       6,
-       7,
-       8,
-       9,
-       10,
-       11,
-       12,
-       13,
-       14,
-       15,
-       16,
-       17,
-       18
-      ],
-      "method": "面授讲课",
-      "teachers": [
-       {
-        "name": "蔡惠",
-        "title": null,
-        "role": "主讲",
-        "weeks": [
-         4,
-         5,
-         6,
-         7,
-         8,
-         9,
-         10,
-         11,
-         12,
-         13,
-         14,
-         15,
-         16,
-         17,
-         18
-        ],
-        "id": "teacher/358a91fd647bdfc2"
-       }
-      ],
-      "classes": [
-       "B260424",
-       "B260425",
-       "B260426",
-       "B260427"
-      ],
-      "kind": "event",
-      "subtype": "meeting"
-     },
-     {
-      "id": "33dde5b7af0f11ea",
-      "course": {
-       "code": "JS150200S",
-       "name": "计算机问题求解：使用C语言",
-       "category": "通识教育课",
-       "nature": "必修",
-       "credits": 3.5,
-       "hours": 60,
-       "hours_composition": "理论:44,实验:12",
-       "assessment": "考试",
-       "exam": null
-      },
-      "teaching_class": {
-       "id": "teaching-class/1c33b147fbc0b545",
-       "size": 124
-      },
-      "campus": "仙林",
-      "room": "仙林/教2-520",
-      "location": "教2－520",
-      "weekday": 4,
-      "periods": [
-       6,
-       7
-      ],
-      "weeks": [
-       4,
-       5,
-       6,
-       7,
-       9,
-       10,
-       11,
-       12,
-       13,
-       14,
-       15,
-       16,
-       17,
-       18
-      ],
-      "method": "面授讲课",
-      "teachers": [
-       {
-        "name": "蔡惠",
-        "title": null,
-        "role": "主讲",
-        "weeks": [
-         4,
-         5,
-         6,
-         7,
-         9,
-         10,
-         11,
-         12,
-         13,
-         14,
-         15,
-         16,
-         17,
-         18
-        ],
-        "id": "teacher/358a91fd647bdfc2"
-       }
-      ],
-      "classes": [
-       "B260424",
-       "B260425",
-       "B260426",
-       "B260427"
-      ],
-      "kind": "event",
-      "subtype": "meeting"
-     },
-     {
-      "id": "4792d0a9e73bfb4f",
-      "course": {
-       "code": "JS150200S",
-       "name": "计算机问题求解：使用C语言",
-       "category": "通识教育课",
-       "nature": "必修",
-       "credits": 3.5,
-       "hours": 60,
-       "hours_composition": "理论:44,实验:12",
-       "assessment": "考试",
-       "exam": null
-      },
-      "teaching_class": {
-       "id": "teaching-class/1c33b147fbc0b545",
-       "size": 124
-      },
-      "campus": "仙林",
-      "room": "仙林/教2-520",
-      "location": "教2－520",
-      "weekday": 5,
-      "periods": [
-       6,
-       7
-      ],
-      "weeks": [
-       9
-      ],
-      "method": "面授讲课",
-      "teachers": [
-       {
-        "name": "蔡惠",
-        "title": null,
-        "role": "主讲",
-        "weeks": [
-         9
-        ],
-        "id": "teacher/358a91fd647bdfc2"
-       }
-      ],
-      "classes": [
-       "B260424",
-       "B260425",
-       "B260426",
-       "B260427"
-      ],
-      "kind": "event",
-      "subtype": "meeting"
-     }
+    "extraClasses": [
+     "B260424",
+     "B260425",
+     "B260426",
+     "B260427"
     ],
     "all": [
      {
@@ -9276,7 +11042,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 7,
       "weekday": 1,
@@ -9310,7 +11076,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 7,
       "weekday": 1,
@@ -9348,7 +11114,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 204、206",
-      "short": "CS-204/206",
+      "short": "计科楼-204/206",
       "room": null,
       "week": 7,
       "weekday": 1,
@@ -9380,7 +11146,7 @@
       ],
       "location": "计算机学科楼202-前4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 7,
       "weekday": 2,
@@ -9412,7 +11178,7 @@
       ],
       "location": "计算机学科楼202-后4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 7,
       "weekday": 2,
@@ -9444,7 +11210,7 @@
       ],
       "location": "计算机学科楼202-前4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 7,
       "weekday": 2,
@@ -9482,7 +11248,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 7,
       "weekday": 2,
@@ -9515,7 +11281,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 7,
       "weekday": 4,
@@ -9549,7 +11315,7 @@
       ],
       "location": "计算机学科楼106-后4排,计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 106、108",
-      "short": "CS-106/108",
+      "short": "计科楼-106/108",
       "room": null,
       "week": 8,
       "weekday": 2,
@@ -9583,7 +11349,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼202-前4排",
       "place": "计算机学科楼 108、202",
-      "short": "CS-108/202",
+      "short": "计科楼-108/202",
       "room": null,
       "week": 8,
       "weekday": 3,
@@ -9617,7 +11383,7 @@
       ],
       "location": "计算机学科楼106-前4排,计算机学科楼106-后4排",
       "place": "计算机学科楼 106",
-      "short": "CS-106",
+      "short": "计科楼-106",
       "room": null,
       "week": 8,
       "weekday": 3,
@@ -9651,7 +11417,7 @@
       ],
       "location": "计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 104",
-      "short": "CS-104",
+      "short": "计科楼-104",
       "room": null,
       "week": 8,
       "weekday": 4,
@@ -9685,7 +11451,7 @@
       ],
       "location": "计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 104",
-      "short": "CS-104",
+      "short": "计科楼-104",
       "room": null,
       "week": 8,
       "weekday": 4,
@@ -9723,7 +11489,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 204、206",
-      "short": "CS-204/206",
+      "short": "计科楼-204/206",
       "room": null,
       "week": 8,
       "weekday": 4,
@@ -9757,7 +11523,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼204-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 202、204、206",
-      "short": "CS-202/204/206",
+      "short": "计科楼-202/204/206",
       "room": null,
       "week": 9,
       "weekday": 1,
@@ -9791,7 +11557,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 10,
       "weekday": 1,
@@ -9825,7 +11591,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 10,
       "weekday": 1,
@@ -9857,7 +11623,7 @@
       ],
       "location": "计算机学科楼108-前4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 10,
       "weekday": 2,
@@ -9889,7 +11655,7 @@
       ],
       "location": "计算机学科楼202-前4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 10,
       "weekday": 2,
@@ -9921,7 +11687,7 @@
       ],
       "location": "计算机学科楼202-后4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 10,
       "weekday": 2,
@@ -9959,7 +11725,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼104-前4排,计算机学科楼104-后4排,计算机学科楼106-前4排",
       "place": "计算机学科楼 102、104、106",
-      "short": "CS-102/104/106",
+      "short": "计科楼-102/104/106",
       "room": null,
       "week": 10,
       "weekday": 3,
@@ -9993,7 +11759,7 @@
       ],
       "location": "计算机学科楼106-后4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 106、108",
-      "short": "CS-106/108",
+      "short": "计科楼-106/108",
       "room": null,
       "week": 10,
       "weekday": 4,
@@ -10027,7 +11793,7 @@
       ],
       "location": "计算机学科楼106-后4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 106、108",
-      "short": "CS-106/108",
+      "short": "计科楼-106/108",
       "room": null,
       "week": 10,
       "weekday": 4,
@@ -10060,7 +11826,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排",
       "place": "计算机学科楼 102",
-      "short": "CS-102",
+      "short": "计科楼-102",
       "room": null,
       "week": 10,
       "weekday": 4,
@@ -10094,7 +11860,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 11,
       "weekday": 3,
@@ -10128,7 +11894,7 @@
       ],
       "location": "计算机学科楼202-后4排,计算机学科楼208（自带笔记本电脑）",
       "place": "计算机学科楼 202、208",
-      "short": "CS-202/208",
+      "short": "计科楼-202/208",
       "room": null,
       "week": 11,
       "weekday": 3,
@@ -10166,7 +11932,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼202-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 202、206",
-      "short": "CS-202/206",
+      "short": "计科楼-202/206",
       "room": null,
       "week": 11,
       "weekday": 5,
@@ -10200,7 +11966,7 @@
       ],
       "location": "计算机学科楼104-后4排",
       "place": "计算机学科楼 104",
-      "short": "CS-104",
+      "short": "计科楼-104",
       "room": null,
       "week": 12,
       "weekday": 1,
@@ -10234,7 +12000,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 12,
       "weekday": 1,
@@ -10267,7 +12033,7 @@
       ],
       "location": "计算机学科楼106-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 106、108",
-      "short": "CS-106/108",
+      "short": "计科楼-106/108",
       "room": null,
       "week": 12,
       "weekday": 4,
@@ -10301,7 +12067,7 @@
       ],
       "location": "计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 13,
       "weekday": 1,
@@ -10339,7 +12105,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 13,
       "weekday": 1,
@@ -10373,7 +12139,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 13,
       "weekday": 1,
@@ -10411,7 +12177,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼202-后4排,计算机学科楼204-前4排,计算机学科楼204-后4排",
       "place": "计算机学科楼 202、204",
-      "short": "CS-202/204",
+      "short": "计科楼-202/204",
       "room": null,
       "week": 13,
       "weekday": 2,
@@ -10443,7 +12209,7 @@
       ],
       "location": "计算机学科楼206-前4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 13,
       "weekday": 2,
@@ -10475,7 +12241,7 @@
       ],
       "location": "计算机学科楼106-前4排",
       "place": "计算机学科楼 106",
-      "short": "CS-106",
+      "short": "计科楼-106",
       "room": null,
       "week": 13,
       "weekday": 2,
@@ -10513,7 +12279,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼202-前4排,计算机学科楼204-前4排",
       "place": "计算机学科楼 102、202、204",
-      "short": "CS-102/202/204",
+      "short": "计科楼-102/202/204",
       "room": null,
       "week": 13,
       "weekday": 2,
@@ -10545,7 +12311,7 @@
       ],
       "location": "计算机学科楼106-后4排",
       "place": "计算机学科楼 106",
-      "short": "CS-106",
+      "short": "计科楼-106",
       "room": null,
       "week": 13,
       "weekday": 2,
@@ -10583,7 +12349,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼204-前4排,计算机学科楼208（自带笔记本电脑）",
       "place": "计算机学科楼 202、204、208",
-      "short": "CS-202/204/208",
+      "short": "计科楼-202/204/208",
       "room": null,
       "week": 14,
       "weekday": 1,
@@ -10615,7 +12381,7 @@
       ],
       "location": "计算机学科楼206-前4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 14,
       "weekday": 2,
@@ -10647,7 +12413,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 14,
       "weekday": 2,
@@ -10679,7 +12445,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 14,
       "weekday": 2,
@@ -10717,7 +12483,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 14,
       "weekday": 2,
@@ -10751,7 +12517,7 @@
       ],
       "location": "计算机学科楼206-前4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 14,
       "weekday": 3,
@@ -10785,7 +12551,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 14,
       "weekday": 3,
@@ -10819,7 +12585,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 14,
       "weekday": 3,
@@ -10853,7 +12619,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 14,
       "weekday": 4,
@@ -10887,7 +12653,7 @@
       ],
       "location": "计算机学科楼102-后4排",
       "place": "计算机学科楼 102",
-      "short": "CS-102",
+      "short": "计科楼-102",
       "room": null,
       "week": 14,
       "weekday": 4,
@@ -10921,7 +12687,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 14,
       "weekday": 4,
@@ -10954,7 +12720,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 14,
       "weekday": 4,
@@ -10988,7 +12754,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排",
       "place": "计算机学科楼 204、206",
-      "short": "CS-204/206",
+      "short": "计科楼-204/206",
       "room": null,
       "week": 15,
       "weekday": 1,
@@ -11026,7 +12792,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 15,
       "weekday": 1,
@@ -11064,7 +12830,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 15,
       "weekday": 2,
@@ -11102,7 +12868,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 204、206",
-      "short": "CS-204/206",
+      "short": "计科楼-204/206",
       "room": null,
       "week": 15,
       "weekday": 3,
@@ -11136,7 +12902,7 @@
       ],
       "location": "计算机学科楼202-前4排,计算机学科楼202-后4排",
       "place": "计算机学科楼 202",
-      "short": "CS-202",
+      "short": "计科楼-202",
       "room": null,
       "week": 15,
       "weekday": 3,
@@ -11170,7 +12936,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 15,
       "weekday": 3,
@@ -11204,7 +12970,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼204-前4排,计算机学科楼204-后4排",
       "place": "计算机学科楼 108、204",
-      "short": "CS-108/204",
+      "short": "计科楼-108/204",
       "room": null,
       "week": 16,
       "weekday": 1,
@@ -11238,7 +13004,7 @@
       ],
       "location": "计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 16,
       "weekday": 1,
@@ -11272,7 +13038,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 16,
       "weekday": 1,
@@ -11306,7 +13072,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 16,
       "weekday": 1,
@@ -11344,7 +13110,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 16,
       "weekday": 1,
@@ -11378,7 +13144,7 @@
       ],
       "location": "计算机学科楼108-前4排,计算机学科楼108-后4排",
       "place": "计算机学科楼 108",
-      "short": "CS-108",
+      "short": "计科楼-108",
       "room": null,
       "week": 16,
       "weekday": 1,
@@ -11410,7 +13176,7 @@
       ],
       "location": "计算机学科楼206-前4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 16,
       "weekday": 2,
@@ -11442,7 +13208,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 16,
       "weekday": 2,
@@ -11474,7 +13240,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 16,
       "weekday": 2,
@@ -11512,7 +13278,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼106-前4排,计算机学科楼106-后4排",
       "place": "计算机学科楼 102、106",
-      "short": "CS-102/106",
+      "short": "计科楼-102/106",
       "room": null,
       "week": 16,
       "weekday": 2,
@@ -11550,7 +13316,7 @@
       ],
       "location": "计算机学科楼204-前4排,计算机学科楼204-后4排,计算机学科楼206-前4排,计算机学科楼206-后4排",
       "place": "计算机学科楼 204、206",
-      "short": "CS-204/206",
+      "short": "计科楼-204/206",
       "room": null,
       "week": 16,
       "weekday": 3,
@@ -11584,7 +13350,7 @@
       ],
       "location": "计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 104",
-      "short": "CS-104",
+      "short": "计科楼-104",
       "room": null,
       "week": 16,
       "weekday": 3,
@@ -11618,7 +13384,7 @@
       ],
       "location": "计算机学科楼106-前4排,计算机学科楼106-后4排",
       "place": "计算机学科楼 106",
-      "short": "CS-106",
+      "short": "计科楼-106",
       "room": null,
       "week": 16,
       "weekday": 3,
@@ -11651,7 +13417,7 @@
       ],
       "location": "计算机学科楼104-后4排,计算机学科楼104-前4排",
       "place": "计算机学科楼 104",
-      "short": "CS-104",
+      "short": "计科楼-104",
       "room": null,
       "week": 16,
       "weekday": 4,
@@ -11685,7 +13451,7 @@
       ],
       "location": "计算机学科楼106-前4排,计算机学科楼106-后4排,计算机学科楼202-前4排",
       "place": "计算机学科楼 106、202",
-      "short": "CS-106/202",
+      "short": "计科楼-106/202",
       "room": null,
       "week": 17,
       "weekday": 1,
@@ -11719,7 +13485,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 18,
       "weekday": 1,
@@ -11753,7 +13519,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 18,
       "weekday": 1,
@@ -11787,7 +13553,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 18,
       "weekday": 1,
@@ -11825,7 +13591,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 18,
       "weekday": 1,
@@ -11857,7 +13623,7 @@
       ],
       "location": "计算机学科楼206-前4排",
       "place": "计算机学科楼 206",
-      "short": "CS-206",
+      "short": "计科楼-206",
       "room": null,
       "week": 18,
       "weekday": 2,
@@ -11889,7 +13655,7 @@
       ],
       "location": "计算机学科楼204-前4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 18,
       "weekday": 2,
@@ -11921,7 +13687,7 @@
       ],
       "location": "计算机学科楼204-后4排",
       "place": "计算机学科楼 204",
-      "short": "CS-204",
+      "short": "计科楼-204",
       "room": null,
       "week": 18,
       "weekday": 2,
@@ -11959,7 +13725,7 @@
       ],
       "location": "计算机学科楼102-前4排,计算机学科楼102-后4排,计算机学科楼104-前4排,计算机学科楼104-后4排",
       "place": "计算机学科楼 102、104",
-      "short": "CS-102/104",
+      "short": "计科楼-102/104",
       "room": null,
       "week": 18,
       "weekday": 2,
@@ -11993,7 +13759,7 @@
       ],
       "location": "计算机学科楼106-前4排,计算机学科楼106-后4排",
       "place": "计算机学科楼 106",
-      "short": "CS-106",
+      "short": "计科楼-106",
       "room": null,
       "week": 18,
       "weekday": 4,
@@ -12124,7 +13890,7 @@
    {
     "choices": {
      "drop": [
-      "JS102K03C"
+      "实验实践课程上机安排（1、2、3、4楼）:云计算"
      ]
     },
     "expected": [
@@ -17009,7 +18775,7 @@
   }
  ],
  "source": {
-  "release": "map-v0.8.5__data-20261112-1439__p10",
+  "release": "map-v0.8.5__data-20261112-1738__p10",
   "teaching": "2026-2027-1"
  },
  "term": {
@@ -35074,7 +36840,7 @@
     "date": "2026-11-09",
     "week": 11,
     "weekday": 1,
-    "observed_at": "2026-11-12T12:45:06Z",
+    "observed_at": "2026-11-12T17:37:44Z",
     "free": {
      "1": [
       "三牌楼:MBA中心301室",

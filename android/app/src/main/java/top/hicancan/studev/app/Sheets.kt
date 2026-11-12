@@ -59,10 +59,10 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     @Composable fun colours(item: LineEvent): Pair<Color, Color> = when (item.kind) {
         "exam" -> mark.exam to mark.onExam
         "run", "task" -> Ink.sunken to Ink.text
-        else -> top.hicancan.studev.timetable.TimetablePresentation.toneOf(item, tones, line.meetings)?.let { tone(it) }?.let { it.bg to it.fg } ?: (Ink.sunken to Ink.text)
+        else -> top.hicancan.studev.timetable.TimetablePresentation.toneOf(item, tones, line.courseMeetings)?.let { tone(it) }?.let { it.bg to it.fg } ?: (Ink.sunken to Ink.text)
     }
     val group = CampusLine.clusters(line.on(date), settings.layers).firstOrNull { run -> run.events.any { it.id == event.id } }
-    val together = group?.events?.takeIf { it.size > 1 }?.sortedWith(compareBy<LineEvent> { settings.layers.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }).orEmpty()
+    val together = group?.events?.takeIf { it.size > 1 }?.sortedWith(compareByDescending<LineEvent> { it.layer }.thenBy { settings.layers.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }).orEmpty()
     val kindNames = mapOf("class" to "课", "lab" to "实验", "exam" to "考试", "run" to "早锻炼", "task" to "任务")
     val strip: (@Composable () -> Unit)? = if (together.isEmpty()) null else ({
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -81,12 +81,13 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     event.task?.let { opened ->
         val tasks by model.tasks.all.collectAsStateWithLifecycle()
         val task = tasks.firstOrNull { it.id == opened.id && it.deleted != true } ?: run { LaunchedEffect(opened.id) { onClose() }; return }
-        top.hicancan.studev.timetable.TaskSheet(task, line, model.tasks, strip, onClose)
+        top.hicancan.studev.timetable.TaskSheet(task, line, model.tasks, model.settings, strip, onClose)
         return
     }
     if (event.kind == "run" && plan != null) {
         val place = plan.rule.xianlin
         PlainSheet("早锻炼", onClose, strip, head) {
+            if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
             Plain(whenText, 13.5.sp, Ink.muted)
             if (place != null) Row(Modifier.padding(top = 16.dp, bottom = 8.dp)) { ActionButton("去起点", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = "仙林/${place.route[0]}") } }
             if (place != null) {
@@ -102,9 +103,10 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     val lab = event.lab
     val kinds = mapOf("class" to "课", "lab" to "实验", "exam" to "考试")
     PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else event.name, onClose, strip, head) {
+        if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
         val placed = Names.placed(event.room)
         val roomName = event.room?.let(Names::room)
-        val facts = if (exam != null) Exams.courseOf(line.meetings, exam.course) else if (lab != null) Exams.courseOf(line.meetings, lab.course) else event.meeting?.course
+        val facts = if (exam != null) Exams.courseOf(line.courseMeetings, exam.course) else if (lab != null) Exams.courseOf(line.courseMeetings, lab.course) else event.meeting?.course
         courseLine(facts, exam == null && lab == null).takeIf { it.isNotEmpty() }?.let { Plain(it, 13.5.sp, Ink.muted) }
         val campus = state.classes.firstOrNull { it.id == classId }?.campus
         Plain(whenText + " · " + (roomName ?: exam?.location ?: "课表没写地点") + (exam?.campus?.takeIf { campus != null && it != campus }?.let { " · ${it}校区" } ?: ""), 13.5.sp, modifier = Modifier.padding(top = 2.dp))
@@ -134,7 +136,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         event.teachers.flatMap { it.split("、") }.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
         if (lab != null) KeyRow("来源", Exams.sheetName(lab.source), "实验中心排课表，${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本；调整以老师通知为准")
         if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
-        KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", event.name) })
+        KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", Names.course(event.meeting?.course?.name ?: event.lab?.course?.name ?: event.exam?.course?.name ?: event.name)) })
         line.sharingSlot(event).forEach { other ->
             KeyRow("同时段", Names.course(other.course.name), "${Exams.weeksText(other.weeks)} · 本周不上", chevron = true, onClick = { line.meetingAround(other.id, event.date)?.let(onOpen) })
         }
@@ -153,7 +155,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         if (isMe && meeting != null && !top.hicancan.studev.timetable.Courses.isCustom(meeting.teaching_class.id)) {
             var naming by remember(event.id) { mutableStateOf<String?>(null) }
             val typed = naming
-            if (typed == null) KeyRow("名称", "改名", "比如把板块课改成具体上的课", chevron = true, onClick = { naming = Names.course(meeting.course.name) })
+            if (typed == null) KeyRow("名称", "改名", "比如把板块课改成具体上的课", chevron = true, onClick = { naming = event.name })
             else Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val id = top.hicancan.studev.timetable.TimetablePresentation.identity(meeting)
                 val focus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -167,8 +169,8 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         if (isMe && meeting != null) KeyRow(null, if (top.hicancan.studev.timetable.Courses.isCustom(meeting.teaching_class.id)) "删除这门课" else "从我的课表移除", color = mark.danger, onClick = { model.removeCourse(meeting.teaching_class.id); onClose() })
         if (isMe && lab != null) {
             KeyRow(null, "不上这次实验", color = mark.danger, onClick = { model.settings.update { it.copy(labs = it.labs.copy(skip = (it.labs.skip + lab.id).distinct())) }; onClose() })
-            KeyRow(null, "不上这门实验", "共 ${line.labs.count { it.course == lab.course }} 次，可在“我 · 实验”里恢复", color = mark.danger,
-                onClick = { model.settings.update { it.copy(labs = it.labs.copy(drop = (it.labs.drop + top.hicancan.studev.timetable.TimetablePresentation.identity(lab)).distinct())) }; onClose() })
+            KeyRow(null, "不上这门实验", "共 ${line.labs.count { top.hicancan.studev.timetable.CourseCatalog.labCourseKey(it) == top.hicancan.studev.timetable.CourseCatalog.labCourseKey(lab) }} 次，可在“我 · 实验”里恢复", color = mark.danger,
+                onClick = { model.settings.update { it.copy(labs = it.labs.copy(drop = (it.labs.drop + top.hicancan.studev.timetable.CourseCatalog.labCourseKey(lab)).distinct())) }; onClose() })
         }
     }
 }
@@ -193,11 +195,18 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
  * whole, and what they took off one lab or one sitting at a time comes back from here.
  */
 @Composable fun LabSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {
+    var extraClass by remember { mutableStateOf("") }
     val choices = settings.labs
     val catalog = top.hicancan.studev.timetable.CourseCatalog
     val sheets = state.labs.distinctBy(catalog::labSheet)
-    fun update(change: (top.hicancan.studev.me.LabChoices) -> top.hicancan.studev.me.LabChoices) = model.settings.update { it.copy(labs = change(it.labs)) }
+    fun update(change: (top.hicancan.studev.me.LabChoices) -> top.hicancan.studev.me.LabChoices) = model.setLabs(change)
     PlainSheet("实验安排", onClose) {
+        Plain("实验与理论课各自选择；增删理论课不会改变这里的选择。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+        settings.labs.classes.forEach { name -> KeyRow("其他班", name, trailing = { Chip("移除", { update { it.copy(classes = it.classes - name) } }) }) }
+        Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            top.hicancan.studev.timetable.Field(extraClass, "添加其他班实验，如 B240402", Modifier.weight(1f)) { extraClass = it.uppercase() }
+            Chip("添加", { val name = extraClass.trim(); if (Regex("^[A-Z]\\d{6}(\\([A-Z]{2}\\))?$").matches(name)) { update { it.copy(classes = (it.classes + name).distinct()) }; extraClass = "" } else model.tell("请填写完整班级号") })
+        }
         Plain("实验表来自学院实验中心，不在教务系统里。每份表由你决定要不要放进自己的课表；放进来之后，还可以单独去掉某门实验或某一次。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
         sheets.forEach { lab ->
             val name = catalog.labSheet(lab)
@@ -206,9 +215,9 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 trailing = { Toggle(on) { next -> update { if (next) it.copy(off = it.off - name) else it.copy(off = (it.off + name).distinct()) } } })
         }
         if (sheets.isEmpty()) Plain("你的班级不在已收到的实验表里。", 13.sp, Ink.faint)
-        val dropped = state.labs.filter { top.hicancan.studev.timetable.TimetablePresentation.identity(it) in choices.drop }.distinctBy { top.hicancan.studev.timetable.TimetablePresentation.identity(it) }
+        val dropped = state.labs.filter { catalog.labCourseKey(it) in choices.drop }.distinctBy(catalog::labCourseKey)
         if (dropped.isNotEmpty()) Plain("去掉的实验", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-        dropped.forEach { lab -> val key = top.hicancan.studev.timetable.TimetablePresentation.identity(lab)
+        dropped.forEach { lab -> val key = catalog.labCourseKey(lab)
             KeyRow(null, Names.course(lab.course.name), "整门实验", trailing = { Chip("恢复", { update { it.copy(drop = it.drop - key) } }) }) }
         val skipped = state.labs.filter { it.id in choices.skip }
         if (skipped.isNotEmpty()) Plain("不上的几次", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
@@ -249,7 +258,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 }
             }
             val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
-            if (state.labs.isNotEmpty()) {
+            if (settings.klass != null) {
                 val on = state.labs.any { top.hicancan.studev.timetable.CourseCatalog.labSheet(it) !in settings.labs.off }
                 KeyRow("实验", if (on) "已放进课表" else "没有放进课表", listOfNotNull(settings.labs.drop.size.takeIf { it > 0 }?.let { "去掉 $it 门" }, settings.labs.skip.size.takeIf { it > 0 }?.let { "不上 $it 次" }).joinToString("，").ifEmpty { "学院实验中心的上机安排" }, chevron = true, onClick = { labsOpen = true })
             }

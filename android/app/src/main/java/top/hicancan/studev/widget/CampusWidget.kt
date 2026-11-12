@@ -115,20 +115,22 @@ private fun row(event: LineEvent, tones: Map<String, Int>, meetings: List<top.hi
 
 private fun published(line: CampusLine, now: Moment, view: String, theme: String, order: List<String>) = buildJsonObject {
     val tones = TimetablePresentation.tones(line)
-    val shown = WidgetDay.of(line, now)
-    put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: "近期没有课")
-    put("hint", ""); put("view", view); put("theme", theme)
-    put("rows", buildJsonArray { shown.take(5).forEach { add(row(it, tones, line.meetings)) } })
+    val due = line.dueOn(now.date).filter { it.done == null }
+    val shown = if (due.isEmpty()) WidgetDay.of(line, now) else line.on(now.date).filter { it.end > now.min && it.task?.done == null }
+    put("due", buildJsonArray { due.forEach { add(it.title + (it.due?.time?.let { time -> " ${hm(time)}" } ?: "")) } })
+    put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: if (due.isNotEmpty()) "今天 · ${due.size} 项截止" else "近期没有课")
+    put("hint", if (shown.isEmpty() && due.isNotEmpty()) "今天截止 · " + due.joinToString("、") { it.title } else ""); put("view", view); put("theme", theme)
+    put("rows", buildJsonArray { shown.take(5).forEach { add(row(it, tones, line.courseMeetings)) } })
     val monday = line.weekShown(now)
     val ahead = CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7
     put("weekTitle", (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + (line.weekOf(monday)?.let { "第 $it 周" } ?: "假期"))
     put("week", buildJsonArray { WidgetDay.week(line, now).forEach { (date, events) ->
         addJsonObject {
-            put("label", WEEKDAYS[date.dayOfWeek.value].drop(1)); put("today", date == now.date)
-            // What a lab or an exam covers steps back: the widget shows what one goes to.
-            // No room to stack them: a run of things that overlap is one tile, named by the one in front, with how many more.
+            val count = line.dueOn(date).count { it.done == null }
+            put("label", WEEKDAYS[date.dayOfWeek.value].drop(1) + if (count > 0) "·截$count" else ""); put("today", date == now.date)
+            // A compact tile names the front event and counts the others; none is cancelled.
             put("events", buildJsonArray { CampusLine.clusters(events.filter { it.kind != "run" }, order).forEach { run ->
-                add(JsonObject(row(run.front, tones, line.meetings) + mapOf("start" to JsonPrimitive(run.start), "end" to JsonPrimitive(run.end), "more" to JsonPrimitive(run.events.size - 1))))
+                add(JsonObject(row(run.front, tones, line.courseMeetings) + mapOf("start" to JsonPrimitive(run.start), "end" to JsonPrimitive(run.end), "more" to JsonPrimitive(run.events.size - 1))))
             } })
         }
     } })
@@ -158,6 +160,7 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
     }
     val shape = if (Build.VERSION.SDK_INT >= 31) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier
     val rows = line["rows"]?.jsonArray?.map { it.jsonObject }.orEmpty()
+    val due = line["due"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
     val week = line["week"]?.jsonArray?.map { it.jsonObject }.orEmpty()
     val empty = week.isEmpty()
     Column(GlanceModifier.fillMaxSize().then(shape).background(color(Tokens.Color.Light.paper, Tokens.Color.Dark.paper)).appWidgetBackground()
@@ -175,7 +178,8 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
             }
             view == "day" -> {
                 Text(line.getValue("title").jsonPrimitive.content, style = TextStyle(color = paint.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(bottom = 6.dp))
-                rows.take(((size.height - 44.dp) / 32.dp).toInt().coerceIn(1, 5)).forEach { LessonRow(context, it, paint, false) }
+                if (due.isNotEmpty()) Text("今天截止 · " + due.joinToString("、"), style = TextStyle(color = paint.brand, fontSize = 12.sp), maxLines = 1)
+                rows.take(((size.height - (if (due.isNotEmpty()) 62.dp else 44.dp)) / 32.dp).toInt().coerceIn(1, 5)).forEach { LessonRow(context, it, paint, false) }
             }
             else -> {
                 Text(line.getValue("weekTitle").jsonPrimitive.content, style = TextStyle(color = paint.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(bottom = 6.dp))
@@ -212,41 +216,61 @@ private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tok
     }
 }
 
-/** The week as the timetable draws it: a column for each day, tiles placed by the clock. */
+/** All days share one clock. Empty spans across the whole week fold down so late tasks do not squash lessons. */
 @Composable private fun WeekGrid(week: List<JsonObject>, paint: Paint, height: Dp) {
     val events = week.flatMap { it.getValue("events").jsonArray.map { event -> event.jsonObject } }
-    val first = events.minOfOrNull { it.getValue("start").jsonPrimitive.int } ?: (8 * 60)
-    val last = events.maxOfOrNull { it.getValue("end").jsonPrimitive.int } ?: (18 * 60)
-    val perMinute = height.value / maxOf(60, last - first)
+    val bands = mutableListOf<Pair<Int, Int>>()
+    events.sortedBy { it.getValue("start").jsonPrimitive.int }.forEach { event ->
+        val start = event.getValue("start").jsonPrimitive.int
+        val end = event.getValue("end").jsonPrimitive.int
+        val last = bands.lastOrNull()
+        if (last != null && start <= last.second) bands[bands.lastIndex] = last.first to maxOf(last.second, end)
+        else bands.add(start to end)
+    }
+    val gap = 6f
+    val room = (height.value - 18f - gap * maxOf(0, bands.size - 1)).coerceAtLeast(0f)
+    val minimum = minOf(32f, room / maxOf(1, bands.size))
+    val extra = (room - minimum * bands.size).coerceAtLeast(0f)
+    val minutes = bands.sumOf { it.second - it.first }.coerceAtLeast(1)
+    fun position(minute: Int): Float {
+        var y = 0f
+        for ((start, end) in bands) {
+            val tall = minimum + extra * (end - start) / minutes
+            if (minute <= end) return y + tall * ((minute - start).toFloat() / (end - start).coerceAtLeast(1)).coerceIn(0f, 1f)
+            y += tall + gap
+        }
+        return y
+    }
     Row(GlanceModifier.fillMaxWidth()) {
         week.forEach { day ->
             val today = day.getValue("today").jsonPrimitive.boolean
             Column(GlanceModifier.defaultWeight().padding(horizontal = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(day.getValue("label").jsonPrimitive.content, style = TextStyle(color = if (today) paint.brand else paint.muted, fontSize = 11.sp, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal), maxLines = 1)
-                var cursor = first
-                var placedAny = false
+                var cursor = 0f
                 // A Glance column holds at most ten children, so a full day nests.
                 day.getValue("events").jsonArray.map { it.jsonObject }.chunked(4).forEach { part ->
                     Column(GlanceModifier.fillMaxWidth()) {
                         part.forEach { event ->
                             val start = event.getValue("start").jsonPrimitive.int
                             val end = event.getValue("end").jsonPrimitive.int
-                            // A tile stops 2 dp short of its end, and the next gap gives that back, so the clock stays true.
-                            if (start > cursor || placedAny) Spacer(GlanceModifier.height(((start - cursor) * perMinute + if (placedAny) 2f else 0f).dp))
+                            val top = position(start)
+                            if (top > cursor) Spacer(GlanceModifier.height((top - cursor).dp))
+                            val tileHeight = (position(end) - top - 2).coerceAtLeast(26f)
                             val index = event.getValue("tone").jsonPrimitive.int
                             val mark = if (event["kind"]?.jsonPrimitive?.content == "exam") examTone(paint.dark) else tone(maxOf(index, 0), paint.dark)
-                            Box(GlanceModifier.fillMaxWidth().height(((end - start) * perMinute - 2).coerceAtLeast(14f).dp).cornerRadius(4.dp).background(androidx.glance.unit.ColorProvider(mark.bg)).padding(horizontal = 2.dp, vertical = 2.dp)) {
-                                val tall = ((end - start) * perMinute - 2) >= 30f
+                            Box(GlanceModifier.fillMaxWidth().height(tileHeight.dp).cornerRadius(4.dp).background(androidx.glance.unit.ColorProvider(mark.bg)).padding(horizontal = 2.dp, vertical = 2.dp)) {
+                                val tall = tileHeight >= 42f
                                 val place = event.getValue("place").jsonPrimitive.content
                                 Column {
-                                    if (tall || place.isEmpty()) Text(event.getValue("name").jsonPrimitive.content, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp), maxLines = if (place.isEmpty()) 3 else 2)
-                                    if (place.isNotEmpty()) Text(place, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-                                    val more = event["more"]?.jsonPrimitive?.int ?: 0
-                                    if (more > 0) Text("+$more", style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                                    if (tall || place.isEmpty()) Text(event.getValue("name").jsonPrimitive.content, style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 10.sp), maxLines = if (place.isEmpty()) 2 else 1)
+                                    if (place.isNotEmpty()) Text(Names.compactPlace(place).replaceFirst("-", "\n"), style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 2)
+                                }
+                                val more = event["more"]?.jsonPrimitive?.int ?: 0
+                                if (more > 0) Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
+                                    Text("+$more", modifier = GlanceModifier.background(androidx.glance.unit.ColorProvider(mark.bg)), style = TextStyle(color = androidx.glance.unit.ColorProvider(mark.fg), fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
                                 }
                             }
-                            cursor = maxOf(cursor, end)
-                            placedAny = true
+                            cursor = maxOf(cursor, top) + tileHeight
                         }
                     }
                 }

@@ -32,14 +32,16 @@ object ReminderTimes {
         ReminderPlan(it.id, title, it.room, it.startsAt.minusSeconds(lead * 60L), it.startsAt)
     }.filter { it.at > now }.distinctBy { it.id }
     /** One's own tasks remind when each was asked to: they are theirs, so they do not wait for lesson reminders to be on. */
-    fun taskPlans(tasks: List<top.hicancan.studev.world.Task>, now: Instant): List<ReminderPlan> = tasks.filter { it.parent == null && it.done == null }.flatMap { task ->
-        task.remind.orEmpty().mapNotNull { remind ->
-            val (date, min) = top.hicancan.studev.world.Tasks.reminderAt(task, remind) ?: return@mapNotNull null
+    fun taskPlans(tasks: List<top.hicancan.studev.world.Task>, now: Instant): List<ReminderPlan> = tasks.filter { it.parent == null && it.done == null && it.deleted != true }.flatMap { task ->
+        listOf("plan" to task.remind.orEmpty(), "due" to task.due?.remind.orEmpty()).flatMap { (anchor, reminders) -> reminders.mapNotNull { remind ->
+            val (date, min) = top.hicancan.studev.world.Tasks.reminderAt(task, remind, anchor) ?: return@mapNotNull null
             val at = date.atStartOfDay(top.hicancan.studev.world.CampusDay.zone).plusMinutes(min.toLong()).toInstant()
-            val start = LocalDate.parse(task.date).atStartOfDay(top.hicancan.studev.world.CampusDay.zone).plusMinutes((task.start ?: 1439).toLong()).toInstant()
-            val title = if (task.start != null) (if (remind == 0) "任务开始 · ${task.title}" else "任务 · ${task.title}") else "今天截止 · ${task.title}"
-            ReminderPlan("task:${task.id}:$remind", title, null, at, start)
-        }
+            val day = if (anchor == "due") task.due!!.date else task.date!!
+            val time = if (anchor == "due") task.due?.time ?: 1439 else task.start ?: 0
+            val start = LocalDate.parse(day).atStartOfDay(top.hicancan.studev.world.CampusDay.zone).plusMinutes(time.toLong()).toInstant()
+            val title = if (anchor == "due") "截止提醒 · ${task.title}" else if (remind == 0) "任务开始 · ${task.title}" else "执行提醒 · ${task.title}"
+            ReminderPlan("task:${task.id}:$anchor:$remind", title, null, at, start)
+        } }
     }.filter { it.at > now }
 
     fun mode(exactAllowed: Boolean): ReminderScheduleMode =
@@ -54,19 +56,32 @@ object LessonReminders {
             .putExtra("title", title).putExtra("room", room), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     @SuppressLint("ScheduleExactAlarm")
     suspend fun sync(context: Context, events: List<LineEvent>, tasks: List<top.hicancan.studev.world.Task>, enabled: Boolean, lead: Int) = withContext(Dispatchers.IO) {
+        val now = Instant.now()
+        replace(context, (if (enabled) ReminderTimes.plans(events, lead, now) else emptyList()) + ReminderTimes.taskPlans(tasks, now), tasks, !enabled) { true }
+    }
+    /** A local task still reminds when campus files cannot be read; keep existing school reminders intact. */
+    suspend fun syncTasks(context: Context, tasks: List<top.hicancan.studev.world.Task>) = withContext(Dispatchers.IO) {
+        replace(context, ReminderTimes.taskPlans(tasks, Instant.now()), tasks, false) { it.startsWith("task:") }
+    }
+    private fun replace(context: Context, requested: List<ReminderPlan>, tasks: List<top.hicancan.studev.world.Task>, clearLessons: Boolean, selected: (String) -> Boolean) {
         val alarms = context.getSystemService(AlarmManager::class.java)
         val work = WorkManager.getInstance(context)
         val preferences = prefs(context)
-        preferences.getStringSet("ids", emptySet()).orEmpty().forEach { alarms.cancel(pending(context, it)) }
-        work.cancelAllWorkByTag(TAG).result.get()
-        if (!enabled) context.getSystemService(NotificationManager::class.java).let { manager ->
-            manager.activeNotifications.filter { it.notification.channelId == TAG && it.tag == null }.forEach { manager.cancel(it.id) }
+        val previous = preferences.getStringSet("ids", emptySet()).orEmpty()
+        val replaced = previous.filter(selected)
+        replaced.forEach { id -> alarms.cancel(pending(context, id)); work.cancelUniqueWork("$TAG:$id").result.get() }
+        context.getSystemService(NotificationManager::class.java).let { manager ->
+            val live = tasks.filter { it.deleted != true && it.done == null }.map { "task:${it.id}:" }
+            manager.activeNotifications.filter { notice -> notice.notification.channelId == TAG &&
+                (if (notice.tag?.startsWith("task:") == true) live.none { notice.tag.startsWith(it) } else clearLessons) }
+                .forEach { manager.cancel(it.tag, it.id) }
         }
         // A rolling seven-day window stays below the platform's per-app alarm limit.
         // The persisted maintenance worker replenishes it twice daily and after boot.
         val now = Instant.now()
-        val plans = ((if (enabled) ReminderTimes.plans(events, lead, now) else emptyList()) + ReminderTimes.taskPlans(tasks, now)).filter { it.at < now.plusSeconds(7 * 86400L) }
-        val edit = preferences.edit().putStringSet("ids", plans.map { it.id }.toSet())
+        val plans = requested.filter { it.at < now.plusSeconds(7 * 86400L) }
+        val edit = preferences.edit().putStringSet("ids", (previous.filterNot(selected) + plans.map { it.id }).toSet())
+        replaced.forEach { edit.remove("sent:$it") }
         plans.forEach { edit.remove("sent:${it.id}") }
         edit.apply()
         val mode = ReminderTimes.mode(exact(context))
@@ -101,7 +116,7 @@ object LessonReminders {
         val notification = NotificationCompat.Builder(context, TAG).setSmallIcon(R.drawable.ic_navigation).setContentTitle(title)
             .setContentText(roomName ?: "打开课表查看详情").setContentIntent(open).setAutoCancel(true)
         if (roomName != null) notification.addAction(R.drawable.ic_navigation, "导航到 $roomName", open)
-        manager.notify(id.hashCode(), notification.build())
+        manager.notify(id, id.hashCode(), notification.build())
         preferences.edit().putBoolean("sent:$id", true).apply()
     }
 }

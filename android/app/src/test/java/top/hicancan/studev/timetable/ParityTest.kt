@@ -40,6 +40,56 @@ class ParityTest {
             assertEquals(row.toString(), row.getValue("expected").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("state").jsonPrimitive.content }, got.map { it.place.id to it.status.name.lowercase() })
         }
     }
+    @Test fun attendanceDeadlineAndPlanningSemanticsMatch() {
+        val s = golden.getValue("semantics").jsonObject
+        s.getValue("migration").jsonArray.forEach { item ->
+            val before = json.decodeFromJsonElement<Task>(item.jsonObject.getValue("before"))
+            val expected = json.decodeFromJsonElement<Task>(item.jsonObject.getValue("after"))
+            assertEquals(expected, Tasks.migrateTimes(before))
+            assertEquals(expected, Tasks.migrateTimes(expected))
+        }
+        val tasks = json.decodeFromJsonElement<List<Task>>(golden.getValue("tasks").jsonObject.getValue("list"))
+        s.getValue("dueReminders").jsonArray.forEach { item ->
+            val row = item.jsonObject
+            val task = tasks.first { it.id == row.getValue("id").jsonPrimitive.content }
+            val at = Tasks.reminderAt(task, row.getValue("remind").jsonPrimitive.int, "due")!!
+            assertEquals(row.getValue("at").jsonObject.getValue("date").jsonPrimitive.content, at.first.toString())
+            assertEquals(row.getValue("at").jsonObject.getValue("min").jsonPrimitive.int, at.second)
+        }
+        val labs = golden.getValue("labs").jsonObject
+        val labList = json.decodeFromJsonElement<List<Lab>>(labs.getValue("labs"))
+        s.getValue("labMigration").jsonArray.forEach { item ->
+            val before = json.decodeFromJsonElement<top.hicancan.studev.me.LabChoices>(item.jsonObject.getValue("before"))
+            val after = json.decodeFromJsonElement<top.hicancan.studev.me.LabChoices>(item.jsonObject.getValue("after"))
+            assertEquals(after, CourseCatalog.migrateLabChoices(labList, before))
+            assertEquals(after, CourseCatalog.migrateLabChoices(labList, after))
+        }
+        s.getValue("frames").jsonArray.forEach { item ->
+            val row = item.jsonObject
+            val personal = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), labList, listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, json.decodeFromJsonElement(row.getValue("tasks")))
+            val frame = CampusLine.timeBounds(personal.on(LocalDate.parse(s.getValue("scheduleDate").jsonPrimitive.content)))
+            assertEquals(row.getValue("expected").jsonArray.map { it.jsonPrimitive.int }, listOf(frame.first, frame.second))
+        }
+        val hidden = golden.getValue("courses").jsonObject.getValue("hidden").jsonObject
+        val hiddenLine = CampusLine(term, periods, json.decodeFromJsonElement(hidden.getValue("meetings")), labList, listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, names = json.decodeFromJsonElement(hidden.getValue("names")), courseMeetings = json.decodeFromJsonElement(labs.getValue("meetings")))
+        val hiddenEvents = hiddenLine.on(LocalDate.parse(hidden.getValue("date").jsonPrimitive.content))
+        assertEquals(hidden.getValue("events"), JsonArray(hiddenEvents.map { event -> JsonObject(brief(event) + mapOf("id" to JsonPrimitive(event.id), "lab" to (event.lab?.let { JsonPrimitive(it.id) } ?: JsonNull))) }))
+        assertEquals(json.decodeFromJsonElement<Map<String, Int>>(hidden.getValue("tones")), TimetablePresentation.tones(hiddenLine))
+        val at = s.getValue("now").jsonObject
+        val now = Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int)
+        val req = s.getValue("request").jsonObject
+        val request = SlotRequest(LocalDate.parse(req.getValue("from").jsonPrimitive.content), LocalDate.parse(req.getValue("to").jsonPrimitive.content), req.getValue("minutes").jsonPrimitive.int, req.getValue("earliest").jsonPrimitive.int, req.getValue("latest").jsonPrimitive.int)
+        s.getValue("cases").jsonArray.forEach { item ->
+            val row = item.jsonObject
+            val preferences = json.decodeFromJsonElement<Map<String, EventPreference>>(row.getValue("preferences"))
+            val personal = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, preferences = preferences)
+            val events = personal.on(LocalDate.parse(s.getValue("scheduleDate").jsonPrimitive.content))
+            assertEquals(row.getValue("events"), JsonArray(events.map { event -> buildJsonObject { put("id", event.id); put("avoid", event.avoid); put("layer", event.layer) } }))
+            assertEquals(row.getValue("layers"), JsonArray(CampusLine.layers(events).map { buildJsonObject { put("id", it.event.id); put("under", it.under); put("over", it.over) } }))
+            val slots = Planning.available(personal, request, now).take(4).map { slot -> buildJsonObject { put("date", slot.date.toString()); put("start", slot.start); put("end", slot.end); put("clashes", JsonArray(slot.clashes.map(::JsonPrimitive))); put("penalty", slot.penalty) } }
+            assertEquals(row.getValue("slots"), JsonArray(slots))
+        }
+    }
     @Test fun tasksStandOnTheLineAndAreGroupedOrderedAndRead() {
         val tasks = golden.getValue("tasks").jsonObject
         val labs = golden.getValue("labs").jsonObject
@@ -66,6 +116,7 @@ class ParityTest {
             assertEquals(test.toString(), expected.getValue("title").jsonPrimitive.content, quick.title)
             assertEquals(test.toString(), expected["date"]?.jsonPrimitive?.content, quick.date)
             assertEquals(test.toString(), expected["start"]?.jsonPrimitive?.int, quick.start)
+            assertEquals(test.toString(), expected["due"]?.let { json.decodeFromJsonElement<TaskDeadline>(it) }, quick.due)
         }
     }
     @Test fun ownCoursesBecomeMeetingsAndOwnNamesFollowACourse() {
@@ -81,9 +132,9 @@ class ParityTest {
         val named = Courses.named(CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null), names)
         val expected = courses.getValue("renamed").jsonObject
         fun pairs(key: String) = expected.getValue(key).jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("name").jsonPrimitive.content }
-        assertEquals(pairs("meetings"), named.meetings.map { it.id to it.course.name })
-        assertEquals(pairs("labs"), named.labs.map { it.id to it.course.name })
-        assertEquals(pairs("exams"), named.exams.map { it.id to it.course.name })
+        assertEquals(pairs("meetings"), named.meetings.map { it.id to (Courses.personalName(it.course.code, it.course.name, named.meetings, names) ?: it.course.name) })
+        assertEquals(pairs("labs"), named.labs.map { it.id to (Courses.personalName(it.course.code, it.course.name, named.meetings, names) ?: it.course.name) })
+        assertEquals(pairs("exams"), named.exams.map { it.id to (Courses.personalName(it.course.code, it.course.name, named.meetings, names) ?: it.course.name) })
         courses.getValue("weeks").jsonArray.forEach { item ->
             val test = item.jsonObject
             assertEquals(test.toString(), (test.getValue("weeks") as? JsonArray)?.map { it.jsonPrimitive.int }, Courses.parseWeeks(test.getValue("text").jsonPrimitive.content, 18))
@@ -120,8 +171,8 @@ class ParityTest {
             assertEquals(item.jsonObject.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, CourseCatalog.attendingLabs(classLabs, choices).map { it.id })
         }
         labs.getValue("personal").jsonArray.forEach { item ->
-            val kept = item.jsonObject.getValue("kept").jsonArray.map { it.jsonPrimitive.content }
-            val got = CourseCatalog.effectiveLabs(classLabs, meetings, meetings.filter { it.id in kept }, json.decodeFromJsonElement(item.jsonObject.getValue("added")), json.decodeFromJsonElement(item.jsonObject.getValue("all")))
+            val extra = item.jsonObject.getValue("extraClasses").jsonArray.map { it.jsonPrimitive.content }
+            val got = CourseCatalog.effectiveLabs(classLabs, extra, json.decodeFromJsonElement(item.jsonObject.getValue("all")))
             assertEquals(item.jsonObject.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, got.map { it.id })
         }
     }

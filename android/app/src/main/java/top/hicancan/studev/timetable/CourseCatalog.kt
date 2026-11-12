@@ -137,23 +137,26 @@ object CourseCatalog {
     }
 
     /**
-     * A person's labs, the same answer as src/campus/timetable/model/labs.ts. They are their class's, less those of
-     * a course they took off their timetable, plus those a course added from other classes brings: that course's
-     * labs for those classes. `kept` are the class's own lessons still on the timetable, `added` the lessons brought in.
+     * A person's lab sources, as in src/campus/timetable/model/labs.ts: their own class plus
+     * explicitly selected extra classes. Lecture attendance never changes these sources.
      */
-    fun effectiveLabs(classLabs: List<Lab>, classMeetings: List<TeachingMeeting>, kept: List<TeachingMeeting>, added: List<TeachingMeeting>, allLabs: List<Lab>): List<Lab> {
-        fun dropped(lab: Lab) = classMeetings.any { TimetablePresentation.sameCourse(lab, it) } && kept.none { TimetablePresentation.sameCourse(lab, it) }
-        val brought = allLabs.filter { lab -> added.any { meeting -> TimetablePresentation.sameCourse(lab, meeting) && meeting.classes.any { it in lab.classes } } }
-        return (classLabs.filterNot(::dropped) + brought).distinctBy { it.id }.sortedWith(compareBy({ it.date }, { it.start }, { it.id }))
+    fun effectiveLabs(classLabs: List<Lab>, extraClasses: List<String>, allLabs: List<Lab>): List<Lab> {
+        val brought = allLabs.filter { lab -> lab.classes.any { it in extraClasses } }
+        return (classLabs + brought).distinctBy { it.id }.sortedWith(compareBy({ it.date }, { it.start }, { it.id }))
     }
     /** A lab sheet's name across its versions: the file name without the date it was sent. */
     fun labSheet(lab: Lab) = top.hicancan.studev.world.Exams.sheetName(lab.source)
+    fun labCourseKey(lab: Lab) = labSheet(lab) + ":" + Normalizer.normalize(lab.course.name, Normalizer.Form.NFKC).trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+    fun migrateLabChoices(labs: List<Lab>, choices: top.hicancan.studev.me.LabChoices): top.hicancan.studev.me.LabChoices {
+        val drop = choices.drop.map { key -> labs.firstOrNull { TimetablePresentation.identity(it) == key }?.let(::labCourseKey) ?: key }.distinct()
+        return if (drop == choices.drop) choices else choices.copy(drop = drop)
+    }
     /**
      * What a person chose about labs, the same as src/campus/timetable/model/labs.ts: a lab sheet comes from outside the
      * teaching office, so each is theirs to take or leave whole; then a lab course or a single sitting.
      */
     fun attendingLabs(labs: List<Lab>, choices: top.hicancan.studev.me.LabChoices) =
-        labs.filter { labSheet(it) !in choices.off && TimetablePresentation.identity(it) !in choices.drop && it.id !in choices.skip }
+        labs.filter { labSheet(it) !in choices.off && labCourseKey(it) !in choices.drop && it.id !in choices.skip }
 
     private fun groupCourses(meetings: List<TeachingMeeting>, source: String, hidden: Set<String>): List<TimetableCourse> {
         val groups = LinkedHashMap<String, MutableList<TeachingMeeting>>()

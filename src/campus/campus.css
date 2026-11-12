@@ -381,3 +381,5 @@
   }
 }
 @media (prefers-reduced-motion:reduce){.sd *{transition-duration:.01ms!important;animation:none!important}}
+
+.event-choices{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.event-choices summary{cursor:pointer;padding:6px 0;color:var(--muted)}.event-choices .picks{margin-top:8px}.event-choices label{display:block;margin:6px 0}

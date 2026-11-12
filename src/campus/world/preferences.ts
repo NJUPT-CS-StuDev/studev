@@ -3,6 +3,7 @@
 // account page and every campus tool read and write the same thing.
 import { LAYER_ORDER, type EventKind } from './events';
 import type { CustomCourse } from '@/timetable/model/courses';
+import type { EventPreferences } from './schedule';
 
 export interface TimetableEdits {
     /** Teaching classes of the class timetable this person does not attend. */
@@ -31,7 +32,8 @@ export interface Preferences {
     /** Which kind shows in front when things overlap, front first; absent means the default. */
     layers?: EventKind[];
     /** Lab sheets left out, lab courses not taken and single sittings missed. */
-    labs?: { off?: string[]; drop?: string[]; skip?: string[] };
+    labs?: { off?: string[]; drop?: string[]; skip?: string[]; classes?: string[] };
+    events?: EventPreferences;
 }
 
 /** The mornings put down in this browser, plus the bonus or penalty entered from the sports office. */
@@ -90,10 +92,21 @@ const sanitize = (raw: unknown): Preferences => {
     if (Array.isArray(record.layers) && record.layers.length === LAYER_ORDER.length && LAYER_ORDER.every(kind => (record.layers as unknown[]).includes(kind))) result.layers = record.layers as EventKind[];
     if (record.labs && typeof record.labs === 'object' && !Array.isArray(record.labs)) {
         const labs = record.labs as Record<string, unknown>;
-        const kept = Object.fromEntries((['off', 'drop', 'skip'] as const).map(key => [key, ids(labs[key])] as const).filter(([, value]) => value.length > 0));
+        const kept = Object.fromEntries((['off', 'drop', 'skip', 'classes'] as const).map(key => [key, ids(labs[key])] as const).filter(([, value]) => value.length > 0));
         if (Object.keys(kept).length) result.labs = kept;
     }
     if (typeof record.examsSeen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.examsSeen)) result.examsSeen = record.examsSeen;
+    if (record.events && typeof record.events === 'object' && !Array.isArray(record.events)) {
+        const events: EventPreferences = {};
+        for (const [key, raw] of Object.entries(record.events)) {
+            if (key.length > 300 || !raw || typeof raw !== 'object') continue;
+            const value = raw as Record<string, unknown>, next: EventPreferences[string] = {};
+            if (value.avoid === 'must' || value.avoid === 'prefer' || value.avoid === 'allow') next.avoid = value.avoid;
+            if (typeof value.layer === 'number' && Number.isSafeInteger(value.layer) && Math.abs(value.layer) < 1e15) next.layer = value.layer;
+            if (Object.keys(next).length) events[key] = next;
+        }
+        if (Object.keys(events).length) result.events = events;
+    }
     if (record.examAttendance && typeof record.examAttendance === 'object' && !Array.isArray(record.examAttendance)) {
         const attendance: NonNullable<Preferences['examAttendance']> = {};
         for (const [scope, rawChoices] of Object.entries(record.examAttendance)) {

@@ -18,7 +18,10 @@ class DeviceRefreshWorker(context: Context, parameters: WorkerParameters) : Coro
         DeviceSchedule.update(applicationContext, repo.line(settings).lessonsAndExams(), settings.klass, settings, facts)
         CampusWidget.refreshAll(applicationContext)
         Result.success()
-    } catch (e: CancellationException) { throw e } catch (_: Exception) { Result.retry() }
+    } catch (e: CancellationException) { throw e } catch (_: Exception) {
+        DeviceSchedule.tasksOnly(applicationContext)
+        Result.retry()
+    }
     companion object {
         fun enqueue(context: Context) {
             WorkManager.getInstance(context).enqueueUniqueWork("device-refresh", ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<DeviceRefreshWorker>().build())

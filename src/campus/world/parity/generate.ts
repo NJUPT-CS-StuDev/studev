@@ -3,11 +3,13 @@
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { courseIdentity, courseTones, linkedCourse, sameCourse, timelineTones } from '@/timetable/model/courseColors';
-import { attendingLabs, labSheet, personalLabs } from '@/timetable/model/labs';
+import { attendingLabs, labCourseKey, labSheet, personalLabs, migrateLabChoices } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
-import { customMeetings, parseWeeks, renamed, renamedAlong, type CustomCourse } from '@/timetable/model/courses';
-import { parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
-import { dueOn } from '@/world/events';
+import { customMeetings, parseWeeks, personalCourseName, type CustomCourse } from '@/timetable/model/courses';
+import { migrateTaskTimes, parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
+import { availableSlots } from '@/world/planning';
+import { preferenceKey, type EventPreferences } from '@/world/schedule';
+import { dueOn, timeBounds } from '@/world/events';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
@@ -81,7 +83,6 @@ const offLine: Timeline = { ...labLine, labs: [dayOff], exams: [] };
 const other = 'B260424';
 const added = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${other}.json`).meetings.filter(meeting => everyLab.some(lab => courseIdentity(lab) === courseIdentity(meeting) && lab.classes.includes(other)));
 const nearby = everyLab.filter(lab => lab.classes.some(name => name.startsWith('B2604'))).slice(0, 80);
-const labCourse = courseIdentity(classLabs[0]!);
 const labs = {
     class: labClass, meetings: labMeetings, labs: classLabs, exam: labExam,
     days: [...new Set(classLabs.map(lab => lab.date))].map(date => {
@@ -97,23 +98,22 @@ const labs = {
     moments: classLabs.slice(0, 3).map(lab => ({ date: lab.date, min: 7 * 60 })).map(now => ({ now, next: (event => event ? labBrief(event) : null)(nextEvent(labLine, now)) })),
     tones: Object.fromEntries(timelineTones(labLine)), last: lastLesson(labLine),
     personal: [
-        { kept: labMeetings.map(meeting => meeting.id), added: [] as TeachingMeeting[], all: [] as Lab[] },
-        { kept: labMeetings.filter(meeting => courseIdentity(meeting) !== labCourse).map(meeting => meeting.id), added: [] as TeachingMeeting[], all: [] as Lab[] },
-        { kept: labMeetings.map(meeting => meeting.id), added, all: nearby },
-    ].map(test => ({ ...test, expected: personalLabs(classLabs, labMeetings, labMeetings.filter(meeting => test.kept.includes(meeting.id)), test.added, test.all).map(lab => lab.id) })),
+        { extraClasses: [] as string[], all: [] as Lab[] },
+        { extraClasses: [...new Set(added.flatMap(meeting => meeting.classes))], all: nearby },
+    ].map(test => ({ ...test, expected: personalLabs(classLabs, test.extraClasses, test.all).map(lab => lab.id) })),
     choices: [
-        {}, { off: [labSheet(classLabs[0]!)] }, { drop: [courseIdentity(classLabs[0]!)] }, { skip: classLabs.slice(0, 3).map(lab => lab.id) },
+        {}, { off: [labSheet(classLabs[0]!)] }, { drop: [labCourseKey(classLabs[0]!)] }, { skip: classLabs.slice(0, 3).map(lab => lab.id) },
     ].map(choices => ({ choices, expected: attendingLabs(classLabs, choices).map(lab => lab.id) })),
 };
 // Tasks: on the line where they have a time, due where they have only a day, grouped and ordered for the list.
 const taskNow = { date: '2026-11-09', min: 16 * 60 };
 const taskList: Task[] = [
     { id: 'a', title: '交毛概作业', date: '2026-11-10', start: 14 * 60, remind: [15, 1440], modified: 'm' },
-    { id: 'b', title: '复习计网', date: '2026-11-09', start: 10 * 60, end: 11 * 60 + 30, priority: 3, modified: 'm' },
-    { id: 'c', title: '毛概两个作业', date: '2026-11-13', remind: [480], priority: 2, modified: 'm' },
+    { id: 'b', title: '复习计网', date: '2026-11-09', start: 10 * 60, end: 11 * 60 + 30, due: { date: '2026-11-13', time: 23 * 60 + 59, remind: [60, 1440] }, priority: 3, modified: 'm' },
+    { id: 'c', title: '毛概两个作业', due: { date: '2026-11-13', remind: [480] }, priority: 2, modified: 'm' },
     { id: 'd', title: '读论文', modified: 'm' },
     { id: 'e', title: '第一步', parent: 'b', date: '2026-11-09', start: 9 * 60, modified: 'm' },
-    { id: 'f', title: '过期的', date: '2026-11-01', modified: 'm' },
+    { id: 'f', title: '过期的', due: { date: '2026-11-01' }, modified: 'm' },
     { id: 'g', title: '下个月', date: '2026-12-20', start: 0, remind: [60], modified: 'm' },
 ];
 const taskLine: Timeline = { ...labLine, tasks: taskList };
@@ -123,7 +123,26 @@ const tasks = {
     groups: taskList.map(task => ({ id: task.id, group: taskGroup(task, taskNow) })),
     order: [...taskList].sort(taskOrder).map(task => task.id),
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
-    parse: ['明天 14:00 交毛概作业', '下周五 毛概两个作业', '今天下午3点 复习计网', '周一晚上8点半 开会', '读论文', '周日 洗衣服', '中午12点 吃饭'].map(input => ({ input, result: parseQuickTask(input, { date: '2026-11-12', min: 600 }) })),
+    parse: ['明天 14:00 交毛概作业', '下周五 毛概两个作业', '今天下午3点 复习计网', '周一晚上8点半 开会', '读论文', '周日 洗衣服', '中午12点 吃饭', '周五23:59前交报告', '明天18:00截止交作业'].map(input => ({ input, result: parseQuickTask(input, { date: '2026-11-12', min: 600 }) })),
+};
+const migrationInputs: Task[] = [{ id: 'old-day', title: '交作业', date: '2026-11-13', remind: [480], modified: '2026-11-12T15:00:00Z' }, taskList[0]!];
+const scheduleDate = '2026-11-09';
+const scheduleNow = { date: scheduleDate, min: 480 };
+const scheduled = eventsOn(labLine, scheduleDate);
+const slotRequest = { from: scheduleDate, to: scheduleDate, minutes: 30, earliest: 590, latest: 685 };
+const semantics = {
+    migration: migrationInputs.map(before => ({ before, after: migrateTaskTimes(before) })),
+    labMigration: [{ drop: [courseIdentity(classLabs[0]!)] }].map(before => ({ before, after: migrateLabChoices(classLabs, before) })),
+    frames: [[], [{ id: 'early', title: '早起', date: scheduleDate, start: 0, end: 30, modified: 'm' }, { id: 'late', title: '晚间复习', date: scheduleDate, start: 1410, modified: 'm' }]].map(tasks => ({ tasks, expected: timeBounds(eventsOn({ ...labLine, tasks }, scheduleDate)) })),
+    dueReminders: taskList.flatMap(task => (task.due?.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind, 'due') }))),
+    scheduleDate, now: scheduleNow, request: slotRequest,
+    cases: ['must', 'prefer', 'allow', 'layer-only'].map(mode => {
+        const preferences: EventPreferences = Object.fromEntries(scheduled.map((event, i) => [preferenceKey(event, term.term), mode === 'layer-only' ? { layer: i + 1 } : { avoid: mode as 'must' | 'prefer' | 'allow' }]));
+        const personal = { ...labLine, preferences };
+        return { mode, preferences, events: eventsOn(personal, scheduleDate).map(event => ({ id: event.id, avoid: event.avoid, layer: event.layer })),
+            layers: layers(eventsOn(personal, scheduleDate)).map(item => ({ id: item.event.id, under: item.under, over: item.over })),
+            slots: availableSlots(personal, slotRequest, scheduleNow).slice(0, 4) };
+    }),
 };
 // One's own courses become meetings; a name of one's own follows a course into its labs and exams.
 const ownCourse: CustomCourse = { id: 'x1', name: '金工实习', days: [1, 3], periods: [1, 4], weeks: [16], room: '工程训练中心', teacher: '王老师' };
@@ -132,12 +151,18 @@ const courses = {
     custom: ownCourse,
     meetings: customMeetings(ownCourse).map(meeting => ({ id: meeting.id, teachingClass: meeting.teaching_class.id, name: meeting.course.name, weekday: meeting.weekday, periods: meeting.periods, weeks: meeting.weeks, room: meeting.room, teachers: meeting.teachers.map(teacher => teacher.name) })),
     names: ownNames,
+    hidden: (() => {
+        const names = { [courseIdentity(linkedCourse(classLabs[0]!, labMeetings))]: '自己的名（老师）' };
+        const meetings = labMeetings.filter(meeting => !sameCourse(classLabs[0]!, meeting));
+        const personal = { ...labLine, meetings, courseMeetings: labMeetings, names };
+        return { meetings, names, date: classLabs[0]!.date, events: eventsOn(personal, classLabs[0]!.date).map(labBrief), tones: Object.fromEntries(timelineTones(personal)) };
+    })(),
     renamed: {
-        meetings: labMeetings.map(meeting => ({ id: meeting.id, name: renamed(meeting, ownNames).course.name })),
-        labs: classLabs.map(lab => ({ id: lab.id, name: renamedAlong(lab, labMeetings, ownNames).course.name })),
-        exams: [labExam].map(exam => ({ id: exam.id, name: renamedAlong(exam, labMeetings, ownNames).course.name })),
+        meetings: labMeetings.map(meeting => ({ id: meeting.id, name: personalCourseName(meeting, labMeetings, ownNames) ?? meeting.course.name })),
+        labs: classLabs.map(lab => ({ id: lab.id, name: personalCourseName(lab, labMeetings, ownNames) ?? lab.course.name })),
+        exams: [labExam].map(exam => ({ id: exam.id, name: personalCourseName(exam, labMeetings, ownNames) ?? exam.course.name })),
     },
     weeks: ['1-16', '1-8,10,12-14', '单1-15', '双 2-16', '3，5、7周', '0-3', '1-20', '9-3', '第一周', '', '16'].map(text => ({ text, weeks: parseWeeks(text, 18) })),
 };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

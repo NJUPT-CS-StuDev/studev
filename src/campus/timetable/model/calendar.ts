@@ -5,11 +5,13 @@ import type { CalendarTerm } from '@/world/data';
 import { weekOfDate, type RunPlan, type Timeline } from '@/world/events';
 import { courseName, roomLabel } from '@/world/names';
 import { addDays, minutesOf } from '@/world/time';
+import { personalCourseName } from './courses';
 
 /** What can go into the file; the Android app writes each as its own calendar on the phone. */
 export const CALENDARS = [
     { kind: 'lessons', name: '课程' },
     { kind: 'exams', name: '考试' },
+    { kind: 'tasks', name: '任务' },
     { kind: 'run', name: '早锻炼' },
 ] as const;
 export type CalendarKind = typeof CALENDARS[number]['kind'];
@@ -37,11 +39,12 @@ interface Entry {
     /** A weekly series: its final date, and the weeks it skips. */
     until?: string; skip?: string[];
     reminders: number[];
+    transparent?: boolean;
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');
 const day = (date: string) => date.replaceAll('-', '');
-const local = (date: string, minutes: number) => `${day(date)}T${pad(Math.floor(minutes / 60))}${pad(minutes % 60)}00`;
+const local = (date: string, minutes: number) => `${day(addDays(date, Math.floor(minutes / 1440)))}T${pad(Math.floor(((minutes % 1440) + 1440) % 1440 / 60))}${pad(((minutes % 1440) + 1440) % 60)}00`;
 /** Campus time is UTC+8 all year. */
 const utc = (date: string, minutes: number) => minutes >= 480 ? `${local(date, minutes - 480)}Z` : `${local(addDays(date, -1), minutes + 960)}Z`;
 const text = (value: string) => value.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
@@ -73,9 +76,10 @@ export function calendarFile(name: string, entries: Entry[], stamp: Date): strin
         if (entry.until) lines.push(`RRULE:FREQ=WEEKLY;UNTIL=${utc(entry.until, entry.end!)}`);
         if (entry.skip?.length) lines.push(`EXDATE;TZID=Asia/Shanghai:${entry.skip.map(date => local(date, entry.start!)).join(',')}`);
         lines.push(`SUMMARY:${text(entry.summary)}`);
+        if (entry.transparent) lines.push('TRANSP:TRANSPARENT');
         if (entry.location) lines.push(`LOCATION:${text(entry.location)}`);
         if (entry.description) lines.push(`DESCRIPTION:${text(entry.description)}`);
-        for (const minutes of entry.reminders) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${text(entry.summary)}`, `TRIGGER:-PT${minutes}M`, 'END:VALARM');
+        for (const minutes of entry.reminders) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${text(entry.summary)}`, `TRIGGER:${minutes < 0 ? '' : '-'}PT${Math.abs(minutes)}M`, 'END:VALARM');
         lines.push('END:VEVENT');
     }
     lines.push('END:VCALENDAR');
@@ -93,7 +97,7 @@ export function lessonEntries(line: Timeline): Entry[] {
         for (let date = dates[0]!; date < dates.at(-1)!; date = addDays(date, 7)) if (!dates.includes(date)) skip.push(date);
         const weeks = dates.map(date => weekOfDate(line.term, date));
         return [{
-            uid: `${meeting.id}`, summary: courseName(meeting.course.name), location: roomLabel(meeting.room ?? meeting.location),
+            uid: `${meeting.id}`, summary: personalCourseName(meeting, line.courseMeetings ?? line.meetings, line.names) ?? courseName(meeting.course.name), location: roomLabel(meeting.room ?? meeting.location),
             description: [`第 ${weeks[0]}–${weeks.at(-1)} 周`, meeting.teachers.map(teacher => teacher.name).join('、')].filter(Boolean).join(' · '),
             date: dates[0]!, start: minutesOf(first.start), end: minutesOf(last.end), until: dates.at(-1)!, skip, reminders: [LESSON_REMINDER],
         }];
@@ -102,13 +106,13 @@ export function lessonEntries(line: Timeline): Entry[] {
 
 /** Each lab sitting the timeline holds, on its own date. */
 export const labEntries = (line: Timeline): Entry[] => line.labs.map((lab: Lab) => ({
-    uid: lab.id, summary: `实验 · ${courseName(lab.course.name)}`, location: roomLabel(lab.room ?? lab.place),
+    uid: lab.id, summary: `实验 · ${personalCourseName(lab, line.courseMeetings ?? line.meetings, line.names) ?? courseName(lab.course.name)}`, location: roomLabel(lab.room ?? lab.place),
     description: [lab.project, lab.teachers.join('、')].filter(Boolean).join(' · '),
     date: lab.date, start: minutesOf(lab.start), end: minutesOf(lab.end), reminders: [LESSON_REMINDER],
 }));
 
-export const examEntries = (exams: Exam[], reminders: ExamReminder[]): Entry[] => exams.map(exam => ({
-    uid: exam.id, summary: `考试 · ${courseName(exam.course.name)}`, location: roomLabel(exam.room ?? exam.location),
+export const examEntries = (exams: Exam[], reminders: ExamReminder[], line?: Timeline): Entry[] => exams.map(exam => ({
+    uid: exam.id, summary: `考试 · ${(line && personalCourseName(exam, line.courseMeetings ?? line.meetings, line.names)) ?? courseName(exam.course.name)}`, location: roomLabel(exam.room ?? exam.location),
     description: [exam.teacher ? `任课老师 ${exam.teacher}` : '', exam.students ? `本考场 ${exam.students} 人` : ''].filter(Boolean).join(' · '),
     date: exam.date, start: minutesOf(exam.start), end: minutesOf(exam.end),
     reminders: reminders.map(key => examReminderMinutes(key, minutesOf(exam.start))),
@@ -118,6 +122,17 @@ export const runEntries = ({ rule, days }: RunPlan): Entry[] => days.map(date =>
     uid: `run-${date}`, summary: '早锻炼', location: rule.xianlin?.route.join(' ↔ ') ?? '', description: '',
     date, start: minutesOf(rule.time[0]), end: minutesOf(rule.time[1]), reminders: [RUN_REMINDER],
 }));
+
+/** A planned work block occupies its time. A deadline is only a transparent marker. */
+export const taskEntries = (line: Timeline): Entry[] => line.tasks.filter(task => !task.parent && !task.done).flatMap(task => {
+    const out: Entry[] = [];
+    if (task.date && task.start !== undefined) out.push({ uid: `task-${task.id}-plan`, summary: task.title, location: '', description: task.note ?? '',
+        date: task.date, start: task.start, end: task.end ?? Math.min(1440, task.start + 30), reminders: task.remind ?? [] });
+    if (task.due) out.push({ uid: `task-${task.id}-due`, summary: `截止 · ${task.title}`, location: '', description: task.note ?? '', date: task.due.date,
+        ...(task.due.time !== undefined ? { start: task.due.time, end: task.due.time + 1 } : {}),
+        reminders: task.due.time !== undefined ? task.due.remind ?? [] : (task.due.remind ?? []).map(minute => -minute), transparent: true });
+    return out;
+});
 
 /**
  * The days in a term without lessons, whole-day, so a gap among the lessons says why it is there.

@@ -5,7 +5,7 @@ import { writePreferences, type Preferences } from '@/world/preferences';
 import { loadCalendar } from '@/world/data';
 import type { Timeline } from '@/world/events';
 import { Sheet, Toggle } from '@/world/ui';
-import { CALENDARS, DEFAULT_EXAM_REMINDERS, EXAM_REMINDERS, calendarFile, daysOffEntries, downloadCalendar, examEntries, labEntries, lessonEntries, runEntries, type CalendarKind, type ExamReminder } from './model/calendar';
+import { CALENDARS, DEFAULT_EXAM_REMINDERS, EXAM_REMINDERS, calendarFile, daysOffEntries, downloadCalendar, examEntries, labEntries, lessonEntries, runEntries, taskEntries, type CalendarKind, type ExamReminder } from './model/calendar';
 
 export function CalendarSheet({ line, className, prefs, onClose }: { line: Timeline; className: string; prefs: Preferences; onClose: () => void }) {
     const kinds = CALENDARS.filter(({ kind }) => kind !== 'run' || line.run);
@@ -15,7 +15,8 @@ export function CalendarSheet({ line, className, prefs, onClose }: { line: Timel
     const download = async () => {
         const entries = [
             ...(picked.includes('lessons') ? [...lessonEntries(line), ...labEntries(line), ...daysOffEntries(await loadCalendar())] : []),
-            ...(picked.includes('exams') ? examEntries(line.exams, reminders) : []),
+            ...(picked.includes('exams') ? examEntries(line.exams, reminders, line) : []),
+            ...(picked.includes('tasks') ? taskEntries(line) : []),
             ...(picked.includes('run') && line.run ? runEntries(line.run) : []),
         ];
         downloadCalendar(`StuDev ${className}.ics`, calendarFile(`StuDev ${className}`, entries, new Date()));

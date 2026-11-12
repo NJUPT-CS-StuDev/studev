@@ -9,7 +9,7 @@ import { walkMinutes } from '@/world/walk';
 import { Chevron } from '@/world/ui';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 
-const tileStyle = (event: CampusEvent, tones: Map<string, number>, line: Timeline) => { const tone = eventTone(tones, event, line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
+const tileStyle = (event: CampusEvent, tones: Map<string, number>, line: Timeline) => { const tone = eventTone(tones, event, line.courseMeetings ?? line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
 const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'class' ? '' : event.kind;
 /** Free rooms are the rooms dimension of search, at a moment. */
 const roomsAt = (date: string, min: number) => `/search/?scope=room&t=${momentText({ date, min })}`;
@@ -62,10 +62,10 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, o
     // What is due by the end of the day, with no time of its own, is listed above the day's hours.
     const due = dueOn(line, day);
     const dues = due.length > 0 && <div className="dues">
-        <h3 className="sh">今天截止</h3>
+        <h3 className="sh">{day === now.date ? '今天' : dateLabel(day)}截止</h3>
         {due.map(task => <div key={task.id} className={`trow-i p${task.priority ?? 0}`}>
             <button className={`tcheck ${task.done ? 'on' : ''}`} aria-label={task.done ? '标为未完成' : '完成'} onClick={() => toggleDone(task)} />
-            <button className="tmain" onClick={() => onTask(task)}><b className={task.done ? 'task-done' : ''}>{task.title}</b></button>
+            <button className="tmain" onClick={() => onTask(task)}><b className={task.done ? 'task-done' : ''}>{task.title}</b><small>{task.due?.time !== undefined ? hm(task.due.time) : '当天结束'}</small></button>
         </div>)}
     </div>;
     if (!events.length) return <>{head}{strip}{dues}{!due.length && <div className="empty">{line.holidays.get(day) ?? '这一天没有安排'}</div>}</>;

@@ -10,15 +10,15 @@ import java.time.LocalDate
 /** What the home-screen widget shows: the rest of today, or the next day that has something. */
 object WidgetDay {
     fun of(line: CampusLine, now: Moment): List<LineEvent> =
-        line.on(now.date).filter { it.end > now.min }.ifEmpty {
-            generateSequence(now.date.plusDays(1)) { it.plusDays(1) }.take(30).map(line::on).firstOrNull { it.isNotEmpty() }.orEmpty()
+        line.on(now.date).filter { it.end > now.min && it.task?.done == null }.ifEmpty {
+            generateSequence(now.date.plusDays(1)) { it.plusDays(1) }.take(30).map { day -> line.on(day).filter { it.task?.done == null } }.firstOrNull { it.isNotEmpty() }.orEmpty()
         }
 
     /** The week a "now" view shows (what is left of this one, or the next one once it is over), Monday to
      *  Sunday, Saturday and Sunday only when something happens on them. */
     fun week(line: CampusLine, now: Moment): List<Pair<LocalDate, List<LineEvent>>> {
         val monday = line.weekShown(now)
-        val days = (0L until 7L).map { monday.plusDays(it) }.map { it to line.on(it) }
+        val days = (0L until 7L).map { monday.plusDays(it) }.map { date -> date to line.on(date).filter { it.task?.done == null } }
         return days.filter { (date, events) -> date.dayOfWeek.value <= 5 || events.isNotEmpty() }
     }
 

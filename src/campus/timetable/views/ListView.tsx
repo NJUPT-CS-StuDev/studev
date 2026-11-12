@@ -12,10 +12,11 @@ const examGroup = (date: string, now: Moment): TaskGroup => {
     const days = daysBetween(now.date, date);
     return days === 0 ? 'today' : days === 1 ? 'tomorrow' : days <= 7 ? 'week' : 'later';
 };
-const when = (task: Task, now: Moment) => !task.date ? '' : [
-    daysBetween(now.date, task.date) === 0 ? '今天' : daysBetween(now.date, task.date) === 1 ? '明天' : `${dateLabel(task.date)} ${WEEKDAYS[weekdayOf(task.date)]}`,
-    task.start !== undefined ? `${hm(task.start)}${task.end !== undefined ? `–${hm(task.end)}` : ''}` : '',
-].filter(Boolean).join(' ');
+const when = (task: Task, now: Moment) => {
+    const day = (date: string) => daysBetween(now.date, date) === 0 ? '今天' : daysBetween(now.date, date) === 1 ? '明天' : `${dateLabel(date)} ${WEEKDAYS[weekdayOf(date)]}`;
+    return [task.date ? `计划 ${day(task.date)} ${task.start !== undefined ? hm(task.start) : ''}${task.end !== undefined ? `–${hm(task.end)}` : ''}` : '',
+        task.due ? `截止 ${day(task.due.date)} ${task.due.time !== undefined ? hm(task.due.time) : '当天结束'}` : ''].filter(Boolean).join(' · ');
+};
 
 export function ListView({ line, now, courses, onTask, onOpen }: { line: Timeline; now: Moment; courses: Map<string, string>; onTask: (task: Task) => void; onOpen: (event: CampusEvent) => void }) {
     const [draft, setDraft] = useState('');

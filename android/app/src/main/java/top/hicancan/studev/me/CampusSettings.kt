@@ -21,7 +21,7 @@ data class TimetableEdits(
 
 /** Lab sheets left out, lab courses not taken and single sittings missed. */
 @Serializable
-data class LabChoices(val off: List<String> = emptyList(), val drop: List<String> = emptyList(), val skip: List<String> = emptyList())
+data class LabChoices(val off: List<String> = emptyList(), val drop: List<String> = emptyList(), val skip: List<String> = emptyList(), val classes: List<String> = emptyList())
 
 data class PersonalSettings(
     val klass: String? = null,
@@ -38,6 +38,7 @@ data class PersonalSettings(
     val timetable: Map<String, TimetableEdits> = emptyMap(),
     val examAttendance: Map<String, Map<String, Boolean>> = emptyMap(),
     val calendarExams: Boolean = false,
+    val calendarTasks: Boolean = false,
     /** null until someone chooses: 大一大二 see 早锻炼 by default. */
     val runShown: Boolean? = null,
     /** The mornings put down for 早锻炼; gone by counts as run. */
@@ -54,6 +55,7 @@ data class PersonalSettings(
     /** Which kind shows in front when things overlap, front first. */
     val layers: List<String> = top.hicancan.studev.world.CampusLine.LAYER_ORDER,
     val labs: LabChoices = LabChoices(),
+    val events: Map<String, top.hicancan.studev.world.EventPreference> = emptyMap(),
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -106,6 +108,7 @@ class CampusSettings(context: Context) {
             runCatching { sanitizeAttendance(Json.decodeFromString<Map<String, Map<String, Boolean>>>(it)) }.getOrDefault(emptyMap())
         } ?: emptyMap(),
         calendarExams = store.getBoolean("calendar-exams", false),
+        calendarTasks = store.getBoolean("calendar-tasks", false),
         runShown = if (store.contains("run-shown")) store.getBoolean("run-shown", false) else null,
         runDays = store.getString("run-days", null)?.let { raw -> runCatching { Json.decodeFromString<List<String>>(raw) }.getOrNull() } ?: emptyList(),
         runAdjust = store.getInt("run-adjust", 0),
@@ -116,6 +119,7 @@ class CampusSettings(context: Context) {
         // Only a whole ordering of every kind is kept: a partial one would leave some kind nowhere.
         layers = store.getString("layers", null)?.let { Json.decodeFromString<List<String>>(it) }?.takeIf { it.sorted() == top.hicancan.studev.world.CampusLine.LAYER_ORDER.sorted() } ?: top.hicancan.studev.world.CampusLine.LAYER_ORDER,
         labs = store.getString("labs", null)?.let { Json.decodeFromString<LabChoices>(it) } ?: LabChoices(),
+        events = store.getString("events", null)?.let { Json.decodeFromString<Map<String, top.hicancan.studev.world.EventPreference>>(it) } ?: emptyMap(),
     ))
     val state = _state.asStateFlow()
     fun update(change: (PersonalSettings) -> PersonalSettings) {
@@ -129,7 +133,7 @@ class CampusSettings(context: Context) {
             .putBoolean("ball-hinted", next.ballHinted)
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
-            .putBoolean("calendar-exams", next.calendarExams)
+            .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-tasks", next.calendarTasks).putString("events", Json.encodeToString(next.events))
             .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders)).putString("layers", Json.encodeToString(next.layers)).putString("labs", Json.encodeToString(next.labs))
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next

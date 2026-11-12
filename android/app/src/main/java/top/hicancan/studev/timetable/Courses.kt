@@ -39,20 +39,13 @@ object Courses {
     }
     fun isCustom(teachingClass: String) = teachingClass.startsWith("custom:")
 
-    /** A lesson under the name its person gave its course, if they gave one. */
-    fun renamed(meeting: TeachingMeeting, names: Map<String, String>): TeachingMeeting =
-        names[TimetablePresentation.identity(meeting)]?.let { meeting.copy(course = meeting.course.copy(name = it)) } ?: meeting
-    /** A lab under the name its person gave the course it belongs to. */
-    fun renamed(lab: Lab, meetings: List<TeachingMeeting>, names: Map<String, String>): Lab =
-        names[TimetablePresentation.linked(lab, meetings)]?.let { lab.copy(course = lab.course.copy(name = it)) } ?: lab
-    /** An exam under the name its person gave the course it belongs to. */
-    fun renamed(exam: Exam, meetings: List<TeachingMeeting>, names: Map<String, String>): Exam =
-        names[TimetablePresentation.linked(exam.course.code, exam.course.name, meetings)]?.let { exam.copy(course = ExamCourse(exam.course.code, it)) } ?: exam
+    /** Personal labels never rewrite public course facts or pass through bracket stripping. */
+    fun personalName(code: String?, name: String, meetings: List<TeachingMeeting>, names: Map<String, String>): String? =
+        names[TimetablePresentation.linked(code, name, meetings)]
 
     /** A timeline as its person names things: every lesson, lab and exam under the name they gave its course. */
-    fun named(line: CampusLine, names: Map<String, String>): CampusLine = if (names.isEmpty()) line else CampusLine(
-        line.term, line.periods, line.meetings.map { renamed(it, names) }, line.labs.map { renamed(it, line.meetings, names) },
-        line.exams.map { renamed(it, line.meetings, names) }, line.holidays, line.run, line.tasks,
+    fun named(line: CampusLine, names: Map<String, String>, preferences: Map<String, top.hicancan.studev.world.EventPreference> = line.preferences): CampusLine = CampusLine(
+        line.term, line.periods, line.meetings, line.labs, line.exams, line.holidays, line.run, line.tasks, preferences, names, line.courseMeetings,
     )
 
     /** "1-16", "1-8,10,12-14", "单1-15", "双 2-16": the weeks written; null when the text is not weeks. */

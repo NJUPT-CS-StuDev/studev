@@ -4,19 +4,21 @@ import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
 /**
- * One's own task, the same as src/campus/world/tasks.ts. With a date and a time it sits on that day like a lesson and
- * may share the time with one; with only a date it is due that day; with neither it waits to be given one.
+ * One's own task, the same as src/campus/world/tasks.ts. Planned execution occupies time; its deadline is independent.
  */
+@Serializable data class TaskDeadline(val date: String, val time: Int? = null, val remind: List<Int>? = null)
+
 @Serializable data class Task(
     val id: String,
     val title: String,
     val note: String? = null,
-    /** The day it is on or due; absent while it waits for one. */
+    /** The day planned for execution. */
     val date: String? = null,
-    /** Minutes into the day; absent for a task due by the end of its day. */
+    /** Planned start and end, in minutes into the day. */
     val start: Int? = null,
     val end: Int? = null,
-    /** When it reminds: minutes before it starts, or for one due by the end of a day, minutes into the day before which. */
+    val due: TaskDeadline? = null,
+    /** Minutes before execution; deadline reminders belong to due. */
     val remind: List<Int>? = null,
     /** 0 none, 1 low, 2 medium, 3 high. */
     val priority: Int? = null,
@@ -34,23 +36,29 @@ import java.time.LocalDate
 object Tasks {
     /** A task given a time but no end takes this long on the line. */
     const val MINUTES = 30
-    val GROUPS = listOf("overdue" to "已过期", "today" to "今天", "tomorrow" to "明天", "week" to "未来 7 天", "later" to "更晚", "someday" to "还没排日期")
+    val GROUPS = listOf("overdue" to "待补做", "today" to "今天", "tomorrow" to "明天", "week" to "未来 7 天", "later" to "更晚", "someday" to "还没排日期")
     val TIMED_REMINDERS = listOf(0 to "准时", 15 to "提前 15 分钟", 60 to "提前 1 小时", 1440 to "提前 1 天")
     val DAY_REMINDERS = listOf(8 * 60 to "当天 8:00", 12 * 60 to "当天 12:00", 20 * 60 to "当天 20:00")
 
     /** Where a task stands for a list; one done or a step is not asked. */
     fun group(task: Task, now: Moment): String {
-        val date = task.date?.let(LocalDate::parse) ?: return "someday"
+        val at = at(task) ?: return "someday"
+        val date = LocalDate.parse(at.first)
         val days = CampusLine.daysBetween(now.date, date)
-        if (days < 0 || (days == 0 && task.start != null && (task.end ?: task.start) <= now.min)) return "overdue"
+        if (days < 0 || (days == 0 && at.second <= now.min)) return "overdue"
         return when { days == 0 -> "today"; days == 1 -> "tomorrow"; days <= 7 -> "week"; else -> "later" }
     }
     /** In a group: the earliest first, then the most important, then the oldest. */
-    val order: Comparator<Task> = compareBy<Task> { it.date ?: "9999" }.thenBy { it.start ?: 1440 }.thenByDescending { it.priority ?: 0 }.thenBy { it.id }
+    fun at(task: Task): Pair<String, Int>? = listOfNotNull(task.date?.let { it to (task.end ?: task.start ?: 1440) }, task.due?.let { it.date to (it.time ?: 1440) })
+        .sortedWith(compareBy<Pair<String, Int>> { it.first }.thenBy { it.second }).firstOrNull()
+    val order: Comparator<Task> = compareBy<Task> { at(it)?.first ?: "9999" }.thenBy { at(it)?.second ?: 1440 }.thenByDescending { it.priority ?: 0 }.thenBy { it.id }
+    /** Rewrite the old date-only deadline once, before current readers see it. Timed plans keep their time. */
+    fun migrateTimes(task: Task): Task = if (task.date != null && task.start == null)
+        task.copy(date = null, start = null, end = null, remind = null, due = task.due ?: TaskDeadline(task.date, remind = task.remind)) else task
     /** When a reminder goes off, as a date and minutes into it. */
-    fun reminderAt(task: Task, remind: Int): Pair<LocalDate, Int>? {
-        var date = task.date?.let(LocalDate::parse) ?: return null
-        val start = task.start ?: return date to remind
+    fun reminderAt(task: Task, remind: Int, anchor: String = "plan"): Pair<LocalDate, Int>? {
+        var date = (if (anchor == "due") task.due?.date else task.date)?.let(LocalDate::parse) ?: return null
+        val start = (if (anchor == "due") task.due?.time else task.start) ?: return date to remind
         var min = start - remind
         while (min < 0) { min += 1440; date = date.minusDays(1) }
         return date to min
@@ -61,7 +69,7 @@ object Tasks {
      * What a task typed in one line says of its day and time: 今天、明天、后天, 周三 (the next one, today included), 下周三,
      * and a clock such as 14:30 or 下午3点. The words are taken out of the title; anything else stays in it.
      */
-    data class Quick(val title: String, val date: String? = null, val start: Int? = null)
+    data class Quick(val title: String, val date: String? = null, val start: Int? = null, val due: TaskDeadline? = null)
     fun parse(input: String, now: Moment): Quick {
         var title = input.trim()
         var date: LocalDate? = null
@@ -85,6 +93,8 @@ object Tasks {
             if (hour < 24) start = hour * 60 + if (it.groupValues[3].isNotEmpty()) 30 else 0
         }
         if (start != null && date == null) date = now.date
+        if (date != null && (start == null || Regex("截止|之前|^前").containsMatchIn(title)))
+            return Quick(title.replaceFirst(Regex("截止|之前|^前"), "").trim().ifEmpty { input.trim() }, due = TaskDeadline(date.toString(), start))
         return Quick(title.ifEmpty { input.trim() }, date?.toString(), start)
     }
 }

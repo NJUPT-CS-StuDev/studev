@@ -22,6 +22,7 @@ import { TaskSheet } from './TaskSheet';
 import { ListView } from './views/ListView';
 import { courseName } from '@/world/names';
 import type { Task } from '@/world/tasks';
+import { labCourseKey } from './model/labs';
 import '../campus.css';
 
 // The list is one's own: tasks by when they are due, exams among them.
@@ -151,7 +152,7 @@ export default function TimetableApp() {
             {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} order={prefs.layers ?? LAYER_ORDER} onClose={() => setOpen(null)} onOpen={setOpen}
                 onSkipLab={event => { mine.labs('skip', event.lab!.id); setOpen(null); }}
                 onRename={(event, name) => { const id = courseIdentity(event.meeting!); updateTimetableEdits(term.term, edits => { const names = { ...edits.names }; if (name) names[id] = name; else delete names[id]; return { ...edits, names: Object.keys(names).length ? names : undefined }; }); setOpen(null); }}
-                onDropLab={event => { mine.labs('drop', courseIdentity(event.lab!)); setOpen(null); }}
+                onDropLab={event => { mine.labs('drop', labCourseKey(event.lab!)); setOpen(null); }}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}
                 onUnplan={() => { updateRun({ days: toggleRun(line.run!.days, open.date) }); setOpen(null); }}

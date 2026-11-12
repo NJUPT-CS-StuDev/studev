@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Exam, Lab, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import type { Task } from '@/world/tasks';
-import { attendingLabs, personalLabs } from '@/timetable/model/labs';
-import { customMeetings, renamed, renamedAlong } from '@/timetable/model/courses';
+import { attendingLabs, migrateLabChoices, personalLabs } from '@/timetable/model/labs';
+import { customMeetings } from '@/timetable/model/courses';
 import { attendingExams } from '@/timetable/model/examAttendance';
-import { examAttendanceScope, timetableEdits, type Preferences, type TimetableEdits } from '@/world/preferences';
+import { examAttendanceScope, timetableEdits, writePreferences, type Preferences, type TimetableEdits } from '@/world/preferences';
 import { loadCalendar, loadClasses, loadClassExams, loadClassLabs, loadClassMeetings, loadExams, loadLabs, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf, holidayMap, type Timeline } from '@/world/events';
 import { courseName } from '@/world/names';
@@ -58,11 +58,17 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
     const edits = useMemo(() => who.type === 'me' ? timetableEdits(prefs, term) : { hidden: [] as string[], added: [] as string[] } as TimetableEdits, [prefs, term, who.type]);
     const [catalogRows, setCatalogRows] = useState<TeachingMeeting[]>([]);
     const [catalogLabs, setCatalogLabs] = useState<Lab[]>([]);
-    const needAll = edits.added.length > 0 || Boolean(preview);
+    const needMeetings = edits.added.length > 0 || Boolean(preview);
+    const needAll = needMeetings || Boolean(prefs.labs?.classes?.length);
+    useEffect(() => {
+        if (!source || !prefs.labs) return;
+        const migrated = migrateLabChoices([...source.labs, ...catalogLabs], prefs.labs);
+        if (migrated !== prefs.labs) writePreferences(current => ({ ...current, labs: migrateLabChoices([...source.labs, ...catalogLabs], current.labs ?? {}) }));
+    }, [source, catalogLabs, prefs.labs]);
     useEffect(() => {
         if (!needAll) return;
         let live = true;
-        Promise.all([loadMeetings(), edits.added.length ? loadLabs() : Promise.resolve([] as Lab[])]).then(([all, labs]) => {
+        Promise.all([needMeetings ? loadMeetings() : Promise.resolve([] as TeachingMeeting[]), prefs.labs?.classes?.length ? loadLabs() : Promise.resolve([] as Lab[])]).then(([all, labs]) => {
             if (!live) return;
             const wanted = new Set(edits.added);
             setCatalogRows(all.filter(meeting => wanted.has(meeting.teaching_class.id)));
@@ -70,7 +76,7 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
             setPreviewRows(preview ? all.filter(meeting => meeting.teaching_class.id === preview) : []);
         }).catch(() => undefined);
         return () => { live = false; };
-    }, [edits.added, needAll, preview]);
+    }, [edits.added, needAll, needMeetings, prefs.labs?.classes, preview]);
 
     return useMemo<{ loaded: Loaded | null; error: string | null; previewRows: TeachingMeeting[] }>(() => {
         if (!base || !source || source.key !== key) return { loaded: null, error, previewRows };
@@ -79,15 +85,17 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         const added = catalogRows.filter(meeting => !own.some(row => row.id === meeting.id));
         // One's own courses join as meetings, and every lesson carries the name its person gave its course.
         const plain = distinct([...own, ...added, ...(edits.custom ?? []).flatMap(customMeetings)]);
-        const meetings = plain.map(meeting => renamed(meeting, edits.names));
+        const meetings = plain;
         const classInfo = classId ? base.classes.find(item => item.id === classId || item.name === classId) ?? null : null;
         const codes = new Set(meetings.map(meeting => meeting.course.code ?? ''));
         const choices = classId ? prefs.examAttendance?.[examAttendanceScope(base.term.term, classId)] ?? {} : {};
         const exams = who.type === 'me' ? attendingExams(source.exams, choices, codes) : source.exams;
         const grade = gradeOf(classInfo?.grade, base.term);
         const runOn = who.type === 'me' && base.run && (prefs.run?.on ?? (grade !== null && grade <= 2));
-        const labs = who.type === 'me' ? attendingLabs(personalLabs(source.labs, source.meetings, own, added, catalogLabs), prefs.labs) : source.labs;
-        const line: Timeline = { term: base.term, periods: base.periods, meetings, labs: labs.map(lab => renamedAlong(lab, plain, edits.names)), exams: exams.map(exam => renamedAlong(exam, plain, edits.names)), holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null, tasks: who.type === 'me' ? tasks : [] };
+        const labs = who.type === 'me' ? attendingLabs(personalLabs(source.labs, prefs.labs?.classes ?? [], catalogLabs), prefs.labs) : source.labs;
+        const line: Timeline = { term: base.term, periods: base.periods, meetings, labs, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null, tasks: who.type === 'me' ? tasks : [], names: edits.names };
+        line.preferences = who.type === 'me' ? prefs.events : undefined;
+        line.courseMeetings = distinct([...source.meetings, ...plain]);
         return { loaded: { ...base, line, own, added, classInfo }, error, previewRows };
-    }, [base, catalogLabs, catalogRows, classId, prefs.labs, tasks, edits.hidden, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
+    }, [base, catalogLabs, catalogRows, classId, prefs.labs, prefs.events, tasks, edits, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
 }

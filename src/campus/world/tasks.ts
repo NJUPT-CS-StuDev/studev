@@ -1,18 +1,19 @@
-// A person's own tasks, kept on this device. A task is one more kind of thing on the timeline: with a date and a
-// time it sits on that day like a lesson, and may share the time with one; with only a date it is due that day;
-// with neither it waits to be given one. Nothing here leaves the device.
+// A person's own tasks. A deadline and planned execution are independent; only the latter occupies time.
+// An unplanned task may have a deadline or wait for one. Nothing here leaves the device.
 import { addDays, daysBetween, type Moment } from './time';
 
 export interface Task {
     id: string;
     title: string;
     note?: string;
-    /** The day it is on or due; absent while it waits for one. */
+    /** The day planned for doing it. Independent of its deadline. */
     date?: string;
-    /** Minutes into the day; absent for a task due by the end of its day. */
+    /** Planned start and end, in minutes into the day. */
     start?: number;
     end?: number;
-    /** When it reminds: minutes before it starts, or for one due by the end of a day, minutes into the day before which. */
+    /** When it must be finished. Without a time, by the end of that day. */
+    due?: { date: string; time?: number; remind?: number[] };
+    /** Minutes before planned execution; deadline reminders belong to due. */
     remind?: number[];
     /** 0 none, 1 low, 2 medium, 3 high. */
     priority?: 0 | 1 | 2 | 3;
@@ -44,6 +45,14 @@ export function sanitizeTask(raw: unknown): Task | null {
     if (typeof record.date === 'string' && DATE.test(record.date)) task.date = record.date;
     const start = minute(record.start), end = minute(record.end);
     if (task.date && start !== undefined) { task.start = start; if (end !== undefined && end > start) task.end = end; }
+    if (record.due && typeof record.due === 'object') {
+        const due = record.due as Record<string, unknown>;
+        if (typeof due.date === 'string' && DATE.test(due.date)) {
+            task.due = { date: due.date };
+            const time = minute(due.time); if (time !== undefined) task.due.time = time;
+            if (Array.isArray(due.remind)) task.due.remind = [...new Set(due.remind.filter((value): value is number => Number.isInteger(value) && value >= 0 && value <= 10080))];
+        }
+    }
     if (Array.isArray(record.remind)) { const remind = [...new Set(record.remind.filter(value => typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 7 * 1440))].sort((a, b) => a - b); if (remind.length) task.remind = remind; }
     if (record.priority === 1 || record.priority === 2 || record.priority === 3) task.priority = record.priority;
     const parent = text(record.parent, 80); if (parent) task.parent = parent;
@@ -59,7 +68,20 @@ const storage = (): Storage | null => { try { return window.localStorage; } catc
 export function readTasks(): Task[] {
     const raw = storage()?.getItem(KEY);
     if (!raw) return [];
-    try { const list = JSON.parse(raw); return Array.isArray(list) ? list.map(sanitizeTask).filter((task): task is Task => task !== null) : []; } catch { return []; }
+    try {
+        const list = JSON.parse(raw);
+        if (!Array.isArray(list)) return [];
+        const tasks = list.map(sanitizeTask).filter((task): task is Task => task !== null);
+        const migrated = tasks.map(migrateTaskTimes);
+        if (tasks.some((task, index) => task !== migrated[index])) { try { storage()?.setItem(KEY, JSON.stringify(migrated)); } catch { /* Readable even when storage cannot be updated. */ } }
+        return migrated;
+    } catch { return []; }
+}
+/** Persist the old date-only deadline as a deadline before any current reader uses it. Timed plans stay put. */
+export function migrateTaskTimes(task: Task): Task {
+    if (!task.date || task.start !== undefined) return task;
+    const { date, start, end, remind, ...rest } = task;
+    return { ...rest, due: task.due ?? { date, ...(remind?.length ? { remind } : {}) } };
 }
 export function writeTasks(change: (tasks: Task[]) => Task[]): Task[] {
     const next = change(readTasks());
@@ -76,7 +98,10 @@ export function subscribeTasks(listener: () => void): () => void {
 const stamp = () => new Date().toISOString();
 export const newTaskId = () => (crypto.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`);
 /** Adds a task, or changes one: the change is stamped so that the newer side wins a merge. */
-export const saveTask = (task: Omit<Task, 'modified'>) => writeTasks(tasks => [...tasks.filter(item => item.id !== task.id), { ...task, modified: stamp() }]);
+export const saveTask = (task: Omit<Task, 'modified'>) => {
+    if (task.date && task.start === undefined) throw new Error('执行安排需要开始时间；截止日期请填写在截止时间中。');
+    return writeTasks(tasks => [...tasks.filter(item => item.id !== task.id), { ...task, modified: stamp() }]);
+};
 /** Deleting keeps a mark, and takes its steps with it. */
 export const deleteTask = (id: string) => writeTasks(tasks => tasks.map(task => task.id === id || task.parent === id ? { id: task.id, title: task.title, modified: stamp(), deleted: true as const } : task));
 export const toggleDone = (task: Task) => saveTask({ ...task, done: task.done ? undefined : stamp() });
@@ -90,27 +115,36 @@ export const liveTasks = (tasks: Task[]) => tasks.filter(task => !task.deleted);
  */
 export type TaskGroup = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'someday';
 export const TASK_GROUPS: { key: TaskGroup; name: string }[] = [
-    { key: 'overdue', name: '已过期' }, { key: 'today', name: '今天' }, { key: 'tomorrow', name: '明天' },
+    { key: 'overdue', name: '待补做' }, { key: 'today', name: '今天' }, { key: 'tomorrow', name: '明天' },
     { key: 'week', name: '未来 7 天' }, { key: 'later', name: '更晚' }, { key: 'someday', name: '还没排日期' },
 ];
 export function taskGroup(task: Task, now: Moment): TaskGroup {
-    if (!task.date) return 'someday';
-    const days = daysBetween(now.date, task.date);
-    if (days < 0 || (days === 0 && task.start !== undefined && (task.end ?? task.start) <= now.min)) return 'overdue';
+    const at = taskWhen(task);
+    if (!at) return 'someday';
+    const days = daysBetween(now.date, at.date);
+    if (days < 0 || (days === 0 && at.time <= now.min)) return 'overdue';
     return days === 0 ? 'today' : days === 1 ? 'tomorrow' : days <= 7 ? 'week' : 'later';
+}
+/** The earlier outstanding plan or deadline gives the list its day; both remain visible in the task. */
+export function taskWhen(task: Task): { date: string; time: number } | null {
+    const times = [task.date ? { date: task.date, time: task.end ?? task.start ?? 1440 } : null,
+        task.due ? { date: task.due.date, time: task.due.time ?? 1440 } : null].filter((at): at is { date: string; time: number } => at !== null);
+    return times.sort((a, b) => a.date.localeCompare(b.date) || a.time - b.time)[0] ?? null;
 }
 /** In a group: the earliest first, then the most important, then the oldest. */
 export const taskOrder = (left: Task, right: Task) =>
-    (left.date ?? '9999').localeCompare(right.date ?? '9999') || (left.start ?? 1440) - (right.start ?? 1440)
+    (taskWhen(left)?.date ?? '9999').localeCompare(taskWhen(right)?.date ?? '9999') || (taskWhen(left)?.time ?? 1440) - (taskWhen(right)?.time ?? 1440)
     || (right.priority ?? 0) - (left.priority ?? 0) || left.id.localeCompare(right.id);
 /** What reminders a task can have: for one at a time, before it starts; for one due by a day's end, a time that day. */
 export const TIMED_REMINDERS = [{ minutes: 0, name: '准时' }, { minutes: 15, name: '提前 15 分钟' }, { minutes: 60, name: '提前 1 小时' }, { minutes: 1440, name: '提前 1 天' }];
 export const DAY_REMINDERS = [{ minutes: 8 * 60, name: '当天 8:00' }, { minutes: 12 * 60, name: '当天 12:00' }, { minutes: 20 * 60, name: '当天 20:00' }];
 /** When a reminder goes off, as a date and minutes into it. */
-export function reminderAt(task: Task, remind: number): { date: string; min: number } | null {
-    if (!task.date) return null;
-    if (task.start === undefined) return { date: task.date, min: remind };
-    let min = task.start - remind, date = task.date;
+export function reminderAt(task: Task, remind: number, anchor: 'plan' | 'due' = 'plan'): { date: string; min: number } | null {
+    const day = anchor === 'due' ? task.due?.date : task.date;
+    const time = anchor === 'due' ? task.due?.time : task.start;
+    if (!day) return null;
+    if (time === undefined) return { date: day, min: remind };
+    let min = time - remind, date = day;
     while (min < 0) { min += 1440; date = addDays(date, -1); }
     return { date, min };
 }
@@ -120,7 +154,7 @@ const WEEKDAY_WORDS = '一二三四五六日天';
  * What a task typed in one line says of its day and time: 今天、明天、后天, 周三 (the next one, today included),
  * 下周三, and a clock such as 14:30 or 下午3点. The words are taken out of the title; anything else stays in it.
  */
-export function parseQuickTask(input: string, now: Moment): { title: string; date?: string; start?: number } {
+export function parseQuickTask(input: string, now: Moment): { title: string; date?: string; start?: number; due?: Task['due'] } {
     let title = input.trim();
     let date: string | undefined;
     let start: number | undefined;
@@ -144,5 +178,7 @@ export function parseQuickTask(input: string, now: Moment): { title: string; dat
         if (hour < 24) start = hour * 60 + (match[3] ? 30 : 0);
     });
     if (start !== undefined && !date) date = now.date;
+    const deadline = date && (start === undefined || /截止|之前|^前/.test(title));
+    if (deadline && date) return { title: title.replace(/截止|之前|^前/, '').trim() || input.trim(), due: { date, ...(start !== undefined ? { time: start } : {}) } };
     return { title: title || input.trim(), ...(date ? { date } : {}), ...(start !== undefined ? { start } : {}) };
 }

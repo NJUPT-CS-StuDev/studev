@@ -1,20 +1,19 @@
 import type { TeachingMeeting } from '@/world/facts';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
-import { dueOn, eventsOn, layers, meetingAround, weekOfDate, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
+import { dueOn, eventsOn, layers, meetingAround, timeBounds, weekOfDate, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import type { Task } from '@/world/tasks';
 import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
-import { courseName, courseShort, roomLabel, roomShort } from '@/world/names';
+import { compactPlace, courseName, courseShort, roomLabel, roomShort } from '@/world/names';
 import { addDays, hm, minutesOf, startOfWeek, WEEKDAYS, type Moment } from '@/world/time';
 
-const DAY_END = 21 * 60 + 8;
 /** How far each thing behind shows beside the one in front of it. */
 const EDGE = 5;
 
 /** What a tile says under its name: where, a lab's said short, and where there is room that it is a lab (its edge says so too). */
 const tileNote = (event: CampusEvent, wide: boolean) => event.lab
-    ? `${wide ? '实验 · ' : ''}${event.lab.room ? roomShort(event.lab.room) : event.lab.short}`
+    ? `${wide ? '实验 · ' : ''}${event.lab.room ? roomShort(event.lab.room) : wide ? event.lab.short : compactPlace(event.lab.short)}`
     : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
 
 export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen, onTask }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void; onTask: (task: Task) => void }) {
@@ -26,12 +25,12 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
     const hints = week ? offWeekLessons(line.meetings, week) : [];
     const ghosts = week ? previewRows.filter(meeting => meeting.weeks.includes(week)) : [];
     let columns = wide ? 7 : 5;
-    days.forEach((_, index) => { if (events[index]!.length || hints.some(hint => hint.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
+    days.forEach((date, index) => { if (events[index]!.length || dueOn(line, date).length || hints.some(hint => hint.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
     const clock = new Map(line.periods.map(period => [period.period, { start: minutesOf(period.start), end: minutesOf(period.end) }]));
     const scale = wide ? 1.02 : .72;
-    const from = (events.flat().some(event => event.kind === 'run') ? minutesOf(line.run!.rule.time[0]) : 480) - 4;
+    const [from, until] = timeBounds(events.flat());
     const y = (minutes: number) => Math.round((minutes - from) * scale);
-    const height = y(DAY_END);
+    const height = y(until);
     const inThisWeek = days.includes(now.date);
     // Tasks due by the end of a day, with no time of their own, sit in a row under the day they are due.
     const dues = days.map(date => dueOn(line, date));
@@ -71,12 +70,12 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                             const end = clock.get(hint.periods[1])!.end;
                             const event = meetingAround(line, hint.id, monday);
                             return <button key={hint.id} className="t quiet" style={{ top: y(start) + 1, height: y(end) - y(start) - 2 }} onClick={() => event && onOpen(event)}>
-                                {wide ? courseName(hint.course) : courseShort(hint.course)}<small>{hint.label}</small>
+                                {event && event.name !== courseName(hint.course) ? event.name : wide ? courseName(hint.course) : courseShort(hint.course)}<small>{hint.label}</small>
                             </button>;
                         })}
                         {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
                         {layers(today, order).map(({ event, under, over }) => {
-                            const tone = eventTone(tones, event, line.meetings);
+                            const tone = eventTone(tones, event, line.courseMeetings ?? line.meetings);
                             return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''} ${event.task?.done ? 'done' : ''}`}
                                 style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(tone !== undefined ? courseToneStyle(tone) : {}) }} onClick={() => onOpen(event)}>
                                 {wide ? event.name : event.short}<small>{tileNote(event, wide)}</small>

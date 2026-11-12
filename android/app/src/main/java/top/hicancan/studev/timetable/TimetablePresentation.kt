@@ -25,7 +25,7 @@ object TimetablePresentation {
      *  where they can; a tone is shared only by courses that never meet on the same day. */
     fun tones(meetings: List<TeachingMeeting>): Map<String, Int> = allot(meetings.map { identity(it) to it.weekday })
     /** One timeline's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
-    fun tones(line: top.hicancan.studev.world.CampusLine): Map<String, Int> = allot(line.meetings.map { identity(it) to it.weekday } + line.labs.map { linked(it, line.meetings) to it.weekday })
+    fun tones(line: top.hicancan.studev.world.CampusLine): Map<String, Int> = allot(line.meetings.map { identity(it) to it.weekday } + line.labs.map { linked(it, line.courseMeetings) to it.weekday })
     /**
      * A lab belongs to a lesson's course when the two carry the same course code, or the same name: the lab sheet often
      * gives a lab its own code (Linux 编程 labs are B0301371S, its lessons JS113701S), never a different name.

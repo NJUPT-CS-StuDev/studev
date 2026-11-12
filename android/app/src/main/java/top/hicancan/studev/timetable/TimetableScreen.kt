@@ -194,7 +194,7 @@ import java.time.LocalDate
     Box(modifier) {
         val lab = event.lab
         val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
-            else if (lab != null) lab.room?.let(Names::roomShort) ?: lab.short else Names.roomShort(event.room)
+            else if (lab != null) lab.room?.let(Names::roomShort) ?: Names.compactPlace(lab.short) else Names.roomShort(event.room)
         TileBox(if (big) event.name else event.short, if (event.task != null) (if (big) "${hm(event.start)}–${hm(event.end)}" else "") else note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null || event.task != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
         if (behind > 0) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).border(1.dp, Ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 3.dp)) {
@@ -233,11 +233,12 @@ import java.time.LocalDate
         // What is due by the end of the day, with no time of its own, is listed above the day's hours.
         val due = line.dueOn(day)
         if (due.isNotEmpty()) {
-            Plain("今天截止", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
+            Plain((if (day == now.date) "今天" else dateLabel(day)) + "截止", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
             due.forEach { task ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TaskCheck(task, store)
                     Plain(task.title, 15.sp, if (task.done != null) Ink.faint else Ink.text, maxLines = 1, modifier = Modifier.weight(1f).clickable { onOpen(taskEvent(task, day)) })
+                    Plain(task.due?.time?.let(::hm) ?: "当天结束", 12.sp, Ink.muted)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -270,7 +271,7 @@ import java.time.LocalDate
             if (awake && live.first().start - free >= 45) gap(free, live.first().start)
             // Everything on, at its own time, back to front: what is behind shows beside what is in front.
             CampusLine.layers(live, order).forEach { (event, under, over) ->
-                Tile(event, TimetablePresentation.toneOf(event, tones, line.meetings), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
+                Tile(event, TimetablePresentation.toneOf(event, tones, line.courseMeetings), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
                     event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
             }
             // Free time is between runs of things that overlap, not between any two of them.
@@ -321,7 +322,6 @@ import java.time.LocalDate
 
 @Composable private fun Empty(text: String) = Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(text, 14.sp, Ink.faint) }
 
-private const val DAY_END = 21 * 60 + 8
 
 @Composable private fun WeekView(line: CampusLine, day: LocalDate, now: Moment, record: ExamRecord?, ghosts: List<TeachingMeeting>, order: List<String>, onOpen: (LineEvent) -> Unit) {
     val monday = day.minusDays((day.dayOfWeek.value - 1).toLong())
@@ -332,9 +332,9 @@ private const val DAY_END = 21 * 60 + 8
     val hints = remember(line, week) { if (week != null) TimetablePresentation.offWeekLessons(line.meetings, week) else emptyList() }
     val shownGhosts = if (week != null) ghosts.filter { week in it.weeks } else emptyList()
     var columns = 5
-    days.forEachIndexed { index, _ -> if (events[index].isNotEmpty() || hints.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
+    days.forEachIndexed { index, date -> if (events[index].isNotEmpty() || line.dueOn(date).isNotEmpty() || hints.any { it.day == index + 1 } || shownGhosts.any { it.weekday == index + 1 }) columns = maxOf(columns, index + 1) }
     val period = remember(line) { line.periods.associate { it.period to (clock(it.start) to clock(it.end)) } }
-    val from = (if (events.flatten().any { it.kind == "run" }) clock(line.run!!.rule.time[0]) else 480) - 4
+    val (from, until) = CampusLine.timeBounds(events.flatten())
     fun y(minutes: Int): Dp = ((minutes - from) * .72f).dp
     val mark = marks()
     val hairline = Ink.line
@@ -364,7 +364,7 @@ private const val DAY_END = 21 * 60 + 8
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().height(y(DAY_END))) {
+            Row(Modifier.fillMaxWidth().height(y(until))) {
                 Box(Modifier.width(38.dp).fillMaxHeight().drawBehind { drawLine(hairline, Offset(size.width, 0f), Offset(size.width, size.height), 1f) }) {
                     // The period, with its start and end beneath, as the school's own timetable shows it.
                     line.periods.forEach { item ->
@@ -390,13 +390,13 @@ private const val DAY_END = 21 * 60 + 8
                             val end = period[hint.periods.last()]?.second ?: return@forEach
                             if (events[index].any { it.start < end && start < it.end }) return@forEach
                             val event = line.meetingAround(hint.id, monday)
-                            TileBox(Names.courseShort(hint.course), hint.label, Ink.sunken, Ink.line, Ink.faint,
+                            TileBox(event?.takeIf { it.name != Names.course(hint.course) }?.name ?: Names.courseShort(hint.course), hint.label, Ink.sunken, Ink.line, Ink.faint,
                                 Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
                         // Everything on, at its own time, back to front: what is behind shows beside what is in front.
                         CampusLine.layers(events[index], order).forEach { (event, under, over) ->
                             val past = event.kind != "exam" && (date < now.date || (date == now.date && event.end <= now.min))
-                            Tile(event, TimetablePresentation.toneOf(event, lineTones, line.meetings), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
+                            Tile(event, TimetablePresentation.toneOf(event, lineTones, line.courseMeetings), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
                                 event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->

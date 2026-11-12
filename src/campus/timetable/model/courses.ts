@@ -22,17 +22,9 @@ export const customMeetings = (course: CustomCourse): TeachingMeeting[] => cours
     campus: null, room: course.room ?? null, location: course.room ?? null, weekday: day, periods: course.periods, weeks: course.weeks, method: null, classes: [],
 }));
 
-/** A lesson under the name its person gave its course, if they gave one. */
-export const renamed = (meeting: TeachingMeeting, names: Record<string, string> | undefined) => {
-    const name = names?.[courseIdentity(meeting)];
-    return name ? { ...meeting, course: { ...meeting.course, name } } : meeting;
-};
-
-/** A lab or an exam under the name its person gave the course it belongs to. */
-export const renamedAlong = <T extends { course: { code: string | null; name: string } }>(item: T, meetings: TeachingMeeting[], names: Record<string, string> | undefined): T => {
-    const name = names?.[courseIdentity(linkedCourse(item, meetings))];
-    return name ? { ...item, course: { ...item.course, name } } : item;
-};
+/** An authored display name never rewrites the public course fact or passes through name shortening. */
+export const personalCourseName = (item: { course: { code: string | null; name: string }; teaching_class?: { id: string } }, meetings: TeachingMeeting[], names: Record<string, string> | undefined) =>
+    names?.[courseIdentity(linkedCourse(item, meetings))] ?? (item.teaching_class?.id.startsWith('custom:') ? item.course.name : undefined);
 
 /** "1-16", "1-8,10,12-14", "单1-15", "双 2-16": the weeks written; null when the text is not weeks. */
 export function parseWeeks(text: string, last: number): number[] | null {

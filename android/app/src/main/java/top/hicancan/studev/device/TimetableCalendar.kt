@@ -20,7 +20,7 @@ import java.time.ZoneOffset
 /** School facts that reach the phone beyond lessons and exams: the calendar's days without lessons, and 早锻炼. */
 class PhoneFacts(val terms: List<CalendarTerm> = emptyList(), val run: MorningRun? = null)
 
-private class Entry(val id: String, val title: String, val start: Long, val end: Long, val room: String, val description: String, val allDay: Boolean, val reminders: List<Int>)
+private class Entry(val id: String, val title: String, val start: Long, val end: Long, val room: String, val description: String, val allDay: Boolean, val reminders: List<Int>, val transparent: Boolean = false)
 
 /** Each kind of thing has its own local calendar, so each can be switched off in the system calendar too. */
 object TimetableCalendar {
@@ -29,6 +29,7 @@ object TimetableCalendar {
     private val lessons = Book("studev", "studev 课程")
     private val exams = Book("studev-exams", "studev 考试")
     private val runs = Book("studev-run", "studev 早锻炼")
+    private val tasks = Book("studev-tasks", "studev 任务")
     private fun adapter(uri: android.net.Uri) = uri.buildUpon().appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
         .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, ACCOUNT)
         .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL).build()
@@ -43,7 +44,7 @@ object TimetableCalendar {
     }
     /** The phone holds only the calendars studev writes now; any other calendar of its account goes. */
     private fun prune(context: Context) {
-        val kept = setOf(lessons, exams, runs).map { it.name }
+        val kept = setOf(lessons, exams, runs, tasks).map { it.name }
         context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.NAME),
             "account_name=? AND account_type=?", arrayOf(ACCOUNT, CalendarContract.ACCOUNT_TYPE_LOCAL), null)?.use { cursor ->
             while (cursor.moveToNext()) if (cursor.getString(1) !in kept)
@@ -74,6 +75,7 @@ object TimetableCalendar {
                 put(CalendarContract.Events.TITLE, entry.title)
                 put(CalendarContract.Events.DTSTART, entry.start); put(CalendarContract.Events.DTEND, entry.end)
                 put(CalendarContract.Events.ALL_DAY, if (entry.allDay) 1 else 0)
+                put(CalendarContract.Events.AVAILABILITY, if (entry.transparent) CalendarContract.Events.AVAILABILITY_FREE else CalendarContract.Events.AVAILABILITY_BUSY)
                 put(CalendarContract.Events.EVENT_TIMEZONE, if (entry.allDay) "UTC" else CampusDay.zone.id)
                 put(CalendarContract.Events.EVENT_LOCATION, entry.room); put(CalendarContract.Events.DESCRIPTION, entry.description)
                 put(CalendarContract.Events.HAS_ALARM, if (entry.reminders.isEmpty()) 0 else 1)
@@ -102,7 +104,7 @@ object TimetableCalendar {
         flush()
     }
     private fun day(date: LocalDate) = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-    suspend fun sync(context: Context, events: List<LineEvent>, facts: PhoneFacts, settings: PersonalSettings): Int = withContext(Dispatchers.IO) {
+    suspend fun sync(context: Context, events: List<LineEvent>, facts: PhoneFacts, settings: PersonalSettings, ownTasks: List<Task> = emptyList()): Int = withContext(Dispatchers.IO) {
         fun entry(event: LineEvent, title: String, reminders: List<Int>) = Entry(event.id, title, event.startsAt.toEpochMilli(), event.endsAt.toEpochMilli(),
             Names.room(event.room), (listOfNotNull(event.lab?.project) + event.teachers + listOfNotNull(event.exam?.note)).joinToString(" · "), false, reminders)
         prune(context)
@@ -124,6 +126,16 @@ object TimetableCalendar {
             }
             write(context, runs, rows)
         } else remove(context, runs)
-        lessonRows.size + examRows.size
+        val taskRows = ownTasks.filter { it.parent == null && it.done == null && it.deleted != true }.flatMap { task -> buildList {
+            fun at(date: String, minute: Int) = LocalDate.parse(date).atStartOfDay(CampusDay.zone).plusMinutes(minute.toLong()).toInstant().toEpochMilli()
+            if (task.date != null && task.start != null) add(Entry("task:${task.id}:plan", task.title, at(task.date, task.start), at(task.date, task.end ?: minOf(1440, task.start + Tasks.MINUTES)), "", task.note.orEmpty(), false, task.remind.orEmpty()))
+            task.due?.let { due ->
+                val start = if (due.time == null) day(LocalDate.parse(due.date)) else at(due.date, due.time)
+                val end = if (due.time == null) day(LocalDate.parse(due.date).plusDays(1)) else start + 60000
+                add(Entry("task:${task.id}:due", "截止 · ${task.title}", start, end, "", task.note.orEmpty(), due.time == null, if (due.time == null) emptyList() else due.remind.orEmpty(), true))
+            }
+        } }
+        if (settings.calendarTasks) write(context, tasks, taskRows) else remove(context, tasks)
+        lessonRows.size + examRows.size + taskRows.size
     }
 }

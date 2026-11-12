@@ -7,6 +7,8 @@ import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
 import { dateLabel, hm, momentText, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { Chevron, Sheet } from '@/world/ui';
 import { TaskSheet } from './TaskSheet';
+import { EventChoices } from './EventChoices';
+import { labCourseKey } from './model/labs';
 
 const KIND = { class: '课', lab: '实验', exam: '考试', run: '早锻炼', task: '任务' } as const;
 const whoLink = (type: string, id: string) => `/?who=${type}:${encodeURI(id)}&scale=week`;
@@ -37,9 +39,9 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
     // The sheet is the tile it opened from, enlarged: the same colour. Things on at the same time sit in a strip
     // above it, in the order they are stacked, and switch in place, by a tap or a sideways swipe.
     const tones = timelineTones(line);
-    const toneOf = (item: CampusEvent) => { const tone = eventTone(tones, item, line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
+    const toneOf = (item: CampusEvent) => { const tone = eventTone(tones, item, line.courseMeetings ?? line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
     const group = clusters(eventsOn(line, event.date), order).find(item => item.events.some(other => other.id === event.id));
-    const together = group && group.events.length > 1 ? [...group.events].sort((left, right) => order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : 1)) : [];
+    const together = group && group.events.length > 1 ? [...group.events].sort((left, right) => (right.layer ?? 0) - (left.layer ?? 0) || order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : 1)) : [];
     const at = together.findIndex(item => item.id === event.id);
     const swipe = useRef<number | null>(null);
     const [naming, setNaming] = useState<string | null>(null);
@@ -52,8 +54,8 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
             </button>)}
         </div>
     );
-    const dress = { top: strip || undefined, className: `toned ${event.kind}`, style: toneOf(event) };
-    if (event.task) { const task = line.tasks.find(item => item.id === event.task!.id) ?? event.task; return <TaskSheet key={task.id} task={task} line={line} top={dress.top} onClose={onClose} />; }
+    const dress = { top: <>{strip}{isMe && <EventChoices key={event.id} event={event} line={line} />}</>, className: `toned ${event.kind}`, style: toneOf(event) };
+    if (event.task) { const task = line.tasks.find(item => item.id === event.task!.id) ?? event.task; return <TaskSheet key={task.id} task={task} line={line} top={strip || undefined} onClose={onClose} />; }
     const when = `${WEEKDAYS[weekdayOf(event.date)]} ${dateLabel(event.date)} · ${hm(event.start)}–${hm(event.end)}`;
     const run = line.run;
     if (event.kind === 'run' && run) {
@@ -76,13 +78,13 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
         <a className="btn go" href={`/map/?nav=${encodeURI(event.room!)}`}>去这里</a>
     </div> : <div style={{ height: 12 }} />;
     const teachers = event.teachers.flatMap(teacher => teacher.split('、')).map(teacher => <a key={teacher} className="kv" href={whoLink('teacher', teacher)}><span className="k">老师</span><span className="v">{teacher} 的课表</span><Chevron /></a>);
-    const course = <a className="kv" href={whoLink('course', courseName(event.name))}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a>;
+    const course = <a className="kv" href={whoLink('course', courseName(event.meeting?.course.name ?? event.lab?.course.name ?? event.exam?.course.name ?? event.name))}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a>;
 
     const dayOff = line.holidays.get(event.date);
 
     if (event.kind === 'lab' && event.lab) {
         const lab = event.lab;
-        const facts = courseOf(line.meetings, lab);
+        const facts = courseOf(line.courseMeetings ?? line.meetings, lab);
         return (
             <Sheet title={<><span className="tag lab">实验</span>{event.name}</>} {...dress} onClose={onClose}>
                 {facts && <div className="meta">{courseLine({ credits: facts.credits, nature: facts.nature })}</div>}
@@ -97,14 +99,14 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 {course}
                 <div className="kv"><span className="k">来源</span><span className="v">{sheetName(lab.source)}<small>实验中心排课表，{dateLabel(publishedOn(lab.source))} 的版本；调整以老师通知为准</small></span></div>
                 {isMe && <button className="kv" onClick={() => onSkipLab(event)}><span className="k" /><span className="v danger">不上这次实验</span></button>}
-                {isMe && <button className="kv" onClick={() => onDropLab(event)}><span className="k" /><span className="v danger">不上这门实验<small>共 {line.labs.filter(other => other.course.code === lab.course.code && other.course.name === lab.course.name).length} 次，可在“我 · 实验安排”里恢复</small></span></button>}
+                {isMe && <button className="kv" onClick={() => onDropLab(event)}><span className="k" /><span className="v danger">不上这门实验<small>共 {line.labs.filter(other => labCourseKey(other) === labCourseKey(lab)).length} 次，可在“我 · 实验安排”里恢复</small></span></button>}
             </Sheet>
         );
     }
 
     if (event.kind === 'exam' && event.exam) {
         const exam = event.exam;
-        const facts = courseOf(line.meetings, exam);
+        const facts = courseOf(line.courseMeetings ?? line.meetings, exam);
         const changes = changesOf(record, exam);
         const sheet = record?.sources.find(source => source.file === exam.source);
         return (
@@ -147,7 +149,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
             {examEvent && <button className="kv" onClick={() => onOpen(examEvent)}><span className="k">考试</span><span className="v">{dateLabel(exam.date)} {WEEKDAYS[weekdayOf(exam.date)]} {exam.start}</span><Chevron /></button>}
             {/* A name of one's own for the course: 板块课 becomes the sport actually taken. One's own course is named where it was added. */}
             {isMe && meeting && !meeting.teaching_class.id.startsWith('custom:') && (naming === null
-                ? <button className="kv" onClick={() => setNaming(courseName(meeting.course.name))}><span className="k">名称</span><span className="v">改名<small>比如把板块课改成具体上的课</small></span><Chevron /></button>
+                ? <button className="kv" onClick={() => setNaming(event.name)}><span className="k">名称</span><span className="v">改名<small>比如把板块课改成具体上的课</small></span><Chevron /></button>
                 : <div className="kv rename">
                     <input className="tf" autoFocus value={naming} onChange={change => setNaming(change.target.value)} onKeyDown={key => { if (key.key === 'Enter' && naming.trim()) { onRename(event, naming.trim()); setNaming(null); } }} />
                     <button className="ib" disabled={!naming.trim()} onClick={() => { onRename(event, naming.trim()); setNaming(null); }}>保存</button>

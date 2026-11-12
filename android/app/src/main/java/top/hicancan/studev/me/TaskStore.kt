@@ -14,7 +14,11 @@ class TaskStore(context: Context) {
     private val context = context.applicationContext
     private val store = this.context.getSharedPreferences("tasks", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
-    private val _all = MutableStateFlow(store.getString("tasks", null)?.let { runCatching { json.decodeFromString<List<Task>>(it) }.getOrNull() }.orEmpty())
+    private val _all = MutableStateFlow(store.getString("tasks", null)?.let { runCatching { json.decodeFromString<List<Task>>(it) }.getOrNull() }.orEmpty().let { tasks ->
+        val migrated = tasks.map(top.hicancan.studev.world.Tasks::migrateTimes)
+        if (migrated != tasks) store.edit().putString("tasks", json.encodeToString(migrated)).apply()
+        migrated
+    })
     /** Every task kept here, deleted ones included. */
     val all = _all.asStateFlow()
     /** A change reaches the home-screen widget and the phone's reminders as a settings change does. */
@@ -27,7 +31,10 @@ class TaskStore(context: Context) {
     private fun stamp() = Instant.now().toString()
     fun newId() = UUID.randomUUID().toString()
     /** Adds a task, or changes one: the change is stamped so that the newer side wins a merge. */
-    fun save(task: Task) = write(_all.value.filter { it.id != task.id } + task.copy(modified = stamp()))
+    fun save(task: Task) {
+        require(task.date == null || task.start != null) { "执行安排需要开始时间；截止日期请填写在截止时间中。" }
+        write(_all.value.filter { it.id != task.id } + task.copy(modified = stamp()))
+    }
     /** Deleting keeps a mark, and takes its steps with it. */
     fun delete(id: String) = write(_all.value.map { if (it.id == id || it.parent == id) Task(it.id, it.title, modified = stamp(), deleted = true) else it })
     fun toggleDone(task: Task) = save(task.copy(done = if (task.done != null) null else stamp()))

@@ -3,6 +3,8 @@ import type { Exam, Lab, TeachingMeeting, TeachingPeriod, TeachingTerm } from '@
 import { courseName, courseShort } from './names';
 import type { CalendarTerm, MorningRun } from './data';
 import type { Task } from './tasks';
+import { eventPreference, type Avoidance, type EventPreferences } from './schedule';
+import { personalCourseName } from '@/timetable/model/courses';
 import { addDays, daysBetween, minutesOf, startOfWeek, weekdayOf, type Moment } from './time';
 
 export interface CampusEvent {
@@ -10,6 +12,7 @@ export interface CampusEvent {
     id: string; date: string; name: string; short: string; start: number; end: number;
     room: string | null; teachers: string[];
     meeting?: TeachingMeeting; lab?: Lab; exam?: Exam; task?: Task;
+    avoid?: Avoidance; layer?: number;
 }
 export type EventKind = CampusEvent['kind'];
 
@@ -24,7 +27,7 @@ export const LAYER_ORDER: readonly EventKind[] = ['exam', 'task', 'lab', 'class'
 export const TASK_MINUTES = 30;
 const clash = (left: CampusEvent, right: CampusEvent) => left !== right && left.date === right.date && left.start < right.end && right.start < left.end;
 const frontFirst = (order: readonly EventKind[]) => (left: CampusEvent, right: CampusEvent) =>
-    order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+    (right.layer ?? 0) - (left.layer ?? 0) || order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 /**
  * A day's events as layers, back to front, the order they are drawn in. `under` is how many it overlaps lie
  * behind it, `over` how many in front: one in front shows the count of those behind; those behind show their
@@ -62,6 +65,10 @@ export interface Timeline {
     holidays: Map<string, string>; run: RunPlan | null;
     /** One's own tasks, steps included; only someone's own line has any. */
     tasks: Task[];
+    preferences?: EventPreferences;
+    names?: Record<string, string>;
+    /** Course facts for names and links, including lectures this person does not attend. */
+    courseMeetings?: TeachingMeeting[];
 }
 
 export const weekOfDate = (term: TeachingTerm, date: string) => term.weeks.find(week => week.start <= date && date <= week.end)?.week ?? null;
@@ -128,11 +135,20 @@ export function eventsOn(line: Timeline, date: string): CampusEvent[] {
     if (line.run?.days.includes(date)) {
         out.push({ kind: 'run', id: `run@${date}`, date, name: '早锻炼', short: '早锻炼', start: minutesOf(line.run.rule.time[0]), end: minutesOf(line.run.rule.time[1]), room: null, teachers: [] });
     }
-    return out.sort((left, right) => left.start - right.start || frontFirst(LAYER_ORDER)(left, right));
+    return out.map(event => {
+        const item = event.meeting ?? event.lab ?? event.exam;
+        const name = item ? personalCourseName(item, line.courseMeetings ?? line.meetings, line.names) : undefined;
+        return { ...event, ...(name ? { name, short: name } : {}), ...eventPreference(event, line.term.term, line.preferences) };
+    }).sort((left, right) => left.start - right.start || frontFirst(LAYER_ORDER)(left, right));
 }
 
 /** The tasks due by the end of a day, with no time of their own. */
-export const dueOn = (line: Timeline, date: string) => line.tasks.filter(task => !task.parent && task.date === date && task.start === undefined);
+export const dueOn = (line: Timeline, date: string) => line.tasks.filter(task => !task.parent && task.due?.date === date);
+/** The school day is the default frame; personal events can extend it through the whole day. */
+export const timeBounds = (events: CampusEvent[]): [number, number] => [
+    Math.max(0, Math.min(480, ...events.map(event => event.start)) - 4),
+    Math.min(1440, Math.max(1268, ...events.map(event => event.end + 4))),
+];
 
 /** What else is on at the same time as an event. */
 export const overlapping = (line: Timeline, event: CampusEvent) => eventsOn(line, event.date).filter(other => other.id !== event.id && clash(other, event));
@@ -224,8 +240,11 @@ export const gradeOf = (classGrade: string | null | undefined, term: TeachingTer
  * next day that has something.
  */
 export function weekShown(line: Timeline, now: Moment): string {
-    const next = nextEvent(line, now, 60);
-    return startOfWeek(next ? next.date : now.date);
+    for (let offset = 0; offset < 60; offset++) {
+        const date = addDays(now.date, offset);
+        if (dueOn(line, date).some(task => !task.done) || eventsOn(line, date).some(event => event.kind !== 'run' && !event.task?.done && (offset > 0 || event.end > now.min))) return startOfWeek(date);
+    }
+    return startOfWeek(now.date);
 }
 
 /** The last day with a lesson or a lab on this line: where the term's teaching ends. */

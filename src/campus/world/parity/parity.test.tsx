@@ -82,6 +82,6 @@ describe('the shared web / Android real-data contract', () => {
         expect(Object.fromEntries(timelineTones(labLine))).toEqual(labs.tones);
         expect(lastLesson(labLine)).toBe(labs.last);
         for (const test of labs.choices) expect(attendingLabs(classLabs, test.choices).map(lab => lab.id)).toEqual(test.expected);
-        for (const test of labs.personal) expect(personalLabs(classLabs, meetings, meetings.filter(meeting => test.kept.includes(meeting.id)), test.added as unknown as TeachingMeeting[], test.all as unknown as Lab[]).map(lab => lab.id)).toEqual(test.expected);
+        for (const test of labs.personal) expect(personalLabs(classLabs, test.extraClasses, test.all as unknown as Lab[]).map(lab => lab.id)).toEqual(test.expected);
     });
 });
