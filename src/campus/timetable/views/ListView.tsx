@@ -8,6 +8,7 @@ import { courseName, courseShort, roomLabel } from '@/world/names';
 import { DROP_GROUPS, moveTask, newTaskId, parseQuickTask, saveTask, saveTasks, taskGroup, taskOrder, TASK_GROUPS, toggleDone, type QuickTask, type Task, type TaskGroup } from '@/world/tasks';
 import { dateLabel, daysBetween, hm, minutesOf, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { Chevron } from '@/world/ui';
+import { readHints, suggestTasks, TASK_EXAMPLES, writeHints } from '@/world/suggestions';
 
 const examGroup = (date: string, now: Moment): TaskGroup => {
     const days = daysBetween(now.date, date);
@@ -43,6 +44,7 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
     const [draft, setDraft] = useState('');
     const [showDone, setShowDone] = useState(false);
     const [drag, setDrag] = useState<Drag | null>(null);
+    const [hints, setHints] = useState(readHints);
     const listRef = useRef<HTMLDivElement>(null);
     const hold = useRef<{ timer: number; pointer: number; x: number; y: number; id: string; row: HTMLElement } | null>(null);
     const top = line.tasks.filter(task => !task.parent);
@@ -52,6 +54,8 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
     const steps = (task: Task) => line.tasks.filter(item => item.parent === task.id);
     const quickCourses = useMemo(() => [...new Map(line.meetings.map(meeting => [courseIdentity(meeting), { identity: courseIdentity(meeting), names: [courseName(meeting.course.name), courseShort(meeting.course.name)] }])).values()], [line.meetings]);
     const quick = draft.trim() ? parseQuickTask(draft, now, quickCourses) : null;
+    const suggested = suggestTasks(line, now, hints.setAside);
+    const setAside = (key: string) => setHints(writeHints(current => ({ ...current, setAside: [...current.setAside, key] })));
     const said = quick ? readBack(quick, now, courses) : [];
     const add = () => {
         if (!quick?.title) return;
@@ -158,7 +162,17 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
                 {quick && <p className="tread">{said.length
                     ? <>{said.map(item => <span key={item}>{item}</span>)}<b>{quick.title}</b></>
                     : <small>没有读出日期，会放进“还没排日期”</small>}</p>}
+                {!draft && !open.length && <p className="tread examples">{TASK_EXAMPLES.map(example => <button key={example} onClick={() => setDraft(example)}>{example}</button>)}</p>}
+                {open.length > 1 && !hints.dragTold && <p className="thint">按住一件事可以拖动，拖到“今天”“明天”就改了日期<button aria-label="知道了" onClick={() => setHints(writeHints(current => ({ ...current, dragTold: true })))}>×</button></p>}
             </div>
+            {suggested.length > 0 && !drag && <section className="tgroup suggest">
+                <h3 className="sh">从你的安排里<span /></h3>
+                {suggested.map(({ key, task }) => <div key={key} className="trow-i">
+                    <button className="tplus" aria-label="加上" onClick={() => saveTask({ id: newTaskId(), ...task, order: -Date.now() })}>+</button>
+                    <span className="tmain"><b>{task.title}</b><span className="tmeta">{task.course && courses.get(task.course) && <i>{courseShort(courses.get(task.course)!)}</i>}<em>{dayWord(task.due!.date, now)} 截止</em></span></span>
+                    <button className="tskip" aria-label="不用" onClick={() => setAside(key)}>×</button>
+                </div>)}
+            </section>}
             {TASK_GROUPS.map(({ key, name }) => {
                 const tasks = grouped(key).filter(task => task.id !== drag?.id);
                 const dated = key === 'overdue' || key === 'someday' ? [] : exams.filter(exam => examGroup(exam.date, now) === key);

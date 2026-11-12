@@ -8,6 +8,7 @@ import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { customMeetings, parseWeeks, personalCourseName, type CustomCourse } from '@/timetable/model/courses';
 import { moveTask, parseQuickTask, reminderAt, taskGroup, taskOrder, type Task, type TaskGroup } from '@/world/tasks';
 import { availableSlots } from '@/world/planning';
+import { reportTitle, suggestTasks } from '@/world/suggestions';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds } from '@/world/events';
 import { attendingExams } from '@/timetable/model/examAttendance';
@@ -125,6 +126,9 @@ const tasks = {
     order: [...taskList].sort(taskOrder).map(task => task.id),
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
     courses: quickCourses,
+    suggestions: [{ now: { date: '2026-09-10', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-10-01', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: ['lab:' + classLabs.filter(lab => lab.date >= '2026-11-09')[0]!.id] }]
+        .map(test => ({ ...test, expected: suggestTasks(taskLine, test.now, test.setAside) })),
+    reportTitles: ['实验二：组网与路由器配置', 'Cachelab实验(上)', '数据库设计', '实验3: 进程调度'].map(project => ({ project, title: reportTitle(project) })),
     manual: [{ ...taskList[2]!, order: 1 }, { ...taskList[3]!, order: 0 }, ...taskList.filter((_, at) => at !== 2 && at !== 3)].sort(taskOrder).map(task => task.id),
     moves: ([['d', 'today', 0], ['c', 'tomorrow', 1], ['a', 'tomorrow', 0], ['b', 'someday', 0], ['a', 'later', 0], ['g', 'today', 5]] as [string, TaskGroup, number][]).map(([id, group, index]) => {
         const shown = taskList.filter(task => !task.parent && !task.done && taskGroup(task, taskNow) === group).sort(taskOrder);

@@ -88,6 +88,9 @@
   .tdone-h svg{width:12px;height:12px}
   .tadd{margin-bottom:16px}
   .tread{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 2px 0;font-size:12.5px}.tread span{padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--brand) 12%,var(--paper));color:var(--brand)}.tread b{font-weight:500;color:var(--muted)}.tread small{color:var(--faint)}
+  .tread.examples button{padding:4px 10px;border-radius:14px;border:1px solid var(--line);background:none;color:var(--muted);font-size:12.5px}
+  .thint{display:flex;align-items:center;gap:6px;margin:8px 2px 0;font-size:12.5px;color:var(--faint)}.thint button{background:none;color:var(--faint);font-size:15px;padding:0 4px}
+  .tgroup.suggest .sh{color:var(--brand)}.tplus{flex:none;width:20px;height:20px;border-radius:5px;border:1.5px dashed var(--brand);color:var(--brand);background:none;line-height:16px;font-size:16px;padding:0}.tskip{flex:none;background:none;color:var(--faint);font-size:16px;padding:0 4px}
   .tf{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14.5px;background:var(--paper);color:var(--ink)}
   .tf.big{font-size:17px;font-weight:600;margin-bottom:10px}
   textarea.tf{resize:vertical}

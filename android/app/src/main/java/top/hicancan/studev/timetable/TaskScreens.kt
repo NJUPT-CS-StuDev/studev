@@ -213,6 +213,11 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
     val courses = line.meetings.associate { TimetablePresentation.identity(it) to (line.names[TimetablePresentation.identity(it)] ?: Names.course(it.course.name)) }
     val quickCourses = remember(line.meetings) { line.meetings.distinctBy { TimetablePresentation.identity(it) }.map { Tasks.QuickCourse(TimetablePresentation.identity(it), listOf(Names.course(it.course.name), Names.courseShort(it.course.name))) } }
     val quick = if (draft.isNotBlank()) Tasks.parse(draft, now, quickCourses) else null
+    // What the list was told to stop offering, kept on this device, as readHints in src/campus/world/suggestions.ts.
+    val prefs = LocalContext.current.getSharedPreferences("task_hints", android.content.Context.MODE_PRIVATE)
+    var setAside by remember { mutableStateOf(prefs.getStringSet("setAside", emptySet()).orEmpty()) }
+    var dragTold by remember { mutableStateOf(prefs.getBoolean("dragTold", false)) }
+    val suggested = Suggestions.suggest(line, now, setAside)
     fun add() {
         val read = quick ?: return
         // A task just added goes first in its group, where it is seen.
@@ -333,7 +338,26 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
                 if (said.isNotEmpty()) Plain(read.title, 12.5.sp, Ink.muted, FontWeight.Medium)
             }
         }
+        if (draft.isEmpty() && open.isEmpty()) FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Suggestions.EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(14.dp)).border(1.dp, Ink.line, RoundedCornerShape(14.dp)).clickable { draft = example }.padding(horizontal = 10.dp, vertical = 4.dp)) { Plain(example, 12.5.sp, Ink.muted) } }
+        }
+        if (open.size > 1 && !dragTold) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Plain("按住一件事可以拖动，拖到“今天”“明天”就改了日期", 12.5.sp, Ink.faint, modifier = Modifier.weight(1f))
+            Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { dragTold = true; prefs.edit().putBoolean("dragTold", true).apply() }.padding(horizontal = 6.dp))
+        }
         Spacer(Modifier.height(8.dp))
+        if (suggested.isNotEmpty() && dragId == null) {
+            Plain("从你的安排里", 13.sp, brand, FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+            suggested.forEach { (key, task) ->
+                Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).border(1.5.dp, brand, RoundedCornerShape(5.dp)).clickable { store.save(task.copy(id = store.newId(), order = -System.currentTimeMillis().toDouble())) }, contentAlignment = Alignment.Center) { Plain("+", 15.sp, brand) }
+                    Plain(task.title, 15.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                    task.course?.let { courses[it] }?.let { Plain(Names.courseShort(it), 12.sp, Ink.faint, maxLines = 1) }
+                    Plain("${dayWord(task.due!!.date)} 截止", 12.sp, Ink.muted, maxLines = 1)
+                    Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { setAside = setAside + key; prefs.edit().putStringSet("setAside", setAside).apply() }.padding(horizontal = 4.dp))
+                }
+            }
+        }
         Tasks.GROUPS.forEach { (key, name) ->
             val tasks = grouped(key)
             val shown = tasks.filter { it.id != dragId }

@@ -2867,6 +2867,184 @@
     ]
    }
   ],
+  "suggestions": [
+   {
+    "now": {
+     "date": "2026-09-10",
+     "min": 600
+    },
+    "setAside": [],
+    "expected": [
+     {
+      "key": "exam:x",
+      "task": {
+       "title": "复习嵌入式开发",
+       "course": "JS116K01C",
+       "due": {
+        "date": "2026-09-18"
+       }
+      }
+     },
+     {
+      "key": "lab:03027b8f14ec66a6",
+      "task": {
+       "title": "虚拟化平台的安装、配置与应用实验报告",
+       "course": "JS102K03C",
+       "due": {
+        "date": "2026-09-24"
+       }
+      }
+     },
+     {
+      "key": "lab:f788c73f2327e194",
+      "task": {
+       "title": "Android开发环境搭建及关键技术实践实验报告",
+       "course": "JS116K01C",
+       "due": {
+        "date": "2026-09-26"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "now": {
+     "date": "2026-10-01",
+     "min": 600
+    },
+    "setAside": [],
+    "expected": [
+     {
+      "key": "lab:66dafe956393c5f8",
+      "task": {
+       "title": "linux基本命令操作实验报告",
+       "course": "JS113701S",
+       "due": {
+        "date": "2026-10-14"
+       }
+      }
+     },
+     {
+      "key": "lab:5238476c17993583",
+      "task": {
+       "title": "集中实践性环节实验报告",
+       "course": "JS194901C",
+       "due": {
+        "date": "2026-10-19"
+       }
+      }
+     },
+     {
+      "key": "lab:9fc48884fcbb3e80",
+      "task": {
+       "title": "动态网页开发实验报告",
+       "course": "JS112300S",
+       "due": {
+        "date": "2026-10-19"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "now": {
+     "date": "2026-11-09",
+     "min": 600
+    },
+    "setAside": [],
+    "expected": [
+     {
+      "key": "lab:e2bd2b7ca6169f11",
+      "task": {
+       "title": "交换机配置与VLAN实验报告",
+       "course": "JS160201S",
+       "due": {
+        "date": "2026-11-16"
+       }
+      }
+     },
+     {
+      "key": "lab:e45f70a06b9af869",
+      "task": {
+       "title": "动态网页开发（数据库）实验报告",
+       "course": "JS112300S",
+       "due": {
+        "date": "2026-11-16"
+       }
+      }
+     },
+     {
+      "key": "lab:674f9ea2fc63f680",
+      "task": {
+       "title": "存储管理与页面调度算法实验报告",
+       "course": "JS140301S",
+       "due": {
+        "date": "2026-11-18"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "now": {
+     "date": "2026-11-09",
+     "min": 600
+    },
+    "setAside": [
+     "lab:e2bd2b7ca6169f11"
+    ],
+    "expected": [
+     {
+      "key": "lab:e45f70a06b9af869",
+      "task": {
+       "title": "动态网页开发（数据库）实验报告",
+       "course": "JS112300S",
+       "due": {
+        "date": "2026-11-16"
+       }
+      }
+     },
+     {
+      "key": "lab:674f9ea2fc63f680",
+      "task": {
+       "title": "存储管理与页面调度算法实验报告",
+       "course": "JS140301S",
+       "due": {
+        "date": "2026-11-18"
+       }
+      }
+     },
+     {
+      "key": "lab:6e718d41aa0444f2",
+      "task": {
+       "title": "shell编程实验报告",
+       "course": "JS113701S",
+       "due": {
+        "date": "2026-11-18"
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "reportTitles": [
+   {
+    "project": "实验二：组网与路由器配置",
+    "title": "组网与路由器配置实验报告"
+   },
+   {
+    "project": "Cachelab实验(上)",
+    "title": "Cachelab实验(上)报告"
+   },
+   {
+    "project": "数据库设计",
+    "title": "数据库设计实验报告"
+   },
+   {
+    "project": "实验3: 进程调度",
+    "title": "进程调度实验报告"
+   }
+  ],
   "manual": [
    "d",
    "c",
