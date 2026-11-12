@@ -47,7 +47,7 @@ test('real identity and form services compose: private mixed submissions, immuta
   const completed = await a.client.call(`/submissions/${id}/complete`, { method: 'POST', body: { receiptToken: created.body.receiptToken } });
   assert.equal(completed.status, 200); assert.equal(completed.body.submission.status, 'pending_review');
   assert.equal((await b.client.call(`/submissions/${id}`)).status, 404);
-  assert.equal((await f.client().call(`/submissions/${id}`, { headers: { 'X-Receipt-Token': created.body.receiptToken } })).status, 404);
+  assert.equal((await f.client().call(`/submissions/${id}`, { headers: { 'X-Receipt-Token': created.body.receiptToken } })).status, 401);
   assert.equal((await a.client.call('/me/submissions')).body.items.length, 1);
   assert.equal((await b.client.call('/me/submissions')).body.items.length, 0);
   const fileId = created.body.submission.files[0].id;
@@ -67,24 +67,24 @@ test('real identity and form services compose: private mixed submissions, immuta
   assert.ok(!JSON.stringify(listed.body).includes('finalObjectKey')); assert.ok(!JSON.stringify(listed.body).includes('receiptHash'));
 });
 
-test('real identity permits anonymous public submissions and receipt downloads while preserving signed-in CSRF checks', async () => {
-  const f = await fixture(); const guest = f.client();
+test('real identity shows a public form to a visitor and asks them to sign in to answer it', async () => {
+  const f = await fixture(); const guest = f.client(); const a = await f.member('100002', '成员甲');
   const result = await f.owner.call('/admin/forms', { method: 'POST', body: {
     title: '公开文件收集', status: 'published', access: 'public',
     fields: [{ id: 'file', type: 'file', label: '附件', required: true, extensions: ['txt'] }],
   } });
   assert.equal(result.status, 201); const form = result.body.form;
-  const created = await guest.call(`/forms/${form.id}/submissions`, { method: 'POST', body: { answers: {}, files: [{ fieldId: 'file', name: 'public.txt', size: 7, type: 'text/plain' }], submitterName: '匿名合成测试' } });
+  assert.equal((await guest.call(`/forms/${form.id}`)).status, 200);
+  assert.ok((await guest.call('/forms')).body.items.some((item) => item.id === form.id));
+  const refused = await guest.call(`/forms/${form.id}/submissions`, { method: 'POST', body: { answers: {}, files: [{ fieldId: 'file', name: 'public.txt', size: 7, type: 'text/plain' }] } });
+  assert.equal(refused.status, 401);
+  const created = await a.client.call(`/forms/${form.id}/submissions`, { method: 'POST', body: { answers: {}, files: [{ fieldId: 'file', name: 'public.txt', size: 7, type: 'text/plain' }] } });
   assert.equal(created.status, 201);
   f.gateway.upload(f.gateway.uploads.at(-1), Buffer.from('fixture'));
-  const id = created.body.submission.id, token = created.body.receiptToken;
-  const complete = await guest.call(`/submissions/${id}/complete`, { method: 'POST', body: { receiptToken: token } });
-  assert.equal(complete.status, 200);
-  assert.equal((await guest.call(`/submissions/${id}`)).status, 404);
-  assert.equal((await guest.call(`/submissions/${id}`, { headers: { 'X-Receipt-Token': token } })).status, 200);
-  const fileId = complete.body.submission.files[0].id;
-  assert.equal((await guest.call(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', body: {}, headers: { 'X-Receipt-Token': token } })).status, 200);
-  assert.equal((await guest.call(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', body: {} })).status, 404);
+  const id = created.body.submission.id;
+  assert.equal((await a.client.call(`/submissions/${id}/complete`, { method: 'POST', body: { receiptToken: created.body.receiptToken } })).status, 200);
+  assert.equal((await guest.call(`/submissions/${id}`, { headers: { 'X-Receipt-Token': created.body.receiptToken } })).status, 401);
+  assert.equal((await a.client.call(`/submissions/${id}`)).status, 200);
 });
 
 test('role promotion and suspension revoke existing sessions; admin can manage forms and look up users but cannot delete forms', async () => {

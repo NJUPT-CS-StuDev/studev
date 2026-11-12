@@ -162,7 +162,8 @@ android {
         // emulator remains a first-class development target.
         ndk { abiFilters += listOf("arm64-v8a") }
         buildConfigField("String", "SITE_ORIGIN", "\"$productOrigin\"")
-        buildConfigField("String", "CONTRIBUTION_FORM", "\"${(product["contributions"] as Map<*, *>)["form"]}\"")
+        val forms = product["forms"] as Map<*, *>
+        for ((kind, field) in listOf("feedback" to "FORM_FEEDBACK", "place" to "FORM_PLACE", "data" to "FORM_DATA")) buildConfigField("String", field, "\"${checkNotNull(forms[kind]) { "product.json forms.$kind" }}\"")
         buildConfigField("String", "APP_FILING", "\"${(product["filings"] as Map<*, *>)["app"]}\"")
         buildConfigField("String", "CAMPUS_TIME_ZONE", "\"${product["timeZone"]}\"")
         val campus = product["campus"] as Map<*, *>

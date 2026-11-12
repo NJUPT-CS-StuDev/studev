@@ -194,7 +194,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
  * Lab sheets come from a college's laboratory centre, not the teaching office: each is the person's to take or leave
  * whole, and what they took off one lab or one sitting at a time comes back from here.
  */
-@Composable fun LabSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {
+@Composable fun LabSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onClose: () -> Unit) {
     var extraClass by remember { mutableStateOf("") }
     val choices = settings.labs
     val catalog = top.hicancan.studev.timetable.CourseCatalog
@@ -215,6 +215,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 trailing = { Toggle(on) { next -> update { if (next) it.copy(off = it.off - name) else it.copy(off = (it.off + name).distinct()) } } })
         }
         if (sheets.isEmpty()) Plain("你的班级不在已收到的实验表里。", 13.sp, Ink.faint)
+        KeyRow(null, "有新版实验表，或你的班不在里面", "传上来，审核后所有人的课表都会更新", chevron = true, onClick = { onForm(top.hicancan.studev.account.FormRequest("data")) })
         val dropped = state.labs.filter { catalog.labCourseKey(it) in choices.drop }.distinctBy(catalog::labCourseKey)
         if (dropped.isNotEmpty()) Plain("去掉的实验", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
         dropped.forEach { lab -> val key = catalog.labCourseKey(lab)
@@ -225,12 +226,12 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     }
 }
 
-@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onContribute: () -> Unit, onClose: () -> Unit) {
+@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onClose: () -> Unit) {
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
     if (layering) { LayerSheet(settings, model) { layering = false }; return }
     var coursesOpen by remember { mutableStateOf(false) }
-    if (labsOpen) { LabSheet(state, settings, model) { labsOpen = false }; return }
+    if (labsOpen) { LabSheet(state, settings, model, onForm = { onClose(); onForm(it) }) { labsOpen = false }; return }
     if (coursesOpen && state.term != null) {
         top.hicancan.studev.timetable.CustomCourseSheet(settings.timetableEdits(state.term.term), state.term.weeks.size, state.periods.size, model) { coursesOpen = false }
         return
@@ -263,7 +264,8 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 KeyRow("实验", if (on) "已放进课表" else "没有放进课表", listOfNotNull(settings.labs.drop.size.takeIf { it > 0 }?.let { "去掉 $it 门" }, settings.labs.skip.size.takeIf { it > 0 }?.let { "不上 $it 次" }).joinToString("，").ifEmpty { "学院实验中心的上机安排" }, chevron = true, onClick = { labsOpen = true })
             }
             KeyRow("叠放", settings.layers.joinToString(" › ") { KIND_NAMES.getValue(it) }, "同一时间有几件事时谁在前面", chevron = true, onClick = { layering = true })
-            KeyRow("贡献资料", "实验安排与校园勘误", "登录后提交，审核通过后整理发布", chevron = true, onClick = { onClose(); onContribute() })
+            KeyRow("反馈", "哪里不顺手、哪里不对", "写一句就行，我们会看每一条", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
+            KeyRow("补充数据", "实验课表、讲座、校车、营业时间", "教务系统里没有的，审核后放进课表和地图", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
             KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
             state.run?.let { rule ->
                 Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))

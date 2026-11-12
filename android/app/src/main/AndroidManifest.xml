@@ -65,7 +65,12 @@
                 <data android:path="/" />
                 <data android:pathPrefix="/map" />
                 <data android:pathPrefix="/search" />
+                <data android:pathPrefix="/fill" />
             </intent-filter>
         </activity>
+        <!-- Photos taken for a form are written to the app's cache and handed to the camera from here. -->
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/form_files" />
+        </provider>
     </application>
 </manifest>

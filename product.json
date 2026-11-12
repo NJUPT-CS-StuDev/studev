@@ -6,7 +6,11 @@
   "origin": "https://studev.hicancan.top",
   "repository": "NJUPT-CS-StuDev/studev",
   "timeZone": "Asia/Shanghai",
-  "contributions": { "form": "6156a5d3-8ae2-41d5-bd6b-3673fb39a7a6" },
+  "forms": {
+    "feedback": "82615c11-7535-4a89-aa6d-f79bb9f4cbc0",
+    "place": "1e522240-ad06-4290-af1a-9601d57cda66",
+    "data": "6156a5d3-8ae2-41d5-bd6b-3673fb39a7a6"
+  },
   "filings": {
     "icp": "苏ICP备2026038426号-1",
     "app": "苏ICP备2026038426号-2A",

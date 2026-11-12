@@ -124,21 +124,23 @@ test('pure information submissions confirm idempotently and preserve schema snap
   const changedRow = (await changed.json()).submission; assert.equal(changedRow.status, 'pending_review'); assert.equal(changedRow.review, undefined);
 });
 
-test('members are isolated; guests require an unguessable receipt and safe projections', async () => {
+test('members are isolated; a public form is read by anyone and answered only by someone signed in', async () => {
   const f = fixture(); const form = await createForm(f); const created = await authorize(f, form); await complete(f, created);
   const id = created.submission.id;
   assert.equal((await f.request(`/submissions/${id}`, { user: 'secondMember' })).status, 404);
-  assert.equal((await f.request(`/submissions/${id}`, { receipt: created.receiptToken })).status, 404);
+  // The upload receipt finishes an upload; it does not open the submission to anyone.
+  assert.equal((await f.request(`/submissions/${id}`, { receipt: created.receiptToken })).status, 401);
   const own = (await (await f.request('/me/submissions', { user: 'member' })).json()).items; assert.equal(own.length, 1);
   assert.equal((await (await f.request('/me/submissions', { user: 'secondMember' })).json()).items.length, 0);
+  const serialized = JSON.stringify(await (await f.request(`/submissions/${id}`, { user: 'member' })).json());
+  for (const forbidden of ['receiptHash', 'objectKey', 'finalObjectKey', 'secretAccessKey', 'synthetic-key']) assert.equal(serialized.includes(forbidden), false);
   const publicForm = await createForm(f, { access: 'public' });
-  const guest = await authorize(f, publicForm, { submitterName: '测试访客' }, { user: undefined }); await complete(f, guest);
-  assert.equal((await f.request(`/submissions/${guest.submission.id}`)).status, 404);
-  assert.equal((await f.request(`/submissions/${guest.submission.id}`, { receipt: 'incorrect-but-long-secret' })).status, 404);
-  const view = await f.request(`/submissions/${guest.submission.id}`, { receipt: guest.receiptToken }); assert.equal(view.status, 200);
-  const serialized = JSON.stringify(await view.json());
-  for (const forbidden of ['receiptHash', 'objectKey', 'finalObjectKey', 'secretAccessKey', 'synthetic-key', '12345678']) assert.equal(serialized.includes(forbidden), false);
-  assert.equal((await f.request(`/submissions/${guest.submission.id}/edit`, { method: 'POST', body: { revision: 0, answers: { name: '更改' } }, receipt: guest.receiptToken })).status, 401);
+  assert.equal((await f.request(`/forms/${publicForm.id}`)).status, 200);
+  assert.equal((await (await f.request('/forms')).json()).items.some((item) => item.id === publicForm.id), true);
+  assert.equal((await (await f.request('/forms')).json()).items.some((item) => item.id === form.id), false);
+  const guest = await f.request(`/forms/${publicForm.id}/submissions`, { method: 'POST', body: { answers: { name: '测试访客' }, files: [] }, csrf: false });
+  assert.equal(guest.status, 401);
+  assert.equal((await f.repo.list(`form-quota/${publicForm.id}/`)).length, 0);
 });
 
 test('only staff record details expose the current member contact projection, never personal or public lists', async () => {
@@ -155,12 +157,6 @@ test('only staff record details expose the current member contact projection, ne
   const staffList = await (await f.request(`/admin/forms/${form.id}/submissions`, { user: 'owner' })).json();
   const ownList = await (await f.request('/me/submissions', { user: 'member' })).json();
   for (const list of [staffList, ownList]) { assert.equal(JSON.stringify(list).includes('submitterContact'), false); assert.equal(JSON.stringify(list).includes('12345678@qq.com'), false); }
-  const guestForm = await createForm(f, { access: 'public' });
-  const guest = await authorize(f, guestForm, { submitterName: '测试访客' }, { user: undefined }); await complete(f, guest);
-  const guestDetails = await (await f.request(`/submissions/${guest.submission.id}`, { receipt: guest.receiptToken })).json();
-  assert.equal(guestDetails.submitterContact, undefined); assert.equal(guestDetails.canEdit, false);
-  const staffGuestDetails = await (await f.request(`/submissions/${guest.submission.id}`, { user: 'owner' })).json();
-  assert.equal(staffGuestDetails.submitterContact, undefined);
   assert.equal((await f.request(`/submissions/${created.submission.id}`, { user: 'owner', mfa: false })).status, 403);
 });
 
@@ -183,10 +179,7 @@ test('member identity is snapshotted automatically and only exposed through owne
   assert.equal(staff.submitterContact.studentId, '202600000099'); assert.equal(staff.submitterContact.realName, '测试更正姓名'); assert.equal(staff.submitterContact.identityVerified, true);
   const staffList = await (await f.request(`/admin/forms/${form.id}/submissions`, { user: 'owner' })).json(); assert.deepEqual(staffList.items[0].submitterIdentity, expected);
   assert.equal((await f.request(`/submissions/${created.submission.id}`, { user: 'secondMember' })).status, 404);
-  assert.equal((await f.request(`/submissions/${created.submission.id}`, { receipt: created.receiptToken })).status, 404);
-  const guest = await authorize(f, form, { submitterName: '测试访客', submitterIdentity: expected }, { user: undefined });
-  assert.equal(guest.submission.submitterIdentity, undefined); await complete(f, guest);
-  const guestView = await (await f.request(`/submissions/${guest.submission.id}`, { receipt: guest.receiptToken })).json(); assert.equal(guestView.submission.submitterIdentity, undefined);
+  assert.equal((await f.request(`/submissions/${created.submission.id}`, { receipt: created.receiptToken })).status, 401);
   for (const path of ['/forms', `/forms/${form.id}`]) {
     const serialized = JSON.stringify(await (await f.request(path)).json());
     assert.equal(serialized.includes(member.studentId), false); assert.equal(serialized.includes(member.realName), false); assert.equal(serialized.includes('submitterIdentity'), false);
@@ -209,10 +202,6 @@ test('member receipt-only completion returns minimal confirmation without names,
   }
   const personal = await (await f.request(`/submissions/${created.submission.id}`, { user: 'member' })).json();
   assert.equal(personal.submission.answers.name, '测试专用私人答案'); assert.equal(personal.submission.files[0].name, '测试私人文件名.txt');
-  const guestForm = await createForm(f, { access: 'public' });
-  const guest = await authorize(f, guestForm, { submitterName: '测试访客称呼', answers: { name: '测试访客答案' } }, { user: undefined });
-  const guestDone = await (await complete(f, guest)).json();
-  assert.equal(guestDone.submission.submitterName, '测试访客称呼'); assert.equal(guestDone.submission.answers.name, '测试访客答案');
 });
 
 test('identity CSV exports submission-time values and leaves historical identity cells blank', async () => {
@@ -324,15 +313,15 @@ test('multiple individually valid files cannot exceed the 20 MiB total submissio
   assert.equal((await authorize(f, form, { answers: {}, files: exact })).uploads.length, 2);
 });
 
-test('guest file submission and receipt download work without a session while member CSRF remains required', async () => {
+test('a file is downloaded by its author signed in, never by its receipt, and submitting keeps CSRF', async () => {
   const f = fixture(); const form = await createForm(f, { access: 'public', fields: [fileField] });
-  const created = await authorize(f, form, { answers: {}, submitterName: '测试访客', files: [{ fieldId: 'attachments', name: 'guest.txt', size: 7, type: 'text/plain' }] }, { user: undefined, csrf: false });
+  const created = await authorize(f, form, { answers: {}, files: [{ fieldId: 'attachments', name: 'member.txt', size: 7, type: 'text/plain' }] });
   assert.equal((await complete(f, created)).status, 200);
   const id = created.submission.id; const fileId = created.submission.files[0].id;
-  assert.equal((await f.request(`/submissions/${id}`, { receipt: created.receiptToken })).status, 200);
-  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', receipt: created.receiptToken, csrf: false })).status, 200);
-  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', receipt: 'incorrect-but-long-secret', csrf: false })).status, 404);
-  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', receipt: created.receiptToken, csrf: false, origin: 'https://attacker.test' })).status, 403);
+  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', user: 'member' })).status, 200);
+  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', user: 'secondMember' })).status, 404);
+  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', receipt: created.receiptToken, csrf: false })).status, 401);
+  assert.equal((await f.request(`/submissions/${id}/files/${fileId}/download`, { method: 'POST', user: 'member', origin: 'https://attacker.test' })).status, 403);
   assert.equal((await f.request(`/forms/${form.id}/submissions`, { method: 'POST', user: 'member', csrf: false, body: { answers: {}, files: [] } })).status, 403);
 });
 
@@ -376,8 +365,8 @@ test('closed/deadline forms reject new submissions but authorized uploads can fi
 });
 
 test('CSV exports UTF8 BOM, quotes, formulas safely and retains removed schema fields', async () => {
-  const f = fixture(); const form = await createForm(f, { access: 'public', fields: [{ ...textField, label: '=危险标题' }] });
-  const created = await authorize(f, form, { answers: { name: '=HYPERLINK("https://attacker.test")' }, submitterName: '+危险称呼' }, { user: undefined }); await complete(f, created);
+  const f = fixture(); f.users.member.nickname = '+危险称呼'; const form = await createForm(f, { access: 'public', fields: [{ ...textField, label: '=危险标题' }] });
+  const created = await authorize(f, form, { answers: { name: '=HYPERLINK("https://attacker.test")' } }); await complete(f, created);
   const updated = await f.request(`/admin/forms/${form.id}`, { method: 'POST', user: 'owner', body: { revision: form.revision, fields: [{ id: 'other', type: 'text', label: '另一个字段' }] } }); assert.equal(updated.status, 200);
   const res = await f.request(`/admin/forms/${form.id}/export`, { user: 'owner' }); assert.equal(res.status, 200);
   const bytes = new Uint8Array(await res.arrayBuffer()); assert.deepEqual([...bytes.slice(0, 3)], [239, 187, 191]);

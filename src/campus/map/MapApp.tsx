@@ -13,6 +13,7 @@ import { Back, Chevron, Cross, Magnifier, Sheet } from '@/world/ui';
 import { campusTime, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { displayName } from './model/displayName';
 import { loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
+import { formLink } from '@/world/product';
 import { visibleRouteText } from './model/routeText';
 import type { ModelIndex } from './models';
 import { CampusScene, type CampusModel, type RoomPaint, type SceneLabel } from './scene';
@@ -21,6 +22,12 @@ import { holidayMap } from '@/world/events';
 import { readAppearance } from '@/world/appearance';
 import { orientationBall } from './ball';
 import '../campus.css';
+
+/** A photo of a place, sent with where it is: its name, its id on the map and, where the map has one, its centre. */
+const photoLink = (place: Place, name: string, within?: Place | null) => {
+    const centre = place.centre ?? within?.centre;
+    return formLink('place', { place: `${name} · ${place.id}`, ...(centre ? { position: `${centre[1].toFixed(6)},${centre[0].toFixed(6)}` } : {}) });
+};
 import './map.css';
 
 const RULER_START = 7 * 60, RULER_END = 22 * 60;
@@ -328,6 +335,7 @@ export default function MapApp() {
                 {state && <a className="btn" href={`/?who=room:${encodeURI(pickedRoom.id)}&scale=week&t=${moment.date}`}>这间的课表</a>}
                 <button className="btn go" onClick={() => set({ nav: pickedRoom.id, place: null }, { push: true })}>去这里</button>
             </div>
+            <a className="kv" href={photoLink(pickedRoom, roomName, openBuilding)}><span className="v">给这里拍张照<small>门牌、入口拍清楚，大家更好找</small></span><Chevron /></a>
             {state?.occupants.map(occupant => <a key={occupant.id} className={`occ ${occupant === state.current ? 'cur' : ''}`} href={`/?who=course:${encodeURI(courseName(occupant.course))}&scale=week`}><span className="tm">{hm(occupant.start)}–{hm(occupant.end)}</span><span className="nm">{courseName(occupant.course)}{occupant.kind === 'exam' ? ' · 考试' : ''}<small>{occupant.teachers.join(' ')}{occupant.classes.length ? ` · ${occupant.classes.slice(0, 2).join(' ')}${occupant.classes.length > 2 ? ' 等' : ''}` : ''}</small></span></a>)}
             {state && day && !state.occupants.length && <div className="empty small">今天没有排课</div>}
         </>;
@@ -350,6 +358,7 @@ export default function MapApp() {
             {status && status.state !== 'unknown' && <div className="state"><b className={status.state === 'closed' ? 'off' : ''}>{openingLabel[status.state]}</b> · 今日 {status.today}</div>}
             <div className="btns"><button className="btn go" onClick={() => set({ nav: selected.id, place: null }, { push: true })}>去这里</button></div>
             <a className="kv" href={`/search/?within=${encodeURIComponent(selected.id)}`}><span className="v">这里的一切</span><Chevron /></a>
+            <a className="kv" href={photoLink(selected, displayName(selected, world.space.byId))}><span className="v">给这里拍张照<small>楼门、入口、店面，大家更好找</small></span><Chevron /></a>
             {selected.hours && <div className="hours">{Array.from({ length: 7 }, (_, index) => <div key={index}><span>{WEEKDAYS[index + 1]}</span><span>{selected.hours!.week[String(index + 1)]?.map(range => range.join('–')).join('、') || '不开放'}</span></div>)}</div>}
         </>;
     } else if (world) {

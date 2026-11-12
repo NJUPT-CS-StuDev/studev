@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { fail, readJson, requireOrigin, response, text } from './common.mjs';
 import { isConflict } from './store.mjs';
 import { hasAuthorization } from './sessions.mjs';
@@ -174,29 +174,22 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
     if (!record) fail(404, 'NOT_FOUND', '提交记录不存在。');
     return record;
   }
-  async function recordView(record, { includeIdentity = false } = {}) {
+  async function recordView(record) {
     const [complete, event] = await Promise.all([repo.get(completionKey(record.id)), repo.latest(eventPrefix(record.id))]);
-    const submitterIdentity = includeIdentity && record.userId && record.submitterIdentity ? identitySnapshot(record.submitterIdentity) : null;
-    return { id: record.id, formId: record.formId, formTitle: record.schemaSnapshot.title, ...(record.userId ? { userId: record.userId } : {}), submitterName: record.submitterName, ...(submitterIdentity ? { submitterIdentity } : {}), answers: event?.answers || record.answers, files: record.files.map(({ id, fieldId, name, size, type }) => ({ id, fieldId, name, size, type })), status: event?.status || complete?.status || 'uploading', revision: event?.revision || 0, createdAt: record.createdAt, updatedAt: event?.updatedAt || complete?.completedAt || record.createdAt, ...(event?.review ? { review: event.review } : {}) };
+    return { id: record.id, formId: record.formId, formTitle: record.schemaSnapshot.title, userId: record.userId, submitterName: record.submitterName, ...(record.submitterIdentity ? { submitterIdentity: identitySnapshot(record.submitterIdentity) } : {}), answers: event?.answers || record.answers, files: record.files.map(({ id, fieldId, name, size, type }) => ({ id, fieldId, name, size, type })), status: event?.status || complete?.status || 'uploading', revision: event?.revision || 0, createdAt: record.createdAt, updatedAt: event?.updatedAt || complete?.completedAt || record.createdAt, ...(event?.review ? { review: event.review } : {}) };
   }
   async function completionView(record) {
     const view = await recordView(record);
-    if (!record.userId) return view;
     // A receipt is sufficient to finish an authorized upload after session expiry, but it is
     // not an account login. Do not echo names, answers, filenames, review comments or identity.
     const { id, formId, status, revision, createdAt, updatedAt } = view;
     return { id, formId, status, revision, createdAt, updatedAt };
   }
-  async function authorize(request, record, { csrf = false, receiptToken } = {}) {
-    const session = await identity.authenticate(request);
-    if (session && csrf) await identity.authenticate(request, { required: true, csrf: true });
-    if (session && ['owner', 'admin'].includes(session.user.role)) return identity.authenticate(request, { staff: true, csrf });
-    if (session && record.userId === session.user.id) return session;
-    const secret = receiptToken ?? request.headers.get('x-receipt-token');
-    if (!record.userId && typeof secret === 'string' && secret.length >= 20 && secret.length <= 256) {
-      const actual = Buffer.from(hash(secret)); const expected = Buffer.from(record.receiptHash);
-      if (actual.length === expected.length && timingSafeEqual(actual, expected)) return null;
-    }
+  /** A submission is seen by the one who made it and by staff; every submission has a signed-in author. */
+  async function authorize(request, record, { csrf = false } = {}) {
+    const session = await identity.authenticate(request, { required: true, csrf });
+    if (['owner', 'admin'].includes(session.user.role)) return identity.authenticate(request, { staff: true, csrf });
+    if (record.userId === session.user.id) return session;
     fail(404, 'NOT_FOUND', '提交记录不存在或无权访问。');
   }
   async function claim(prefix, maximum, value, code) {
@@ -264,7 +257,7 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
         }
         if (action === 'duplicate' && method === 'POST') return response({ form: publicForm(await addForm({ ...formInput(form), title: `${form.title.slice(0, 94)} · 副本`, status: 'draft', deadline: '' }, session.user)) }, 201);
         if (['submissions', 'export'].includes(action) && method === 'GET') {
-          const records = await recordsFor(form.id); const items = await Promise.all(records.map((record) => recordView(record, { includeIdentity: true })));
+          const records = await recordsFor(form.id); const items = await Promise.all(records.map((record) => recordView(record)));
           if (action === 'submissions') return response({ items, usage: { authorizations: (await repo.list(`form-quota/${form.id}/`)).length, completed: items.filter((v) => v.status !== 'uploading').length, fileBytes: items.filter((v) => v.status !== 'uploading').reduce((sum, row) => sum + row.files.reduce((n, f) => n + f.size, 0), 0) } });
           // A union of immutable schemas preserves labels/values of deleted or renamed fields.
           const signature = (field) => JSON.stringify([field.id, field.type, field.label]);
@@ -293,47 +286,47 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
       const formRoute = path.match(/^\/api\/platform\/forms\/([^/]+)(?:\/(submissions))?$/);
       if (formRoute) {
         const form = await getForm(formRoute[1]);
-        const session = await identity.authenticate(request, { required: form.access === 'members' });
-        if (session && method === 'POST') await identity.authenticate(request, { required: true, csrf: true });
+        // Anyone may read a public form; only someone signed in may answer one.
+        const session = await identity.authenticate(request, { required: form.access === 'members' || method === 'POST', csrf: method === 'POST' });
         if (method === 'GET' && !formRoute[2]) {
           if (form.status !== 'published') await identity.authenticate(request, { staff: true });
           return response({ form: publicForm(form), canSubmit: canSubmit(form), ...(!canSubmit(form) ? { reason: form.status !== 'published' ? '本表尚未发布或已经停止收集。' : '已超过截止时间。' } : {}) });
         }
         if (method === 'POST' && formRoute[2] === 'submissions') {
           if (!canSubmit(form)) fail(409, 'FORM_CLOSED', '本表当前不接受新提交。');
-          await repo.throttle('form-submit', session?.user.id || context.clientIp || 'unknown', 15);
+          await repo.throttle('form-submit', session.user.id, 15);
           const body = await readJson(request); const answers = answersInput(body.answers, form.fields); const files = fileInput(body.files || [], form.fields);
-          const submitterName = session ? text(session.user.nickname, '提交者', 80, true) : text(body.submitterName, '称呼', 80, true);
-          const submitterIdentity = session ? identitySnapshot(session.user) : null;
+          const submitterName = text(session.user.nickname, '提交者', 80, true);
+          const submitterIdentity = identitySnapshot(session.user);
           const config = files.length ? oscaConfig(env, form.id) : null;
           const id = randomUUID(); const token = randomBytes(32).toString('base64url'); const timestamp = iso();
           const ticket = { id, createdAt: timestamp };
-          if (session) await claim(`form-user-quota/${form.id}/${session.user.id}/`, form.maxPerUser, ticket, 'USER_LIMIT_REACHED');
+          await claim(`form-user-quota/${form.id}/${session.user.id}/`, form.maxPerUser, ticket, 'USER_LIMIT_REACHED');
           await claim(`form-quota/${form.id}/`, form.maxSubmissions, ticket, 'FORM_FULL');
-          const record = { id, formId: form.id, ...(session ? { userId: session.user.id } : {}), submitterName, ...(submitterIdentity ? { submitterIdentity } : {}), answers, files: files.map((file) => ({ ...file, objectKey: `${config.objectPrefix}staging/${id}/${file.id}.${file.extension}` })), schemaSnapshot: publicForm(form), receiptHash: hash(token), createdAt: timestamp, uploadExpiresAt: now() + 300000, objectPrefix: config?.objectPrefix || '' };
+          const record = { id, formId: form.id, userId: session.user.id, submitterName, submitterIdentity, answers, files: files.map((file) => ({ ...file, objectKey: `${config.objectPrefix}staging/${id}/${file.id}.${file.extension}` })), schemaSnapshot: publicForm(form), receiptHash: hash(token), createdAt: timestamp, uploadExpiresAt: now() + 300000, objectPrefix: config?.objectPrefix || '' };
           await repo.putNew(recordKey(id), record);
           await repo.putNew(`form-submissions/${form.id}/${id}.json`, { id });
-          if (session) await repo.putNew(`user-submissions/${session.user.id}/${String(9999999999999 - now()).padStart(13, '0')}-${id}.json`, { id });
+          await repo.putNew(`user-submissions/${session.user.id}/${String(9999999999999 - now()).padStart(13, '0')}-${id}.json`, { id });
           const gateway = files.length ? getGateway(config) : null;
           const uploads = await Promise.all(record.files.map(async (file) => ({ fileId: file.id, ...await gateway.presignUpload({ id: file.id, objectKey: file.objectKey, contentType: file.type, fileSize: file.size, fileName: file.name }, 300) })));
-          return response({ submission: await recordView(record, { includeIdentity: Boolean(session) }), receiptToken: token, uploads }, 201);
+          return response({ submission: await recordView(record), receiptToken: token, uploads }, 201);
         }
         fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
       }
       if (path === `${API}/me/submissions` && method === 'GET') {
         const session = await identity.authenticate(request, { required: true });
         const records = await Promise.all((await repo.list(`user-submissions/${session.user.id}/`)).slice(0, 1000).map(async (key) => { const index = await repo.get(key); return index ? getRecord(index.id) : null; }));
-        return response({ items: (await Promise.all(records.filter((r) => r.userId === session.user.id).map((record) => recordView(record, { includeIdentity: true })))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+        return response({ items: (await Promise.all(records.filter((r) => r.userId === session.user.id).map((record) => recordView(record)))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
       }
       const submissionRoute = path.match(/^\/api\/platform\/submissions\/([^/]+)(?:\/(complete|edit|review)|\/files\/([^/]+)\/(download))?$/);
       if (!submissionRoute) return null;
       const record = await getRecord(submissionRoute[1]); const action = submissionRoute[2] || submissionRoute[4];
       if (!action && method === 'GET') {
         const auth = await authorize(request, record);
-        const [submission, currentForm] = await Promise.all([recordView(record, { includeIdentity: Boolean(auth) }), getForm(record.formId)]);
-        const canEdit = Boolean(auth && auth.user.id === record.userId && record.schemaSnapshot.allowEdit && currentForm.allowEdit && canSubmit(currentForm) && submission.status !== 'uploading');
+        const [submission, currentForm] = await Promise.all([recordView(record), getForm(record.formId)]);
+        const canEdit = Boolean(auth.user.id === record.userId && record.schemaSnapshot.allowEdit && currentForm.allowEdit && canSubmit(currentForm) && submission.status !== 'uploading');
         let submitterContact;
-        if (auth && ['owner', 'admin'].includes(auth.user.role) && record.userId) {
+        if (['owner', 'admin'].includes(auth.user.role)) {
           // Contact details are deliberately limited to the staff detail response, never lists,
           // public schemas or receipt responses. Read the current account rather than a stale copy.
           const account = await repo.latest(`identity/users/${record.userId}`);
@@ -391,7 +384,7 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
         if (body.files !== undefined) fail(400, 'FILES_IMMUTABLE', '附件不能替换，请新建提交。');
         const event = await repo.append(eventPrefix(record.id), { answers: answersInput(body.answers, record.schemaSnapshot.fields), status: record.schemaSnapshot.requireReview ? 'pending_review' : 'submitted', updatedAt: iso() }, body.revision);
         await repo.audit(session.user, 'submission.edit', record.id, { formId: record.formId, revision: event.revision });
-        return response({ submission: await recordView(record, { includeIdentity: true }) });
+        return response({ submission: await recordView(record) });
       }
       if (action === 'review' && method === 'POST') {
         const session = await identity.authenticate(request, { staff: true, csrf: true });
@@ -401,7 +394,7 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
         const current = await recordView(record);
         const event = await repo.append(eventPrefix(record.id), { answers: current.answers, status: body.status, updatedAt: iso(), review: { status: body.status, comment: text(body.comment, '审核说明', 1000), reviewedAt: iso() } }, body.revision);
         await repo.audit(session.user, 'submission.review', record.id, { formId: record.formId, status: body.status, revision: event.revision });
-        return response({ submission: await recordView(record, { includeIdentity: true }) });
+        return response({ submission: await recordView(record) });
       }
       if (action === 'download' && method === 'POST') {
         await authorize(request, record, { csrf: true });

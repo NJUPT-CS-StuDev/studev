@@ -93,7 +93,7 @@ export class PlatformError extends Error {
 }
 let currentSession: Session | null = null;
 let sessionRequest: Promise<Session | null> | null = null;
-export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', user: '用户', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '访客可填', members: '登录后填写', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
+export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', user: '用户', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '公开', members: '仅登录可见', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
 function extractQq(user: { qq?: string; avatarUrl?: string }): string {
     if (user.qq && /^[1-9]\d{4,11}$/.test(user.qq.trim())) return user.qq.trim();
     const match = user.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
@@ -342,13 +342,13 @@ export function empty(title: string, description = '') { const box = el('div', u
 export function safeStorageUrl(raw: string): string { const url = new URL(raw); if (url.origin !== 'https://fgws3-ocloud.ihep.ac.cn' || url.username || url.password)
     throw new PlatformError('文件地址无法验证，请联系管理员。'); return url.href; }
 export function saveBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = el('a'); a.href = url; a.download = name.replace(/[\\/\x00-\x1f]/g, '_'); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
-async function downloadFile(submission: Submission, file: SubmissionFile, receipt?: string) { const result = await api<{
+async function downloadFile(submission: Submission, file: SubmissionFile) { const result = await api<{
     download: {
         url: string;
         headers: Record<string, string>;
         fileName: string;
     };
-}>(`/submissions/${encodeURIComponent(submission.id)}/files/${encodeURIComponent(file.id)}/download`, {}, receipt ? { headers: { 'X-Receipt-Token': receipt } } : {}); let response: Response; try {
+}>(`/submissions/${encodeURIComponent(submission.id)}/files/${encodeURIComponent(file.id)}/download`, {}); let response: Response; try {
     response = await fetch(safeStorageUrl(result.download.url), { headers: result.download.headers, credentials: 'omit', cache: 'no-store', redirect: 'error' });
 }
 catch {
@@ -454,7 +454,7 @@ export function readAnswers(root: ParentNode, fields: Field[]): Record<string, u
         values[f.id] = f.type === 'number' && n.value !== '' ? Number(n.value) : n.value;
     }
 } return values; }
-export function renderSubmission(root: HTMLElement, submission: Submission, form: FormDefinition, onError: (e: unknown) => void, receipt?: string) { const meta = el('dl', undefined, 'p-meta'); for (const [k, v] of [['回执编号', submission.id], ['填写者', submission.submitterName || '—'], ['提交时间', formatTime(submission.createdAt)], ['状态', labels[submission.status] || submission.status]])
+export function renderSubmission(root: HTMLElement, submission: Submission, form: FormDefinition, onError: (e: unknown) => void) { const meta = el('dl', undefined, 'p-meta'); for (const [k, v] of [['回执编号', submission.id], ['填写者', submission.submitterName || '—'], ['提交时间', formatTime(submission.createdAt)], ['状态', labels[submission.status] || submission.status]])
     meta.append(el('dt', k), el('dd', v)); if(submission.submitterIdentity){meta.append(el('dt','提交时学号'),el('dd',submission.submitterIdentity.studentId),el('dt','提交时姓名'),el('dd',submission.submitterIdentity.realName));} root.append(meta, el('hr', undefined, 'p-divider')); for (const field of form.fields) {
     if (field.type === 'file')
         continue;
@@ -469,7 +469,7 @@ export function renderSubmission(root: HTMLElement, submission: Submission, form
         const item = el('li');
         const text = el('span', `${file.name} · ${bytes(file.size)}`);
         const b = button('下载', async () => { try {
-            await busy(b, () => downloadFile(submission, file, receipt));
+            await busy(b, () => downloadFile(submission, file));
         }
         catch (e) {
             onError(e);

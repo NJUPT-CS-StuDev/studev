@@ -1,6 +1,5 @@
 import { api, bytes, busy, copy, el, errorText, formatTime, message, PlatformError, q, readAnswers, renderFields, safeStorageUrl, session, type FormDefinition, type Session, type Submission } from './api';
-import { receipts, rememberReceipt, receiptStorageAvailable, type LocalReceipt } from './receipts';
-import {saveBlob} from './api';
+import { receipts, rememberReceipt, type LocalReceipt } from './receipts';
 interface Upload {
     fileId: string;
     url: string;
@@ -17,15 +16,37 @@ const activeXHR = new Set<XMLHttpRequest>();
 let canceled = false;
 let latestId = '';
 let canSubmit = false;
-let receiptBackup:LocalReceipt|null=null;
-
-function saveReceipt(value:LocalReceipt) {
-    receiptBackup={...value};
-    const saved=rememberReceipt(value);
-    q('[data-fill-storage-fallback]').hidden=!!identity;
-    q('[data-receipt-backup-heading]').textContent=saved?'保存访客回执':'浏览器未能保存回执凭证，请立即下载';
-    return saved;
+/** Signing in happens in another tab, so that what is filled in here, files included, stays as it is. */
+let signingIn = false;
+const saveReceipt = (value: LocalReceipt) => rememberReceipt(value);
+function showIdentity() {
+    q('[data-fill-identity]').textContent = identity
+        ? `以 ${identity.user.realName || identity.user.nickname}${identity.user.studentId ? `（${identity.user.studentId}）` : ''} 的身份提交；学号和姓名由账号自动关联，无需重复填写`
+        : '可以先填写，提交时需要登录；没有账号可以当场注册，填好的内容不会丢。';
 }
+function signIn() {
+    signingIn = true;
+    const url = `/login/?next=${encodeURIComponent('/signed-in/')}`;
+    const opened = window.open(url, '_blank');
+    message(status, '在新打开的页面登录或注册，完成后回到这里，会自动继续提交。');
+    if (!opened) {
+        const link = el('a', '打开登录页', 'p-button');
+        link.href = url; link.target = '_blank'; link.rel = 'opener';
+        status.append(el('br'), link);
+    }
+}
+// Back from signing in: the submission goes on by itself.
+async function returned() {
+    if (!signingIn || document.visibilityState !== 'visible') return;
+    identity = await session(false);
+    if (!identity) return;
+    signingIn = false;
+    showIdentity();
+    message(status, '已登录，正在提交……');
+    formElement.requestSubmit();
+}
+window.addEventListener('focus', () => { void returned(); });
+document.addEventListener('visibilitychange', () => { void returned(); });
 function setLocked(locked: boolean) {
     q<HTMLFieldSetElement>('[data-fill-fieldset]').disabled = locked || !!pending || !canSubmit;
 }
@@ -42,9 +63,7 @@ function finish(submission: Submission) {
     q('[data-fill-receipt-id]').textContent = submission.id;
     q('[data-fill-success]').textContent = submission.status === 'pending_review'
         ? '你的填写和附件已收到，等待管理员审核。' : '你的填写和附件已收到。';
-    q('[data-fill-receipt-note]').textContent = identity
-        ? '可以随时在“我的提交”查看记录和处理结果。'
-        : '访客回执凭证仅保存在当前浏览器标签页会话中，关闭会话或清理浏览器数据后可能无法再查询。可下载回执恢复文件妥善保存；使用共用设备时请注意隐私。';
+    q('[data-fill-receipt-note]').textContent = '可以随时在“我的提交”查看记录和处理结果。';
     q('[data-fill-receipt]').hidden = false;
     formElement.hidden = true;
     q('[data-fill-progress]').hidden = true;
@@ -110,7 +129,6 @@ formElement.addEventListener('submit', async (event) => {
     if (!definition || !canSubmit || pending)
         return;
     try {
-        if(!identity&&!receiptStorageAvailable())throw new Error('当前浏览器无法保存访客回执，请允许本站会话存储后重试，或先登录再填写。尚未申请提交次数。');
         const answers = readAnswers(formElement, definition.fields);
         const files: File[] = [];
         const metadata: {
@@ -141,6 +159,7 @@ formElement.addEventListener('submit', async (event) => {
             throw new Error('每次提交最多 10 个附件。');
         if (files.reduce((sum, file) => sum + file.size, 0) > 20971520)
             throw new Error('本次所有附件合计超过 20 MB，请压缩或减少文件后提交。');
+        if (!identity) { signIn(); return; }
         setLocked(true);
         canceled = false;
         message(status, '正在创建提交，请不要关闭页面……');
@@ -149,7 +168,7 @@ formElement.addEventListener('submit', async (event) => {
             receiptToken: string;
             uploads: Upload[];
         }>(`/forms/${encodeURIComponent(definition.id)}/submissions`, {
-            answers, files: metadata, submitterName: identity ? undefined : q<HTMLInputElement>('#guest-name').value.trim(),
+            answers, files: metadata,
         });
         pending = { id: result.submission.id, formId: definition.id, title: definition.title, token: result.receiptToken, createdAt: result.submission.createdAt || new Date().toISOString(), completed: false };
         saveReceipt(pending);
@@ -201,7 +220,6 @@ q('[data-fill-abandon]').addEventListener('click', () => {
     message(status, '已放弃本次填写。你可以重新填写并申请新的提交。');
 });
 q('[data-fill-copy]').addEventListener('click', () => { void copy(latestId, status); });
-q('[data-fill-save-receipt]').addEventListener('click',()=>{if(receiptBackup)saveBlob(new Blob([JSON.stringify({version:1,site:location.origin,...receiptBackup},null,2)],{type:'application/json'}),`StuDev-回执-${receiptBackup.id}.json`);});
 q('[data-fill-another]').addEventListener('click', () => {
     formElement.reset();
     formElement.hidden = false;
@@ -225,14 +243,14 @@ void (async () => {
             canSubmit: boolean;
             reason?: string;
         }>(`/forms/${encodeURIComponent(id)}`);
-        identity = await session(true);
-        if (!identity) return;
-        pending = receipts().filter(value => value.formId === id && !value.completed && !value.abandoned).at(-1) || null;
+        // A form is read without signing in; signing in is asked for when it is sent.
+        identity = await session(false);
+        pending = identity && receipts().filter(value => value.formId === id && !value.completed && !value.abandoned).at(-1) || null;
         let result:{form:FormDefinition;canSubmit:boolean;reason?:string};
         try {result = await formRequest;}
         catch(error){
             if(!pending)throw error;
-            const previous=await api<{submission:Submission;form:FormDefinition}>(`/submissions/${encodeURIComponent(pending.id)}`,undefined,{headers:{'X-Receipt-Token':pending.token}});
+            const previous=await api<{submission:Submission;form:FormDefinition}>(`/submissions/${encodeURIComponent(pending.id)}`);
             result={form:previous.form,canSubmit:false,reason:'此表目前无法新填写。你仍可重试确认此前已申请的提交，或明确放弃。'};
         }
         definition = result.form;
@@ -241,9 +259,14 @@ void (async () => {
         q('[data-fill-description]').textContent = definition.description || '请填写下方内容，确认无误后提交。';
         document.title = `${definition.title} — StuDev`;
         renderFields(q('[data-fill-fields]'), definition.fields);
-        q('[data-guest-name]').hidden = !!identity;
-        q<HTMLInputElement>('#guest-name').required = !identity;
-        q('[data-fill-identity]').textContent = identity ? `以 ${identity.user.realName||identity.user.nickname}${identity.user.studentId?`（${identity.user.studentId}）`:""} 的身份提交；学号和姓名由账号自动关联，无需重复填写` : '';
+        // An entry may fill what it knows, such as the place a photo is of: `a.<field>=` in the link.
+        const params = new URLSearchParams(location.search);
+        for (const field of definition.fields.filter(item => item.type !== 'file')) {
+            const value = params.get(`a.${field.id}`);
+            const input = formElement.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[name="${field.id}"]`);
+            if (value && input && input.type !== 'checkbox') input.value = value;
+        }
+        showIdentity();
         const rules = q('[data-fill-rules]');
         if (definition.requireReview)
             rules.append(el('span', '提交后审核', 'p-pill'));
@@ -252,10 +275,6 @@ void (async () => {
         if (definition.deadline)
             rules.append(el('span', `截止 ${formatTime(definition.deadline)}`, 'p-pill'));
         rules.hidden = !rules.childElementCount;
-        if (definition.allowEdit)
-            rules.append(el('span', '允许修改文字信息', 'p-pill'));
-        if (definition.deadline)
-            rules.append(el('span', `截止 ${formatTime(definition.deadline)}`, 'p-pill'));
         q('[data-fill-card]').hidden = false;
         if (!canSubmit) {
             message(status, result.reason || '此表单暂时不能提交。');

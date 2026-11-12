@@ -246,6 +246,7 @@ function openEditor(form: FormDefinition | null) {
   q<HTMLInputElement>('#editor-deadline').value = form?.deadline ? new Date(new Date(form.deadline).getTime() - new Date(form.deadline).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
   q<HTMLInputElement>('#editor-per-user').value = String(form?.maxPerUser || 1);
   q<HTMLInputElement>('#editor-total').value = String(form?.maxSubmissions || 100);
+  q<HTMLInputElement>('#editor-public').checked = form?.access === 'public';
   q<HTMLInputElement>('#editor-review').checked = form?.requireReview || false;
   q<HTMLInputElement>('#editor-edit').checked = form?.allowEdit || false;
   q<HTMLSelectElement>('#editor-status').value = form?.status || 'draft';
@@ -276,7 +277,7 @@ function readForm() {
     title,
     description: q<HTMLTextAreaElement>('#editor-description').value.trim(),
     status: q<HTMLSelectElement>('#editor-status').value,
-    access: 'members',
+    access: q<HTMLInputElement>('#editor-public').checked ? 'public' : 'members',
     deadline: deadline ? new Date(deadline).toISOString() : '',
     requireReview: q<HTMLInputElement>('#editor-review').checked,
     allowEdit: q<HTMLInputElement>('#editor-edit').checked,

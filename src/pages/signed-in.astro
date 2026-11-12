@@ -1,0 +1,15 @@
+---
+// Where signing in from a form ends: the form waits in the tab it was filled in, and goes on by itself there.
+import SiteLayout from '../site/SiteLayout.astro';
+import '../platform/platform.css';
+---
+<SiteLayout title="已登录 — StuDev" active="login" noindex={true}>
+  <div class="platform">
+    <section class="p-card p-auth">
+      <h1>已登录</h1>
+      <p class="p-description">回到刚才填写的页面，提交会自动继续。这个页面可以关闭。</p>
+      <div class="p-actions" style="margin-top:20px"><a class="p-button secondary" href="/forms/">查看全部表单</a></div>
+    </section>
+  </div>
+  <script>window.opener ? window.setTimeout(() => window.close(), 600) : undefined;</script>
+</SiteLayout>

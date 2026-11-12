@@ -8,7 +8,7 @@ import { loginOwner } from './bootstrap-owner.mjs';
 import { privateFile } from '../private/files.mjs';
 
 export async function exportContributions(client, output) {
-  const result = await client.call(`/admin/forms/${product.contributions.form}/submissions`, { expected: 200 });
+  const result = await client.call(`/admin/forms/${product.forms.data}/submissions`, { expected: 200 });
   const accepted = result.body.items.filter(record => record.status === 'accepted');
   let count = 0;
   for (const record of accepted) {

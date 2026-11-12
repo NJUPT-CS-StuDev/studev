@@ -1,7 +1,7 @@
 // The one place for personal settings, reached from the avatar on every page.
 import { useEffect, useMemo, useState } from 'react';
 import { DATA_RELEASE } from '@/world/config';
-import { PRODUCT_CONFIG } from '@/world/product';
+import { formLink, PRODUCT_CONFIG } from '@/world/product';
 import { timetableEdits, updateTimetableEdits, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
@@ -85,6 +85,7 @@ export default function MeApp() {
                     <span className="v">{labSheet(lab)}<small>{dateLabel(publishedOn(lab.source))} 的版本 · 你的班有 {(classLabs ?? []).filter(other => labSheet(other) === labSheet(lab)).length} 次</small></span><Toggle on={!choices.off?.includes(labSheet(lab))} />
                 </button>)}
                 {classLabs && !sheets.length && <p className="fine">你的班级不在已收到的实验表里。</p>}
+                <a className="kv" href={formLink('data')}><span className="v">有新版实验表，或你的班不在里面<small>传上来，审核后所有人的课表都会更新</small></span><Chevron /></a>
                 {dropped.length > 0 && <h3 className="sh gap">去掉的实验</h3>}
                 {dropped.map(lab => <div key={labCourseKey(lab)} className="kv"><span className="v">{courseName(lab.course.name)}<small>整门实验</small></span><button className="ib" onClick={() => setChoice('drop', labCourseKey(lab), false)}>恢复</button></div>)}
                 {skipped.length > 0 && <h3 className="sh gap">不上的几次</h3>}
@@ -115,7 +116,8 @@ export default function MeApp() {
             <div className="kv"><span className="k">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{label}</button>)}</div></div>
             {classLabs !== null && <button className="kv" onClick={() => setLabsOpen(true)}><span className="k">实验</span><span className="v">{sheets.filter(lab => !choices.off?.includes(labSheet(lab))).length ? '已放进课表' : '没有放进课表'}<small>{[choices.drop?.length ? `去掉 ${choices.drop.length} 门` : '', choices.skip?.length ? `不上 ${choices.skip.length} 次` : ''].filter(Boolean).join('，') || '学院实验中心的上机安排'}</small></span><Chevron /></button>}
             <button className="kv" onClick={() => setLayering(true)}><span className="k">叠放</span><span className="v">{order.map(kind => KIND_NAMES[kind]).join(' › ')}<small>同一时间有几件事时谁在前面</small></span><Chevron /></button>
-            <a className="kv" href={PRODUCT_CONFIG.CONTRIBUTION_URL}><span className="k">贡献资料</span><span className="v">实验安排与校园勘误<small>登录后提交，审核通过后整理发布</small></span><Chevron /></a>
+            <a className="kv" href={formLink('feedback', { where: '网页 · 我' })}><span className="k">反馈</span><span className="v">哪里不顺手、哪里不对<small>写一句就行，我们会看每一条</small></span><Chevron /></a>
+            <a className="kv" href={formLink('data')}><span className="k">补充数据</span><span className="v">实验课表、讲座、校车、营业时间<small>教务系统里没有的，审核后放进课表和地图</small></span><Chevron /></a>
             <a className="kv" href="/account/"><span className="k">账号</span><span className="v">{account ? `${account.nickname} · ${labels[account.role] ?? account.role}` : '未登录'}</span><Chevron /></a>
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>

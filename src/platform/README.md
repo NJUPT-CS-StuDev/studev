@@ -54,9 +54,12 @@ an authenticated submitter's identity or contact details to their holder.
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
 output and function together.
 
-Campus contributions use the member form named in `product.json` under
-`contributions.form`, with the existing immutable attachments and review service.
-The web and native Android entry read that form. Review does not directly change
+Every form is answered by someone signed in; `access` says only who can see it
+(`public`: anyone, who signs in when they submit; `members`: signed-in people).
+The campus's own three forms are named in `product.json` under `forms`: feedback,
+photos of places and data the teaching office does not publish. The web and
+native Android entries read them, and fill fields they know (`a.<field>=` in the
+link). The data form's approved material goes to njupt-data. Review does not directly change
 public campus facts. Export approved material with `STUDEV_PRIVATE_DIR` pointing
 to the existing external private storage:
 

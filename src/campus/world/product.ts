@@ -8,7 +8,6 @@ export const PRODUCT_CONFIG = {
     /** Both identities in one breath, short enough for the three lines a WeChat card shows. */
     SUMMARY: product.summary,
     TIME_ZONE: product.timeZone,
-    CONTRIBUTION_URL: `/fill/?id=${product.contributions.form}`,
     CAMPUS: product.campus,
     ORIGIN: product.origin,
     GITHUB_REPO: `https://github.com/${product.repository}`,
@@ -32,3 +31,12 @@ export const PRODUCT_CONFIG = {
     SHOW_RECRUITMENT: false,
 } as const;
 
+
+/**
+ * The three ways anyone adds to the campus: a word on how it works, a photo of a place, and what the teaching office
+ * does not publish. Each is a public form on the platform, answered once signed in. `fill` sets answers by field id,
+ * as an entry knows them: the place one came from, where one was when writing.
+ */
+export type FormKind = keyof typeof product.forms;
+export const formLink = (kind: FormKind, fill: Record<string, string> = {}) =>
+    `/fill/?${new URLSearchParams({ id: product.forms[kind], ...Object.fromEntries(Object.entries(fill).map(([field, value]) => [`a.${field}`, value])) })}`;

@@ -7,7 +7,7 @@ import PlatformShell from '../platform/PlatformShell.astro';
   <section class="p-card" data-fill-card hidden>
     <div class="p-pills" data-fill-rules style="margin-bottom:20px"></div>
     <div class="p-message" data-fill-preview hidden>管理员预览模式。草稿和已停止的表单无法提交。</div>
-    <form data-fill-form><fieldset class="p-fieldset" data-fill-fieldset><div class="p-field" data-guest-name hidden><label for="guest-name">姓名</label><input id="guest-name" name="submitterName" maxlength="80" autocomplete="name" /></div><div data-fill-fields></div><div class="p-actions" style="margin-top:20px"><button class="p-button" type="submit" data-fill-submit>提交表单</button><span class="p-help" data-fill-identity></span></div></fieldset></form>
+    <form data-fill-form><fieldset class="p-fieldset" data-fill-fieldset><div data-fill-fields></div><div class="p-actions" style="margin-top:20px"><button class="p-button" type="submit" data-fill-submit>提交表单</button><span class="p-help" data-fill-identity></span></div></fieldset></form>
     <div class="p-progress" data-fill-progress hidden><progress value="0" max="100" aria-label="上传进度" data-fill-bar></progress><p data-fill-progress-label></p><button class="p-button secondary small" type="button" data-fill-cancel>取消</button></div>
     <button class="p-button secondary" type="button" data-fill-complete hidden>重试确认</button><button class="p-button secondary" style="margin-left:10px" type="button" data-fill-abandon hidden>重新填写</button>
     <section data-fill-receipt hidden>
@@ -22,7 +22,6 @@ import PlatformShell from '../platform/PlatformShell.astro';
         <button class="p-button secondary" type="button" data-fill-another hidden>再填一份</button>
       </div>
     </section>
-    <div data-fill-storage-fallback hidden><span data-receipt-backup-heading hidden></span><button type="button" data-fill-save-receipt hidden></button></div>
   </section>
   <script>import '../platform/client/fill';</script>
 </PlatformShell>
