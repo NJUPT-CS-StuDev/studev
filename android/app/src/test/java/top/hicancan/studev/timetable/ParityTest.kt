@@ -367,6 +367,10 @@ class ParityTest {
             val expected = case.getValue("result").jsonObject; val got = completion.result()
             if (expected["message"] != null) assertEquals(expected.getValue("message"), got.getOrThrow()) else assertEquals(expected.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message)
         }
+        val first = cases.getValue("situations").jsonArray[0].jsonObject.getValue("situation").jsonObject
+        assertEquals(cases.getValue("last"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }),
+            top.hicancan.studev.ai.Situation(first["week"]?.jsonPrimitive?.intOrNull, first["class"]?.jsonPrimitive?.contentOrNull, first.getValue("campus").jsonPrimitive.content, first["name"]?.jsonPrimitive?.contentOrNull, first["student"]?.jsonPrimitive?.contentOrNull, first["memory"]?.jsonPrimitive?.contentOrNull),
+            java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long), last = true))
         cases.getValue("situations").jsonArray.forEach { item ->
             val case = item.jsonObject; val given = case.getValue("situation").jsonObject
             fun text(key: String) = given[key]?.jsonPrimitive?.contentOrNull
@@ -380,6 +384,10 @@ class ParityTest {
         val byId = all.associateBy { it.id }
         finding.getValue("queries").jsonArray.forEach { item -> val case = item.jsonObject
             assertEquals(case.toString(), case.getValue("found").jsonArray.map { it.jsonPrimitive.content }, top.hicancan.studev.map.Find.places(all, case.getValue("query").jsonPrimitive.content).map { it.id }) }
+        finding.getValue("around").jsonArray.forEach { item -> val case = item.jsonObject
+            val near = top.hicancan.studev.map.Find.meant(all, byId, case.getValue("near").jsonPrimitive.content)
+            assertEquals(case.toString(), case.getValue("found").jsonArray.map { val pair = it.jsonArray; pair[0].jsonPrimitive.content to pair[1].jsonPrimitive.long },
+                top.hicancan.studev.map.Find.around(all, byId, near, case.getValue("what").jsonPrimitive.content).map { it.first.id to it.second }) }
         finding.getValue("meant").jsonArray.forEach { item -> val case = item.jsonObject
             val got = runCatching { top.hicancan.studev.map.Find.meant(all, byId, case.getValue("said").jsonPrimitive.content).id }
             if (case["id"] != null) assertEquals(case.getValue("id").jsonPrimitive.content, got.getOrThrow()) else assertEquals(case.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message) }

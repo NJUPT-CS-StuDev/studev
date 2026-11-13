@@ -18,7 +18,7 @@ import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/wor
 import tools from '@/world/tools.json';
 import { chatGroups, titleOf } from '@/ai/chats';
 import { Completion, completionRequest, type Situation } from '@/world/assistant.mjs';
-import { findPlaces, placeMeant } from '../../map/model/find';
+import { findPlaces, placeMeant, placesAround } from '../../map/model/find';
 import { stepsLine, stepsOf } from '../../ai/steps';
 import { remembered } from '../../ai/memory';
 import { addressError, endpoint } from '@/ai/model';
@@ -81,7 +81,7 @@ const places = placeRows.filter(place => (place.kind === 'building' || place.kin
 const placeById = new Map(placeRows.map(place => [place.id, place]));
 // The map's entities as far as naming and finding them needs, for Android to read without the data release.
 const entities = placeRows.filter(place => ['campus', 'building', 'place', 'room'].includes(place.kind))
-    .map(({ id, kind, parent, names, category, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(category ? { category } : {}), ...(tier ? { tier } : {}), sources, routing }));
+    .map(({ id, kind, parent, names, centre, category, group, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(centre ? { centre } : {}), ...(category ? { category } : {}), ...(group ? { group } : {}), ...(tier ? { tier } : {}), sources, routing }));
 const labels = placeRows.filter(place => place.kind === 'building' || place.kind === 'place').map(place => ({ id: place.id, rule: labelRule(place, placeById), teaching: place.kind === 'building' ? labelRule(place, placeById, true) : null }));
 const from: [number, number] = [118.9262, 32.1146];
 const recommend = [1, 3, 6, 7].flatMap(day => [6, 8, 12, 15, 17, 18, 20, 23].map(hour => ({ day, hour, minute: 30, expected: recommendations(places, { day, hour, minute: 30 }, from).map(({ place, status }) => ({ id: place.id, state: status.state })) })));
@@ -233,6 +233,7 @@ const streams = [
     [frame({ delta: { reasoning_content: '不传' } }), frame({ delta: { content: '我来' } }), ': keep-alive', frame({ delta: { content: '查一下。' } }), frame({ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'free_', arguments: '{"date":' } }] } }), frame({ delta: { tool_calls: [{ index: 0, function: { name: 'rooms', arguments: '"2026-11-14"}' } }] } }), frame({ delta: {}, finish_reason: 'tool_calls' }), 'data: [DONE]'],
     [frame({ delta: { content: '**结论**' } }), frame({ delta: { content: '。' }, finish_reason: 'stop' })],
     [frame({ delta: { content: '半句' } })],
+    [frame({ delta: { content: '写到一半' }, finish_reason: 'length' })],
     [frame({ delta: { tool_calls: [{ index: 0, id: 'c', function: { name: 'delete_user', arguments: '{}' } }] }, finish_reason: 'tool_calls' })],
 ].map(lines => { const completion = new Completion(); return { lines, pieces: lines.map(line => completion.take(line)), result: completion.result() }; });
 const askAt = Date.parse('2026-11-13T16:30:00Z');
@@ -242,7 +243,7 @@ const situations: Situation[] = [
     { week: null, class: null, campus: '三牌楼', name: null, student: null, memory: '' },
     { week: 3, class: 'B260424', campus: '仙林', name: '同学', student: null, memory: null },
 ];
-const assistantCases = { streams, at: askAt, situations: situations.map(situation => ({ situation, request: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], situation, askAt) })),
+const assistantCases = { streams, at: askAt, last: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], situations[0]!, askAt, true), situations: situations.map(situation => ({ situation, request: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], situation, askAt) })),
     addresses: ['https://api.deepseek.com', 'https://example.org/v1/', ' https://example.org/v1/chat/completions ', 'http://example.org', 'https://user:pass@example.org', 'https://example.org?token=x', 'not a URL'].map(base => ({ base, endpoint: endpoint(base), invalid: addressError(base) !== null })) };
 // Real timetable choices made before sync existed, then a class change and a cleared lab choice elsewhere.
 const oldSettings: Preferences = {
@@ -261,6 +262,7 @@ const settingsSync = { original: oldSettings, initial: settingsMine, theirs: set
 const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };
 // Places found by what people call them, and the one a route means.
 const finding = { queries: ['教三', '教三楼', '三食堂', '三食堂门口', '图书馆', '菜鸟驿站', '地铁站', '教3-301', 'luckin', '东门', '麦当劳', '不存在的地方'].map(query => ({ query, found: findPlaces(placeRows, query).map(place => place.id) })),
+    around: [['金鹰湖滨天地', '餐饮'], ['教三', '打印'], ['东门', '快递'], ['三食堂', '咖啡茶饮'], ['图书馆', '交通']].map(([near, what]) => ({ near, what, found: placesAround(placeRows, placeById, placeMeant(placeRows, placeById, near!), what!).map(({ place, metres }) => [place.id, metres]) })),
     meant: ['仙林/教3', '教三', '三食堂门口', '咖啡', '不存在的地方'].map(said => { try { return { said, id: placeMeant(placeRows, placeById, said).id }; } catch (failure) { return { said, error: (failure as Error).message }; } }) };
 // The steps an answer took, as said under the question: the same call twice is one step, a failure says why.
 const stepCalls = [

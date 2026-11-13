@@ -124,7 +124,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         tools.definitions = assistant.toolsFor(situation)
         var said = ""
         try {
-            repeat(8) {
+            repeat(Assistant.ROUNDS) { round ->
+                val last = round == Assistant.ROUNDS - 1
                 said = ""; streaming = ""; live = null
                 var answer: JsonObject? = null
                 var failed: String? = null
@@ -132,8 +133,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                 try {
                     val mine = asking
-                    if (mine != null) answer = assistant.askOwn(mine, history, situation, ::onDelta)
-                    else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)); put("situation", situation.toJson()) }) { event, data ->
+                    if (mine != null) answer = assistant.askOwn(mine, history, situation, last, ::onDelta)
+                    else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)); put("last", last); put("situation", situation.toJson()) }) { event, data ->
                         when (event) {
                             "delta" -> onDelta(data["content"]?.jsonPrimitive?.contentOrNull.orEmpty())
                             "message" -> answer = data["message"]?.jsonObject
@@ -156,7 +157,6 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                     history = history + message; grow(message)
                 }
             }
-            error = "这一问查了很多轮，换个更具体的问法试试。"
         } catch (e: CancellationException) {
             // Stopped: what was said so far stays, as an answer cut short.
             if (said.isNotEmpty()) grow(buildJsonObject { put("role", "assistant"); put("content", said) })
@@ -466,6 +466,10 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
             "route" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
                 val target = android.net.Uri.parse(url).getQueryParameter("nav")
                 Card("导航到${value["to"]?.jsonPrimitive?.contentOrNull.orEmpty()}", "${value.getValue("distance_m").jsonPrimitive.long} 米 · 约 ${maxOf(1L, kotlin.math.round(value.getValue("duration_s").jsonPrimitive.double / 60).toLong())} 分钟") { target?.let { route.map(nav = it) } }
+            }
+            "nearby" -> value["places"]?.jsonArray?.take(4)?.forEach { item ->
+                val place = item.jsonObject
+                Card(place.getValue("name").jsonPrimitive.content, listOfNotNull("${place.getValue("metres").jsonPrimitive.long} 米", place["now"]?.jsonPrimitive?.contentOrNull).joinToString(" · ")) { route.map(place = place.getValue("id").jsonPrimitive.content) }
             }
             "read" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
                 Card(value["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), listOfNotNull(value["source"]?.jsonPrimitive?.contentOrNull, value["date"]?.jsonPrimitive?.contentOrNull).joinToString(" · ")) { openInApp(url, route) }

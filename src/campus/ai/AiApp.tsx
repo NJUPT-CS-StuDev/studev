@@ -12,13 +12,13 @@ import { useTasks } from '@/world/useTasks';
 import { newTaskId, readTasks, saveTask } from '@/world/tasks';
 import { dayWord, hm, momentNow } from '@/world/time';
 import { weekOfDate } from '@/world/events';
-import type { Situation } from '@/world/assistant.mjs';
+import { ROUNDS, type Situation } from '@/world/assistant.mjs';
 import { useTimeline } from '@/timetable/useTimeline';
 import { PRODUCT_CONFIG } from '@/world/product';
 import { CampusTools } from '@/world/campusTools';
 import { roomLabel } from '@/world/names';
 import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up } from '@/world/ui';
-import { definitions, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
+import { definitions, readExams, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, askOwn, type Message } from './stream';
 import { addressError, endpoint, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
 import { append, chain, choose, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
@@ -72,6 +72,8 @@ function Found({ name, result }: { name: string; result: unknown }) {
     if (name === 'route' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url}><b>导航到{String(value.to)}</b>
         <small>{String(value.distance_m)} 米 · 约 {Math.max(1, Math.round(Number(value.duration_s) / 60))} 分钟</small></a></div>;
     if (name === 'read' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url} target="_blank" rel="noreferrer"><b>{String(value.title)}</b><small>{[value.source, value.date].filter(Boolean).join(' · ')}</small></a></div>;
+    if (name === 'nearby' && Array.isArray(value.places)) return <div className="ai-cards">{(value.places as { id: string; name: string; metres: number; now?: string }[]).slice(0, 4).map(item =>
+        <a key={item.id} className="ai-card" href={`/map/?place=${encodeURIComponent(item.id)}`}><b>{item.name}</b><small>{[`${item.metres} 米`, item.now].filter(Boolean).join(' · ')}</small></a>)}</div>;
     if (name === 'find_place' && Array.isArray(result)) return <div className="ai-cards">{(result as { id: string; name: string; where: string; now?: string }[]).slice(0, 3).map(item =>
         <a key={item.id} className="ai-card" href={`/map/?place=${encodeURIComponent(item.id)}`}><b>{item.name}</b><small>{[item.where, item.now].filter(Boolean).join(' · ')}</small></a>)}</div>;
     return null;
@@ -181,6 +183,7 @@ export default function AiApp() {
         if (name === 'search') return services.query(String(args.query), args.in === undefined ? undefined : String(args.in));
         if (name === 'read') return services.read(String(args.id));
         if (name === 'find_place') return services.findPlace(String(args.query));
+        if (name === 'nearby') return services.nearby(String(args.near), String(args.what));
         if (name === 'free_rooms') return services.rooms(args);
         if (name === 'route') return services.route(args);
         if (name === 'remember') {
@@ -191,6 +194,7 @@ export default function AiApp() {
         }
         if (!line) throw new Error('请先在“我”里选择班级，等待课表读取完成。');
         if (name === 'timeline') return readTimeline(line, String(args.from), String(args.to));
+        if (name === 'exams') return readExams(line);
         if (name === 'list_tasks') return readTasks().filter(task => !task.deleted);
         if (name === 'suggest_slots') return schedulingTool(line, args);
         if (name === 'propose_task') {
@@ -231,11 +235,12 @@ export default function AiApp() {
         let said = '';
         try {
             await docReady();
-            for (let round = 0; round < 8; round++) {
+            for (let round = 0; round < ROUNDS; round++) {
+                const last = round === ROUNDS - 1;
                 said = ''; setStreaming(''); setLive(null);
                 const doc = new DocStream();
                 const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); };
-                const answer = await (own ? askOwn(own, history, situation(), onDelta, controller.signal) : ask(history, situation(), onDelta, controller.signal)).finally(() => doc.free());
+                const answer = await (own ? askOwn(own, history, situation(), last, onDelta, controller.signal) : ask(history, situation(), last, onDelta, controller.signal)).finally(() => doc.free());
                 setStreaming(null); setLive(null);
                 history = [...history, answer]; grow(answer);
                 if (!answer.tool_calls?.length) return;
@@ -246,7 +251,6 @@ export default function AiApp() {
                     history = [...history, result]; grow(result);
                 }
             }
-            setError('这一问查了很多轮，换个更具体的问法试试。');
         } catch (failure) {
             // Stopped: what was said so far stays, as an answer cut short.
             if (controller.signal.aborted) { if (said) grow({ role: 'assistant', content: said }); return; }

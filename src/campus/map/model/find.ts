@@ -2,6 +2,7 @@
 // 教三 is 教3, 三食堂门口 is 三食堂, 教3-301 is that room. The best match first; a place on the campus and a more
 // prominent one before others as good. The same rules are android/.../map/Find.kt.
 import type { Place } from './space';
+import { distance } from './homePolicy';
 
 const DIGITS = '一二三四五六七八九';
 /** What a name is said as, to compare: no spaces or brackets, small letters, 教三楼 as 教3. */
@@ -45,4 +46,16 @@ export function placeMeant(places: readonly Place[], byId: ReadonlyMap<string, P
     const rivals = ranked.filter(item => item.score === top.score && item.place.names[0] !== top.place.names[0]);
     if (top.score < 70 && rivals.length) throw new Error(`“${said}”可能是：${[top, ...rivals].slice(0, 4).map(item => item.place.names[0]).join('、')}，说具体一点。`);
     return top.place;
+}
+
+/** Where a place is, its own point or else the point of what it lies in. */
+const pointOf = (place: Place, byId: ReadonlyMap<string, Place>) => place.centre ?? (place.parent ? byId.get(place.parent)?.centre : undefined);
+
+/** The places of a kind (a category, or a group of them) around one place, nearest first, with how far each is. */
+export function placesAround(places: readonly Place[], byId: ReadonlyMap<string, Place>, near: Place, what: string, limit = 8): { place: Place; metres: number }[] {
+    const from = pointOf(near, byId);
+    if (!from) throw new Error(`地图上没有“${near.names[0] ?? near.id}”的位置。`);
+    return places.filter(place => place.id !== near.id && (place.kind === 'place' || place.kind === 'building') && (place.category === what || place.group === what) && place.centre)
+        .map(place => ({ place, metres: Math.round(distance(from, place.centre!)) }))
+        .sort((a, b) => a.metres - b.metres || (a.place.id < b.place.id ? -1 : 1)).slice(0, limit);
 }

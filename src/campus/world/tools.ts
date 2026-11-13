@@ -58,3 +58,10 @@ export function schedulingTool(line: Timeline, args: Record<string, unknown>, no
     return availableSlots(line, { from, to, minutes: args.minutes as number, exclude: task?.id, due: task?.due }, now).slice(0, 12)
         .map(slot => ({ date: slot.date, start: slot.start, end: slot.end, day: toolDay(slot.date), time: `${hm(slot.start)}–${hm(slot.end)}`, overlaps: slot.clashes.length }));
 }
+
+/** Every exam of the term one sits, as published, in order; those already sat said so. */
+export function readExams(line: Timeline, today = momentNow().date) {
+    const exams = [...line.exams].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
+        .map(exam => ({ course: exam.course.name, day: toolDay(exam.date), time: `${exam.start}–${exam.end}`, room: exam.location, ...(exam.date < today ? { done: true } : {}) }));
+    return exams.length ? { exams } : { exams, note: '学校还没有发布这学期你的考试安排。' };
+}

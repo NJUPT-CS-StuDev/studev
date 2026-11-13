@@ -46,9 +46,12 @@ export function instructions(situation, now = Date.now()) {
 /** The tools offered: all of them, but `remember` only to someone who keeps a memory. */
 export const toolsFor = situation => situation.memory === null ? tools.filter(tool => tool.function.name !== 'remember') : tools;
 
-/** The request a provider is sent, OpenAI's chat completions as every provider speaks it. */
-export const completionRequest = (model, messages, situation, now = Date.now()) =>
-    ({ model, stream: true, max_tokens: 2048, temperature: 0.2, tools: toolsFor(situation), messages: [{ role: 'system', content: instructions(situation, now) }, ...messages] });
+/** How many times the model may look things up for one question; the last time it must answer with what it found. */
+export const ROUNDS = 8;
+
+/** The request a provider is sent, OpenAI's chat completions as every provider speaks it; `last`, it may call no more tools. */
+export const completionRequest = (model, messages, situation, now = Date.now(), last = false) =>
+    ({ model, stream: true, max_tokens: 4096, temperature: 0.2, tools: toolsFor(situation), ...(last ? { tool_choice: 'none' } : {}), messages: [{ role: 'system', content: instructions(situation, now) }, ...messages] });
 
 /** Why what a device says about its situation cannot be taken, or null. The platform fills in name and number itself. */
 export function situationError(value) {
@@ -89,7 +92,9 @@ export class Completion {
     /** The turn, once the stream has ended: `{ message }`, or `{ error }` when it stopped short or called what it may not. */
     result() {
         const made = this.calls.filter(Boolean);
-        if (!['stop', 'tool_calls'].includes(this.finish) || made.some(call => !call.id || !names.has(call.function.name))) return { error: 'AI 回答未完成，请缩短问题后重试。' };
+        // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
+        const whole = ['stop', 'tool_calls'].includes(this.finish) || (this.finish === 'length' && !made.length && this.content);
+        if (!whole || made.some(call => !call.id || !names.has(call.function.name))) return { error: 'AI 回答未完成，请缩短问题后重试。' };
         return { message: { role: 'assistant', content: this.content || null, ...(made.length ? { tool_calls: made } : {}) } };
     }
 }

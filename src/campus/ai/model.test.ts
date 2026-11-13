@@ -13,7 +13,7 @@ it('uses only the explicitly chosen provider, without platform credentials, and 
     const fetch = vi.fn(async () => new Response(new ReadableStream({ start(controller) { pieces.forEach(piece => controller.enqueue(encoder.encode(piece))); controller.close(); } })));
     vi.stubGlobal('fetch', fetch);
     let shown = '';
-    const answer = await askOwn(own, messages, situation, (piece: string) => { shown += piece; }, new AbortController().signal);
+    const answer = await askOwn(own, messages, situation, false, (piece: string) => { shown += piece; }, new AbortController().signal);
     expect(answer).toEqual({ role: 'assistant', content: '你好' });
     expect(shown).toBe('你好');
     expect(fetch).toHaveBeenCalledOnce();
@@ -29,12 +29,12 @@ it('uses only the explicitly chosen provider, without platform credentials, and 
 it('reports a failed personal key without falling back to the shared quota', async () => {
     const fetch = vi.fn(async () => new Response('{"error":{"message":"invalid"}}', { status: 401 }));
     vi.stubGlobal('fetch', fetch);
-    await expect(askOwn(own, messages, situation, () => {}, new AbortController().signal)).rejects.toThrow('API Key 不对');
+    await expect(askOwn(own, messages, situation, false, () => {}, new AbortController().signal)).rejects.toThrow('API Key 不对');
     expect(fetch).toHaveBeenCalledOnce();
 });
 
 it('does not send a key to an invalid or unencrypted provider address', async () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
-    await expect(askOwn({ ...own, base: 'http://example.org' }, messages, situation, () => {}, new AbortController().signal)).rejects.toThrow('https://');
+    await expect(askOwn({ ...own, base: 'http://example.org' }, messages, situation, false, () => {}, new AbortController().signal)).rejects.toThrow('https://');
     expect(fetch).not.toHaveBeenCalled();
 });

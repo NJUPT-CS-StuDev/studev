@@ -7,7 +7,7 @@ export interface Step { name: string; label: string; detail: string; failed: boo
 export interface Call { id: string; name: string; arguments: string }
 
 const LABELS: Record<string, string> = {
-    search: '搜索资料', read: '读原文', find_place: '找地点', route: '规划路线', timeline: '查看安排', list_tasks: '读取任务',
+    search: '搜索资料', read: '读原文', find_place: '找地点', nearby: '找附近', route: '规划路线', timeline: '查看安排', exams: '查考试', list_tasks: '读取任务',
     suggest_slots: '找空闲时间', free_rooms: '查空教室', propose_task: '起草任务', remember: '记住',
 };
 const text = (value: unknown) => typeof value === 'string' ? value : '';
@@ -22,8 +22,10 @@ function detail(name: string, args: Record<string, unknown>, result: unknown, do
         case 'search': return `${quoted('query')}${args.in && args.in !== '全部' ? ` · ${text(args.in)}` : ''}${done ? ` · ${count(result)} 条` : ''}`;
         case 'read': return done && text(field(result, 'title')) ? `《${text(field(result, 'title'))}》` : '';
         case 'find_place': { const first = Array.isArray(result) ? text(field(result[0], 'name')) : ''; return `${quoted('query')}${done ? first ? ` → ${first}` : ' · 没找到' : ''}`; }
+        case 'nearby': { const places = field(result, 'places'); return `${text(field(result, 'near')) || text(args.near)}附近的${text(args.what)}${done && Array.isArray(places) ? ` · ${places.length} 处` : ''}`; }
         case 'route': { const metres = field(result, 'distance_m'); return `${text(field(result, 'from')) || text(args.from)} → ${text(field(result, 'to')) || text(args.to)}${typeof metres === 'number' ? ` · ${Math.round(metres)} 米` : ''}`; }
         case 'timeline': return days(text(args.from), text(args.to));
+        case 'exams': { const exams = field(result, 'exams'); return done && Array.isArray(exams) ? `${exams.length} 场` : ''; }
         case 'list_tasks': return done ? `${count(result)} 个` : '';
         case 'suggest_slots': return `${days(text(args.from), text(args.to))} · ${args.minutes} 分钟${done ? ` · ${count(result)} 个空档` : ''}`;
         case 'free_rooms': return `${dateLabel(text(args.date))} ${hm(args.minute as number)}${args.building ? ` · ${text(args.building)}` : ''}${done ? ` · ${count(field(result, 'rooms'))} 间` : ''}`;

@@ -48,9 +48,9 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     fun toolsFor(s: Situation) = if (s.memory == null) tools.filter { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content != "remember" } else tools
 
     /** The request a provider is sent, OpenAI's chat completions as every provider speaks it. */
-    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now()) = buildJsonObject {
-        put("model", model); put("stream", true); put("max_tokens", 2048); put("temperature", 0.2)
-        put("tools", JsonArray(toolsFor(s)))
+    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now(), last: Boolean = false) = buildJsonObject {
+        put("model", model); put("stream", true); put("max_tokens", 4096); put("temperature", 0.2)
+        put("tools", JsonArray(toolsFor(s))); if (last) put("tool_choice", "none")
         put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(s, now)) }) + messages))
     }
 
@@ -85,7 +85,9 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
         /** The turn, once the stream has ended, or why it is not one. */
         fun result(): Result<JsonObject> {
             val made = calls.values.map { (id, name, arguments) -> buildJsonObject { put("id", id.toString()); put("type", "function"); put("function", buildJsonObject { put("name", name.toString()); put("arguments", arguments.toString()) }) } }
-            if (finish !in setOf("stop", "tool_calls") || made.any { it.getValue("id").jsonPrimitive.content.isEmpty() || it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content !in names })
+            // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
+            val whole = finish in setOf("stop", "tool_calls") || (finish == "length" && made.isEmpty() && content.isNotEmpty())
+            if (!whole || made.any { it.getValue("id").jsonPrimitive.content.isEmpty() || it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content !in names })
                 return Result.failure(IllegalStateException("AI 回答未完成，请缩短问题后重试。"))
             return Result.success(buildJsonObject {
                 put("role", "assistant"); put("content", content.takeIf { it.isNotEmpty() }?.toString()?.let(::JsonPrimitive) ?: JsonNull)
@@ -95,7 +97,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     }
 
     /** Asking with one's own key, straight from this device: no sign-in, nothing through the platform. */
-    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
+    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, last: Boolean, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
         Models.addressError(own.base)?.let { throw IllegalStateException(it) }
         val connection = try { URI(Models.endpoint(own.base)).toURL().openConnection() as HttpURLConnection } catch (e: Exception) { throw IllegalStateException("你填的接口地址无效。") }
         try {
@@ -105,7 +107,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
             connection.setRequestProperty("Accept", "text/event-stream"); connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer ${own.key}")
             val status = try {
-                connection.outputStream.use { it.write(request(own.model, messages, situation).toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use { it.write(request(own.model, messages, situation, Instant.now(), last).toString().toByteArray(Charsets.UTF_8)) }
                 connection.responseCode
             } catch (e: java.io.IOException) { throw IllegalStateException("连不上你填的接口地址，检查一下地址和网络。") }
             if (status !in 200..299) {
@@ -126,6 +128,8 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     }
 
     companion object {
+        /** How many times the model may look things up for one question, as ROUNDS in assistant.mjs. */
+        const val ROUNDS = 8
         val NANJING: ZoneId = ZoneId.of("Asia/Shanghai")
         private val WEEKDAYS = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
         /** The moment in Nanjing, as people say it: 2026年11月13日 周五 16:40. */

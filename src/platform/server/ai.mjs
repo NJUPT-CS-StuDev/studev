@@ -53,6 +53,7 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     const messages = aiMessages(body.messages);
     const invalid = situationError(body.situation);
     if (invalid) fail(400, 'AI_SITUATION_INVALID', invalid);
+    if (body.last !== undefined && typeof body.last !== 'boolean') fail(400, 'AI_MESSAGES_INVALID', '对话格式无效。');
     // Who is asking is the account's own, not what the device says.
     const user = session.user;
     const situation = { week: body.situation.week, class: body.situation.class, campus: body.situation.campus, memory: body.situation.memory,
@@ -69,7 +70,7 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
         const upstream = await fetcher(member.url, { method: 'POST',
           headers: { Authorization: `Bearer ${env[member.key]}`, 'Content-Type': 'application/json' },
           signal: AbortSignal.any([begun.signal, AbortSignal.timeout(FINISH), ...asked]),
-          body: JSON.stringify(completionRequest(member.model, messages, situation, now())) });
+          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true)) });
         if (upstream.ok && upstream.body) return response.stream(relay(upstream.body));
         if (upstream.status === 429) limited++;
       } catch { if (context.request.signal?.aborted) throw new Error('asked no more'); }
