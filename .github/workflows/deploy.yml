@@ -27,7 +27,7 @@ jobs:
       OSCA_DOWNLOAD_ACCESS_KEY: ${{ secrets.OSCA_DOWNLOAD_ACCESS_KEY }}
       OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.OSCA_DOWNLOAD_SECRET_KEY }}
       DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
-      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      MAKERS_MODELS_KEY: ${{ secrets.MAKERS_MODELS_KEY }}
       MAP_REPOSITORY: hicancan/njupt-map
     steps:
       - uses: actions/checkout@v6
@@ -57,7 +57,7 @@ jobs:
           makers() { for try in 1 2 3 4; do npx -y edgeone@1.6.44 makers "$@" -e production -t "$EDGEONE_API_TOKEN" && return 0; sleep $((try * 15)); done; return 1; }
           makers env set DATA_REPOSITORY "$DATA_REPOSITORY"
           makers env set DATA_TOKEN "$DATA_TOKEN"
-          for name in OSCA_DOWNLOAD_ENDPOINT OSCA_DOWNLOAD_BUCKET OSCA_DOWNLOAD_ACCESS_KEY OSCA_DOWNLOAD_SECRET_KEY DEEPSEEK_API_KEY; do
+          for name in OSCA_DOWNLOAD_ENDPOINT OSCA_DOWNLOAD_BUCKET OSCA_DOWNLOAD_ACCESS_KEY OSCA_DOWNLOAD_SECRET_KEY MAKERS_MODELS_KEY; do
             makers env set "$name" "${!name}"
           done
           makers env pull

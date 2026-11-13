@@ -85,7 +85,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     run {
         Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("AI", style = MaterialTheme.typography.headlineMedium)
-            Text("问课表、地图和校园资料：查安排、找时间、找空教室、问路，起草的任务经你确认才保存。对话和查到的内容会发给 DeepSeek，对话只留在这一页。", style = MaterialTheme.typography.bodySmall)
+            Text("问课表、地图和校园资料：查安排、找时间、找空教室、问路，起草的任务经你确认才保存。对话和查到的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek），对话只留在这一页。", style = MaterialTheme.typography.bodySmall)
             if (messages.isEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EXAMPLES.forEach { example -> SuggestionChip(onClick = { ask(example) }, label = { Text(example) }, enabled = !busy) }
             }

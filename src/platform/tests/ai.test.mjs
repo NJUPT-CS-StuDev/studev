@@ -11,9 +11,9 @@ test('AI accepts complete tool turns and rejects forged roles, tools and danglin
 
 test('AI proxies only fixed model and tools, authenticates before inference and never returns provider secrets', async () => {
   let calls = 0; const limits = [], auth = [];
-  const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { DEEPSEEK_API_KEY: 'test-provider-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {
-    calls++; assert.equal(url, 'https://api.deepseek.com/chat/completions');
-    const body = JSON.parse(init.body); assert.equal(body.model, 'deepseek-flash'); assert.equal(body.thinking.type, 'disabled'); assert.equal(body.stream, false);
+  const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { MAKERS_MODELS_KEY: 'test-provider-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {
+    calls++; assert.equal(url, 'https://ai-gateway.edgeone.link/v1/chat/completions');
+    const body = JSON.parse(init.body); assert.equal(body.model, '@makers/deepseek-v4.1-flash'); assert.equal(body.stream, false);
     assert.ok(body.tools.some(tool => tool.function.name === 'suggest_slots')); assert.equal(body.messages[0].role, 'system'); assert.match(body.messages[0].content, /执行与截止不同/);
     return Response.json({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: '请先确认任务草案。', reasoning_content: 'not-returned' } }] });
   } });

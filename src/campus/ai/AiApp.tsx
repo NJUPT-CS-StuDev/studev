@@ -84,7 +84,7 @@ export default function AiApp() {
     }
     return <main className="ai-entry">
         <header><h1>AI</h1></header>
-        <p className="meta">问课表、地图和校园资料：查安排、找时间、找空教室、问路，起草的任务经你确认才保存。对话和查到的内容会发给 DeepSeek，对话只留在这个页面。</p>
+        <p className="meta">问课表、地图和校园资料：查安排、找时间、找空教室、问路，起草的任务经你确认才保存。对话和查到的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek），对话只留在这个页面。</p>
         {waiting && <p role="status" className="meta">在新打开的页面登录或注册，回到这里会自动发出：“{waiting}”</p>}
         {!messages.length && !waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
         {!prefs.class && <p className="meta">查看个人安排前，请在“我”里选择班级；校园搜索与空教室查询可以直接使用。</p>}
