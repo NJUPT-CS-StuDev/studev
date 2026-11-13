@@ -1,7 +1,0 @@
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "main",
-  "description": "The site in the main window calls nothing native; the shell does all a desktop adds.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
-}

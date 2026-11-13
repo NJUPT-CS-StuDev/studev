@@ -1,0 +1,9 @@
+<Window x:Class="StuDev.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="StuDev">
+  <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
+  <Grid>
+    <TextBlock x:Name="Status" Margin="40" FontSize="20" Text="StuDev" />
+  </Grid>
+</Window>

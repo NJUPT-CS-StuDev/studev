@@ -42,7 +42,7 @@ jobs:
           OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.R2_DOWNLOAD_SECRET_KEY }}
         run: |
           version=$(node -p "require('./product.json').android.versionName")
-          for file in "studev-$version.apk" "studev-$version-windows.exe"; do
+          for file in "studev-$version.apk"; do
             gh release download "v$version" -R "$GITHUB_REPOSITORY" -p "$file" -D "$RUNNER_TEMP"
             node scripts/release/put.mjs "$RUNNER_TEMP/$file" "$file"
           done

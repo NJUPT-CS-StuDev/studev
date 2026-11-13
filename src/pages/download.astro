@@ -9,7 +9,6 @@ if (!store) throw new Error('the download store is not configured');
 const version = PRODUCT_CONFIG.ANDROID_APP.VERSION;
 const signedFor = (file: string) => presignGet(store, file, WEEK, { 'response-content-disposition': `attachment; filename="${file}"` });
 const signed = signedFor(`studev-${version}.apk`);
-const windows = signedFor(`studev-${version}-windows.exe`);
 ---
 <SiteLayout title="下载 StuDev" noPwa>
   <section class="download-page">
@@ -26,9 +25,6 @@ const windows = signedFor(`studev-${version}-windows.exe`);
       <span><b>GitHub</b><small>所有版本和更新说明</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
     </a>
     <h2 class="download-more">电脑和 iPhone</h2>
-    <a class="download-route" href={windows} rel="nofollow" data-astro-prefetch="false">
-      <span><b>Windows 版</b><small>独立窗口，关掉后留在托盘里，随时点开；{version}</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
-    </a>
     <a class="download-route" href="/">
       <span><b>使用网页版</b><small>iPhone、Mac 和任何浏览器都能用，可以添加到主屏幕</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
     </a>

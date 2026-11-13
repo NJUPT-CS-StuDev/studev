@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- StuDev on Windows, native: WinUI 3 over the same Rust kernels and the same shared contracts as the web and Android. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>StuDev</RootNamespace>
+    <AssemblyName>StuDev</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <!-- The generated kernel bindings are not ours to lint. -->
+    <NoWarn>$(NoWarn);CS8632;CS0162;CS1998;CS8981</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The kernels and the contracts every client reads, taken from where they are made, never copied by hand. -->
+    <Compile Include="..\kernels\bindings\*.cs" Link="Kernels\%(Filename)%(Extension)" />
+    <None Include="..\kernels\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\campus\world\tools.json;..\..\src\campus\world\assistant.json;..\..\src\campus\world\channels.json" Link="world\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\public\assets\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

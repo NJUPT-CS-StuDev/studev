@@ -1,5 +1,5 @@
-# One release of StuDev: the Android APK and the Windows installer, both of the version in product.json, put on the
-# download store and on a GitHub release; publishing the release deploys the site that links to them.
+# One release of StuDev: the Android APK of the version in product.json, put on the download store and on a GitHub
+# release; publishing the release deploys the site that links to it.
 param(
     [string]$Notes = '',
     [string[]]$GradleArgs = @()
@@ -57,19 +57,9 @@ $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.osca_download.access_key
 $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.osca_download.secret_key
 & node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
-# The Windows installer, built with the MSVC toolchain from the same commit.
-& 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
-Push-Location (Join-Path $repo 'windows')
-try { & npm ci --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'Windows dependencies failed' }; & node build.mjs; $windowsExitCode = $LASTEXITCODE } finally { Pop-Location }
-if ($windowsExitCode -ne 0) { throw 'Windows build failed' }
-$installer = Join-Path $repo "windows\src-tauri\target\release\bundle\nsis\StuDev_${versionName}_x64-setup.exe"
-if (-not (Test-Path -LiteralPath $installer)) { throw "Windows installer is missing: $installer" }
-$fullExe = Join-Path $tempRoot "studev-$versionName-windows.exe"
-Copy-Item $installer $fullExe
-& node (Join-Path $repo 'scripts/release/put.mjs') $fullExe "studev-$versionName-windows.exe"
-if ($LASTEXITCODE -ne 0) { throw 'Windows installer upload failed' }
+
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$assetPaths = @($fullApk, $fullExe)
+$assetPaths = @($fullApk)
 $tag = "v$versionName"
 $repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()
