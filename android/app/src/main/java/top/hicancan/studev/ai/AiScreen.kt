@@ -135,7 +135,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("AI", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            if (messages.isNotEmpty() && !busy) TextButton(onClick = { messages = emptyList(); proposals = emptyList(); saved = emptySet(); error = "" }) { Text("新对话") }
+            if (messages.isNotEmpty() && !busy) top.hicancan.studev.app.Chip("新对话", { messages = emptyList(); proposals = emptyList(); saved = emptySet(); error = "" })
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (messages.isEmpty()) {
@@ -144,51 +144,66 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                     EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 10.dp)) { Plain(example, 14.sp) } }
                 }
             }
+            // One turn: a question, and everything that answered it, however many rounds of looking up it took.
+            val turns = mutableListOf<Pair<String, MutableList<JsonObject>>>()
             messages.forEach { message ->
                 when (message["role"]?.jsonPrimitive?.content) {
-                    "user" -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                        Box(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)).background(Ink.sunken).padding(horizontal = 14.dp, vertical = 10.dp)) { Plain(message["content"]?.jsonPrimitive?.contentOrNull.orEmpty(), 15.5.sp) }
-                    }
-                    "assistant" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        message["content"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { Plain(it, 15.5.sp, lineHeight = 26.sp) }
-                        message["tool_calls"]?.jsonArray?.forEach { item ->
-                            val call = item.jsonObject; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
-                            val result = results[call.getValue("id").jsonPrimitive.content]
-                            val failed = (result as? JsonObject)?.containsKey("error") == true
-                            Plain((if (result == null) "… " else if (failed) "! " else "✓ ") + (STEPS[name] ?: name) + (if (result == null) "……" else if (failed) " · 没查到" else ""), 13.sp, if (failed) marks().danger else Ink.muted)
-                            if (result != null && !failed) Found(name, result, route)
+                    "user" -> turns += (message["content"]?.jsonPrimitive?.contentOrNull.orEmpty() to mutableListOf())
+                    "assistant" -> turns.lastOrNull()?.second?.add(message)
+                }
+            }
+            turns.forEachIndexed { at, (question, replies) ->
+                val last = at == turns.lastIndex
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Box(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)).background(Ink.sunken).padding(horizontal = 14.dp, vertical = 10.dp)) { Plain(question, 15.5.sp) }
+                }
+                val calls = replies.flatMap { it["tool_calls"]?.jsonArray.orEmpty() }.map { it.jsonObject }
+                if (calls.isNotEmpty()) {
+                    var open by remember(at) { mutableStateOf(false) }
+                    val doing = calls.any { results[it.getValue("id").jsonPrimitive.content] == null }
+                    val counts = calls.groupingBy { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content }.eachCount()
+                    Plain((if (doing) "● 正在" else "● 已") + counts.entries.joinToString(" · ") { (name, count) -> (STEPS[name] ?: name) + if (count > 1) " ×$count" else "" } + if (open) "  ⌃" else "  ›", 13.sp, Ink.muted, modifier = Modifier.clickable { open = !open })
+                    if (open) Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        replies.forEach { reply ->
+                            if (reply["tool_calls"] != null) reply["content"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { Plain(it, 13.sp) }
+                            reply["tool_calls"]?.jsonArray?.forEach { item ->
+                                val call = item.jsonObject; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
+                                val result = results[call.getValue("id").jsonPrimitive.content]
+                                val failed = (result as? JsonObject)?.get("error")?.jsonPrimitive?.contentOrNull
+                                Plain((STEPS[name] ?: name) + (if (result == null) "……" else failed?.let { "：$it" }.orEmpty()), 13.sp, if (failed != null) marks().danger else Ink.muted)
+                            }
                         }
                     }
                 }
+                val answer = replies.lastOrNull { it["tool_calls"] == null && !it["content"]?.jsonPrimitive?.contentOrNull.isNullOrEmpty() }?.get("content")?.jsonPrimitive?.contentOrNull
+                answer?.let { Plain(it, 15.5.sp, lineHeight = 26.sp) }
+                if (last) streaming?.let { Plain("$it▍", 15.5.sp, lineHeight = 26.sp) }
+                calls.mapNotNull { call -> val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content; results[call.getValue("id").jsonPrimitive.content]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { name to it } }
+                    .associate { it }.forEach { (name, result) -> Found(name, result, route) }
             }
-            streaming?.let { Plain("$it▍", 15.5.sp, lineHeight = 26.sp) }
-            if (busy && streaming == null) Plain("正在查……", 13.sp, Ink.muted)
-            proposals.forEach { proposal -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, Ink.brand, RoundedCornerShape(12.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val task = proposal.task
-                Plain((if (proposal.id == null) "新任务 · " else "改成 · ") + task.title, 15.sp, weight = FontWeight.SemiBold)
-                task.date?.let { Plain("$it ${task.start?.let(::hm).orEmpty()}${task.end?.let { end -> "–${hm(end)}" }.orEmpty()}", 13.sp, Ink.muted) }
-                task.due?.let { Plain("${it.date} ${it.time?.let(::hm).orEmpty()} 截止", 13.sp, Ink.muted) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = proposal.key !in saved, onClick = {
-                        val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
-                        if (proposal.id != null && current?.modified != proposal.expected) error = "这个任务已经改过了，请让 AI 重新起草。"
-                        else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + proposal.key }
-                    }) { Text(if (proposal.key in saved) "已加到清单" else "加到清单") }
-                    if (proposal.key !in saved) TextButton(onClick = { proposals = proposals.filter { it.key != proposal.key } }) { Text("不要") }
+            if (busy && streaming == null) Plain("正在想……", 14.sp, Ink.muted)
+            if (proposals.isNotEmpty()) Drafts(proposals, saved, onAdd = { keys ->
+                keys.forEach { key ->
+                    val proposal = proposals.first { it.key == key }; val task = proposal.task
+                    val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
+                    if (proposal.id != null && current?.modified != proposal.expected) error = "这个任务已经改过了，请让 AI 重新起草。"
+                    else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + key }
                 }
-            } }
+            }, onDrop = { key -> proposals = proposals.filter { it.key != key } })
             if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
                 Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
-                if (lastUser >= 0) TextButton(onClick = { start(messages.take(lastUser + 1)) }) { Text("重试") }
+                if (lastUser >= 0) top.hicancan.studev.app.Chip("重试", { start(messages.take(lastUser + 1)) })
             }
-            if (!busy && lastUser >= 0 && error.isEmpty()) Row {
-                TextButton(onClick = { start(messages.take(lastUser + 1)) }) { Text("重新回答") }
-                TextButton(onClick = { draft = messages[lastUser]["content"]?.jsonPrimitive?.contentOrNull.orEmpty(); messages = messages.take(lastUser) }) { Text("改问题") }
+            if (!busy && lastUser >= 0 && error.isEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                top.hicancan.studev.app.Chip("重新回答", { start(messages.take(lastUser + 1)) })
+                top.hicancan.studev.app.Chip("改问题", { draft = messages[lastUser]["content"]?.jsonPrimitive?.contentOrNull.orEmpty(); messages = messages.take(lastUser) })
             }
             Spacer(Modifier.height(8.dp))
         }
-        Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(20.dp)).border(1.dp, Ink.line, RoundedCornerShape(20.dp)).padding(6.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            top.hicancan.studev.timetable.Field(draft, "问点什么", Modifier.weight(1f), single = false) { draft = it.take(4000) }
+        Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(22.dp)).border(1.dp, Ink.line, RoundedCornerShape(22.dp)).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val ink = Ink.text
+            androidx.compose.foundation.text.BasicTextField(draft, { draft = it.take(4000) }, Modifier.weight(1f).heightIn(max = 160.dp).padding(vertical = 8.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.5.sp, color = ink),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(ink), decorationBox = { inner -> if (draft.isEmpty()) Plain("问点什么", 15.5.sp, Ink.faint); inner() })
             if (busy) OutlinedButton(onClick = { job?.cancel() }) { Text("停止") }
             else Button(onClick = { ask(draft) }, enabled = draft.isNotBlank()) { Text("发送") }
         }
@@ -214,5 +229,27 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 Card("在地图上导航", first?.let { "${it.getValue("distance_m").jsonPrimitive.double.toInt()} 米 · 约 ${maxOf(1, (it.getValue("duration_s").jsonPrimitive.double / 60).toInt())} 分钟" }.orEmpty()) { target?.let { route.map(nav = it) } }
             }
         }
+    }
+}
+
+/** The tasks drafted, in one card, as Drafts in AiApp.tsx: each to tick, then added together. */
+@Composable private fun Drafts(drafts: List<TaskProposal>, saved: Set<String>, onAdd: (List<String>) -> Unit, onDrop: (String) -> Unit) {
+    val open = drafts.filter { it.key !in saved }
+    var picked by remember(drafts.size) { mutableStateOf(open.map { it.key }.toSet()) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, Ink.line, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Plain(if (open.isNotEmpty()) "起草了 ${drafts.size} 个任务" else "已加到清单 · ${drafts.size} 个任务", 13.sp, Ink.muted, FontWeight.SemiBold)
+        drafts.forEach { draft ->
+            val done = draft.key in saved
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clickable(enabled = !done) { picked = if (draft.key in picked) picked - draft.key else picked + draft.key }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Checkbox(checked = done || draft.key in picked, onCheckedChange = if (done) null else { on -> picked = if (on) picked + draft.key else picked - draft.key })
+                Column(Modifier.weight(1f)) {
+                    Plain((if (draft.id != null) "改成 · " else "") + draft.task.title, 15.sp, if (done) Ink.muted else Ink.text)
+                    Plain(listOfNotNull(draft.task.date?.let { "$it ${draft.task.start?.let(::hm).orEmpty()}${draft.task.end?.let { end -> "–${hm(end)}" }.orEmpty()}" }, draft.task.due?.let { "${it.date} ${it.time?.let(::hm).orEmpty()} 截止" }).joinToString(" · "), 12.5.sp, Ink.muted)
+                }
+                if (!done) Plain("×", 16.sp, Ink.faint, modifier = Modifier.clickable { onDrop(draft.key) }.padding(6.dp))
+            }
+        }
+        val chosen = open.filter { it.key in picked }
+        if (open.isNotEmpty()) Button(onClick = { onAdd(chosen.map { it.key }) }, enabled = chosen.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text(if (chosen.size == open.size) "全部加到清单" else "加 ${chosen.size} 个到清单") }
     }
 }
