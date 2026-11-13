@@ -27,7 +27,7 @@ object Steps {
         fun quoted(key: String) = "“${text(args[key])}”"
         return when (name) {
             "search" -> quoted("query") + (args["in"]?.let { if (text(it) != "全部") " · ${text(it)}" else "" } ?: "") + if (done) " · ${count(result)} 条" else ""
-            "materials" -> quoted("course") + if (done) { val n = (field(result, "kinds") as? JsonObject)?.values?.sumOf { (it as? JsonArray)?.size ?: 0 } ?: 0; if (n > 0) " · $n 份" else " · 没有" } else ""
+            "materials" -> quoted("course") + if (done) { val n = (listOfNotNull(result) + ((field(result, "courses") as? JsonArray).orEmpty())).sumOf { one -> (field(one, "kinds") as? JsonObject)?.values?.sumOf { (it as? JsonArray)?.size ?: 0 } ?: 0 }; if (n > 0) " · $n 份" else " · 没有" } else ""
             "read" -> text(field(result, "title")).let { if (done && it.isNotEmpty()) "《$it》" else "" }
             "find_place" -> { val first = (result as? JsonArray)?.firstOrNull()?.let { text(field(it, "name")) }.orEmpty(); quoted("query") + if (done) { if (first.isNotEmpty()) " → $first" else " · 没找到" } else "" }
             "nearby" -> "${text(field(result, "near")).ifEmpty { text(args["near"]) }}附近的${text(args["what"])}" + ((field(result, "places") as? JsonArray)?.let { if (done) " · ${it.size} 处" else "" } ?: "")

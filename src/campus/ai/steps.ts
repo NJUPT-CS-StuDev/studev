@@ -20,7 +20,7 @@ function detail(name: string, args: Record<string, unknown>, result: unknown, do
     const quoted = (key: string) => `“${text(args[key])}”`;
     switch (name) {
         case 'search': return `${quoted('query')}${args.in && args.in !== '全部' ? ` · ${text(args.in)}` : ''}${done ? ` · ${count(result)} 条` : ''}`;
-        case 'materials': { const kinds = field(result, 'kinds'); const n = kinds && typeof kinds === 'object' ? Object.values(kinds).reduce((sum: number, list) => sum + count(list), 0) : 0; return `${quoted('course')}${done ? (n ? ` · ${n} 份` : ' · 没有') : ''}`; }
+        case 'materials': { const all = [result, ...(Array.isArray(field(result, 'courses')) ? field(result, 'courses') as unknown[] : [])]; const n = all.reduce((sum: number, one) => { const kinds = field(one, 'kinds'); return sum + (kinds && typeof kinds === 'object' ? Object.values(kinds).reduce((s: number, list) => s + count(list), 0) : 0); }, 0); return `${quoted('course')}${done ? (n ? ` · ${n} 份` : ' · 没有') : ''}`; }
         case 'read': return done && text(field(result, 'title')) ? `《${text(field(result, 'title'))}》` : '';
         case 'find_place': { const first = Array.isArray(result) ? text(field(result[0], 'name')) : ''; return `${quoted('query')}${done ? first ? ` → ${first}` : ' · 没找到' : ''}`; }
         case 'nearby': { const places = field(result, 'places'); return `${text(field(result, 'near')) || text(args.near)}附近的${text(args.what)}${done && Array.isArray(places) ? ` · ${places.length} 处` : ''}`; }

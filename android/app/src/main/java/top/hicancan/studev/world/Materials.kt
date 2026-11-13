@@ -23,22 +23,25 @@ object Materials {
     /** How many of each kind, in the order shown. */
     fun counts(items: List<Material>) = KINDS.map { kind -> kind to items.count { it.kind == kind } }.filter { it.second > 0 }
 
+    /** One course's materials by kind, a dozen of each at most. */
+    private fun byKind(found: CourseMaterials) = buildJsonObject {
+        put("course", found.course)
+        put("kinds", buildJsonObject {
+            for (kind in KINDS) {
+                val items = found.items.filter { it.kind == kind }.take(12)
+                if (items.isNotEmpty()) put(kind, JsonArray(items.map { item -> buildJsonObject { put("title", item.title); put("url", item.url); item.term?.let { put("term", it) } } }))
+            }
+        })
+    }
+
     /** A course's materials as the AI is told them, as materialsSaid in materials.ts. */
     fun said(all: List<CourseMaterials>, course: String): JsonObject {
-        of(all, course)?.let { found ->
-            return buildJsonObject {
-                put("course", found.course)
-                put("kinds", buildJsonObject {
-                    for (kind in KINDS) {
-                        val items = found.items.filter { it.kind == kind }.take(12)
-                        if (items.isNotEmpty()) put(kind, JsonArray(items.map { item -> buildJsonObject { put("title", item.title); put("url", item.url); item.term?.let { put("term", it) } } }))
-                    }
-                })
-            }
-        }
-        val stem = Regex("[a-z]$|\\(.\\)$")
-        val k = key(course).replace(stem, "")
-        val like = all.filter { k.length >= 2 && (key(it.course).contains(k) || k.contains(key(it.course).replace(stem, ""))) }.map { it.course }
-        return buildJsonObject { put("course", course); put("found", false); if (like.isNotEmpty()) put("courses", JsonArray(like.map(::JsonPrimitive))) }
+        of(all, course)?.let { return byKind(it) }
+        val pattern = Regex("[a-z]$|\\(.\\)$")
+        fun stem(name: String) = key(name).replace(pattern, "")
+        val k = stem(course)
+        val like = all.filter { k.length >= 2 && (key(it.course).contains(k) || k.contains(stem(it.course))) }
+        if (like.isNotEmpty() && like.size <= 3) return buildJsonObject { put("course", course); put("courses", JsonArray(like.map(::byKind))) }
+        return buildJsonObject { put("course", course); put("found", false); if (like.isNotEmpty()) put("courses", JsonArray(like.map { JsonPrimitive(it.course) })) }
     }
 }

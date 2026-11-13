@@ -20,18 +20,23 @@ export function materialsOf(all: readonly CourseMaterials[], course: string): Co
 export const kindCounts = (items: readonly Material[]) =>
     MATERIAL_KINDS.map(kind => [kind, items.filter(item => item.kind === kind).length] as const).filter(([, count]) => count > 0);
 
-/** A course's materials as the AI is told them: by kind, a dozen of each at most; or the courses a name may mean. */
+/** One course's materials by kind, a dozen of each at most. */
+function byKind(found: CourseMaterials) {
+    const kinds: Record<string, { title: string; url: string; term?: string }[]> = {};
+    for (const kind of MATERIAL_KINDS) {
+        const items = found.items.filter(item => item.kind === kind).slice(0, 12).map(({ title, url, term }) => ({ title, url, ...(term ? { term } : {}) }));
+        if (items.length) kinds[kind] = items;
+    }
+    return { course: found.course, kinds };
+}
+
+/** A course's materials as the AI is told them; for a loose name (高数, 大学物理), every course it may mean, up to three. */
 export function materialsSaid(all: readonly CourseMaterials[], course: string) {
     const found = materialsOf(all, course);
-    if (found) {
-        const kinds: Record<string, { title: string; url: string; term?: string }[]> = {};
-        for (const kind of MATERIAL_KINDS) {
-            const items = found.items.filter(item => item.kind === kind).slice(0, 12).map(({ title, url, term }) => ({ title, url, ...(term ? { term } : {}) }));
-            if (items.length) kinds[kind] = items;
-        }
-        return { course: found.course, kinds };
-    }
-    const key = courseKey(course).replace(/[a-z]$|\(.\)$/, '');
-    const like = all.filter(item => key.length >= 2 && (courseKey(item.course).includes(key) || key.includes(courseKey(item.course).replace(/[a-z]$|\(.\)$/, '')))).map(item => item.course);
-    return { course, found: false, ...(like.length ? { courses: like } : {}) };
+    if (found) return byKind(found);
+    const stem = (name: string) => courseKey(name).replace(/[a-z]$|\(.\)$/, '');
+    const key = stem(course);
+    const like = all.filter(item => key.length >= 2 && (courseKey(item.course).includes(key) || key.includes(stem(item.course))));
+    if (like.length && like.length <= 3) return { course, courses: like.map(byKind) };
+    return { course, found: false, ...(like.length ? { courses: like.map(item => item.course) } : {}) };
 }
