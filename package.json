@@ -19,7 +19,7 @@
     "digest": "node scripts/data/digest.ts",
     "test:campus": "vitest run",
     "typecheck": "astro sync && tsc --noEmit",
-    "release:apk": "pwsh android/release.ps1"
+    "release": "pwsh scripts/release/release.ps1"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.5",

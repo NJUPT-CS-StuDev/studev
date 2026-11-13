@@ -1,0 +1,12 @@
+{
+  "name": "studev-windows",
+  "private": true,
+  "description": "StuDev on Windows: the site in its own window, kept in the tray.",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "tauri icon ../public/assets/logo.png && tauri dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.9.4"
+  }
+}

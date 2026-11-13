@@ -1,3 +1,5 @@
+# One release of StuDev: the Android APK and the Windows installer, both of the version in product.json, put on the
+# download store and on a GitHub release; publishing the release deploys the site that links to them.
 param(
     [string]$Notes = '',
     [string[]]$GradleArgs = @()
@@ -5,8 +7,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $env:JAVA_HOME = 'D:\Dev\java\jdk-21.0.13+9'
 $env:ANDROID_HOME = 'D:\Dev\Android\Sdk'
-$gradle = Join-Path $PSScriptRoot 'gradlew.bat'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$android = Join-Path $repo 'android'
+$gradle = Join-Path $android 'gradlew.bat'
 $privateModule = 'D:\personal-config\secrets\secrets.psm1'
 Import-Module $privateModule
 $keystore = 'D:\personal-config\secrets\projects\studev\android-release.p12'
@@ -14,10 +17,10 @@ $alias = 'studev'
 $storePassword = [string](Get-Secret local.studev_android.store_password)
 if (-not (Test-Path $keystore)) { throw "release keystore is missing: $keystore" }
 $signingArgs = @("-Pstudev.keystore=$keystore", "-Pstudev.keyAlias=$alias", "-Pstudev.storePassword=$storePassword")
-Push-Location $PSScriptRoot
+Push-Location $android
 try { & $gradle assembleRelease @signingArgs @GradleArgs; $gradleExitCode = $LASTEXITCODE } finally { Pop-Location }
 if ($gradleExitCode -ne 0) { throw "assembleRelease failed" }
-$apk = Join-Path $PSScriptRoot 'app\build\outputs\apk\release\app-release.apk'
+$apk = Join-Path $android 'app\build\outputs\apk\release\app-release.apk'
 $product = Get-Content (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
 $versionName = $product.android.versionName
 $versionCode = [int]$product.android.versionCode
@@ -52,10 +55,21 @@ $env:OSCA_DOWNLOAD_ENDPOINT = Get-Secret local.osca_download.endpoint
 $env:OSCA_DOWNLOAD_BUCKET = Get-Secret local.osca_download.bucket
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.osca_download.access_key
 $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.osca_download.secret_key
-& node (Join-Path $repo 'scripts/release/put-apk.mjs') $fullApk "studev-$versionName.apk"
+& node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
+# The Windows installer, built with the MSVC toolchain from the same commit.
+& 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
+Push-Location (Join-Path $repo 'windows')
+try { & npm ci --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'Windows dependencies failed' }; & node build.mjs; $windowsExitCode = $LASTEXITCODE } finally { Pop-Location }
+if ($windowsExitCode -ne 0) { throw 'Windows build failed' }
+$installer = Join-Path $repo "windows\src-tauri\target\release\bundle\nsis\StuDev_${versionName}_x64-setup.exe"
+if (-not (Test-Path -LiteralPath $installer)) { throw "Windows installer is missing: $installer" }
+$fullExe = Join-Path $tempRoot "studev-$versionName-windows.exe"
+Copy-Item $installer $fullExe
+& node (Join-Path $repo 'scripts/release/put.mjs') $fullExe "studev-$versionName-windows.exe"
+if ($LASTEXITCODE -ne 0) { throw 'Windows installer upload failed' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$assetPaths = @($fullApk)
+$assetPaths = @($fullApk, $fullExe)
 $tag = "v$versionName"
 $repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()

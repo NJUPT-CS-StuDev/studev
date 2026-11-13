@@ -6,14 +6,16 @@ import { downloadStore, presignGet, WEEK } from '../download/object-store.mjs';
 // Signed when the site is built; data releases redeploy it several times a day, well inside the week.
 const store = downloadStore();
 if (!store) throw new Error('the download store is not configured');
-const file = `studev-${PRODUCT_CONFIG.ANDROID_APP.VERSION}.apk`;
-const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `attachment; filename="${file}"` });
+const version = PRODUCT_CONFIG.ANDROID_APP.VERSION;
+const signedFor = (file: string) => presignGet(store, file, WEEK, { 'response-content-disposition': `attachment; filename="${file}"` });
+const signed = signedFor(`studev-${version}.apk`);
+const windows = signedFor(`studev-${version}-windows.exe`);
 ---
 <SiteLayout title="下载 StuDev" noPwa>
   <section class="download-page">
-    <h1>StuDev Android</h1>
-    <p class="download-summary">{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
-    <a class="download-button" href={signed} data-astro-prefetch="false" rel="nofollow">下载 {PRODUCT_CONFIG.ANDROID_APP.VERSION}</a>
+    <h1>下载 StuDev</h1>
+    <p class="download-summary">安卓手机：{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
+    <a class="download-button" href={signed} data-astro-prefetch="false" rel="nofollow">下载 Android 版 {version}</a>
     <p class="download-help">下载后在浏览器的下载列表中打开，按系统提示安装。微信、QQ 内请先选择“在浏览器打开”。</p>
     {/* Each other way is a row of its own: what it is, why one would take it, and a chevron to say it opens. */}
     <h2 class="download-more">下载不动时换一个</h2>
@@ -23,9 +25,12 @@ const signed = presignGet(store, file, WEEK, { 'response-content-disposition': `
     <a class="download-route" href={PRODUCT_CONFIG.ANDROID_APP.RELEASES_URL}>
       <span><b>GitHub</b><small>所有版本和更新说明</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
     </a>
-    <h2 class="download-more">不是安卓手机</h2>
+    <h2 class="download-more">电脑和 iPhone</h2>
+    <a class="download-route" href={windows} rel="nofollow" data-astro-prefetch="false">
+      <span><b>Windows 版</b><small>独立窗口，关掉后留在托盘里，随时点开；{version}</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
+    </a>
     <a class="download-route" href="/">
-      <span><b>使用网页版</b><small>iPhone 和电脑都能用，可以添加到主屏幕</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
+      <span><b>使用网页版</b><small>iPhone、Mac 和任何浏览器都能用，可以添加到主屏幕</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
     </a>
     <p class="download-filing">App 备案号 <a href={PRODUCT_CONFIG.FILINGS.APP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.APP.TEXT}</a></p>
   </section>
