@@ -155,6 +155,64 @@ foreach (var test in golden["labels"]!.AsArray())
     Equal("map label", LabelRules.Of(place, byId), test["rule"]);
     Equal("teaching label", place.Kind == "building" ? LabelRules.Of(place, byId, true) : null, test["teaching"]);
 }
+// The AI: the request a provider is sent, a stream read into a turn, the steps said, the thread, the chats, memory.
+var assistantCases = golden["assistant"]!;
+foreach (var test in assistantCases["addresses"]!.AsArray())
+{
+    Equal("endpoint", StuDev.Ai.Models.Endpoint((string)test!["base"]!), test["endpoint"]);
+    Equal("address", StuDev.Ai.Models.AddressError((string)test["base"]!) is not null, test["invalid"]);
+}
+var worldFolder = Path.Combine(repositoryRoot.FullName, "src", "campus", "world");
+var assistant = StuDev.Ai.Assistant.Load(worldFolder);
+foreach (var test in assistantCases["streams"]!.AsArray())
+{
+    var completion = assistant.Read();
+    Equal("stream pieces", test!["lines"]!.AsArray().Select(l => completion.Take((string)l!)), test["pieces"]);
+    var expected = test["result"]!;
+    try { var turn = completion.Result(); checks++; if (!JsonNode.DeepEquals(turn, expected["message"])) failures.Add($"stream turn: expected {expected["message"]?.ToJsonString()}, got {turn.ToJsonString()}"); }
+    catch (InvalidOperationException error) { Equal("stream error", error.Message, expected["error"]); }
+}
+StuDev.Ai.Situation SituationOf(JsonNode given) => new(given["week"] is JsonValue w && w.TryGetValue<int>(out var week) ? week : null, given["class"]?.GetValue<string>(), (string)given["campus"]!, given["name"]?.GetValue<string>(), given["student"]?.GetValue<string>(), given["memory"]?.GetValue<string>());
+var asked = DateTimeOffset.FromUnixTimeMilliseconds((long)assistantCases["at"]!);
+var question = new List<JsonObject> { new() { ["role"] = "user", ["content"] = "明天有课吗" } };
+void Same(string label, JsonNode actual, JsonNode? expected) { checks++; if (!JsonNode.DeepEquals(actual, expected)) failures.Add($"{label}: expected {expected?.ToJsonString()[..Math.Min(400, expected.ToJsonString().Length)]}, got {actual.ToJsonString()[..Math.Min(400, actual.ToJsonString().Length)]}"); }
+Same("last request", assistant.Request("deepseek-flash", question, SituationOf(assistantCases["situations"]![0]!["situation"]!), asked, last: true), assistantCases["last"]);
+foreach (var test in assistantCases["situations"]!.AsArray()) Same("request", assistant.Request("deepseek-flash", question, SituationOf(test!["situation"]!), asked), test["request"]);
+foreach (var test in golden["steps"]!.AsArray())
+{
+    var calls = test!["calls"]!.AsArray().Select(c => new StuDev.Ai.Call((string)c!["id"]!, (string)c["name"]!, (string)c["arguments"]!)).ToList();
+    var steps = StuDev.Ai.Steps.Of(calls, test["results"]!.AsObject().ToDictionary(kv => kv.Key, kv => kv.Value?.DeepClone()));
+    Equal("steps", steps.Select(s => new { name = s.Name, label = s.Label, detail = s.Detail, failed = s.Failed, pending = s.Pending }), test["steps"]);
+    Equal("steps line", StuDev.Ai.Steps.Line(steps), test["line"]);
+}
+var thread = golden["thread"]!;
+var tree = StuDev.Ai.ChatThread.Empty;
+foreach (var (step, frame) in thread["steps"]!.AsArray().Zip(thread["frames"]!.AsArray()))
+{
+    var id = (string)step!["id"]!;
+    tree = (string)step["op"]! == "append" ? tree.Append((string)step["parent"]!, id, new JsonObject { ["role"] = step["role"]!.DeepClone(), ["content"] = step["content"]!.DeepClone() }) : tree.Choose(id);
+    Equal("thread path", tree.Path().Select(n => n.Id), frame!["path"]);
+    Equal("thread tip", tree.Tip(), frame["tip"]);
+    Equal("thread lineage", tree.Lineage(tree.Tip()).Select(n => n.Id), frame["lineage"]);
+    foreach (var (node, value) in frame["siblings"]!.AsObject())
+    {
+        var got = tree.SiblingsOf(node);
+        Equal("siblings", new { index = got.Index, count = got.Count }, new JsonObject { ["index"] = value!["index"]!.DeepClone(), ["count"] = value["count"]!.DeepClone() });
+    }
+}
+Equal("thread chain", StuDev.Ai.ChatThread.Chain([new() { ["role"] = "user", ["content"] = "a" }, new() { ["role"] = "assistant", ["content"] = "b" }], ["x", "y"]).Path().Select(n => new[] { n.Id, n.Parent }), thread["chain"]);
+var chatCases = golden["chats"]!;
+var listed = chatCases["listed"]!.AsArray().Select(c => new StuDev.Ai.SavedChat((string)c!["id"]!, (string)c["title"]!, (long)c["updated"]!, StuDev.Ai.ChatThread.Of(c["thread"]!.AsObject()))).ToList();
+Equal("chat titles", listed.Select(c => StuDev.Ai.Chats.TitleOf(c.Title, c.Thread)), chatCases["titles"]);
+Equal("chat groups", StuDev.Ai.Chats.Groups(listed, (long)chatCases["now"]!).Select(g => new object[] { g.Name, g.Chats.Select(c => c.Id) }), chatCases["groups"]);
+foreach (var test in golden["memory"]!.AsArray())
+{
+    try { Equal("memory", StuDev.Ai.Memory.Remembered((string)test!["text"]!, (string)test["fact"]!), test["next"]); }
+    catch (ArgumentException error) { Equal("memory error", error.Message, test!["error"]); }
+}
+var allMaterials = JsonSerializer.Deserialize<List<CourseMaterials>>(File.ReadAllText(Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "materials.json")), Facts.Json)!;
+foreach (var test in golden["materials"]!["cases"]!.AsArray()) Same("materials said", Lessons.MaterialsSaid(allMaterials, (string)test!["course"]!), test["said"]);
+foreach (var test in golden["materials"]!["counts"]!.AsArray()) Equal("material counts", Lessons.KindCounts(allMaterials.First(m => m.Course == (string)test!["course"]!).Items).Select(k => new object[] { k.Kind, k.Count }), test!["counts"]);
 Console.WriteLine($"Windows parity: {checks} checks, {failures.Count} failures");
 foreach (var failure in failures) Console.WriteLine(failure);
 return failures.Count == 0 ? 0 : 1;
