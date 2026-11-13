@@ -68,6 +68,7 @@ jobs:
       - run: npm run test:campus
       - run: npm run test:platform
       - run: npm run build
+      - run: npm run test:site
       - name: Stage the verified data release for the EdgeOne builder
         run: |
           node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('src/data/campus-release.json','utf8')); fs.rmSync('public/data-source',{recursive:true,force:true}); fs.cpSync('.data/'+r.data_version,'public/data-source',{recursive:true}); const idx=JSON.parse(fs.readFileSync('public/data-source/index.json','utf8')); idx.version=r.data_version; fs.writeFileSync('public/data-source/index.json',JSON.stringify(idx));"
