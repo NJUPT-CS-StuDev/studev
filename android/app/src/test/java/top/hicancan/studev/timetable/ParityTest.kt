@@ -401,6 +401,16 @@ class ParityTest {
             assertEquals(case.getValue("line").jsonPrimitive.content, top.hicancan.studev.ai.Steps.line(steps))
         }
     }
+    @Test fun courseMaterialsAreFoundAndSaidTheSame() {
+        val root = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }.first { File(it, "src/campus/world/parity/golden.json").isFile }
+        val all = json.decodeFromString<List<CourseMaterials>>(File(root, "public/data/${golden.getValue("source").jsonObject.getValue("release").jsonPrimitive.content}/materials.json").readText())
+        val cases = golden.getValue("materials").jsonObject
+        cases.getValue("cases").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.getValue("course").toString(), case.getValue("said"), Materials.said(all, case.getValue("course").jsonPrimitive.content)) }
+        cases.getValue("counts").jsonArray.forEach { item -> val case = item.jsonObject
+            val found = all.first { it.course == case.getValue("course").jsonPrimitive.content }
+            assertEquals(case.getValue("counts").jsonArray.map { it.jsonArray[0].jsonPrimitive.content to it.jsonArray[1].jsonPrimitive.int }, Materials.counts(found.items)) }
+    }
     @Test fun rememberingIsTheSame() {
         golden.getValue("memory").jsonArray.forEach { item -> val case = item.jsonObject
             val got = runCatching { top.hicancan.studev.ai.Memory.remembered(case.getValue("text").jsonPrimitive.content, case.getValue("fact").jsonPrimitive.content) }

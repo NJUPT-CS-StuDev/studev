@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { loadMaterials } from '@/world/data';
+import { kindCounts, MATERIAL_KINDS, materialsOf, type CourseMaterials, type Material } from '@/world/materials';
 import { clusters, eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import type { ExamRecord } from '@/world/data';
@@ -22,6 +24,40 @@ function Together({ label, classes, people }: { label: string; classes: string[]
         <details className="kv together">
             <summary><span className="k">{label}</span><span className="v">{classes.length > 1 ? `${classes.length} 个班` : classes[0]}{people !== null ? ` · ${people} 人` : ''}</span></summary>
             {classes.length > 1 && <p className="meta">{classes.join('、')}</p>}
+        </details>
+    );
+}
+
+/** A material's name as shown: its file's name, with the folder it is in when the file's name alone says little. */
+const shownTitle = (title: string) => {
+    const parts = title.replace(/\.[a-z0-9]+$/i, '').split(' · ');
+    const name = parts.at(-1)!;
+    return name.length > 4 || parts.length < 2 ? name : `${parts.at(-2)} ${name}`;
+};
+
+/** One kind of material: the newest few, the rest a tap away. */
+function Kind({ kind, items }: { kind: string; items: Material[] }) {
+    const [all, setAll] = useState(false);
+    const shown = all ? items : items.slice(0, 4);
+    return <section><h4>{kind}</h4>
+        {shown.map(item => <a key={item.url} href={item.url} target="_blank" rel="noreferrer"><span>{shownTitle(item.title)}</span><small>{[item.term, item.ext?.toUpperCase()].filter(Boolean).join(' · ')}</small></a>)}
+        {items.length > shown.length && <button className="more" onClick={() => setAll(true)}>还有 {items.length - shown.length} 份</button>}
+    </section>;
+}
+
+/** What students have shared for the course, folded: "资料 · 试卷 4 · 复习 2", open to see each by kind. */
+function Materials({ course }: { course: string }) {
+    const [all, setAll] = useState<CourseMaterials[] | null>(null);
+    useEffect(() => { let live = true; void loadMaterials().then(list => { if (live) setAll(list); }, () => {}); return () => { live = false; }; }, []);
+    const found = all && materialsOf(all, course);
+    if (!found) return null;
+    return (
+        <details className="kv together materials">
+            <summary><span className="k">资料</span><span className="v">{kindCounts(found.items).map(([kind, count]) => `${kind} ${count}`).join(' · ')}</span></summary>
+            <div className="mat">
+                {MATERIAL_KINDS.map(kind => { const items = found.items.filter(item => item.kind === kind); return items.length > 0 && <Kind key={kind} kind={kind} items={items} />; })}
+                <p className="meta">同学们整理的南邮历年资料{found.note && <> · <a href={found.note.url} target="_blank" rel="noreferrer">说明</a></>}</p>
+            </div>
         </details>
     );
 }
@@ -78,7 +114,8 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
         <a className="btn go" href={`/map/?nav=${encodeURI(event.room!)}`}>去这里</a>
     </div> : <div style={{ height: 12 }} />;
     const teachers = event.teachers.flatMap(teacher => teacher.split('、')).map(teacher => <a key={teacher} className="kv" href={whoLink('teacher', teacher)}><span className="k">老师</span><span className="v">{teacher} 的课表</span><Chevron /></a>);
-    const course = <a className="kv" href={whoLink('course', courseName(event.meeting?.course.name ?? event.lab?.course.name ?? event.exam?.course.name ?? event.name))}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a>;
+    const courseTitle = courseName(event.meeting?.course.name ?? event.lab?.course.name ?? event.exam?.course.name ?? event.name);
+    const course = <><a className="kv" href={whoLink('course', courseTitle)}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a><Materials course={courseTitle} /></>;
 
     const dayOff = line.holidays.get(event.date);
 

@@ -33,6 +33,38 @@ import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.*
 
 /** Classes sitting or taught together, folded: "4 个班 · 102 人", open to see which. */
+/** A material's name as shown, as shownTitle in EventSheet.tsx: its file's name, with its folder when that says little. */
+private fun shownTitle(title: String): String {
+    val parts = title.replace(Regex("\\.[A-Za-z0-9]+$"), "").split(" · ")
+    val name = parts.last()
+    return if (name.length > 4 || parts.size < 2) name else "${parts[parts.size - 2]} $name"
+}
+
+/** What students have shared for the course, folded, as Materials in EventSheet.tsx: "资料 · 试卷 4 · 复习 2". */
+@Composable private fun MaterialsRow(course: String, repository: top.hicancan.studev.data.AcademicRepository?, onOpen: (String) -> Unit) {
+    var all by remember { mutableStateOf<List<top.hicancan.studev.world.CourseMaterials>?>(null) }
+    LaunchedEffect(repository) { all = repository?.let { runCatching { it.materials() }.getOrNull() } }
+    val found = all?.let { top.hicancan.studev.world.Materials.of(it, course) } ?: return
+    var open by remember { mutableStateOf(false) }
+    KeyRow("资料", top.hicancan.studev.world.Materials.counts(found.items).joinToString(" · ") { "${it.first} ${it.second}" }, chevron = !open, onClick = { open = !open })
+    if (open) Column(Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        for (kind in top.hicancan.studev.world.Materials.KINDS) {
+            val items = found.items.filter { it.kind == kind }
+            if (items.isEmpty()) continue
+            Plain(kind, 12.sp, Ink.muted, weight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+            var every by remember(kind) { mutableStateOf(false) }
+            (if (every) items else items.take(4)).forEach { item ->
+                Row(Modifier.fillMaxWidth().clickable { onOpen(item.url) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Plain(shownTitle(item.title), 14.sp, modifier = Modifier.weight(1f))
+                    Plain(listOfNotNull(item.term, item.ext?.uppercase()).joinToString(" · "), 12.sp, Ink.muted, modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+            if (!every && items.size > 4) Plain("还有 ${items.size - 4} 份", 13.sp, Ink.brand, modifier = Modifier.clickable { every = true }.padding(vertical = 6.dp))
+        }
+        Plain("来自同学们整理的南邮历年资料", 12.sp, Ink.faint, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
 @Composable private fun Together(label: String, classes: List<String>, people: Int?) {
     if (classes.size < 2 && people == null) return
     var open by remember { mutableStateOf(false) }
@@ -136,7 +168,10 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         event.teachers.flatMap { it.split("、") }.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
         if (lab != null) KeyRow("来源", Exams.sheetName(lab.source), "实验中心排课表，${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本；调整以老师通知为准")
         if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
-        KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", Names.course(event.meeting?.course?.name ?: event.lab?.course?.name ?: event.exam?.course?.name ?: event.name)) })
+        val courseTitle = Names.course(event.meeting?.course?.name ?: event.lab?.course?.name ?: event.exam?.course?.name ?: event.name)
+        KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", courseTitle) })
+        val context = androidx.compose.ui.platform.LocalContext.current
+        MaterialsRow(courseTitle, state.repository) { url -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
         line.sharingSlot(event).forEach { other ->
             KeyRow("同时段", Names.course(other.course.name), "${Exams.weeksText(other.weeks)} · 本周不上", chevron = true, onClick = { line.meetingAround(other.id, event.date)?.let(onOpen) })
         }

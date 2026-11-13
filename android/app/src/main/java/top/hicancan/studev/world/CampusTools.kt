@@ -60,6 +60,10 @@ class CampusTools(private val context: android.content.Context, private val repo
                 result["snippet"]?.let { put("snippet", it) }; put("url", result.getValue("url"))
             } })
         }
+        if (name == "materials") {
+            val repo = repository() ?: error("校园数据还没准备好。")
+            return Materials.said(repo.materials(), args.getValue("course").jsonPrimitive.content)
+        }
         if (name == "read") {
             val repo = repository() ?: error("校园数据还没准备好。")
             val id = args.getValue("id").jsonPrimitive.content

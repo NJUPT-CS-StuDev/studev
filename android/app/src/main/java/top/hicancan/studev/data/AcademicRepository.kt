@@ -157,6 +157,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     }
     private val lenient = Json { ignoreUnknownKeys = true }
     suspend fun calendar() = lenient.decodeFromString<top.hicancan.studev.world.CalendarFile>(bytes("calendar.json").decodeToString()).terms
+    suspend fun materials() = lenient.decodeFromString<List<top.hicancan.studev.world.CourseMaterials>>(bytes("materials.json").decodeToString())
     suspend fun runs() = lenient.decodeFromString<Map<String, top.hicancan.studev.world.MorningRun>>(bytes("morning-run.json").decodeToString())
     suspend fun rooms() = read<RoomIndex>("rooms/index.json")
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }

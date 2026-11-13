@@ -14,7 +14,7 @@ object Steps {
     data class Step(val name: String, val label: String, val detail: String, val failed: Boolean, val pending: Boolean)
     data class Call(val id: String, val name: String, val arguments: String)
 
-    private val LABELS = mapOf("search" to "搜索资料", "read" to "读原文", "find_place" to "找地点", "nearby" to "找附近", "route" to "规划路线", "timeline" to "查看安排", "exams" to "查考试", "list_tasks" to "读取任务",
+    private val LABELS = mapOf("search" to "搜索资料", "read" to "读原文", "materials" to "找课程资料", "find_place" to "找地点", "nearby" to "找附近", "route" to "规划路线", "timeline" to "查看安排", "exams" to "查考试", "list_tasks" to "读取任务",
         "suggest_slots" to "找空闲时间", "free_rooms" to "查空教室", "propose_task" to "起草任务", "remember" to "记住")
     private fun text(value: JsonElement?) = (value as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
     private fun count(value: JsonElement?) = (value as? JsonArray)?.size ?: 0
@@ -27,6 +27,7 @@ object Steps {
         fun quoted(key: String) = "“${text(args[key])}”"
         return when (name) {
             "search" -> quoted("query") + (args["in"]?.let { if (text(it) != "全部") " · ${text(it)}" else "" } ?: "") + if (done) " · ${count(result)} 条" else ""
+            "materials" -> quoted("course") + if (done) { val n = (field(result, "kinds") as? JsonObject)?.values?.sumOf { (it as? JsonArray)?.size ?: 0 } ?: 0; if (n > 0) " · $n 份" else " · 没有" } else ""
             "read" -> text(field(result, "title")).let { if (done && it.isNotEmpty()) "《$it》" else "" }
             "find_place" -> { val first = (result as? JsonArray)?.firstOrNull()?.let { text(field(it, "name")) }.orEmpty(); quoted("query") + if (done) { if (first.isNotEmpty()) " → $first" else " · 没找到" } else "" }
             "nearby" -> "${text(field(result, "near")).ifEmpty { text(args["near"]) }}附近的${text(args["what"])}" + ((field(result, "places") as? JsonArray)?.let { if (done) " · ${it.size} 处" else "" } ?: "")

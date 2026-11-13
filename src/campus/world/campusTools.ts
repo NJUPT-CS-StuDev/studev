@@ -8,6 +8,8 @@ import { findPlaces, placeMeant, placesAround } from '@/map/model/find';
 import { campusTime, openingStatus } from '@/map/model/homePolicy';
 import { fetchJson } from './fetch';
 import { toolDate } from './tools';
+import { loadMaterials } from './data';
+import { materialsSaid } from './materials';
 import { campusConfig } from '../../../campus.config';
 
 /** Where a search looks, by the name a person gives it: the same channels as the search page. */
@@ -48,6 +50,8 @@ export class CampusTools {
             where: !parent ? '校外' : parent.kind === 'campus' ? '校内' : `${parent.names[0] ?? parent.id}里`,
             ...(status.state === 'unknown' ? {} : status.today === '00:00–24:00' ? { today: '全天', now: '24 小时开放' } : { today: status.today, now: status.state === 'closed' ? '已关闭' : status.state === 'closing' ? `快关门了，${status.closesAt} 关` : `开着，${status.closesAt} 关` }) };
     }
+    /** A course's shared materials, or the courses a name may mean. */
+    async materials(course: string) { return materialsSaid(await loadMaterials(), course); }
     /** The places a name may mean. */
     async findPlace(query: string) {
         const space = await this.places();

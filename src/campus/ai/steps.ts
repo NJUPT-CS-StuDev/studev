@@ -7,7 +7,7 @@ export interface Step { name: string; label: string; detail: string; failed: boo
 export interface Call { id: string; name: string; arguments: string }
 
 const LABELS: Record<string, string> = {
-    search: '搜索资料', read: '读原文', find_place: '找地点', nearby: '找附近', route: '规划路线', timeline: '查看安排', exams: '查考试', list_tasks: '读取任务',
+    search: '搜索资料', read: '读原文', materials: '找课程资料', find_place: '找地点', nearby: '找附近', route: '规划路线', timeline: '查看安排', exams: '查考试', list_tasks: '读取任务',
     suggest_slots: '找空闲时间', free_rooms: '查空教室', propose_task: '起草任务', remember: '记住',
 };
 const text = (value: unknown) => typeof value === 'string' ? value : '';
@@ -20,6 +20,7 @@ function detail(name: string, args: Record<string, unknown>, result: unknown, do
     const quoted = (key: string) => `“${text(args[key])}”`;
     switch (name) {
         case 'search': return `${quoted('query')}${args.in && args.in !== '全部' ? ` · ${text(args.in)}` : ''}${done ? ` · ${count(result)} 条` : ''}`;
+        case 'materials': { const kinds = field(result, 'kinds'); const n = kinds && typeof kinds === 'object' ? Object.values(kinds).reduce((sum: number, list) => sum + count(list), 0) : 0; return `${quoted('course')}${done ? (n ? ` · ${n} 份` : ' · 没有') : ''}`; }
         case 'read': return done && text(field(result, 'title')) ? `《${text(field(result, 'title'))}》` : '';
         case 'find_place': { const first = Array.isArray(result) ? text(field(result[0], 'name')) : ''; return `${quoted('query')}${done ? first ? ` → ${first}` : ' · 没找到' : ''}`; }
         case 'nearby': { const places = field(result, 'places'); return `${text(field(result, 'near')) || text(args.near)}附近的${text(args.what)}${done && Array.isArray(places) ? ` · ${places.length} 处` : ''}`; }

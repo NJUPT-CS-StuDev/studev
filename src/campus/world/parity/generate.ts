@@ -21,6 +21,7 @@ import { Completion, completionRequest, type Situation } from '@/world/assistant
 import { findPlaces, placeMeant, placesAround } from '../../map/model/find';
 import { stepsLine, stepsOf } from '../../ai/steps';
 import { remembered } from '../../ai/memory';
+import { kindCounts, materialsSaid, type CourseMaterials } from '../materials';
 import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
@@ -278,5 +279,9 @@ const stepResults: [string, unknown][] = [['s1', [{ id: 'a' }, { id: 'b' }]], ['
 const stepCases = [stepCalls, stepCalls.slice(0, 4)].map(calls => { const results = new Map(stepResults.filter(([id]) => calls.some(call => call.id === id) && (calls.length > 4 || id !== 's4'))); const steps = stepsOf(calls, results); return { calls, results: Object.fromEntries(results), steps, line: stepsLine(steps) }; });
 // Remembering: a line each, the same thing again changes nothing, an empty thing is refused.
 const memoryCases = [['', '在准备考研'], ['- 在准备考研', ' 在准备考研。 '], ['- 在准备考研\n\n', '喜欢  早上学习'], ['', '   ']].map(([text, fact]) => { try { return { text, fact, next: remembered(text!, fact!) }; } catch (failure) { return { text, fact, error: (failure as Error).message }; } });
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// Course materials found by a course's name as the timetable writes it, and said to the AI.
+const allMaterials = JSON.parse(readFileSync(`public/data/${release.version}/materials.json`, 'utf8')) as CourseMaterials[];
+const materialCases = ['数字电路与逻辑设计B', '高等数学A(上)', '信号与系统 A', '高等数学', '计算机组成原理', '大学物理（上）'].map(course => ({ course, said: materialsSaid(allMaterials, course) }));
+const materialCounts = allMaterials.slice(0, 6).map(item => ({ course: item.course, counts: kindCounts(item.items) }));
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

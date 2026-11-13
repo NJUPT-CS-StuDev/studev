@@ -2,6 +2,7 @@
 import type { Exam, ExamChange, ExamSource, Lab, Room, RoomDay, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm, TeachingWeek } from '@/world/facts';
 import { DATA_RELEASE } from '@/world/config';
 import { fetchJson } from '@/world/fetch';
+import type { CourseMaterials } from '@/world/materials';
 
 const base = DATA_RELEASE.base;
 const teaching = `${base}/teaching/${DATA_RELEASE.teaching}`;
@@ -31,6 +32,7 @@ export const loadMeetings = once(() => fetchJson<TeachingMeeting[]>(`${teaching}
 export const loadCalendar = once(async () => (await fetchJson<{ terms: CalendarTerm[] }>(`${base}/calendar.json`)).terms);
 export const loadRuns = once(() => fetchJson<Record<string, MorningRun>>(`${base}/morning-run.json`));
 export const loadRoomIndex = once(() => fetchJson<RoomIndex>(`${base}/rooms/index.json`));
+export const loadMaterials = once(() => fetchJson<CourseMaterials[]>(`${base}/materials.json`));
 
 const classFiles = new Map<string, Promise<TeachingMeeting[]>>();
 export const loadClassMeetings = (id: string) => {
