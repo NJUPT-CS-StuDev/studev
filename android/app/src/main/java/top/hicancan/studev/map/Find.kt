@@ -58,7 +58,7 @@ object Find {
     fun around(places: Collection<Place>, byId: Map<String, Place>, near: Place, what: String, limit: Int = 8): List<Pair<Place, Long>> {
         val from = near.centre ?: near.parent?.let(byId::get)?.centre ?: error("地图上没有“${near.names.firstOrNull() ?: near.id}”的位置。")
         return places.filter { it.id != near.id && (it.kind == "place" || it.kind == "building") && (it.category == what || it.group == what) && it.centre != null }
-            .map { it to Math.round(metres(from, it.centre!)) }
+            .map { it to Math.round(metres(from, it.centre!!)) }
             .sortedWith(compareBy<Pair<Place, Long>> { it.second }.thenBy { it.first.id }).take(limit)
     }
 }

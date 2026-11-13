@@ -120,12 +120,11 @@ class CampusTools(private val context: android.content.Context, private val repo
     private fun said(campus: top.hicancan.studev.data.CampusPackage, place: top.hicancan.studev.data.Place): JsonObject {
         val now = CampusDay.now(); val parent = place.parent?.let(campus.byId::get)
         val hours = top.hicancan.studev.map.Recommendations.hoursAt(place.hours, now.dayOfWeek.value, now.hour * 60 + now.minute)
-        val open = top.hicancan.studev.map.Recommendations.Open
         return buildJsonObject {
             put("id", place.id); put("name", nameOf(place)); place.category?.let { put("category", it) }
             put("where", when { parent == null -> "校外"; parent.kind == "campus" -> "校内"; else -> "${parent.names.firstOrNull() ?: parent.id}里" })
-            if (hours.open != open.Unknown && hours.today == "00:00–24:00") { put("today", "全天"); put("now", "24 小时开放") }
-            else if (hours.open != open.Unknown) { put("today", hours.today); put("now", when (hours.open) { open.Closed -> "已关闭"; open.Closing -> "快关门了，${hours.closesAt} 关"; else -> "开着，${hours.closesAt} 关" }) }
+            if (hours.open != top.hicancan.studev.map.Recommendations.Open.Unknown && hours.today == "00:00–24:00") { put("today", "全天"); put("now", "24 小时开放") }
+            else if (hours.open != top.hicancan.studev.map.Recommendations.Open.Unknown) { put("today", hours.today); put("now", when (hours.open) { top.hicancan.studev.map.Recommendations.Open.Closed -> "已关闭"; top.hicancan.studev.map.Recommendations.Open.Closing -> "快关门了，${hours.closesAt} 关"; else -> "开着，${hours.closesAt} 关" }) }
         }
     }
     override fun close() { search?.close(); wayfind?.close() }
