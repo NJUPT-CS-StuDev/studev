@@ -17,20 +17,27 @@ object Recommendations {
 
     private fun clock(value: String) = value.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
 
+    /** Whether a place is open, its hours today and when it closes, as openingStatus in src/campus/map/model/homePolicy.ts. */
+    data class Hours(val open: Open, val today: String, val closesAt: String?)
+
+    fun status(hours: OpeningHours?, day: Int, minute: Int): Open = hoursAt(hours, day, minute).open
+
     /** Half-open intervals, closing 30 minutes before the end, overnight windows carried from the day before. */
-    fun status(hours: OpeningHours?, day: Int, minute: Int): Open {
-        if (hours == null) return Open.Unknown
+    fun hoursAt(hours: OpeningHours?, day: Int, minute: Int): Hours {
+        if (hours == null) return Hours(Open.Unknown, "", null)
+        val todays = hours.week[day.toString()].orEmpty()
+        val today = if (todays.isEmpty()) "今日不开放" else todays.joinToString(" · ") { it.joinToString("–") }
         val intervals = mutableListOf<Pair<Int, Int>>()
         hours.week[day.toString()].orEmpty().forEach { val start = clock(it[0]); val end = clock(it[1]); intervals += start to if (end <= start) end + 1440 else end }
         hours.week[(if (day == 1) 7 else day - 1).toString()].orEmpty().forEach { val start = clock(it[0]); val end = clock(it[1]); if (end < start) intervals += start - 1440 to end }
         hours.week[(if (day == 7) 1 else day + 1).toString()].orEmpty().forEach { val start = clock(it[0]); val end = clock(it[1]); intervals += start + 1440 to end + if (end <= start) 2880 else 1440 }
-        var end = intervals.filter { minute >= it.first && minute < it.second }.maxOfOrNull { it.second } ?: return Open.Closed
+        var end = intervals.filter { minute >= it.first && minute < it.second }.maxOfOrNull { it.second } ?: return Hours(Open.Closed, today, null)
         while (true) {
             val next = max(end, intervals.filter { it.first <= end && it.second > minute }.maxOfOrNull { it.second } ?: end)
             if (next == end) break
             end = next
         }
-        return if (end - minute <= 30) Open.Closing else Open.Open
+        return Hours(if (end - minute <= 30) Open.Closing else Open.Open, today, "%02d:%02d".format((end % 1440) / 60, end % 60))
     }
 
     /** Where people on campus go at each part of the day, most likely first, as categories of the map's vocabulary. */
