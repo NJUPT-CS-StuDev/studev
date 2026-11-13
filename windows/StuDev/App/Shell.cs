@@ -75,6 +75,7 @@ public sealed partial class Shell : Window
             {
                 "timetable" => new Timetable.TimetableScreen(),
                 "me" => new Me.MeScreen(),
+                "search" => new Search.SearchScreen(),
                 _ => new Later(Entries.FirstOrDefault(e => e.Key == entry).Label ?? entry),
             };
             screens[entry] = screen;

@@ -67,6 +67,33 @@ public sealed class Repository
         return bytes;
     }
 
+    /** A stretch of a large file (a search pack), fetched by range from its mirror or the site and kept on disk. */
+    public async Task<byte[]> Block(string path, string? mirror, long offset, int length)
+    {
+        if (path.Split('/').Any(part => part is "" or "." or "..")) throw new ArgumentException($"bad release path {path}");
+        var file = Path.Combine(folder, path.Replace('/', Path.DirectorySeparatorChar) + "." + offset);
+        if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
+        async Task<byte[]> Range(string url)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + length - 1);
+            using var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (response.StatusCode != System.Net.HttpStatusCode.PartialContent || bytes.Length != length) throw new HttpRequestException($"range of {url} not served");
+            return bytes;
+        }
+        byte[] got;
+        var own = $"{Site}{Release.Base}/" + string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
+        if (mirror is null) got = await Range(own);
+        else try { got = await Range(mirror); } catch (HttpRequestException) { got = await Range(own); }
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var pending = file + "." + Guid.NewGuid().ToString("N") + ".pending";
+        try { await File.WriteAllBytesAsync(pending, got); File.Move(pending, file, true); }
+        finally { if (File.Exists(pending)) File.Delete(pending); }
+        return got;
+    }
+
     public async Task<T> Read<T>(string path) => JsonSerializer.Deserialize<T>(await Bytes(path), Facts.Json) ?? throw new InvalidDataException(path);
 
     private string Teaching => $"teaching/{Release.Teaching}";

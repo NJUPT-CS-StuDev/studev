@@ -62,7 +62,7 @@ public static class ListView
 
     public static FrameworkElement Make(Campus campus, CampusLine line, Moment now, Action<PersonalTask> openTask, Action<LineEvent> open)
     {
-        var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Width = 760 };
         var courses = TaskSheet.CourseNames(line);
         var tones = CourseTones.Of(line);
         var top = campus.Tasks.Live.Where(t => t.Parent is null).ToList();

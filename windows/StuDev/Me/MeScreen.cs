@@ -37,7 +37,7 @@ public sealed partial class MeScreen : Screen
     private void Draw()
     {
         Children.Clear();
-        var page = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var page = new StackPanel();
         page.Children.Add(Pages.Header("我", campus.Preferences.Class is { } k ? $"{k}{(campus.Classes.FirstOrDefault(c => c.Id == k)?.Major is { } m ? $" · {m}" : "")}" : "还没选班级"));
         void Row(string key, UIElement value, Action? open = null) => page.Children.Add(Kit.Row(key, value, open));
         var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);
@@ -77,7 +77,7 @@ public sealed partial class MeScreen : Screen
         var links = Kit.Line(14, Link("用户协议", $"{Repository.Site}/terms/"), Link("隐私政策", $"{Repository.Site}/privacy/"), Link("关于", $"{Repository.Site}/about/"));
         links.Margin = new Thickness(0, 6, 0, 0);
         page.Children.Add(links);
-        Children.Add(Pages.Frame(page));
+        Children.Add(Pages.Frame(page, 680));
     }
 
     private static FrameworkElement Link(string text, string url)

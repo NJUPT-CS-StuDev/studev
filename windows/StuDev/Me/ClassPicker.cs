@@ -13,7 +13,7 @@ public static class ClassPicker
 
     public static FrameworkElement Make(List<TeachingClass> classes, Action<TeachingClass> picked, bool heading = true)
     {
-        var column = new StackPanel { Spacing = 0, MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Center };
+        var column = new StackPanel { Spacing = 0, Width = 560, HorizontalAlignment = HorizontalAlignment.Center };
         if (heading)
         {
             column.Children.Add(Kit.Text("你在哪个班？", Role.Title));

@@ -9,7 +9,12 @@ public static class Pages
 {
     public static ScrollViewer Frame(UIElement content, double width = 1040)
     {
-        var column = new Grid { MaxWidth = width, Padding = new Thickness(32, 26, 32, 56), HorizontalAlignment = HorizontalAlignment.Stretch };
+        // One column of at most `width`, the rest shared either side: a star column with a MaxWidth keeps it centred.
+        var column = new Grid { Padding = new Thickness(32, 26, 32, 56) };
+        column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10000, GridUnitType.Star), MaxWidth = width });
+        column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn((FrameworkElement)content, 1);
         column.Children.Add(content);
         return new ScrollViewer { Content = column, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
