@@ -6,6 +6,7 @@ import top.hicancan.studev.data.AcademicRepository
 import top.hicancan.studev.me.TaskStore
 import top.hicancan.studev.navigation.*
 import top.hicancan.studev.search.NativeSearch
+import top.hicancan.studev.map.Find
 
 /** A task drafted, to be confirmed; [call] is the tool call that drafted it, so it shows in that answer. */
 data class TaskProposal(val task: Task, val id: String? = null, val expected: String? = null, val key: String = java.util.UUID.randomUUID().toString(), val call: String = "")
@@ -14,7 +15,19 @@ data class TaskProposal(val task: Task, val id: String? = null, val expected: St
 /** A building as said, as the room data writes it: 教三楼 → 教3, as buildingWord in src/campus/world/campusTools.ts. */
 fun buildingWord(said: String): String = said.trim().map { c -> "一二三四五六七八九".indexOf(c).let { if (it >= 0) ('1' + it) else c } }.joinToString("").let { if (it.length > 1 && it.endsWith("楼")) it.dropLast(1) else it }
 
-class CampusTools(private val context: android.content.Context, private val repository: () -> AcademicRepository?, private val line: () -> CampusLine?, private val tasks: TaskStore, private val propose: (TaskProposal) -> Unit) : AutoCloseable {
+/** Where a search looks, by the name a person gives it: the search page's channels, src/campus/world/channels.json. */
+data class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false) {
+    companion object {
+        fun load(context: android.content.Context) = Json.parseToJsonElement(context.assets.open("world/channels.json").bufferedReader().use { it.readText() }).jsonArray.map { item ->
+            val row = item.jsonObject; fun list(key: String) = row[key]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+            Channel(row.getValue("id").jsonPrimitive.content, row.getValue("label").jsonPrimitive.content, list("sources"), list("excluded"), row["dated"]?.jsonPrimitive?.boolean ?: false)
+        }
+    }
+}
+
+class CampusTools(private val context: android.content.Context, private val repository: () -> AcademicRepository?, private val line: () -> CampusLine?, private val tasks: TaskStore,
+    private val remember: (String) -> Unit, private val propose: (TaskProposal) -> Unit) : AutoCloseable {
+    private val channels by lazy { Channel.load(context) }
     private var search: NativeSearch? = null
     private var wayfind: Wayfind? = null
     private var places: top.hicancan.studev.data.CampusPackage? = null
@@ -36,11 +49,46 @@ class CampusTools(private val context: android.content.Context, private val repo
     }
     suspend fun execute(name: String, raw: JsonObject, call: String = ""): JsonElement {
         val args = arguments(name, raw)
-        if (name == "campus_search") {
+        if (name == "search") {
             val repo = repository() ?: error("校园数据还没准备好。")
+            val channel = channels.firstOrNull { it.label == (args["in"]?.jsonPrimitive?.content ?: "全部") } ?: error("没有这个搜索范围。")
             val engine = search ?: NativeSearch({ path -> repo.bytes("search/$path") }, { pack, mirror, offset, length -> repo.block("search/$pack", mirror, offset, length) }).also { search = it }
-            return JsonArray(engine.page(args.getValue("query").jsonPrimitive.content, 6).results.map { result -> buildJsonObject { for (key in listOf("id", "title", "url", "sourceName", "snippet", "attachments")) result[key]?.let { put(key, it) } } })
+            val filters = buildJsonObject { if (channel.sources.isNotEmpty()) put("sourceIds", JsonArray(channel.sources.map(::JsonPrimitive))); if (channel.excluded.isNotEmpty()) put("excludedSourceIds", JsonArray(channel.excluded.map(::JsonPrimitive))) }
+            return JsonArray(engine.page(args.getValue("query").jsonPrimitive.content, 6, filters = filters).results.map { result -> buildJsonObject {
+                put("id", result.getValue("id")); put("title", result.getValue("title")); result["sourceName"]?.let { put("source", it) }
+                result["publishedAt"]?.jsonPrimitive?.contentOrNull?.let { put("date", it.take(10)) }
+                result["snippet"]?.let { put("snippet", it) }; put("url", result.getValue("url"))
+            } })
         }
+        if (name == "read") {
+            val repo = repository() ?: error("校园数据还没准备好。")
+            val id = args.getValue("id").jsonPrimitive.content
+            require(Regex("[0-9a-f]{16}").matches(id)) { "这条不是文章，课程、教室、地点请用对应的方式查。" }
+            val doc = Json.parseToJsonElement(repo.bytes("texts/${id.take(2)}.json").decodeToString()).jsonObject[id]?.jsonObject ?: error("找不到这篇资料。")
+            val text = doc.getValue("text").jsonPrimitive.content
+            return buildJsonObject {
+                put("title", doc.getValue("title")); put("source", doc.getValue("source"))
+                doc["published"]?.jsonPrimitive?.contentOrNull?.let { put("date", it.take(10)) }
+                put("url", doc.getValue("url")); put("text", text.take(READ).ifEmpty { "（这篇只有标题和附件）" })
+                if (text.length > READ) put("cut", true)
+                put("files", JsonArray(doc.getValue("files").jsonArray.take(10)))
+            }
+        }
+        if (name == "find_place") {
+            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context.assets).also { places = it }
+            val now = CampusDay.now()
+            return JsonArray(Find.places(campus.places, args.getValue("query").jsonPrimitive.content).map { place ->
+                val parent = place.parent?.let(campus.byId::get)
+                val hours = top.hicancan.studev.map.Recommendations.hoursAt(place.hours, now.dayOfWeek.value, now.hour * 60 + now.minute)
+                buildJsonObject {
+                    put("id", place.id); put("name", place.names.firstOrNull() ?: place.id); place.category?.let { put("category", it) }
+                    put("where", when { parent == null -> "校外"; parent.kind == "campus" -> "校内"; else -> "${parent.names.firstOrNull() ?: parent.id}里" })
+                    if (hours.open != top.hicancan.studev.map.Recommendations.Open.Unknown && hours.today == "00:00–24:00") { put("today", "全天"); put("now", "24 小时开放") }
+                    else if (hours.open != top.hicancan.studev.map.Recommendations.Open.Unknown) { put("today", hours.today); put("now", when (hours.open) { top.hicancan.studev.map.Recommendations.Open.Closed -> "已关闭"; top.hicancan.studev.map.Recommendations.Open.Closing -> "快关门了，${hours.closesAt} 关"; else -> "开着，${hours.closesAt} 关" }) }
+                }
+            })
+        }
+        if (name == "remember") { remember(args.getValue("fact").jsonPrimitive.content); return buildJsonObject { put("remembered", true) } }
         if (name == "free_rooms") {
             val repo = repository() ?: error("校园数据还没准备好。")
             val date = date(args.getValue("date").jsonPrimitive.content); val index = repo.rooms(); val day = repo.roomDay(index.term, date.toString())
@@ -52,11 +100,11 @@ class CampusTools(private val context: android.content.Context, private val repo
         }
         if (name == "route") {
             val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context.assets).also { places = it }
-            val from = campus.byId[args.getValue("from").jsonPrimitive.content] ?: error("请先搜索确认地图地点。")
-            val to = campus.byId[args.getValue("to").jsonPrimitive.content] ?: error("请先搜索确认地图地点。")
+            val from = Find.meant(campus.places, campus.byId, args.getValue("from").jsonPrimitive.content)
+            val to = Find.meant(campus.places, campus.byId, args.getValue("to").jsonPrimitive.content)
             val engine = wayfind ?: Wayfind.load(context.assets).also { wayfind = it }
-            val routes = engine.route(RouteRequest(from.routing, to.routing, args["mode"]?.jsonPrimitive?.content ?: "walk", alternatives = 1))
-            return buildJsonObject { put("routes", JsonArray(routes.map { route -> buildJsonObject { put("distance_m", route.distance_m); put("duration_s", route.duration_s); put("steps", JsonArray(route.maneuvers.map { JsonPrimitive(it.instruction) })) } })); put("url", "/map/?from=${java.net.URLEncoder.encode(from.id, "UTF-8")}&nav=${java.net.URLEncoder.encode(to.id, "UTF-8")}") }
+            val route = engine.route(RouteRequest(from.routing, to.routing, args["mode"]?.jsonPrimitive?.content ?: "walk", alternatives = 1)).firstOrNull() ?: error("地图里没有从${from.names.firstOrNull()}到${to.names.firstOrNull()}的路。")
+            return buildJsonObject { put("from", from.names.firstOrNull() ?: from.id); put("to", to.names.firstOrNull() ?: to.id); put("distance_m", kotlin.math.round(route.distance_m).toLong()); put("duration_s", kotlin.math.round(route.duration_s).toLong()); put("steps", JsonArray(route.maneuvers.map { JsonPrimitive(it.instruction) })); put("url", "/map/?from=${java.net.URLEncoder.encode(from.id, "UTF-8")}&nav=${java.net.URLEncoder.encode(to.id, "UTF-8")}") }
         }
         val current = line() ?: error("请先选择班级，等待课表读取完成。")
         return when (name) {
@@ -69,6 +117,8 @@ class CampusTools(private val context: android.content.Context, private val repo
     }
     override fun close() { search?.close(); wayfind?.close() }
     companion object {
+        /** How much of an article the model reads at once, as READ in src/campus/world/campusTools.ts. */
+        private const val READ = 8000
         fun date(value: String): LocalDate { require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(value)) { "日期无效。" }; return LocalDate.parse(value) }
         /** Said as people say it, as toolDay in src/campus/world/tools.ts: 11月16日 周一, 08:00–09:35. */
         private fun toolDay(day: LocalDate) = "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"

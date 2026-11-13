@@ -59,10 +59,9 @@ class ParityTest {
         }
     }
     @Test fun labelsMatch() {
-        val labels = golden.getValue("labels").jsonObject
-        val byId = json.decodeFromJsonElement<List<Place>>(labels.getValue("entities")).associateBy { it.id }
+        val byId = json.decodeFromJsonElement<List<Place>>(golden.getValue("entities")).associateBy { it.id }
         fun rule(value: JsonElement) = (value as? JsonObject)?.let { Labels.Rule(it.getValue("minZoom").jsonPrimitive.double, it.getValue("priority").jsonPrimitive.int) }
-        labels.getValue("cases").jsonArray.forEach { case ->
+        golden.getValue("labels").jsonArray.forEach { case ->
             val row = case.jsonObject; val place = byId.getValue(row.getValue("id").jsonPrimitive.content)
             assertEquals(row.toString(), rule(row.getValue("rule")), Labels.rule(place, byId))
             if (place.kind == "building") assertEquals(row.toString(), rule(row.getValue("teaching")), Labels.rule(place, byId, true))
@@ -368,6 +367,36 @@ class ParityTest {
             val expected = case.getValue("result").jsonObject; val got = completion.result()
             if (expected["message"] != null) assertEquals(expected.getValue("message"), got.getOrThrow()) else assertEquals(expected.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message)
         }
-        assertEquals(cases.getValue("request"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }), java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long)))
+        cases.getValue("situations").jsonArray.forEach { item ->
+            val case = item.jsonObject; val given = case.getValue("situation").jsonObject
+            fun text(key: String) = given[key]?.jsonPrimitive?.contentOrNull
+            val situation = top.hicancan.studev.ai.Situation(given["week"]?.jsonPrimitive?.intOrNull, text("class"), text("campus")!!, text("name"), text("student"), text("memory"))
+            assertEquals(case.getValue("request"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }), situation, java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long)))
+        }
+    }
+    @Test fun placesAreFoundByWhatPeopleCallThem() {
+        val finding = golden.getValue("finding").jsonObject
+        val all = json.decodeFromJsonElement<List<Place>>(golden.getValue("entities"))
+        val byId = all.associateBy { it.id }
+        finding.getValue("queries").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.toString(), case.getValue("found").jsonArray.map { it.jsonPrimitive.content }, top.hicancan.studev.map.Find.places(all, case.getValue("query").jsonPrimitive.content).map { it.id }) }
+        finding.getValue("meant").jsonArray.forEach { item -> val case = item.jsonObject
+            val got = runCatching { top.hicancan.studev.map.Find.meant(all, byId, case.getValue("said").jsonPrimitive.content).id }
+            if (case["id"] != null) assertEquals(case.getValue("id").jsonPrimitive.content, got.getOrThrow()) else assertEquals(case.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message) }
+    }
+    @Test fun stepsAreSaidTheSame() {
+        golden.getValue("steps").jsonArray.forEach { item -> val case = item.jsonObject
+            val calls = case.getValue("calls").jsonArray.map { val call = it.jsonObject; top.hicancan.studev.ai.Steps.Call(call.getValue("id").jsonPrimitive.content, call.getValue("name").jsonPrimitive.content, call.getValue("arguments").jsonPrimitive.content) }
+            val steps = top.hicancan.studev.ai.Steps.of(calls, case.getValue("results").jsonObject)
+            assertEquals(case.getValue("steps").jsonArray.map { val step = it.jsonObject; listOf(step.getValue("name"), step.getValue("label"), step.getValue("detail"), step.getValue("failed"), step.getValue("pending")).map { v -> v.jsonPrimitive.content } },
+                steps.map { listOf(it.name, it.label, it.detail, it.failed.toString(), it.pending.toString()) })
+            assertEquals(case.getValue("line").jsonPrimitive.content, top.hicancan.studev.ai.Steps.line(steps))
+        }
+    }
+    @Test fun rememberingIsTheSame() {
+        golden.getValue("memory").jsonArray.forEach { item -> val case = item.jsonObject
+            val got = runCatching { top.hicancan.studev.ai.Memory.remembered(case.getValue("text").jsonPrimitive.content, case.getValue("fact").jsonPrimitive.content) }
+            if (case["next"] != null) assertEquals(case.getValue("next").jsonPrimitive.content, got.getOrThrow()) else assertEquals(case.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message)
+        }
     }
 }

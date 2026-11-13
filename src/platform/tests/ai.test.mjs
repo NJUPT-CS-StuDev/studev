@@ -16,19 +16,24 @@ async function events(result) {
   return text.split('\n\n').filter(Boolean).map((block) => ({ event: block.match(/^event: (.*)$/m)[1], data: JSON.parse(block.match(/^data: (.*)$/m)[1]) }));
 }
 
+const situation = { week: 11, class: 'B240402', campus: '仙林', memory: null };
+
 test('AI streams the fixed model through the gateway, passing on what it says and its whole turn, never its thinking or the key', async () => {
   let calls = 0; const limits = [], auth = [];
-  const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { MAKERS_MODELS_KEY: 'test-provider-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {
+  const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user', realName: '吴双灿', studentId: 'B24040213' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { MAKERS_MODELS_KEY: 'test-provider-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {
     calls++; assert.equal(url, 'https://ai-gateway.edgeone.link/v1/chat/completions');
     const body = JSON.parse(init.body); assert.equal(body.model, '@makers/deepseek-v4.1-flash'); assert.equal(body.stream, true);
     assert.ok(body.tools.some(tool => tool.function.name === 'suggest_slots')); assert.equal(body.messages[0].role, 'system'); assert.match(body.messages[0].content, /“做的时间”和“截止时间”是两回事/); assert.match(body.messages[0].content, /绝不对用户提工具名/);
+    // When and who: the moment is the platform's, the name the account's; the device cannot claim another.
+    assert.match(body.messages[0].content, /2026年11月12日 周四 08:00，本学期第 11 周/); assert.match(body.messages[0].content, /仙林校区 B240402 班的吴双灿（学号 B24040213）/);
+    assert.doesNotMatch(body.messages[0].content, /冒充/); assert.ok(!body.tools.some(tool => tool.function.name === 'remember'));
     // A frame split across chunks, thinking that must not pass, and a tool call in pieces.
     const first = frame({ delta: { reasoning_content: 'not-returned' } }) + frame({ delta: { content: '我来' } });
     const second = frame({ delta: { content: '查一下。' } }) + frame({ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'free_', arguments: '{"date":' } }] } });
     const third = frame({ delta: { tool_calls: [{ index: 0, function: { name: 'rooms', arguments: '"2026-11-14","minute":840,"minutes":120}' } }] } }) + frame({ delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n';
     return sse(first, second.slice(0, 20), second.slice(20), third);
   } });
-  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '帮我找空教室' }], model: 'ignored-client-model', tools: ['ignored'] }) });
+  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '帮我找空教室' }], situation: { ...situation, name: '冒充' }, model: 'ignored-client-model', tools: ['ignored'] }) });
   const result = await handler({ request }, '/api/platform/ai'); assert.equal(result.status, 200);
   assert.match(result.headers.get('content-type'), /text\/event-stream/);
   const got = await events(result);
@@ -37,14 +42,15 @@ test('AI streams the fixed model through the gateway, passing on what it says an
   assert.equal(JSON.stringify(got).includes('not-returned'), false); assert.equal(JSON.stringify(got).includes('test-provider-secret'), false);
   assert.equal(calls, 1); assert.deepEqual(auth, [{ required: true, csrf: true }]); assert.deepEqual(limits.map(item => item.slice(0, 2)), [['ai-minute', 'test-user'], ['ai-day', 'test-user']]);
   const cut = createAiService({ identity: { async authenticate() { return { user: { id: 'u' } }; } }, repo: { async throttle() {} }, env: { MAKERS_MODELS_KEY: 'k' }, fetcher: async () => sse(frame({ delta: { content: '半句' } })) });
-  assert.equal((await events(await cut({ request: new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }] }) }) }, '/api/platform/ai'))).at(-1).event, 'error');
+  assert.equal((await events(await cut({ request: new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }], situation }) }) }, '/api/platform/ai'))).at(-1).event, 'error');
+  await assert.rejects(cut({ request: new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }], situation: { ...situation, week: 99 } }) }) }, '/api/platform/ai'), error => error.status === 400);
   const denied = createAiService({ identity: { async authenticate() { throw Object.assign(new Error('denied'), { status: 401 }); } }, env: {}, repo: {}, fetcher: () => { throw new Error('must not infer'); } });
   await assert.rejects(denied({ request }, '/api/platform/ai'), error => error.status === 401);
 });
 
 test('A person who has used up the day of the free quota is told so, and that their own key goes on', async () => {
   const handler = createAiService({ identity: { async authenticate() { return { user: { id: 'u' } }; } }, repo: { async throttle(scope, client, limit) { if (scope === 'ai-day') { assert.equal(limit, DAILY); throw Object.assign(new Error('limited'), { status: 429 }); } } }, env: { MAKERS_MODELS_KEY: 'k' }, fetcher: () => { throw new Error('must not infer'); } });
-  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }] }) });
+  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }], situation }) });
   await assert.rejects(handler({ request }, '/api/platform/ai'), error => error.status === 429 && error.code === 'AI_DAILY' && /自己的 API/.test(error.message));
   assert.equal(DAILY, 30);
 });

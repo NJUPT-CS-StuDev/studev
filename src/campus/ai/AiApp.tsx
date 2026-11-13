@@ -2,16 +2,19 @@
 // three, run on this device. The answer is shown as it comes; what was looked up is shown as steps one can open;
 // rooms and routes it finds are things to tap; a task it drafts is saved only when confirmed. A question can be
 // changed where it stands and an answer asked again: each grows a branch beside the old one (thread.ts), and one goes
-// back and forth between them. Conversations are kept on this device and listed at the side (chats.ts). The model is
-// the free quota, or one's own key used straight from this device (model.ts). Asking is for someone signed in, since the
-// model is reached through the platform.
+// back and forth between them. Conversations are kept on this device and listed at the side (chats.ts), and so is what it
+// keeps in mind about the person (memory.ts). It is told the moment and who is asking (assistant.mjs). The model is the
+// free quota, which needs signing in, or one's own key used straight from this device (model.ts).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { session } from '../../platform/client/api';
+import { session, type Session } from '../../platform/client/api';
 import { usePreferences } from '@/world/usePreferences';
 import { useTasks } from '@/world/useTasks';
 import { newTaskId, readTasks, saveTask } from '@/world/tasks';
 import { dayWord, hm, momentNow } from '@/world/time';
+import { weekOfDate } from '@/world/events';
+import type { Situation } from '@/world/assistant.mjs';
 import { useTimeline } from '@/timetable/useTimeline';
+import { PRODUCT_CONFIG } from '@/world/product';
 import { CampusTools } from '@/world/campusTools';
 import { roomLabel } from '@/world/names';
 import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up } from '@/world/ui';
@@ -20,13 +23,13 @@ import { ask, askOwn, type Message } from './stream';
 import { addressError, endpoint, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
 import { append, chain, choose, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
+import { stepsLine, stepsOf } from './steps';
+import { MEMORY_LIMIT, readMemory, remembered, writeMemory, type Memory } from './memory';
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
 
 /** What one can ask, offered while the conversation is empty. */
 const AI_EXAMPLES = ['这周有哪些截止和考试？', '今天下午哪里有空教室？', '帮我在下周找三次一小时复习，周五前完成', '从教三到图书馆怎么走？'];
-/** What each tool is doing, as a step says it. */
-const STEPS: Record<string, string> = { campus_search: '搜索校园资料', timeline: '查看你的安排', list_tasks: '读取你的任务', suggest_slots: '找空闲时间', free_rooms: '查空教室', route: '规划路线', propose_task: '起草任务' };
 const KEY = 'studev_ai_chats';
 
 interface ModelContext { registerTool(tool: { name: string; description: string; inputSchema: object; execute(args: unknown): Promise<unknown> }): void; unregisterTool(name: string): void }
@@ -66,12 +69,11 @@ function Found({ name, result }: { name: string; result: unknown }) {
     if (!value || typeof value !== 'object') return null;
     if (name === 'free_rooms' && Array.isArray(value.rooms)) return <div className="ai-cards">{(value.rooms as { room: string; until: number; minutes: number }[]).slice(0, 6).map(room =>
         <a key={room.room} className="ai-card" href={`/map/?place=${encodeURIComponent(room.room)}`}><b>{roomLabel(room.room)}</b><small>空到 {hm(room.until)} · {Math.floor(room.minutes / 60)} 小时 {room.minutes % 60} 分</small></a>)}</div>;
-    if (name === 'route' && typeof value.url === 'string') {
-        const route = (value.routes as { distance_m: number; duration_s: number }[] | undefined)?.[0];
-        return <div className="ai-cards"><a className="ai-card" href={value.url}><b>在地图上导航</b>{route && <small>{Math.round(route.distance_m)} 米 · 约 {Math.max(1, Math.round(route.duration_s / 60))} 分钟</small>}</a></div>;
-    }
-    if (name === 'campus_search' && Array.isArray(result)) return <div className="ai-cards">{(result as { id: string; title: string; url: string; source?: string }[]).slice(0, 4).map(item =>
-        <a key={item.id} className="ai-card" href={item.url} target="_blank" rel="noreferrer"><b>{item.title}</b>{item.source && <small>{item.source}</small>}</a>)}</div>;
+    if (name === 'route' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url}><b>导航到{String(value.to)}</b>
+        <small>{String(value.distance_m)} 米 · 约 {Math.max(1, Math.round(Number(value.duration_s) / 60))} 分钟</small></a></div>;
+    if (name === 'read' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url} target="_blank" rel="noreferrer"><b>{String(value.title)}</b><small>{[value.source, value.date].filter(Boolean).join(' · ')}</small></a></div>;
+    if (name === 'find_place' && Array.isArray(result)) return <div className="ai-cards">{(result as { id: string; name: string; where: string; now?: string }[]).slice(0, 3).map(item =>
+        <a key={item.id} className="ai-card" href={`/map/?place=${encodeURIComponent(item.id)}`}><b>{item.name}</b><small>{[item.where, item.now].filter(Boolean).join(' · ')}</small></a>)}</div>;
     return null;
 }
 
@@ -121,6 +123,12 @@ export default function AiApp() {
     const [chat, setChat] = useState<Chat>(() => kept.chats.find(item => item.id === kept.current) ?? empty());
     const [side, setSide] = useState(false), [menu, setMenu] = useState<string | null>(null), [renaming, setRenaming] = useState<string | null>(null);
     const [choice, setChoice] = useState<Choice>(readChoice), [picking, setPicking] = useState(false), [setting, setSetting] = useState(false);
+    const [memory, setMemory] = useState<Memory>(readMemory), [minding, setMinding] = useState(false);
+    useEffect(() => writeMemory(memory), [memory]);
+    const memoryNow = useRef(memory); memoryNow.current = memory;
+    // Who is signed in, if anyone: one's own key tells the model their name as the platform would.
+    const [account, setAccount] = useState<Session['user'] | null>(null);
+    useEffect(() => { void session().then(current => setAccount(current?.user ?? null), () => setAccount(null)); }, []);
     useEffect(() => writeChoice(choice), [choice]);
     const own = choice.use === 'own' && choice.own.key ? choice.own : null;
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
@@ -130,7 +138,7 @@ export default function AiApp() {
     // While answering after a message, only what this answer says shows after it, not the answer it had before.
     const [from, setFrom] = useState<string | null>(null);
     const fresh = useRef(new Set<string>());
-    // The document kernel, loaded once; until then an answer shows as plain text.
+    // The document kernel, loaded once; nothing is shown as raw text while it loads, and an answer waits for it.
     const [drawn, setDrawn] = useState(false);
     const [live, setLive] = useState<Update | null>(null);
     useEffect(() => { void docReady().then(() => setDrawn(true)); }, []);
@@ -170,9 +178,17 @@ export default function AiApp() {
 
     const execute = useMemo(() => async (name: string, raw: unknown, call = ''): Promise<unknown> => {
         const args = toolArguments(name, raw), line = latest.current;
-        if (name === 'campus_search') return services.query(String(args.query));
+        if (name === 'search') return services.query(String(args.query), args.in === undefined ? undefined : String(args.in));
+        if (name === 'read') return services.read(String(args.id));
+        if (name === 'find_place') return services.findPlace(String(args.query));
         if (name === 'free_rooms') return services.rooms(args);
         if (name === 'route') return services.route(args);
+        if (name === 'remember') {
+            if (!memoryNow.current.on) throw new Error('记忆已关闭。');
+            const text = remembered(memoryNow.current.text, String(args.fact));
+            memoryNow.current = { ...memoryNow.current, text }; setMemory(memoryNow.current);
+            return { remembered: true };
+        }
         if (!line) throw new Error('请先在“我”里选择班级，等待课表读取完成。');
         if (name === 'timeline') return readTimeline(line, String(args.from), String(args.to));
         if (name === 'list_tasks') return readTasks().filter(task => !task.deleted);
@@ -198,6 +214,12 @@ export default function AiApp() {
         window.addEventListener('focus', back); document.addEventListener('visibilitychange', back);
         return () => { window.removeEventListener('focus', back); document.removeEventListener('visibilitychange', back); };
     });
+    /** The moment and who is asking, as this device knows them now. */
+    const situation = (): Situation => {
+        const line = latest.current, today = momentNow().date;
+        return { week: line ? weekOfDate(line.term, today) : null, class: prefs.class ?? null, campus: prefs.campus ?? PRODUCT_CONFIG.CAMPUS.id,
+            name: account ? account.realName || account.nickname || null : null, student: account?.studentId || null, memory: memoryNow.current.on ? memoryNow.current.text : null };
+    };
     /** Answering after `at` in `base`: each message said grows the branch from there, and is the one shown. */
     async function run(base: Thread, at: string) {
         let thread = base, tipId = at;
@@ -208,11 +230,12 @@ export default function AiApp() {
         const controller = new AbortController(); stop.current = controller;
         let said = '';
         try {
+            await docReady();
             for (let round = 0; round < 8; round++) {
                 said = ''; setStreaming(''); setLive(null);
-                const doc = drawn ? new DocStream() : null;
-                const onDelta = (piece: string) => { said += piece; setStreaming(said); if (doc) setLive(doc.push(piece)); };
-                const answer = await (own ? askOwn(own, history, onDelta, controller.signal) : ask(history, onDelta, controller.signal)).finally(() => doc?.free());
+                const doc = new DocStream();
+                const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); };
+                const answer = await (own ? askOwn(own, history, situation(), onDelta, controller.signal) : ask(history, situation(), onDelta, controller.signal)).finally(() => doc.free());
                 setStreaming(null); setLive(null);
                 history = [...history, answer]; grow(answer);
                 if (!answer.tool_calls?.length) return;
@@ -283,9 +306,11 @@ export default function AiApp() {
                 </div>)}
             </section>)}
             {!kept.chats.length && <p className="ai-side-none">问过的对话会列在这里，只存在这台设备上。</p>}</nav>
+            <button className="ai-side-memory" onClick={() => { setMinding(true); setSide(false); }}><b>记忆</b><small>{!memory.on ? '已关闭' : memory.text.trim() ? `记着 ${memory.text.split('\n').filter(line => line.trim()).length} 件事` : '还没有'}</small></button>
         </aside>
         {side && <div className="ai-scrim" onClick={() => setSide(false)} />}
         {picking && <div className="ai-catch" onClick={() => setPicking(false)} />}
+        {minding && <MemorySettings memory={memory} onClose={() => setMinding(false)} onSave={next => { memoryNow.current = next; setMemory(next); setMinding(false); }} />}
         {setting && <OwnSettings own={choice.own} onClose={() => setSetting(false)} onSave={next => { setChoice({ use: next.key ? 'own' : 'free', own: next }); setSetting(false); }} />}
         <div className="ai-main">
         <div className="ai-bar">
@@ -294,9 +319,9 @@ export default function AiApp() {
                 <button className={`ai-model-b ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>{own ? ownName(own) : '免费额度'}<Chevron /></button>
                 {picking && <div className="ai-menu ai-model-menu" role="menu">
                     <button role="menuitemradio" aria-checked={!own} onClick={() => { setChoice(current => ({ ...current, use: 'free' })); setPicking(false); }}>
-                        <b>免费额度</b><small>hicancan 带领学发为爱发电，登录后可用</small>{!own && <Tick />}</button>
+                        <b>免费额度 · 为爱发电</b><small>登录后可用</small>{!own && <Tick />}</button>
                     <button role="menuitemradio" aria-checked={Boolean(own)} onClick={() => { if (choice.own.key) setChoice(current => ({ ...current, use: 'own' })); else setSetting(true); setPicking(false); }}>
-                        <b>我的 API</b><small>{choice.own.key ? `${ownName(choice.own)} · 只存在这台设备上，不用登录` : '填自己的 Key，不用登录'}</small>{own && <Tick />}</button>
+                        <b>我的 API</b><small>{choice.own.key ? `${ownName(choice.own)} · 存在这台设备上` : '填上自己的 Key 就能用'}</small>{own && <Tick />}</button>
                     <button role="menuitem" className="ai-model-set" onClick={() => { setSetting(true); setPicking(false); }}>设置我的 API…</button>
                 </div>}
             </div>
@@ -309,18 +334,20 @@ export default function AiApp() {
             {composer}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
             {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
-            <p className="fine">问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才会加到清单。对话只存在这台设备上。</p>
+            <p className="fine">可以问课表、地图和校园资料：查安排、找空闲、找空教室、问路、读通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。</p>
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
         <div className="ai-turns" aria-live="polite">{turns.map(turn => {
             const replies = turn.replies.map(node => node.message);
             const calls = replies.flatMap(reply => reply.tool_calls ?? []);
-            const answer = [...replies].reverse().find(reply => reply.content && !reply.tool_calls?.length)?.content
-                ?? (turn.last && streaming !== null ? null : [...replies].reverse().find(reply => reply.role === 'assistant' && reply.content)?.content);
-            const counts = new Map<string, number>(); calls.forEach(call => counts.set(call.function.name, (counts.get(call.function.name) ?? 0) + 1));
-            const doing = calls.some(call => !results.has(call.id));
+            // What it said last without looking anything more up: what it says before looking something up is part of
+            // the looking (its steps), and a tool's result is never the answer.
+            const answer = [...replies].reverse().find(reply => reply.role === 'assistant' && reply.content && !reply.tool_calls?.length)?.content;
+            const steps = stepsOf(calls.map(call => ({ id: call.id, name: call.function.name, arguments: call.function.arguments })), results);
+            const doing = steps.some(step => step.pending);
+            // What it found, to tap: every article it read, the last of anything else.
             const found = new Map<string, { name: string; result: unknown }>();
-            calls.forEach(call => { const result = results.get(call.id); if (result && !(typeof result === 'object' && 'error' in (result as object))) found.set(call.function.name, { name: call.function.name, result }); });
+            calls.forEach(call => { const result = results.get(call.id); if (result && !(typeof result === 'object' && 'error' in (result as object))) found.set(call.function.name === 'read' ? call.id : call.function.name, { name: call.function.name, result }); });
             const drafts = chat.proposals.filter(item => calls.some(call => call.id === item.call));
             const question = turn.question.message.content ?? '';
             const answering = turn.last && busy;
@@ -330,14 +357,12 @@ export default function AiApp() {
                     : <div className="ai-ask"><p className="ai-q">{question}</p>
                         <div className="ai-tools ai-tools-q"><CopyButton text={question} /><button className="ai-icon" aria-label="改问题" title="改问题" disabled={busy} onClick={() => setEditing(turn.question.id)}><Pencil /></button>
                             <Branches thread={chat.thread} id={turn.question.id} onChoose={pick} disabled={busy} /></div></div>}
-                {calls.length > 0 && <details className="ai-steps"><summary className={doing ? 'doing' : ''}>{doing ? '正在' : '已'}{[...counts].map(([name, count]) => `${STEPS[name] ?? name}${count > 1 ? ` ×${count}` : ''}`).join(' · ')}</summary>
-                    <ol>{replies.filter(reply => reply.role === 'assistant').map((reply, i) => <li key={i}>{reply.content && reply.tool_calls?.length ? <p>{reply.content}</p> : null}
-                        {reply.tool_calls?.map(call => { const result = results.get(call.id); const failed = Boolean(result && typeof result === 'object' && 'error' in (result as object));
-                            return <div key={call.id} className={failed ? 'failed' : ''}>{STEPS[call.function.name] ?? call.function.name}{result === undefined ? '……' : failed ? `：${(result as { error: string }).error}` : ''}</div>; })}</li>)}</ol>
+                {steps.length > 0 && <details className="ai-steps"><summary className={doing ? 'doing' : ''}>{stepsLine(steps)}</summary>
+                    <ol>{steps.map((step, i) => <li key={i} className={step.failed ? 'failed' : step.pending ? 'doing' : ''}><b>{step.label}</b>{step.detail && <span>{step.detail}</span>}</li>)}</ol>
                 </details>}
-                {answer && <div className="ai-a">{drawn ? <DocText text={answer} /> : <p className="ai-plain">{answer}</p>}</div>}
-                {turn.last && streaming !== null && <div className="ai-a">{live ? <Doc blocks={live.blocks} live /> : <p className="ai-plain">{streaming}<span className="ai-dot" /></p>}</div>}
-                {answering && streaming === null && !doing && <p className="ai-think">正在想</p>}
+                {answer && drawn && <div className="ai-a"><DocText text={answer} /></div>}
+                {turn.last && live && <div className="ai-a"><Doc blocks={live.blocks} live /></div>}
+                {answering && !live && !doing && <p className="ai-think">正在想</p>}
                 {found.size > 0 && [...found.values()].map(item => <Found key={item.name} name={item.name} result={item.result} />)}
                 {drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
                 {!answering && turn.replies.length > 0 && <div className="ai-tools">
@@ -357,6 +382,26 @@ export default function AiApp() {
     </div>;
 }
 
+/** What the AI keeps in mind: to read, change, empty or turn off. */
+function MemorySettings({ memory, onClose, onSave }: { memory: Memory; onClose: () => void; onSave: (memory: Memory) => void }) {
+    const [value, setValue] = useState(memory);
+    return <div className="ai-modal" role="dialog" aria-label="记忆" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+        <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); onSave({ on: value.on, text: value.text.trim() }); }}>
+            <h2>记忆</h2>
+            <p className="fine">AI 会记下你让它记的事，也会在聊天里记下你的专业方向、习惯和偏好，回答越来越贴合你。一行一件，随时可改；存在这台设备上，提问时一起发给模型。</p>
+            <label className="ai-switch"><input type="checkbox" checked={value.on} onChange={event => setValue(current => ({ ...current, on: event.target.checked }))} />使用记忆</label>
+            <textarea className="ai-memory" value={value.text} maxLength={MEMORY_LIMIT} disabled={!value.on} rows={8} placeholder={'- 通信工程专业，在准备考研\n- 喜欢早上学习'} onChange={event => setValue(current => ({ ...current, text: event.target.value }))} />
+            <small className="fine">{value.on ? `${value.text.length} / ${MEMORY_LIMIT}` : '关掉后 AI 看不到这些，也不再记新的；内容留着，打开接着用。'}</small>
+            <div className="ai-modal-btns">
+                {value.text && <button type="button" className="ai-pill" onClick={() => setValue(current => ({ ...current, text: '' }))}>清空</button>}
+                <span />
+                <button type="button" className="ai-pill" onClick={onClose}>取消</button>
+                <button className="ai-pill go">保存</button>
+            </div>
+        </form>
+    </div>;
+}
+
 /** One's own provider: where, which model, and the key, kept only on this device. */
 function OwnSettings({ own, onClose, onSave }: { own: Own; onClose: () => void; onSave: (own: Own) => void }) {
     const [value, setValue] = useState(own);
@@ -365,7 +410,7 @@ function OwnSettings({ own, onClose, onSave }: { own: Own; onClose: () => void; 
     return <div className="ai-modal" role="dialog" aria-label="我的 API" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
         <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); onSave({ base: value.base.trim(), model: value.model.trim(), key: value.key.trim() }); }}>
             <h2>我的 API</h2>
-            <p className="fine">填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 只存在这台设备上，提问从这台设备直接发给服务商，不经过 StuDev，也不用登录。</p>
+            <p className="fine">填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。</p>
             <label>接口地址<input value={value.base} onChange={event => set({ base: event.target.value })} placeholder="https://api.deepseek.com" required /></label>
             <small className="fine">{invalid ?? `会请求 ${endpoint(value.base)}`}</small>
             <label>模型<input value={value.model} onChange={event => set({ model: event.target.value })} placeholder="deepseek-flash" required /></label>

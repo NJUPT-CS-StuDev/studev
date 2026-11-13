@@ -47,8 +47,6 @@ import androidx.compose.ui.graphics.compositeOver
 
 /** What one can ask, offered while the conversation is empty, as AI_EXAMPLES in src/campus/ai/AiApp.tsx. */
 private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午哪里有空教室？", "帮我在下周找三次一小时复习，周五前完成", "从教三到图书馆怎么走？")
-/** What each tool is doing, as a step says it, as STEPS in AiApp.tsx. */
-private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to "查看你的安排", "list_tasks" to "读取你的任务", "suggest_slots" to "找空闲时间", "free_rooms" to "查空教室", "route" to "规划路线", "propose_task" to "起草任务")
 
 /**
  * The fourth entry beside the timetable, the map and search, as src/campus/ai/AiApp.tsx: one conversation over the
@@ -81,6 +79,10 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     var own by remember { mutableStateOf(Models.read(modelPrefs).second) }
     var picking by remember { mutableStateOf(false) }
     var setting by remember { mutableStateOf(false) }
+    val memoryPrefs = remember { context.getSharedPreferences("ai_memory", android.content.Context.MODE_PRIVATE) }
+    var memory by remember { mutableStateOf(Memory.read(memoryPrefs)) }
+    var minding by remember { mutableStateOf(false) }
+    LaunchedEffect(memory) { Memory.write(memoryPrefs, memory) }
     val asking = own.takeIf { useOwn && it.key.isNotBlank() }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
@@ -93,7 +95,8 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     var from by remember { mutableStateOf<String?>(null) }
     val fresh = remember { mutableSetOf<String>() }
     val busy = job != null
-    val tools = remember { CampusTools(context, { model.state.value.repository }, { model.myLine(model.state.value, model.settings.state.value) }, model.tasks) { proposal -> proposals = proposals + proposal } }
+    val tools = remember { CampusTools(context, { model.state.value.repository }, { model.myLine(model.state.value, model.settings.state.value) }, model.tasks,
+        remember = { fact -> check(memory.on) { "记忆已关闭。" }; memory = memory.copy(text = Memory.remembered(memory.text, fact)) }) { proposal -> proposals = proposals + proposal } }
     DisposableEffect(tools) { onDispose { tools.close() } }
     LaunchedEffect(thread) {
         if (opening) { opening = false; return@LaunchedEffect }
@@ -114,7 +117,11 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
         fun grow(message: JsonObject) { val id = java.util.UUID.randomUUID().toString(); fresh += id; thread = thread.append(tipId, id, message); tipId = id }
         thread = base; fresh.clear(); from = at; editing = null
         var history = recent(base.lineage(at).map { it.message })
-        tools.definitions = assistant.tools
+        // The moment and who is asking, as this device knows them now.
+        val settings = model.settings.state.value; val line = model.myLine(model.state.value, settings); val user = client.current()
+        val situation = Situation(line?.weekOf(top.hicancan.studev.world.CampusDay.now().toLocalDate()), settings.klass, settings.campus,
+            user?.let { it.realName.ifBlank { it.nickname }.ifBlank { null } }, user?.studentId?.ifBlank { null }, memory.takeIf { it.on }?.text)
+        tools.definitions = assistant.toolsFor(situation)
         var said = ""
         try {
             repeat(8) {
@@ -125,8 +132,8 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                 try {
                     val mine = asking
-                    if (mine != null) answer = assistant.askOwn(mine, history, ::onDelta)
-                    else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)) }) { event, data ->
+                    if (mine != null) answer = assistant.askOwn(mine, history, situation, ::onDelta)
+                    else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)); put("situation", situation.toJson()) }) { event, data ->
                         when (event) {
                             "delta" -> onDelta(data["content"]?.jsonPrimitive?.contentOrNull.orEmpty())
                             "message" -> answer = data["message"]?.jsonObject
@@ -199,6 +206,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
     val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
+    if (minding) MemorySettings(memory, onClose = { minding = false }) { next -> memory = next; minding = false }
     if (setting) OwnSettings(own, onClose = { setting = false }) { next -> own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
     renaming?.let { chat ->
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
@@ -233,6 +241,11 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                     }
                     if (chats.isEmpty()) Plain("问过的对话会列在这里，只存在这台设备上。", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp))
                 }
+                HorizontalDivider(color = Ink.line)
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { minding = true; scope.launch { drawer.close() } }.padding(horizontal = 10.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Plain("记忆", 15.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Plain(if (!memory.on) "已关闭" else memory.text.lines().count { it.isNotBlank() }.let { if (it > 0) "记着 $it 件事" else "还没有" }, 13.sp, Ink.muted)
+                }
             }
         }
     }) {
@@ -245,9 +258,9 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                     Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Ink.muted)
                 }
                 DropdownMenu(picking, { picking = false }, containerColor = Ink.paper) {
-                    DropdownMenuItem({ Column { Text("免费额度"); Plain("hicancan 带领学发为爱发电，登录后可用", 12.sp, Ink.muted) } }, { useOwn = false; Models.write(modelPrefs, false, own); picking = false },
+                    DropdownMenuItem({ Column { Text("免费额度 · 为爱发电"); Plain("登录后可用", 12.sp, Ink.muted) } }, { useOwn = false; Models.write(modelPrefs, false, own); picking = false },
                         trailingIcon = { if (asking == null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
-                    DropdownMenuItem({ Column { Text("我的 API"); Plain(if (own.key.isNotBlank()) "${Models.name(own)} · 只存在这台设备上，不用登录" else "填自己的 Key，不用登录", 12.sp, Ink.muted) } },
+                    DropdownMenuItem({ Column { Text("我的 API"); Plain(if (own.key.isNotBlank()) "${Models.name(own)} · 存在这台设备上" else "填上自己的 Key 就能用", 12.sp, Ink.muted) } },
                         { picking = false; if (own.key.isNotBlank()) { useOwn = true; Models.write(modelPrefs, true, own) } else setting = true },
                         trailingIcon = { if (asking != null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
                     HorizontalDivider(color = Ink.line)
@@ -264,7 +277,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
                 }
-                Plain("问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才保存。对话只存在这台设备上。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
+                Plain("可以问课表、地图和校园资料：查安排、找空闲、找空教室、问路、读通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
             }
             return@Column
         }
@@ -286,17 +299,14 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 val calls = replies.flatMap { it["tool_calls"]?.jsonArray.orEmpty() }.map { it.jsonObject }
                 if (calls.isNotEmpty()) {
                     var open by remember(question.id) { mutableStateOf(false) }
-                    val doing = calls.any { results[it.getValue("id").jsonPrimitive.content] == null }
-                    val counts = calls.groupingBy { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content }.eachCount()
-                    Plain((if (doing) "正在" else "已") + counts.entries.joinToString(" · ") { (name, count) -> (STEPS[name] ?: name) + if (count > 1) " ×$count" else "" } + if (open) "  ⌃" else "  ›", 13.5.sp, Ink.muted, modifier = Modifier.clickable { open = !open })
+                    val steps = Steps.of(calls.map { call -> val function = call.getValue("function").jsonObject; Steps.Call(call.getValue("id").jsonPrimitive.content, function.getValue("name").jsonPrimitive.content, function.getValue("arguments").jsonPrimitive.content) },
+                        results.filterValues { it != null }.mapValues { it.value!! })
+                    Plain(Steps.line(steps) + if (open) "  ⌃" else "  ›", 13.5.sp, Ink.muted, modifier = Modifier.clickable { open = !open })
                     if (open) Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        replies.filter { it["role"]?.jsonPrimitive?.content == "assistant" }.forEach { reply ->
-                            if (reply["tool_calls"] != null) reply["content"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { Plain(it, 13.sp) }
-                            reply["tool_calls"]?.jsonArray?.forEach { item ->
-                                val call = item.jsonObject; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
-                                val result = results[call.getValue("id").jsonPrimitive.content]
-                                val failed = (result as? JsonObject)?.get("error")?.jsonPrimitive?.contentOrNull
-                                Plain((STEPS[name] ?: name) + (if (result == null) "……" else failed?.let { "：$it" }.orEmpty()), 13.sp, if (failed != null) marks().danger else Ink.muted)
+                        steps.forEach { step ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Plain(step.label, 13.sp, if (step.failed) marks().danger else Ink.text, weight = FontWeight.Medium)
+                                Plain(step.detail + if (step.pending) "……" else "", 13.sp, if (step.failed) marks().danger else Ink.muted, modifier = Modifier.weight(1f, fill = false))
                             }
                         }
                     }
@@ -305,8 +315,10 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 answer?.let { top.hicancan.studev.world.DocText(it, onLink = { href -> openInApp(href, route) }) }
                 if (last) live?.let { top.hicancan.studev.world.Doc(it, live = true, onLink = { href -> openInApp(href, route) }) } ?: run { if (last) streaming?.let { Plain("$it ●", 16.sp, lineHeight = 26.sp) } }
                 if (answering && streaming == null && calls.none { results[it.getValue("id").jsonPrimitive.content] == null }) Thinking()
-                calls.mapNotNull { call -> val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content; results[call.getValue("id").jsonPrimitive.content]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { name to it } }
-                    .associate { it }.forEach { (name, result) -> Found(name, result, route) }
+                // What it found, to tap: every article it read, the last of anything else.
+                calls.mapNotNull { call -> val id = call.getValue("id").jsonPrimitive.content; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
+                    results[id]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { (if (name == "read") id else name) to (name to it) } }
+                    .toMap().values.forEach { (name, result) -> Found(name, result, route) }
                 val drafts = proposals.filter { proposal -> calls.any { it.getValue("id").jsonPrimitive.content == proposal.call } }
                 if (drafts.isNotEmpty()) Drafts(drafts, saved, onAdd = { keys ->
                     keys.forEach { key ->
@@ -341,7 +353,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val invalid = Models.addressError(base)
     AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("我的 API") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Plain("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 只存在这台设备上，提问从手机直接发给服务商，不经过 StuDev，也不用登录。", 13.sp, Ink.muted, lineHeight = 20.sp)
+            Plain("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台手机上，提问从这里直接发给服务商。", 13.sp, Ink.muted, lineHeight = 20.sp)
             OutlinedTextField(base, { base = it }, label = { Text("接口地址") }, singleLine = true)
             if (invalid != null) Plain(invalid, 12.sp, marks().danger)
             OutlinedTextField(model, { model = it }, label = { Text("模型") }, singleLine = true)
@@ -427,6 +439,19 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
 
 /** What a tool found, as things to tap, as Found in AiApp.tsx: rooms on the map, a route to follow. */
 @Composable private fun Found(name: String, result: JsonElement, route: Route) {
+    if (name == "find_place") {
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            (result as? JsonArray)?.take(3)?.forEach { item ->
+                val place = item.jsonObject
+                Column(Modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, Ink.line, RoundedCornerShape(12.dp)).clickable { route.map(place = place.getValue("id").jsonPrimitive.content) }.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                    Plain(place.getValue("name").jsonPrimitive.content, 14.sp, weight = FontWeight.SemiBold)
+                    Plain(listOfNotNull(place["where"]?.jsonPrimitive?.contentOrNull, place["now"]?.jsonPrimitive?.contentOrNull).joinToString(" · "), 12.sp, Ink.muted)
+                }
+            }
+        }
+        return
+    }
     val value = result as? JsonObject ?: return
     @Composable fun Card(title: String, note: String, onClick: () -> Unit) = Column(Modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, Ink.line, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp)) {
         Plain(title, 14.sp, weight = FontWeight.SemiBold); Plain(note, 12.sp, Ink.muted)
@@ -440,11 +465,28 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
             }
             "route" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
                 val target = android.net.Uri.parse(url).getQueryParameter("nav")
-                val first = value["routes"]?.jsonArray?.firstOrNull()?.jsonObject
-                Card("在地图上导航", first?.let { "${it.getValue("distance_m").jsonPrimitive.double.toInt()} 米 · 约 ${maxOf(1, (it.getValue("duration_s").jsonPrimitive.double / 60).toInt())} 分钟" }.orEmpty()) { target?.let { route.map(nav = it) } }
+                Card("导航到${value["to"]?.jsonPrimitive?.contentOrNull.orEmpty()}", "${value.getValue("distance_m").jsonPrimitive.long} 米 · 约 ${maxOf(1L, kotlin.math.round(value.getValue("duration_s").jsonPrimitive.double / 60).toLong())} 分钟") { target?.let { route.map(nav = it) } }
+            }
+            "read" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
+                Card(value["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), listOfNotNull(value["source"]?.jsonPrimitive?.contentOrNull, value["date"]?.jsonPrimitive?.contentOrNull).joinToString(" · ")) { openInApp(url, route) }
             }
         }
     }
+}
+
+/** What the AI keeps in mind, as MemorySettings in AiApp.tsx: to read, change, empty or turn off. */
+@Composable private fun MemorySettings(memory: Memory, onClose: () -> Unit, onSave: (Memory) -> Unit) {
+    var on by remember { mutableStateOf(memory.on) }
+    var text by remember { mutableStateOf(memory.text) }
+    AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("记忆") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Plain("AI 会记下你让它记的事，也会在聊天里记下你的专业方向、习惯和偏好，回答越来越贴合你。一行一件，随时可改；存在这台设备上，提问时一起发给模型。", 13.sp, Ink.muted, lineHeight = 19.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) { Plain("使用记忆", 15.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f)); Switch(on, { on = it }) }
+            OutlinedTextField(text, { text = it.take(Memory.LIMIT) }, enabled = on, minLines = 5, maxLines = 10, modifier = Modifier.fillMaxWidth(), placeholder = { Text("- 通信工程专业，在准备考研\n- 喜欢早上学习") })
+            Plain(if (on) "${text.length} / ${Memory.LIMIT}" else "关掉后 AI 看不到这些，也不再记新的；内容留着，打开接着用。", 12.sp, Ink.faint)
+        } },
+        confirmButton = { TextButton({ onSave(Memory(on, text.trim())) }) { Text("保存") } },
+        dismissButton = { Row { if (text.isNotEmpty()) TextButton({ text = "" }) { Text("清空") }; TextButton(onClose) { Text("取消") } } })
 }
 
 /** The tasks drafted, in one card, as Drafts in AiApp.tsx: each to tick, then added together. */

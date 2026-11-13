@@ -30,7 +30,7 @@ export function addressError(base: string): string | null {
         const url = new URL(base.trim());
         if (url.protocol === 'https:' && url.hostname && !url.username && !url.password && !url.search && !url.hash) return null;
     } catch { /* The settings form says what is missing. */ }
-    return '请填写完整的 HTTPS 接口地址，不带账号、查询参数或片段。';
+    return '接口地址以 https:// 开头，只写地址本身。';
 }
 /** What one's own model is called in the picker. */
 export const ownName = (own: Own) => own.model || '我的 API';

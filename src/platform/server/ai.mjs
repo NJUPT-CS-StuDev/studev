@@ -1,4 +1,4 @@
-import { Completion, completionRequest, tools } from '../../campus/world/assistant.mjs';
+import { Completion, completionRequest, situationError, tools } from '../../campus/world/assistant.mjs';
 import { fail, readJson, response } from './common.mjs';
 
 /** The model, through EdgeOne Makers Models' gateway: the built-in one that is quickest and calls the tools right. */
@@ -42,6 +42,12 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     if (!env.MAKERS_MODELS_KEY) fail(503, 'AI_NOT_CONFIGURED', 'AI 服务尚未配置。');
     const body = await readJson(context.request, 131072);
     const messages = aiMessages(body.messages);
+    const invalid = situationError(body.situation);
+    if (invalid) fail(400, 'AI_SITUATION_INVALID', invalid);
+    // Who is asking is the account's own, not what the device says.
+    const user = session.user;
+    const situation = { week: body.situation.week, class: body.situation.class, campus: body.situation.campus, memory: body.situation.memory,
+      name: user.realName || user.nickname || null, student: user.studentId || null };
     await repo.throttle('ai-minute', session.user.id, 12);
     // The free quota is shared by everyone; each person has a fair part of it a day, said only once it is used up.
     try { await repo.throttle('ai-day', session.user.id, DAILY, 86400); }
@@ -51,7 +57,7 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
       upstream = await fetcher(GATEWAY, { method: 'POST',
         headers: { Authorization: `Bearer ${env.MAKERS_MODELS_KEY}`, 'Content-Type': 'application/json' },
         signal: AbortSignal.any([AbortSignal.timeout(90000), ...(context.request.signal ? [context.request.signal] : [])]),
-        body: JSON.stringify(completionRequest(AI_MODEL, messages, now())) });
+        body: JSON.stringify(completionRequest(AI_MODEL, messages, situation, now())) });
     } catch { fail(502, 'AI_UPSTREAM_FAILED', 'AI 暂时无法响应，请稍后重试。'); }
     if (!upstream.ok || !upstream.body) fail(upstream.status === 429 ? 429 : 502, upstream.status === 429 ? 'AI_QUOTA' : 'AI_UPSTREAM_FAILED', upstream.status === 429 ? '这个月的免费额度用完了，下个月恢复；也可以在模型里填自己的 API 继续用。' : 'AI 暂时无法响应，请稍后重试。');
     return response.stream(relay(upstream.body));

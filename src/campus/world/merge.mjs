@@ -15,7 +15,8 @@ export function mergeTasks(mine, theirs) {
 /** The parts of one's timetable settings that go with one: each part is merged whole, by when it last changed. */
 export const SECTIONS = ['class', 'campus', 'timetable', 'examAttendance', 'examReminders', 'labs', 'layers', 'events', 'run'];
 
-// Preferences kept before sync existed have no timestamp. They travel too, but never replace a later explicit choice.
+// A part with no time it was changed counts as changed at the start of time: it travels, and any part changed at a
+// known time wins over it.
 export const INITIAL_MODIFIED = '1970-01-01T00:00:00.000Z';
 export function initialModified(settings) {
     const modified = { ...settings.modified };

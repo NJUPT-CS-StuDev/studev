@@ -17,7 +17,10 @@ import { dueOn, timeBounds, LAYER_ORDER } from '@/world/events';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
 import tools from '@/world/tools.json';
 import { chatGroups, titleOf } from '@/ai/chats';
-import { Completion, completionRequest } from '@/world/assistant.mjs';
+import { Completion, completionRequest, type Situation } from '@/world/assistant.mjs';
+import { findPlaces, placeMeant } from '../../map/model/find';
+import { stepsLine, stepsOf } from '../../ai/steps';
+import { remembered } from '../../ai/memory';
 import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
@@ -76,11 +79,10 @@ const hourFacts = JSON.parse(readFileSync(`public/data/${release.version}/hours.
 // The buildings and places of the campus, as home suggestions choose among them, and how each entity is named on the map.
 const places = placeRows.filter(place => (place.kind === 'building' || place.kind === 'place') && place.id.startsWith('仙林/')).map(place => ({ ...place, ...(hourFacts[place.id] ? { hours: hourFacts[place.id]!.hours } : {}) }));
 const placeById = new Map(placeRows.map(place => [place.id, place]));
-const named = placeRows.filter(place => ['campus', 'building', 'place'].includes(place.kind));
-const labels = {
-    entities: named.map(({ id, kind, parent, names, category, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(category ? { category } : {}), ...(tier ? { tier } : {}), sources, routing })),
-    cases: named.filter(place => place.kind !== 'campus').map(place => ({ id: place.id, rule: labelRule(place, placeById), teaching: place.kind === 'building' ? labelRule(place, placeById, true) : null })),
-};
+// The map's entities as far as naming and finding them needs, for Android to read without the data release.
+const entities = placeRows.filter(place => ['campus', 'building', 'place', 'room'].includes(place.kind))
+    .map(({ id, kind, parent, names, category, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(category ? { category } : {}), ...(tier ? { tier } : {}), sources, routing }));
+const labels = placeRows.filter(place => place.kind === 'building' || place.kind === 'place').map(place => ({ id: place.id, rule: labelRule(place, placeById), teaching: place.kind === 'building' ? labelRule(place, placeById, true) : null }));
 const from: [number, number] = [118.9262, 32.1146];
 const recommend = [1, 3, 6, 7].flatMap(day => [6, 8, 12, 15, 17, 18, 20, 23].map(hour => ({ day, hour, minute: 30, expected: recommendations(places, { day, hour, minute: 30 }, from).map(({ place, status }) => ({ id: place.id, state: status.state })) })));
 const hoursCases = [{ week: { '5': [['08:00', '12:00'], ['13:30', '17:00']] } }, { week: { '7': [['22:00', '02:00']] } }, { week: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(day => [String(day), [['00:00', '00:00']]])) }].flatMap(hours => [[5, 8, 0], [5, 11, 40], [5, 12, 0], [5, 13, 30], [1, 1, 50], [1, 2, 0], [7, 22, 0], [3, 12, 0]].map(([day, hour, minute]) => ({ hours, day, minute: hour! * 60 + minute!, state: openingStatus(hours as Place['hours'], { day: day!, hour: hour!, minute: minute! }).state })));
@@ -234,7 +236,13 @@ const streams = [
     [frame({ delta: { tool_calls: [{ index: 0, id: 'c', function: { name: 'delete_user', arguments: '{}' } }] }, finish_reason: 'tool_calls' })],
 ].map(lines => { const completion = new Completion(); return { lines, pieces: lines.map(line => completion.take(line)), result: completion.result() }; });
 const askAt = Date.parse('2026-11-13T16:30:00Z');
-const assistantCases = { streams, at: askAt, request: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], askAt),
+// Who is asking and when: signed in with a class and a memory, signed out without a class, memory turned off.
+const situations: Situation[] = [
+    { week: 11, class: 'B240402', campus: '仙林', name: '吴双灿', student: 'B24040213', memory: '- 在准备考研\n- 喜欢早上学习' },
+    { week: null, class: null, campus: '三牌楼', name: null, student: null, memory: '' },
+    { week: 3, class: 'B260424', campus: '仙林', name: '同学', student: null, memory: null },
+];
+const assistantCases = { streams, at: askAt, situations: situations.map(situation => ({ situation, request: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], situation, askAt) })),
     addresses: ['https://api.deepseek.com', 'https://example.org/v1/', ' https://example.org/v1/chat/completions ', 'http://example.org', 'https://user:pass@example.org', 'https://example.org?token=x', 'not a URL'].map(base => ({ base, endpoint: endpoint(base), invalid: addressError(base) !== null })) };
 // Real timetable choices made before sync existed, then a class change and a cleared lab choice elsewhere.
 const oldSettings: Preferences = {
@@ -251,5 +259,22 @@ const settingsTheirs = { class: { value: schedules[1]!.class, modified: '2026-11
 const settingsMerged = mergeSettings(settingsMine, settingsTheirs);
 const settingsSync = { original: oldSettings, initial: settingsMine, theirs: settingsTheirs, merged: settingsMerged, taken: settingsTaken(initialSettings, settingsMerged) };
 const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// Places found by what people call them, and the one a route means.
+const finding = { queries: ['教三', '教三楼', '三食堂', '三食堂门口', '图书馆', '菜鸟驿站', '地铁站', '教3-301', 'luckin', '东门', '麦当劳', '不存在的地方'].map(query => ({ query, found: findPlaces(placeRows, query).map(place => place.id) })),
+    meant: ['仙林/教3', '教三', '三食堂门口', '咖啡', '不存在的地方'].map(said => { try { return { said, id: placeMeant(placeRows, placeById, said).id }; } catch (failure) { return { said, error: (failure as Error).message }; } }) };
+// The steps an answer took, as said under the question: the same call twice is one step, a failure says why.
+const stepCalls = [
+    { id: 's1', name: 'search', arguments: JSON.stringify({ query: '补考报名', in: '通知' }) }, { id: 's2', name: 'read', arguments: JSON.stringify({ id: '217f18e4a94128cf' }) },
+    { id: 's3', name: 'find_place', arguments: JSON.stringify({ query: '教三' }) }, { id: 's4', name: 'route', arguments: JSON.stringify({ from: '教三', to: '图书馆' }) },
+    { id: 's5', name: 'timeline', arguments: JSON.stringify({ from: '2026-11-13', to: '2026-11-19' }) }, { id: 's6', name: 'free_rooms', arguments: JSON.stringify({ date: '2026-11-14', minute: 840, minutes: 120, building: '教三' }) },
+    { id: 's7', name: 'suggest_slots', arguments: JSON.stringify({ from: '2026-11-16', to: '2026-11-20', minutes: 60 }) }, { id: 's8', name: 'search', arguments: JSON.stringify({ query: '补考报名', in: '通知' }) },
+    { id: 's9', name: 'remember', arguments: JSON.stringify({ fact: '在准备考研' }) }, { id: 's10', name: 'list_tasks', arguments: '{}' }, { id: 's11', name: 'propose_task', arguments: JSON.stringify({ title: '复习高数' }) },
+    { id: 's12', name: 'find_place', arguments: JSON.stringify({ query: '火星' }) }, { id: 's13', name: 'search', arguments: '{"query":' },
+];
+const stepResults: [string, unknown][] = [['s1', [{ id: 'a' }, { id: 'b' }]], ['s2', { title: '关于补考报名的通知' }], ['s3', [{ name: '教3' }]], ['s4', { from: '教3', to: '图书馆', distance_m: 652.4 }], ['s5', []], ['s6', { rooms: [{}, {}, {}] }],
+    ['s7', [{}, {}]], ['s8', [{ id: 'a' }]], ['s9', { remembered: true }], ['s10', [{}, {}, {}, {}]], ['s12', []], ['s13', { error: '工具参数无效。' }]];
+const stepCases = [stepCalls, stepCalls.slice(0, 4)].map(calls => { const results = new Map(stepResults.filter(([id]) => calls.some(call => call.id === id) && (calls.length > 4 || id !== 's4'))); const steps = stepsOf(calls, results); return { calls, results: Object.fromEntries(results), steps, line: stepsLine(steps) }; });
+// Remembering: a line each, the same thing again changes nothing, an empty thing is refused.
+const memoryCases = [['', '在准备考研'], ['- 在准备考研', ' 在准备考研。 '], ['- 在准备考研\n\n', '喜欢  早上学习'], ['', '   ']].map(([text, fact]) => { try { return { text, fact, next: remembered(text!, fact!) }; } catch (failure) { return { text, fact, error: (failure as Error).message }; } });
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

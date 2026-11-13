@@ -9,20 +9,49 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
 /**
- * The AI's one contract, as src/campus/world/assistant.mjs: what the model is told (assistant.json, today's date filled
- * in) and the tools it may call (tools.json), both read from the assets the build copies from the web's own files.
+ * Who is asking and when, as far as this device knows, as Situation in src/campus/world/assistant.mjs: the teaching week
+ * (null outside one), the class and campus chosen in “我”, the account's name and student number (null when not signed
+ * in), and the memory one keeps (null when it is turned off).
  */
-class Assistant(val prompt: List<String>, val tools: List<JsonObject>) {
+data class Situation(val week: Int?, val klass: String?, val campus: String, val name: String?, val student: String?, val memory: String?) {
+    /** What the platform is told; it says who is asking itself. */
+    fun toJson() = buildJsonObject { put("week", week); put("class", klass); put("campus", campus); put("memory", memory) }
+}
+
+/**
+ * The AI's one contract, as src/campus/world/assistant.mjs: what the model is told (assistant.json, filled in with the
+ * moment and who is asking) and the tools it may call (tools.json), both read from the assets the build copies from
+ * the web's own files.
+ */
+class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private val names = tools.map { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content }.toSet()
+    private fun lines(key: String) = contract.getValue(key).jsonArray.map { it.jsonPrimitive.content }
+    private fun phrase(group: String, key: String) = contract.getValue(group).jsonObject.getValue(key).jsonPrimitive.content
+    private fun fill(text: String, values: Map<String, Any?>) = Regex("\\{(\\w+)\\}").replace(text) { values[it.groupValues[1]].toString() }
+    val diagrams = contract.getValue("diagrams").jsonArray.map { it.jsonPrimitive.content }
+
+    /** Who the model is talking to, in a phrase: 仙林校区 B240402 班的吴双灿（学号 B24040213）. */
+    private fun who(s: Situation): String {
+        val where = fill(phrase("me", if (s.klass != null) "class" else "noClass"), mapOf("campus" to s.campus, "class" to s.klass))
+        return where + if (s.name != null) fill(phrase("me", "named"), mapOf("name" to s.name, "student" to (s.student ?: "未知"))) else phrase("me", "anyone")
+    }
 
     /** What the model is told before the conversation. */
-    fun instructions(now: Instant = Instant.now()) = prompt.joinToString("\n").replace("{date}", now.atZone(NANJING).toLocalDate().toString())
+    fun instructions(s: Situation, now: Instant = Instant.now()): String {
+        val week = if (s.week == null) phrase("week", "out") else fill(phrase("week", "in"), mapOf("week" to s.week))
+        val values = mapOf("now" to nanjingNow(now), "week" to week, "me" to who(s), "diagrams" to diagrams.joinToString("、"))
+        val all = lines("prompt").map { fill(it, values) } + if (s.memory != null) lines("memory").map { fill(it, mapOf("memory" to s.memory.trim().ifEmpty { "（还没有）" })) } else emptyList()
+        return all.joinToString("\n")
+    }
+
+    /** The tools offered: all of them, but `remember` only to someone who keeps a memory. */
+    fun toolsFor(s: Situation) = if (s.memory == null) tools.filter { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content != "remember" } else tools
 
     /** The request a provider is sent, OpenAI's chat completions as every provider speaks it. */
-    fun request(model: String, messages: List<JsonObject>, now: Instant = Instant.now()) = buildJsonObject {
+    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now()) = buildJsonObject {
         put("model", model); put("stream", true); put("max_tokens", 2048); put("temperature", 0.2)
-        put("tools", JsonArray(tools))
-        put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(now)) }) + messages))
+        put("tools", JsonArray(toolsFor(s)))
+        put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(s, now)) }) + messages))
     }
 
     /** A streamed answer read line by line, as Completion in assistant.mjs. */
@@ -66,7 +95,7 @@ class Assistant(val prompt: List<String>, val tools: List<JsonObject>) {
     }
 
     /** Asking with one's own key, straight from this device: no sign-in, nothing through the platform. */
-    suspend fun askOwn(own: Own, messages: List<JsonObject>, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
+    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
         Models.addressError(own.base)?.let { throw IllegalStateException(it) }
         val connection = try { URI(Models.endpoint(own.base)).toURL().openConnection() as HttpURLConnection } catch (e: Exception) { throw IllegalStateException("你填的接口地址无效。") }
         try {
@@ -76,14 +105,14 @@ class Assistant(val prompt: List<String>, val tools: List<JsonObject>) {
             connection.setRequestProperty("Accept", "text/event-stream"); connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer ${own.key}")
             val status = try {
-                connection.outputStream.use { it.write(request(own.model, messages).toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use { it.write(request(own.model, messages, situation).toString().toByteArray(Charsets.UTF_8)) }
                 connection.responseCode
             } catch (e: java.io.IOException) { throw IllegalStateException("连不上你填的接口地址，检查一下地址和网络。") }
             if (status !in 200..299) {
                 val said = connection.errorStream?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
                 val detail = runCatching { Json.parseToJsonElement(said).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull }.getOrNull()
                 throw IllegalStateException(when (status) {
-                    401 -> "你的 API Key 无效，在模型里改一下。"; 402 -> "你的 API 余额不足。"
+                    401 -> "API Key 不对，在“我的 API”里改一下。"; 402 -> "你的 API 余额不足。"
                     404 -> "接口或模型不存在" + (detail?.let { "：$it" } ?: "，检查地址和模型名。"); 429 -> "你的 API 请求太频繁，稍后再试。"
                     else -> "你的 API 没有回答（$status）" + (detail?.let { "：$it" } ?: "")
                 })
@@ -98,10 +127,13 @@ class Assistant(val prompt: List<String>, val tools: List<JsonObject>) {
 
     companion object {
         val NANJING: ZoneId = ZoneId.of("Asia/Shanghai")
-        fun of(prompt: JsonObject, tools: JsonArray) = Assistant(prompt.getValue("prompt").jsonArray.map { it.jsonPrimitive.content }, tools.map { it.jsonObject })
+        private val WEEKDAYS = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
+        /** The moment in Nanjing, as people say it: 2026年11月13日 周五 16:40. */
+        fun nanjingNow(now: Instant): String { val at = now.atZone(NANJING); return "%d年%d月%d日 %s %02d:%02d".format(at.year, at.monthValue, at.dayOfMonth, WEEKDAYS[at.dayOfWeek.value], at.hour, at.minute) }
+        fun of(contract: JsonObject, tools: JsonArray) = Assistant(contract, tools.map { it.jsonObject })
         fun load(context: android.content.Context) = of(
-            Json.parseToJsonElement(context.assets.open("assistant/assistant.json").bufferedReader().use { it.readText() }).jsonObject,
-            Json.parseToJsonElement(context.assets.open("assistant/tools.json").bufferedReader().use { it.readText() }).jsonArray)
+            Json.parseToJsonElement(context.assets.open("world/assistant.json").bufferedReader().use { it.readText() }).jsonObject,
+            Json.parseToJsonElement(context.assets.open("world/tools.json").bufferedReader().use { it.readText() }).jsonArray)
     }
 }
 
@@ -115,8 +147,8 @@ object Models {
     fun addressError(base: String): String? = runCatching {
         val uri = URI(base.trim())
         if (uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.userInfo == null && uri.rawQuery == null && uri.rawFragment == null) null
-        else "请填写完整的 HTTPS 接口地址，不带账号、查询参数或片段。"
-    }.getOrElse { "请填写完整的 HTTPS 接口地址，不带账号、查询参数或片段。" }
+        else "接口地址以 https:// 开头，只写地址本身。"
+    }.getOrElse { "接口地址以 https:// 开头，只写地址本身。" }
     fun name(own: Own) = own.model.ifBlank { "我的 API" }
     fun read(prefs: android.content.SharedPreferences): Pair<Boolean, Own> {
         val own = Own(prefs.getString("base", null) ?: STARTING.base, prefs.getString("model", null) ?: STARTING.model, prefs.getString("key", null).orEmpty())
