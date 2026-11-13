@@ -384,16 +384,28 @@ export default function AiApp() {
 
 /** What the AI keeps in mind: to read, change, empty or turn off. */
 function MemorySettings({ memory, onClose, onSave }: { memory: Memory; onClose: () => void; onSave: (memory: Memory) => void }) {
-    const [value, setValue] = useState(memory);
+    // Shown as plain lines; kept as a list, one `- ` item a line, as the AI reads and writes it.
+    const [value, setValue] = useState(() => ({ ...memory, text: memory.text.replace(/^- /gm, '') }));
+    const count = value.text.split('\n').filter(line => line.trim()).length;
+    const kept = () => value.text.split('\n').map(line => line.trim()).filter(Boolean).map(line => `- ${line}`).join('\n');
     return <div className="ai-modal" role="dialog" aria-label="记忆" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-        <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); onSave({ on: value.on, text: value.text.trim() }); }}>
-            <h2>记忆</h2>
-            <p className="fine">AI 会记下你让它记的事，也会在聊天里记下你的专业方向、习惯和偏好，回答越来越贴合你。一行一件，随时可改；存在这台设备上，提问时一起发给模型。</p>
-            <label className="ai-switch"><input type="checkbox" checked={value.on} onChange={event => setValue(current => ({ ...current, on: event.target.checked }))} />使用记忆</label>
-            <textarea className="ai-memory" value={value.text} maxLength={MEMORY_LIMIT} disabled={!value.on} rows={8} placeholder={'- 通信工程专业，在准备考研\n- 喜欢早上学习'} onChange={event => setValue(current => ({ ...current, text: event.target.value }))} />
-            <small className="fine">{value.on ? `${value.text.length} / ${MEMORY_LIMIT}` : '关掉后 AI 看不到这些，也不再记新的；内容留着，打开接着用。'}</small>
+        <form className="ai-modal-box ai-mind" onSubmit={event => { event.preventDefault(); onSave({ on: value.on, text: kept() }); }}>
+            <header className="ai-mind-head">
+                <div><h2>记忆</h2><p>AI 记下你的专业、习惯和偏好，回答会越来越贴合你。</p></div>
+                <label className="ai-toggle" title={value.on ? '关闭记忆' : '打开记忆'}>
+                    <input type="checkbox" role="switch" aria-label="使用记忆" checked={value.on} onChange={event => setValue(current => ({ ...current, on: event.target.checked }))} /><span />
+                </label>
+            </header>
+            {value.on
+                ? <div className="ai-mind-body">
+                    <textarea className="ai-memory" value={value.text} maxLength={MEMORY_LIMIT} rows={5} autoFocus={!value.text}
+                        placeholder={'一行一件，比如：\n通信工程专业，在准备考研\n喜欢早上学习'} onChange={event => setValue(current => ({ ...current, text: event.target.value }))} />
+                    <div className="ai-mind-foot"><span>{count ? `记着 ${count} 件事` : '聊天时说“记住……”，AI 也会写进来'}</span>{value.text.length > MEMORY_LIMIT * 0.8 && <span>{value.text.length} / {MEMORY_LIMIT}</span>}</div>
+                </div>
+                : <div className="ai-mind-off">记忆已关闭，AI 看不到这些内容，也不再记新的。{count > 0 && `记着的 ${count} 件事还在，打开就接着用。`}</div>}
+            <p className="ai-mind-note">只存在这台设备上，提问时随问题一起发给模型。</p>
             <div className="ai-modal-btns">
-                {value.text && <button type="button" className="ai-pill" onClick={() => setValue(current => ({ ...current, text: '' }))}>清空</button>}
+                {value.on && value.text && <button type="button" className="ai-link danger" onClick={() => setValue(current => ({ ...current, text: '' }))}>全部清空</button>}
                 <span />
                 <button type="button" className="ai-pill" onClick={onClose}>取消</button>
                 <button className="ai-pill go">保存</button>

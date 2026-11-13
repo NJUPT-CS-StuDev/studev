@@ -477,16 +477,32 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
 /** What the AI keeps in mind, as MemorySettings in AiApp.tsx: to read, change, empty or turn off. */
 @Composable private fun MemorySettings(memory: Memory, onClose: () -> Unit, onSave: (Memory) -> Unit) {
     var on by remember { mutableStateOf(memory.on) }
-    var text by remember { mutableStateOf(memory.text) }
-    AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("记忆") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Plain("AI 会记下你让它记的事，也会在聊天里记下你的专业方向、习惯和偏好，回答越来越贴合你。一行一件，随时可改；存在这台设备上，提问时一起发给模型。", 13.sp, Ink.muted, lineHeight = 19.sp)
-            Row(verticalAlignment = Alignment.CenterVertically) { Plain("使用记忆", 15.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f)); Switch(on, { on = it }) }
-            OutlinedTextField(text, { text = it.take(Memory.LIMIT) }, enabled = on, minLines = 5, maxLines = 10, modifier = Modifier.fillMaxWidth(), placeholder = { Text("- 通信工程专业，在准备考研\n- 喜欢早上学习") })
-            Plain(if (on) "${text.length} / ${Memory.LIMIT}" else "关掉后 AI 看不到这些，也不再记新的；内容留着，打开接着用。", 12.sp, Ink.faint)
+    // Shown as plain lines; kept as a list, one `- ` item a line, as the AI reads and writes it.
+    var text by remember { mutableStateOf(memory.text.replace(Regex("(?m)^- "), "")) }
+    val count = text.lines().count { it.isNotBlank() }
+    AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper,
+        title = { Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) { Text("记忆"); Plain("AI 记下你的专业、习惯和偏好，回答会越来越贴合你。", 13.sp, Ink.muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp)) }
+            Switch(on, { on = it }, modifier = Modifier.padding(start = 12.dp))
         } },
-        confirmButton = { TextButton({ onSave(Memory(on, text.trim())) }) { Text("保存") } },
-        dismissButton = { Row { if (text.isNotEmpty()) TextButton({ text = "" }) { Text("清空") }; TextButton(onClose) { Text("取消") } } })
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (on) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ink.text.copy(alpha = .05f))) {
+                    androidx.compose.foundation.text.BasicTextField(text, { text = it.take(Memory.LIMIT) }, Modifier.fillMaxWidth().heightIn(min = 140.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, lineHeight = 25.sp, color = Ink.text),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.brand),
+                        decorationBox = { inner -> Box { if (text.isEmpty()) Plain("一行一件，比如：\n通信工程专业，在准备考研\n喜欢早上学习", 15.sp, Ink.faint, lineHeight = 25.sp); inner() } })
+                    Plain(if (count > 0) "记着 $count 件事" else "聊天时说“记住……”，AI 也会写进来", 12.sp, Ink.muted, modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp))
+                }
+            } else {
+                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Ink.text.copy(alpha = .05f)).padding(16.dp)) {
+                    Plain("记忆已关闭，AI 看不到这些内容，也不再记新的。" + if (count > 0) "记着的 $count 件事还在，打开就接着用。" else "", 13.5.sp, Ink.muted, lineHeight = 21.sp)
+                }
+            }
+            Plain("只存在这台设备上，提问时随问题一起发给模型。", 12.sp, Ink.faint)
+        } },
+        confirmButton = { TextButton({ onSave(Memory(on, text.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n") { "- $it" })) }) { Text("保存") } },
+        dismissButton = { Row { if (on && text.isNotEmpty()) TextButton({ text = "" }) { Text("全部清空", color = Ink.muted) }; TextButton(onClose) { Text("取消") } } })
 }
 
 /** The tasks drafted, in one card, as Drafts in AiApp.tsx: each to tick, then added together. */
