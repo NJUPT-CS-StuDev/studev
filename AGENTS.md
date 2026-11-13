@@ -16,7 +16,8 @@ its references and from the bindings that relate them. The campus facts release
 holds all non-spatial campus facts (teaching, exams, rooms in use, school content,
 the calendar rule) and references njupt-map space ids. The digest merges one
 njupt-map release and one campus facts release. Clients render and interact. The
-only generic kernels are `wayfind` (routing, guidance) and `wasm-search` (search);
+generic kernels are `wayfind` (routing, guidance), `wasm-search` (search), and
+`docstream` (document parsing, math typesetting and diagram layout);
 institutional time is campus data plus interpreting code here, not a kernel.
 
 The logical model is complete while physical encoding stays minimal: encode

@@ -1,13 +1,34 @@
 // A document as docstream reads it, drawn as the page's own elements: one reading of Markdown for the web, the app
 // and the blog alike (the kernel is Rust; see NJUPT-CS-StuDev/docstream). Each top-level block is drawn once and
-// kept while its key is the same, so text streaming in redraws only the block being written.
+// kept while its key is the same, so text streaming in redraws only the block being written. Formulas are typeset and
+// Mermaid diagrams laid out by the same kernel, as SVG in the colour of the text around them.
 import { memo, useMemo, useState } from 'react';
-import { initialize, read, Stream, type Block, type Inline, type Keyed, type Update } from 'docstream';
+import { diagram, initialize, math, read, Stream, type Block, type Inline, type Keyed, type Update } from 'docstream';
 
 let ready: Promise<void> | undefined;
 /** The kernel, loaded once. */
 export const docReady = () => ready ??= initialize();
 export { read as readDoc, Stream as DocStream, type Keyed, type Update };
+
+/** What the kernel drew, kept by what it was drawn from: a streamed answer draws the same formula many times over. */
+const drawn = new Map<string, string | undefined>();
+function remember(key: string, draw: () => string | undefined) {
+    if (drawn.has(key)) return drawn.get(key);
+    if (drawn.size > 400) drawn.delete(drawn.keys().next().value!);
+    const svg = draw();
+    drawn.set(key, svg);
+    return svg;
+}
+
+// The kernel's SVG: its words are escaped there, and nothing else in it comes from the text.
+function Tex({ tex, display }: { tex: string; display: boolean }) {
+    const svg = remember(`${display ? 'D' : 'T'}${tex}`, () => math(tex, display))!;
+    return <span className={display ? 'doc-math' : 'doc-tex'} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+function Diagram({ text }: { text: string }) {
+    const svg = remember(`M${text}`, () => diagram(text));
+    return svg ? <figure className="doc-diagram" dangerouslySetInnerHTML={{ __html: svg }} /> : <CodeView language="mermaid" text={text} />;
+}
 
 const ALERTS = { note: '说明', tip: '提示', important: '重要', warning: '注意', caution: '小心' } as const;
 
@@ -24,7 +45,7 @@ function InlineView({ inline }: { inline: Inline }) {
         case 'superscript': return <sup><Inlines inlines={inline.children} /></sup>;
         case 'subscript': return <sub><Inlines inlines={inline.children} /></sub>;
         case 'code': return <code>{inline.text}</code>;
-        case 'math': return <code className="tex">{inline.tex}</code>;
+        case 'math': return <Tex tex={inline.tex} display={inline.display} />;
         case 'link': {
             const inside = inline.href.startsWith('/');
             return <a href={inline.href} {...(inside ? {} : { target: '_blank', rel: 'noreferrer' })}><Inlines inlines={inline.children} /></a>;
@@ -54,8 +75,8 @@ function BlockView({ block }: { block: Block }) {
                 {item.blocks.map((inner, i) => <BlockView key={i} block={inner} />)}</li>);
             return block.ordered ? <ol start={block.start}>{items}</ol> : <ul>{items}</ul>;
         }
-        case 'code': return <CodeView language={block.language} text={block.text} />;
-        case 'math': return <pre className="doc-math tex">{block.tex}</pre>;
+        case 'code': return block.language === 'mermaid' ? <Diagram text={block.text} /> : <CodeView language={block.language} text={block.text} />;
+        case 'math': return <Tex tex={block.tex} display />;
         case 'table': return <div className="doc-table"><table>
             <thead><tr>{block.head.map((cell, at) => <th key={at} style={{ textAlign: block.align[at] === 'none' ? undefined : block.align[at] }}><Inlines inlines={cell} /></th>)}</tr></thead>
             <tbody>{block.rows.map((row, r) => <tr key={r}>{row.map((cell, at) => <td key={at} style={{ textAlign: block.align[at] === 'none' ? undefined : block.align[at] }}><Inlines inlines={cell} /></td>)}</tr>)}</tbody>

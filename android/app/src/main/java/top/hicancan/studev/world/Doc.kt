@@ -3,10 +3,13 @@ package top.hicancan.studev.world
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -24,6 +27,7 @@ import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.*
 import top.hicancan.studev.app.Ink
@@ -58,8 +62,9 @@ private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull
 @Composable private fun InlineText(inlines: List<JsonObject>, size: Float = 15.5f, weight: FontWeight = FontWeight.Normal, color: Color = Ink.text, caret: Boolean = false, onLink: (String) -> Unit, align: TextAlign? = null) {
     val code = Ink.sunken; val brand = Ink.brand
     val uri = LocalUriHandler.current
-    val text = remember(inlines, caret, code, brand) {
-        buildAnnotatedString {
+    val (text, drawings) = remember(inlines, caret, code, brand, size, color, onLink, uri) {
+        val drawings = mutableMapOf<String, InlineTextContent>()
+        val text = buildAnnotatedString {
             fun walk(items: List<JsonObject>) {
                 for (inline in items) when (inline.type) {
                     "text" -> append(inline.str("text"))
@@ -70,7 +75,22 @@ private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull
                     "superscript" -> withStyle(SpanStyle(baselineShift = BaselineShift.Superscript, fontSize = (size * .72f).sp)) { walk(inline.list("children")) }
                     "subscript" -> withStyle(SpanStyle(baselineShift = BaselineShift.Subscript, fontSize = (size * .72f).sp)) { walk(inline.list("children")) }
                     "code" -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = code, fontSize = (size * .88f).sp)) { append(" ${inline.str("text")} ") }
-                    "math" -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontStyle = FontStyle.Italic, fontSize = (size * .9f).sp)) { append(inline.str("tex")) }
+                    "math" -> {
+                        val tex = inline.str("tex")
+                        val formula = Drawings.formula(tex, inline["display"]?.jsonPrimitive?.boolean == true)
+                        val id = "math-${drawings.size}"
+                        drawings[id] = InlineTextContent(Placeholder(
+                            width = formula.width.coerceAtLeast(.001f).em,
+                            height = formula.lineHeight().em,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        )) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                val em = size.sp.toPx()
+                                drawFormula(formula, em, formula.lineHeight() * em / 2f + TEXT_MIDDLE * em, color)
+                            }
+                        }
+                        appendInlineContent(id, tex.ifEmpty { "公式" })
+                    }
                     "link" -> {
                         val href = inline.str("href")
                         withLink(LinkAnnotation.Clickable(href, TextLinkStyles(SpanStyle(color = brand, textDecoration = TextDecoration.Underline))) { if (href.startsWith("/")) onLink(href) else runCatching { uri.openUri(href) } }) { walk(inline.list("children")) }
@@ -82,8 +102,9 @@ private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull
             walk(inlines)
             if (caret) withStyle(SpanStyle(color = brand)) { append(" ▍") }
         }
+        text to drawings.toMap()
     }
-    Text(text, if (align != null) Modifier.fillMaxWidth() else Modifier, color = color, style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.7f).sp, fontWeight = weight), textAlign = align)
+    Text(text, if (align != null) Modifier.fillMaxWidth() else Modifier, color = color, style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.7f).sp, fontWeight = weight), textAlign = align, inlineContent = drawings)
 }
 
 @Composable private fun BlockView(block: JsonObject, onLink: (String) -> Unit, caret: Boolean = false) {
@@ -123,17 +144,22 @@ private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull
             }
         }
         "code" -> {
-            val clipboard = LocalClipboardManager.current
-            var copied by remember { mutableStateOf(false) }
-            Column(Modifier.fillMaxWidth().clip(shape).border(1.dp, Ink.line, shape)) {
-                Row(Modifier.fillMaxWidth().background(Ink.sunken).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Plain(block.str("language").ifEmpty { "代码" }, 12.sp, Ink.muted, modifier = Modifier.weight(1f))
-                    Plain(if (copied) "已复制" else "复制", 12.sp, Ink.muted, modifier = Modifier.clickable { clipboard.setText(AnnotatedString(block.str("text"))); copied = true })
+            val drawing = if (block.str("language") == "mermaid") Drawings.diagram(block.str("text")) else null
+            if (drawing != null) {
+                DiagramView(drawing, source = block.str("text"))
+            } else {
+                val clipboard = LocalClipboardManager.current
+                var copied by remember { mutableStateOf(false) }
+                Column(Modifier.fillMaxWidth().clip(shape).border(1.dp, Ink.line, shape)) {
+                    Row(Modifier.fillMaxWidth().background(Ink.sunken).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Plain(block.str("language").ifEmpty { "代码" }, 12.sp, Ink.muted, modifier = Modifier.weight(1f))
+                        Plain(if (copied) "已复制" else "复制", 12.sp, Ink.muted, modifier = Modifier.clickable { clipboard.setText(AnnotatedString(block.str("text"))); copied = true })
+                    }
+                    Text(block.str("text"), Modifier.horizontalScroll(rememberScrollState()).padding(12.dp), color = Ink.text, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp), softWrap = false)
                 }
-                Text(block.str("text"), Modifier.horizontalScroll(rememberScrollState()).padding(12.dp), color = Ink.text, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp), softWrap = false)
             }
         }
-        "math" -> Text(block.str("tex"), Modifier.fillMaxWidth().clip(shape).background(Ink.sunken).horizontalScroll(rememberScrollState()).padding(12.dp), color = Ink.text, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp), softWrap = false)
+        "math" -> MathBlock(block.str("tex"), 15.5.sp)
         "table" -> {
             val head = block.getValue("head").jsonArray.map { cell -> cell.jsonArray.map { it.jsonObject } }
             val rows = block.getValue("rows").jsonArray.map { row -> row.jsonArray.map { cell -> cell.jsonArray.map { it.jsonObject } } }

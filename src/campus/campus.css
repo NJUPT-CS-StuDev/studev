@@ -428,7 +428,6 @@
 .doc strong{font-weight:650}.doc a{color:var(--brand);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
 .doc mark{background:color-mix(in srgb,#f5c542 38%,transparent);color:inherit;border-radius:3px;padding:0 2px}
 .doc code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;padding:.1em .35em;border-radius:5px;background:var(--surface-sunken)}
-.doc code.tex{font-style:italic}
 .doc ul,.doc ol{margin:0 0 .75em;padding-left:1.4em}.doc li{margin:.2em 0}.doc li>p{margin:0}.doc li>ul,.doc li>ol{margin:.2em 0 0}
 .doc li.task{list-style:none;position:relative}.doc .doc-check{position:absolute;left:-1.35em;top:.38em;width:14px;height:14px;border-radius:4px;box-shadow:inset 0 0 0 1.5px var(--faint)}.doc .doc-check.on{background:var(--brand);box-shadow:none}
 .doc blockquote{margin:0 0 .75em;padding:.1em 0 .1em .9em;border-left:3px solid var(--line);color:var(--muted)}
@@ -436,7 +435,9 @@
 .doc .doc-alert.warning,.doc .doc-alert.caution{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 7%,transparent)}.doc .doc-alert.warning>b,.doc .doc-alert.caution>b{color:var(--danger)}
 .doc .doc-code{margin:0 0 .75em;border-radius:10px;border:1px solid var(--line);overflow:hidden}.doc .doc-code-h{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:12px;color:var(--muted);background:var(--surface-sunken)}.doc .doc-code-h button{font-size:12px;color:var(--muted)}
 .doc .doc-code pre{margin:0;padding:10px 12px;overflow-x:auto;font-size:13px;line-height:1.6}.doc .doc-code pre code{background:none;padding:0;font-size:inherit}
-.doc .doc-math{margin:0 0 .75em;padding:10px 12px;border-radius:10px;background:var(--surface-sunken);overflow-x:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.doc .doc-tex svg,.doc .doc-math svg{overflow:visible;fill:currentColor;stroke:none}
+.doc .doc-math{display:block;margin:.2em 0 .9em;overflow-x:auto;overflow-y:hidden;text-align:center;font-size:1.08em;padding:.2em 0}
+.doc .doc-diagram{margin:.2em 0 .9em;overflow-x:auto;text-align:center}.doc .doc-diagram svg{max-width:100%;height:auto}
 .doc .doc-table{margin:0 0 .75em;overflow-x:auto;border:1px solid var(--line);border-radius:10px}.doc table{border-collapse:collapse;width:100%;font-size:14px}.doc th,.doc td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.doc th{font-weight:600;background:var(--surface-sunken)}.doc tr:last-child td{border-bottom:0}
 .doc hr{border:0;border-top:1px solid var(--line);margin:1em 0}.doc img{max-width:100%;border-radius:8px}.doc .doc-html{white-space:pre-wrap;font-size:13px;color:var(--muted)}
 .doc.live>*:last-child::after{content:"";display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:text-bottom;border-radius:1px;background:var(--brand);animation:ai-fade 1s steps(2) infinite}

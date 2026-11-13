@@ -28,7 +28,6 @@ jobs:
       - run: npm run test:platform
 
   android-apk:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
@@ -42,7 +41,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Android Rust targets
         run: rustup target add aarch64-linux-android x86_64-linux-android
@@ -54,7 +53,7 @@ jobs:
           "$sdkmanager_path" --channel=1 "platforms;android-37.0" "ndk;28.2.13676358" "cmake;3.22.1"
       - run: npm ci
       - run: npm run digest
-      - name: Build native routing and search kernels
+      - name: Build native search, routing and document kernels
         run: bash android/kernels-ci.sh
       - name: Assemble debug APK
         working-directory: android
