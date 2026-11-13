@@ -131,7 +131,15 @@ public sealed partial class Shell : Window
         card.Transitions = [new PopupThemeTransition()];
         layer.Children.Add(card);
         layer.Visibility = Visibility.Visible;
-        card.Loaded += (_, _) => { var first = FocusManager.FindFirstFocusableElement(content); if (first is Control control) control.Focus(FocusState.Programmatic); else card.Focus(FocusState.Programmatic); };
+        // Focus goes where one types, else to the sheet itself, so Esc works and no ring sits on a button.
+        scroller.IsTabStop = true;
+        card.Loaded += (_, _) => { if (FirstBox(content) is { } box) box.Focus(FocusState.Programmatic); else scroller.Focus(FocusState.Programmatic); };
+    }
+    private static TextBox? FirstBox(DependencyObject at)
+    {
+        if (at is TextBox { Text.Length: 0 } box) return box;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(at); i++) if (FirstBox(VisualTreeHelper.GetChild(at, i)) is { } found) return found;
+        return null;
     }
     public new void Close()
     {
