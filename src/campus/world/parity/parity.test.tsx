@@ -10,6 +10,9 @@ import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapp
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
 import { chatGroups, titleOf } from '@/ai/chats';
+import { initialModified } from '../merge.mjs';
+import { mergeSettings, settingsOf, settingsTaken } from '../sync';
+import type { Preferences } from '../preferences';
 import { append as threadAppend, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
@@ -19,6 +22,14 @@ const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.peri
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('migrates and synchronizes the same real timetable choices, including clearing labs', () => {
+        const test = golden.settingsSync;
+        const original = test.original as unknown as Preferences;
+        const initial = { ...original, modified: initialModified(original) };
+        expect(settingsOf(initial)).toEqual(test.initial);
+        expect(mergeSettings(test.initial, test.theirs)).toEqual(test.merged);
+        expect(settingsTaken(initial, test.merged)).toEqual(test.taken);
+    });
     it('conversations are named by their first question and grouped by the day they last changed', () => {
         const listed = golden.chats.listed as unknown as Parameters<typeof titleOf>[0][] as never[];
         expect((listed as { title: string; thread: Thread }[]).map(chat => titleOf(chat))).toEqual(golden.chats.titles);

@@ -7,8 +7,8 @@ import { PRODUCT_CONFIG } from '../campus/world/product';
     <p class="eyebrow article-kicker">数据安全与个人信息保护 · Privacy Policy</p>
     <h1>StuDev 隐私政策</h1>
     <div class="article-meta">
-      <span>更新日期：2026-11-08</span>
-      <span>· 生效日期：2026-11-08</span>
+      <span>更新日期：2026-11-13</span>
+      <span>· 生效日期：2026-11-13</span>
       <span>· 网站 {PRODUCT_CONFIG.FILINGS.ICP.TEXT}</span>
       <span>· App {PRODUCT_CONFIG.FILINGS.APP.TEXT}</span>
       <span>· {PRODUCT_CONFIG.FILINGS.POLICE.TEXT}</span>
@@ -22,6 +22,8 @@ import { PRODUCT_CONFIG } from '../campus/world/product';
         <ul>
           <li><strong>不登录使用时</strong>：你选择的班级、隐藏或添加的课程、早锻炼记录、考试提醒设置与深浅色主题，<strong>仅保存在你的浏览器或手机本地</strong>，StuDev 服务器不接收、不收集上述信息。</li>
           <li><strong>注册和使用账号时</strong>：我们仅收集完成社团协作、表单填报与志愿勘误所必需的信息，存储于<strong>中华人民共和国境内（中国大陆）</strong>，不会出售，也不会向无关第三方提供。</li>
+          <li><strong>登录后的设备同步</strong>：清单与课表偏好会保留一份账号专属的云端副本。AI 对话记录与自己的 API Key 只在当前设备保存，不参与同步。</li>
+          <li><strong>使用 AI 时</strong>：提问及回答所需的当前对话、工具结果会发送给所选模型处理。免费通道经 StuDev 转发，平台不保存对话正文；自带 API 从设备直连你选择的服务商。</li>
         </ul>
       </div>
 
@@ -90,12 +92,18 @@ import { PRODUCT_CONFIG } from '../campus/world/product';
             <td>仅你本人、该表单发布者及社团管理员可见</td>
           </tr>
           <tr>
+            <td><strong>清单与课表偏好</strong></td>
+            <td>登录后同步任务、班级、自定义课程、实验取舍、排程态度、图层顺序、早锻炼记录与考试提醒偏好；较晚的修改生效，删除选择也会同步</td>
+            <td>保留在本机及该账号的云端副本，仅供同一账号的设备读取；设备权限、主题等本机设置不同步</td>
+          </tr>
+          <tr>
             <td><strong>志愿勘误与实景投稿</strong></td>
             <td>经审核确认后，用于修订公开教学安排或丰富校园地图实景</td>
             <td>审核通过后公开展示，署名仅显示你的昵称</td>
           </tr>
         </tbody>
       </table>
+      <p><strong>AI 与自带 API</strong>：免费 AI 经腾讯云 EdgeOne 模型网关处理；平台只保留限流所需的计数，不持久化提问、回答或工具结果正文。自带 API 的地址、模型和 Key 仅保存在填写它的设备上，Key 只随请求发送给你指定的模型服务进行鉴权。自带 API 无需 StuDev 账号；模型服务商的数据处理规则由该服务商提供。清除本机数据会删除本机对话和 Key，另一台设备无法通过同步恢复它们。</p>
       <ol>
         <li><strong>QQ 头像加载</strong>：页面显示你的 QQ 头像时，你的浏览器或客户端将以不发送来源信息（<code>no-referrer</code>）的方式，直接从腾讯头像服务器（<code>q1.qlogo.cn</code>）加载公开头像图片。</li>
         <li><strong>管理人员信息公开的单独同意</strong>：普通注册成员的身份信息不对外公开；担任学生发展中心（社团）管理员或部门负责人的成员，仅在取得本人单独同意后，方在社团“历史 / 成员”页面公开其姓名及部门职务。</li>

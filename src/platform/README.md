@@ -54,6 +54,20 @@ an authenticated submitter's identity or contact details to their holder.
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
 output and function together.
 
+`POST /sync` takes `{ tasks, settings }` and returns both merged. Tasks are merged
+by id and modification time, including deletion markers. Settings contain only
+the sections named in `src/campus/world/merge.mjs`, each `{ value, modified }`;
+`null` clears a section. The later modification wins for each section. Existing
+local preferences without timestamps migrate with an epoch timestamp so that
+they can be uploaded without replacing a newer explicit choice. These records
+are private to the authenticated account. AI conversations and provider keys
+are never part of this contract.
+
+`POST /ai` relays the shared assistant contract as a stream without persisting
+message bodies. Free inference is bounded per account, including continuation
+requests after tool calls. A device using its own provider key calls that
+provider directly; neither its key nor its conversation goes through this API.
+
 Every form is answered by someone signed in; `access` says only who can see it
 (`public`: anyone, who signs in when they submit; `members`: signed-in people).
 The campus's own three forms are named in `product.json` under `forms`: feedback,

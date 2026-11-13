@@ -1,5 +1,6 @@
 import groovy.json.JsonSlurper
 import java.net.URI
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.file.FileSystemOperations
@@ -57,6 +58,12 @@ abstract class DesignTokensTask : DefaultTask() {
             }
         }
     }
+}
+/** The AI's contract, the same files the web and the platform read: what the model is told and the tools it may call. */
+abstract class AssistantTask @Inject constructor(private val fs: FileSystemOperations) : DefaultTask() {
+    @get:InputFiles abstract val sources: ConfigurableFileCollection
+    @get:OutputDirectory abstract val assetDir: DirectoryProperty
+    @TaskAction fun copy() { fs.sync { from(sources); into(assetDir.get().dir("assistant")) } }
 }
 abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOperations) : DefaultTask() {
     @get:InputDirectory abstract val releases: DirectoryProperty
@@ -122,6 +129,10 @@ val packageCampusData = tasks.register<CampusDataTask>("packageCampusData") {
     releaseManifest.set(rootProject.layout.projectDirectory.file("../src/data/campus-release.json"))
     assetDir.set(layout.buildDirectory.dir("generated/campus/assets"))
 }
+val packageAssistant = tasks.register<AssistantTask>("packageAssistant") {
+    sources.from(rootProject.layout.projectDirectory.file("../src/campus/world/tools.json"), rootProject.layout.projectDirectory.file("../src/campus/world/assistant.json"))
+    assetDir.set(layout.buildDirectory.dir("generated/assistant/assets"))
+}
 val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtures") {
     val manifest = rootProject.layout.projectDirectory.file("../src/data/campus-release.json")
     inputs.file(manifest)
@@ -145,6 +156,7 @@ androidComponents.onVariants { variant ->
     variant.sources.kotlin?.addGeneratedSourceDirectory(generateDesignTokens, DesignTokensTask::kotlinDir)
     variant.sources.res?.addGeneratedSourceDirectory(generateDesignTokens, DesignTokensTask::resourceDir)
     variant.sources.assets?.addGeneratedSourceDirectory(packageCampusData, CampusDataTask::assetDir)
+    variant.sources.assets?.addGeneratedSourceDirectory(packageAssistant, AssistantTask::assetDir)
 }
 
 android {

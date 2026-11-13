@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 
 @Serializable
 data class TimetableEdits(
@@ -56,6 +59,8 @@ data class PersonalSettings(
     val layers: List<String> = top.hicancan.studev.world.CampusLine.LAYER_ORDER,
     val labs: LabChoices = LabChoices(),
     val events: Map<String, top.hicancan.studev.world.EventPreference> = emptyMap(),
+    /** When each part that goes with one to one's other devices last changed (CampusSettings.SECTIONS). */
+    val modified: Map<String, String> = emptyMap(),
 ) {
     fun timetableEdits(term: String): TimetableEdits = timetable[term] ?: TimetableEdits()
     fun examChoices(term: String?, klass: String?): Map<String, Boolean> =
@@ -120,11 +125,24 @@ class CampusSettings(context: Context) {
         layers = store.getString("layers", null)?.let { Json.decodeFromString<List<String>>(it) }?.takeIf { it.sorted() == top.hicancan.studev.world.CampusLine.LAYER_ORDER.sorted() } ?: top.hicancan.studev.world.CampusLine.LAYER_ORDER,
         labs = store.getString("labs", null)?.let { Json.decodeFromString<LabChoices>(it) } ?: LabChoices(),
         events = store.getString("events", null)?.let { Json.decodeFromString<Map<String, top.hicancan.studev.world.EventPreference>>(it) } ?: emptyMap(),
-    ))
+        modified = store.getString("modified", null)?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull() }.orEmpty().filterKeys { it in SECTIONS },
+    ).let(::initial))
     val state = _state.asStateFlow()
-    fun update(change: (PersonalSettings) -> PersonalSettings) {
-        val raw = change(_state.value)
-        val next = raw.copy(timetable = sanitizeTimetable(raw.timetable), examAttendance = sanitizeAttendance(raw.examAttendance))
+    init {
+        if (_state.value.modified.isNotEmpty()) store.edit().putString("modified", Json.encodeToString(_state.value.modified)).apply()
+    }
+    /**
+     * Settings changed here: each part that changed notes now as when, as writePreferences on the web. [adopt] writes
+     * parts taken from another device as they came, their own times kept, so that taking them is not a change made here.
+     */
+    fun update(adopt: Boolean = false, change: (PersonalSettings) -> PersonalSettings) {
+        val before = _state.value
+        val raw = change(before)
+        var next = raw.copy(timetable = sanitizeTimetable(raw.timetable), examAttendance = sanitizeAttendance(raw.examAttendance))
+        if (!adopt) {
+            val was = sections(before); val now = sections(next); val at = top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now())
+            next = next.copy(modified = next.modified + SECTIONS.filter { was[it] != now[it] }.associateWith { at })
+        }
         store.edit().putString("class", next.klass).putString("campus", next.campus).putString("theme", next.theme)
             .putBoolean("calendar", next.calendar).putBoolean("reminders", next.reminders).putInt("lead", next.leadMinutes)
             .putBoolean("navigation-guidance", next.navigationGuidanceShown)
@@ -134,7 +152,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-tasks", next.calendarTasks).putString("events", Json.encodeToString(next.events))
-            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders)).putString("layers", Json.encodeToString(next.layers)).putString("labs", Json.encodeToString(next.labs))
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders)).putString("layers", Json.encodeToString(next.layers)).putString("labs", Json.encodeToString(next.labs)).putString("modified", Json.encodeToString(next.modified))
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
@@ -142,6 +160,52 @@ class CampusSettings(context: Context) {
         // window through the same worker used by boot/timezone restoration.
         top.hicancan.studev.device.DeviceRefreshWorker.enqueue(context)
     }
+    fun update(change: (PersonalSettings) -> PersonalSettings) = update(false, change)
+
+    companion object {
+        /** The parts of one's settings that go with one, as SECTIONS in src/campus/world/merge.mjs. */
+        val SECTIONS = listOf("class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run")
+        private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
+
+        /** Choices made before sync existed travel too, without replacing a later explicit choice on another device. */
+        fun initial(s: PersonalSettings): PersonalSettings {
+            val defaults = sections(PersonalSettings()); val kept = sections(s)
+            return s.copy(modified = s.modified + SECTIONS.filter { it !in s.modified && kept[it] != defaults[it] }.associateWith { "1970-01-01T00:00:00.000Z" })
+        }
+
+        /** Each part as the web keeps it in its preferences, so that either can take what the other wrote. */
+        fun sections(s: PersonalSettings): Map<String, kotlinx.serialization.json.JsonElement> = mapOf(
+            "class" to (s.klass?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull),
+            "campus" to JsonPrimitive(s.campus),
+            "timetable" to json.encodeToJsonElement(s.timetable),
+            "examAttendance" to json.encodeToJsonElement(s.examAttendance),
+            "examReminders" to json.encodeToJsonElement(s.examReminders),
+            "labs" to json.encodeToJsonElement(s.labs),
+            "layers" to json.encodeToJsonElement(s.layers),
+            "events" to json.encodeToJsonElement(s.events),
+            "run" to kotlinx.serialization.json.buildJsonObject { s.runShown?.let { put("on", JsonPrimitive(it)) }; put("days", json.encodeToJsonElement(s.runDays)); put("adjust", JsonPrimitive(s.runAdjust)) },
+        )
+
+        /** A part taken from another device into these settings; a part cleared there goes back to how it starts. */
+        fun take(s: PersonalSettings, section: String, value: kotlinx.serialization.json.JsonElement): PersonalSettings {
+            val none = value is kotlinx.serialization.json.JsonNull
+            return when (section) {
+                "class" -> s.copy(klass = if (none) null else (value as JsonPrimitive).content)
+                "campus" -> s.copy(campus = if (none) top.hicancan.studev.BuildConfig.DEFAULT_CAMPUS else (value as JsonPrimitive).content)
+                "timetable" -> s.copy(timetable = if (none) emptyMap() else json.decodeFromJsonElement(value))
+                "examAttendance" -> s.copy(examAttendance = if (none) emptyMap() else json.decodeFromJsonElement(value))
+                "examReminders" -> s.copy(examReminders = if (none) top.hicancan.studev.world.Exams.DEFAULT_REMINDERS else json.decodeFromJsonElement(value))
+                "labs" -> s.copy(labs = if (none) LabChoices() else json.decodeFromJsonElement(value))
+                "layers" -> s.copy(layers = if (none) top.hicancan.studev.world.CampusLine.LAYER_ORDER else json.decodeFromJsonElement<List<String>>(value).takeIf { it.sorted() == top.hicancan.studev.world.CampusLine.LAYER_ORDER.sorted() } ?: top.hicancan.studev.world.CampusLine.LAYER_ORDER)
+                "events" -> s.copy(events = if (none) emptyMap() else json.decodeFromJsonElement(value))
+                "run" -> if (none) s.copy(runShown = null, runDays = emptyList(), runAdjust = 0) else (value as kotlinx.serialization.json.JsonObject).let { run ->
+                    s.copy(runShown = (run["on"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull(), runDays = run["days"]?.let { json.decodeFromJsonElement<List<String>>(it) }.orEmpty(), runAdjust = (run["adjust"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0)
+                }
+                else -> s
+            }
+        }
+    }
+
     fun updateTimetable(term: String, change: (TimetableEdits) -> TimetableEdits) {
         update { current ->
             val updated = change(current.timetableEdits(term))

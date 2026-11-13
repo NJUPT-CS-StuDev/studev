@@ -9,12 +9,16 @@ import { customMeetings, parseWeeks, personalCourseName, type CustomCourse } fro
 import { moveTask, parseQuickTask, reminderAt, taskGroup, taskOrder, type Task, type TaskGroup } from '@/world/tasks';
 import { availableSlots } from '@/world/planning';
 import { reportTitle, suggestTasks } from '@/world/suggestions';
-import { mergeTasks } from '@/world/sync';
+import { mergeTasks, mergeSettings, settingsOf, settingsTaken } from '@/world/sync';
+import { initialModified } from '@/world/merge.mjs';
+import type { Preferences } from '@/world/preferences';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
-import { dueOn, timeBounds } from '@/world/events';
+import { dueOn, timeBounds, LAYER_ORDER } from '@/world/events';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
 import tools from '@/world/tools.json';
 import { chatGroups, titleOf } from '@/ai/chats';
+import { Completion, completionRequest } from '@/world/assistant.mjs';
+import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
@@ -213,6 +217,31 @@ const threadReplay = threadSteps.reduce<{ thread: Thread; frames: unknown[] }>((
 const noon = (date: string) => Date.parse(`${date}T12:00:00+08:00`);
 const listed = ['2026-11-13', '2026-11-12', '2026-11-09', '2026-10-20', '2026-08-02', '2026-11-13'].map((date, at) => ({ id: `c${at}`, title: at === 5 ? '改过的名字' : '', updated: noon(date) + at, thread: threadChain([{ role: 'user', content: at === 2 ? '  一个很长很长的问题，用来看看名字会不会在二十八个字的地方被截断然后加上省略号 ' : `问题 ${at}` }], [`n${at}`]), proposals: [] }));
 const chats = { now: noon('2026-11-13') + 3600000, listed, titles: listed.map(chat => titleOf(chat)), groups: chatGroups(listed, noon('2026-11-13') + 3600000).map(group => [group.name, group.chats.map(chat => chat.id)]) };
+// A provider's stream read into a turn the same way on the web and Android, and the same request made of it.
+const frame = (choice: object) => `data: ${JSON.stringify({ choices: [choice] })}`;
+const streams = [
+    [frame({ delta: { reasoning_content: '不传' } }), frame({ delta: { content: '我来' } }), ': keep-alive', frame({ delta: { content: '查一下。' } }), frame({ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'free_', arguments: '{"date":' } }] } }), frame({ delta: { tool_calls: [{ index: 0, function: { name: 'rooms', arguments: '"2026-11-14"}' } }] } }), frame({ delta: {}, finish_reason: 'tool_calls' }), 'data: [DONE]'],
+    [frame({ delta: { content: '**结论**' } }), frame({ delta: { content: '。' }, finish_reason: 'stop' })],
+    [frame({ delta: { content: '半句' } })],
+    [frame({ delta: { tool_calls: [{ index: 0, id: 'c', function: { name: 'delete_user', arguments: '{}' } }] }, finish_reason: 'tool_calls' })],
+].map(lines => { const completion = new Completion(); return { lines, pieces: lines.map(line => completion.take(line)), result: completion.result() }; });
+const askAt = Date.parse('2026-11-13T16:30:00Z');
+const assistantCases = { streams, at: askAt, request: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], askAt),
+    addresses: ['https://api.deepseek.com', 'https://example.org/v1/', ' https://example.org/v1/chat/completions ', 'http://example.org', 'https://user:pass@example.org', 'https://example.org?token=x', 'not a URL'].map(base => ({ base, endpoint: endpoint(base), invalid: addressError(base) !== null })) };
+// Real timetable choices made before sync existed, then a class change and a cleared lab choice elsewhere.
+const oldSettings: Preferences = {
+    class: schedules[0]!.class, campus: '三牌楼',
+    timetable: { [term.term]: { hidden: [labMeetings[0]!.teaching_class.id], added: [], names: {}, custom: [ownCourse] } },
+    examAttendance: { [`${term.term}:${schedules[0]!.class}`]: { [labExam.id]: false } },
+    examReminders: [], labs: { off: [], drop: [], skip: [classLabs[0]!.id], classes: [] },
+    layers: [...LAYER_ORDER].reverse(), events: { [scheduled[0]!.id]: { avoid: 'allow', layer: 5 } },
+    run: { on: false, days: line.run!.days.slice(0, 2), adjust: 2 },
+};
+const initialSettings = { ...oldSettings, modified: initialModified(oldSettings) };
+const settingsMine = settingsOf(initialSettings);
+const settingsTheirs = { class: { value: schedules[1]!.class, modified: '2026-11-13T01:00:00.000Z' }, labs: { value: null, modified: '2026-11-13T02:00:00.000Z' } };
+const settingsMerged = mergeSettings(settingsMine, settingsTheirs);
+const settingsSync = { original: oldSettings, initial: settingsMine, theirs: settingsTheirs, merged: settingsMerged, taken: settingsTaken(initialSettings, settingsMerged) };
 const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ thread, chats, semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

@@ -35,6 +35,7 @@ import top.hicancan.studev.world.Moment
 /** Three entries over one shell, the same as the website. */
 @Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { model.resume() }
     val state by model.state.collectAsStateWithLifecycle()
     val settings by model.settings.state.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()

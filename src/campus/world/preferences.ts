@@ -1,9 +1,14 @@
-// A visitor's own settings, kept in this browser only: their class, their usual
-// campus, and the changes they made to their class timetable. One record, so the
-// account page and every campus tool read and write the same thing.
+// A visitor's own settings, kept in this browser: their class, their usual campus,
+// and the changes they made to their class timetable. One record, so the account
+// page and every campus tool read and write the same thing. Signed in, its parts
+// go with them to their other devices (sync.ts); each part notes when it changed.
 import { LAYER_ORDER, type EventKind } from './events';
 import type { CustomCourse } from '@/timetable/model/courses';
 import type { EventPreferences } from './schedule';
+import { initialModified, SECTIONS } from './merge.mjs';
+
+/** A part of the settings that goes with one to one's other devices. */
+export type Section = 'class' | 'campus' | 'timetable' | 'examAttendance' | 'examReminders' | 'labs' | 'layers' | 'events' | 'run';
 
 export interface TimetableEdits {
     /** Teaching classes of the class timetable this person does not attend. */
@@ -34,6 +39,8 @@ export interface Preferences {
     /** Lab sheets left out, lab courses not taken and single sittings missed. */
     labs?: { off?: string[]; drop?: string[]; skip?: string[]; classes?: string[] };
     events?: EventPreferences;
+    /** When each part last changed here or on another device, so that the later change wins when they meet. */
+    modified?: Partial<Record<Section, string>>;
 }
 
 /** The mornings put down in this browser, plus the bonus or penalty entered from the sports office. */
@@ -117,6 +124,10 @@ const sanitize = (raw: unknown): Preferences => {
         }
         if (Object.keys(attendance).length) result.examAttendance = attendance;
     }
+    if (record.modified && typeof record.modified === 'object' && !Array.isArray(record.modified)) {
+        const modified = Object.fromEntries(Object.entries(record.modified as Record<string, unknown>).filter((entry): entry is [Section, string] => (SECTIONS as string[]).includes(entry[0]) && typeof entry[1] === 'string' && entry[1].length < 40));
+        if (Object.keys(modified).length) result.modified = modified;
+    }
     if (record.run && typeof record.run === 'object' && !Array.isArray(record.run)) {
         const run = record.run as Record<string, unknown>;
         const listed = Array.isArray(run.days) ? run.days : [];
@@ -133,14 +144,29 @@ export const readPreferences = (): Preferences => {
     const raw = store.getItem(KEY);
     if (raw === null) return {};
     try {
-        return sanitize(JSON.parse(raw));
+        const prefs = sanitize(JSON.parse(raw));
+        const modified = initialModified(prefs);
+        if (Object.keys(modified).length && JSON.stringify(modified) !== JSON.stringify(prefs.modified)) {
+            prefs.modified = modified;
+            try { store.setItem(KEY, JSON.stringify(prefs)); } catch { /* Readable even when storage is full. */ }
+        }
+        return prefs;
     } catch {
         return {};
     }
 };
 
-export const writePreferences = (update: (current: Preferences) => Preferences): Preferences => {
-    const next = sanitize(update(readPreferences()));
+/**
+ * Settings changed here: each part that changed notes now as when. `adopt` writes parts taken from another device as
+ * they came, their own times kept, so that taking them is not a change made here.
+ */
+export const writePreferences = (update: (current: Preferences) => Preferences, adopt = false): Preferences => {
+    const before = readPreferences();
+    const next = sanitize(update(before));
+    if (!adopt) {
+        const now = new Date().toISOString();
+        for (const section of SECTIONS as Section[]) if (JSON.stringify(before[section] ?? null) !== JSON.stringify(next[section] ?? null)) next.modified = { ...next.modified, [section]: now };
+    }
     const store = storage();
     if (store) {
         try {
@@ -149,7 +175,7 @@ export const writePreferences = (update: (current: Preferences) => Preferences):
             // Full or blocked storage: the change lasts for this page only.
         }
     }
-    window.dispatchEvent(new CustomEvent(EVENT));
+    window.dispatchEvent(new CustomEvent(EVENT, { detail: { adopt } }));
     return next;
 };
 

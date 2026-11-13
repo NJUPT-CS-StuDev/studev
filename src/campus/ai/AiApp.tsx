@@ -2,7 +2,8 @@
 // three, run on this device. The answer is shown as it comes; what was looked up is shown as steps one can open;
 // rooms and routes it finds are things to tap; a task it drafts is saved only when confirmed. A question can be
 // changed where it stands and an answer asked again: each grows a branch beside the old one (thread.ts), and one goes
-// back and forth between them. Conversations are kept on this device and listed at the side (chats.ts). Asking is for someone signed in, since the
+// back and forth between them. Conversations are kept on this device and listed at the side (chats.ts). The model is
+// the free quota, or one's own key used straight from this device (model.ts). Asking is for someone signed in, since the
 // model is reached through the platform.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { session } from '../../platform/client/api';
@@ -15,7 +16,8 @@ import { CampusTools } from '@/world/campusTools';
 import { roomLabel } from '@/world/names';
 import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up } from '@/world/ui';
 import { definitions, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
-import { ask, type Message } from './stream';
+import { ask, askOwn, type Message } from './stream';
+import { addressError, endpoint, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
 import { append, chain, choose, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
@@ -118,6 +120,9 @@ export default function AiApp() {
     const [kept, setKept] = useState<Kept>(readKept);
     const [chat, setChat] = useState<Chat>(() => kept.chats.find(item => item.id === kept.current) ?? empty());
     const [side, setSide] = useState(false), [menu, setMenu] = useState<string | null>(null), [renaming, setRenaming] = useState<string | null>(null);
+    const [choice, setChoice] = useState<Choice>(readChoice), [picking, setPicking] = useState(false), [setting, setSetting] = useState(false);
+    useEffect(() => writeChoice(choice), [choice]);
+    const own = choice.use === 'own' && choice.own.key ? choice.own : null;
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     const opening = useRef(true);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -206,7 +211,8 @@ export default function AiApp() {
             for (let round = 0; round < 8; round++) {
                 said = ''; setStreaming(''); setLive(null);
                 const doc = drawn ? new DocStream() : null;
-                const answer = await ask(history, piece => { said += piece; setStreaming(said); if (doc) setLive(doc.push(piece)); }, controller.signal).finally(() => doc?.free());
+                const onDelta = (piece: string) => { said += piece; setStreaming(said); if (doc) setLive(doc.push(piece)); };
+                const answer = await (own ? askOwn(own, history, onDelta, controller.signal) : ask(history, onDelta, controller.signal)).finally(() => doc?.free());
                 setStreaming(null); setLive(null);
                 history = [...history, answer]; grow(answer);
                 if (!answer.tool_calls?.length) return;
@@ -228,7 +234,8 @@ export default function AiApp() {
     async function send(question: string, signedIn = false, parent = tip(chat.thread)) {
         const asked = question.trim();
         if (!asked || busy) return;
-        if (!signedIn && !await session()) { setWaiting(asked); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
+        // One's own key needs no sign-in; the free quota is shared, so it is asked when signed in.
+        if (!own && !signedIn && !await session()) { setWaiting(asked); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
         if (parent === tip(chat.thread)) setDraft('');
         const id = newId();
         void run(append(chat.thread, parent, id, { role: 'user', content: asked }), id);
@@ -278,9 +285,21 @@ export default function AiApp() {
             {!kept.chats.length && <p className="ai-side-none">问过的对话会列在这里，只存在这台设备上。</p>}</nav>
         </aside>
         {side && <div className="ai-scrim" onClick={() => setSide(false)} />}
+        {picking && <div className="ai-catch" onClick={() => setPicking(false)} />}
+        {setting && <OwnSettings own={choice.own} onClose={() => setSetting(false)} onSave={next => { setChoice({ use: next.key ? 'own' : 'free', own: next }); setSetting(false); }} />}
         <div className="ai-main">
         <div className="ai-bar">
             <button className="ai-icon ai-menu-btn" aria-label="对话列表" onClick={() => setSide(true)}><Bars /></button>
+            <div className="ai-model">
+                <button className={`ai-model-b ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>{own ? ownName(own) : '免费额度'}<Chevron /></button>
+                {picking && <div className="ai-menu ai-model-menu" role="menu">
+                    <button role="menuitemradio" aria-checked={!own} onClick={() => { setChoice(current => ({ ...current, use: 'free' })); setPicking(false); }}>
+                        <b>免费额度</b><small>hicancan 带领学发为爱发电，登录后可用</small>{!own && <Tick />}</button>
+                    <button role="menuitemradio" aria-checked={Boolean(own)} onClick={() => { if (choice.own.key) setChoice(current => ({ ...current, use: 'own' })); else setSetting(true); setPicking(false); }}>
+                        <b>我的 API</b><small>{choice.own.key ? `${ownName(choice.own)} · 只存在这台设备上，不用登录` : '填自己的 Key，不用登录'}</small>{own && <Tick />}</button>
+                    <button role="menuitem" className="ai-model-set" onClick={() => { setSetting(true); setPicking(false); }}>设置我的 API…</button>
+                </div>}
+            </div>
             <span className="ai-title">{blank ? '' : titleOf(current ?? { title: '', thread: chat.thread })}</span>
             {!blank && <button className="ai-icon ai-bar-new" aria-label="新对话" title="新对话" disabled={busy} onClick={() => open(null)}><Compose /></button>}
         </div>
@@ -335,6 +354,29 @@ export default function AiApp() {
         {below && !blank && <button className="ai-down" aria-label="回到底部" onClick={() => { stuck.current = true; end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }}><Down /></button>}
         {!blank && <div className="ai-dock">{composer}</div>}
         </div>
+    </div>;
+}
+
+/** One's own provider: where, which model, and the key, kept only on this device. */
+function OwnSettings({ own, onClose, onSave }: { own: Own; onClose: () => void; onSave: (own: Own) => void }) {
+    const [value, setValue] = useState(own);
+    const invalid = addressError(value.base);
+    const set = (part: Partial<Own>) => setValue(current => ({ ...current, ...part }));
+    return <div className="ai-modal" role="dialog" aria-label="我的 API" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+        <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); onSave({ base: value.base.trim(), model: value.model.trim(), key: value.key.trim() }); }}>
+            <h2>我的 API</h2>
+            <p className="fine">填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 只存在这台设备上，提问从这台设备直接发给服务商，不经过 StuDev，也不用登录。</p>
+            <label>接口地址<input value={value.base} onChange={event => set({ base: event.target.value })} placeholder="https://api.deepseek.com" required /></label>
+            <small className="fine">{invalid ?? `会请求 ${endpoint(value.base)}`}</small>
+            <label>模型<input value={value.model} onChange={event => set({ model: event.target.value })} placeholder="deepseek-flash" required /></label>
+            <label>API Key<input type="password" value={value.key} onChange={event => set({ key: event.target.value })} placeholder="sk-…" autoComplete="off" /></label>
+            <div className="ai-modal-btns">
+                {own.key && <button type="button" className="ai-pill" onClick={() => onSave({ ...value, key: '' })}>清除 Key</button>}
+                <span />
+                <button type="button" className="ai-pill" onClick={onClose}>取消</button>
+                <button className="ai-pill go" disabled={!!invalid || !value.key.trim() || !value.model.trim()}>保存并使用</button>
+            </div>
+        </form>
     </div>;
 }
 

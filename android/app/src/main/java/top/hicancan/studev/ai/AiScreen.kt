@@ -55,7 +55,8 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
  * same tools as the other three, run on this device. The answer shows as it comes and can be stopped; what was looked
  * up shows as steps; rooms and routes found are things to tap; a drafted task is added only when confirmed. A question
  * can be changed where it stands and an answer asked again: each grows a branch beside the old one (Thread.kt), and
- * one goes back and forth between them. Conversations are kept on this device and listed in a drawer (Chats.kt).
+ * one goes back and forth between them. Conversations are kept on this device and listed in a drawer (Chats.kt). The
+ * model is the free quota, or one's own key used straight from this device with no sign-in (Assistant.kt).
  * Asking is for someone signed in;
  * signing in opens over it and the question goes on.
  */
@@ -74,6 +75,13 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     var opening by remember { mutableStateOf(true) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    val assistant = remember { Assistant.load(context) }
+    val modelPrefs = remember { context.getSharedPreferences("ai_model", android.content.Context.MODE_PRIVATE) }
+    var useOwn by remember { mutableStateOf(Models.read(modelPrefs).first) }
+    var own by remember { mutableStateOf(Models.read(modelPrefs).second) }
+    var picking by remember { mutableStateOf(false) }
+    var setting by remember { mutableStateOf(false) }
+    val asking = own.takeIf { useOwn && it.key.isNotBlank() }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
     var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
@@ -106,7 +114,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
         fun grow(message: JsonObject) { val id = java.util.UUID.randomUUID().toString(); fresh += id; thread = thread.append(tipId, id, message); tipId = id }
         thread = base; fresh.clear(); from = at; editing = null
         var history = recent(base.lineage(at).map { it.message })
-        if (tools.definitions.isEmpty()) tools.definitions = client.request("/ai", authenticated = true).getValue("tools").jsonArray.map { it.jsonObject }
+        tools.definitions = assistant.tools
         var said = ""
         try {
             repeat(8) {
@@ -114,13 +122,18 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 var answer: JsonObject? = null
                 var failed: String? = null
                 val doc = top.hicancan.docstream.Stream()
-                try { client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)) }) { event, data ->
-                    when (event) {
-                        "delta" -> { val piece = data["content"]?.jsonPrimitive?.contentOrNull.orEmpty(); said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
-                        "message" -> answer = data["message"]?.jsonObject
-                        "error" -> failed = data["message"]?.jsonPrimitive?.contentOrNull
+                fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
+                try {
+                    val mine = asking
+                    if (mine != null) answer = assistant.askOwn(mine, history, ::onDelta)
+                    else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)) }) { event, data ->
+                        when (event) {
+                            "delta" -> onDelta(data["content"]?.jsonPrimitive?.contentOrNull.orEmpty())
+                            "message" -> answer = data["message"]?.jsonObject
+                            "error" -> failed = data["message"]?.jsonPrimitive?.contentOrNull
+                        }
                     }
-                } } finally { doc.close() }
+                } finally { doc.close() }
                 streaming = null; live = null
                 failed?.let { throw IllegalStateException(it) }
                 val reply = answer ?: throw IllegalStateException("回答中断了，请重试。")
@@ -156,7 +169,8 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     fun ask(question: String, parent: String = thread.tip()) {
         if (question.isBlank() || busy) return
         scope.launch {
-            if (client.current() == null) { waiting = question; return@launch }
+            // One's own key needs no sign-in; the free quota is shared, so it is asked when signed in.
+            if (asking == null && client.current() == null) { waiting = question; return@launch }
             if (parent == thread.tip()) draft = ""
             val id = java.util.UUID.randomUUID().toString()
             start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id)
@@ -185,6 +199,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
     val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
+    if (setting) OwnSettings(own, onClose = { setting = false }) { next -> own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
     renaming?.let { chat ->
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text("重命名") },
@@ -224,7 +239,22 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
-            Plain(if (shown.isEmpty()) "" else Chats.titleOf(chats.firstOrNull { it.id == current }?.title.orEmpty(), thread), 15.sp, weight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Box {
+                Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Plain(asking?.let(Models::name) ?: "免费额度", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                    Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Ink.muted)
+                }
+                DropdownMenu(picking, { picking = false }, containerColor = Ink.paper) {
+                    DropdownMenuItem({ Column { Text("免费额度"); Plain("hicancan 带领学发为爱发电，登录后可用", 12.sp, Ink.muted) } }, { useOwn = false; Models.write(modelPrefs, false, own); picking = false },
+                        trailingIcon = { if (asking == null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
+                    DropdownMenuItem({ Column { Text("我的 API"); Plain(if (own.key.isNotBlank()) "${Models.name(own)} · 只存在这台设备上，不用登录" else "填自己的 Key，不用登录", 12.sp, Ink.muted) } },
+                        { picking = false; if (own.key.isNotBlank()) { useOwn = true; Models.write(modelPrefs, true, own) } else setting = true },
+                        trailingIcon = { if (asking != null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
+                    HorizontalDivider(color = Ink.line)
+                    DropdownMenuItem({ Text("设置我的 API…", color = Ink.muted) }, { picking = false; setting = true })
+                }
+            }
+            Plain(if (shown.isEmpty()) "" else Chats.titleOf(chats.firstOrNull { it.id == current }?.title.orEmpty(), thread), 14.sp, Ink.muted, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 2.dp))
             if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null) }
         }
         if (shown.isEmpty()) {
@@ -301,6 +331,24 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
         Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)) { composer() }
     }
     }
+}
+
+/** One's own provider: where, which model, and the key, kept only on this device, as OwnSettings in AiApp.tsx. */
+@Composable private fun OwnSettings(own: Own, onClose: () -> Unit, onSave: (Own) -> Unit) {
+    var base by remember { mutableStateOf(own.base) }
+    var model by remember { mutableStateOf(own.model) }
+    var key by remember { mutableStateOf(own.key) }
+    val invalid = Models.addressError(base)
+    AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("我的 API") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Plain("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 只存在这台设备上，提问从手机直接发给服务商，不经过 StuDev，也不用登录。", 13.sp, Ink.muted, lineHeight = 20.sp)
+            OutlinedTextField(base, { base = it }, label = { Text("接口地址") }, singleLine = true)
+            if (invalid != null) Plain(invalid, 12.sp, marks().danger)
+            OutlinedTextField(model, { model = it }, label = { Text("模型") }, singleLine = true)
+            OutlinedTextField(key, { key = it }, label = { Text("API Key") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+        } },
+        confirmButton = { TextButton({ onSave(Own(base.trim(), model.trim(), key.trim())) }, enabled = invalid == null && model.isNotBlank() && key.isNotBlank()) { Text("保存并使用") } },
+        dismissButton = { Row { if (own.key.isNotBlank()) TextButton({ onSave(own.copy(key = "")) }) { Text("清除 Key", color = marks().danger) }; TextButton(onClose) { Text("取消") } } })
 }
 
 /** The conversations kept on this device, and the one open; one kept before there could be many becomes the first. */

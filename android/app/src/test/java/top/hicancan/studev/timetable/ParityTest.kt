@@ -21,6 +21,23 @@ class ParityTest {
     private val holidays = CampusLine.holidays(json.decodeFromJsonElement<List<CalendarTerm>>(golden.getValue("calendar")))
     private val run = RunPlan(json.decodeFromJsonElement<MorningRun>(golden.getValue("run")), json.decodeFromJsonElement<List<String>>(golden.getValue("runDays")), 5)
     private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), emptyList(), holidays, run)
+    @Test fun settingsSyncMatches() {
+        val test = golden.getValue("settingsSync").jsonObject
+        fun settings(value: JsonObject): top.hicancan.studev.me.PersonalSettings = value.entries.filter { it.key != "modified" }
+            .fold(top.hicancan.studev.me.PersonalSettings()) { s, (key, part) -> top.hicancan.studev.me.CampusSettings.take(s, key, part) }
+            .copy(modified = value["modified"]?.let { json.decodeFromJsonElement<Map<String, String>>(it) }.orEmpty())
+        val initial = top.hicancan.studev.me.CampusSettings.initial(settings(test.getValue("original").jsonObject))
+        assertEquals(test.getValue("initial"), top.hicancan.studev.me.Sync.partsOf(initial))
+        assertEquals(test.getValue("merged"), top.hicancan.studev.me.Sync.mergeSettings(test.getValue("initial").jsonObject, test.getValue("theirs").jsonObject))
+        assertEquals(settings(test.getValue("taken").jsonObject), top.hicancan.studev.me.Sync.taken(initial, test.getValue("merged").jsonObject))
+    }
+    @Test fun ownProviderAddressesMatch() {
+        golden.getValue("assistant").jsonObject.getValue("addresses").jsonArray.forEach { item ->
+            val test = item.jsonObject; val base = test.getValue("base").jsonPrimitive.content
+            assertEquals(test.getValue("endpoint").jsonPrimitive.content, top.hicancan.studev.ai.Models.endpoint(base))
+            assertEquals(test.getValue("invalid").jsonPrimitive.boolean, top.hicancan.studev.ai.Models.addressError(base) != null)
+        }
+    }
     private fun brief(event: LineEvent) = buildJsonObject {
         put("kind", event.kind); put("name", event.name); put("short", event.short); put("start", event.start); put("end", event.end); put("room", event.room)
     }
@@ -329,5 +346,17 @@ class ParityTest {
         assertEquals(chats.getValue("titles").jsonArray.map { it.jsonPrimitive.content }, listed.map { top.hicancan.studev.ai.Chats.titleOf(it.title, it.thread) })
         assertEquals(chats.getValue("groups").jsonArray.map { group -> group.jsonArray[0].jsonPrimitive.content to group.jsonArray[1].jsonArray.map { it.jsonPrimitive.content } },
             top.hicancan.studev.ai.Chats.groups(listed, chats.getValue("now").jsonPrimitive.long).map { (name, list) -> name to list.map { it.id } })
+    }
+    @Test fun aProviderStreamIsReadIntoTheSameTurnAndTheSameRequestIsMade() {
+        val cases = golden.getValue("assistant").jsonObject
+        val root = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }.first { File(it, "src/campus/world/assistant.json").isFile }
+        val assistant = top.hicancan.studev.ai.Assistant.of(json.parseToJsonElement(File(root, "src/campus/world/assistant.json").readText()).jsonObject, json.parseToJsonElement(File(root, "src/campus/world/tools.json").readText()).jsonArray)
+        cases.getValue("streams").jsonArray.forEach { item ->
+            val case = item.jsonObject; val completion = assistant.Completion()
+            assertEquals(case.getValue("pieces").jsonArray.map { it.jsonPrimitive.content }, case.getValue("lines").jsonArray.map { completion.take(it.jsonPrimitive.content) })
+            val expected = case.getValue("result").jsonObject; val got = completion.result()
+            if (expected["message"] != null) assertEquals(expected.getValue("message"), got.getOrThrow()) else assertEquals(expected.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message)
+        }
+        assertEquals(cases.getValue("request"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }), java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long)))
     }
 }

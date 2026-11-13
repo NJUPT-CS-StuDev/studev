@@ -1,22 +1,12 @@
 import { fail, readJson, response } from './common.mjs';
 import { isConflict } from './store.mjs';
+import { mergeSettings, mergeTasks, SECTIONS } from '../../campus/world/merge.mjs';
+
+export { mergeTasks, mergeSettings };
 
 const MAX_TASKS = 5000;
 const MAX_TASK_BYTES = 8192;
 
-/**
- * One's tasks, the same on every device one signs in on. Each task carries when it last changed and whether it was
- * deleted; of two versions of a task, the later change wins, and a deletion is a change like any other. The platform
- * merges by those alone and keeps the rest as the device wrote it: what a task holds is the clients' to read.
- */
-export function mergeTasks(stored, incoming) {
-  const merged = new Map(stored.map((task) => [task.id, task]));
-  for (const task of incoming) {
-    const kept = merged.get(task.id);
-    if (!kept || task.modified > kept.modified) merged.set(task.id, task);
-  }
-  return [...merged.values()].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
-}
 export function syncedTasks(input) {
   if (!Array.isArray(input) || input.length > MAX_TASKS) fail(400, 'SYNC_INVALID', '任务数据无效。');
   const ids = new Set();
@@ -28,23 +18,44 @@ export function syncedTasks(input) {
   });
 }
 
+const MAX_SETTINGS_BYTES = 256 * 1024;
+/** Settings as a device sends them: only the known parts, each with when it changed. */
+export function syncedSettings(input) {
+  if (input === undefined) return {};
+  if (!input || typeof input !== 'object' || Array.isArray(input) || JSON.stringify(input).length > MAX_SETTINGS_BYTES) fail(400, 'SYNC_INVALID', '设置数据无效。');
+  const kept = {};
+  for (const [section, part] of Object.entries(input)) {
+    if (!SECTIONS.includes(section) || !part || typeof part !== 'object' || typeof part.modified !== 'string' || !part.modified || part.modified.length > 40 || !('value' in part)) fail(400, 'SYNC_INVALID', '设置数据无效。');
+    kept[section] = { value: part.value, modified: part.modified };
+  }
+  return kept;
+}
+
+/**
+ * One's tasks and timetable settings, the same on every device one signs in on. Nothing comes here from a device that
+ * is not signed in; AI conversations and one's own model key never come here at all.
+ */
 export function createSyncService({ identity, repo }) {
   return async function handle(context, path) {
     if (path !== '/api/platform/sync') return null;
     if (context.request.method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
     const session = await identity.authenticate(context.request, { required: true, csrf: true });
     await repo.throttle('sync', session.user.id, 60);
-    const incoming = syncedTasks((await readJson(context.request, 4 * 1024 * 1024)).tasks);
-    const prefix = `sync/tasks/${session.user.id}`;
-    // Two devices may send at once: the second to write finds the first's tasks and merges again.
+    const body = await readJson(context.request, 4 * 1024 * 1024);
+    const incoming = syncedTasks(body.tasks), settings = syncedSettings(body.settings);
+    const tasks = await merged(`sync/tasks/${session.user.id}`, 'tasks', stored => mergeTasks(stored ?? [], incoming));
+    const kept = await merged(`sync/settings/${session.user.id}`, 'settings', stored => mergeSettings(stored ?? {}, settings));
+    return response({ tasks, settings: kept });
+  };
+  /** What is kept under a key, merged with what came: two devices may send at once, and the second merges again. */
+  async function merged(prefix, field, merge) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const current = await repo.latest(prefix);
-      const stored = current?.tasks ?? [];
-      const merged = mergeTasks(stored, incoming);
-      if (current && JSON.stringify(merged) === JSON.stringify(stored)) return response({ tasks: merged });
-      try { await repo.append(prefix, { tasks: merged }, current?.revision ?? 0); return response({ tasks: merged }); }
+      const value = merge(current?.[field]);
+      if (current && JSON.stringify(value) === JSON.stringify(current[field])) return value;
+      try { await repo.append(prefix, { [field]: value }, current?.revision ?? 0); return value; }
       catch (error) { if (!isConflict(error)) throw error; }
     }
     fail(409, 'SYNC_BUSY', '另一台设备正在同步，请稍后再试。');
-  };
+  }
 }

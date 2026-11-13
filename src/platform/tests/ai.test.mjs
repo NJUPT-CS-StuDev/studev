@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aiMessages, createAiService } from '../server/ai.mjs';
+import { aiMessages, createAiService, DAILY } from '../server/ai.mjs';
 
 test('AI accepts complete tool turns and rejects forged roles, tools and dangling results', () => {
   const call = { id: 'call-1', type: 'function', function: { name: 'timeline', arguments: '{"from":"2026-11-09","to":"2026-11-09"}' } };
@@ -40,4 +40,11 @@ test('AI streams the fixed model through the gateway, passing on what it says an
   assert.equal((await events(await cut({ request: new Request(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }] }) }) }, '/api/platform/ai'))).at(-1).event, 'error');
   const denied = createAiService({ identity: { async authenticate() { throw Object.assign(new Error('denied'), { status: 401 }); } }, env: {}, repo: {}, fetcher: () => { throw new Error('must not infer'); } });
   await assert.rejects(denied({ request }, '/api/platform/ai'), error => error.status === 401);
+});
+
+test('A person who has used up the day of the free quota is told so, and that their own key goes on', async () => {
+  const handler = createAiService({ identity: { async authenticate() { return { user: { id: 'u' } }; } }, repo: { async throttle(scope, client, limit) { if (scope === 'ai-day') { assert.equal(limit, DAILY); throw Object.assign(new Error('limited'), { status: 429 }); } } }, env: { MAKERS_MODELS_KEY: 'k' }, fetcher: () => { throw new Error('must not infer'); } });
+  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }] }) });
+  await assert.rejects(handler({ request }, '/api/platform/ai'), error => error.status === 429 && error.code === 'AI_DAILY' && /自己的 API/.test(error.message));
+  assert.equal(DAILY, 30);
 });

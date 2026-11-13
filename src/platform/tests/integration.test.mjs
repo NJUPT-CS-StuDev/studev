@@ -151,3 +151,16 @@ test('tasks sync per person: the later change of a task wins, a deletion travels
   for (const tasks of [[{ id: 't1' }], [first, first], 'x', [{ ...first, note: 'x'.repeat(9000) }]]) assert.ok([400, 413].includes((await a.client.call('/sync', { method: 'POST', body: { tasks } })).status));
 });
 
+test('settings sync per account, preserve independent choices and clears, and reject AI storage', async () => {
+  const f = await fixture(); const a = await f.member('100002', '成员甲'), b = await f.member('100003', '成员乙');
+  const part = (value, hour) => ({ value, modified: `2026-11-13T0${hour}:00:00.000Z` });
+  const phone = await a.client.call('/sync', { method: 'POST', body: { tasks: [], settings: { class: part('B240402', 1), labs: part({ skip: ['lab-1'] }, 1), examReminders: part([], 1) } } });
+  assert.equal(phone.status, 200);
+  const laptop = await a.client.call('/sync', { method: 'POST', body: { tasks: [], settings: { class: part('B240403', 0), labs: part(null, 2), events: part({ 'lab-1': { avoid: 'allow', layer: 10 } }, 2) } } });
+  assert.equal(laptop.status, 200);
+  assert.deepEqual(laptop.body.settings, { class: part('B240402', 1), labs: part(null, 2), examReminders: part([], 1), events: part({ 'lab-1': { avoid: 'allow', layer: 10 } }, 2) });
+  assert.deepEqual((await a.client.call('/sync', { method: 'POST', body: { tasks: [], settings: phone.body.settings } })).body.settings, laptop.body.settings);
+  assert.deepEqual((await b.client.call('/sync', { method: 'POST', body: { tasks: [], settings: {} } })).body.settings, {});
+  for (const section of ['ai', 'chats', 'key', 'theme']) assert.equal((await a.client.call('/sync', { method: 'POST', body: { tasks: [], settings: { [section]: part('private', 3) } } })).status, 400);
+});
+
