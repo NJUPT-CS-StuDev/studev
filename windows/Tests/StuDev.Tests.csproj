@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../StuDev/Data/*.cs" Link="Data/%(Filename)%(Extension)" />
+    <Compile Include="../StuDev/Me/Preferences.cs;../StuDev/Me/Choices.cs;../StuDev/Me/Courses.cs" Link="Me/%(Filename)%(Extension)" />
+    <Compile Include="../StuDev/Map/MapData.cs;../StuDev/Map/Find.cs;../StuDev/Map/Labels.cs" Link="Map/%(Filename)%(Extension)" />
+    <Compile Include="../kernels/bindings/wayfind_native.cs" Link="Kernels/wayfind_native.cs" />
+    <None Include="../kernels/wayfind_native.dll" Link="wayfind_native.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../StuDev/World/*.cs" Exclude="../StuDev/World/Campus.cs" Link="World/%(Filename)%(Extension)" />
+    <None Include="../../src/campus/world/parity/golden.json" Link="golden.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
