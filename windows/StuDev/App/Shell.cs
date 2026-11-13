@@ -60,6 +60,7 @@ public sealed partial class Shell : Window
         Grid.SetRow(body, 1); root.Children.Add(body);
         Grid.SetRowSpan(layer, 2); root.Children.Add(layer);
         Content = root;
+        Snapshot.Watch(root);
         root.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape && layer.Visibility == Visibility.Visible) { Close(); e.Handled = true; } };
         root.ActualThemeChanged += (_, _) => Turned();
         AppWindow.Changed += (_, e) => { if (e.DidSizeChange) Inset(); };
@@ -76,6 +77,7 @@ public sealed partial class Shell : Window
                 "timetable" => new Timetable.TimetableScreen(),
                 "me" => new Me.MeScreen(),
                 "search" => new Search.SearchScreen(),
+                "ai" => new Ai.AiScreen(),
                 _ => new Later(Entries.FirstOrDefault(e => e.Key == entry).Label ?? entry),
             };
             screens[entry] = screen;

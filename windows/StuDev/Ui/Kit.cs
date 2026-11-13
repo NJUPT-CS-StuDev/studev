@@ -288,6 +288,7 @@ public static class Icons
     public const string Compose = "M9,4 H5.5 A2,2 0 0 0 3.5,6 V14.5 A2,2 0 0 0 5.5,16.5 H14 A2,2 0 0 0 16,14.5 V11 M14.5,3.5 L16.5,5.5 L10,12 H8 V10 Z";
     public const string Plus = "M10,4.5 V15.5 M4.5,10 H15.5";
     public const string Again = "M15.5,10 A5.5,5.5 0 1 1 13.9,6.1 M14.5,3.5 V6.5 H11.5";
+    public const string Copy = "M9,7 H14.5 A2,2 0 0 1 16.5,9 V14.5 A2,2 0 0 1 14.5,16.5 H9 A2,2 0 0 1 7,14.5 V9 A2,2 0 0 1 9,7 Z M13,7 V5.5 A2,2 0 0 0 11,3.5 H5.5 A2,2 0 0 0 3.5,5.5 V11 A2,2 0 0 0 5.5,13 H7";
     public const string Up = "M10,15.5 V4.5 M5.5,9 L10,4.5 L14.5,9";
     public const string Square = "M7.5,6 H12.5 A1.5,1.5 0 0 1 14,7.5 V12.5 A1.5,1.5 0 0 1 12.5,14 H7.5 A1.5,1.5 0 0 1 6,12.5 V7.5 A1.5,1.5 0 0 1 7.5,6 Z";
     /** 24-unit: nobody signed in (the site header's avatar). */

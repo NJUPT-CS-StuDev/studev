@@ -9,14 +9,20 @@ public static class Pages
 {
     public static ScrollViewer Frame(UIElement content, double width = 1040)
     {
-        // One column of at most `width`, the rest shared either side: a star column with a MaxWidth keeps it centred.
-        var column = new Grid { Padding = new Thickness(32, 26, 32, 56) };
+        var column = Centre(content, width); column.Padding = new Thickness(32, 26, 32, 56);
+        return new ScrollViewer { Content = column, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    }
+
+    /** One column of at most `width`, the rest shared either side: a star column with a MaxWidth keeps it centred. */
+    public static Grid Centre(UIElement content, double width)
+    {
+        var column = new Grid();
         column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10000, GridUnitType.Star), MaxWidth = width });
         column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn((FrameworkElement)content, 1);
         column.Children.Add(content);
-        return new ScrollViewer { Content = column, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        return column;
     }
 
     /** A page's header (.ph): the title and the line under it on the left, the page's buttons on the right. */

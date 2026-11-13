@@ -14,6 +14,8 @@ public static class Storage
     };
 
     public static string PathFor(string name) => Path.Combine(Root, name);
+    /** A record kept under its name, or null when there is none yet. */
+    public static string? Read(string name) => File.Exists(PathFor(name)) ? File.ReadAllText(PathFor(name)) : null;
 
     /** A write replaces its predecessor only after the complete new record is on disk. */
     public static void Write(string path, string value)
