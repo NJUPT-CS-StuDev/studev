@@ -290,7 +290,7 @@ export default function AiApp() {
             {composer}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
             {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
-            <p className="fine">问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才会加到清单。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。</p>
+            <p className="fine">问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才会加到清单。对话只存在这台设备上。</p>
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
         <div className="ai-turns" aria-live="polite">{turns.map(turn => {

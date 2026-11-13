@@ -234,7 +234,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
                 }
-                Plain("问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才保存。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
+                Plain("问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才保存。对话只存在这台设备上。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
             }
             return@Column
         }
