@@ -79,7 +79,8 @@ import top.hicancan.studev.world.Moment
             }
         }
     }) { padding ->
-        Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+        // The bar below counts as room already given: a keyboard rising over it lifts the page only by what it covers beyond.
+        Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = padding.calculateBottomPadding()))) {
             // The native map keeps its surface while another entry is on top of it.
             if (mapOpened) campus?.let { loaded -> MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) }
             when (route.tab) {
