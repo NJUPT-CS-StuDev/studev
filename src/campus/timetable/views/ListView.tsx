@@ -3,11 +3,11 @@
 // is typed. A task is held and dragged to put it elsewhere in its group, or into today, tomorrow or no day at all.
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { eventsOn, upcomingExams, type CampusEvent, type Timeline } from '@/world/events';
-import { courseIdentity } from '@/timetable/model/courseColors';
+import { courseIdentity, courseToneStyle, timelineTones } from '@/timetable/model/courseColors';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { DROP_GROUPS, moveTask, newTaskId, parseQuickTask, saveTask, saveTasks, taskGroup, taskOrder, TASK_GROUPS, toggleDone, type QuickTask, type Task, type TaskGroup } from '@/world/tasks';
 import { dayWord as dayOf, daysBetween, hm, minutesOf, type Moment } from '@/world/time';
-import { Chevron } from '@/world/ui';
+import { Bell, Chevron, Note, Steps } from '@/world/ui';
 import { readHints, suggestTasks, TASK_EXAMPLES, writeHints } from '@/world/suggestions';
 
 const examGroup = (date: string, now: Moment): TaskGroup => {
@@ -41,6 +41,9 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
     const [showDone, setShowDone] = useState(false);
     const [drag, setDrag] = useState<Drag | null>(null);
     const [hints, setHints] = useState(readHints);
+    // Groups folded away, as a list keeps them closed while one works on another.
+    const [folded, setFolded] = useState<TaskGroup[]>([]);
+    const tones = useMemo(() => timelineTones(line), [line]);
     const listRef = useRef<HTMLDivElement>(null);
     const hold = useRef<{ timer: number; pointer: number; x: number; y: number; id: string; row: HTMLElement } | null>(null);
     const top = line.tasks.filter(task => !task.parent);
@@ -136,9 +139,10 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
                 <button className="tmain" onClick={() => onTask(task)}>
                     <b className={task.done ? 'task-done' : ''}>{task.title}</b>
                     <span className="tmeta">
-                        {task.course && courses.get(task.course) && <i>{courseShort(courses.get(task.course)!)}</i>}
-                        {parts.length > 0 && <i>{parts.filter(item => item.done).length}/{parts.length}</i>}
-                        {task.note && <i aria-label="有备注">≡</i>}
+                        {task.course && courses.get(task.course) && <i className="tcourse" style={tones.has(task.course) ? courseToneStyle(tones.get(task.course)!) : undefined}>{courseShort(courses.get(task.course)!)}</i>}
+                        {parts.length > 0 && <i className="ticon" aria-label="步骤"><Steps />{parts.filter(item => item.done).length}/{parts.length}</i>}
+                        {task.note && <i className="ticon" aria-label="有备注"><Note /></i>}
+                        {Boolean(task.remind?.length || task.due?.remind?.length) && <i className="ticon" aria-label="有提醒"><Bell /></i>}
                         {when.text && <em className={when.tone}>{when.text}</em>}
                     </span>
                 </button>
@@ -162,10 +166,10 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
                 {open.length > 1 && !hints.dragTold && <p className="thint">按住一件事可以拖动，拖到“今天”“明天”就改了日期<button aria-label="知道了" onClick={() => setHints(writeHints(current => ({ ...current, dragTold: true })))}>×</button></p>}
             </div>
             {suggested.length > 0 && !drag && <section className="tgroup suggest">
-                <h3 className="sh">从你的安排里<span /></h3>
+                <h3 className="sh">从你的安排里</h3>
                 {suggested.map(({ key, task }) => <div key={key} className="trow-i">
                     <button className="tplus" aria-label="加上" onClick={() => saveTask({ id: newTaskId(), ...task, order: -Date.now() })}>+</button>
-                    <span className="tmain"><b>{task.title}</b><span className="tmeta">{task.course && courses.get(task.course) && <i>{courseShort(courses.get(task.course)!)}</i>}<em>{dayWord(task.due!.date, now)} 截止</em></span></span>
+                    <span className="tmain"><b>{task.title}</b><span className="tmeta">{task.course && courses.get(task.course) && <i className="tcourse" style={tones.has(task.course) ? courseToneStyle(tones.get(task.course)!) : undefined}>{courseShort(courses.get(task.course)!)}</i>}<em>{dayWord(task.due!.date, now)} 截止</em></span></span>
                     <button className="tskip" aria-label="不用" onClick={() => setAside(key)}>×</button>
                 </div>)}
             </section>}
@@ -176,7 +180,8 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
                 if (!tasks.length && !dated.length && !target) return null;
                 return (
                     <section key={key} className={`tgroup ${key} ${drag && !accepts(key, drag.from) ? 'closed' : ''}`}>
-                        <h3 className="sh">{name}<span>{tasks.length + dated.length || ''}</span></h3>
+                        <h3 className="sh"><button className={`sh-fold ${folded.includes(key) && !drag ? 'shut' : ''}`} aria-expanded={!folded.includes(key)} onClick={() => setFolded(current => current.includes(key) ? current.filter(item => item !== key) : [...current, key])}><Chevron />{name}<span>{tasks.length + dated.length || ''}</span></button></h3>
+                        {(!folded.includes(key) || drag) && <>
                         {dated.map(exam => {
                             const event = eventsOn(line, exam.date).find(item => item.exam?.id === exam.id);
                             return <button key={exam.id} className="trow-i exam" onClick={() => event && onOpen(event)}>
@@ -187,6 +192,7 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
                         {tasks.flatMap((task, index) => [dropLine(key, index), row(task, { group: key, index })])}
                         {tasks.length > 0 && dropLine(key, tasks.length)}
                         {!tasks.length && target && <div className={`tempty ${drag?.target?.group === key ? 'on' : ''}`} data-slot="empty" data-group={key} data-index={0}>{key === 'someday' ? '放到这里，去掉日期' : `放到这里，改到${name}`}</div>}
+                        </>}
                     </section>
                 );
             })}

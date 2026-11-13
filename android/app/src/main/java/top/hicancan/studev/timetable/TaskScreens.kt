@@ -39,6 +39,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.hicancan.studev.app.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Notes
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.compositeOver
 import top.hicancan.studev.me.TaskStore
 import top.hicancan.studev.world.*
 import java.time.LocalDate
@@ -230,6 +237,9 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
 @Composable fun TaskList(line: CampusLine, now: Moment, store: TaskStore, onOpen: (LineEvent) -> Unit) {
     var draft by remember { mutableStateOf("") }
     var showDone by remember { mutableStateOf(false) }
+    // Groups folded away, as a list keeps them closed while one works on another.
+    var folded by remember { mutableStateOf(emptySet<String>()) }
+    val tones = remember(line) { TimetablePresentation.tones(line) }
     val top = line.tasks.filter { it.parent == null }
     val open = top.filter { it.done == null }.sortedWith(Tasks.order)
     val done = top.filter { it.done != null }.sortedByDescending { it.done }
@@ -332,13 +342,14 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
             TaskCheck(task, store)
             Row(Modifier.weight(1f).clickable(enabled = dragId == null) { onOpen(taskEvent(task, now.date)) }.padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Title(task, Modifier.weight(1f))
-                task.course?.let { courses[it] }?.let { Plain(Names.courseShort(it), 12.sp, Ink.faint, maxLines = 1) }
-                if (parts.isNotEmpty()) Plain("${parts.count { it.done != null }}/${parts.size}", 12.sp, Ink.faint)
-                if (task.note != null) Plain("≡", 12.sp, Ink.faint)
+                task.course?.let { id -> courses[id]?.let { CourseTag(Names.courseShort(it), tones[id]) } }
+                if (parts.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Checklist, "步骤", Modifier.size(13.dp), tint = Ink.faint); Plain("${parts.count { it.done != null }}/${parts.size}", 12.sp, Ink.faint) }
+                if (task.note != null) Icon(Icons.Outlined.Notes, "有备注", Modifier.size(13.dp), tint = Ink.faint)
+                if (!task.remind.isNullOrEmpty() || !task.due?.remind.isNullOrEmpty()) Icon(Icons.Outlined.NotificationsNone, "有提醒", Modifier.size(13.dp), tint = Ink.faint)
                 val text = whenText(task)
                 if (text.isNotEmpty()) {
-                    val tone = when (Tasks.group(task, now)) { "overdue" -> marks().danger; "today" -> brand; else -> Ink.muted }
-                    Plain(text, 12.sp, tone, maxLines = 1)
+                    val group = Tasks.group(task, now)
+                    Plain(text, 12.sp, when (group) { "overdue" -> marks().danger; "today" -> brand; else -> brand.copy(alpha = .78f).compositeOver(Ink.text) }, if (group == "today") FontWeight.Medium else FontWeight.Normal, maxLines = 1)
                 }
             }
         } }
@@ -376,7 +387,7 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
                 Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).border(1.5.dp, brand, RoundedCornerShape(5.dp)).clickable { store.save(task.copy(id = store.newId(), order = -System.currentTimeMillis().toDouble())) }, contentAlignment = Alignment.Center) { Plain("+", 15.sp, brand) }
                     Plain(task.title, 15.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                    task.course?.let { courses[it] }?.let { Plain(Names.courseShort(it), 12.sp, Ink.faint, maxLines = 1) }
+                    task.course?.let { id -> courses[id]?.let { CourseTag(Names.courseShort(it), tones[id]) } }
                     Plain("${dayWord(task.due!!.date)} 截止", 12.sp, Ink.muted, maxLines = 1)
                     Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { setAside = setAside + key; prefs.edit().putStringSet("setAside", setAside).apply() }.padding(horizontal = 4.dp))
                 }
@@ -391,10 +402,15 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
             }
             val dropHere = dragId != null && key in Tasks.DROP_GROUPS
             if (tasks.isEmpty() && dated.isEmpty() && !dropHere) { slots.remove("e:$key"); return@forEach }
-            Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp)) {
-                Plain(name, 13.sp, if (key == "overdue") marks().danger else Ink.muted, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            val shut = key in folded && dragId == null
+            Row(Modifier.fillMaxWidth().clickable { folded = if (key in folded) folded - key else folded + key }.padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val ink = if (key == "overdue") marks().danger else Ink.muted
+                Icon(Icons.Outlined.ChevronRight, if (shut) "展开" else "收起", Modifier.size(16.dp).graphicsLayer { rotationZ = if (shut) 0f else 90f }, tint = ink)
+                Spacer(Modifier.width(4.dp))
+                Plain(name, 13.sp, ink, FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 if (shown.size + dated.size > 0) Plain("${shown.size + dated.size}", 13.sp, Ink.faint)
             }
+            if (shut) { tasks.forEach { slots.remove("t:${it.id}") }; slots.remove("e:$key"); return@forEach }
             dated.forEach { exam ->
                 val event = line.on(LocalDate.parse(exam.date)).firstOrNull { it.exam?.id == exam.id }
                 Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { event?.let(onOpen) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -421,4 +437,10 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** A task's course as a small tag in the course's colour, as .tcourse on the web. */
+@Composable private fun CourseTag(name: String, toneIndex: Int?) {
+    val mark = toneIndex?.let { tone(it) }
+    Box(Modifier.widthIn(max = 84.dp).clip(RoundedCornerShape(9.dp)).background(mark?.bg ?: Ink.sunken).padding(horizontal = 7.dp, vertical = 1.dp)) { Plain(name, 11.5.sp, mark?.fg ?: Ink.muted, FontWeight.Medium, maxLines = 1) }
 }
