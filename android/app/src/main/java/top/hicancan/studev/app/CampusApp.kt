@@ -85,7 +85,7 @@ import top.hicancan.studev.world.Moment
             when (route.tab) {
                 "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }
-                "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model) }
+                "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model, route) }
             }
             if (route.tab != "map" && route.tab != "ai") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 14.dp).size(32.dp).testTag("me"), shape = CircleShape, color = Ink.sunken) {
                 MeAvatar()

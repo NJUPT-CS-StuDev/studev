@@ -33,10 +33,43 @@ interface AccountStorage { suspend fun read(): StoredAccount; suspend fun write(
 data class PlatformReply(val status: Int, val body: JsonObject)
 class PlatformFailure(val status: Int, val code: String, message: String) : Exception(message)
 fun interface PlatformTransport { suspend fun send(path: String, body: JsonObject?, bearer: String?): PlatformReply }
+/** An event stream from the platform: each event as it arrives; a refusal before any comes back as its reply. */
+fun interface PlatformStreamer { suspend fun stream(path: String, body: JsonObject, bearer: String, onEvent: (String, JsonObject) -> Unit): PlatformReply? }
 internal fun InputStream.accountBytes(limit: Int): ByteArray {
     val output = ByteArrayOutputStream(); val buffer = ByteArray(8192)
     while (true) { val count = read(buffer); if (count < 0) break; require(output.size() + count <= limit) { "Response exceeds limit" }; output.write(buffer, 0, count) }
     return output.toByteArray()
+}
+
+class HttpsPlatformStreamer : PlatformStreamer {
+    override suspend fun stream(path: String, body: JsonObject, bearer: String, onEvent: (String, JsonObject) -> Unit): PlatformReply? = withContext(Dispatchers.IO) {
+        require(path.startsWith('/') && !path.startsWith("//") && !path.contains('\\'))
+        val connection = URI(BuildConfig.PLATFORM_HOST + "/api/platform" + path).toURL().openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout = 15_000; connection.readTimeout = 90_000
+            connection.instanceFollowRedirects = false; connection.requestMethod = "POST"; connection.doOutput = true
+            connection.setRequestProperty("Accept", "text/event-stream"); connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Authorization", "Bearer $bearer")
+            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val bytes = connection.errorStream?.use { it.accountBytes(65_536) } ?: byteArrayOf()
+                return@withContext PlatformReply(status, runCatching { accountJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject }.getOrElse { buildJsonObject {} })
+            }
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                var event: String? = null
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    when {
+                        line.startsWith("event: ") -> event = line.removePrefix("event: ")
+                        line.startsWith("data: ") -> event?.let { onEvent(it, accountJson.parseToJsonElement(line.removePrefix("data: ")).jsonObject) }
+                        line.isEmpty() -> event = null
+                    }
+                }
+            }
+            null
+        } finally { connection.disconnect() }
+    }
 }
 
 class HttpsPlatformTransport : PlatformTransport {
@@ -44,7 +77,7 @@ class HttpsPlatformTransport : PlatformTransport {
         require(path.startsWith('/') && !path.startsWith("//") && !path.contains('\\'))
         val connection = URI(BuildConfig.PLATFORM_HOST + "/api/platform" + path).toURL().openConnection() as HttpURLConnection
         try {
-            connection.connectTimeout = 15_000; connection.readTimeout = if (path == "/ai") 60_000 else 15_000
+            connection.connectTimeout = 15_000; connection.readTimeout = 15_000
             connection.instanceFollowRedirects = false
             connection.requestMethod = if (body == null) "GET" else "POST"
             connection.setRequestProperty("Accept", "application/json")
@@ -64,7 +97,7 @@ class HttpsPlatformTransport : PlatformTransport {
     }
 }
 
-class AccountClient(private val storage: AccountStorage, private val transport: PlatformTransport, private val now: () -> Long = System::currentTimeMillis) {
+class AccountClient(private val storage: AccountStorage, private val transport: PlatformTransport, private val now: () -> Long = System::currentTimeMillis, private val streamer: PlatformStreamer = HttpsPlatformStreamer()) {
     private val lock = Mutex()
     private val signedIn = kotlinx.coroutines.flow.MutableStateFlow<AccountUser?>(null)
     /** Who is signed in, updated the moment that changes: signing in or out, a refreshed session, a saved profile. */
@@ -149,6 +182,13 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     suspend fun request(path: String, body: JsonObject? = null, authenticated: Boolean = false): JsonObject {
         if (!authenticated) return checked(transport.send(path, body, null))
         return authenticatedRequest(path, body, access())
+    }
+    /** An event stream for someone signed in, renewing the pass once if it ran out before the stream began. */
+    suspend fun stream(path: String, body: JsonObject, onEvent: (String, JsonObject) -> Unit) {
+        val credential = access()
+        var refused = streamer.stream(path, body, credential.accessToken, onEvent)
+        if (refused?.status == 401) refused = streamer.stream(path, body, access(forceFor = credential).accessToken, onEvent)
+        refused?.let(::checked)
     }
     suspend fun signOut() {
         val credential = access()
