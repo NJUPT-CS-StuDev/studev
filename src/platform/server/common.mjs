@@ -9,6 +9,11 @@ export function response(body, status = 200, headers = {}) {
     'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'", ...headers,
   } });
 }
+/** An event stream: what arrives is sent on at once, never held or rewritten on the way. */
+response.stream = (body) => new Response(body, { headers: {
+  'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store, private, no-transform', 'X-Accel-Buffering': 'no',
+  'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
+} });
 export async function readJson(request, maxBytes = 65536) {
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) fail(415, 'JSON_REQUIRED', '请以 JSON 格式提交。');
   if (Number(request.headers.get('content-length')) > maxBytes) fail(413, 'BODY_TOO_LARGE', '提交信息过长。');
