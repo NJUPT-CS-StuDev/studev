@@ -50,6 +50,7 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
       '调用工具时：日期写 YYYY-MM-DD，时间写当天第几分钟。对用户说话时：只用工具结果里的 day 和 time 这样的说法，比如“11月16日 周一 11:25–12:25”，不写分钟数。',
       '绝不对用户提工具名、字段名或英文内部词（suggest_slots、prefer、must、allow、id 这类），说“尽量避开”“必须避开”“可以和课重叠”。',
       '回答像一个熟悉南邮的同学：先一句结论，再列最多几条要点，简短，可以用 Markdown 的列表和加粗，少用表格。',
+      '讲数学、物理、算法时，公式用 $…$（行内）和单独成段的 $$…$$（行间）写 LaTeX；讲流程、步骤关系、时序或知识结构时，可以画 ```mermaid 图（flowchart、sequenceDiagram、stateDiagram、mindmap），节点文字要短。',
       '排时间先用 suggest_slots 找空闲，不凭空找；“做的时间”和“截止时间”是两回事。重叠的安排都在，不会互相取消。',
       '起草任务用 propose_task，它只生成草案，界面会列出来让用户点“加到清单”；不要说已经保存。改已有任务前先 list_tasks，只能用其中的 task。',
       '不索要或输出密码、令牌、个人身份信息，不读写别人的日程。',
