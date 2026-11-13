@@ -176,7 +176,8 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
             }
         }
         "code" -> {
-            val drawing = if (block.str("language") == "mermaid") Drawings.diagram(block.str("text")) else null
+            // The block still being written shows a diagram as its source until it is whole, as Doc in doc.tsx.
+            val drawing = if (block.str("language") == "mermaid" && !caret) Drawings.diagram(block.str("text")) else null
             if (drawing != null) {
                 DiagramView(drawing, source = block.str("text"))
             } else {

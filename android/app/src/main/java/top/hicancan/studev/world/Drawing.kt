@@ -112,11 +112,15 @@ fun DrawScope.drawFormula(f: Drawings.Formula, em: Float, baseline: Float, color
     }
 }
 
-/** A diagram, drawn to fit the page's width (never larger than laid out). */
+/**
+ * A diagram, drawn to fit the page's width, never larger than laid out and never so small its words cannot be read:
+ * past [SMALLEST] of its size it scrolls sideways instead, as .doc-diagram does on the web.
+ */
 @Composable fun DiagramView(d: Drawings.Diagram, source: String, color: Color = Ink.text) {
     val density = LocalDensity.current.density
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val fit = minOf(1f, maxWidth.value / d.width)
+        val fit = (maxWidth.value / d.width).coerceIn(SMALLEST, 1f)
+        Box(if (d.width * fit > maxWidth.value) Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()) else Modifier) {
         Canvas(Modifier.size((d.width * fit).dp, (d.height * fit).dp).semantics { contentDescription = source }) {
             val unit = density * fit
             val canvas = drawContext.canvas.nativeCanvas
@@ -152,5 +156,9 @@ fun DrawScope.drawFormula(f: Drawings.Formula, em: Float, baseline: Float, color
             }
             canvas.restore()
         }
+        }
     }
 }
+
+/** The smallest a diagram is drawn, as a share of its size: its 14dp words stay about 10dp. */
+private const val SMALLEST = 0.72f
