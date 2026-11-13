@@ -14,6 +14,7 @@ import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds } from '@/world/events';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
 import tools from '@/world/tools.json';
+import { chatGroups, titleOf } from '@/ai/chats';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
@@ -208,6 +209,10 @@ const threadReplay = threadSteps.reduce<{ thread: Thread; frames: unknown[] }>((
     const next = step.op === 'append' ? threadAppend(thread, step.parent, step.id, { role: step.role, content: step.content }) : threadChoose(thread, step.id);
     return { thread: next, frames: [...frames, { path: threadPath(next).map(node => node.id), tip: tip(next), siblings: Object.fromEntries(next.nodes.map(node => [node.id, siblings(next, node.id)])), lineage: lineage(next, tip(next)).map(node => node.id) }] };
 }, { thread: emptyThread(), frames: [] });
+// Conversations listed: named by their first question, grouped by the local day they last changed (noon in Nanjing).
+const noon = (date: string) => Date.parse(`${date}T12:00:00+08:00`);
+const listed = ['2026-11-13', '2026-11-12', '2026-11-09', '2026-10-20', '2026-08-02', '2026-11-13'].map((date, at) => ({ id: `c${at}`, title: at === 5 ? '改过的名字' : '', updated: noon(date) + at, thread: threadChain([{ role: 'user', content: at === 2 ? '  一个很长很长的问题，用来看看名字会不会在二十八个字的地方被截断然后加上省略号 ' : `问题 ${at}` }], [`n${at}`]), proposals: [] }));
+const chats = { now: noon('2026-11-13') + 3600000, listed, titles: listed.map(chat => titleOf(chat)), groups: chatGroups(listed, noon('2026-11-13') + 3600000).map(group => [group.name, group.chats.map(chat => chat.id)]) };
 const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ thread, semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ thread, chats, semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

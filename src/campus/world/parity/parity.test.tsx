@@ -9,6 +9,7 @@ import { attendingExams } from '@/timetable/model/examAttendance';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
+import { chatGroups, titleOf } from '@/ai/chats';
 import { append as threadAppend, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
@@ -18,6 +19,11 @@ const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.peri
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('conversations are named by their first question and grouped by the day they last changed', () => {
+        const listed = golden.chats.listed as unknown as Parameters<typeof titleOf>[0][] as never[];
+        expect((listed as { title: string; thread: Thread }[]).map(chat => titleOf(chat))).toEqual(golden.chats.titles);
+        expect(chatGroups(listed as never, golden.chats.now).map(group => [group.name, group.chats.map((chat: { id: string }) => chat.id)])).toEqual(golden.chats.groups);
+    });
     it('a conversation branches, and the path shown follows the branches chosen', () => {
         let thread: Thread = emptyThread();
         golden.thread.steps.forEach((step, at) => {

@@ -2,7 +2,7 @@
 // three, run on this device. The answer is shown as it comes; what was looked up is shown as steps one can open;
 // rooms and routes it finds are things to tap; a task it drafts is saved only when confirmed. A question can be
 // changed where it stands and an answer asked again: each grows a branch beside the old one (thread.ts), and one goes
-// back and forth between them. The conversation is kept on this device. Asking is for someone signed in, since the
+// back and forth between them. Conversations are kept on this device and listed at the side (chats.ts). Asking is for someone signed in, since the
 // model is reached through the platform.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { session } from '../../platform/client/api';
@@ -13,10 +13,11 @@ import { dayWord, hm, momentNow } from '@/world/time';
 import { useTimeline } from '@/timetable/useTimeline';
 import { CampusTools } from '@/world/campusTools';
 import { roomLabel } from '@/world/names';
-import { Again, Back, Chevron, Compose, Copy, Down, Pencil, Square, Tick, Up } from '@/world/ui';
+import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up } from '@/world/ui';
 import { definitions, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, type Message } from './stream';
 import { append, chain, choose, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
+import { chatGroups, titleOf, type Saved } from './chats';
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
 
@@ -24,22 +25,30 @@ import '../campus.css';
 const AI_EXAMPLES = ['这周有哪些截止和考试？', '今天下午哪里有空教室？', '帮我在下周找三次一小时复习，周五前完成', '从教三到图书馆怎么走？'];
 /** What each tool is doing, as a step says it. */
 const STEPS: Record<string, string> = { campus_search: '搜索校园资料', timeline: '查看你的安排', list_tasks: '读取你的任务', suggest_slots: '找空闲时间', free_rooms: '查空教室', route: '规划路线', propose_task: '起草任务' };
-const KEY = 'studev_ai_thread';
+const KEY = 'studev_ai_chats';
 
 interface ModelContext { registerTool(tool: { name: string; description: string; inputSchema: object; execute(args: unknown): Promise<unknown> }): void; unregisterTool(name: string): void }
 type Proposal = TaskProposal & { key: string; call: string; saved?: boolean };
 interface Chat { thread: Thread; proposals: Proposal[] }
+/** Every conversation kept, and the one open (none: a new one, kept once something is asked in it). */
+interface Kept { chats: Saved<Proposal>[]; current: string | null }
 const newId = () => crypto.randomUUID();
-function readChat(): Chat {
+const empty = (): Chat => ({ thread: emptyThread(), proposals: [] });
+function readKept(): Kept {
     try {
-        const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Chat | null;
-        if (raw && Array.isArray(raw.thread?.nodes)) return { thread: raw.thread, proposals: raw.proposals ?? [] };
-        // A conversation kept before it could branch becomes one branch.
+        const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Kept | null;
+        if (raw && Array.isArray(raw.chats)) return raw;
+        // One conversation kept before there could be many, or before it could branch, becomes the first of them.
+        const single = JSON.parse(localStorage.getItem('studev_ai_thread') ?? 'null') as Chat | null;
         const old = JSON.parse(localStorage.getItem('studev_ai_chat') ?? 'null') as { messages?: Message[]; proposals?: Proposal[] } | null;
-        localStorage.removeItem('studev_ai_chat');
-        if (old && Array.isArray(old.messages)) return { thread: chain(old.messages, old.messages.map(newId)), proposals: old.proposals ?? [] };
-    } catch { /* Nothing kept, or kept unreadably: a new conversation. */ }
-    return { thread: emptyThread(), proposals: [] };
+        const thread = single?.thread?.nodes ? single.thread : old?.messages ? chain(old.messages, old.messages.map(newId)) : null;
+        const id = newId();
+        const kept: Kept = thread?.nodes.length ? { chats: [{ id, title: '', updated: Date.now(), thread, proposals: single?.proposals ?? old?.proposals ?? [] }], current: id } : { chats: [], current: null };
+        // Written at once, before the old keys go, so that a page opened twice does not lose it.
+        localStorage.setItem(KEY, JSON.stringify(kept)); localStorage.removeItem('studev_ai_thread'); localStorage.removeItem('studev_ai_chat');
+        return kept;
+    } catch { /* Nothing kept, or kept unreadably: no conversations yet. */ }
+    return { chats: [], current: null };
 }
 const parse = (text: string | null) => { try { return JSON.parse(text ?? 'null') as unknown; } catch { return null; } };
 /** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
@@ -106,7 +115,11 @@ export default function AiApp() {
     const { prefs, ready } = usePreferences(), tasks = useTasks();
     const who = useMemo(() => ({ type: 'me' as const }), []);
     const { loaded, error: loadError } = useTimeline(who, prefs, ready, null, tasks);
-    const [chat, setChat] = useState<Chat>(readChat);
+    const [kept, setKept] = useState<Kept>(readKept);
+    const [chat, setChat] = useState<Chat>(() => kept.chats.find(item => item.id === kept.current) ?? empty());
+    const [side, setSide] = useState(false), [menu, setMenu] = useState<string | null>(null), [renaming, setRenaming] = useState<string | null>(null);
+    // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
+    const opening = useRef(true);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [waiting, setWaiting] = useState<string | null>(null), [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
     // While answering after a message, only what this answer says shows after it, not the answer it had before.
@@ -121,7 +134,26 @@ export default function AiApp() {
     const services = useMemo(() => new CampusTools(), []);
     useEffect(() => () => services.dispose(), [services]);
     const latest = useRef(loaded?.line); latest.current = loaded?.line;
-    useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(chat)); } catch { /* Kept for this page only. */ } }, [chat]);
+    useEffect(() => {
+        if (opening.current) { opening.current = false; return; }
+        if (!chat.thread.nodes.length) return;
+        setKept(all => {
+            const id = all.current ?? newId(), before = all.chats.find(item => item.id === id);
+            const saved = { id, title: before?.title ?? '', updated: Date.now(), thread: chat.thread, proposals: chat.proposals };
+            return { chats: [saved, ...all.chats.filter(item => item.id !== id)], current: id };
+        });
+    }, [chat]);
+    useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(kept)); } catch { /* Kept for this page only. */ } }, [kept]);
+    const open = (id: string | null) => {
+        if (busy) return;
+        const found = kept.chats.find(item => item.id === id);
+        opening.current = true;
+        setChat(found ? { thread: found.thread, proposals: found.proposals } : empty());
+        setKept(all => ({ ...all, current: found ? found.id : null }));
+        setError(''); setEditing(null); setSide(false); setMenu(null); stuck.current = true;
+    };
+    const remove = (id: string) => { setKept(all => ({ chats: all.chats.filter(item => item.id !== id), current: all.current === id ? null : all.current })); if (kept.current === id) { opening.current = true; setChat(empty()); } setMenu(null); };
+    const rename = (id: string, title: string) => { setKept(all => ({ ...all, chats: all.chats.map(item => item.id === id ? { ...item, title: title.trim().slice(0, 60) } : item) })); setRenaming(null); };
     // The view follows the answer down unless one has scrolled up to read; then a button brings it back.
     useEffect(() => {
         const box = scroller.current; if (!box) return;
@@ -223,12 +255,37 @@ export default function AiApp() {
         else turns.at(-1)?.replies.push(node);
     });
     if (turns.length) turns.at(-1)!.last = true;
-    const empty = !shown.length;
+    const blank = !shown.length;
     const composer = <Composer value={draft} onChange={setDraft} onSend={() => void send(draft)} onStop={() => stop.current?.abort()} busy={busy} />;
-    return <div className={`sd ai ${empty ? 'blank' : ''}`}>
-        {!empty && <div className="ai-bar"><button className="ai-new" disabled={busy} onClick={() => { setChat({ thread: emptyThread(), proposals: [] }); setError(''); setEditing(null); }}><Compose />新对话</button></div>}
+    const current = kept.chats.find(item => item.id === kept.current);
+    return <div className={`sd ai ${blank ? 'blank' : ''} ${side ? 'side-open' : ''}`}>
+        <aside className="ai-side" aria-label="对话">
+            <button className="ai-side-new" disabled={busy} onClick={() => open(null)}><Compose />新对话</button>
+            <nav className="ai-side-list">{chatGroups(kept.chats, Date.now()).map(group => <section key={group.name}>
+                <h4>{group.name}</h4>
+                {group.chats.map(item => <div key={item.id} className={`ai-chat ${item.id === kept.current ? 'on' : ''} ${menu === item.id ? 'menu' : ''}`}>
+                    {renaming === item.id
+                        ? <input className="ai-rename" autoFocus defaultValue={titleOf(item)} maxLength={60} onBlur={event => rename(item.id, event.target.value)}
+                            onKeyDown={event => { if (event.key === 'Enter') rename(item.id, (event.target as HTMLInputElement).value); if (event.key === 'Escape') setRenaming(null); }} />
+                        : <button className="ai-chat-t" disabled={busy && item.id !== kept.current} onClick={() => open(item.id)} title={titleOf(item)}>{titleOf(item)}</button>}
+                    <button className="ai-chat-more" aria-label="更多" onClick={() => setMenu(menu === item.id ? null : item.id)}><Dots /></button>
+                    {menu === item.id && <div className="ai-menu" role="menu">
+                        <button role="menuitem" onClick={() => { setRenaming(item.id); setMenu(null); }}>重命名</button>
+                        <button role="menuitem" className="danger" disabled={busy && item.id === kept.current} onClick={() => remove(item.id)}>删除</button>
+                    </div>}
+                </div>)}
+            </section>)}
+            {!kept.chats.length && <p className="ai-side-none">问过的对话会列在这里，只存在这台设备上。</p>}</nav>
+        </aside>
+        {side && <div className="ai-scrim" onClick={() => setSide(false)} />}
+        <div className="ai-main">
+        <div className="ai-bar">
+            <button className="ai-icon ai-menu-btn" aria-label="对话列表" onClick={() => setSide(true)}><Bars /></button>
+            <span className="ai-title">{blank ? '' : titleOf(current ?? { title: '', thread: chat.thread })}</span>
+            {!blank && <button className="ai-icon ai-bar-new" aria-label="新对话" title="新对话" disabled={busy} onClick={() => open(null)}><Compose /></button>}
+        </div>
         <div className="ai-scroll" ref={scroller}><div className="ai-col">
-        {empty && <div className="ai-hello">
+        {blank && <div className="ai-hello">
             <h1>有什么可以帮你？</h1>
             {composer}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
@@ -275,8 +332,9 @@ export default function AiApp() {
         {waiting && <p role="status" className="fine">在新打开的页面登录或注册，回到这里会自动发出：“{waiting}”</p>}
         <div ref={end} className="ai-end" />
         </div></div>
-        {below && !empty && <button className="ai-down" aria-label="回到底部" onClick={() => { stuck.current = true; end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }}><Down /></button>}
-        {!empty && <div className="ai-dock">{composer}</div>}
+        {below && !blank && <button className="ai-down" aria-label="回到底部" onClick={() => { stuck.current = true; end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }}><Down /></button>}
+        {!blank && <div className="ai-dock">{composer}</div>}
+        </div>
     </div>;
 }
 

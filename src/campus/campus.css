@@ -409,11 +409,30 @@
 .event-choices{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.event-choices summary{cursor:pointer;padding:6px 0;color:var(--muted)}.event-choices .picks{margin-top:8px}.event-choices label{display:block;margin:6px 0}
 /* AI: the conversation, read like a page: one column of 16/26 text, questions in a soft bubble, quiet icon actions,
    a floating box to write in. */
-.sd.ai{height:100%;display:flex;flex-direction:column;position:relative}
+.sd.ai{height:100%;display:flex;position:relative}
+.ai .ai-main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+/* The conversations, at the side: newest first, by when; a drawer on a narrow screen. */
+.ai .ai-side{flex:none;width:260px;display:flex;flex-direction:column;gap:6px;padding:12px 10px;background:color-mix(in srgb,var(--surface-sunken) 55%,var(--paper));border-right:1px solid var(--line);overflow:hidden}
+.ai .ai-side-new{display:flex;align-items:center;gap:8px;height:38px;padding:0 10px;border-radius:10px;color:var(--ink);font-size:14px;font-weight:500}.ai .ai-side-new:hover:not(:disabled){background:var(--surface-sunken)}.ai .ai-side-new svg{width:18px;height:18px}
+.ai .ai-side-list{flex:1;overflow-y:auto;margin:0 -4px;padding:0 4px}.ai .ai-side-list h4{margin:14px 10px 4px;font-size:12px;font-weight:500;color:var(--faint)}
+.ai .ai-chat{position:relative;display:flex;align-items:center;border-radius:10px}.ai .ai-chat:hover,.ai .ai-chat.menu{background:var(--surface-sunken)}.ai .ai-chat.on{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.ai .ai-chat-t{flex:1;min-width:0;height:36px;padding:0 10px;text-align:left;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+.ai .ai-chat-more{flex:none;display:grid;place-items:center;width:30px;height:30px;margin-right:3px;border-radius:8px;color:var(--muted);opacity:0}.ai .ai-chat:hover .ai-chat-more,.ai .ai-chat.on .ai-chat-more,.ai .ai-chat.menu .ai-chat-more{opacity:1}.ai .ai-chat-more svg{width:18px;height:18px}@media (hover:none){.ai .ai-chat-more{opacity:1}}
+.ai .ai-menu{position:absolute;right:4px;top:36px;z-index:5;min-width:128px;padding:6px;border-radius:12px;background:var(--paper);box-shadow:0 0 0 1px var(--line),0 8px 24px rgba(0,0,0,.12);display:flex;flex-direction:column}
+.ai .ai-menu button{height:34px;padding:0 10px;border-radius:8px;text-align:left;font-size:14px;color:var(--ink)}.ai .ai-menu button:hover{background:var(--surface-sunken)}.ai .ai-menu .danger{color:var(--danger)}
+.ai .ai-rename{flex:1;min-width:0;height:34px;margin:1px 4px;padding:0 8px;border-radius:8px;border:1px solid var(--brand);background:var(--paper);color:var(--ink);font:inherit;font-size:14px;outline:none}
+.ai .ai-side-none{margin:14px 10px;font-size:13px;color:var(--faint);line-height:1.6}
+.ai .ai-scrim{display:none}
+@media (max-width:899px){
+  .ai .ai-side{position:fixed;z-index:80;top:0;bottom:0;left:0;width:min(300px,82vw);transform:translateX(-102%);transition:transform .22s var(--ease,ease);box-shadow:none;background:var(--paper)}
+  .ai.side-open .ai-side{transform:none;box-shadow:0 0 40px rgba(0,0,0,.18)}
+  .ai.side-open .ai-scrim{display:block;position:fixed;inset:0;z-index:79;background:rgba(0,0,0,.28);animation:sd-fade .2s}
+}
+@media (min-width:900px){.ai .ai-bar .ai-menu-btn,.ai .ai-bar .ai-bar-new{display:none}}
 .ai .ai-scroll{flex:1;min-height:0;overflow-y:auto;padding:12px 18px 28px;overscroll-behavior:contain;scrollbar-gutter:stable}
 .ai .ai-col{max-width:768px;margin:0 auto}
-.ai .ai-bar{flex:none;display:flex;justify-content:flex-end;padding:10px 14px 0}@media (max-width:899px){.ai .ai-bar{padding-right:60px}}
-.ai .ai-new{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;color:var(--muted);font-size:13.5px}.ai .ai-new:hover{background:var(--surface-sunken);color:var(--ink)}.ai .ai-new svg{width:18px;height:18px}
+.ai .ai-bar{flex:none;display:flex;align-items:center;gap:6px;min-height:48px;padding:6px 14px 0}@media (max-width:899px){.ai .ai-bar{padding-right:60px}}
+.ai .ai-title{flex:1;min-width:0;font-size:15px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Nothing asked yet: a greeting, and the box in the middle of the page. */
 .ai.blank .ai-scroll{display:flex}.ai.blank .ai-col{flex:1;display:flex;flex-direction:column;justify-content:center;width:100%}
 .ai .ai-hello{display:flex;flex-direction:column;align-items:stretch;gap:16px;padding-bottom:8vh}.ai .ai-hello h1{margin:0 0 6px;text-align:center;font-size:28px;font-weight:600;letter-spacing:-.01em}

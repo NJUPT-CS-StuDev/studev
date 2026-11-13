@@ -322,4 +322,12 @@ class ParityTest {
         val chain = top.hicancan.studev.ai.ChatThread.chain(listOf(buildJsonObject { put("role", "user"); put("content", "a") }, buildJsonObject { put("role", "assistant"); put("content", "b") }), listOf("x", "y"))
         assertEquals(thread.getValue("chain").jsonArray.map { pair -> pair.jsonArray.map { it.jsonPrimitive.content } }, chain.path().map { listOf(it.id, it.parent) })
     }
+    @Test fun conversationsAreNamedByTheirFirstQuestionAndGroupedByTheDayTheyLastChanged() {
+        val chats = golden.getValue("chats").jsonObject
+        val listed = chats.getValue("listed").jsonArray.map { item -> val chat = item.jsonObject
+            top.hicancan.studev.ai.SavedChat(chat.getValue("id").jsonPrimitive.content, chat.getValue("title").jsonPrimitive.content, chat.getValue("updated").jsonPrimitive.long, top.hicancan.studev.ai.ChatThread.of(chat.getValue("thread").jsonObject)) }
+        assertEquals(chats.getValue("titles").jsonArray.map { it.jsonPrimitive.content }, listed.map { top.hicancan.studev.ai.Chats.titleOf(it.title, it.thread) })
+        assertEquals(chats.getValue("groups").jsonArray.map { group -> group.jsonArray[0].jsonPrimitive.content to group.jsonArray[1].jsonArray.map { it.jsonPrimitive.content } },
+            top.hicancan.studev.ai.Chats.groups(listed, chats.getValue("now").jsonPrimitive.long).map { (name, list) -> name to list.map { it.id } })
+    }
 }

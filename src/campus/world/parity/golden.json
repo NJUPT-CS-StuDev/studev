@@ -473,6 +473,178 @@
    ]
   ]
  },
+ "chats": {
+  "now": 1794546000000,
+  "listed": [
+   {
+    "id": "c0",
+    "title": "",
+    "updated": 1794542400000,
+    "thread": {
+     "nodes": [
+      {
+       "id": "n0",
+       "parent": "",
+       "message": {
+        "role": "user",
+        "content": "问题 0"
+       }
+      }
+     ],
+     "chosen": {
+      "": "n0"
+     }
+    },
+    "proposals": []
+   },
+   {
+    "id": "c1",
+    "title": "",
+    "updated": 1794456000001,
+    "thread": {
+     "nodes": [
+      {
+       "id": "n1",
+       "parent": "",
+       "message": {
+        "role": "user",
+        "content": "问题 1"
+       }
+      }
+     ],
+     "chosen": {
+      "": "n1"
+     }
+    },
+    "proposals": []
+   },
+   {
+    "id": "c2",
+    "title": "",
+    "updated": 1794196800002,
+    "thread": {
+     "nodes": [
+      {
+       "id": "n2",
+       "parent": "",
+       "message": {
+        "role": "user",
+        "content": "  一个很长很长的问题，用来看看名字会不会在二十八个字的地方被截断然后加上省略号 "
+       }
+      }
+     ],
+     "chosen": {
+      "": "n2"
+     }
+    },
+    "proposals": []
+   },
+   {
+    "id": "c3",
+    "title": "",
+    "updated": 1792468800003,
+    "thread": {
+     "nodes": [
+      {
+       "id": "n3",
+       "parent": "",
+       "message": {
+        "role": "user",
+        "content": "问题 3"
+       }
+      }
+     ],
+     "chosen": {
+      "": "n3"
+     }
+    },
+    "proposals": []
+   },
+   {
+    "id": "c4",
+    "title": "",
+    "updated": 1785643200004,
+    "thread": {
+     "nodes": [
+      {
+       "id": "n4",
+       "parent": "",
+       "message": {
+        "role": "user",
+        "content": "问题 4"
+       }
+      }
+     ],
+     "chosen": {
+      "": "n4"
+     }
+    },
+    "proposals": []
+   },
+   {
+    "id": "c5",
+    "title": "改过的名字",
+    "updated": 1794542400005,
+    "thread": {
+     "nodes": [
+      {
+       "id": "n5",
+       "parent": "",
+       "message": {
+        "role": "user",
+        "content": "问题 5"
+       }
+      }
+     ],
+     "chosen": {
+      "": "n5"
+     }
+    },
+    "proposals": []
+   }
+  ],
+  "titles": [
+   "问题 0",
+   "问题 1",
+   "一个很长很长的问题，用来看看名字会不会在二十八个字的地方…",
+   "问题 3",
+   "问题 4",
+   "改过的名字"
+  ],
+  "groups": [
+   [
+    "今天",
+    [
+     "c5",
+     "c0"
+    ]
+   ],
+   [
+    "昨天",
+    [
+     "c1"
+    ]
+   ],
+   [
+    "前 7 天",
+    [
+     "c2"
+    ]
+   ],
+   [
+    "前 30 天",
+    [
+     "c3"
+    ]
+   ],
+   [
+    "2026年8月",
+    [
+     "c4"
+    ]
+   ]
+  ]
+ },
  "semantics": {
   "tools": [
    {

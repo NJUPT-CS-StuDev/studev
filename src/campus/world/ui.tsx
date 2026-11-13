@@ -14,6 +14,8 @@ export const Compose = () => <svg viewBox="0 0 20 20"><path d="M9 4H5.5a2 2 0 0 
 export const Note = () => <svg viewBox="0 0 16 16"><path d="M3.5 4.5h9M3.5 8h9M3.5 11.5h5" /></svg>;
 export const Bell = () => <svg viewBox="0 0 16 16"><path d="M4.5 11V7.5a3.5 3.5 0 0 1 7 0V11l1 1.5h-9Z" /><path d="M6.8 14h2.4" /></svg>;
 export const Steps = () => <svg viewBox="0 0 16 16"><path d="m3 4.5 1.2 1.2L6.5 3.5M3 10.5l1.2 1.2 2.3-2.2M9 5h4M9 11h4" /></svg>;
+export const Bars = () => <svg viewBox="0 0 20 20"><path d="M3.5 6h13M3.5 10h13M3.5 14h8" /></svg>;
+export const Dots = () => <svg viewBox="0 0 20 20"><path d="M5 10h.01M10 10h.01M15 10h.01" strokeWidth="2.6" /></svg>;
 export const Magnifier = () => <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5" /><path d="m13.2 13.2 3.3 3.3" /></svg>;
 
 /** A sheet from the bottom on phones, a centred card on wide screens. Back closes it. */

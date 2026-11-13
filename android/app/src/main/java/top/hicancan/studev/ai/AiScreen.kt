@@ -55,7 +55,8 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
  * same tools as the other three, run on this device. The answer shows as it comes and can be stopped; what was looked
  * up shows as steps; rooms and routes found are things to tap; a drafted task is added only when confirmed. A question
  * can be changed where it stands and an answer asked again: each grows a branch beside the old one (Thread.kt), and
- * one goes back and forth between them. The conversation is kept on this device. Asking is for someone signed in;
+ * one goes back and forth between them. Conversations are kept on this device and listed in a drawer (Chats.kt).
+ * Asking is for someone signed in;
  * signing in opens over it and the question goes on.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -65,7 +66,14 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val scope = rememberCoroutineScope()
     val kept = remember { context.getSharedPreferences("ai_chat", android.content.Context.MODE_PRIVATE) }
     var draft by remember { mutableStateOf("") }
-    var thread by remember { mutableStateOf(readThread(kept)) }
+    val start = remember { readChats(kept) }
+    var chats by remember { mutableStateOf(start.first) }
+    var current by remember { mutableStateOf(start.second) }
+    var thread by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.thread ?: ChatThread()) }
+    // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
+    var opening by remember { mutableStateOf(true) }
+    var renaming by remember { mutableStateOf<SavedChat?>(null) }
+    val drawer = rememberDrawerState(DrawerValue.Closed)
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
     var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
@@ -79,7 +87,15 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val busy = job != null
     val tools = remember { CampusTools(context, { model.state.value.repository }, { model.myLine(model.state.value, model.settings.state.value) }, model.tasks) { proposal -> proposals = proposals + proposal } }
     DisposableEffect(tools) { onDispose { tools.close() } }
-    LaunchedEffect(thread) { kept.edit().putString("thread", thread.toJson().toString()).remove("messages").apply() }
+    LaunchedEffect(thread) {
+        if (opening) { opening = false; return@LaunchedEffect }
+        if (thread.nodes.isEmpty()) return@LaunchedEffect
+        val id = current ?: java.util.UUID.randomUUID().toString()
+        val before = chats.firstOrNull { it.id == id }
+        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), thread)) + chats.filter { it.id != id }
+        current = id
+    }
+    LaunchedEffect(chats, current) { kept.edit().putString("chats", buildJsonObject { put("chats", JsonArray(chats.map { it.toJson() })); current?.let { put("current", it) } }.toString()).remove("thread").remove("messages").apply() }
     var waiting by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
     LaunchedEffect(thread.nodes.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
@@ -149,6 +165,14 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     /** The answer to a question asked again, beside the answer it had. */
     fun again(question: String) { if (!busy) start(thread, question) }
     fun pick(id: String) { if (!busy) { thread = thread.choose(id); error = "" } }
+    fun open(id: String?) {
+        if (busy) return
+        opening = true
+        thread = chats.firstOrNull { it.id == id }?.thread ?: ChatThread()
+        current = chats.firstOrNull { it.id == id }?.id
+        proposals = emptyList(); saved = emptySet(); error = ""; editing = null
+        scope.launch { drawer.close() }
+    }
     waiting?.let { question ->
         BackHandler { waiting = null }
         top.hicancan.studev.account.AccountScreen(client, onBack = { waiting = null }, onSignedIn = { waiting = null; ask(question) })
@@ -161,7 +185,48 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
     val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
+    renaming?.let { chat ->
+        var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
+        AlertDialog(onDismissRequest = { renaming = null }, title = { Text("重命名") },
+            text = { OutlinedTextField(name, { name = it.take(60) }, singleLine = true) },
+            confirmButton = { TextButton({ chats = chats.map { if (it.id == chat.id) it.copy(title = name.trim()) else it }; renaming = null }) { Text("好") } },
+            dismissButton = { TextButton({ renaming = null }) { Text("取消") } })
+    }
+    ModalNavigationDrawer(drawerState = drawer, drawerContent = {
+        ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = Ink.paper) {
+            Column(Modifier.fillMaxHeight().statusBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !busy) { open(null) }.padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.EditNote, null, Modifier.size(20.dp), tint = Ink.text); Spacer(Modifier.width(10.dp)); Plain("新对话", 15.sp, weight = FontWeight.Medium)
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    Chats.groups(chats, System.currentTimeMillis()).forEach { (name, list) ->
+                        Plain(name, 12.sp, Ink.faint, modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 4.dp))
+                        list.forEach { chat ->
+                            var more by remember(chat.id) { mutableStateOf(false) }
+                            val on = chat.id == current
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (on) Ink.text.copy(alpha = .08f) else Color.Transparent).clickable(enabled = !busy || on) { open(chat.id) }.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Plain(Chats.titleOf(chat.title, chat.thread), 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
+                                Box {
+                                    IconAction(Icons.Outlined.MoreHoriz, "更多") { more = true }
+                                    DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
+                                        DropdownMenuItem({ Text("重命名") }, { more = false; renaming = chat })
+                                        DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; chats = chats.filter { it.id != chat.id }; if (current == chat.id) { opening = true; current = null; thread = ChatThread() } }, enabled = !(busy && on))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (chats.isEmpty()) Plain("问过的对话会列在这里，只存在这台设备上。", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp))
+                }
+            }
+        }
+    }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
+            Plain(if (shown.isEmpty()) "" else Chats.titleOf(chats.firstOrNull { it.id == current }?.title.orEmpty(), thread), 15.sp, weight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null) }
+        }
         if (shown.isEmpty()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
                 Plain("有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
@@ -172,11 +237,6 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 Plain("问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才保存。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
             }
             return@Column
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { thread = ChatThread(); proposals = emptyList(); saved = emptySet(); error = ""; editing = null }, enabled = !busy, colors = ButtonDefaults.textButtonColors(contentColor = Ink.muted)) {
-                Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("新对话", fontSize = 13.5.sp)
-            }
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             turns.forEachIndexed { at, (question, replyNodes) ->
@@ -240,13 +300,16 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
         }
         Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)) { composer() }
     }
+    }
 }
 
-/** The conversation kept on this device; one kept before it could branch becomes one branch. */
-private fun readThread(kept: android.content.SharedPreferences): ChatThread = runCatching {
-    kept.getString("thread", null)?.let { ChatThread.of(Json.parseToJsonElement(it).jsonObject) }
-        ?: kept.getString("messages", null)?.let { old -> Json.parseToJsonElement(old).jsonArray.map { it.jsonObject }.let { ChatThread.chain(it, it.map { java.util.UUID.randomUUID().toString() }) } }
-}.getOrNull() ?: ChatThread()
+/** The conversations kept on this device, and the one open; one kept before there could be many becomes the first. */
+private fun readChats(kept: android.content.SharedPreferences): Pair<List<SavedChat>, String?> = runCatching {
+    kept.getString("chats", null)?.let { text -> Json.parseToJsonElement(text).jsonObject.let { json -> json.getValue("chats").jsonArray.map { SavedChat.of(it.jsonObject) } to json["current"]?.jsonPrimitive?.contentOrNull } }
+        ?: (kept.getString("thread", null)?.let { ChatThread.of(Json.parseToJsonElement(it).jsonObject) }
+            ?: kept.getString("messages", null)?.let { old -> Json.parseToJsonElement(old).jsonArray.map { it.jsonObject }.let { ChatThread.chain(it, it.map { java.util.UUID.randomUUID().toString() }) } })
+            ?.takeIf { it.nodes.isNotEmpty() }?.let { thread -> val id = java.util.UUID.randomUUID().toString(); listOf(SavedChat(id, "", System.currentTimeMillis(), thread)) to id }
+}.getOrNull() ?: (emptyList<SavedChat>() to null)
 
 /** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
 private fun recent(history: List<JsonObject>): List<JsonObject> {
