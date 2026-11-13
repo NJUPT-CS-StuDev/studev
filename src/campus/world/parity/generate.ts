@@ -14,6 +14,7 @@ import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds } from '@/world/events';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
 import tools from '@/world/tools.json';
+import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
@@ -195,5 +196,18 @@ const courses = {
     },
     weeks: ['1-16', '1-8,10,12-14', '单1-15', '双 2-16', '3，5、7周', '0-3', '1-20', '9-3', '第一周', '', '16'].map(text => ({ text, weeks: parseWeeks(text, 18) })),
 };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// A conversation that branches: a question changed, an answer asked again, back and forth between them.
+const threadSteps: ({ op: 'append'; parent: string; id: string; role: 'user' | 'assistant'; content: string } | { op: 'choose'; id: string })[] = [
+    { op: 'append', parent: '', id: 'q1', role: 'user', content: '明天有课吗' }, { op: 'append', parent: 'q1', id: 'a1', role: 'assistant', content: '有三节' },
+    { op: 'append', parent: 'a1', id: 'q2', role: 'user', content: '几点' }, { op: 'append', parent: 'q2', id: 'a2', role: 'assistant', content: '八点' },
+    { op: 'append', parent: 'q1', id: 'a1b', role: 'assistant', content: '有，三节' }, { op: 'choose', id: 'a1' },
+    { op: 'append', parent: '', id: 'q1b', role: 'user', content: '后天有课吗' }, { op: 'append', parent: 'q1b', id: 'a3', role: 'assistant', content: '没有' },
+    { op: 'choose', id: 'q1' }, { op: 'choose', id: 'a1b' }, { op: 'choose', id: 'missing' },
+];
+const threadReplay = threadSteps.reduce<{ thread: Thread; frames: unknown[] }>(({ thread, frames }, step) => {
+    const next = step.op === 'append' ? threadAppend(thread, step.parent, step.id, { role: step.role, content: step.content }) : threadChoose(thread, step.id);
+    return { thread: next, frames: [...frames, { path: threadPath(next).map(node => node.id), tip: tip(next), siblings: Object.fromEntries(next.nodes.map(node => [node.id, siblings(next, node.id)])), lineage: lineage(next, tip(next)).map(node => node.id) }] };
+}, { thread: emptyThread(), frames: [] });
+const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ thread, semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

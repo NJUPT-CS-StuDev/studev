@@ -79,7 +79,7 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
     }
 }
 
-@Composable private fun InlineText(inlines: List<JsonObject>, size: Float = 15.5f, weight: FontWeight = FontWeight.Normal, color: Color = Ink.text, caret: Boolean = false, onLink: (String) -> Unit, align: TextAlign? = null) {
+@Composable private fun InlineText(inlines: List<JsonObject>, size: Float = 16f, weight: FontWeight = FontWeight.Normal, color: Color = Ink.text, caret: Boolean = false, onLink: (String) -> Unit, align: TextAlign? = null) {
     val code = Ink.sunken; val brand = Ink.brand
     val uri = LocalUriHandler.current
     val (text, drawings) = remember(inlines, caret, code, brand, size, color, onLink, uri) {
@@ -120,11 +120,11 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
                 }
             }
             walk(inlines)
-            if (caret) withStyle(SpanStyle(color = brand)) { append(" ▍") }
+            if (caret) withStyle(SpanStyle(color = color)) { append(" ●") }
         }
         text to drawings.toMap()
     }
-    Text(text, if (align != null) Modifier.fillMaxWidth() else Modifier, color = color, style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.7f).sp, fontWeight = weight), textAlign = align, inlineContent = drawings)
+    Text(text, if (align != null) Modifier.fillMaxWidth() else Modifier, color = color, style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.625f).sp, fontWeight = weight), textAlign = align, inlineContent = drawings)
 }
 
 @Composable private fun BlockView(block: JsonObject, onLink: (String) -> Unit, caret: Boolean = false) {
@@ -137,7 +137,7 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
             else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 runs.forEachIndexed { at, run ->
                     when (run) {
-                        is Run.Display -> MathBlock(run.tex, 15.5.sp)
+                        is Run.Display -> MathBlock(run.tex, 16.sp)
                         is Run.Text -> InlineText(run.inlines, caret = caret && at == runs.lastIndex, onLink = onLink)
                     }
                 }
@@ -191,7 +191,7 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
                 }
             }
         }
-        "math" -> MathBlock(block.str("tex"), 15.5.sp)
+        "math" -> MathBlock(block.str("tex"), 16.sp)
         "table" -> {
             val head = block.getValue("head").jsonArray.map { cell -> cell.jsonArray.map { it.jsonObject } }
             val rows = block.getValue("rows").jsonArray.map { row -> row.jsonArray.map { cell -> cell.jsonArray.map { it.jsonObject } } }

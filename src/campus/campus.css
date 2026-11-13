@@ -401,26 +401,55 @@
 @media (prefers-reduced-motion:reduce){.sd *{transition-duration:.01ms!important;animation:none!important}}
 
 .event-choices{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.event-choices summary{cursor:pointer;padding:6px 0;color:var(--muted)}.event-choices .picks{margin-top:8px}.event-choices label{display:block;margin:6px 0}
-/* AI: the conversation, in the same parts as the timetable and the list. */
-.sd.ai{height:100%;display:flex;flex-direction:column}.ai .ai-scroll{flex:1;min-height:0;overflow-y:auto;padding:24px 18px 24px;overscroll-behavior:contain}.ai .wrap.narrow{max-width:720px}
-.ai .ai-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.ai .ai-head h1{font-size:28px;font-weight:700;margin:0}@media (max-width:899px){.ai .ai-head{padding-right:52px}}
-.ai .ai-empty{display:flex;flex-direction:column;gap:12px;margin-top:12px;color:var(--muted)}.ai .ai-empty>p{margin:0}
-.ai .ai-examples{display:flex;flex-wrap:wrap;gap:8px}.ai .ai-examples button{padding:10px 14px;border-radius:18px;border:1px solid var(--line);color:var(--ink);font-size:14px;text-align:left;background:var(--paper)}.ai .ai-examples button:hover{background:var(--surface-sunken)}
-.ai .ai-turns{display:flex;flex-direction:column;gap:28px;margin-top:20px}.ai .ai-turn{display:flex;flex-direction:column;gap:10px}
-.ai .ai-q{align-self:flex-end;max-width:85%;margin:0;padding:10px 14px;border-radius:18px 18px 4px 18px;background:var(--surface-sunken);white-space:pre-wrap;overflow-wrap:anywhere}
-.ai .ai-steps{font-size:13px;color:var(--muted)}.ai .ai-steps summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}.ai .ai-steps summary::-webkit-details-marker{display:none}
-.ai .ai-steps summary:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand);flex:none}.ai .ai-steps summary.doing:before{animation:ai-pulse 1s ease-in-out infinite}.ai .ai-steps summary:after{content:"›";transition:transform .15s}.ai .ai-steps[open] summary:after{transform:rotate(90deg)}
+/* AI: the conversation, read like a page: one column of 16/26 text, questions in a soft bubble, quiet icon actions,
+   a floating box to write in. */
+.sd.ai{height:100%;display:flex;flex-direction:column;position:relative}
+.ai .ai-scroll{flex:1;min-height:0;overflow-y:auto;padding:12px 18px 28px;overscroll-behavior:contain;scrollbar-gutter:stable}
+.ai .ai-col{max-width:768px;margin:0 auto}
+.ai .ai-bar{flex:none;display:flex;justify-content:flex-end;padding:10px 14px 0}@media (max-width:899px){.ai .ai-bar{padding-right:60px}}
+.ai .ai-new{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;color:var(--muted);font-size:13.5px}.ai .ai-new:hover{background:var(--surface-sunken);color:var(--ink)}.ai .ai-new svg{width:18px;height:18px}
+/* Nothing asked yet: a greeting, and the box in the middle of the page. */
+.ai.blank .ai-scroll{display:flex}.ai.blank .ai-col{flex:1;display:flex;flex-direction:column;justify-content:center;width:100%}
+.ai .ai-hello{display:flex;flex-direction:column;align-items:stretch;gap:16px;padding-bottom:8vh}.ai .ai-hello h1{margin:0 0 6px;text-align:center;font-size:28px;font-weight:600;letter-spacing:-.01em}
+.ai .ai-hello .fine{margin:0;text-align:center}
+.ai .ai-examples{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}.ai .ai-examples button{padding:8px 14px;border-radius:18px;border:1px solid var(--line);color:var(--muted);font-size:13.5px;background:var(--paper);transition:background .15s,color .15s}.ai .ai-examples button:hover{background:var(--surface-sunken);color:var(--ink)}
+.ai .ai-turns{display:flex;flex-direction:column;gap:30px}.ai .ai-turn{display:flex;flex-direction:column;gap:12px}
+/* A question: a soft bubble at the right, its actions shown when the pointer comes near. */
+.ai .ai-ask{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.ai .ai-q{max-width:75%;margin:0;padding:10px 16px;border-radius:22px;background:color-mix(in srgb,var(--brand) 10%,var(--paper));color:var(--ink);font-size:16px;line-height:1.625;white-space:pre-wrap;overflow-wrap:anywhere}
+.ai .ai-tools{display:flex;align-items:center;gap:2px;min-height:32px;color:var(--muted)}
+.ai .ai-tools-q{opacity:0;transition:opacity .15s}.ai .ai-ask:hover .ai-tools-q,.ai .ai-ask:focus-within .ai-tools-q{opacity:1}@media (hover:none){.ai .ai-tools-q{opacity:1}}
+.ai .ai-icon{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--muted)}.ai .ai-icon:hover:not(:disabled){background:var(--surface-sunken);color:var(--ink)}.ai .ai-icon:disabled{opacity:.35}.ai .ai-icon svg{width:18px;height:18px}
+.ai .ai-branches{display:inline-flex;align-items:center;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}.ai .ai-branches .ai-icon{width:26px}.ai .ai-branches .ai-icon svg{width:15px;height:15px}
+/* A question changed where it stands. */
+.ai .ai-edit{align-self:stretch;margin-left:12%;display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:22px;background:var(--surface-sunken)}
+.ai .ai-edit textarea{border:0;background:none;color:var(--ink);font:inherit;font-size:16px;line-height:1.625;resize:none;outline:none;field-sizing:content;min-height:52px;max-height:280px}
+.ai .ai-edit-btns{display:flex;justify-content:flex-end;gap:8px}
+.ai .ai-pill{height:34px;padding:0 16px;border-radius:17px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:14px}.ai .ai-pill:hover{background:var(--surface-sunken)}.ai .ai-pill.go{border-color:var(--ink);background:var(--ink);color:var(--paper)}.ai .ai-pill:disabled{opacity:.35}
+/* What was looked up, folded into one line. */
+.ai .ai-steps{font-size:13.5px;color:var(--muted)}.ai .ai-steps summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px}.ai .ai-steps summary::-webkit-details-marker{display:none}
+.ai .ai-steps summary:after{content:"›";transition:transform .15s}.ai .ai-steps[open] summary:after{transform:rotate(90deg)}
+.ai .ai-steps summary.doing,.ai .ai-think{background:linear-gradient(90deg,var(--muted) 30%,var(--ink) 50%,var(--muted) 70%) 0 0/200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:ai-shine 1.6s linear infinite}
 .ai .ai-steps ol{margin:8px 0 0;padding:0 0 0 12px;border-left:2px solid var(--line);list-style:none;display:flex;flex-direction:column;gap:6px}.ai .ai-steps ol p{margin:0 0 2px;color:var(--ink)}.ai .ai-steps .failed{color:var(--danger)}
-.ai .ai-a .ai-plain{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;font-size:15.5px}.ai .ai-wait{margin:0;color:var(--muted);font-size:14px;animation:ai-fade 1.4s ease-in-out infinite}
-.ai .ai-caret{display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:text-bottom;border-radius:1px;background:var(--brand);animation:ai-fade 1s steps(2) infinite}
-@keyframes ai-fade{50%{opacity:.35}}@keyframes ai-pulse{50%{transform:scale(1.6);opacity:.5}}
-.ai .ai-cards{display:flex;flex-wrap:wrap;gap:8px}.ai .ai-card{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper);min-width:132px}.ai .ai-card:hover{border-color:var(--brand)}.ai .ai-card b{font-weight:600;font-size:14px}.ai .ai-card small{color:var(--muted);font-size:12px}
-.ai .ai-drafts{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--paper)}.ai .ai-drafts h3{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--muted)}
+.ai .ai-think{margin:0;font-size:15px;width:max-content}
+.ai .ai-a .ai-plain{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.625;font-size:16px}
+.ai .ai-dot{display:inline-block;width:.6em;height:.6em;margin-left:4px;border-radius:50%;background:var(--ink);vertical-align:.05em;animation:ai-breathe 1.2s ease-in-out infinite}
+@keyframes ai-fade{50%{opacity:.35}}@keyframes ai-breathe{50%{transform:scale(.7);opacity:.55}}@keyframes ai-shine{from{background-position:100% 0}to{background-position:-100% 0}}
+/* The answer reads at the size of the page. */
+.ai .doc{font-size:16px;line-height:1.625}.ai .doc p{margin:0 0 .8em}.ai .doc h2{font-size:1.25em;margin:1.3em 0 .5em}.ai .doc h3{font-size:1.125em;margin:1.2em 0 .45em}.ai .doc hr{margin:1.6em 0}.ai .doc li{margin:.25em 0}
+.ai .ai-cards{display:flex;flex-wrap:wrap;gap:8px}.ai .ai-card{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper);min-width:132px;transition:border-color .15s,background .15s}.ai .ai-card:hover{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 4%,var(--paper))}.ai .ai-card b{font-weight:600;font-size:14px}.ai .ai-card small{color:var(--muted);font-size:12px}
+.ai .ai-drafts{border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:var(--paper)}.ai .ai-drafts h3{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--muted)}
 .ai .ai-draft{display:flex;align-items:center;gap:12px;min-height:48px;border-top:1px solid var(--line);cursor:pointer}.ai .ai-draft:first-of-type{border-top:0}.ai .ai-draft input{width:18px;height:18px;accent-color:var(--brand);flex:none}
 .ai .ai-draft-main{flex:1;min-width:0;display:flex;flex-direction:column}.ai .ai-draft-main b{font-weight:500;font-size:15px}.ai .ai-draft-main small{color:var(--muted);font-size:12.5px}.ai .ai-draft.saved b{color:var(--muted)}.ai .ai-drafts .btns{margin-top:10px}
-.ai .ai-again{display:flex;gap:8px;margin-top:4px}.ai .ai-error{display:flex;align-items:center;gap:8px;color:var(--danger);margin-top:12px}
-.ai .ai-dock{flex:none;padding:8px 12px 12px}.ai .ai-compose{margin:0 auto;width:min(720px,100%);display:flex;gap:8px;align-items:flex-end;padding:8px 8px 8px 14px;border-radius:22px;border:1px solid var(--line);background:var(--paper);box-shadow:0 8px 30px rgba(0,0,0,.10)}
-.ai .ai-compose textarea{flex:1;border:0;background:none;color:var(--ink);font:inherit;font-size:15.5px;resize:none;max-height:180px;padding:7px 0;outline:none;field-sizing:content}.ai .ai-compose .btn{border-radius:16px}
+.ai .ai-error{display:flex;align-items:center;gap:10px;color:var(--danger);margin-top:14px;font-size:14.5px}
+/* The box to write in: white, round, lifted by soft shadows rather than a border; one round button. */
+.ai .ai-dock{flex:none;padding:6px 14px 14px}
+.ai .ai-compose{margin:0 auto;width:min(768px,100%);display:flex;gap:8px;align-items:flex-end;padding:9px 9px 9px 20px;border-radius:28px;background:var(--paper);box-shadow:0 0 0 1px var(--line),0 2px 8px rgba(0,0,0,.05),0 4px 60px 6px rgba(0,0,0,.035)}
+.ai .ai-compose:focus-within{box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 22%,transparent),0 2px 8px rgba(0,0,0,.06),0 4px 60px 6px rgba(0,0,0,.04)}
+.ai .ai-compose textarea{flex:1;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;line-height:24px;resize:none;max-height:200px;padding:6px 0;outline:none;field-sizing:content}
+.ai .ai-send{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--paper);transition:opacity .15s}.ai .ai-send:disabled{opacity:.18}.ai .ai-send svg{width:20px;height:20px;stroke-width:2}
+.ai .ai-send svg rect{fill:currentColor}
+.ai .ai-down{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line),0 4px 14px rgba(0,0,0,.08);animation:sd-fade .2s}.ai .ai-down svg{width:18px;height:18px}
 /* A document as docstream reads it: the same look wherever Markdown is drawn. */
 .doc{font-size:15.5px;line-height:1.75;color:var(--ink);overflow-wrap:anywhere}
 .doc>*:first-child{margin-top:0}.doc>*:last-child{margin-bottom:0}.doc blockquote>:last-child,.doc .doc-alert>:last-child,.doc li>:last-child{margin-bottom:0}
@@ -440,4 +469,4 @@
 .doc .doc-diagram{margin:.2em 0 .9em;overflow-x:auto;text-align:center}.doc .doc-diagram svg{max-width:100%;height:auto}
 .doc .doc-table{margin:0 0 .75em;overflow-x:auto;border:1px solid var(--line);border-radius:10px}.doc table{border-collapse:collapse;width:100%;font-size:14px}.doc th,.doc td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.doc th{font-weight:600;background:var(--surface-sunken)}.doc tr:last-child td{border-bottom:0}
 .doc hr{border:0;border-top:1px solid var(--line);margin:1em 0}.doc img{max-width:100%;border-radius:8px}.doc .doc-html{white-space:pre-wrap;font-size:13px;color:var(--muted)}
-.doc.live>*:last-child::after{content:"";display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:text-bottom;border-radius:1px;background:var(--brand);animation:ai-fade 1s steps(2) infinite}
+.doc.live>*:last-child::after{content:"";display:inline-block;width:.6em;height:.6em;margin-left:4px;border-radius:50%;background:var(--ink);vertical-align:.05em;animation:ai-breathe 1.2s ease-in-out infinite}

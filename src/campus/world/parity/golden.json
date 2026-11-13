@@ -1,4 +1,478 @@
 {
+ "thread": {
+  "steps": [
+   {
+    "op": "append",
+    "parent": "",
+    "id": "q1",
+    "role": "user",
+    "content": "明天有课吗"
+   },
+   {
+    "op": "append",
+    "parent": "q1",
+    "id": "a1",
+    "role": "assistant",
+    "content": "有三节"
+   },
+   {
+    "op": "append",
+    "parent": "a1",
+    "id": "q2",
+    "role": "user",
+    "content": "几点"
+   },
+   {
+    "op": "append",
+    "parent": "q2",
+    "id": "a2",
+    "role": "assistant",
+    "content": "八点"
+   },
+   {
+    "op": "append",
+    "parent": "q1",
+    "id": "a1b",
+    "role": "assistant",
+    "content": "有，三节"
+   },
+   {
+    "op": "choose",
+    "id": "a1"
+   },
+   {
+    "op": "append",
+    "parent": "",
+    "id": "q1b",
+    "role": "user",
+    "content": "后天有课吗"
+   },
+   {
+    "op": "append",
+    "parent": "q1b",
+    "id": "a3",
+    "role": "assistant",
+    "content": "没有"
+   },
+   {
+    "op": "choose",
+    "id": "q1"
+   },
+   {
+    "op": "choose",
+    "id": "a1b"
+   },
+   {
+    "op": "choose",
+    "id": "missing"
+   }
+  ],
+  "frames": [
+   {
+    "path": [
+     "q1"
+    ],
+    "tip": "q1",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1"
+    ],
+    "tip": "a1",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 1
+     },
+     "a1": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1",
+     "q2"
+    ],
+    "tip": "q2",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 1
+     },
+     "a1": {
+      "index": 0,
+      "count": 1
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1",
+     "q2"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1",
+     "q2",
+     "a2"
+    ],
+    "tip": "a2",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 1
+     },
+     "a1": {
+      "index": 0,
+      "count": 1
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1",
+     "q2",
+     "a2"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1b"
+    ],
+    "tip": "a1b",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 1
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1b"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1",
+     "q2",
+     "a2"
+    ],
+    "tip": "a2",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 1
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1",
+     "q2",
+     "a2"
+    ]
+   },
+   {
+    "path": [
+     "q1b"
+    ],
+    "tip": "q1b",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 2,
+      "next": "q1b"
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     },
+     "q1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "q1"
+     }
+    },
+    "lineage": [
+     "q1b"
+    ]
+   },
+   {
+    "path": [
+     "q1b",
+     "a3"
+    ],
+    "tip": "a3",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 2,
+      "next": "q1b"
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     },
+     "q1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "q1"
+     },
+     "a3": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1b",
+     "a3"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1",
+     "q2",
+     "a2"
+    ],
+    "tip": "a2",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 2,
+      "next": "q1b"
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     },
+     "q1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "q1"
+     },
+     "a3": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1",
+     "q2",
+     "a2"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1b"
+    ],
+    "tip": "a1b",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 2,
+      "next": "q1b"
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     },
+     "q1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "q1"
+     },
+     "a3": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1b"
+    ]
+   },
+   {
+    "path": [
+     "q1",
+     "a1b"
+    ],
+    "tip": "a1b",
+    "siblings": {
+     "q1": {
+      "index": 0,
+      "count": 2,
+      "next": "q1b"
+     },
+     "a1": {
+      "index": 0,
+      "count": 2,
+      "next": "a1b"
+     },
+     "q2": {
+      "index": 0,
+      "count": 1
+     },
+     "a2": {
+      "index": 0,
+      "count": 1
+     },
+     "a1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "a1"
+     },
+     "q1b": {
+      "index": 1,
+      "count": 2,
+      "previous": "q1"
+     },
+     "a3": {
+      "index": 0,
+      "count": 1
+     }
+    },
+    "lineage": [
+     "q1",
+     "a1b"
+    ]
+   }
+  ],
+  "chain": [
+   [
+    "x",
+    ""
+   ],
+   [
+    "y",
+    "x"
+   ]
+  ]
+ },
  "semantics": {
   "tools": [
    {
@@ -20343,7 +20817,7 @@
   }
  ],
  "source": {
-  "release": "map-v0.8.5__data-20261112-1738__p10",
+  "release": "map-v0.8.5__data-20261113-0307__p10",
   "teaching": "2026-2027-1"
  },
  "term": {
@@ -20452,7 +20926,7 @@
     "end": "2027-01-15"
    }
   ],
-  "observed_at": "2026-11-11T02:18:51Z"
+  "observed_at": "2026-11-13T02:58:31Z"
  },
  "periods": [
   {
@@ -38408,7 +38882,7 @@
     "date": "2026-11-09",
     "week": 11,
     "weekday": 1,
-    "observed_at": "2026-11-12T17:37:44Z",
+    "observed_at": "2026-11-13T03:06:35Z",
     "free": {
      "1": [
       "三牌楼:MBA中心301室",

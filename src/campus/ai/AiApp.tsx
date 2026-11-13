@@ -1,7 +1,9 @@
 // AI, the fourth entry beside the timetable, the map and search: one conversation over the same tools as the other
 // three, run on this device. The answer is shown as it comes; what was looked up is shown as steps one can open;
-// rooms and routes it finds are things to tap; a task it drafts is saved only when confirmed. The conversation is kept
-// on this device. Asking is for someone signed in, since the model is reached through the platform.
+// rooms and routes it finds are things to tap; a task it drafts is saved only when confirmed. A question can be
+// changed where it stands and an answer asked again: each grows a branch beside the old one (thread.ts), and one goes
+// back and forth between them. The conversation is kept on this device. Asking is for someone signed in, since the
+// model is reached through the platform.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { session } from '../../platform/client/api';
 import { usePreferences } from '@/world/usePreferences';
@@ -11,8 +13,10 @@ import { dayWord, hm, momentNow } from '@/world/time';
 import { useTimeline } from '@/timetable/useTimeline';
 import { CampusTools } from '@/world/campusTools';
 import { roomLabel } from '@/world/names';
+import { Again, Back, Chevron, Compose, Copy, Down, Pencil, Square, Tick, Up } from '@/world/ui';
 import { definitions, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, type Message } from './stream';
+import { append, chain, choose, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
 
@@ -20,13 +24,30 @@ import '../campus.css';
 const AI_EXAMPLES = ['这周有哪些截止和考试？', '今天下午哪里有空教室？', '帮我在下周找三次一小时复习，周五前完成', '从教三到图书馆怎么走？'];
 /** What each tool is doing, as a step says it. */
 const STEPS: Record<string, string> = { campus_search: '搜索校园资料', timeline: '查看你的安排', list_tasks: '读取你的任务', suggest_slots: '找空闲时间', free_rooms: '查空教室', route: '规划路线', propose_task: '起草任务' };
-const KEY = 'studev_ai_chat';
+const KEY = 'studev_ai_thread';
 
 interface ModelContext { registerTool(tool: { name: string; description: string; inputSchema: object; execute(args: unknown): Promise<unknown> }): void; unregisterTool(name: string): void }
 type Proposal = TaskProposal & { key: string; call: string; saved?: boolean };
-interface Chat { messages: Message[]; proposals: Proposal[] }
-const readChat = (): Chat => { try { const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null'); return raw && Array.isArray(raw.messages) ? { messages: raw.messages, proposals: raw.proposals ?? [] } : { messages: [], proposals: [] }; } catch { return { messages: [], proposals: [] }; } };
+interface Chat { thread: Thread; proposals: Proposal[] }
+const newId = () => crypto.randomUUID();
+function readChat(): Chat {
+    try {
+        const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Chat | null;
+        if (raw && Array.isArray(raw.thread?.nodes)) return { thread: raw.thread, proposals: raw.proposals ?? [] };
+        // A conversation kept before it could branch becomes one branch.
+        const old = JSON.parse(localStorage.getItem('studev_ai_chat') ?? 'null') as { messages?: Message[]; proposals?: Proposal[] } | null;
+        localStorage.removeItem('studev_ai_chat');
+        if (old && Array.isArray(old.messages)) return { thread: chain(old.messages, old.messages.map(newId)), proposals: old.proposals ?? [] };
+    } catch { /* Nothing kept, or kept unreadably: a new conversation. */ }
+    return { thread: emptyThread(), proposals: [] };
+}
 const parse = (text: string | null) => { try { return JSON.parse(text ?? 'null') as unknown; } catch { return null; } };
+/** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
+function recent(history: Message[]) {
+    let out = history;
+    while (out.length > 24) { const next = out.findIndex((item, i) => i > 0 && item.role === 'user'); if (next < 0) break; out = out.slice(next); }
+    return out;
+}
 
 /** What a tool found, as things to tap: rooms on the map, a route to follow. */
 function Found({ name, result }: { name: string; result: unknown }) {
@@ -43,13 +64,54 @@ function Found({ name, result }: { name: string; result: unknown }) {
     return null;
 }
 
+/** ‹ 2/3 ›: the branches beside one, to go back and forth. */
+function Branches({ thread, id, onChoose, disabled }: { thread: Thread; id: string; onChoose: (id: string) => void; disabled: boolean }) {
+    const at = siblings(thread, id);
+    if (at.count < 2) return null;
+    return <span className="ai-branches">
+        <button className="ai-icon" aria-label="上一个版本" disabled={disabled || !at.previous} onClick={() => at.previous && onChoose(at.previous)}><Back /></button>
+        <span>{at.index + 1}/{at.count}</span>
+        <button className="ai-icon" aria-label="下一个版本" disabled={disabled || !at.next} onClick={() => at.next && onChoose(at.next)}><Chevron /></button>
+    </span>;
+}
+
+function CopyButton({ text }: { text: string }) {
+    const [done, setDone] = useState(false);
+    return <button className="ai-icon" aria-label={done ? '已复制' : '复制'} title={done ? '已复制' : '复制'} onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }); }}>{done ? <Tick /> : <Copy />}</button>;
+}
+
+/** The box one writes in: grows with what is written, sends on Enter, stops while answering. */
+function Composer({ value, onChange, onSend, onStop, busy }: { value: string; onChange: (text: string) => void; onSend: () => void; onStop: () => void; busy: boolean }) {
+    return <form className="ai-compose" onSubmit={event => { event.preventDefault(); onSend(); }}>
+        <textarea aria-label="问点什么" value={value} maxLength={4000} rows={1} placeholder="问点什么" onChange={event => onChange(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); onSend(); } }} />
+        {busy ? <button type="button" className="ai-send" aria-label="停止" onClick={onStop}><Square /></button>
+            : <button className="ai-send" aria-label="发送" disabled={!value.trim()}><Up /></button>}
+    </form>;
+}
+
+/** A question one has asked, changed where it stands. */
+function Editing({ text, onCancel, onSend }: { text: string; onCancel: () => void; onSend: (text: string) => void }) {
+    const [value, setValue] = useState(text);
+    const box = useRef<HTMLTextAreaElement>(null);
+    useEffect(() => { const el = box.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, []);
+    return <div className="ai-edit">
+        <textarea ref={box} value={value} maxLength={4000} onChange={event => setValue(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Escape') onCancel(); if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (value.trim()) onSend(value.trim()); } }} />
+        <div className="ai-edit-btns"><button className="ai-pill" onClick={onCancel}>取消</button><button className="ai-pill go" disabled={!value.trim()} onClick={() => onSend(value.trim())}>发送</button></div>
+    </div>;
+}
+
 export default function AiApp() {
     const { prefs, ready } = usePreferences(), tasks = useTasks();
     const who = useMemo(() => ({ type: 'me' as const }), []);
     const { loaded, error: loadError } = useTimeline(who, prefs, ready, null, tasks);
     const [chat, setChat] = useState<Chat>(readChat);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
-    const [waiting, setWaiting] = useState<string | null>(null);
+    const [waiting, setWaiting] = useState<string | null>(null), [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
+    // While answering after a message, only what this answer says shows after it, not the answer it had before.
+    const [from, setFrom] = useState<string | null>(null);
+    const fresh = useRef(new Set<string>());
     // The document kernel, loaded once; until then an answer shows as plain text.
     const [drawn, setDrawn] = useState(false);
     const [live, setLive] = useState<Update | null>(null);
@@ -60,10 +122,10 @@ export default function AiApp() {
     useEffect(() => () => services.dispose(), [services]);
     const latest = useRef(loaded?.line); latest.current = loaded?.line;
     useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(chat)); } catch { /* Kept for this page only. */ } }, [chat]);
-    // The view follows the answer down unless one has scrolled up to read.
+    // The view follows the answer down unless one has scrolled up to read; then a button brings it back.
     useEffect(() => {
         const box = scroller.current; if (!box) return;
-        const onScroll = () => { stuck.current = box.scrollTop + box.clientHeight >= box.scrollHeight - 80; };
+        const onScroll = () => { stuck.current = box.scrollTop + box.clientHeight >= box.scrollHeight - 80; setBelow(!stuck.current); };
         box.addEventListener('scroll', onScroll, { passive: true });
         return () => box.removeEventListener('scroll', onScroll);
     }, []);
@@ -95,15 +157,17 @@ export default function AiApp() {
     // Asking is for someone signed in; signing in happens in another tab and the question waits.
     useEffect(() => {
         if (!waiting) return;
-        const back = async () => { if (document.visibilityState === 'visible' && await session()) { const question = waiting; setWaiting(null); void run([...chat.messages, { role: 'user', content: question }]); } };
+        const back = async () => { if (document.visibilityState === 'visible' && await session()) { const question = waiting; setWaiting(null); void send(question, true); } };
         window.addEventListener('focus', back); document.addEventListener('visibilitychange', back);
         return () => { window.removeEventListener('focus', back); document.removeEventListener('visibilitychange', back); };
     });
-    async function run(start: Message[]) {
-        let history = start;
-        // Whole turns are kept: a tool result never stays without the call that made it.
-        while (history.length > 24) { const next = history.findIndex((item, i) => i > 0 && item.role === 'user'); if (next < 0) break; history = history.slice(next); }
-        setChat(current => ({ ...current, messages: history })); setBusy(true); setError(''); stuck.current = true;
+    /** Answering after `at` in `base`: each message said grows the branch from there, and is the one shown. */
+    async function run(base: Thread, at: string) {
+        let thread = base, tipId = at;
+        const grow = (message: Message) => { const id = newId(); fresh.current.add(id); thread = append(thread, tipId, id, message); tipId = id; setChat(current => ({ ...current, thread })); };
+        fresh.current = new Set(); setFrom(at);
+        let history = recent(lineage(thread, at).map(node => node.message));
+        setChat(current => ({ ...current, thread })); setBusy(true); setError(''); setEditing(null); stuck.current = true;
         const controller = new AbortController(); stop.current = controller;
         let said = '';
         try {
@@ -112,33 +176,34 @@ export default function AiApp() {
                 const doc = drawn ? new DocStream() : null;
                 const answer = await ask(history, piece => { said += piece; setStreaming(said); if (doc) setLive(doc.push(piece)); }, controller.signal).finally(() => doc?.free());
                 setStreaming(null); setLive(null);
-                history = [...history, answer]; setChat(current => ({ ...current, messages: history }));
+                history = [...history, answer]; grow(answer);
                 if (!answer.tool_calls?.length) return;
                 for (const call of answer.tool_calls) {
                     let value: unknown;
                     try { value = await execute(call.function.name, JSON.parse(call.function.arguments), call.id); } catch (failure) { value = { error: failure instanceof Error ? failure.message : '工具执行失败。' }; }
-                    history = [...history, { role: 'tool', tool_call_id: call.id, content: JSON.stringify(value) }];
+                    const result: Message = { role: 'tool', tool_call_id: call.id, content: JSON.stringify(value) };
+                    history = [...history, result]; grow(result);
                 }
-                setChat(current => ({ ...current, messages: history }));
             }
             setError('这一问查了很多轮，换个更具体的问法试试。');
         } catch (failure) {
             // Stopped: what was said so far stays, as an answer cut short.
-            if (controller.signal.aborted) { if (said) setChat(current => ({ ...current, messages: [...history, { role: 'assistant', content: said }] })); return; }
+            if (controller.signal.aborted) { if (said) grow({ role: 'assistant', content: said }); return; }
             setError(failure instanceof Error ? failure.message : 'AI 暂时无法响应。');
-        } finally { setStreaming(null); setBusy(false); stop.current = null; }
+        } finally { setStreaming(null); setLive(null); setBusy(false); setFrom(null); stop.current = null; }
     }
-    async function send(question = draft) {
+    /** A question asked after `parent` (the end of the conversation, or before a question being changed). */
+    async function send(question: string, signedIn = false, parent = tip(chat.thread)) {
         const asked = question.trim();
         if (!asked || busy) return;
-        if (!await session()) { setWaiting(asked); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
-        setDraft('');
-        void run([...chat.messages, { role: 'user', content: asked }]);
+        if (!signedIn && !await session()) { setWaiting(asked); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
+        if (parent === tip(chat.thread)) setDraft('');
+        const id = newId();
+        void run(append(chat.thread, parent, id, { role: 'user', content: asked }), id);
     }
-    const lastUser = chat.messages.map(item => item.role).lastIndexOf('user');
-    /** Asking the last question again, or changing it: the turn after it is set aside. */
-    const again = () => { if (lastUser >= 0 && !busy) void run(chat.messages.slice(0, lastUser + 1)); };
-    const edit = () => { if (lastUser < 0 || busy) return; setDraft(chat.messages[lastUser]!.content ?? ''); setChat(current => ({ ...current, messages: current.messages.slice(0, lastUser) })); };
+    /** The answer to a question asked again, beside the answer it had. */
+    const again = (question: string) => { if (!busy) void run(chat.thread, question); };
+    const pick = (id: string) => { if (!busy) { setChat(current => ({ ...current, thread: choose(current.thread, id) })); setError(''); } };
     function confirm(key: string) {
         const proposal = chat.proposals.find(item => item.key === key); if (!proposal || proposal.saved) return;
         const current = proposal.id ? readTasks().find(task => task.id === proposal.id && !task.deleted) : undefined;
@@ -146,57 +211,72 @@ export default function AiApp() {
         saveTask({ ...proposal.task, id: proposal.id ?? newTaskId(), ...(proposal.task.done === 'awaiting-confirmation' ? { done: new Date().toISOString() } : {}) });
         setChat(all => ({ ...all, proposals: all.proposals.map(item => item.key === key ? { ...item, saved: true } : item) }));
     }
-    const results = new Map(chat.messages.filter(item => item.role === 'tool').map(item => [item.tool_call_id!, parse(item.content)]));
+    let shown = path(chat.thread);
+    const cut = from === null ? -1 : shown.findIndex(node => node.id === from);
+    if (cut >= 0 && shown[cut + 1] && !fresh.current.has(shown[cut + 1]!.id)) shown = shown.slice(0, cut + 1);
+    const results = new Map(shown.filter(node => node.message.role === 'tool').map(node => [node.message.tool_call_id!, parse(node.message.content)]));
     const today = momentNow().date;
     // One turn: a question, and everything that answered it, however many rounds of looking up it took.
-    const turns: { question: string; replies: Message[]; last: boolean }[] = [];
-    chat.messages.forEach(message => {
-        if (message.role === 'user') turns.push({ question: message.content ?? '', replies: [], last: false });
-        else if (message.role === 'assistant') turns.at(-1)?.replies.push(message);
+    const turns: { question: Node; replies: Node[]; last: boolean }[] = [];
+    shown.forEach(node => {
+        if (node.message.role === 'user') turns.push({ question: node, replies: [], last: false });
+        else turns.at(-1)?.replies.push(node);
     });
     if (turns.length) turns.at(-1)!.last = true;
-    return <div className="sd ai"><div className="ai-scroll" ref={scroller}><div className="wrap narrow">
-        <header className="ai-head"><h1>AI</h1>{chat.messages.length > 0 && !busy && <button className="ib" onClick={() => { setChat({ messages: [], proposals: [] }); setError(''); }}>新对话</button>}</header>
-        {!chat.messages.length && <div className="ai-empty">
-            <p>问课表、地图和校园资料：查安排、找时间、找空教室、问路。起草的任务经你确认才会加到清单。</p>
-            {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
+    const empty = !shown.length;
+    const composer = <Composer value={draft} onChange={setDraft} onSend={() => void send(draft)} onStop={() => stop.current?.abort()} busy={busy} />;
+    return <div className={`sd ai ${empty ? 'blank' : ''}`}>
+        {!empty && <div className="ai-bar"><button className="ai-new" disabled={busy} onClick={() => { setChat({ thread: emptyThread(), proposals: [] }); setError(''); setEditing(null); }}><Compose />新对话</button></div>}
+        <div className="ai-scroll" ref={scroller}><div className="ai-col">
+        {empty && <div className="ai-hello">
+            <h1>有什么可以帮你？</h1>
+            {composer}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
-            <p className="fine">对话只存在这台设备上；问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。</p>
+            {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
+            <p className="fine">问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才会加到清单。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。</p>
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
-        <div className="ai-turns" aria-live="polite">{turns.map((turn, at) => {
-            const calls = turn.replies.flatMap(reply => reply.tool_calls ?? []);
-            const answer = [...turn.replies].reverse().find(reply => reply.content && !reply.tool_calls?.length)?.content
-                ?? (turn.last && streaming !== null ? null : [...turn.replies].reverse().find(reply => reply.content)?.content);
+        <div className="ai-turns" aria-live="polite">{turns.map(turn => {
+            const replies = turn.replies.map(node => node.message);
+            const calls = replies.flatMap(reply => reply.tool_calls ?? []);
+            const answer = [...replies].reverse().find(reply => reply.content && !reply.tool_calls?.length)?.content
+                ?? (turn.last && streaming !== null ? null : [...replies].reverse().find(reply => reply.role === 'assistant' && reply.content)?.content);
             const counts = new Map<string, number>(); calls.forEach(call => counts.set(call.function.name, (counts.get(call.function.name) ?? 0) + 1));
             const doing = calls.some(call => !results.has(call.id));
             const found = new Map<string, { name: string; result: unknown }>();
             calls.forEach(call => { const result = results.get(call.id); if (result && !(typeof result === 'object' && 'error' in (result as object))) found.set(call.function.name, { name: call.function.name, result }); });
             const drafts = chat.proposals.filter(item => calls.some(call => call.id === item.call));
-            return <section key={at} className="ai-turn">
-                <p className="ai-q">{turn.question}</p>
+            const question = turn.question.message.content ?? '';
+            const answering = turn.last && busy;
+            return <section key={turn.question.id} className="ai-turn">
+                {editing === turn.question.id
+                    ? <Editing text={question} onCancel={() => setEditing(null)} onSend={text => void send(text, false, turn.question.parent)} />
+                    : <div className="ai-ask"><p className="ai-q">{question}</p>
+                        <div className="ai-tools ai-tools-q"><CopyButton text={question} /><button className="ai-icon" aria-label="改问题" title="改问题" disabled={busy} onClick={() => setEditing(turn.question.id)}><Pencil /></button>
+                            <Branches thread={chat.thread} id={turn.question.id} onChoose={pick} disabled={busy} /></div></div>}
                 {calls.length > 0 && <details className="ai-steps"><summary className={doing ? 'doing' : ''}>{doing ? '正在' : '已'}{[...counts].map(([name, count]) => `${STEPS[name] ?? name}${count > 1 ? ` ×${count}` : ''}`).join(' · ')}</summary>
-                    <ol>{turn.replies.map((reply, i) => <li key={i}>{reply.content && reply.tool_calls?.length ? <p>{reply.content}</p> : null}
+                    <ol>{replies.filter(reply => reply.role === 'assistant').map((reply, i) => <li key={i}>{reply.content && reply.tool_calls?.length ? <p>{reply.content}</p> : null}
                         {reply.tool_calls?.map(call => { const result = results.get(call.id); const failed = Boolean(result && typeof result === 'object' && 'error' in (result as object));
                             return <div key={call.id} className={failed ? 'failed' : ''}>{STEPS[call.function.name] ?? call.function.name}{result === undefined ? '……' : failed ? `：${(result as { error: string }).error}` : ''}</div>; })}</li>)}</ol>
                 </details>}
-                {answer && <div className="ai-a">{drawn ? <DocText text={answer} /> : <p>{answer}</p>}</div>}
-                {turn.last && streaming !== null && <div className="ai-a">{live ? <Doc blocks={live.blocks} live /> : <p className="ai-plain">{streaming}<span className="ai-caret" /></p>}</div>}
-                {turn.last && busy && streaming === null && !doing && <p className="ai-wait">正在想……</p>}
+                {answer && <div className="ai-a">{drawn ? <DocText text={answer} /> : <p className="ai-plain">{answer}</p>}</div>}
+                {turn.last && streaming !== null && <div className="ai-a">{live ? <Doc blocks={live.blocks} live /> : <p className="ai-plain">{streaming}<span className="ai-dot" /></p>}</div>}
+                {answering && streaming === null && !doing && <p className="ai-think">正在想</p>}
                 {found.size > 0 && [...found.values()].map(item => <Found key={item.name} name={item.name} result={item.result} />)}
                 {drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
+                {!answering && turn.replies.length > 0 && <div className="ai-tools">
+                    {answer && <CopyButton text={answer} />}
+                    <button className="ai-icon" aria-label="重新回答" title="重新回答" disabled={busy} onClick={() => again(turn.question.id)}><Again /></button>
+                    <Branches thread={chat.thread} id={turn.replies[0]!.id} onChoose={pick} disabled={busy} />
+                </div>}
             </section>;
         })}</div>
-        {error && <p role="alert" className="ai-error">{error}{lastUser >= 0 && <button className="ib" onClick={again}>重试</button>}</p>}
-        {!busy && lastUser >= 0 && !error && <div className="ai-again"><button className="ib" onClick={again}>重新回答</button><button className="ib" onClick={edit}>改问题</button></div>}
+        {error && <p role="alert" className="ai-error">{error}{turns.length > 0 && <button className="ai-pill" onClick={() => again(turns.at(-1)!.question.id)}>重试</button>}</p>}
         {waiting && <p role="status" className="fine">在新打开的页面登录或注册，回到这里会自动发出：“{waiting}”</p>}
         <div ref={end} className="ai-end" />
         </div></div>
-        <div className="ai-dock"><form className="ai-compose" onSubmit={event => { event.preventDefault(); void send(); }}>
-            <textarea aria-label="问点什么" value={draft} maxLength={4000} rows={1} placeholder="问点什么" onChange={event => setDraft(event.target.value)}
-                onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-            {busy ? <button type="button" className="btn" onClick={() => stop.current?.abort()}>停止</button> : <button className="btn go" disabled={!draft.trim()}>发送</button>}
-        </form></div>
+        {below && !empty && <button className="ai-down" aria-label="回到底部" onClick={() => { stuck.current = true; end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }}><Down /></button>}
+        {!empty && <div className="ai-dock">{composer}</div>}
     </div>;
 }
 

@@ -7,7 +7,8 @@ import top.hicancan.studev.me.TaskStore
 import top.hicancan.studev.navigation.*
 import top.hicancan.studev.search.NativeSearch
 
-data class TaskProposal(val task: Task, val id: String? = null, val expected: String? = null, val key: String = java.util.UUID.randomUUID().toString())
+/** A task drafted, to be confirmed; [call] is the tool call that drafted it, so it shows in that answer. */
+data class TaskProposal(val task: Task, val id: String? = null, val expected: String? = null, val key: String = java.util.UUID.randomUUID().toString(), val call: String = "")
 
 /** Device-local tools over the same interpreters and immutable kernels as the visual entries. */
 /** A building as said, as the room data writes it: 教三楼 → 教3, as buildingWord in src/campus/world/campusTools.ts. */
@@ -33,7 +34,7 @@ class CampusTools(private val context: android.content.Context, private val repo
         }
         return args
     }
-    suspend fun execute(name: String, raw: JsonObject): JsonElement {
+    suspend fun execute(name: String, raw: JsonObject, call: String = ""): JsonElement {
         val args = arguments(name, raw)
         if (name == "campus_search") {
             val repo = repository() ?: error("校园数据还没准备好。")
@@ -62,7 +63,7 @@ class CampusTools(private val context: android.content.Context, private val repo
             "timeline" -> timeline(current, args.getValue("from").jsonPrimitive.content, args.getValue("to").jsonPrimitive.content)
             "list_tasks" -> Json.encodeToJsonElement(TaskStore.live(tasks.all.value))
             "suggest_slots" -> slots(current, args, Moment.of(CampusDay.now()))
-            "propose_task" -> proposal(args, current).let { item -> propose(item); buildJsonObject { put("state", "awaiting_user_confirmation"); put("proposal", item.key); put("task", JsonObject(Json.encodeToJsonElement(item.task).jsonObject - "id" - "modified")) } }
+            "propose_task" -> proposal(args, current).copy(call = call).let { item -> propose(item); buildJsonObject { put("state", "awaiting_user_confirmation"); put("proposal", item.key); put("task", JsonObject(Json.encodeToJsonElement(item.task).jsonObject - "id" - "modified")) } }
             else -> error("未知工具。")
         }
     }

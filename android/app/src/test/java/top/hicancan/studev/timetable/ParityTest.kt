@@ -299,4 +299,27 @@ class ParityTest {
             .jsonObject.getValue("meetings").let { json.decodeFromJsonElement<List<TeachingMeeting>>(it) }
         assertEquals(test.getValue("tones").jsonObject.mapValues { it.value.jsonPrimitive.int }, TimetablePresentation.tones(meetings))
     }
+    @Test fun aConversationBranchesAndThePathShownFollowsTheBranchesChosen() {
+        val thread = golden.getValue("thread").jsonObject
+        var at = top.hicancan.studev.ai.ChatThread()
+        thread.getValue("steps").jsonArray.zip(thread.getValue("frames").jsonArray).forEach { (stepJson, frameJson) ->
+            val step = stepJson.jsonObject; val frame = frameJson.jsonObject
+            val id = step.getValue("id").jsonPrimitive.content
+            at = if (step.getValue("op").jsonPrimitive.content == "append")
+                at.append(step.getValue("parent").jsonPrimitive.content, id, buildJsonObject { put("role", step.getValue("role")); put("content", step.getValue("content")) })
+            else at.choose(id)
+            assertEquals(frame.getValue("path").jsonArray.map { it.jsonPrimitive.content }, at.path().map { it.id })
+            assertEquals(frame.getValue("tip").jsonPrimitive.content, at.tip())
+            assertEquals(frame.getValue("lineage").jsonArray.map { it.jsonPrimitive.content }, at.lineage(at.tip()).map { it.id })
+            frame.getValue("siblings").jsonObject.forEach { (node, value) ->
+                val expected = value.jsonObject; val got = at.siblings(node)
+                assertEquals(expected.getValue("index").jsonPrimitive.int, got.index)
+                assertEquals(expected.getValue("count").jsonPrimitive.int, got.count)
+                assertEquals(expected["previous"]?.jsonPrimitive?.contentOrNull, got.previous)
+                assertEquals(expected["next"]?.jsonPrimitive?.contentOrNull, got.next)
+            }
+        }
+        val chain = top.hicancan.studev.ai.ChatThread.chain(listOf(buildJsonObject { put("role", "user"); put("content", "a") }, buildJsonObject { put("role", "assistant"); put("content", "b") }), listOf("x", "y"))
+        assertEquals(thread.getValue("chain").jsonArray.map { pair -> pair.jsonArray.map { it.jsonPrimitive.content } }, chain.path().map { listOf(it.id, it.parent) })
+    }
 }

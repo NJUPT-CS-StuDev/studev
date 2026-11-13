@@ -9,6 +9,7 @@ import { attendingExams } from '@/timetable/model/examAttendance';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
+import { append as threadAppend, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
 
@@ -17,6 +18,13 @@ const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.peri
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('a conversation branches, and the path shown follows the branches chosen', () => {
+        let thread: Thread = emptyThread();
+        golden.thread.steps.forEach((step, at) => {
+            thread = step.op === 'append' ? threadAppend(thread, step.parent!, step.id, { role: step.role as 'user' | 'assistant', content: step.content! }) : threadChoose(thread, step.id);
+            expect({ path: threadPath(thread).map(node => node.id), tip: tip(thread), siblings: Object.fromEntries(thread.nodes.map(node => [node.id, siblings(thread, node.id)])), lineage: lineage(thread, tip(thread)).map(node => node.id) }).toEqual(golden.thread.frames[at]);
+        });
+    });
     for (const schedule of golden.schedules) for (const { week, cells } of schedule.weeks) {
         it(`${schedule.class}, week ${week}: the same lessons off this week, greyed in place`, () => {
             const meetings = schedule.meetings as unknown as TeachingMeeting[];

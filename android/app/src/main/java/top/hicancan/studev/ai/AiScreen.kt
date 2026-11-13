@@ -34,6 +34,16 @@ import top.hicancan.studev.world.CampusTools
 import top.hicancan.studev.world.Names
 import top.hicancan.studev.world.TaskProposal
 import top.hicancan.studev.world.hm
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 
 /** What one can ask, offered while the conversation is empty, as AI_EXAMPLES in src/campus/ai/AiApp.tsx. */
 private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午哪里有空教室？", "帮我在下周找三次一小时复习，周五前完成", "从教三到图书馆怎么走？")
@@ -43,8 +53,10 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
 /**
  * The fourth entry beside the timetable, the map and search, as src/campus/ai/AiApp.tsx: one conversation over the
  * same tools as the other three, run on this device. The answer shows as it comes and can be stopped; what was looked
- * up shows as steps; rooms and routes found are things to tap; a drafted task is added only when confirmed. The
- * conversation is kept on this device. Asking is for someone signed in; signing in opens over it and the question goes on.
+ * up shows as steps; rooms and routes found are things to tap; a drafted task is added only when confirmed. A question
+ * can be changed where it stands and an answer asked again: each grows a branch beside the old one (Thread.kt), and
+ * one goes back and forth between them. The conversation is kept on this device. Asking is for someone signed in;
+ * signing in opens over it and the question goes on.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun AiScreen(model: CampusModel, route: Route) {
@@ -53,26 +65,31 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     val scope = rememberCoroutineScope()
     val kept = remember { context.getSharedPreferences("ai_chat", android.content.Context.MODE_PRIVATE) }
     var draft by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf(runCatching { Json.parseToJsonElement(kept.getString("messages", "[]")!!).jsonArray.map { it.jsonObject } }.getOrDefault(emptyList())) }
+    var thread by remember { mutableStateOf(readThread(kept)) }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
     var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
     var saved by remember { mutableStateOf<Set<String>>(emptySet()) }
     var error by remember { mutableStateOf("") }
     var job by remember { mutableStateOf<Job?>(null) }
+    var editing by remember { mutableStateOf<String?>(null) }
+    // While answering after a message, only what this answer says shows after it, not the answer it had before.
+    var from by remember { mutableStateOf<String?>(null) }
+    val fresh = remember { mutableSetOf<String>() }
     val busy = job != null
     val tools = remember { CampusTools(context, { model.state.value.repository }, { model.myLine(model.state.value, model.settings.state.value) }, model.tasks) { proposal -> proposals = proposals + proposal } }
     DisposableEffect(tools) { onDispose { tools.close() } }
-    LaunchedEffect(messages) { kept.edit().putString("messages", JsonArray(messages).toString()).apply() }
+    LaunchedEffect(thread) { kept.edit().putString("thread", thread.toJson().toString()).remove("messages").apply() }
     var waiting by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
-    LaunchedEffect(messages.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
+    LaunchedEffect(thread.nodes.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
 
-    suspend fun run(start: List<JsonObject>) {
-        var history = start
-        // Whole turns are kept: a tool result never stays without the call that made it.
-        while (history.size > 24) { val next = history.indexOfFirst { it !== history.first() && it["role"]?.jsonPrimitive?.content == "user" }; if (next < 0) break; history = history.drop(next) }
-        messages = history
+    /** Answering after [at] in [base]: each message said grows the branch from there, and is the one shown. */
+    suspend fun run(base: ChatThread, at: String) {
+        var tipId = at
+        fun grow(message: JsonObject) { val id = java.util.UUID.randomUUID().toString(); fresh += id; thread = thread.append(tipId, id, message); tipId = id }
+        thread = base; fresh.clear(); from = at; editing = null
+        var history = recent(base.lineage(at).map { it.message })
         if (tools.definitions.isEmpty()) tools.definitions = client.request("/ai", authenticated = true).getValue("tools").jsonArray.map { it.jsonObject }
         var said = ""
         try {
@@ -91,82 +108,99 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                 streaming = null; live = null
                 failed?.let { throw IllegalStateException(it) }
                 val reply = answer ?: throw IllegalStateException("回答中断了，请重试。")
-                history = history + reply; messages = history
+                history = history + reply; grow(reply)
                 val calls = reply["tool_calls"]?.jsonArray.orEmpty()
                 if (calls.isEmpty()) return
                 for (item in calls) {
                     val call = item.jsonObject; val function = call.getValue("function").jsonObject
-                    val result = try { withContext(Dispatchers.IO) { tools.execute(function.getValue("name").jsonPrimitive.content, Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject) } }
+                    val result = try { withContext(Dispatchers.IO) { tools.execute(function.getValue("name").jsonPrimitive.content, Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject, call.getValue("id").jsonPrimitive.content) } }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { buildJsonObject { put("error", if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "工具执行失败。" else "校园数据暂不可读，请重试。") } }
-                    history = history + buildJsonObject { put("role", "tool"); put("tool_call_id", call.getValue("id")); put("content", result.toString()) }
+                    val message = buildJsonObject { put("role", "tool"); put("tool_call_id", call.getValue("id")); put("content", result.toString()) }
+                    history = history + message; grow(message)
                 }
-                messages = history
             }
             error = "这一问查了很多轮，换个更具体的问法试试。"
         } catch (e: CancellationException) {
             // Stopped: what was said so far stays, as an answer cut short.
-            if (said.isNotEmpty()) messages = history + buildJsonObject { put("role", "assistant"); put("content", said) }
+            if (said.isNotEmpty()) grow(buildJsonObject { put("role", "assistant"); put("content", said) })
             throw e
         } finally { streaming = null; live = null }
     }
-    fun start(history: List<JsonObject>) {
+    fun start(base: ChatThread, at: String) {
         error = ""
         job = scope.launch {
-            try { run(history) }
+            try { run(base, at) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalStateException) e.message.orEmpty() else "AI 暂不可用，请稍后重试。" }
-            finally { job = null }
+            finally { job = null; from = null }
         }
     }
-    fun ask(question: String) {
+    /** A question asked after [parent] (the end of the conversation, or before a question being changed). */
+    fun ask(question: String, parent: String = thread.tip()) {
         if (question.isBlank() || busy) return
         scope.launch {
             if (client.current() == null) { waiting = question; return@launch }
-            draft = ""
-            start(messages + buildJsonObject { put("role", "user"); put("content", question.trim()) })
+            if (parent == thread.tip()) draft = ""
+            val id = java.util.UUID.randomUUID().toString()
+            start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id)
         }
     }
-    val lastUser = messages.indexOfLast { it["role"]?.jsonPrimitive?.content == "user" }
+    /** The answer to a question asked again, beside the answer it had. */
+    fun again(question: String) { if (!busy) start(thread, question) }
+    fun pick(id: String) { if (!busy) { thread = thread.choose(id); error = "" } }
     waiting?.let { question ->
         BackHandler { waiting = null }
         top.hicancan.studev.account.AccountScreen(client, onBack = { waiting = null }, onSignedIn = { waiting = null; ask(question) })
         return
     }
-    val results = messages.filter { it["role"]?.jsonPrimitive?.content == "tool" }.associate { it.getValue("tool_call_id").jsonPrimitive.content to runCatching { Json.parseToJsonElement(it.getValue("content").jsonPrimitive.content) }.getOrNull() }
+    var shown = thread.path()
+    from?.let { at -> val cut = shown.indexOfFirst { it.id == at }; if (cut >= 0 && cut + 1 < shown.size && shown[cut + 1].id !in fresh) shown = shown.take(cut + 1) }
+    val results = shown.map { it.message }.filter { it["role"]?.jsonPrimitive?.content == "tool" }.associate { it.getValue("tool_call_id").jsonPrimitive.content to runCatching { Json.parseToJsonElement(it.getValue("content").jsonPrimitive.content) }.getOrNull() }
+    // One turn: a question, and everything that answered it, however many rounds of looking up it took.
+    val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
+    shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
+    val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("AI", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            if (messages.isNotEmpty() && !busy) top.hicancan.studev.app.Chip("新对话", { messages = emptyList(); proposals = emptyList(); saved = emptySet(); error = "" })
+        if (shown.isEmpty()) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+                Plain("有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
+                composer()
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
+                }
+                Plain("问课表、地图和校园资料：查安排、找时间、找空教室、问路；起草的任务经你确认才保存。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
+            }
+            return@Column
         }
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (messages.isEmpty()) {
-                Plain("问课表、地图和校园资料：查安排、找时间、找空教室、问路，起草的任务经你确认才保存。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。", 13.sp, Ink.muted)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 10.dp)) { Plain(example, 14.sp) } }
-                }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { thread = ChatThread(); proposals = emptyList(); saved = emptySet(); error = ""; editing = null }, enabled = !busy, colors = ButtonDefaults.textButtonColors(contentColor = Ink.muted)) {
+                Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("新对话", fontSize = 13.5.sp)
             }
-            // One turn: a question, and everything that answered it, however many rounds of looking up it took.
-            val turns = mutableListOf<Pair<String, MutableList<JsonObject>>>()
-            messages.forEach { message ->
-                when (message["role"]?.jsonPrimitive?.content) {
-                    "user" -> turns += (message["content"]?.jsonPrimitive?.contentOrNull.orEmpty() to mutableListOf())
-                    "assistant" -> turns.lastOrNull()?.second?.add(message)
-                }
-            }
-            turns.forEachIndexed { at, (question, replies) ->
+        }
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            turns.forEachIndexed { at, (question, replyNodes) ->
                 val last = at == turns.lastIndex
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    Box(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)).background(Ink.sunken).padding(horizontal = 14.dp, vertical = 10.dp)) { Plain(question, 15.5.sp) }
+                val answering = last && busy
+                val replies = replyNodes.map { it.message }
+                val text = question.message["content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (editing == question.id) Editing(text, onCancel = { editing = null }, onSend = { ask(it, question.parent) })
+                else Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                    Box(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(22.dp)).background(Ink.brand.copy(alpha = .10f).compositeOver(Ink.paper)).padding(horizontal = 16.dp, vertical = 10.dp)) { Plain(text, 16.sp, lineHeight = 26.sp) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CopyIcon(text)
+                        IconAction(Icons.Outlined.Edit, "改问题", enabled = !busy) { editing = question.id }
+                        Branches(thread, question.id, !busy, ::pick)
+                    }
                 }
                 val calls = replies.flatMap { it["tool_calls"]?.jsonArray.orEmpty() }.map { it.jsonObject }
                 if (calls.isNotEmpty()) {
-                    var open by remember(at) { mutableStateOf(false) }
+                    var open by remember(question.id) { mutableStateOf(false) }
                     val doing = calls.any { results[it.getValue("id").jsonPrimitive.content] == null }
                     val counts = calls.groupingBy { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content }.eachCount()
-                    Plain((if (doing) "● 正在" else "● 已") + counts.entries.joinToString(" · ") { (name, count) -> (STEPS[name] ?: name) + if (count > 1) " ×$count" else "" } + if (open) "  ⌃" else "  ›", 13.sp, Ink.muted, modifier = Modifier.clickable { open = !open })
+                    Plain((if (doing) "正在" else "已") + counts.entries.joinToString(" · ") { (name, count) -> (STEPS[name] ?: name) + if (count > 1) " ×$count" else "" } + if (open) "  ⌃" else "  ›", 13.5.sp, Ink.muted, modifier = Modifier.clickable { open = !open })
                     if (open) Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        replies.forEach { reply ->
+                        replies.filter { it["role"]?.jsonPrimitive?.content == "assistant" }.forEach { reply ->
                             if (reply["tool_calls"] != null) reply["content"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { Plain(it, 13.sp) }
                             reply["tool_calls"]?.jsonArray?.forEach { item ->
                                 val call = item.jsonObject; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
@@ -177,39 +211,107 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                         }
                     }
                 }
-                val answer = replies.lastOrNull { it["tool_calls"] == null && !it["content"]?.jsonPrimitive?.contentOrNull.isNullOrEmpty() }?.get("content")?.jsonPrimitive?.contentOrNull
+                val answer = replies.lastOrNull { it["role"]?.jsonPrimitive?.content == "assistant" && it["tool_calls"] == null && !it["content"]?.jsonPrimitive?.contentOrNull.isNullOrEmpty() }?.get("content")?.jsonPrimitive?.contentOrNull
                 answer?.let { top.hicancan.studev.world.DocText(it, onLink = { href -> openInApp(href, route) }) }
-                if (last) live?.let { top.hicancan.studev.world.Doc(it, live = true, onLink = { href -> openInApp(href, route) }) } ?: run { if (last) streaming?.let { Plain("$it▍", 15.5.sp, lineHeight = 26.sp) } }
+                if (last) live?.let { top.hicancan.studev.world.Doc(it, live = true, onLink = { href -> openInApp(href, route) }) } ?: run { if (last) streaming?.let { Plain("$it ●", 16.sp, lineHeight = 26.sp) } }
+                if (answering && streaming == null && calls.none { results[it.getValue("id").jsonPrimitive.content] == null }) Thinking()
                 calls.mapNotNull { call -> val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content; results[call.getValue("id").jsonPrimitive.content]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { name to it } }
                     .associate { it }.forEach { (name, result) -> Found(name, result, route) }
-            }
-            if (busy && streaming == null) Plain("正在想……", 14.sp, Ink.muted)
-            if (proposals.isNotEmpty()) Drafts(proposals, saved, onAdd = { keys ->
-                keys.forEach { key ->
-                    val proposal = proposals.first { it.key == key }; val task = proposal.task
-                    val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
-                    if (proposal.id != null && current?.modified != proposal.expected) error = "这个任务已经改过了，请让 AI 重新起草。"
-                    else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + key }
+                val drafts = proposals.filter { proposal -> calls.any { it.getValue("id").jsonPrimitive.content == proposal.call } }
+                if (drafts.isNotEmpty()) Drafts(drafts, saved, onAdd = { keys ->
+                    keys.forEach { key ->
+                        val proposal = proposals.first { it.key == key }; val task = proposal.task
+                        val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
+                        if (proposal.id != null && current?.modified != proposal.expected) error = "这个任务已经改过了，请让 AI 重新起草。"
+                        else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + key }
+                    }
+                }, onDrop = { key -> proposals = proposals.filter { it.key != key } })
+                if (!answering && replyNodes.isNotEmpty()) Row(Modifier.offset(x = (-8).dp), verticalAlignment = Alignment.CenterVertically) {
+                    answer?.let { CopyIcon(it) }
+                    IconAction(Icons.Outlined.Refresh, "重新回答", enabled = !busy) { again(question.id) }
+                    Branches(thread, replyNodes.first().id, !busy, ::pick)
                 }
-            }, onDrop = { key -> proposals = proposals.filter { it.key != key } })
-            if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
-                Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
-                if (lastUser >= 0) top.hicancan.studev.app.Chip("重试", { start(messages.take(lastUser + 1)) })
             }
-            if (!busy && lastUser >= 0 && error.isEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                top.hicancan.studev.app.Chip("重新回答", { start(messages.take(lastUser + 1)) })
-                top.hicancan.studev.app.Chip("改问题", { draft = messages[lastUser]["content"]?.jsonPrimitive?.contentOrNull.orEmpty(); messages = messages.take(lastUser) })
+            if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
+                turns.lastOrNull()?.let { (question, _) -> top.hicancan.studev.app.Chip("重试", { again(question.id) }) }
             }
             Spacer(Modifier.height(8.dp))
         }
-        Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(22.dp)).border(1.dp, Ink.line, RoundedCornerShape(22.dp)).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val ink = Ink.text
-            androidx.compose.foundation.text.BasicTextField(draft, { draft = it.take(4000) }, Modifier.weight(1f).heightIn(max = 160.dp).padding(vertical = 8.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.5.sp, color = ink),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(ink), decorationBox = { inner -> if (draft.isEmpty()) Plain("问点什么", 15.5.sp, Ink.faint); inner() })
-            if (busy) OutlinedButton(onClick = { job?.cancel() }) { Text("停止") }
-            else Button(onClick = { ask(draft) }, enabled = draft.isNotBlank()) { Text("发送") }
+        Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)) { composer() }
+    }
+}
+
+/** The conversation kept on this device; one kept before it could branch becomes one branch. */
+private fun readThread(kept: android.content.SharedPreferences): ChatThread = runCatching {
+    kept.getString("thread", null)?.let { ChatThread.of(Json.parseToJsonElement(it).jsonObject) }
+        ?: kept.getString("messages", null)?.let { old -> Json.parseToJsonElement(old).jsonArray.map { it.jsonObject }.let { ChatThread.chain(it, it.map { java.util.UUID.randomUUID().toString() }) } }
+}.getOrNull() ?: ChatThread()
+
+/** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
+private fun recent(history: List<JsonObject>): List<JsonObject> {
+    var out = history
+    while (out.size > 24) { val next = out.indexOfFirst { it !== out.first() && it["role"]?.jsonPrimitive?.content == "user" }; if (next < 0) break; out = out.drop(next) }
+    return out
+}
+
+@Composable private fun IconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) =
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(36.dp)) { Icon(icon, label, Modifier.size(18.dp), tint = if (enabled) Ink.muted else Ink.faint) }
+
+@Composable private fun CopyIcon(text: String) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var done by remember { mutableStateOf(false) }
+    LaunchedEffect(done) { if (done) { kotlinx.coroutines.delay(1500); done = false } }
+    IconAction(if (done) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (done) "已复制" else "复制") { clipboard.setText(androidx.compose.ui.text.AnnotatedString(text)); done = true }
+}
+
+/** ‹ 2/3 ›: the branches beside one, to go back and forth. */
+@Composable private fun Branches(thread: ChatThread, id: String, enabled: Boolean, onChoose: (String) -> Unit) {
+    val at = thread.siblings(id)
+    if (at.count < 2) return
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconAction(Icons.Outlined.ChevronLeft, "上一个版本", enabled && at.previous != null) { at.previous?.let(onChoose) }
+        Plain("${at.index + 1}/${at.count}", 13.sp, Ink.muted)
+        IconAction(Icons.Outlined.ChevronRight, "下一个版本", enabled && at.next != null) { at.next?.let(onChoose) }
+    }
+}
+
+/** The box one writes in: round and lifted, one round button that sends, or stops while answering. */
+@Composable private fun Composer(value: String, onChange: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit, busy: Boolean) {
+    val shape = RoundedCornerShape(28.dp)
+    Row(Modifier.fillMaxWidth().shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = .08f), spotColor = Color.Black.copy(alpha = .08f)).clip(shape).background(Ink.paper).border(1.dp, Ink.line.copy(alpha = .6f), shape)
+        .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val ink = Ink.text
+        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.weight(1f).heightIn(max = 160.dp).padding(vertical = 8.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 24.sp, color = ink),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(ink), decorationBox = { inner -> if (value.isEmpty()) Plain("问点什么", 16.sp, Ink.faint); inner() })
+        val enabled = busy || value.isNotBlank()
+        Box(Modifier.size(38.dp).clip(CircleShape).background(if (enabled) ink else ink.copy(alpha = .18f)).clickable(enabled = enabled) { if (busy) onStop() else onSend() }, contentAlignment = Alignment.Center) {
+            Icon(if (busy) Icons.Filled.Stop else Icons.Filled.ArrowUpward, if (busy) "停止" else "发送", Modifier.size(20.dp), tint = Ink.paper)
         }
     }
+}
+
+/** A question one has asked, changed where it stands. */
+@Composable private fun Editing(text: String, onCancel: () -> Unit, onSend: (String) -> Unit) {
+    var value by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length))) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    BackHandler { onCancel() }
+    Column(Modifier.fillMaxWidth().padding(start = 40.dp).clip(RoundedCornerShape(22.dp)).background(Ink.sunken).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val ink = Ink.text
+        androidx.compose.foundation.text.BasicTextField(value, { value = it.copy(text = it.text.take(4000)) }, Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 240.dp).focusRequester(focus), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 26.sp, color = ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(ink))
+        Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onCancel, shape = RoundedCornerShape(18.dp)) { Text("取消", color = ink) }
+            Button(onClick = { onSend(value.text.trim()) }, enabled = value.text.isNotBlank(), shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = ink, contentColor = Ink.paper)) { Text("发送") }
+        }
+    }
+}
+
+/** “正在想”, a light passing over it, as the web's shimmer. */
+@Composable private fun Thinking() {
+    val shift by rememberInfiniteTransition(label = "think").animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "shine")
+    val muted = Ink.muted; val ink = Ink.text
+    Text("正在想", fontSize = 15.sp, style = androidx.compose.ui.text.TextStyle(brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(muted, ink, muted), start = androidx.compose.ui.geometry.Offset(-200f + 400f * shift, 0f), end = androidx.compose.ui.geometry.Offset(400f * shift, 0f))))
 }
 
 /** What a tool found, as things to tap, as Found in AiApp.tsx: rooms on the map, a route to follow. */
