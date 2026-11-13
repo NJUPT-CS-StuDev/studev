@@ -213,6 +213,8 @@ foreach (var test in golden["memory"]!.AsArray())
 var allMaterials = JsonSerializer.Deserialize<List<CourseMaterials>>(File.ReadAllText(Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "materials.json")), Facts.Json)!;
 foreach (var test in golden["materials"]!["cases"]!.AsArray()) Same("materials said", Lessons.MaterialsSaid(allMaterials, (string)test!["course"]!), test["said"]);
 foreach (var test in golden["materials"]!["counts"]!.AsArray()) Equal("material counts", Lessons.KindCounts(allMaterials.First(m => m.Course == (string)test!["course"]!).Items).Select(k => new object[] { k.Kind, k.Count }), test!["counts"]);
+foreach (var test in golden["hoursCases"]!.AsArray())
+    Equal("opening", Hours.At(JsonDocument.Parse(test!["hours"]!.ToJsonString()).RootElement, (int)test["day"]!, (int)test["minute"]!).Open.ToString().ToLowerInvariant(), test["state"]);
 Console.WriteLine($"Windows parity: {checks} checks, {failures.Count} failures");
 foreach (var failure in failures) Console.WriteLine(failure);
 return failures.Count == 0 ? 0 : 1;
