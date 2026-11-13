@@ -7,6 +7,7 @@
     <RootNamespace>StuDev</RootNamespace>
     <AssemblyName>StuDev</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\StuDev.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
@@ -31,6 +32,8 @@
     <None Include="..\kernels\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\src\campus\world\tools.json;..\..\src\campus\world\assistant.json;..\..\src\campus\world\channels.json" Link="world\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\design\tokens.json" Link="design\tokens.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\public\assets\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\StuDev.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
