@@ -339,6 +339,21 @@ async function* searchDocuments(dir: string): AsyncGenerator<SearchDocument> {
     }
 }
 
+/** Each article's own text, for the AI to read once search has found it: texts/<first two hex digits of its id>.json. */
+async function writeTexts(docs: SearchDocument[], to: string) {
+    const shards = new Map<string, Record<string, unknown>>();
+    for (const doc of docs) {
+        if (!/^[0-9a-f]{16}$/.test(doc.id)) continue;
+        const shard = shards.get(doc.id.slice(0, 2)) ?? {};
+        shard[doc.id] = { title: doc.title, url: doc.url, source: doc.source_name ?? doc.source, published: doc.published ?? null, text: (doc.text ?? '').slice(0, TEXT_KEPT), files: (doc.files ?? []).map(file => ({ name: file.name, url: file.url })) };
+        shards.set(doc.id.slice(0, 2), shard);
+    }
+    await mkdir(to, { recursive: true });
+    for (const [key, shard] of shards) await write(join(to, `${key}.json`), shard);
+}
+/** How much of one article is kept for reading: long enough for any notice, short of whole handbooks. */
+const TEXT_KEPT = 20000;
+
 async function verifyReferences(data: { dir: string; index: DataIndex }, mapIds: Set<string>) {
     const scan = (value: unknown): string[] => {
         if (typeof value === 'string') {
@@ -561,6 +576,7 @@ async function main() {
         docs.push(doc);
     }
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
+    await writeTexts(docs, join(out, 'texts'));
     await mirrorSearch(join(out, 'search'), version);
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,

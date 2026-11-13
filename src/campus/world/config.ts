@@ -9,6 +9,7 @@ export const APP_CONFIG = {
     PAGE_TITLE: '校园查询',
     DATA_URLS: {
         SEARCH: `${release.base}/search`,
+        TEXTS: `${release.base}/texts`,
         TIMETABLE: `${release.base}/teaching/${release.teaching}`,
         COURSE_PLANS: `${release.base}/entities/information.json`,
         TEACHING_CLASSES: `${release.base}/entities/agent.json`,

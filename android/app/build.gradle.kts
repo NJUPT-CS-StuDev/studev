@@ -60,10 +60,11 @@ abstract class DesignTokensTask : DefaultTask() {
     }
 }
 /** The AI's contract, the same files the web and the platform read: what the model is told and the tools it may call. */
-abstract class AssistantTask @Inject constructor(private val fs: FileSystemOperations) : DefaultTask() {
+/** The shared contracts both clients read as they are: the AI's prompt and tools, and the search channels. */
+abstract class WorldTask @Inject constructor(private val fs: FileSystemOperations) : DefaultTask() {
     @get:InputFiles abstract val sources: ConfigurableFileCollection
     @get:OutputDirectory abstract val assetDir: DirectoryProperty
-    @TaskAction fun copy() { fs.sync { from(sources); into(assetDir.get().dir("assistant")) } }
+    @TaskAction fun copy() { fs.sync { from(sources); into(assetDir.get().dir("world")) } }
 }
 abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOperations) : DefaultTask() {
     @get:InputDirectory abstract val releases: DirectoryProperty
@@ -129,9 +130,9 @@ val packageCampusData = tasks.register<CampusDataTask>("packageCampusData") {
     releaseManifest.set(rootProject.layout.projectDirectory.file("../src/data/campus-release.json"))
     assetDir.set(layout.buildDirectory.dir("generated/campus/assets"))
 }
-val packageAssistant = tasks.register<AssistantTask>("packageAssistant") {
-    sources.from(rootProject.layout.projectDirectory.file("../src/campus/world/tools.json"), rootProject.layout.projectDirectory.file("../src/campus/world/assistant.json"))
-    assetDir.set(layout.buildDirectory.dir("generated/assistant/assets"))
+val packageWorld = tasks.register<WorldTask>("packageWorld") {
+    sources.from(listOf("tools.json", "assistant.json", "channels.json").map { rootProject.layout.projectDirectory.file("../src/campus/world/$it") })
+    assetDir.set(layout.buildDirectory.dir("generated/world/assets"))
 }
 val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtures") {
     val manifest = rootProject.layout.projectDirectory.file("../src/data/campus-release.json")
@@ -156,7 +157,7 @@ androidComponents.onVariants { variant ->
     variant.sources.kotlin?.addGeneratedSourceDirectory(generateDesignTokens, DesignTokensTask::kotlinDir)
     variant.sources.res?.addGeneratedSourceDirectory(generateDesignTokens, DesignTokensTask::resourceDir)
     variant.sources.assets?.addGeneratedSourceDirectory(packageCampusData, CampusDataTask::assetDir)
-    variant.sources.assets?.addGeneratedSourceDirectory(packageAssistant, AssistantTask::assetDir)
+    variant.sources.assets?.addGeneratedSourceDirectory(packageWorld, WorldTask::assetDir)
 }
 
 android {
