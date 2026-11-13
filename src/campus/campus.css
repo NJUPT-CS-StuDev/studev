@@ -438,8 +438,8 @@
 .ai .ai-model-menu svg{position:absolute;right:10px;top:50%;width:16px;height:16px;transform:translateY(-50%)}.ai .ai-model-menu .ai-model-set{border-top:1px solid var(--line);border-radius:0 0 8px 8px;margin-top:4px;padding-top:10px;color:var(--muted)}
 .ai .ai-catch{position:fixed;inset:0;z-index:4}
 .ai .ai-modal{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.3);animation:sd-fade .15s}
-.ai .ai-modal-box{width:min(440px,100%);display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:18px;background:var(--paper);box-shadow:0 20px 60px rgba(0,0,0,.25)}.ai .ai-modal-box h2{margin:0;font-size:18px;font-weight:600}.ai .ai-modal-box .fine{margin:0}
-.ai .ai-modal-box label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.ai .ai-modal-box input{height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:inherit;font-size:14px;outline:none}.ai .ai-modal-box input:focus{border-color:var(--brand)}
+.ai .ai-modal-box{width:min(440px,100%);display:flex;flex-direction:column;gap:12px;padding:22px 22px 18px;border-radius:18px;background:var(--paper);box-shadow:0 20px 60px rgba(0,0,0,.25)}.ai .ai-modal-box h2{margin:0;font-size:18px;font-weight:600}.ai .ai-modal-box .fine{margin:0}
+.ai .ai-modal-box label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}.ai .ai-modal-box input{height:40px;padding:0 14px;border-radius:12px;border:0;box-shadow:inset 0 0 0 1px transparent;background:var(--surface-sunken);color:var(--ink);font:inherit;font-size:14.5px;outline:none;transition:box-shadow .15s}.ai .ai-modal-box input:focus{box-shadow:inset 0 0 0 1.5px var(--brand)}.ai .ai-modal-box label{gap:6px}
 .ai .ai-modal-btns{display:flex;gap:8px;margin-top:6px}.ai .ai-modal-btns span{flex:1}
 .ai .ai-title{flex:1;min-width:0;font-size:15px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Nothing asked yet: a greeting, and the box in the middle of the page. */
