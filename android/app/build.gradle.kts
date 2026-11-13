@@ -101,7 +101,7 @@ abstract class VerifyMapInputsTask : DefaultTask() {
             "Map assets missing. Run node design/map/generate.mjs in the repository root."
         }
         val kernels = kernelDir.get().asFile
-        for (abi in listOf("arm64-v8a", "x86_64")) for (kernel in listOf("wasm_search", "wayfind")) {
+        for (abi in listOf("arm64-v8a", "x86_64")) for (kernel in listOf("wasm_search", "wayfind", "docstream")) {
             check(kernels.resolve("jniLibs/$abi/lib${kernel}_android.so").isFile) {
                 "Native kernels missing. Run pwsh ./kernels.ps1 from android/."
             }

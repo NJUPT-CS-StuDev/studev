@@ -2,14 +2,16 @@
 [CmdletBinding()]
 param(
     [string]$SearchPath = 'D:\code\github\hicancan\wasm-search',
-    [string]$WayfindPath = 'D:\code\github\hicancan\wayfind'
+    [string]$WayfindPath = 'D:\code\github\hicancan\wayfind',
+    [string]$DocstreamPath = 'D:\code\github\hicancan\docstream'
 )
 $ErrorActionPreference = 'Stop'
 $destination = Join-Path $PSScriptRoot 'kernels'
 $dependencies = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).dependencies
 $kernels = @(
     @{ Path = $SearchPath; Name = 'wasm-search'; Package = 'wasm-search-android'; Library = 'wasm_search_android' },
-    @{ Path = $WayfindPath; Name = 'wayfind'; Package = 'wayfind-android'; Library = 'wayfind_android' }
+    @{ Path = $WayfindPath; Name = 'wayfind'; Package = 'wayfind-android'; Library = 'wayfind_android' },
+    @{ Path = $DocstreamPath; Name = 'docstream'; Package = 'docstream-android'; Library = 'docstream_android' }
 )
 foreach ($kernel in $kernels) {
     $repo = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($kernel.Path)
@@ -46,4 +48,4 @@ foreach ($kernel in $kernels) {
         Copy-Item -LiteralPath (Join-Path $repo "android/build/jniLibs/$abi/lib$($kernel.Library).so") -Destination $target -Force
     }
 }
-Write-Host "Both native kernels and their Kotlin bindings are ready in $destination"
+Write-Host "The native kernels and their Kotlin bindings are ready in $destination"

@@ -55,6 +55,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
     var draft by remember { mutableStateOf("") }
     var messages by remember { mutableStateOf(runCatching { Json.parseToJsonElement(kept.getString("messages", "[]")!!).jsonArray.map { it.jsonObject } }.getOrDefault(emptyList())) }
     var streaming by remember { mutableStateOf<String?>(null) }
+    var live by remember { mutableStateOf<List<JsonObject>?>(null) }
     var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
     var saved by remember { mutableStateOf<Set<String>>(emptySet()) }
     var error by remember { mutableStateOf("") }
@@ -76,17 +77,18 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
         var said = ""
         try {
             repeat(8) {
-                said = ""; streaming = ""
+                said = ""; streaming = ""; live = null
                 var answer: JsonObject? = null
                 var failed: String? = null
-                client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)) }) { event, data ->
+                val doc = top.hicancan.docstream.Stream()
+                try { client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)) }) { event, data ->
                     when (event) {
-                        "delta" -> { said += data["content"]?.jsonPrimitive?.contentOrNull.orEmpty(); streaming = said }
+                        "delta" -> { val piece = data["content"]?.jsonPrimitive?.contentOrNull.orEmpty(); said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                         "message" -> answer = data["message"]?.jsonObject
                         "error" -> failed = data["message"]?.jsonPrimitive?.contentOrNull
                     }
-                }
-                streaming = null
+                } } finally { doc.close() }
+                streaming = null; live = null
                 failed?.let { throw IllegalStateException(it) }
                 val reply = answer ?: throw IllegalStateException("回答中断了，请重试。")
                 history = history + reply; messages = history
@@ -106,7 +108,7 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
             // Stopped: what was said so far stays, as an answer cut short.
             if (said.isNotEmpty()) messages = history + buildJsonObject { put("role", "assistant"); put("content", said) }
             throw e
-        } finally { streaming = null }
+        } finally { streaming = null; live = null }
     }
     fun start(history: List<JsonObject>) {
         error = ""
@@ -176,8 +178,8 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
                     }
                 }
                 val answer = replies.lastOrNull { it["tool_calls"] == null && !it["content"]?.jsonPrimitive?.contentOrNull.isNullOrEmpty() }?.get("content")?.jsonPrimitive?.contentOrNull
-                answer?.let { Plain(it, 15.5.sp, lineHeight = 26.sp) }
-                if (last) streaming?.let { Plain("$it▍", 15.5.sp, lineHeight = 26.sp) }
+                answer?.let { top.hicancan.studev.world.DocText(it, onLink = { href -> openInApp(href, route) }) }
+                if (last) live?.let { top.hicancan.studev.world.Doc(it, live = true, onLink = { href -> openInApp(href, route) }) } ?: run { if (last) streaming?.let { Plain("$it▍", 15.5.sp, lineHeight = 26.sp) } }
                 calls.mapNotNull { call -> val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content; results[call.getValue("id").jsonPrimitive.content]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { name to it } }
                     .associate { it }.forEach { (name, result) -> Found(name, result, route) }
             }
@@ -251,5 +253,14 @@ private val STEPS = mapOf("campus_search" to "搜索校园资料", "timeline" to
         }
         val chosen = open.filter { it.key in picked }
         if (open.isNotEmpty()) Button(onClick = { onAdd(chosen.map { it.key }) }, enabled = chosen.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text(if (chosen.size == open.size) "全部加到清单" else "加 ${chosen.size} 个到清单") }
+    }
+}
+
+/** A link inside the site, opened where it points in the app: a place or a route on the map, or the timetable. */
+private fun openInApp(href: String, route: Route) {
+    val uri = android.net.Uri.parse("https://studev$href")
+    when {
+        uri.path?.startsWith("/map") == true -> uri.getQueryParameter("nav")?.let { route.map(nav = it) } ?: route.map(place = uri.getQueryParameter("place"))
+        else -> route.tab = "timetable"
     }
 }

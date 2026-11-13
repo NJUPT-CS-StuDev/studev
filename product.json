@@ -17,8 +17,8 @@
     "police": { "number": "苏公网安备32011302323214号", "code": "32011302323214" }
   },
   "android": {
-    "versionName": "2.9.1",
-    "versionCode": 48,
+    "versionName": "2.10.0",
+    "versionCode": 49,
     "minSdk": 26
   },
   "campus": {
