@@ -51,6 +51,26 @@ private val JsonObject.type get() = getValue("type").jsonPrimitive.content
 private fun JsonObject.list(key: String) = get(key)?.jsonArray.orEmpty().map { it.jsonObject }
 private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull.orEmpty()
 
+private sealed interface Run { class Text(val inlines: List<JsonObject>) : Run; class Display(val tex: String) : Run }
+
+/** A paragraph's inlines cut at each display formula; the line breaks beside a formula go with it. */
+private fun displayRuns(inlines: List<JsonObject>): List<Run> {
+    val runs = mutableListOf<Run>()
+    var text = mutableListOf<JsonObject>()
+    fun flush() {
+        val trimmed = text.toMutableList()
+        trimmed.firstOrNull()?.takeIf { it.type == "text" }?.let { trimmed[0] = JsonObject(it + ("text" to JsonPrimitive(it.str("text").trimStart('\n')))) }
+        trimmed.lastOrNull()?.takeIf { it.type == "text" }?.let { trimmed[trimmed.lastIndex] = JsonObject(it + ("text" to JsonPrimitive(it.str("text").trimEnd('\n')))) }
+        if (trimmed.any { it.type != "text" || it.str("text").isNotBlank() }) runs += Run.Text(trimmed)
+        text = mutableListOf()
+    }
+    for (inline in inlines) {
+        if (inline.type == "math" && inline["display"]?.jsonPrimitive?.booleanOrNull == true) { flush(); runs += Run.Display(inline.str("tex")) } else text += inline
+    }
+    flush()
+    return runs
+}
+
 @Composable fun Doc(blocks: List<JsonObject>, live: Boolean = false, onLink: (String) -> Unit = {}) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         blocks.forEachIndexed { at, keyed ->
@@ -110,7 +130,19 @@ private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull
 @Composable private fun BlockView(block: JsonObject, onLink: (String) -> Unit, caret: Boolean = false) {
     val shape = RoundedCornerShape(10.dp)
     when (block.type) {
-        "paragraph" -> InlineText(block.list("inlines"), caret = caret, onLink = onLink)
+        "paragraph" -> {
+            // Display math written amid the text is set on a line of its own, between the text before and after it.
+            val runs = displayRuns(block.list("inlines"))
+            if (runs.size == 1 && runs[0] !is Run.Display) InlineText(block.list("inlines"), caret = caret, onLink = onLink)
+            else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                runs.forEachIndexed { at, run ->
+                    when (run) {
+                        is Run.Display -> MathBlock(run.tex, 15.5.sp)
+                        is Run.Text -> InlineText(run.inlines, caret = caret && at == runs.lastIndex, onLink = onLink)
+                    }
+                }
+            }
+        }
         "heading" -> InlineText(block.list("inlines"), size = when (block.getValue("level").jsonPrimitive.int) { 1 -> 20f; 2 -> 18f; else -> 16.5f }, weight = FontWeight.SemiBold, caret = caret, onLink = onLink)
         "quote" -> Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(3.dp).fillMaxHeight().background(Ink.line))
