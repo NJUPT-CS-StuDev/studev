@@ -24,6 +24,17 @@ pnpm-debug.log*
 # local agent / IDE instructions
 AGENTS.md
 CLAUDE.md
+CODEBUDDY.md
+GEMINI.md
+.agents/
+.claude/
+.codex/
+.gemini/
+.workbuddy/
+.cursor/
+.cursorrules
+.mcp.json
+.github/copilot-instructions.md
 .vscode/
 
 # private local operations documentation and acceptance evidence
