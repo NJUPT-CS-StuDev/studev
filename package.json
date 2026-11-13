@@ -31,6 +31,7 @@
     "@hackmd/js-sequence-diagrams": "^0.0.1-alpha.3",
     "@noble/hashes": "^2.4.0",
     "astro": "^7.4.4",
+    "docstream": "https://github.com/NJUPT-CS-StuDev/docstream/releases/download/v0.1.0/docstream-0.1.0.tgz",
     "flowchart.js": "^1.18.1",
     "lucide-react": "^1.66.0",
     "maplibre-gl": "^6.16.0",

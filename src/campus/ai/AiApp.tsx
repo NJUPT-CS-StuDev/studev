@@ -13,6 +13,7 @@ import { CampusTools } from '@/world/campusTools';
 import { roomLabel } from '@/world/names';
 import { definitions, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, type Message } from './stream';
+import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
 
 /** What one can ask, offered while the conversation is empty. */
@@ -49,6 +50,10 @@ export default function AiApp() {
     const [chat, setChat] = useState<Chat>(readChat);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [waiting, setWaiting] = useState<string | null>(null);
+    // The document kernel, loaded once; until then an answer shows as plain text.
+    const [drawn, setDrawn] = useState(false);
+    const [live, setLive] = useState<Update | null>(null);
+    useEffect(() => { void docReady().then(() => setDrawn(true)); }, []);
     const stop = useRef<AbortController | null>(null);
     const end = useRef<HTMLDivElement>(null), scroller = useRef<HTMLDivElement>(null), stuck = useRef(true);
     const services = useMemo(() => new CampusTools(), []);
@@ -103,9 +108,10 @@ export default function AiApp() {
         let said = '';
         try {
             for (let round = 0; round < 8; round++) {
-                said = ''; setStreaming('');
-                const answer = await ask(history, piece => { said += piece; setStreaming(said); }, controller.signal);
-                setStreaming(null);
+                said = ''; setStreaming(''); setLive(null);
+                const doc = drawn ? new DocStream() : null;
+                const answer = await ask(history, piece => { said += piece; setStreaming(said); if (doc) setLive(doc.push(piece)); }, controller.signal).finally(() => doc?.free());
+                setStreaming(null); setLive(null);
                 history = [...history, answer]; setChat(current => ({ ...current, messages: history }));
                 if (!answer.tool_calls?.length) return;
                 for (const call of answer.tool_calls) {
@@ -174,8 +180,8 @@ export default function AiApp() {
                         {reply.tool_calls?.map(call => { const result = results.get(call.id); const failed = Boolean(result && typeof result === 'object' && 'error' in (result as object));
                             return <div key={call.id} className={failed ? 'failed' : ''}>{STEPS[call.function.name] ?? call.function.name}{result === undefined ? '……' : failed ? `：${(result as { error: string }).error}` : ''}</div>; })}</li>)}</ol>
                 </details>}
-                {answer && <div className="ai-a"><p>{answer}</p></div>}
-                {turn.last && streaming !== null && <div className="ai-a"><p>{streaming}<span className="ai-caret" /></p></div>}
+                {answer && <div className="ai-a">{drawn ? <DocText text={answer} /> : <p>{answer}</p>}</div>}
+                {turn.last && streaming !== null && <div className="ai-a">{live ? <Doc blocks={live.blocks} live /> : <p className="ai-plain">{streaming}<span className="ai-caret" /></p>}</div>}
                 {turn.last && busy && streaming === null && !doing && <p className="ai-wait">正在想……</p>}
                 {found.size > 0 && [...found.values()].map(item => <Found key={item.name} name={item.name} result={item.result} />)}
                 {drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
