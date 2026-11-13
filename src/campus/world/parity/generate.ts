@@ -27,7 +27,7 @@ import { append as threadAppend, chain as threadChain, choose as threadChoose, e
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
-import { courseName, courseShort, roomLabel } from '@/world/names';
+import { compactPlace, courseName, courseShort, roomLabel } from '@/world/names';
 import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
 import { labelRule } from '../../map/model/labels';
@@ -70,6 +70,7 @@ const colours = [
 ].map(course => ({ course, identity: courseIdentity({ course }) }));
 const tones = schedules.map(schedule => ({ class: schedule.class, tones: Object.fromEntries(courseTones(schedule.meetings)) }));
 const names = ['操作系统基础', '计算机通信与网络（双语）', '习近平新时代中国特色社会主义思想概论', '仙林/教4-309', '仙林/图书馆-201', '翻转课堂线上自学'].map(value => ({ value, course: courseName(value), short: courseShort(value), room: roomLabel(value) }));
+const compactPlaces = ['计算机学科楼 401', '计科楼-401/403', '计算机楼-401/403/405/407', '仙林教4-309', 'CS-306', '计科楼'].map(value => ({ value, compact: compactPlace(value) }));
 const attendanceExams = [{ id: 'a', course: { code: 'X1', name: '甲' } }, { id: 'b', course: { code: 'X2', name: '乙' } }, { id: 'c', course: { code: null, name: '丙' } }] as Exam[];
 const examAttendance = [
     { choices: {}, ownCodes: null }, { choices: { a: false }, ownCodes: null }, { choices: {}, ownCodes: ['X1'] }, { choices: { b: true }, ownCodes: ['X1'] },
@@ -283,5 +284,5 @@ const memoryCases = [['', '在准备考研'], ['- 在准备考研', ' 在准备�
 const allMaterials = JSON.parse(readFileSync(`public/data/${release.version}/materials.json`, 'utf8')) as CourseMaterials[];
 const materialCases = ['数字电路与逻辑设计B', '高等数学A(上)', '信号与系统 A', '高等数学', '计算机组成原理', '大学物理（上）'].map(course => ({ course, said: materialsSaid(allMaterials, course) }));
 const materialCounts = allMaterials.slice(0, 6).map(item => ({ course: item.course, counts: kindCounts(item.items) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

@@ -297,6 +297,10 @@ class ParityTest {
     }
     @Test fun identitiesNamesAndAttendanceMatch() {
         val edge = golden.getValue("edgeCases").jsonObject
+        edge.getValue("compactPlaces").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            assertEquals(test.getValue("compact").jsonPrimitive.content, Names.compactPlace(test.getValue("value").jsonPrimitive.content))
+        }
         edge.getValue("names").jsonArray.forEach { item ->
             val test = item.jsonObject
             val value = test.getValue("value").jsonPrimitive.content

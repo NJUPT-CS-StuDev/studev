@@ -13,7 +13,7 @@ const EDGE = 5;
 
 /** What a tile says under its name: where, a lab's said short, and where there is room that it is a lab (its edge says so too). */
 const tileNote = (event: CampusEvent, wide: boolean) => event.lab
-    ? `${wide ? '实验 · ' : ''}${event.lab.room ? roomShort(event.lab.room) : wide ? event.lab.short : compactPlace(event.lab.short)}`
+    ? `${wide ? '实验 · ' : ''}${event.lab.room ? roomShort(event.lab.room) : compactPlace(event.lab.short)}`
     : event.room ? (wide ? roomLabel(event.room) : roomShort(event.room)) : '';
 
 export function WeekView({ line, day, now, wide, record, previewRows, order, onOpen, onTask }: { line: Timeline; day: string; now: Moment; wide: boolean; record: ExamRecord | null; previewRows: TeachingMeeting[]; order: readonly EventKind[]; onOpen: (event: CampusEvent) => void; onTask: (task: Task) => void }) {

@@ -38,7 +38,7 @@ object Names {
     fun courseShort(name: String) = short[course(name)] ?: course(name)
     fun room(room: String?) = room.orEmpty().replaceFirst(Regex("^[^/:]*[/:]"), "").replace("/", " ")
     fun roomShort(room: String?) = room(room).removePrefix("教")
-    fun compactPlace(place: String) = Regex("\\d+(?:/\\d+){2,}").replace(place) { rooms -> "${rooms.value.substringBefore('/')}等${rooms.value.split('/').size}间" }
+    fun compactPlace(place: String) = Regex("\\d+(?:/\\d+){2,}").replace(place.replaceFirst(Regex("^(?:计算机学科楼|计算机楼|计科楼)[-\\s]*"), "CS-")) { rooms -> "${rooms.value.substringBefore('/')}等${rooms.value.split('/').size}间" }
     /** A slash means the map has it. */
     fun placed(room: String?) = !room.isNullOrEmpty() && room.contains('/')
     /** A room in the teaching office's list, on the map or not; anything else is only a written place. */

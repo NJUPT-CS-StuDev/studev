@@ -120989,6 +120989,32 @@
     "room": "翻转课堂线上自学"
    }
   ],
+  "compactPlaces": [
+   {
+    "value": "计算机学科楼 401",
+    "compact": "CS-401"
+   },
+   {
+    "value": "计科楼-401/403",
+    "compact": "CS-401/403"
+   },
+   {
+    "value": "计算机楼-401/403/405/407",
+    "compact": "CS-401等4间"
+   },
+   {
+    "value": "仙林教4-309",
+    "compact": "仙林教4-309"
+   },
+   {
+    "value": "CS-306",
+    "compact": "CS-306"
+   },
+   {
+    "value": "计科楼",
+    "compact": "CS-"
+   }
+  ],
   "attendanceExams": [
    {
     "id": "a",
