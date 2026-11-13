@@ -12,8 +12,8 @@ export const CAMPUS_CENTRE = PRODUCT_CONFIG.CAMPUS.centre as Position;
 interface Entrance { at: Position; source: string }
 export interface Place {
     id: string;
-    kind: string;                // "building", "room", or what a standalone place is (高德 type)
-    parent: string;
+    kind: string;                // campus, building, floor, room or place
+    parent?: string;             // the entity it lies in; none for a place off the campus
     names: string[];
     centre?: Position;
     levels?: number;
@@ -23,10 +23,11 @@ export interface Place {
     seats?: number;
     room_kinds?: string[];
     sources: string[];
-    category?: string;
+    category?: string;           // from njupt-map's one vocabulary; a room is a 教室
+    group?: string;              // the group the category is in: 教学科研, 生活, 餐饮, 购物, 服务, 文体, 交通, 办公
+    tier?: number;               // how prominent the map shows it: 1 from afar, 2 closer, 3 close up
     routing: Endpoint;
     hours?: { week: Record<string, [string, string][]>; note?: string };
-    featured?: boolean;
 }
 
 interface OpeningRecord { hours: NonNullable<Place['hours']>; sources?: string[] }

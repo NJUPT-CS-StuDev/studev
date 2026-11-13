@@ -13,7 +13,7 @@ import { modelLayer, type ModelIndex, type ModelLook } from './models';
 import { sunAt } from './model/sun';
 
 interface ModelFloor { level: number; plate: Geometry; cores: { kind: string; geometry: Geometry }[]; rooms: { id: string; geometry: Geometry }[] }
-const LABEL_LAYERS = ['way-label', 'water-label', 'green-label', 'surface-label', 'sport-label', 'context-label', 'nearby-label'];
+const LABEL_LAYERS = ['way-label', 'water-label', 'green-label', 'surface-label', 'sport-label', 'context-label'];
 
 export interface CampusModel {
     buildings: { id: string; levels: number; height: number; geometry: Geometry }[];

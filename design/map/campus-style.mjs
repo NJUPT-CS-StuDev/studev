@@ -60,7 +60,6 @@ export function style() {
             label('surface-label', 'surfaces', 15, c),
             label('sport-label', 'sports', 15.5, c),
             label('context-label', 'context_buildings', 15.5, c),
-            label('nearby-label', 'nearby', 16.8, c, { 'text-size': 10 }),
         ],
         // Clients repaint these layers for the moment's light, route colours included.
         metadata: { route: { day: routeColours('light'), night: routeColours('dark') } },

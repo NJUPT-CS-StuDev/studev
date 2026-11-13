@@ -26,6 +26,7 @@ import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, next
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
+import { labelRule } from '../../map/model/labels';
 import type { Place } from '../../map/model/space';
 import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
 import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, Lab, RoomDay } from '@/world/facts';
@@ -72,7 +73,14 @@ const examAttendance = [
 const examReminders = EXAM_REMINDERS.flatMap(({ key }) => [8 * 60, 13 * 60 + 30, 18 * 60 + 30].map(start => ({ key, start, minutes: examReminderMinutes(key, start) })));
 const placeRows = JSON.parse(readFileSync(`public/data/${release.version}/space/仙林/entities.json`, 'utf8')) as Place[];
 const hourFacts = JSON.parse(readFileSync(`public/data/${release.version}/hours.json`, 'utf8')) as Record<string, { hours: Place['hours'] }>;
-const places = placeRows.filter(place => place.featured).map(place => ({ ...place, ...(hourFacts[place.id] ? { hours: hourFacts[place.id]!.hours } : {}) }));
+// The buildings and places of the campus, as home suggestions choose among them, and how each entity is named on the map.
+const places = placeRows.filter(place => (place.kind === 'building' || place.kind === 'place') && place.id.startsWith('仙林/')).map(place => ({ ...place, ...(hourFacts[place.id] ? { hours: hourFacts[place.id]!.hours } : {}) }));
+const placeById = new Map(placeRows.map(place => [place.id, place]));
+const named = placeRows.filter(place => ['campus', 'building', 'place'].includes(place.kind));
+const labels = {
+    entities: named.map(({ id, kind, parent, names, category, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(category ? { category } : {}), ...(tier ? { tier } : {}), sources, routing })),
+    cases: named.filter(place => place.kind !== 'campus').map(place => ({ id: place.id, rule: labelRule(place, placeById), teaching: place.kind === 'building' ? labelRule(place, placeById, true) : null })),
+};
 const from: [number, number] = [118.9262, 32.1146];
 const recommend = [1, 3, 6, 7].flatMap(day => [6, 8, 12, 15, 17, 18, 20, 23].map(hour => ({ day, hour, minute: 30, expected: recommendations(places, { day, hour, minute: 30 }, from).map(({ place, status }) => ({ id: place.id, state: status.state })) })));
 const hoursCases = [{ week: { '5': [['08:00', '12:00'], ['13:30', '17:00']] } }, { week: { '7': [['22:00', '02:00']] } }, { week: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(day => [String(day), [['00:00', '00:00']]])) }].flatMap(hours => [[5, 8, 0], [5, 11, 40], [5, 12, 0], [5, 13, 30], [1, 1, 50], [1, 2, 0], [7, 22, 0], [3, 12, 0]].map(([day, hour, minute]) => ({ hours, day, minute: hour! * 60 + minute!, state: openingStatus(hours as Place['hours'], { day: day!, hour: hour!, minute: minute! }).state })));
@@ -243,5 +251,5 @@ const settingsTheirs = { class: { value: schedules[1]!.class, modified: '2026-11
 const settingsMerged = mergeSettings(settingsMine, settingsTheirs);
 const settingsSync = { original: oldSettings, initial: settingsMine, theirs: settingsTheirs, merged: settingsMerged, taken: settingsTaken(initialSettings, settingsMerged) };
 const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

@@ -45,7 +45,7 @@ private fun polygons(geometry: JsonObject): List<List<Ring>> {
     val coordinates = geometry.getValue("coordinates").jsonArray
     return if (geometry.getValue("type").jsonPrimitive.content == "Polygon") listOf(coordinates.map(::ring)) else coordinates.map { polygon -> polygon.jsonArray.map(::ring) }
 }
-private val LABEL_LAYERS = listOf("way-label", "water-label", "green-label", "surface-label", "sport-label", "context-label", "nearby-label")
+private val LABEL_LAYERS = listOf("way-label", "water-label", "green-label", "surface-label", "sport-label", "context-label")
 
 data class Box2(val west: Double, val south: Double, val east: Double, val north: Double) { val centre get() = doubleArrayOf((west + east) / 2, (south + north) / 2) }
 fun boundsOf(geometry: JsonObject): Box2 {

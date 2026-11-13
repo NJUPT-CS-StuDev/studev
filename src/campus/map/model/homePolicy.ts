@@ -41,14 +41,17 @@ export function openingStatus(hours: Place['hours'], now: CampusTime): HoursStat
     };
 }
 
-/** Where people go at each part of the day, most likely first. */
+/** Where people on campus go at each part of the day, most likely first, as categories of the map's vocabulary. */
 export const momentAt = (hour: number): readonly string[] =>
-    hour >= 5 && hour <= 10 ? ['教学', '图书馆', '食堂']
-        : hour >= 11 && hour <= 13 ? ['食堂', '服务']
-            : hour >= 14 && hour <= 16 ? ['教学', '图书馆', '体育']
-                : hour >= 17 && hour <= 18 ? ['食堂', '服务']
-                    : hour >= 19 && hour <= 21 ? ['图书馆', '教学', '体育']
-                        : ['宿舍', '服务'];
+    hour >= 5 && hour <= 10 ? ['教学楼', '图书馆', '食堂']
+        : hour >= 11 && hour <= 13 ? ['食堂', '超市便利']
+            : hour >= 14 && hour <= 16 ? ['教学楼', '图书馆', '体育']
+                : hour >= 17 && hour <= 18 ? ['食堂', '超市便利']
+                    : hour >= 19 && hour <= 21 ? ['图书馆', '教学楼', '体育']
+                        : ['宿舍', '超市便利'];
+/** What closes and is then no use to suggest. */
+const CLOSES = ['食堂', '超市便利'];
+const onCampus = (place: Place) => place.id.startsWith(`${PRODUCT_CONFIG.CAMPUS.id}/`);
 
 export function distance(a: Position, b: Position): number {
     const rad = Math.PI / 180;
@@ -60,9 +63,9 @@ export function recommendations(places: Place[], now: CampusTime, position?: Pos
     const stateOrder = { open: 0, closing: 0, unknown: 1, closed: 2 };
     const shown = new Map<string | undefined, number>();
     const order = momentAt(now.hour);
-    return places.filter(p => p.kind !== 'room' && p.centre && (category ? p.category === category : p.featured && order.includes(p.category ?? '')))
+    return places.filter(p => (p.kind === 'building' || p.kind === 'place') && p.centre && (category ? p.category === category : onCampus(p) && order.includes(p.category ?? '')))
         .map(place => ({ place, distance: distance(position ?? CAMPUS_CENTRE, place.centre!), status: openingStatus(place.hours, now) }))
-        .filter(item => category || !(['食堂', '服务'].includes(item.place.category ?? '') && item.status.state === 'closed'))
+        .filter(item => category || !(CLOSES.includes(item.place.category ?? '') && item.status.state === 'closed'))
         .sort((a, b) => (category ? 0 : order.indexOf(a.place.category!) - order.indexOf(b.place.category!)) || stateOrder[a.status.state] - stateOrder[b.status.state] || a.distance - b.distance || (a.place.id < b.place.id ? -1 : a.place.id > b.place.id ? 1 : 0))
         .filter(({ place }) => { if (category) return true; const count = shown.get(place.category) ?? 0; shown.set(place.category, count + 1); return count < 3; });
 }

@@ -113,7 +113,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         out as Map<String, Pair<Int, Int>>
     }
     val selected = route.place?.let(campus.byId::get)
-    fun buildingOf(place: Place?): Place? { var current = place; while (current != null && current.kind != "building") current = campus.byId[current.parent]; return current }
+    fun buildingOf(place: Place?): Place? { var current = place; while (current != null && current.kind != "building") current = current.parent?.let(campus.byId::get); return current }
     val openBuilding = buildingOf(selected)
     val picked = selected?.takeIf { it.kind == "room" }
     val buildingId = openBuilding?.id
@@ -154,17 +154,19 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         route.nav?.let(campus.byId::get)?.let { target -> runtime.open(target); if (!access.granted) requestLocation() }
     }
     LaunchedEffect(navigation.open) { if (!navigation.open) route.nav = null }
-    val labels = remember(model, scene) {
+    val labels = remember(model, scene, classrooms) {
         val active = model ?: return@remember emptyList<LabelInfo>()
+        val teaching = classrooms.mapTo(HashSet()) { "${it.campus}/${it.building}" }
         buildList {
             for (building in active.buildings) {
                 val place = campus.byId[building.id]; val name = place?.names?.firstOrNull() ?: continue
-                val dorm = place.category == "宿舍" || Regex("苑\\d").containsMatchIn(name)
-                add(LabelInfo(building.id, name, boundsOf(building.geometry).centre, building.height, if (building.id in classrooms.map { "${it.campus}/${it.building}" }) 14.5 else if (dorm) 16.3 else 15.1, if (building.id in freeBy) 0 else if (dorm) 3 else 1, building.id in freeBy, false))
+                val rule = Labels.rule(place, campus.byId, building.id in teaching)!!
+                add(LabelInfo(building.id, name, boundsOf(building.geometry).centre, building.height, rule.minZoom, rule.priority, building.id in freeBy, false))
             }
             for (place in campus.places) {
-                if (place.kind != "place" || place.centre == null || place.names.isEmpty() || place.category in setOf("停车场", "学院", "宿舍", "公交站")) continue
-                add(LabelInfo(place.id, place.names.first(), place.centre.toDoubleArray(), 0.0, 16.6, 4, false, true))
+                val name = place.names.firstOrNull() ?: continue
+                val rule = place.centre?.let { Labels.rule(place, campus.byId) } ?: continue
+                add(LabelInfo(place.id, name, place.centre.toDoubleArray(), 0.0, rule.minZoom, rule.priority, false, true))
             }
         }.sortedBy { it.priority }
     }

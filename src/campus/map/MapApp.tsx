@@ -12,6 +12,7 @@ import { useUrl, useWide } from '@/world/useUrl';
 import { Back, Chevron, Cross, Magnifier, Sheet } from '@/world/ui';
 import { campusTime, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { displayName } from './model/displayName';
+import { labelRule } from './model/labels';
 import { loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
 import { formLink } from '@/world/product';
 import { visibleRouteText } from './model/routeText';
@@ -37,7 +38,6 @@ const distance = (a: Position, b: Position) => {
     const t = Math.PI / 180;
     return Math.hypot((b[0]! - a[0]!) * t * Math.cos(a[1]! * t), (b[1]! - a[1]!) * t) * 6371000;
 };
-const hidesLabel = new Set(['停车场', '学院', '宿舍', '公交站']);
 
 interface World { space: Space; model: CampusModel; router: Router; rooms: Room[]; roomById: Map<string, Room>; periods: TeachingPeriod[]; term: TeachingTerm; holidays: Map<string, string>; read: ReturnType<typeof makeRoomReader> }
 
@@ -181,12 +181,12 @@ export default function MapApp() {
             const name = place?.names[0];
             const at = scene.centreOf(building.id);
             if (!name || !at) continue;
-            if (freeBy.has(building.id)) out.push({ id: building.id, text: name, count: 0, at, height: building.height, minZoom: 14.5, priority: 0, className: 'teach' });
-            else { const dorm = place.category === '宿舍' || /苑\d/.test(name); out.push({ id: building.id, text: name, at, height: building.height, minZoom: dorm ? 16.3 : 15.1, priority: dorm ? 3 : 1, className: dorm ? 'minor' : '' }); }
+            const teaching = freeBy.has(building.id), rule = labelRule(place!, world.space.byId, teaching)!;
+            out.push({ id: building.id, text: name, ...(teaching ? { count: 0 } : {}), at, height: building.height, ...rule, className: teaching ? 'teach' : rule.priority > 1 ? 'minor' : '' });
         }
         for (const place of world.space.places) {
-            if (place.kind !== 'place' || !place.centre || !place.names[0] || hidesLabel.has(place.category ?? '')) continue;
-            out.push({ id: place.id, text: place.names[0], at: place.centre, height: 0, minZoom: 16.6, priority: 4, className: 'minor place' });
+            const rule = place.centre && place.names[0] ? labelRule(place, world.space.byId) : null;
+            if (rule) out.push({ id: place.id, text: place.names[0]!, at: place.centre!, height: 0, ...rule, className: 'minor place' });
         }
         scene.setLabels(out);
         scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));

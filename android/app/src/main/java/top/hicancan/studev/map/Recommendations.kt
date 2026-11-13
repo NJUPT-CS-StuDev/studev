@@ -33,14 +33,17 @@ object Recommendations {
         return if (end - minute <= 30) Open.Closing else Open.Open
     }
 
+    /** Where people on campus go at each part of the day, most likely first, as categories of the map's vocabulary. */
     fun categories(hour: Int) = when (hour) {
-        in 5..10 -> listOf("教学", "图书馆", "食堂")
-        in 11..13 -> listOf("食堂", "服务")
-        in 14..16 -> listOf("教学", "图书馆", "体育")
-        in 17..18 -> listOf("食堂", "服务")
-        in 19..21 -> listOf("图书馆", "教学", "体育")
-        else -> listOf("宿舍", "服务")
+        in 5..10 -> listOf("教学楼", "图书馆", "食堂")
+        in 11..13 -> listOf("食堂", "超市便利")
+        in 14..16 -> listOf("教学楼", "图书馆", "体育")
+        in 17..18 -> listOf("食堂", "超市便利")
+        in 19..21 -> listOf("图书馆", "教学楼", "体育")
+        else -> listOf("宿舍", "超市便利")
     }
+    /** What closes and is then no use to suggest. */
+    private val CLOSES = setOf("食堂", "超市便利")
 
     private fun metres(a: List<Double>, b: List<Double>): Double {
         val rad = Math.PI / 180
@@ -52,9 +55,9 @@ object Recommendations {
         val order = categories(minute / 60)
         val rank = mapOf(Open.Open to 0, Open.Closing to 0, Open.Unknown to 1, Open.Closed to 2)
         val shown = mutableMapOf<String?, Int>()
-        return places.filter { it.kind != "room" && it.centre != null && it.featured && it.category in order }
+        return places.filter { (it.kind == "building" || it.kind == "place") && it.centre != null && it.id.startsWith("${top.hicancan.studev.BuildConfig.DEFAULT_CAMPUS}/") && it.category in order }
             .map { Item(it, metres(from, it.centre!!), status(it.hours, day, minute)) }
-            .filterNot { it.place.category in setOf("食堂", "服务") && it.status == Open.Closed }
+            .filterNot { it.place.category in CLOSES && it.status == Open.Closed }
             .sortedWith(compareBy<Item>({ order.indexOf(it.place.category) }, { rank.getValue(it.status) }, { it.metres }, { it.place.id }))
             .filter { item -> val count = shown[item.place.category] ?: 0; shown[item.place.category] = count + 1; count < 3 }
     }

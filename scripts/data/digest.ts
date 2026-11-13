@@ -65,6 +65,7 @@ interface MapPlace {
     title?: string;
     category?: string;
     group?: string;
+    tier?: number;
     levels?: number;
     houses?: string[];
     routing: { type: 'target'; id: string };
@@ -262,17 +263,6 @@ async function locateData(): Promise<{ dir: string; version: string; index: Data
     return { dir, version, index: await read<DataIndex>(join(dir, 'index.json')) };
 }
 
-function category(place: MapPlace): string | undefined {
-    const text = `${place.name ?? ''} ${(place.aliases ?? []).join(' ')}`;
-    const rules = [['图书馆', '图书馆'], ['食堂', '食堂'], ['超市', '超市'], ['校医院', '校医院'], ['门诊', '校医院'], ['快递', '快递'], ['打印', '打印'], ['体育', '体育'], ['公交', '公交站']] as const;
-    for (const [name, value] of rules) {
-        if (text.includes(name)) {
-            return value;
-        }
-    }
-    return place.category ?? (place.kind === 'room' ? '教室' : place.kind === 'building' ? '教学楼' : undefined);
-}
-
 function centre(geometry: MapPlace['geometry']): [number, number] | undefined {
     if (!geometry) {
         return undefined;
@@ -300,20 +290,22 @@ function centre(geometry: MapPlace['geometry']): [number, number] | undefined {
     ];
 }
 
-function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>, mapLevels: Map<string, number>) {
+/** One map entity as the clients read it. What a place is (category, group, tier) is the map's; a room is a 教室. */
+function normalizePlace(raw: MapPlace, ids: Set<string>, roomFacts: Map<string, any>, mapLevels: Map<string, number>) {
     if (!raw.routing || raw.routing.type !== 'target' || raw.routing.id !== raw.id) {
         throw new Error(`map entity has no canonical routing target: ${raw.id}`);
     }
     const prefix = raw.id.includes('/') ? raw.id.slice(0, raw.id.lastIndexOf('/')) : '';
     const fact = roomFacts.get(raw.id);
-    const parent = raw.parent || prefix;
+    const parent = raw.parent ?? (ids.has(prefix) ? prefix : undefined);
+    const category = raw.category ?? (raw.kind === 'room' ? '教室' : undefined);
     const names = [...new Set([raw.name, ...(raw.aliases ?? []), ...(fact?.names ?? [])].filter(Boolean))];
     const roomName = raw.kind === 'room' ? raw.name ?? raw.id.slice(raw.id.lastIndexOf('-') + 1) : undefined;
     const floor = raw.kind === 'room' && parent ? parent.slice(parent.lastIndexOf('/') + 1) : null;
     return {
         id: raw.id,
         kind: raw.kind,
-        parent,
+        ...(parent ? { parent } : {}),
         names: roomName ? [...new Set([roomName, ...names])] : names,
         centre: centre(raw.geometry),
         ...(((raw.levels ?? raw.level ?? mapLevels.get(raw.id)) != null) ? { levels: raw.levels ?? raw.level ?? mapLevels.get(raw.id) } : {}),
@@ -324,8 +316,9 @@ function normalizePlace(raw: MapPlace, roomFacts: Map<string, any>, mapLevels: M
         ...(fact?.kinds?.length ? { room_kinds: fact.kinds } : {}),
         sources: ['map'],
         routing: raw.routing,
-        ...(category(raw) ? { category: category(raw) } : {}),
-        ...((raw.kind === 'building' && category(raw)) ? { featured: true } : {}),
+        ...(category ? { category } : {}),
+        ...(raw.group ? { group: raw.group } : {}),
+        ...(raw.tier ? { tier: raw.tier } : {}),
     };
 }
 
@@ -422,7 +415,8 @@ async function buildCampus(
     const entities = await read<MapPlace[]>(join(from, 'entities.json'));
     const mapLevels = new Map<string, number>();
     for (const place of entities) if (place.kind === 'floor' && place.parent && place.level != null) mapLevels.set(place.parent, Math.max(mapLevels.get(place.parent) ?? 0, place.level));
-    const normalized = entities.map(place => normalizePlace(place, roomFacts, mapLevels));
+    const ids = new Set(entities.map(place => place.id));
+    const normalized = entities.map(place => normalizePlace(place, ids, roomFacts, mapLevels));
     await mkdir(to, { recursive: true });
     await write(join(to, 'entities.json'), normalized);
     for (const file of SPACE_FILES) {
@@ -498,7 +492,7 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
         const title = room ? place.id.slice(place.id.indexOf('/') + 1) : displayName(place, byId);
         const roomTitle = (place as { title?: string }).title;
         docs.push(entity(room ? 'rooms' : 'places', place.id, `/map/?place=${encodeURI(place.id)}`, title, place.category ?? null,
-            [...place.names, roomTitle ?? '', place.parent, place.floor ? `${place.floor} 层` : '', place.seats ? `${place.seats} 座` : '', ...(place.room_kinds ?? []), ...(place.houses ?? [])], chain(place.id)));
+            [...place.names, roomTitle ?? '', place.parent ?? '', place.group ?? '', place.floor ? `${place.floor} 层` : '', place.seats ? `${place.seats} 座` : '', ...(place.room_kinds ?? []), ...(place.houses ?? [])], chain(place.id)));
     }
     // What the map has not drawn yet is found the same way and opens as its timetable.
     for (const room of rooms) {

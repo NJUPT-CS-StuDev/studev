@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 import top.hicancan.studev.data.*
+import top.hicancan.studev.map.Labels
 import top.hicancan.studev.map.Recommendations
 import top.hicancan.studev.timetable.ExamAttendance
 import top.hicancan.studev.world.*
@@ -55,6 +56,16 @@ class ParityTest {
             val row = case.jsonObject
             val got = Recommendations.of(places, row.getValue("day").jsonPrimitive.int, row.getValue("hour").jsonPrimitive.int * 60 + row.getValue("minute").jsonPrimitive.int, from)
             assertEquals(row.toString(), row.getValue("expected").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content to it.jsonObject.getValue("state").jsonPrimitive.content }, got.map { it.place.id to it.status.name.lowercase() })
+        }
+    }
+    @Test fun labelsMatch() {
+        val labels = golden.getValue("labels").jsonObject
+        val byId = json.decodeFromJsonElement<List<Place>>(labels.getValue("entities")).associateBy { it.id }
+        fun rule(value: JsonElement) = (value as? JsonObject)?.let { Labels.Rule(it.getValue("minZoom").jsonPrimitive.double, it.getValue("priority").jsonPrimitive.int) }
+        labels.getValue("cases").jsonArray.forEach { case ->
+            val row = case.jsonObject; val place = byId.getValue(row.getValue("id").jsonPrimitive.content)
+            assertEquals(row.toString(), rule(row.getValue("rule")), Labels.rule(place, byId))
+            if (place.kind == "building") assertEquals(row.toString(), rule(row.getValue("teaching")), Labels.rule(place, byId, true))
         }
     }
     @Test fun attendanceDeadlineAndPlanningSemanticsMatch() {

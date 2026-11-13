@@ -30,7 +30,8 @@ private data class OpeningRecord(val hours: OpeningHours, val sources: List<Json
 data class Place(
     val id: String,
     val kind: String,
-    val parent: String,
+    /** The entity it lies in; none for a place off the campus. */
+    val parent: String? = null,
     val names: List<String>,
     val centre: List<Double>? = null,
     val levels: Int? = null,
@@ -41,21 +42,22 @@ data class Place(
     val seats: Int? = null,
     @SerialName("room_kinds") val roomKinds: List<String> = emptyList(),
     val sources: List<String>,
-    val amap: String? = null,
     val routing: Endpoint,
     val hours: OpeningHours? = null,
+    /** From njupt-map's one vocabulary, with its group and how prominently the map shows it (tier 1–3); a room is a 教室. */
     val category: String? = null,
-    val featured: Boolean = false,
+    val group: String? = null,
+    val tier: Int? = null,
 ) {
     val endpoint get() = routing
     val kindLabel get() = when (kind) { "building" -> "楼栋"; "room" -> "教室"; else -> kind }
     fun displayName(byId: Map<String, Place>): String {
         names.firstOrNull { it.isNotBlank() }?.let { return it.trim() }
         if (kind == "building") {
-            var parentPlace = byId[parent]
+            var parentPlace = parent?.let(byId::get)
             while (parentPlace != null) {
                 parentPlace.names.firstOrNull { it.isNotBlank() }?.let { return "${category ?: "建筑"} · ${it.trim()}" }
-                parentPlace = byId[parentPlace.parent]
+                parentPlace = parentPlace.parent?.let(byId::get)
             }
             return "未命名建筑"
         }
@@ -69,8 +71,8 @@ fun roomDisplayName(room: String?, byId: Map<String, Place>): String? {
     if (place == null) return room.substringAfterLast('/')
     val title = place.displayName(byId)
     if (place.kind == "room") {
-        var parent = byId[place.parent]
-        while (parent != null && parent.kind != "building") parent = byId[parent.parent]
+        var parent = place.parent?.let(byId::get)
+        while (parent != null && parent.kind != "building") parent = parent.parent?.let(byId::get)
         if (parent != null) return "${parent.displayName(byId)}-$title"
     }
     return title
@@ -90,7 +92,7 @@ class CampusPackage private constructor(
     val basemapFile: File?,
 ) {
     val byId = places.associateBy { it.id }
-    fun position(place: Place) = place.centre ?: byId[place.parent]?.centre
+    fun position(place: Place) = place.centre ?: place.parent?.let(byId::get)?.centre
     companion object {
         const val BASE = "data/space/仙林"
         suspend fun load(assets: AssetManager): CampusPackage = withContext(Dispatchers.IO) {
