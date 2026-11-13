@@ -30,8 +30,8 @@ Debug supports arm64 and x86_64; release is arm64 only. MapLibre uses the same
 OpenGL renderer and SurfaceView on all devices. Theme changes restyle Compose,
 the map and system bars without recreating the native surface.
 
-From the repository root, `npm run release` builds and signs the APK and the Windows installer, puts them
-on object storage and publishes them on GitHub Releases. Signing keys and credentials
+From the repository root, `npm run release` builds and signs the APK, puts it
+on object storage and publishes it on GitHub Releases. Signing keys and credentials
 stay in external private storage. A direct `assembleRelease` without signing
 properties creates a debug-signed build, not an update. Increase versionCode for
 each release and retain the signing certificate. 我的 → 下载新版本 opens `/download/`

@@ -41,7 +41,7 @@ import top.hicancan.studev.app.marks
  */
 object Docs {
     /** A whole text, read at once into keyed blocks. */
-    fun read(text: String): List<JsonObject> = top.hicancan.docstream.Stream().use { stream -> stream.push(text); blocksOf(stream.finish()) }
+    fun read(text: String): List<JsonObject> = top.hicancan.docstream.DocStream().use { stream -> stream.push(text); blocksOf(stream.finish()) }
     /** The blocks of an update the kernel gives as JSON. */
     fun blocksOf(update: String): List<JsonObject> = Json.parseToJsonElement(update).jsonObject.getValue("blocks").jsonArray.map { it.jsonObject }
 }

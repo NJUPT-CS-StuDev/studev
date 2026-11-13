@@ -129,7 +129,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 said = ""; streaming = ""; live = null
                 var answer: JsonObject? = null
                 var failed: String? = null
-                val doc = top.hicancan.docstream.Stream()
+                val doc = top.hicancan.docstream.DocStream()
                 fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                 try {
                     val mine = asking
