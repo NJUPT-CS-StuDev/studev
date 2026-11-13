@@ -1,7 +1,7 @@
 import definitions from './tools.json';
 import { dueOn, eventsOn, type Timeline } from './events';
 import { availableSlots } from './planning';
-import { addDays, daysBetween, momentNow, type Moment } from './time';
+import { addDays, dateLabel, daysBetween, hm, momentNow, WEEKDAYS, weekdayOf, type Moment } from './time';
 import { sanitizeTask, type Task } from './tasks';
 
 export { definitions };
@@ -37,12 +37,17 @@ export function taskProposal(args: Record<string, unknown>, line: Timeline): Tas
     const { id, modified, ...task } = safe;
     return { task, ...(old ? { id: old.id, expected: old.modified } : {}) };
 }
+/** What the tools give the model is said as people say it, so that it says it back that way: 11月16日 周一, 08:00–09:35. */
+const toolDay = (date: string) => `${dateLabel(date)} ${WEEKDAYS[weekdayOf(date)]}`;
+const KINDS = { class: '课', lab: '实验', exam: '考试', run: '早锻炼', task: '任务' } as const;
+const AVOID = { must: '必须避开', prefer: '尽量避开', allow: '可以重叠' } as const;
 export function readTimeline(line: Timeline, from: string, to: string) {
     const count = daysBetween(toolDate(from), toolDate(to));
     if (count < 0 || count > 13) throw new Error('一次最多查询 14 天。');
     return Array.from({ length: count + 1 }, (_, i) => {
         const date = addDays(from, i);
-        return { date, events: eventsOn(line, date).map(event => ({ id: event.id, kind: event.kind, name: event.name, start: event.start, end: event.end, room: event.room, avoid: event.avoid, layer: event.layer })), due: dueOn(line, date).map(task => ({ id: task.id, title: task.title, due: task.due, done: Boolean(task.done) })) };
+        return { date, day: toolDay(date), events: eventsOn(line, date).map(event => ({ ...(event.task ? { task: event.id } : {}), kind: KINDS[event.kind], name: event.name, time: `${hm(event.start)}–${hm(event.end)}`, room: event.room, ...(event.avoid ? { avoid: AVOID[event.avoid] } : {}) })),
+            due: dueOn(line, date).map(task => ({ task: task.id, title: task.title, when: task.due!.time !== undefined ? `${toolDay(task.due!.date)} ${hm(task.due!.time)}` : `${toolDay(task.due!.date)} 当天`, done: Boolean(task.done) })) };
     });
 }
 export function schedulingTool(line: Timeline, args: Record<string, unknown>, now: Moment = momentNow()) {
@@ -50,5 +55,6 @@ export function schedulingTool(line: Timeline, args: Record<string, unknown>, no
     if (daysBetween(from, to) < 0 || daysBetween(from, to) > 13) throw new Error('一次最多排 14 天。');
     const task = args.task_id ? line.tasks.find(task => task.id === args.task_id && !task.deleted) : undefined;
     if (args.task_id && !task) throw new Error('要移动的任务不存在。');
-    return availableSlots(line, { from, to, minutes: args.minutes as number, exclude: task?.id, due: task?.due }, now).slice(0, 12);
+    return availableSlots(line, { from, to, minutes: args.minutes as number, exclude: task?.id, due: task?.due }, now).slice(0, 12)
+        .map(slot => ({ date: slot.date, start: slot.start, end: slot.end, day: toolDay(slot.date), time: `${hm(slot.start)}–${hm(slot.end)}`, overlaps: slot.clashes.length }));
 }

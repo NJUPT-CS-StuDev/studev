@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import golden from './parity/golden.json';
-import { holidayMap, type Timeline } from './events';
+import { eventsOn, holidayMap, type Timeline } from './events';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from './tools';
 import type { TeachingMeeting, Lab, TeachingPeriod, TeachingTerm } from './facts';
 import type { CalendarTerm } from './data';
@@ -9,9 +9,12 @@ const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.peri
 describe('tools over released facts and local choices', () => {
     it('keeps coincident labs and separates a planned task from its deadline', () => {
         const days = readTimeline(line, '2026-11-09', '2026-11-13');
-        expect(days[0]!.events.filter(event => event.kind === 'lab' && event.start === 590)).toHaveLength(2);
-        expect(days[0]!.events.find(event => event.id === 'report')!.start).toBe(600);
-        expect(days.at(-1)!.due[0]!.id).toBe('report');
+        expect(days[0]!.day).toBe('11月9日 周一');
+        expect(days[0]!.events.filter(event => event.kind === '实验' && event.time.startsWith('09:50'))).toHaveLength(2);
+        expect(days[0]!.events.find(event => event.task === 'report')!.time).toBe('10:00–11:00');
+        expect(days.at(-1)!.due[0]).toMatchObject({ task: 'report', when: '11月13日 周五 23:59' });
+        // What the model reads is said as people say it, never in the words of the code.
+        expect(JSON.stringify(days)).not.toMatch(/"(prefer|must|allow|layer)"/);
     });
     it('only proposes a move, retaining independent deadline and reminders', () => {
         const before = JSON.stringify(line.tasks), proposal = taskProposal(toolArguments('propose_task', { id: 'report', title: '报告', date: '2026-11-12', start: 1410, end: 1440 }), line);
@@ -27,6 +30,8 @@ describe('tools over released facts and local choices', () => {
         expect(() => readTimeline(line, '2026-11-09', '2026-12-30')).toThrow();
         const slots = schedulingTool(line, { from: '2026-11-09', to: '2026-11-09', minutes: 60, task_id: 'report' }, { date: '2026-11-09', min: 480 });
         expect(slots.length).toBeGreaterThan(0);
-        expect(slots.every(slot => !slot.clashes.includes('report'))).toBe(true);
+        // The task being moved does not stand in its own way.
+        for (const slot of slots) expect(slot.overlaps).toBe(eventsOn(line, slot.date).filter(event => !event.task && event.avoid !== 'allow' && event.start < slot.end && slot.start < event.end).length);
+        expect(slots[0]!.day).toBe('11月9日 周一'); expect(slots[0]!.time).toMatch(/^\d\d:\d\d–\d\d:\d\d$/);
     });
 });

@@ -21,7 +21,7 @@ test('AI streams the fixed model through the gateway, passing on what it says an
   const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { MAKERS_MODELS_KEY: 'test-provider-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {
     calls++; assert.equal(url, 'https://ai-gateway.edgeone.link/v1/chat/completions');
     const body = JSON.parse(init.body); assert.equal(body.model, '@makers/deepseek-v4.1-flash'); assert.equal(body.stream, true);
-    assert.ok(body.tools.some(tool => tool.function.name === 'suggest_slots')); assert.equal(body.messages[0].role, 'system'); assert.match(body.messages[0].content, /执行与截止不同/);
+    assert.ok(body.tools.some(tool => tool.function.name === 'suggest_slots')); assert.equal(body.messages[0].role, 'system'); assert.match(body.messages[0].content, /“做的时间”和“截止时间”是两回事/); assert.match(body.messages[0].content, /绝不对用户提工具名/);
     // A frame split across chunks, thinking that must not pass, and a tool call in pieces.
     const first = frame({ delta: { reasoning_content: 'not-returned' } }) + frame({ delta: { content: '我来' } });
     const second = frame({ delta: { content: '查一下。' } }) + frame({ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'free_', arguments: '{"date":' } }] } });

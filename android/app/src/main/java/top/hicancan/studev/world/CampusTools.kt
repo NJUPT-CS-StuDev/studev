@@ -69,12 +69,17 @@ class CampusTools(private val context: android.content.Context, private val repo
     override fun close() { search?.close(); wayfind?.close() }
     companion object {
         fun date(value: String): LocalDate { require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(value)) { "日期无效。" }; return LocalDate.parse(value) }
+        /** Said as people say it, as toolDay in src/campus/world/tools.ts: 11月16日 周一, 08:00–09:35. */
+        private fun toolDay(day: LocalDate) = "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
+        private val KINDS = mapOf("class" to "课", "lab" to "实验", "exam" to "考试", "run" to "早锻炼", "task" to "任务")
+        private val AVOID = mapOf("must" to "必须避开", "prefer" to "尽量避开", "allow" to "可以重叠")
         fun timeline(line: CampusLine, from: String, to: String): JsonArray {
             val start = date(from); val end = date(to); val days = CampusLine.daysBetween(start, end)
             require(days in 0..13) { "一次最多查询14天。" }
             return JsonArray((0..days).map { offset -> val day = start.plusDays(offset.toLong()); buildJsonObject {
-                put("date", day.toString()); put("events", JsonArray(line.on(day).map { event -> buildJsonObject { put("id", event.id); put("kind", event.kind); put("name", event.name); put("start", event.start); put("end", event.end); put("room", event.room); put("avoid", event.avoid); put("layer", event.layer) } }))
-                put("due", JsonArray(line.dueOn(day).map { task -> buildJsonObject { put("id", task.id); put("title", task.title); put("due", Json.encodeToJsonElement(task.due)); put("done", task.done != null) } }))
+                put("date", day.toString()); put("day", toolDay(day))
+                put("events", JsonArray(line.on(day).map { event -> buildJsonObject { if (event.task != null) put("task", event.id); put("kind", KINDS.getValue(event.kind)); put("name", event.name); put("time", "${hm(event.start)}–${hm(event.end)}"); put("room", event.room); event.avoid?.let { put("avoid", AVOID.getValue(it)) } } }))
+                put("due", JsonArray(line.dueOn(day).map { task -> val due = task.due!!; buildJsonObject { put("task", task.id); put("title", task.title); put("when", "${toolDay(LocalDate.parse(due.date))} ${due.time?.let(::hm) ?: "当天"}"); put("done", task.done != null) } }))
             } })
         }
         fun slots(line: CampusLine, args: JsonObject, now: Moment): JsonArray {
@@ -82,7 +87,7 @@ class CampusTools(private val context: android.content.Context, private val repo
             require(CampusLine.daysBetween(from, to) in 0..13) { "一次最多排14天。" }
             val id = args["task_id"]?.jsonPrimitive?.content; val task = id?.let { line.tasks.find { task -> task.id == it && task.deleted != true } }
             require(id == null || task != null) { "要移动的任务不存在。" }
-            return JsonArray(Planning.available(line, SlotRequest(from, to, args.getValue("minutes").jsonPrimitive.int, exclude = id, due = task?.due), now).take(12).map { slot -> buildJsonObject { put("date", slot.date.toString()); put("start", slot.start); put("end", slot.end); put("clashes", JsonArray(slot.clashes.map(::JsonPrimitive))); put("penalty", slot.penalty) } })
+            return JsonArray(Planning.available(line, SlotRequest(from, to, args.getValue("minutes").jsonPrimitive.int, exclude = id, due = task?.due), now).take(12).map { slot -> buildJsonObject { put("date", slot.date.toString()); put("start", slot.start); put("end", slot.end); put("day", toolDay(slot.date)); put("time", "${hm(slot.start)}–${hm(slot.end)}"); put("overlaps", slot.clashes.size) } })
         }
         fun proposal(args: JsonObject, line: CampusLine): TaskProposal {
             val id = args["id"]?.jsonPrimitive?.content; val old = id?.let { line.tasks.find { task -> task.id == it && task.deleted != true } }
