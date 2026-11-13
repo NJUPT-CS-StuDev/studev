@@ -50,16 +50,17 @@ export default function AiApp() {
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [waiting, setWaiting] = useState<string | null>(null);
     const stop = useRef<AbortController | null>(null);
-    const end = useRef<HTMLDivElement>(null), stuck = useRef(true);
+    const end = useRef<HTMLDivElement>(null), scroller = useRef<HTMLDivElement>(null), stuck = useRef(true);
     const services = useMemo(() => new CampusTools(), []);
     useEffect(() => () => services.dispose(), [services]);
     const latest = useRef(loaded?.line); latest.current = loaded?.line;
     useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(chat)); } catch { /* Kept for this page only. */ } }, [chat]);
     // The view follows the answer down unless one has scrolled up to read.
     useEffect(() => {
-        const onScroll = () => { stuck.current = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80; };
-        window.addEventListener('scroll', onScroll, { passive: true });
-        return () => window.removeEventListener('scroll', onScroll);
+        const box = scroller.current; if (!box) return;
+        const onScroll = () => { stuck.current = box.scrollTop + box.clientHeight >= box.scrollHeight - 80; };
+        box.addEventListener('scroll', onScroll, { passive: true });
+        return () => box.removeEventListener('scroll', onScroll);
     }, []);
     useEffect(() => { if (stuck.current) end.current?.scrollIntoView({ block: 'end' }); }, [chat, streaming]);
 
@@ -141,50 +142,73 @@ export default function AiApp() {
     }
     const results = new Map(chat.messages.filter(item => item.role === 'tool').map(item => [item.tool_call_id!, parse(item.content)]));
     const today = momentNow().date;
-    return <main className="ai-entry">
-        <header><h1>AI</h1>{chat.messages.length > 0 && !busy && <button className="ib" onClick={() => { setChat({ messages: [], proposals: [] }); setError(''); }}>新对话</button>}</header>
-        {!chat.messages.length && <>
-            <p className="meta">问课表、地图和校园资料：查安排、找时间、找空教室、问路，起草的任务经你确认才保存。对话只存在这台设备上，问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。</p>
-            {!prefs.class && <p className="meta">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
+    // One turn: a question, and everything that answered it, however many rounds of looking up it took.
+    const turns: { question: string; replies: Message[]; last: boolean }[] = [];
+    chat.messages.forEach(message => {
+        if (message.role === 'user') turns.push({ question: message.content ?? '', replies: [], last: false });
+        else if (message.role === 'assistant') turns.at(-1)?.replies.push(message);
+    });
+    if (turns.length) turns.at(-1)!.last = true;
+    return <div className="sd ai"><div className="ai-scroll" ref={scroller}><div className="wrap narrow">
+        <header className="ai-head"><h1>AI</h1>{chat.messages.length > 0 && !busy && <button className="ib" onClick={() => { setChat({ messages: [], proposals: [] }); setError(''); }}>新对话</button>}</header>
+        {!chat.messages.length && <div className="ai-empty">
+            <p>问课表、地图和校园资料：查安排、找时间、找空教室、问路。起草的任务经你确认才会加到清单。</p>
+            {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
-        </>}
-        {loadError && <p role="status" className="meta">课表还没读完：{loadError}</p>}
-        <div className="ai-messages" aria-live="polite">
-            {chat.messages.map((message, at) => {
-                if (message.role === 'tool') return null;
-                if (message.role === 'user') return <article key={at} className="ai-message user"><p>{message.content}</p></article>;
-                return <article key={at} className="ai-message assistant">
-                    {message.content && <p>{message.content}</p>}
-                    {message.tool_calls?.map(call => {
-                        const result = results.get(call.id), failed = Boolean(result && typeof result === 'object' && 'error' in (result as object));
-                        const proposal = chat.proposals.find(item => item.call === call.id);
-                        return <div key={call.id} className="ai-step">
-                            <details><summary className={result === undefined ? 'doing' : failed ? 'failed' : ''}>{STEPS[call.function.name] ?? call.function.name}{result === undefined ? '……' : failed ? ' · 没查到' : ''}</summary>
-                                <pre>{call.function.arguments}{result !== undefined ? `\n→ ${JSON.stringify(result).slice(0, 1200)}` : ''}</pre></details>
-                            {result !== undefined && !failed && <Found name={call.function.name} result={result} />}
-                            {proposal && <section className="ai-proposal">
-                                <b>{proposal.id ? '改成' : '新任务'} · {proposal.task.title}</b>
-                                {proposal.task.date && <small>{dayWord(proposal.task.date, today)} {hm(proposal.task.start!)}{proposal.task.end !== undefined ? `–${hm(proposal.task.end)}` : ''}</small>}
-                                {proposal.task.due && <small>{dayWord(proposal.task.due.date, today)} {proposal.task.due.time !== undefined ? hm(proposal.task.due.time) : ''} 截止</small>}
-                                {proposal.task.note && <small>{proposal.task.note}</small>}
-                                <div className="btns"><button className="btn go" disabled={proposal.saved} onClick={() => confirm(proposal.key)}>{proposal.saved ? '已加到清单' : '加到清单'}</button>
-                                    {!proposal.saved && <button className="btn" onClick={() => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== proposal.key) }))}>不要</button>}</div>
-                            </section>}
-                        </div>;
-                    })}
-                </article>;
-            })}
-            {streaming !== null && <article className="ai-message assistant"><p>{streaming}<span className="ai-caret" /></p></article>}
-            {busy && streaming === null && <p className="meta ai-thinking">正在查……</p>}
-        </div>
+            <p className="fine">对话只存在这台设备上；问的内容会发给模型（腾讯云 EdgeOne 提供的 DeepSeek）。</p>
+        </div>}
+        {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
+        <div className="ai-turns" aria-live="polite">{turns.map((turn, at) => {
+            const calls = turn.replies.flatMap(reply => reply.tool_calls ?? []);
+            const answer = [...turn.replies].reverse().find(reply => reply.content && !reply.tool_calls?.length)?.content
+                ?? (turn.last && streaming !== null ? null : [...turn.replies].reverse().find(reply => reply.content)?.content);
+            const counts = new Map<string, number>(); calls.forEach(call => counts.set(call.function.name, (counts.get(call.function.name) ?? 0) + 1));
+            const doing = calls.some(call => !results.has(call.id));
+            const found = new Map<string, { name: string; result: unknown }>();
+            calls.forEach(call => { const result = results.get(call.id); if (result && !(typeof result === 'object' && 'error' in (result as object))) found.set(call.function.name, { name: call.function.name, result }); });
+            const drafts = chat.proposals.filter(item => calls.some(call => call.id === item.call));
+            return <section key={at} className="ai-turn">
+                <p className="ai-q">{turn.question}</p>
+                {calls.length > 0 && <details className="ai-steps"><summary className={doing ? 'doing' : ''}>{doing ? '正在' : '已'}{[...counts].map(([name, count]) => `${STEPS[name] ?? name}${count > 1 ? ` ×${count}` : ''}`).join(' · ')}</summary>
+                    <ol>{turn.replies.map((reply, i) => <li key={i}>{reply.content && reply.tool_calls?.length ? <p>{reply.content}</p> : null}
+                        {reply.tool_calls?.map(call => { const result = results.get(call.id); const failed = Boolean(result && typeof result === 'object' && 'error' in (result as object));
+                            return <div key={call.id} className={failed ? 'failed' : ''}>{STEPS[call.function.name] ?? call.function.name}{result === undefined ? '……' : failed ? `：${(result as { error: string }).error}` : ''}</div>; })}</li>)}</ol>
+                </details>}
+                {answer && <div className="ai-a"><p>{answer}</p></div>}
+                {turn.last && streaming !== null && <div className="ai-a"><p>{streaming}<span className="ai-caret" /></p></div>}
+                {turn.last && busy && streaming === null && !doing && <p className="ai-wait">正在想……</p>}
+                {found.size > 0 && [...found.values()].map(item => <Found key={item.name} name={item.name} result={item.result} />)}
+                {drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
+            </section>;
+        })}</div>
         {error && <p role="alert" className="ai-error">{error}{lastUser >= 0 && <button className="ib" onClick={again}>重试</button>}</p>}
-        {!busy && lastUser >= 0 && !error && <div className="ai-turn"><button className="ib" onClick={again}>重新回答</button><button className="ib" onClick={edit}>改问题</button></div>}
-        {waiting && <p role="status" className="meta">在新打开的页面登录或注册，回到这里会自动发出：“{waiting}”</p>}
-        <form className="ai-compose" onSubmit={event => { event.preventDefault(); void send(); }}>
+        {!busy && lastUser >= 0 && !error && <div className="ai-again"><button className="ib" onClick={again}>重新回答</button><button className="ib" onClick={edit}>改问题</button></div>}
+        {waiting && <p role="status" className="fine">在新打开的页面登录或注册，回到这里会自动发出：“{waiting}”</p>}
+        <div ref={end} className="ai-end" />
+        </div></div>
+        <div className="ai-dock"><form className="ai-compose" onSubmit={event => { event.preventDefault(); void send(); }}>
             <textarea aria-label="问点什么" value={draft} maxLength={4000} rows={1} placeholder="问点什么" onChange={event => setDraft(event.target.value)}
                 onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-            {busy ? <button type="button" className="btn ai-stop" onClick={() => stop.current?.abort()}>停止</button> : <button className="btn go" disabled={!draft.trim()}>发送</button>}
-        </form>
-        <div ref={end} />
-    </main>;
+            {busy ? <button type="button" className="btn" onClick={() => stop.current?.abort()}>停止</button> : <button className="btn go" disabled={!draft.trim()}>发送</button>}
+        </form></div>
+    </div>;
+}
+
+/** The tasks one turn drafted, in one card: each to tick, then added together. */
+function Drafts({ drafts, today, onAdd, onDrop }: { drafts: Proposal[]; today: string; onAdd: (keys: string[]) => void; onDrop: (key: string) => void }) {
+    const open = drafts.filter(item => !item.saved);
+    const [picked, setPicked] = useState<string[]>(() => open.map(item => item.key));
+    useEffect(() => setPicked(current => [...new Set([...current, ...open.filter(item => !current.includes(item.key)).map(item => item.key)])]), [drafts.length]);
+    const chosen = open.filter(item => picked.includes(item.key));
+    return <div className="ai-drafts">
+        <h3>{open.length ? `起草了 ${drafts.length} 个任务` : `已加到清单 · ${drafts.length} 个任务`}</h3>
+        {drafts.map(item => <label key={item.key} className={`ai-draft ${item.saved ? 'saved' : ''}`}>
+            {item.saved ? <span className="tcheck on" /> : <input type="checkbox" checked={picked.includes(item.key)} onChange={event => setPicked(current => event.target.checked ? [...current, item.key] : current.filter(key => key !== item.key))} />}
+            <span className="ai-draft-main"><b>{item.id ? '改成 · ' : ''}{item.task.title}</b>
+                <small>{[item.task.date ? `${dayWord(item.task.date, today)} ${hm(item.task.start!)}${item.task.end !== undefined ? `–${hm(item.task.end)}` : ''}` : '',
+                    item.task.due ? `${dayWord(item.task.due.date, today)}${item.task.due.time !== undefined ? ` ${hm(item.task.due.time)}` : ''} 截止` : ''].filter(Boolean).join(' · ')}</small></span>
+            {!item.saved && <button type="button" className="tskip" aria-label="不要这个" onClick={() => onDrop(item.key)}>×</button>}
+        </label>)}
+        {open.length > 0 && <div className="btns"><button className="btn go" disabled={!chosen.length} onClick={() => onAdd(chosen.map(item => item.key))}>{chosen.length === open.length ? '全部加到清单' : `加 ${chosen.length} 个到清单`}</button></div>}
+    </div>;
 }
