@@ -53,7 +53,8 @@ public sealed partial class Shell : Window
         AutomationProperties.SetName(me, "我"); AutomationProperties.SetAutomationId(me, "me");
         me.Click += (_, _) => Open("me");
         Grid.SetColumn(me, 3); bar.Children.Add(me);
-        Face(null);
+        Face(Me.Account.Shared.User?.Letter);
+        Me.Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(() => Face(Me.Account.Shared.User?.Letter));
         root.Children.Add(bar);
         SetTitleBar(drag);
 

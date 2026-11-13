@@ -17,6 +17,7 @@ public sealed partial class MeScreen : Screen
     public MeScreen()
     {
         campus.Changed += () => DispatcherQueue.TryEnqueue(Draw);
+        Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Paint.Turned += Draw;
         Draw();
     }
@@ -56,6 +57,16 @@ public sealed partial class MeScreen : Screen
         Row("外观", look);
         var order = campus.Line?.Order ?? CampusLine.LayerOrder;
         Row("叠放", Value(string.Join(" › ", order.Select(o => KindNames[o])), "同一时间有几件事时谁在前面"), () => Layering(order));
+        var user = Account.Shared.User;
+        if (user is null) Row("账号", Value("未登录", "登录后用免费额度问 AI，任务在手机和电脑间同步"), () => SignIn.Show());
+        else
+        {
+            var account = new Grid(); account.ColumnDefinitions.Add(new ColumnDefinition()); account.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            account.Children.Add(Value($"{(user.RealName.Length > 0 ? user.RealName : user.Nickname)} · {user.RoleName}", "任务在你登录的手机和电脑间自动同步；课表设置也一起同步"));
+            var leave = Kit.Button("退出登录", async () => { try { await Account.Shared.SignOut(); } catch (Exception e) when (e is PlatformFailure or HttpRequestException or TaskCanceledException) { Account.Shared.Forget(); } });
+            leave.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(leave, 1); account.Children.Add(leave);
+            Row("账号", account);
+        }
         Row("反馈", Value("哪里不顺手、哪里不对", "写一句就行，我们会看每一条"), () => Browse(Form("feedback", "Windows · 我")));
         Row("补充数据", Value("实验课表、讲座、校车、营业时间", "教务系统里没有的，审核后放进课表和地图"), () => Browse(Form("data")));
         if (campus.Line?.Run is { } run && campus.Term is { } t2)
@@ -70,7 +81,7 @@ public sealed partial class MeScreen : Screen
             Row("", row);
         }
         page.Children.Add(Pages.Section("关于"));
-        Row("学生发展中心", Value("南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
+        Row("社团", Value("学生发展中心", "南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
         Row("下载 App", Value("安卓：提醒和桌面小组件"), () => Browse($"{Repository.Site}/download/"));
         var fine = Kit.Text($"数据版本 {campus.Repository?.Release.DataVersion ?? "—"} · 地图 {campus.Repository?.Release.MapVersion ?? "—"}", Role.Caption, "faint"); fine.Margin = new Thickness(0, 16, 0, 0);
         page.Children.Add(fine);

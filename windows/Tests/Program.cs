@@ -213,6 +213,14 @@ foreach (var test in golden["memory"]!.AsArray())
 var allMaterials = JsonSerializer.Deserialize<List<CourseMaterials>>(File.ReadAllText(Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "materials.json")), Facts.Json)!;
 foreach (var test in golden["materials"]!["cases"]!.AsArray()) Same("materials said", Lessons.MaterialsSaid(allMaterials, (string)test!["course"]!), test["said"]);
 foreach (var test in golden["materials"]!["counts"]!.AsArray()) Equal("material counts", Lessons.KindCounts(allMaterials.First(m => m.Course == (string)test!["course"]!).Items).Select(k => new object[] { k.Kind, k.Count }), test!["counts"]);
+var syncCase = golden["settingsSync"]!;
+var original = syncCase["original"]!.DeepClone().AsObject();
+Same("settings parts", SettingsSync.PartsOf(original), syncCase["initial"]);
+Same("settings merge", SettingsSync.Merge(syncCase["initial"]!.AsObject(), syncCase["theirs"]!.AsObject()), syncCase["merged"]);
+var stamped = original.DeepClone().AsObject(); stamped["modified"] = new JsonObject(SettingsSync.Sections.Where(s => original[s] is not null).Select(s => new KeyValuePair<string, JsonNode?>(s, "1970-01-01T00:00:00.000Z")));
+var takenSettings = SettingsSync.Taken(stamped, syncCase["merged"]!.AsObject())!; takenSettings.Remove("modified");
+var expectedTaken = syncCase["taken"]!.DeepClone().AsObject(); expectedTaken.Remove("modified");
+Same("settings taken", takenSettings, expectedTaken);
 foreach (var test in golden["hoursCases"]!.AsArray())
     Equal("opening", Hours.At(JsonDocument.Parse(test!["hours"]!.ToJsonString()).RootElement, (int)test["day"]!, (int)test["minute"]!).Open.ToString().ToLowerInvariant(), test["state"]);
 Console.WriteLine($"Windows parity: {checks} checks, {failures.Count} failures");

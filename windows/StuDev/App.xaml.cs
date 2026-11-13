@@ -5,6 +5,7 @@ namespace StuDev;
 public partial class App : Application
 {
     internal static Shell? Window { get; private set; }
+    internal static Me.Sync? Syncing { get; private set; }
     public static void Open(string entry, object? argument = null) => Window?.Open(entry, argument);
     /** A task run without being awaited: if it fails, the failure is written down and ends the app, never swallowed. */
     public static async void Watch(Task task)
@@ -25,6 +26,7 @@ public partial class App : Application
         Window = new Shell();
         Me.Appearance.Apply();
         Window.Open("timetable");
+        Syncing = new Me.Sync(World.Campus.Shared, Window.DispatcherQueue);
         Window.Activate();
     }
 }

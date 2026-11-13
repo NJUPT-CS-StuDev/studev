@@ -50,3 +50,54 @@ public sealed class Preferences
         Saved?.Invoke(adopt);
     }
 }
+
+/** How settings travel between devices, as settingsOf, mergeSettings and settingsTaken on the web: part by part, the later change wins. */
+public static class SettingsSync
+{
+    public static readonly string[] Sections = ["class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run"];
+    private const string Never = "1970-01-01T00:00:00.000Z";
+
+    /** Every part present, with when it last changed; a part kept from before changes were stamped counts as changed never. */
+    public static JsonObject PartsOf(JsonObject settings)
+    {
+        var parts = new JsonObject(); var modified = settings["modified"] as JsonObject;
+        foreach (var section in Sections)
+        {
+            var at = (string?)modified?[section];
+            if (settings[section] is null && at is null) continue;
+            parts[section] = new JsonObject { ["value"] = settings[section]?.DeepClone(), ["modified"] = at ?? Never };
+        }
+        return parts;
+    }
+
+    /** Two sides' parts merged: each part from whichever side changed it later. */
+    public static JsonObject Merge(JsonObject mine, JsonObject theirs)
+    {
+        var merged = new JsonObject();
+        foreach (var section in Sections)
+        {
+            var left = mine[section] as JsonObject; var right = theirs[section] as JsonObject;
+            var kept = left is null ? right : right is null ? left : string.CompareOrdinal((string)right["modified"]!, (string)left["modified"]!) > 0 ? right : left;
+            if (kept is not null) merged[section] = kept.DeepClone();
+        }
+        return merged;
+    }
+
+    /** The settings with the parts that changed later elsewhere taken in, or null when none did. */
+    public static JsonObject? Taken(JsonObject settings, JsonObject merged)
+    {
+        JsonObject? next = null;
+        var modified = settings["modified"] as JsonObject ?? [];
+        foreach (var section in Sections)
+        {
+            if (merged[section] is not JsonObject part || part["modified"] is not JsonValue stamp || !stamp.TryGetValue<string>(out var at)) continue;
+            var mine = (string?)modified[section] ?? "";
+            if (string.CompareOrdinal(at, mine) < 0) continue;
+            if (at == mine && JsonNode.DeepEquals(part["value"], settings[section])) continue;
+            next ??= (JsonObject)settings.DeepClone();
+            if (part["value"] is null) next.Remove(section); else next[section] = part["value"]!.DeepClone();
+            var stamps = next["modified"] as JsonObject ?? []; stamps[section] = at; next["modified"] = stamps;
+        }
+        return next;
+    }
+}
