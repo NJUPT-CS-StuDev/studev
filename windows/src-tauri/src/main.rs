@@ -34,7 +34,6 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let site = Url::parse(SITE).expect("the site is a URL");
-            let handle = app.handle().clone();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(site.clone()))
                 .title("StuDev")
                 .inner_size(1180.0, 800.0)
@@ -72,7 +71,6 @@ fn main() {
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event { show(tray.app_handle()); }
                 })
                 .build(app)?;
-            let _ = handle;
             Ok(())
         })
         // Closing the window keeps StuDev in the tray; 退出 in the tray ends it.
