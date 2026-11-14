@@ -1,8 +1,8 @@
 ---
 import { getCollection, render } from 'astro:content';
 import SiteLayout from '../site/SiteLayout.astro';
-const entries = await getCollection('about');
-const entry = entries.find((e) => e.id === 'studev') ?? entries[0];
+const entry = (await getCollection('about')).find((e) => e.id === 'studev');
+if (!entry) throw new Error('src/content/about/studev.md is missing');
 const { Content } = await render(entry);
 ---
 <SiteLayout title="关于 — StuDev" description={entry.data.description} active="about">

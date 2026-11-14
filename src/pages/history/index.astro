@@ -7,7 +7,9 @@ const entries = (await getCollection('history'))
   .filter((item) => item.data.status === 'published')
   .sort((a, b) => (b.data.order ?? 0) - (a.data.order ?? 0));
 
-const currentEntry = entries.find((item) => item.id === '2026-2027') ?? entries[0];
+// The newest published term is the current one.
+const currentEntry = entries[0];
+if (!currentEntry) throw new Error('No published term in src/content/history');
 ---
 <SiteLayout title="历史 — StuDev" description={currentEntry.data.description} active="history">
   <HistoryTermView entry={currentEntry} allEntries={entries} />
