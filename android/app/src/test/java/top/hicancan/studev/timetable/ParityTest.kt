@@ -120,6 +120,29 @@ class ParityTest {
             assertEquals(expected["expected"]?.jsonPrimitive?.content, result.expected)
         }
     }
+    @Test fun aGlanceShowsTheSameDayWeekTermDueTasksAndExams() {
+        val labs = golden.getValue("labs").jsonObject
+        val glance = golden.getValue("glance").jsonObject
+        val line = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null,
+            json.decodeFromJsonElement(golden.getValue("tasks").jsonObject.getValue("list")))
+        fun ids(events: List<LineEvent>) = JsonArray(events.map { JsonPrimitive(it.id) })
+        fun day(date: LocalDate, events: List<LineEvent>) = buildJsonObject { put("date", date.toString()); put("events", ids(events)) }
+        glance.getValue("moments").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            val at = test.getValue("now").jsonObject.let { Moment(LocalDate.parse(it.getValue("date").jsonPrimitive.content), it.getValue("min").jsonPrimitive.int) }
+            val shown = Glance.day(line, at)
+            assertEquals(test.getValue("day"), day(shown.date, shown.events))
+            assertEquals(test.getValue("week"), JsonArray(Glance.week(line, at).map { day(it.date, it.events) }))
+            assertEquals(test.getValue("due"), JsonArray(Glance.due(line, at).map { JsonPrimitive(it.id) }))
+            assertEquals(test.getValue("exams"), JsonArray(Glance.exams(line, at).map { buildJsonObject { put("date", it.date.toString()); put("days", it.days); put("events", ids(it.events)) } }))
+            val next = Glance.nextChange(line, at)
+            assertEquals(test.getValue("next"), buildJsonObject { put("date", next.date.toString()); put("min", next.min) })
+        }
+        assertEquals(glance.getValue("term"), JsonArray(Glance.term(line).map { week -> buildJsonObject {
+            put("week", week.week); put("start", week.start.toString())
+            put("days", JsonArray(week.days.map { buildJsonObject { put("date", it.date.toString()); put("lessons", it.lessons); put("exam", it.exam); put("off", it.off) } }))
+        } }))
+    }
     @Test fun tasksStandOnTheLineAndAreGroupedOrderedAndRead() {
         val tasks = golden.getValue("tasks").jsonObject
         val labs = golden.getValue("labs").jsonObject

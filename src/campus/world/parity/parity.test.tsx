@@ -5,6 +5,7 @@ import { attendingLabs, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
 import { dueOn } from '@/world/events';
+import { glanceDay, glanceDue, glanceExams, glanceNextChange, glanceTerm, glanceWeek } from '@/world/glance';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
@@ -22,6 +23,18 @@ const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.peri
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('a glance outside the app shows the same day, week, term, due tasks and exams at the same moment', () => {
+        const taskLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.labs.meetings as unknown as TeachingMeeting[], labs: golden.labs.labs as unknown as Lab[], exams: [golden.labs.exam as unknown as Exam], holidays, run: null, tasks: golden.tasks.list as unknown as Task[] };
+        for (const test of golden.glance.moments) {
+            const day = glanceDay(taskLine, test.now);
+            expect({ date: day.date, events: day.events.map(event => event.id) }).toEqual(test.day);
+            expect(glanceWeek(taskLine, test.now).map(item => ({ date: item.date, events: item.events.map(event => event.id) }))).toEqual(test.week);
+            expect(glanceDue(taskLine, test.now).map(task => task.id)).toEqual(test.due);
+            expect(glanceExams(taskLine, test.now).map(item => ({ date: item.date, days: item.days, events: item.events.map(event => event.id) }))).toEqual(test.exams);
+            expect(glanceNextChange(taskLine, test.now)).toEqual(test.next);
+        }
+        expect(glanceTerm(taskLine)).toEqual(golden.glance.term);
+    });
     it('migrates and synchronizes the same real timetable choices, including clearing labs', () => {
         const test = golden.settingsSync;
         const original = test.original as unknown as Preferences;

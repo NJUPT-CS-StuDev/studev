@@ -86,6 +86,20 @@ foreach (var test in tasksData["parse"]!.AsArray())
     Equal("quick task " + test["input"], JsonSerializer.SerializeToNode(parsed, storageJson), test["result"]);
 }
 labLine.Tasks = tasks;
+// A glance outside the app: the same day, week, term, due tasks and exams at the same moment as the TypeScript.
+object Ids(List<LineEvent> events) => events.Select(e => e.Id);
+foreach (var test in golden["glance"]!["moments"]!.AsArray())
+{
+    var at = new Moment(Clock.Parse(test!["now"]!["date"]!.GetValue<string>()), test["now"]!["min"]!.GetValue<int>());
+    var day = Glance.Day(labLine, at);
+    Equal("glance day", new { date = Clock.Text(day.Date), events = Ids(day.Events) }, test["day"]);
+    Equal("glance week", Glance.Week(labLine, at).Select(d => new { date = Clock.Text(d.Date), events = Ids(d.Events) }), test["week"]);
+    Equal("glance due", Glance.Due(labLine, at).Select(t => t.Id), test["due"]);
+    Equal("glance exams", Glance.Exams(labLine, at).Select(d => new { date = Clock.Text(d.Date), days = d.Days, events = Ids(d.Events) }), test["exams"]);
+    var next = Glance.NextChange(labLine, at);
+    Equal("glance next", new { date = Clock.Text(next.Date), min = next.Min }, test["next"]);
+}
+Equal("glance term", Glance.Term(labLine).Select(w => new { week = w.Week, start = Clock.Text(w.Start), days = w.Days.Select(d => new { date = Clock.Text(d.Date), lessons = d.Lessons, exam = d.Exam, off = d.Off }) }), golden["glance"]!["term"]);
 foreach (var day in tasksData["days"]!.AsArray())
 {
     var date = Clock.Parse(day!["date"]!.GetValue<string>());

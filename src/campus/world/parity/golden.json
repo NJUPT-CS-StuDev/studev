@@ -1,4 +1,1465 @@
 {
+ "glance": {
+  "moments": [
+   {
+    "now": {
+     "date": "2026-11-09",
+     "min": 960
+    },
+    "day": {
+     "date": "2026-11-09",
+     "events": [
+      "513d8d51f8a241b3@2026-11-09"
+     ]
+    },
+    "week": [
+     {
+      "date": "2026-11-09",
+      "events": [
+       "6ef4c8163aff1b19@2026-11-09",
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869",
+       "b",
+       "513d8d51f8a241b3@2026-11-09"
+      ]
+     },
+     {
+      "date": "2026-11-10",
+      "events": [
+       "c882dbfbe1d6270c@2026-11-10",
+       "a3aabb82f960bc3d@2026-11-10",
+       "a",
+       "2c56bb4a8bcfe5f0@2026-11-10"
+      ]
+     },
+     {
+      "date": "2026-11-11",
+      "events": [
+       "30d5a6ba07fa58a1@2026-11-11",
+       "674f9ea2fc63f680",
+       "6e718d41aa0444f2",
+       "d3dc484de95aa201@2026-11-11"
+      ]
+     },
+     {
+      "date": "2026-11-12",
+      "events": [
+       "4c1486efb0efdcc0@2026-11-12",
+       "d0297e3cee2ec732@2026-11-12",
+       "ecc146bfe2292216",
+       "54c82186383d5cbc@2026-11-12",
+       "e7ba5e0e1e87440e@2026-11-12"
+      ]
+     },
+     {
+      "date": "2026-11-13",
+      "events": [
+       "42da801b639e1f19",
+       "592bce89717783d3@2026-11-13",
+       "4cbf73b266261374@2026-11-13"
+      ]
+     },
+     {
+      "date": "2026-11-14",
+      "events": [
+       "93aa8dcca112a51c@2026-11-14"
+      ]
+     }
+    ],
+    "due": [
+     "f",
+     "b",
+     "c"
+    ],
+    "exams": [],
+    "next": {
+     "date": "2026-11-09",
+     "min": 1030
+    }
+   },
+   {
+    "now": {
+     "date": "2026-11-09",
+     "min": 420
+    },
+    "day": {
+     "date": "2026-11-09",
+     "events": [
+      "6ef4c8163aff1b19@2026-11-09",
+      "e2bd2b7ca6169f11",
+      "e45f70a06b9af869",
+      "b",
+      "513d8d51f8a241b3@2026-11-09"
+     ]
+    },
+    "week": [
+     {
+      "date": "2026-11-09",
+      "events": [
+       "6ef4c8163aff1b19@2026-11-09",
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869",
+       "b",
+       "513d8d51f8a241b3@2026-11-09"
+      ]
+     },
+     {
+      "date": "2026-11-10",
+      "events": [
+       "c882dbfbe1d6270c@2026-11-10",
+       "a3aabb82f960bc3d@2026-11-10",
+       "a",
+       "2c56bb4a8bcfe5f0@2026-11-10"
+      ]
+     },
+     {
+      "date": "2026-11-11",
+      "events": [
+       "30d5a6ba07fa58a1@2026-11-11",
+       "674f9ea2fc63f680",
+       "6e718d41aa0444f2",
+       "d3dc484de95aa201@2026-11-11"
+      ]
+     },
+     {
+      "date": "2026-11-12",
+      "events": [
+       "4c1486efb0efdcc0@2026-11-12",
+       "d0297e3cee2ec732@2026-11-12",
+       "ecc146bfe2292216",
+       "54c82186383d5cbc@2026-11-12",
+       "e7ba5e0e1e87440e@2026-11-12"
+      ]
+     },
+     {
+      "date": "2026-11-13",
+      "events": [
+       "42da801b639e1f19",
+       "592bce89717783d3@2026-11-13",
+       "4cbf73b266261374@2026-11-13"
+      ]
+     },
+     {
+      "date": "2026-11-14",
+      "events": [
+       "93aa8dcca112a51c@2026-11-14"
+      ]
+     }
+    ],
+    "due": [
+     "f",
+     "b",
+     "c"
+    ],
+    "exams": [],
+    "next": {
+     "date": "2026-11-09",
+     "min": 480
+    }
+   },
+   {
+    "now": {
+     "date": "2026-11-14",
+     "min": 1200
+    },
+    "day": {
+     "date": "2026-11-16",
+     "events": [
+      "6ef4c8163aff1b19@2026-11-16",
+      "66754bd478833ce8",
+      "513d8d51f8a241b3@2026-11-16"
+     ]
+    },
+    "week": [
+     {
+      "date": "2026-11-16",
+      "events": [
+       "6ef4c8163aff1b19@2026-11-16",
+       "66754bd478833ce8",
+       "513d8d51f8a241b3@2026-11-16"
+      ]
+     },
+     {
+      "date": "2026-11-17",
+      "events": [
+       "c882dbfbe1d6270c@2026-11-17",
+       "a3aabb82f960bc3d@2026-11-17",
+       "2c56bb4a8bcfe5f0@2026-11-17"
+      ]
+     },
+     {
+      "date": "2026-11-18",
+      "events": [
+       "30d5a6ba07fa58a1@2026-11-18",
+       "d3dc484de95aa201@2026-11-18"
+      ]
+     },
+     {
+      "date": "2026-11-19",
+      "events": [
+       "4c1486efb0efdcc0@2026-11-19",
+       "d0297e3cee2ec732@2026-11-19",
+       "231eab9bebe39686@2026-11-19",
+       "e7ba5e0e1e87440e@2026-11-19"
+      ]
+     },
+     {
+      "date": "2026-11-20",
+      "events": [
+       "70421b5776f809a9@2026-11-20",
+       "592bce89717783d3@2026-11-20",
+       "4cbf73b266261374@2026-11-20"
+      ]
+     },
+     {
+      "date": "2026-11-21",
+      "events": [
+       "93aa8dcca112a51c@2026-11-21",
+       "a7ba546bcffd7c4c@2026-11-21"
+      ]
+     }
+    ],
+    "due": [
+     "f",
+     "b",
+     "c"
+    ],
+    "exams": [],
+    "next": {
+     "date": "2026-11-15",
+     "min": 0
+    }
+   },
+   {
+    "now": {
+     "date": "2026-11-13",
+     "min": 1380
+    },
+    "day": {
+     "date": "2026-11-14",
+     "events": [
+      "93aa8dcca112a51c@2026-11-14"
+     ]
+    },
+    "week": [
+     {
+      "date": "2026-11-09",
+      "events": [
+       "6ef4c8163aff1b19@2026-11-09",
+       "e2bd2b7ca6169f11",
+       "e45f70a06b9af869",
+       "b",
+       "513d8d51f8a241b3@2026-11-09"
+      ]
+     },
+     {
+      "date": "2026-11-10",
+      "events": [
+       "c882dbfbe1d6270c@2026-11-10",
+       "a3aabb82f960bc3d@2026-11-10",
+       "a",
+       "2c56bb4a8bcfe5f0@2026-11-10"
+      ]
+     },
+     {
+      "date": "2026-11-11",
+      "events": [
+       "30d5a6ba07fa58a1@2026-11-11",
+       "674f9ea2fc63f680",
+       "6e718d41aa0444f2",
+       "d3dc484de95aa201@2026-11-11"
+      ]
+     },
+     {
+      "date": "2026-11-12",
+      "events": [
+       "4c1486efb0efdcc0@2026-11-12",
+       "d0297e3cee2ec732@2026-11-12",
+       "ecc146bfe2292216",
+       "54c82186383d5cbc@2026-11-12",
+       "e7ba5e0e1e87440e@2026-11-12"
+      ]
+     },
+     {
+      "date": "2026-11-13",
+      "events": [
+       "42da801b639e1f19",
+       "592bce89717783d3@2026-11-13",
+       "4cbf73b266261374@2026-11-13"
+      ]
+     },
+     {
+      "date": "2026-11-14",
+      "events": [
+       "93aa8dcca112a51c@2026-11-14"
+      ]
+     }
+    ],
+    "due": [
+     "f",
+     "b",
+     "c"
+    ],
+    "exams": [],
+    "next": {
+     "date": "2026-11-14",
+     "min": 0
+    }
+   },
+   {
+    "now": {
+     "date": "2027-01-14",
+     "min": 1320
+    },
+    "day": {
+     "date": "2027-01-14",
+     "events": []
+    },
+    "week": [
+     {
+      "date": "2027-01-11",
+      "events": []
+     },
+     {
+      "date": "2027-01-12",
+      "events": []
+     },
+     {
+      "date": "2027-01-13",
+      "events": []
+     },
+     {
+      "date": "2027-01-14",
+      "events": []
+     },
+     {
+      "date": "2027-01-15",
+      "events": []
+     }
+    ],
+    "due": [
+     "f",
+     "b",
+     "c"
+    ],
+    "exams": [],
+    "next": {
+     "date": "2027-01-15",
+     "min": 0
+    }
+   },
+   {
+    "now": {
+     "date": "2026-09-14",
+     "min": 540
+    },
+    "day": {
+     "date": "2026-09-14",
+     "events": [
+      "6ef4c8163aff1b19@2026-09-14",
+      "cb6ab3f78e0c81e0@2026-09-14",
+      "513d8d51f8a241b3@2026-09-14"
+     ]
+    },
+    "week": [
+     {
+      "date": "2026-09-14",
+      "events": [
+       "6ef4c8163aff1b19@2026-09-14",
+       "cb6ab3f78e0c81e0@2026-09-14",
+       "513d8d51f8a241b3@2026-09-14"
+      ]
+     },
+     {
+      "date": "2026-09-15",
+      "events": [
+       "c882dbfbe1d6270c@2026-09-15",
+       "a3aabb82f960bc3d@2026-09-15",
+       "a393da8e8ef19d19@2026-09-15"
+      ]
+     },
+     {
+      "date": "2026-09-16",
+      "events": [
+       "30d5a6ba07fa58a1@2026-09-16",
+       "d3dc484de95aa201@2026-09-16"
+      ]
+     },
+     {
+      "date": "2026-09-17",
+      "events": [
+       "4c1486efb0efdcc0@2026-09-17",
+       "d0297e3cee2ec732@2026-09-17",
+       "03027b8f14ec66a6",
+       "54c82186383d5cbc@2026-09-17"
+      ]
+     },
+     {
+      "date": "2026-09-18",
+      "events": [
+       "592bce89717783d3@2026-09-18",
+       "da330f6d4593e420@2026-09-18",
+       "24f803fa46753b50@2026-09-18"
+      ]
+     },
+     {
+      "date": "2026-09-19",
+      "events": [
+       "x",
+       "f788c73f2327e194",
+       "93aa8dcca112a51c@2026-09-19"
+      ]
+     }
+    ],
+    "due": [],
+    "exams": [
+     {
+      "date": "2026-09-19",
+      "days": 5,
+      "events": [
+       "x"
+      ]
+     }
+    ],
+    "next": {
+     "date": "2026-09-14",
+     "min": 575
+    }
+   },
+   {
+    "now": {
+     "date": "2026-09-19",
+     "min": 420
+    },
+    "day": {
+     "date": "2026-09-19",
+     "events": [
+      "x",
+      "f788c73f2327e194",
+      "93aa8dcca112a51c@2026-09-19"
+     ]
+    },
+    "week": [
+     {
+      "date": "2026-09-14",
+      "events": [
+       "6ef4c8163aff1b19@2026-09-14",
+       "cb6ab3f78e0c81e0@2026-09-14",
+       "513d8d51f8a241b3@2026-09-14"
+      ]
+     },
+     {
+      "date": "2026-09-15",
+      "events": [
+       "c882dbfbe1d6270c@2026-09-15",
+       "a3aabb82f960bc3d@2026-09-15",
+       "a393da8e8ef19d19@2026-09-15"
+      ]
+     },
+     {
+      "date": "2026-09-16",
+      "events": [
+       "30d5a6ba07fa58a1@2026-09-16",
+       "d3dc484de95aa201@2026-09-16"
+      ]
+     },
+     {
+      "date": "2026-09-17",
+      "events": [
+       "4c1486efb0efdcc0@2026-09-17",
+       "d0297e3cee2ec732@2026-09-17",
+       "03027b8f14ec66a6",
+       "54c82186383d5cbc@2026-09-17"
+      ]
+     },
+     {
+      "date": "2026-09-18",
+      "events": [
+       "592bce89717783d3@2026-09-18",
+       "da330f6d4593e420@2026-09-18",
+       "24f803fa46753b50@2026-09-18"
+      ]
+     },
+     {
+      "date": "2026-09-19",
+      "events": [
+       "x",
+       "f788c73f2327e194",
+       "93aa8dcca112a51c@2026-09-19"
+      ]
+     }
+    ],
+    "due": [],
+    "exams": [],
+    "next": {
+     "date": "2026-09-19",
+     "min": 480
+    }
+   }
+  ],
+  "term": [
+   {
+    "week": 1,
+    "start": "2026-08-31",
+    "days": [
+     {
+      "date": "2026-08-31",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-01",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-02",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-03",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-04",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-05",
+      "lessons": 1,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-06",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 2,
+    "start": "2026-09-07",
+    "days": [
+     {
+      "date": "2026-09-07",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-08",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-09",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-10",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-11",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-12",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-13",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 3,
+    "start": "2026-09-14",
+    "days": [
+     {
+      "date": "2026-09-14",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-15",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-16",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-17",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-18",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-19",
+      "lessons": 2,
+      "exam": true,
+      "off": false
+     },
+     {
+      "date": "2026-09-20",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 4,
+    "start": "2026-09-21",
+    "days": [
+     {
+      "date": "2026-09-21",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-22",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-23",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-24",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-25",
+      "lessons": 0,
+      "exam": false,
+      "off": true
+     },
+     {
+      "date": "2026-09-26",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-27",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 5,
+    "start": "2026-09-28",
+    "days": [
+     {
+      "date": "2026-09-28",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-29",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-09-30",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-01",
+      "lessons": 0,
+      "exam": false,
+      "off": true
+     },
+     {
+      "date": "2026-10-02",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-03",
+      "lessons": 1,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-04",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 6,
+    "start": "2026-10-05",
+    "days": [
+     {
+      "date": "2026-10-05",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-06",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-07",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-08",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-09",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-10",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-11",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 7,
+    "start": "2026-10-12",
+    "days": [
+     {
+      "date": "2026-10-12",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-13",
+      "lessons": 5,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-14",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-15",
+      "lessons": 6,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-16",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-17",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-18",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 8,
+    "start": "2026-10-19",
+    "days": [
+     {
+      "date": "2026-10-19",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-20",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-21",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-22",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-23",
+      "lessons": 0,
+      "exam": false,
+      "off": true
+     },
+     {
+      "date": "2026-10-24",
+      "lessons": 0,
+      "exam": false,
+      "off": true
+     },
+     {
+      "date": "2026-10-25",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 9,
+    "start": "2026-10-26",
+    "days": [
+     {
+      "date": "2026-10-26",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-27",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-28",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-29",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-30",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-10-31",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-01",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 10,
+    "start": "2026-11-02",
+    "days": [
+     {
+      "date": "2026-11-02",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-03",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-04",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-05",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-06",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-07",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-08",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 11,
+    "start": "2026-11-09",
+    "days": [
+     {
+      "date": "2026-11-09",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-10",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-11",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-12",
+      "lessons": 5,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-13",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-14",
+      "lessons": 1,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-15",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 12,
+    "start": "2026-11-16",
+    "days": [
+     {
+      "date": "2026-11-16",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-17",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-18",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-19",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-20",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-21",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-22",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 13,
+    "start": "2026-11-23",
+    "days": [
+     {
+      "date": "2026-11-23",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-24",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-25",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-26",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-27",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-28",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-11-29",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 14,
+    "start": "2026-11-30",
+    "days": [
+     {
+      "date": "2026-11-30",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-01",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-02",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-03",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-04",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-05",
+      "lessons": 1,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-06",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 15,
+    "start": "2026-12-07",
+    "days": [
+     {
+      "date": "2026-12-07",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-08",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-09",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-10",
+      "lessons": 6,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-11",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-12",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-13",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 16,
+    "start": "2026-12-14",
+    "days": [
+     {
+      "date": "2026-12-14",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-15",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-16",
+      "lessons": 5,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-17",
+      "lessons": 6,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-18",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-19",
+      "lessons": 1,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-20",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 17,
+    "start": "2026-12-21",
+    "days": [
+     {
+      "date": "2026-12-21",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-22",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-23",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-24",
+      "lessons": 5,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-25",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-26",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-27",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 18,
+    "start": "2026-12-28",
+    "days": [
+     {
+      "date": "2026-12-28",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-29",
+      "lessons": 3,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-30",
+      "lessons": 2,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2026-12-31",
+      "lessons": 4,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-01",
+      "lessons": 0,
+      "exam": false,
+      "off": true
+     },
+     {
+      "date": "2027-01-02",
+      "lessons": 1,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-03",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 19,
+    "start": "2027-01-04",
+    "days": [
+     {
+      "date": "2027-01-04",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-05",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-06",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-07",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-08",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-09",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-10",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   },
+   {
+    "week": 20,
+    "start": "2027-01-11",
+    "days": [
+     {
+      "date": "2027-01-11",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-12",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-13",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-14",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-15",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-16",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     },
+     {
+      "date": "2027-01-17",
+      "lessons": 0,
+      "exam": false,
+      "off": false
+     }
+    ]
+   }
+  ]
+ },
  "materials": {
   "cases": [
    {

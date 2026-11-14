@@ -91,7 +91,7 @@ open class CampusWidget : GlanceAppWidget() {
             }
             // Replace the boundary job only after publishing; replacing a currently
             // running boundary worker cancels that worker's coroutine.
-            val boundary = line?.let { WidgetDay.nextChange(it, moment) } ?: moment.date.plusDays(1).atStartOfDay(CampusDay.zone).toInstant()
+            val boundary = (line?.let { Glance.nextChange(it, moment) } ?: Moment(moment.date.plusDays(1), 0)).let { it.date.atStartOfDay(CampusDay.zone).plusMinutes(it.min.toLong()).toInstant() }
             if (scheduleBoundary) WidgetRefreshWorker.at(context, boundary, now)
             boundary
         }
@@ -116,7 +116,7 @@ private fun row(event: LineEvent, tones: Map<String, Int>, meetings: List<top.hi
 private fun published(line: CampusLine, now: Moment, view: String, theme: String, order: List<String>) = buildJsonObject {
     val tones = TimetablePresentation.tones(line)
     val due = line.dueOn(now.date).filter { it.done == null }
-    val shown = if (due.isEmpty()) WidgetDay.of(line, now) else line.on(now.date).filter { it.end > now.min && it.task?.done == null }
+    val shown = if (due.isEmpty()) Glance.day(line, now).events else line.on(now.date).filter { it.end > now.min && it.task?.done == null }
     put("due", buildJsonArray { due.forEach { add(it.title + (it.due?.time?.let { time -> " ${hm(time)}" } ?: "")) } })
     put("title", shown.firstOrNull()?.date?.let { date -> (when (date) { now.date -> "今天"; now.date.plusDays(1) -> "明天"; else -> "${date.monthValue}月${date.dayOfMonth}日" }) + " " + WEEKDAYS[date.dayOfWeek.value] } ?: if (due.isNotEmpty()) "今天 · ${due.size} 项截止" else "近期没有课")
     put("hint", if (shown.isEmpty() && due.isNotEmpty()) "今天截止 · " + due.joinToString("、") { it.title } else ""); put("view", view); put("theme", theme)
@@ -124,7 +124,7 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
     val monday = line.weekShown(now)
     val ahead = CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7
     put("weekTitle", (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + (line.weekOf(monday)?.let { "第 $it 周" } ?: "假期"))
-    put("week", buildJsonArray { WidgetDay.week(line, now).forEach { (date, events) ->
+    put("week", buildJsonArray { Glance.week(line, now).forEach { (date, events) ->
         addJsonObject {
             val count = line.dueOn(date).count { it.done == null }
             put("label", WEEKDAYS[date.dayOfWeek.value].drop(1) + if (count > 0) "·截$count" else ""); put("today", date == now.date)

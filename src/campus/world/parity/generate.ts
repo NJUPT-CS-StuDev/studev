@@ -14,6 +14,8 @@ import { initialModified } from '@/world/merge.mjs';
 import type { Preferences } from '@/world/preferences';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds, LAYER_ORDER } from '@/world/events';
+import { addDays } from '@/world/time';
+import { glanceDay, glanceDue, glanceExams, glanceNextChange, glanceTerm, glanceWeek } from '@/world/glance';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
 import tools from '@/world/tools.json';
 import { chatGroups, titleOf } from '@/ai/chats';
@@ -284,5 +286,16 @@ const memoryCases = [['', '在准备考研'], ['- 在准备考研', ' 在准备�
 const allMaterials = JSON.parse(readFileSync(`public/data/${release.version}/materials.json`, 'utf8')) as CourseMaterials[];
 const materialCases = ['数字电路与逻辑设计B', '高等数学A(上)', '信号与系统 A', '高等数学', '计算机组成原理', '大学物理（上）'].map(course => ({ course, said: materialsSaid(allMaterials, course) }));
 const materialCounts = allMaterials.slice(0, 6).map(item => ({ course: item.course, counts: kindCounts(item.items) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+// What a glance outside the app shows at a few moments: the day, the week, what is due, exams ahead, when it changes next.
+const glance = {
+    moments: [{ date: '2026-11-09', min: 16 * 60 }, { date: '2026-11-09', min: 7 * 60 }, { date: '2026-11-14', min: 20 * 60 }, { date: '2026-11-13', min: 23 * 60 }, { date: '2027-01-14', min: 22 * 60 }, { date: addDays(examined.date, -5), min: 9 * 60 }, { date: examined.date, min: 7 * 60 }].map(now => ({
+        now, day: (day => ({ date: day.date, events: day.events.map(event => event.id) }))(glanceDay(taskLine, now)),
+        week: glanceWeek(taskLine, now).map(day => ({ date: day.date, events: day.events.map(event => event.id) })),
+        due: glanceDue(taskLine, now).map(task => task.id),
+        exams: glanceExams(taskLine, now).map(day => ({ date: day.date, days: day.days, events: day.events.map(event => event.id) })),
+        next: glanceNextChange(taskLine, now),
+    })),
+    term: glanceTerm(taskLine),
+};
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ glance, materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));
