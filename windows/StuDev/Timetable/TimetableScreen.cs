@@ -18,6 +18,8 @@ public sealed partial class TimetableScreen : Screen
     private DateOnly? picked;
     private Moment now = Moment.Now();
     private bool wide = true;
+    /** Room for a task open beside the list. */
+    private bool roomy = true;
     private double lastScroll;
     private ScrollViewer? frame;
     private string termMode = "course";
@@ -32,7 +34,7 @@ public sealed partial class TimetableScreen : Screen
         Paint.Turned += Draw;
         clock.Tick += (_, _) => { var next = Moment.Now(); if (next != now) { now = next; Draw(); } };
         clock.Start();
-        SizeChanged += (_, e) => { var next = e.NewSize.Width >= 900; if (next != wide) { wide = next; Draw(); } };
+        SizeChanged += (_, e) => { var next = e.NewSize.Width >= 900; var room = e.NewSize.Width >= 1100; if (next != wide || room != roomy) { wide = next; roomy = room; Draw(); } };
         KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
         Key(Windows.System.VirtualKey.Left, () => Shift(-1));
         Key(Windows.System.VirtualKey.Right, () => Shift(1));
@@ -163,7 +165,7 @@ public sealed partial class TimetableScreen : Screen
             "week" => WeekView.Make(line, day, now, wide, Open, OpenTask),
             "day" => DayView.Make(line, day, now, Open, OpenTask, date => { picked = date == now.Date ? null : date; Draw(); }, mine),
             "term" => TermView.Make(line, mine ? campus.Preferences.Class : who!.Type == "class" ? who.Id : null, now, termMode, mode => { termMode = mode; Draw(); }, date => { picked = date; scale = "week"; Draw(); }, Open),
-            _ => ListView.Make(campus, line, now, OpenTask, Open),
+            _ => ListView.Make(campus, line, now, OpenTask, Open, roomy),
         });
         frame = Pages.Frame(page);
         var keep = lastScroll;

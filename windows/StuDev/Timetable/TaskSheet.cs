@@ -108,14 +108,33 @@ public static class TaskSheet
         App.Window?.Sheet(column, 520);
     }
 
-    public static void Open(Campus campus, string id, Moment now) => App.Window?.Sheet(Make(campus, id, now, null), 480);
+    /** Where a task is shown: a sheet over the page, or the panel beside the list. */
+    private sealed record Host(Action<FrameworkElement> Show, Action Close, Action<string?> Keep);
 
-    private static FrameworkElement Make(Campus campus, string id, Moment now, string? panel)
+    public static void Open(Campus campus, string id, Moment now)
+    {
+        var host = new Host(element => App.Window?.Sheet(element, 480), () => App.Window?.Close(), _ => { });
+        host.Show(Make(campus, id, now, null, host));
+    }
+
+    /**
+     * The same task, in place beside the list on a wide window, as a calendar opens one: `close` takes it away. The
+     * page is drawn again whenever a task changes, so the choices left open are kept by the list (`open`, `keep`).
+     */
+    public static FrameworkElement Beside(Campus campus, string id, Moment now, string? open, Action<string?> keep, Action close)
+    {
+        var holder = new Border();
+        var host = new Host(element => holder.Child = element, close, keep);
+        holder.Child = Make(campus, id, now, open, host);
+        return holder;
+    }
+
+    private static FrameworkElement Make(Campus campus, string id, Moment now, string? panel, Host host)
     {
         var line = campus.Line!;
         var task = campus.Tasks.All.First(t => t.Id == id);
-        void Redraw(string? open = null) => App.Window?.Sheet(Make(campus, id, now, open), 480);
-        void Save(PersonalTask next, string? open) { campus.Tasks.Put(next); Redraw(open); }
+        void Redraw(string? open = null) { host.Keep(open); host.Show(Make(campus, id, now, open, host)); }
+        void Save(PersonalTask next, string? open) { host.Keep(open); campus.Tasks.Put(next); Redraw(open); }
         var courses = CourseNames(line);
 
         var root = new StackPanel();
@@ -129,7 +148,7 @@ public static class TaskSheet
         title.LostFocus += (_, _) => Rename();
         title.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { Rename(); e.Handled = true; } };
         Grid.SetColumn(title, 1); titleRow.Children.Add(title);
-        var head = new Border { Padding = new Thickness(16, 16, 16, 14), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1), Child = Pages.SheetHead(titleRow, () => App.Window?.Close()) };
+        var head = new Border { Padding = new Thickness(16, 16, 16, 14), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1), Child = Pages.SheetHead(titleRow, host.Close) };
         var edge = new Grid(); edge.Children.Add(head); edge.Children.Add(new Border { Width = 3, Background = Paint.Brush("brand"), HorizontalAlignment = HorizontalAlignment.Left });
         root.Children.Add(edge);
         var body = new StackPanel { Padding = new Thickness(20, 14, 20, 20) };
@@ -258,8 +277,8 @@ public static class TaskSheet
 
         var buttons = new Grid { ColumnSpacing = 8 };
         buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition());
-        var delete = Kit.Action("删除", () => { campus.Tasks.Delete(id); App.Window?.Close(); }, colour: "danger"); delete.HorizontalAlignment = HorizontalAlignment.Stretch;
-        var done = Kit.Action(task.Done is not null ? "标为未完成" : "完成", () => { campus.Tasks.Toggle(task); if (task.Done is null) App.Window?.Close(); else Redraw(panel); }, go: true); done.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var delete = Kit.Action("删除", () => { campus.Tasks.Delete(id); host.Close(); }, colour: "danger"); delete.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var done = Kit.Action(task.Done is not null ? "标为未完成" : "完成", () => { campus.Tasks.Toggle(task); if (task.Done is null) host.Close(); else Redraw(panel); }, go: true); done.HorizontalAlignment = HorizontalAlignment.Stretch;
         Grid.SetColumn(done, 1);
         buttons.Children.Add(delete); buttons.Children.Add(done);
         body.Children.Add(buttons);

@@ -18,6 +18,9 @@ public static class ListView
     private static bool showDone;
     /** One course at a time, by its name: its tasks and its exams, the rest set aside. */
     private static string? only;
+    /** On a wide window, the task open beside the list, and which of its choices are open. */
+    private static string? beside;
+    private static string? besideOpen;
     /** What the list was told to stop offering, kept on this device, as readHints in src/campus/world/suggestions.ts. */
     private static List<string> SetAside => Storage.Read("task-hints.json") is { } raw ? JsonSerializer.Deserialize(raw, StorageJson.Default.ListString) ?? [] : [];
     private static void PutAside(string key) { Storage.Write(Storage.PathFor("task-hints.json"), JsonSerializer.Serialize(SetAside.Append(key).TakeLast(200).ToList(), StorageJson.Default.ListString)); Redraw(); }
@@ -32,7 +35,7 @@ public static class ListView
     }
 
     /** One task as a row: its box, its title, and what it says of itself on the right. */
-    public static FrameworkElement TaskRow(PersonalTask task, Moment now, Dictionary<string, string>? courses, Dictionary<string, int>? tones, Action<PersonalTask> open)
+    public static FrameworkElement TaskRow(PersonalTask task, Moment now, Dictionary<string, string>? courses, Dictionary<string, int>? tones, Action<PersonalTask> open, bool chosen = false)
     {
         var campus = Campus.Shared;
         var row = new Grid { ColumnSpacing = 10, MinHeight = 46, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) };
@@ -60,15 +63,20 @@ public static class ListView
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, task.Title);
         tap.Click += (_, _) => open(task);
         Grid.SetColumn(tap, 1); row.Children.Add(tap);
-        var outer = new Grid { Background = Paint.Brush("paper") }; outer.Children.Add(row);
-        outer.PointerEntered += (_, _) => outer.Background = Paint.Faded("surfaceSunken", .55);
-        outer.PointerExited += (_, _) => outer.Background = Paint.Brush("paper");
+        // The row open beside the list stays marked, as a selected row in a calendar's list does.
+        var rest = chosen ? Paint.Faded("brand", .08) : Paint.Brush("paper");
+        var outer = new Grid { Background = rest, CornerRadius = new CornerRadius(chosen ? 6 : 0) }; outer.Children.Add(row);
+        outer.PointerEntered += (_, _) => outer.Background = chosen ? rest : Paint.Faded("surfaceSunken", .55);
+        outer.PointerExited += (_, _) => outer.Background = rest;
         return outer;
     }
 
-    public static FrameworkElement Make(Campus campus, CampusLine line, Moment now, Action<PersonalTask> openTask, Action<LineEvent> open)
+    public static FrameworkElement Make(Campus campus, CampusLine line, Moment now, Action<PersonalTask> sheet, Action<LineEvent> open, bool wide)
     {
         var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Width = 760 };
+        // Wide, a task opens beside the list and the list stays in view; narrow, it opens as a sheet over it.
+        if (beside is not null && campus.Tasks.Live.All(t => t.Id != beside)) beside = null;
+        void openTask(PersonalTask task) { if (!wide) { sheet(task); return; } beside = task.Id; besideOpen = null; Redraw(); }
         var courses = TaskSheet.CourseNames(line);
         var tones = CourseTones.Of(line);
         string? NameOf(PersonalTask t) => t.Course is { } c ? courses.GetValueOrDefault(c) : null;
@@ -169,7 +177,7 @@ public static class ListView
                 var x = exam; tap.Click += (_, _) => { if (line.On(Clock.Parse(x.Date)).FirstOrDefault(e => e.Exam?.Id == x.Id) is { } e) open(e); };
                 page.Children.Add(tap);
             }
-            foreach (var task in tasks) page.Children.Add(TaskRow(task, now, courses, tones, openTask));
+            foreach (var task in tasks) page.Children.Add(TaskRow(task, now, courses, tones, openTask, wide && task.Id == beside));
         }
         if (open_.Count == 0 && exams.Count == 0) page.Children.Add(Pages.Empty("没有要做的事。在上面输入一件，回车就加上了。"));
         if (done.Count > 0)
@@ -177,9 +185,20 @@ public static class ListView
             var head = new Tap { Content = Kit.Line(6, Kit.Text($"已完成 {done.Count} 项", Role.Label, "muted", bold: true), Kit.Icon(Icons.Chevron, 12, "muted")), Padding = new Thickness(0, 20, 0, 6) };
             head.Click += (_, _) => { showDone = !showDone; Redraw(); };
             page.Children.Add(head);
-            if (showDone) foreach (var task in done) page.Children.Add(TaskRow(task, now, courses, tones, openTask));
+            if (showDone) foreach (var task in done) page.Children.Add(TaskRow(task, now, courses, tones, openTask, wide && task.Id == beside));
         }
-        return page;
+        if (!wide || beside is not { } id) return page;
+        var both = new Grid { ColumnSpacing = 28, HorizontalAlignment = HorizontalAlignment.Left };
+        both.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); both.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(420) });
+        page.Width = double.NaN; page.MinWidth = 520;
+        both.Children.Add(page);
+        var panel = new Border
+        {
+            Child = TaskSheet.Beside(campus, id, now, besideOpen, open => besideOpen = open, () => { beside = null; besideOpen = null; Redraw(); }),
+            Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), VerticalAlignment = VerticalAlignment.Top,
+        };
+        Grid.SetColumn(panel, 1); both.Children.Add(panel);
+        return both;
     }
 
     private static void Redraw() => Campus.Shared.Touch();
