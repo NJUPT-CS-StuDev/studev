@@ -75,7 +75,8 @@ $velopack = Join-Path $tempRoot 'windows-releases'
 New-Item -ItemType Directory -Path $velopack -Force | Out-Null
 $feed = "$($product.origin)/download/windows"
 # The releases already out, so the new one carries a delta from the last; none yet before the first.
-$known = try { Invoke-WebRequest "$feed/releases.win.json" -Method Head -MaximumRedirection 5 -ErrorAction Stop; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
+# Read with GET: the address redirects to a link signed for GET, which refuses HEAD.
+$known = try { Invoke-WebRequest "$feed/releases.win.json" -MaximumRedirection 5 -ErrorAction Stop | Out-Null; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
 if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEXITCODE -ne 0) { throw 'Earlier Windows releases could not be read' } }
 & vpk pack --packId top.hicancan.studev --packVersion $versionName --packDir $publish --mainExe StuDev.exe --packTitle StuDev --packAuthors 'NJUPT StuDev' `
     --icon (Join-Path $windows 'StuDev\Assets\StuDev.ico') --shortcuts 'Desktop,StartMenuRoot' --outputDir $velopack
