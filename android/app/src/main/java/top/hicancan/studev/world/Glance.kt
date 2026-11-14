@@ -10,7 +10,6 @@ import java.time.temporal.ChronoUnit
  */
 object Glance {
     const val HORIZON = 30
-    const val DUE_DAYS = 7
     const val EXAM_DAYS = 14
 
     data class Day(val date: LocalDate, val events: List<LineEvent>)
@@ -49,12 +48,12 @@ object Glance {
         })
     }
 
-    /** Open tasks due soon or already late, in the order they are due, the more important first on the same day. */
-    fun due(line: CampusLine, now: Moment): List<Task> {
-        val last = now.date.plusDays(DUE_DAYS.toLong()).toString()
-        return line.tasks.filter { it.parent == null && it.deleted != true && it.done == null && it.due != null && it.due.date <= last }
-            .sortedWith(compareBy<Task>({ it.due!!.date }, { it.due!!.time ?: 1440 }).thenByDescending { it.priority ?: 0 }.thenBy { it.id })
-    }
+    /** The groups of the app's own list a glance shows: what is late and what falls in the coming week. */
+    val GROUPS = listOf("overdue", "today", "tomorrow", "week")
+
+    /** Open tasks late or falling in the coming week, planned or due, in the list's own groups and order. */
+    fun due(line: CampusLine, now: Moment): List<Task> =
+        line.tasks.filter { it.parent == null && it.deleted != true && it.done == null && Tasks.group(it, now) in GROUPS }.sortedWith(Tasks.order)
 
     /** Exams in the next two weeks, after today. */
     fun exams(line: CampusLine, now: Moment): List<ExamDay> = line.exams.map { LocalDate.parse(it.date) }.distinct().sorted()

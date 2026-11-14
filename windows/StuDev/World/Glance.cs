@@ -10,7 +10,7 @@ public sealed record GlanceExamDay(DateOnly Date, int Days, List<LineEvent> Even
 
 public static class Glance
 {
-    public const int Horizon = 30, DueDays = 7, ExamDays = 14;
+    public const int Horizon = 30, ExamDays = 14;
 
     private static bool Open(LineEvent e) => e.Kind != "run" && e.Task?.Done is null;
 
@@ -47,13 +47,12 @@ public static class Glance
         }).ToList());
     }).ToList();
 
-    /** Open tasks due soon or already late, in the order they are due, the more important first on the same day. */
-    public static List<PersonalTask> Due(CampusLine line, Moment now)
-    {
-        var last = Clock.Text(now.Date.AddDays(DueDays));
-        return line.Tasks.Where(t => t.Parent is null && t.Deleted != true && t.Done is null && t.Due is { } d && string.CompareOrdinal(d.Date, last) <= 0)
-            .OrderBy(t => t.Due!.Date, StringComparer.Ordinal).ThenBy(t => t.Due!.Time ?? 1440).ThenByDescending(t => t.Priority ?? 0).ThenBy(t => t.Id, StringComparer.Ordinal).ToList();
-    }
+    /** The groups of the app's own list a glance shows: what is late and what falls in the coming week. */
+    public static readonly string[] Groups = ["overdue", "today", "tomorrow", "week"];
+
+    /** Open tasks late or falling in the coming week, planned or due, in the list's own groups and order. */
+    public static List<PersonalTask> Due(CampusLine line, Moment now) =>
+        line.Tasks.Where(t => t.Parent is null && t.Deleted != true && t.Done is null && Groups.Contains(TaskRules.Group(t, now))).Order(TaskRules.Order).ToList();
 
     /** Exams in the next two weeks, after today. */
     public static List<GlanceExamDay> Exams(CampusLine line, Moment now) => line.Exams.Select(e => Clock.Parse(e.Date)).Distinct().Order()

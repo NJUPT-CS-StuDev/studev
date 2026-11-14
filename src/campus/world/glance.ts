@@ -4,11 +4,10 @@
 // locks the Android and Windows ports to this file.
 import { addDays, daysBetween, startOfWeek, weekdayOf, type Moment } from './time';
 import { eventsOn, weekShown, type CampusEvent, type Timeline } from './events';
-import type { Task } from './tasks';
+import { taskGroup, taskOrder, type Task } from './tasks';
 
 /** How far ahead a glance looks for the next day that has something, and for what is due. */
 export const GLANCE_HORIZON = 30;
-export const GLANCE_DUE_DAYS = 7;
 export const GLANCE_EXAM_DAYS = 14;
 
 const open = (event: CampusEvent) => event.kind !== 'run' && !event.task?.done;
@@ -45,11 +44,12 @@ export function glanceTerm(line: Timeline): { week: number; start: string; days:
     }));
 }
 
-/** Open tasks due soon or already late, in the order they are due, the more important first on the same day. */
+/** The groups of the app's own list a glance shows: what is late and what falls in the coming week. */
+export const GLANCE_GROUPS = ['overdue', 'today', 'tomorrow', 'week'] as const;
+
+/** Open tasks late or falling in the coming week, planned or due, in the list's own groups and order. */
 export function glanceDue(line: Timeline, now: Moment): Task[] {
-    const last = addDays(now.date, GLANCE_DUE_DAYS);
-    return line.tasks.filter(task => !task.parent && !task.done && task.due && task.due.date <= last)
-        .sort((left, right) => left.due!.date.localeCompare(right.due!.date) || (left.due!.time ?? 1440) - (right.due!.time ?? 1440) || (right.priority ?? 0) - (left.priority ?? 0) || left.id.localeCompare(right.id));
+    return line.tasks.filter(task => !task.parent && !task.done && (GLANCE_GROUPS as readonly string[]).includes(taskGroup(task, now))).sort(taskOrder);
 }
 
 /** Exams in the next two weeks, after today, with how many days away. */
