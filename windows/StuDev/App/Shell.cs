@@ -63,7 +63,10 @@ public sealed partial class Shell : Window
         Content = root;
         root.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape && layer.Visibility == Visibility.Visible) { Close(); e.Handled = true; } };
         root.ActualThemeChanged += (_, _) => Turned();
-        AppWindow.Changed += (_, e) => { if (e.DidSizeChange) Inset(); };
+        // The caption buttons' width can read 0 while a window comes back from the tray or from minimized, and changes
+        // with the display's scale; it is read again on every change and a reading of none keeps the last.
+        AppWindow.Changed += (_, e) => { if (e.DidSizeChange || e.DidPositionChange || e.DidVisibilityChange || e.DidPresenterChange) Inset(); };
+        Activated += (_, _) => Inset();
         Place();
     }
 
@@ -174,7 +177,7 @@ public sealed partial class Shell : Window
     private void Inset()
     {
         var scale = root.XamlRoot?.RasterizationScale ?? 1;
-        inset.Width = new GridLength(Math.Max(0, AppWindow.TitleBar.RightInset / scale));
+        if (AppWindow.TitleBar.RightInset > 0) inset.Width = new GridLength(AppWindow.TitleBar.RightInset / scale);
     }
 
     private void Place()
@@ -185,7 +188,7 @@ public sealed partial class Shell : Window
         var height = (int)Math.Min(display.WorkArea.Height * .92, 880 * scale);
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(display.WorkArea.X + (display.WorkArea.Width - width) / 2,
             display.WorkArea.Y + (display.WorkArea.Height - height) / 2, width, height));
-        root.Loaded += (_, _) => { Inset(); Turned(); };
+        root.Loaded += (_, _) => { Inset(); Turned(); root.XamlRoot.Changed += (_, _) => Inset(); };
     }
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetDpiForWindow")]
     private static extern uint Dpi(IntPtr window);
