@@ -37,9 +37,9 @@ public sealed class Sync
         {
             var sent = campus.Tasks.All.ToList();
             var mine = campus.Preferences.Snapshot();
-            var result = await Account.Shared.Request("/sync", new JsonObject { ["tasks"] = JsonSerializer.SerializeToNode(sent, Storage.Json), ["settings"] = SettingsSync.PartsOf(mine) });
+            var result = await Account.Shared.Request("/sync", new JsonObject { ["tasks"] = JsonSerializer.SerializeToNode(sent, StorageJson.Default.ListPersonalTask), ["settings"] = SettingsSync.PartsOf(mine) });
             if (Account.Shared.User?.Id != user.Id) return;
-            campus.Tasks.Adopt(result["tasks"].Deserialize<List<PersonalTask>>(Storage.Json) ?? []);
+            campus.Tasks.Adopt(result["tasks"].Deserialize(StorageJson.Default.ListPersonalTask) ?? []);
             if (SettingsSync.Taken(campus.Preferences.Snapshot(), result["settings"] as JsonObject ?? []) is { } taken) campus.Preferences.Adopt(taken);
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or PlatformFailure or JsonException or IOException) { /* Offline or signed out: they stay here and go next time. */ }

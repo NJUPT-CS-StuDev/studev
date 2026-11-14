@@ -76,7 +76,7 @@ public sealed partial class AiScreen : Screen
             foreach (var item in kept["chats"]!.AsArray())
             {
                 chats.Add(SavedChat.Of(item!.AsObject()));
-                keptProposals[(string)item["id"]!] = item["proposals"] is JsonArray list ? list.Select(p => p!.Deserialize<TaskProposal>(Storage.Json)!).ToList() : [];
+                keptProposals[(string)item["id"]!] = item["proposals"] is JsonArray list ? list.Deserialize(StorageJson.Default.ListTaskProposal)! : [];
             }
             current = (string?)kept["current"];
             if (chats.FirstOrDefault(c => c.Id == current) is { } open) { thread = open.Thread; proposals = keptProposals.GetValueOrDefault(open.Id) ?? []; } else current = null;
@@ -91,7 +91,7 @@ public sealed partial class AiScreen : Screen
     }
     private void WriteChats() => Storage.Write(Storage.PathFor("ai/chats.json"), new JsonObject
     {
-        ["chats"] = new JsonArray([.. chats.Select(c => { var o = c.ToJson(); o["proposals"] = JsonSerializer.SerializeToNode(keptProposals.GetValueOrDefault(c.Id) ?? [], Storage.Json); return (JsonNode)o; })]),
+        ["chats"] = new JsonArray([.. chats.Select(c => { var o = c.ToJson(); o["proposals"] = JsonSerializer.SerializeToNode(keptProposals.GetValueOrDefault(c.Id) ?? [], StorageJson.Default.ListTaskProposal); return (JsonNode)o; })]),
         ["current"] = current,
     }.ToJsonString());
     private void WriteMemory() => Storage.Write(Storage.PathFor("ai/memory.json"), new JsonObject { ["on"] = memory.On, ["text"] = memory.Text }.ToJsonString());

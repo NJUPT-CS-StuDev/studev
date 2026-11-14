@@ -7,6 +7,9 @@ using System.Text.RegularExpressions;
 
 namespace StuDev.Ai;
 
+/** A task drafted, to be confirmed; `Call` is the tool call that drafted it, so it shows in that answer. */
+public sealed record TaskProposal(World.PersonalTask Task, string? Id, string? Expected, string Key, string Call, bool Saved = false);
+
 /** Who is asking and when, as far as this device knows. */
 public sealed record Situation(int? Week, string? Klass, string Campus, string? Name, string? Student, string? Memory)
 {

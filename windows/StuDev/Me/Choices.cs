@@ -14,9 +14,9 @@ public static class Choices
     /** Changes one term's edits of the timetable: what is hidden, added, renamed, one's own courses. */
     public static void Edit(Preferences prefs, string term, Func<TimetableEdits, TimetableEdits> change)
     {
-        var all = prefs.Get<Dictionary<string, TimetableEdits>>("timetable") ?? new();
+        var all = prefs.Get("timetable", Data.StorageJson.Default.DictionaryStringTimetableEdits) ?? new();
         all[term] = change(all.GetValueOrDefault(term) ?? new([], []));
-        prefs.Set("timetable", all);
+        prefs.Set("timetable", all, Data.StorageJson.Default.DictionaryStringTimetableEdits);
     }
     /** Hides a course from one's timetable, or takes back one added; one's own course is deleted. */
     public static void Hide(Preferences prefs, string term, string id) => Edit(prefs, term, edits => id.StartsWith("custom:")
@@ -31,18 +31,18 @@ public static class Choices
     /** Leaves out one lab (skip, by its id) or one lab course (drop, by its course key). */
     public static void LeaveLab(Preferences prefs, string key, string value)
     {
-        var labs = prefs.Get<LabChoices>("labs") ?? new();
+        var labs = prefs.Get("labs", Data.StorageJson.Default.LabChoices) ?? new();
         labs = key == "skip" ? labs with { Skip = [.. (labs.Skip ?? []).Append(value).Distinct()] } : labs with { Drop = [.. (labs.Drop ?? []).Append(value).Distinct()] };
-        prefs.Set("labs", labs);
+        prefs.Set("labs", labs, Data.StorageJson.Default.LabChoices);
     }
     public static void SkipExam(Preferences prefs, string term, string klass, string exam)
     {
-        var all = prefs.Get<Dictionary<string, Dictionary<string, bool>>>("examAttendance") ?? new();
+        var all = prefs.Get("examAttendance", Data.StorageJson.Default.DictionaryStringDictionaryStringBoolean) ?? new();
         var mine = all.GetValueOrDefault($"{term}:{klass}") ?? new();
         mine[exam] = false; all[$"{term}:{klass}"] = mine;
-        prefs.Set("examAttendance", all);
+        prefs.Set("examAttendance", all, Data.StorageJson.Default.DictionaryStringDictionaryStringBoolean);
     }
-    public static TimetableEdits Edits(Preferences prefs, string term) => prefs.Get<Dictionary<string, TimetableEdits>>("timetable")?.GetValueOrDefault(term) ?? new([], []);
+    public static TimetableEdits Edits(Preferences prefs, string term) => prefs.Get("timetable", Data.StorageJson.Default.DictionaryStringTimetableEdits)?.GetValueOrDefault(term) ?? new([], []);
     public static string LabSheet(Lab lab)
     {
         var file = System.Text.RegularExpressions.Regex.Replace(lab.Source, @"\.[a-z]+$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);

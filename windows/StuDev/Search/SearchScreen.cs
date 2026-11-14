@@ -1,5 +1,6 @@
 // The one way in: everything searchable is one document in one index, so a query has one ranking, one set of
 // highlights and one way to page — here, on the web and in the app. SearchApp.tsx and RoomsBrowse.tsx, natively.
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -12,12 +13,11 @@ using StuDev.World;
 
 namespace StuDev.Search;
 
-public sealed record Channel(string Id, string Label, List<string>? Sources = null, List<string>? Excluded = null, bool Dated = false);
 
 public sealed partial class SearchScreen : Screen
 {
     private const int PageSize = 10;
-    private static readonly List<Channel> Channels = System.Text.Json.JsonSerializer.Deserialize<List<Channel>>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), Storage.Json)!;
+    private static readonly List<Channel> Channels = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), StorageJson.Default.ListChannel)!;
     private static readonly HashSet<string> Entities = ["courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places"];
     private static readonly (string Value, string Label)[] Since = [("", "全部时间"), ("3", "近三天"), ("7", "近一周"), ("30", "近一月"), ("365", "近一年")];
     private static readonly string[] Campuses = ["仙林", "三牌楼", "锁金"];

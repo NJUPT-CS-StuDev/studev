@@ -39,10 +39,5 @@ public sealed record RoomDay(string Date, int Week, int Weekday, Dictionary<stri
 public static class Facts
 {
     /** How every file of the release is read: snake_case names, numbers as numbers, unknown fields ignored. */
-    public static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    public static JsonSerializerOptions Json => FactsJson.Default.Options;
 }

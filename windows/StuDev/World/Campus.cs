@@ -74,22 +74,22 @@ public sealed class Campus
                 var facts = edits.Added.Count > 0 ? await repo.Meetings() : classMeetings;
                 var chosen = classMeetings.Concat(facts.Where(m => edits.Added.Contains(m.TeachingClass.Id))).DistinctBy(m => m.Id).ToList();
                 var meetings = chosen.Where(m => !edits.Hidden.Contains(m.TeachingClass.Id)).Concat((edits.Custom ?? []).SelectMany(Choices.CustomMeetings)).ToList();
-                var labChoices = Preferences.Get<LabChoices>("labs");
+                var labChoices = Preferences.Get("labs", Data.StorageJson.Default.LabChoices);
                 var labFacts = classLabs.Concat(labChoices?.Classes is { Count: > 0 } extra
                     ? (await repo.AllLabs()).Where(l => l.Classes.Any(extra.Contains)) : []).DistinctBy(l => l.Id);
-                var examChoices = Preferences.Get<Dictionary<string, Dictionary<string, bool>>>("examAttendance")?.GetValueOrDefault($"{term.Term}:{klass}");
+                var examChoices = Preferences.Get("examAttendance", Data.StorageJson.Default.DictionaryStringDictionaryStringBoolean)?.GetValueOrDefault($"{term.Term}:{klass}");
                 var codes = meetings.Select(m => m.Course.Code).Where(code => !string.IsNullOrEmpty(code)).ToHashSet();
                 var attendingExams = exams.Result.Where(e => examChoices?.GetValueOrDefault(e.Id, e.Course.Code is null || codes.Contains(e.Course.Code))
                     ?? (e.Course.Code is null || codes.Contains(e.Course.Code))).ToList();
-                var run = Preferences.Get<RunSettings>("run");
+                var run = Preferences.Get("run", Data.StorageJson.Default.RunSettings);
                 var runs = await repo.Runs();
                 var grade = int.TryParse(schedule.Result.Klass.Grade, out var year) ? term.Year - year + 1 : 0;
                 if (version != generation) return;
                 nextLine = new CampusLine(term, periods, meetings, Choices.Labs(labFacts, labChoices), attendingExams, CampusLine.HolidaysOf(calendar))
                 {
                     Tasks = Tasks.Live.ToList(), CourseMeetings = chosen, CourseNames = edits.Names,
-                    Preferences = Preferences.Get<Dictionary<string, EventChoice>>("events"),
-                    Order = Preferences.Get<List<string>>("layers") is { } order && order.Count == CampusLine.LayerOrder.Length && CampusLine.LayerOrder.All(order.Contains) ? order : CampusLine.LayerOrder,
+                    Preferences = Preferences.Get("events", Data.StorageJson.Default.DictionaryStringEventChoice),
+                    Order = Preferences.Get("layers", Data.StorageJson.Default.ListString) is { } order && order.Count == CampusLine.LayerOrder.Length && CampusLine.LayerOrder.All(order.Contains) ? order : CampusLine.LayerOrder,
                     Run = (run?.On ?? (grade is 1 or 2)) ? runs.GetValueOrDefault(term.Term) : null,
                     RunDays = run?.Days ?? [], RunAdjust = run?.Adjust ?? 0,
                 };

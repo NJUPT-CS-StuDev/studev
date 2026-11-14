@@ -140,8 +140,8 @@ public static class Events
             Row("次数", Value($"{tally.Count} / {run.Required}", tally.Need > 0 ? $"还需安排 {tally.Need} 次" : "已经够了"));
             Danger("这天没跑", () =>
             {
-                var settings = campus.Preferences.Get<RunSettings>("run") ?? new([]);
-                campus.Preferences.Set("run", settings with { Days = settings.Days.Where(d => d != Clock.Text(e.Date)).ToList() });
+                var settings = campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([]);
+                campus.Preferences.Set("run", settings with { Days = settings.Days.Where(d => d != Clock.Text(e.Date)).ToList() }, Data.StorageJson.Default.RunSettings);
                 Close();
             });
             return root;

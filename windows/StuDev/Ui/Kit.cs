@@ -8,6 +8,7 @@ using TextDecorations = Windows.UI.Text.TextDecorations;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -19,23 +20,12 @@ public enum Role { Title, Heading, Body, Label, Caption }
 /** A pressable surface: a button with no look of its own, which takes the look it is given and lightens under the pointer. */
 public partial class Tap : Button
 {
-    private static ControlTemplate? template;
-    private static ControlTemplate Look => template ??= (ControlTemplate)XamlReader.Load(
-        """
-        <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Button">
-          <Grid Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
-            <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Foreground="{TemplateBinding Foreground}" />
-          </Grid>
-        </ControlTemplate>
-        """);
+    // Its template is App.xaml's implicit style for Tap: a ground, its edge and corners, and what it holds.
     private Brush rest;
     private Brush? hover;
     private bool over;
     public Tap(Brush? rest = null, Brush? hover = null)
     {
-        base.Template = Look;
         this.rest = rest ?? Paint.Clear; this.hover = hover;
         Background = this.rest; BorderBrush = Paint.Clear; BorderThickness = new Thickness(0);
         Padding = new Thickness(0); HorizontalAlignment = HorizontalAlignment.Stretch; VerticalAlignment = VerticalAlignment.Stretch; HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch;
@@ -43,9 +33,8 @@ public partial class Tap : Button
         PointerEntered += (_, _) => { over = true; Shade(); };
         PointerExited += (_, _) => { over = false; Shade(); };
         PointerCanceled += (_, _) => { over = false; Shade(); };
-        AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => Opacity = .86), true);
-        AddHandler(PointerReleasedEvent, new PointerEventHandler((_, _) => Opacity = 1), true);
-        PointerCaptureLost += (_, _) => Opacity = 1;
+        // Pressed, it dims a little: the button's own pressed state, watched rather than its pointer events.
+        RegisterPropertyChangedCallback(IsPressedProperty, (_, _) => Opacity = IsPressed ? .86 : 1);
     }
     /** The ground at rest and under the pointer, changed when the thing it shows changes (chosen, open). */
     public void Ground(Brush rest, Brush? hover = null) { this.rest = rest; this.hover = hover; Shade(); }

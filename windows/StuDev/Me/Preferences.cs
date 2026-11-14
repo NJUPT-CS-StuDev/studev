@@ -19,9 +19,9 @@ public sealed class Preferences
     public string Campus => value["campus"]?.GetValue<string>() ?? "仙林";
     public event Action? Changed;
     public event Action<bool>? Saved;
-    public T? Get<T>(string section) => value[section] is { } node ? node.Deserialize<T>(Data.Storage.Json) : default;
+    public T? Get<T>(string section, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape) => value[section] is { } node ? node.Deserialize(shape) : default;
     public JsonObject Snapshot() => (JsonObject)value.DeepClone();
-    public void Set<T>(string section, T? next) => Change(section, JsonSerializer.SerializeToNode(next, Data.Storage.Json));
+    public void Set<T>(string section, T next, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape) => Change(section, JsonSerializer.SerializeToNode(next, shape));
     public void Change(string section, JsonNode? next)
     {
         if (JsonNode.DeepEquals(value[section], next)) return;
@@ -101,3 +101,14 @@ public static class SettingsSync
         return next;
     }
 }
+
+/** One's account as this device keeps it, encrypted (Account.cs): who, and the session's tokens. */
+public sealed record AccountUser(string Id, string Nickname, string StudentId = "", bool TotpEnabled = false, string RealName = "", string Qq = "", string Role = "user", int Revision = 0,
+    string Department = "", string Title = "", string Signature = "", string Email = "", string Status = "active", bool ProfileComplete = true)
+{
+    public string RoleName => Role switch { "owner" => "所有者", "admin" => "管理员", _ => "用户" };
+    /** The one letter shown when there is no picture. */
+    public string Letter => (Nickname.Length > 0 ? Nickname : RealName.Length > 0 ? RealName : "我")[..1];
+}
+public sealed record AccountSession(string AccessToken, string RefreshToken, long ExpiresAt, string DeviceSessionId, AccountUser User);
+public sealed record StoredAccount(string DeviceId, AccountSession? Session);

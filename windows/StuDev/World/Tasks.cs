@@ -32,7 +32,7 @@ public sealed class Tasks
     public event Action? Changed;
     public event Action<bool>? Saved;
     public Tasks() => All = System.IO.File.Exists(File)
-        ? JsonSerializer.Deserialize<List<PersonalTask>>(System.IO.File.ReadAllText(File), Storage.Json) ?? throw new InvalidDataException("tasks") : [];
+        ? JsonSerializer.Deserialize(System.IO.File.ReadAllText(File), StorageJson.Default.ListPersonalTask) ?? throw new InvalidDataException("tasks") : [];
 
     public void Put(PersonalTask item)
     {
@@ -60,12 +60,12 @@ public sealed class Tasks
     public void Adopt(List<PersonalTask> incoming)
     {
         var next = TaskRules.Merge(All, incoming);
-        if (JsonSerializer.Serialize(All, Storage.Json) == JsonSerializer.Serialize(next, Storage.Json)) return;
+        if (JsonSerializer.Serialize(All, StorageJson.Default.ListPersonalTask) == JsonSerializer.Serialize(next, StorageJson.Default.ListPersonalTask)) return;
         Write(next, true);
     }
     private void Write(List<PersonalTask> next, bool adopt = false)
     {
-        Storage.Write(File, JsonSerializer.Serialize(next, Storage.Json)); All = next; Changed?.Invoke(); Saved?.Invoke(adopt);
+        Storage.Write(File, JsonSerializer.Serialize(next, StorageJson.Default.ListPersonalTask)); All = next; Changed?.Invoke(); Saved?.Invoke(adopt);
     }
 }
 

@@ -9,12 +9,11 @@ using StuDev.World;
 namespace StuDev.Ai;
 
 /** A task drafted, to be confirmed; `Call` is the tool call that drafted it, so it shows in that answer. */
-public sealed record TaskProposal(PersonalTask Task, string? Id, string? Expected, string Key, string Call, bool Saved = false);
 
 public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Func<string, bool> remember, Action<TaskProposal> propose) : IDisposable
 {
     private const int ReadLimit = 8000;
-    private static readonly List<Search.Channel> Channels = JsonSerializer.Deserialize<List<Search.Channel>>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), Storage.Json)!;
+    private static readonly List<Channel> Channels = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), StorageJson.Default.ListChannel)!;
     private static readonly Dictionary<string, string> Kinds = new() { ["class"] = "课", ["lab"] = "实验", ["exam"] = "考试", ["run"] = "早锻炼", ["task"] = "任务" };
     private static readonly Dictionary<string, string> Avoid = new() { ["must"] = "必须避开", ["prefer"] = "尽量避开", ["allow"] = "可以重叠" };
     private Search.NativeSearch? search;
@@ -171,7 +170,7 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
                 if (exams.Count == 0) said["note"] = "学校还没有发布这学期你的考试安排。";
                 return said;
             }
-            case "list_tasks": return JsonSerializer.SerializeToNode(campus.Tasks.Live.ToList(), Storage.Json);
+            case "list_tasks": return JsonSerializer.SerializeToNode(campus.Tasks.Live.ToList(), StorageJson.Default.ListPersonalTask);
             case "suggest_slots":
             {
                 var from = Date(Text("from")); var to = Date(Text("to"));
@@ -185,7 +184,7 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
             {
                 var proposal = Proposal(args, line, call);
                 propose(proposal);
-                var task = JsonSerializer.SerializeToNode(proposal.Task, Storage.Json)!.AsObject(); task.Remove("id"); task.Remove("modified");
+                var task = JsonSerializer.SerializeToNode(proposal.Task, StorageJson.Default.PersonalTask)!.AsObject(); task.Remove("id"); task.Remove("modified");
                 return new JsonObject { ["state"] = "awaiting_user_confirmation", ["proposal"] = proposal.Key, ["task"] = task };
             }
         }

@@ -9,6 +9,11 @@ public sealed record Place(string Id, string Kind, List<string> Names, string? P
     public string Name => Names.FirstOrDefault() ?? (Kind == "room" ? World.Names.Room(Id) : "未命名地点");
 }
 public sealed record OpeningRecord(JsonElement Hours);
+/** The buildings as the model lays them out (model.json): their shapes and heights, and each floor's plate, rooms and cores. */
+public sealed record ModelBuilding(string Id, int Levels, double Height, JsonElement Geometry);
+public sealed record ModelPart(string? Id, string? Kind, JsonElement Geometry);
+public sealed record ModelFloor(int Level, JsonElement Plate, List<ModelPart> Cores, List<ModelPart> Rooms);
+public sealed record CampusModel(List<ModelBuilding> Buildings, Dictionary<string, ModelFloor> Floors);
 
 /** The campus's places and its walking network, read from the data release; the map's drawing is not here. */
 public sealed class Space(List<Place> places, string network)
@@ -19,7 +24,7 @@ public sealed class Space(List<Place> places, string network)
     public static async Task<Space> Load(Repository repo)
     {
         const string root = "space/仙林/";
-        var entities = repo.Read<List<Place>>(root + "entities.json"); var network = repo.Bytes(root + "network.json"); var hours = repo.Read<Dictionary<string, OpeningRecord>>("hours.json");
+        var entities = repo.Read(root + "entities.json", FactsJson.Default.ListPlace); var network = repo.Bytes(root + "network.json"); var hours = repo.Read("hours.json", FactsJson.Default.DictionaryStringOpeningRecord);
         await Task.WhenAll(entities, network, hours);
         var joined = entities.Result.Select(place =>
         {

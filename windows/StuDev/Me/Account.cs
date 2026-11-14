@@ -10,15 +10,6 @@ using StuDev.Data;
 
 namespace StuDev.Me;
 
-public sealed record AccountUser(string Id, string Nickname, string StudentId = "", bool TotpEnabled = false, string RealName = "", string Qq = "", string Role = "user", int Revision = 0,
-    string Department = "", string Title = "", string Signature = "", string Email = "", string Status = "active", bool ProfileComplete = true)
-{
-    public string RoleName => Role switch { "owner" => "所有者", "admin" => "管理员", _ => "用户" };
-    /** The one letter shown when there is no picture. */
-    public string Letter => (Nickname.Length > 0 ? Nickname : RealName.Length > 0 ? RealName : "我")[..1];
-}
-public sealed record AccountSession(string AccessToken, string RefreshToken, long ExpiresAt, string DeviceSessionId, AccountUser User);
-public sealed record StoredAccount(string DeviceId, AccountSession? Session);
 public sealed class PlatformFailure(int status, string code, string message) : Exception(message) { public int Status => status; public string Code => code; }
 
 public sealed class Account
@@ -26,13 +17,12 @@ public sealed class Account
     public static Account Shared { get; } = new();
     private const string File = "account.bin";
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly SemaphoreSlim gate = new(1, 1);
     public event Action? Changed;
     public AccountUser? User => Stored().Session?.User;
 
-    private static StoredAccount Stored() => Secure.Read(File) is { } text ? JsonSerializer.Deserialize<StoredAccount>(text, Json)! : new(Guid.NewGuid().ToString(), null);
-    private void Keep(StoredAccount stored) { Secure.Write(File, JsonSerializer.Serialize(stored, Json)); Changed?.Invoke(); }
+    private static StoredAccount Stored() => Secure.Read(File) is { } text ? JsonSerializer.Deserialize(text, StorageJson.Default.StoredAccount)! : new(Guid.NewGuid().ToString(), null);
+    private void Keep(StoredAccount stored) { Secure.Write(File, JsonSerializer.Serialize(stored, StorageJson.Default.StoredAccount)); Changed?.Invoke(); }
 
     private static async Task<(int Status, JsonObject Body)> Send(string path, JsonObject? body, string? bearer)
     {
@@ -66,7 +56,7 @@ public sealed class Account
             var body = new JsonObject { ["studentId"] = studentId.Trim(), ["password"] = password, ["deviceId"] = stored.DeviceId, ["deviceName"] = $"Windows · {Environment.MachineName}"[..Math.Min(80, $"Windows · {Environment.MachineName}".Length)] };
             if (totp.Trim().Length > 0) body["totp"] = totp.Trim();
             var value = Checked(await Send("/auth/login", body, null));
-            var user = value["user"].Deserialize<AccountUser>(Json)!;
+            var user = value["user"].Deserialize(StorageJson.Default.AccountUser)!;
             Keep(stored with { Session = Tokens(value, user) });
             return user;
         }
@@ -104,7 +94,7 @@ public sealed class Account
     public async Task Refresh()
     {
         var value = await Request("/auth/session");
-        var user = value["user"].Deserialize<AccountUser>(Json)!;
+        var user = value["user"].Deserialize(StorageJson.Default.AccountUser)!;
         await gate.WaitAsync();
         try { var stored = Stored(); if (stored.Session?.User.Id == user.Id) Keep(stored with { Session = stored.Session with { User = user } }); }
         finally { gate.Release(); }

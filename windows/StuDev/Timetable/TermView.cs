@@ -208,7 +208,7 @@ public static class TermView
         return page;
     }
 
-    private static void UpdateRun(Campus campus, Func<RunSettings, RunSettings> change) => campus.Preferences.Set("run", change(campus.Preferences.Get<RunSettings>("run") ?? new([])));
+    private static void UpdateRun(Campus campus, Func<RunSettings, RunSettings> change) => campus.Preferences.Set("run", change(campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([])), Data.StorageJson.Default.RunSettings);
 
     private static FrameworkElement? Cell(CampusLine line, DateOnly date, Moment now, string showing, DateOnly termStart, DateOnly termEnd, HashSet<DateOnly> runnable, HashSet<string> present, Action<DateOnly> pick, Action<LineEvent> open, Campus campus)
     {
@@ -236,9 +236,9 @@ public static class TermView
             AutomationProperties.SetName(tap, $"{Clock.DateLabel(date)} {(state == "rdone" ? "已跑，点一下去掉" : state == "rplan" ? "排上了，点一下去掉" : "点一下排上")}");
             tap.Click += (_, _) =>
             {
-                var settings = campus.Preferences.Get<RunSettings>("run") ?? new([]);
+                var settings = campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([]);
                 var days = settings.Days.Contains(text) ? settings.Days.Where(d => d != text).ToList() : settings.Days.Append(text).Order(StringComparer.Ordinal).ToList();
-                campus.Preferences.Set("run", settings with { Days = days });
+                campus.Preferences.Set("run", settings with { Days = days }, Data.StorageJson.Default.RunSettings);
             };
             return tap;
         }

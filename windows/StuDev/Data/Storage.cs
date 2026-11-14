@@ -7,11 +7,7 @@ public static class Storage
 {
     public static string Root { get; } = Path.GetFullPath(Environment.GetEnvironmentVariable("STUDEV_DATA_DIR")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StuDev"));
-    public static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
+    public static JsonSerializerOptions Json => StorageJson.Default.Options;
 
     public static string PathFor(string name) => Path.Combine(Root, name);
     /** A record kept under its name, or null when there is none yet. */

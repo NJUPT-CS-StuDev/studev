@@ -72,12 +72,12 @@ public sealed partial class MeScreen : Screen
         if (campus.Line?.Run is { } run && campus.Term is { } t2)
         {
             page.Children.Add(Pages.Section("早锻炼"));
-            var settings = campus.Preferences.Get<RunSettings>("run") ?? new([]);
+            var settings = campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([]);
             var grade = int.TryParse(info?.Grade, out var year) ? t2.Year - year + 1 : 0;
             var on = settings.On ?? (grade is 1 or 2);
             var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.Children.Add(Value("显示在课表上", grade is 1 or 2 ? $"大{"一二"[grade - 1]}必做，本学期 {run.Required} 次" : "大三大四需要补跑时打开"));
-            var toggle = Kit.Switch(on, next => campus.Preferences.Set("run", settings with { On = next }), "早锻炼显示在课表上"); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
+            var toggle = Kit.Switch(on, next => campus.Preferences.Set("run", settings with { On = next }, Data.StorageJson.Default.RunSettings), "早锻炼显示在课表上"); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
             Row("", row);
         }
         page.Children.Add(Pages.Section("关于"));
@@ -123,14 +123,14 @@ public sealed partial class MeScreen : Screen
                 var up = Kit.Button("上移", () =>
                 {
                     var next = order.ToList(); (next[index - 1], next[index]) = (next[index], next[index - 1]);
-                    campus.Preferences.Set("layers", next);
+                    campus.Preferences.Set("layers", next, Data.StorageJson.Default.ListString);
                     Layering(next);
                 });
                 Grid.SetColumn(up, 1); value.Children.Add(up);
             }
             column.Children.Add(Kit.Row($"第 {at + 1} 层", value));
         }
-        if (campus.Preferences.Get<List<string>>("layers") is not null)
+        if (campus.Preferences.Get("layers", Data.StorageJson.Default.ListString) is not null)
         {
             var reset = Kit.Action("恢复默认", () => { campus.Preferences.Change("layers", null); Layering(CampusLine.LayerOrder); }); reset.HorizontalAlignment = HorizontalAlignment.Stretch; reset.Margin = new Thickness(0, 12, 0, 0);
             column.Children.Add(reset);

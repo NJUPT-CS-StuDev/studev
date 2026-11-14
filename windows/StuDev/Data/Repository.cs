@@ -22,7 +22,7 @@ public sealed class Repository
         var kept = Path.Combine(Root, "release.json");
         if (File.Exists(kept))
         {
-            var release = JsonSerializer.Deserialize<DataRelease>(File.ReadAllText(kept), Facts.Json) ?? throw new InvalidDataException("release manifest");
+            var release = JsonSerializer.Deserialize(File.ReadAllText(kept), FactsJson.Default.DataRelease) ?? throw new InvalidDataException("release manifest");
             Valid(release); return Task.FromResult(new Repository(release));
         }
         return Discover();
@@ -30,11 +30,11 @@ public sealed class Repository
     public static async Task<Repository> Discover()
     {
         var text = await Http.GetStringAsync($"{Site}/pwa-release.json");
-        var release = JsonSerializer.Deserialize<DataRelease>(text, Facts.Json) ?? throw new InvalidDataException("release manifest");
+        var release = JsonSerializer.Deserialize(text, FactsJson.Default.DataRelease) ?? throw new InvalidDataException("release manifest");
         Valid(release); return new Repository(release);
     }
 
-    public void Activate() => Storage.Write(Path.Combine(Root, "release.json"), JsonSerializer.Serialize(Release, Facts.Json));
+    public void Activate() => Storage.Write(Path.Combine(Root, "release.json"), JsonSerializer.Serialize(Release, FactsJson.Default.DataRelease));
 
     private static void Valid(DataRelease release)
     {
@@ -94,34 +94,34 @@ public sealed class Repository
         return got;
     }
 
-    public async Task<T> Read<T>(string path) => JsonSerializer.Deserialize<T>(await Bytes(path), Facts.Json) ?? throw new InvalidDataException(path);
+    public async Task<T> Read<T>(string path, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape) => JsonSerializer.Deserialize(await Bytes(path), shape) ?? throw new InvalidDataException(path);
 
     private string Teaching => $"teaching/{Release.Teaching}";
-    public Task<TeachingTerm> Term() => Read<TeachingTerm>($"{Teaching}/term.json");
-    public Task<List<TeachingPeriod>> Periods() => Read<List<TeachingPeriod>>($"{Teaching}/periods.json");
-    public Task<List<TeachingClass>> Classes() => Read<List<TeachingClass>>($"{Teaching}/classes.json");
-    public Task<ClassSchedule> Schedule(string klass) => Read<ClassSchedule>($"{Teaching}/classes/{klass}.json");
-    public Task<List<TeachingMeeting>> Meetings() => Read<List<TeachingMeeting>>($"{Teaching}/meetings.json");
-    public Task<RoomIndex> Rooms() => Read<RoomIndex>("rooms/index.json");
+    public Task<TeachingTerm> Term() => Read($"{Teaching}/term.json", FactsJson.Default.TeachingTerm);
+    public Task<List<TeachingPeriod>> Periods() => Read($"{Teaching}/periods.json", FactsJson.Default.ListTeachingPeriod);
+    public Task<List<TeachingClass>> Classes() => Read($"{Teaching}/classes.json", FactsJson.Default.ListTeachingClass);
+    public Task<ClassSchedule> Schedule(string klass) => Read($"{Teaching}/classes/{klass}.json", FactsJson.Default.ClassSchedule);
+    public Task<List<TeachingMeeting>> Meetings() => Read($"{Teaching}/meetings.json", FactsJson.Default.ListTeachingMeeting);
+    public Task<RoomIndex> Rooms() => Read("rooms/index.json", FactsJson.Default.RoomIndex);
     public async Task<RoomDay?> RoomDay(string term, string date)
     {
-        try { return await Read<RoomDay>($"rooms/{term}/{date}.json"); }
+        try { return await Read($"rooms/{term}/{date}.json", FactsJson.Default.RoomDay); }
         catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
     }
-    public Task<List<World.CourseMaterials>> Materials() => Read<List<World.CourseMaterials>>("materials.json");
-    public Task<Dictionary<string, MorningRun>> Runs() => Read<Dictionary<string, MorningRun>>("morning-run.json");
-    public Task<List<Lab>> AllLabs() => Release.Labs is null ? Task.FromResult(new List<Lab>()) : Read<List<Lab>>($"labs/{Release.Labs}/labs.json");
-    public async Task<List<CalendarTerm>> Calendar() => (await Read<CalendarFile>("calendar.json")).Terms;
+    public Task<List<World.CourseMaterials>> Materials() => Read("materials.json", FactsJson.Default.ListCourseMaterials);
+    public Task<Dictionary<string, MorningRun>> Runs() => Read("morning-run.json", FactsJson.Default.DictionaryStringMorningRun);
+    public Task<List<Lab>> AllLabs() => Release.Labs is null ? Task.FromResult(new List<Lab>()) : Read($"labs/{Release.Labs}/labs.json", FactsJson.Default.ListLab);
+    public async Task<List<CalendarTerm>> Calendar() => (await Read("calendar.json", FactsJson.Default.CalendarFile)).Terms;
     public async Task<List<Exam>> Exams(string klass)
     {
         if (Release.Exams is null) return [];
-        var index = await Read<ExamIndex>($"exams/{Release.Exams}/index.json");
-        return index.Classes.Contains(klass) ? (await Read<ClassExams>($"exams/{Release.Exams}/classes/{klass}.json")).Exams : [];
+        var index = await Read($"exams/{Release.Exams}/index.json", FactsJson.Default.ExamIndex);
+        return index.Classes.Contains(klass) ? (await Read($"exams/{Release.Exams}/classes/{klass}.json", FactsJson.Default.ClassExams)).Exams : [];
     }
     public async Task<List<Lab>> Labs(string klass)
     {
         if (Release.Labs is null) return [];
-        var index = await Read<LabIndex>($"labs/{Release.Labs}/index.json");
-        return index.Classes.Contains(klass) ? (await Read<ClassLabs>($"labs/{Release.Labs}/classes/{klass}.json")).Labs : [];
+        var index = await Read($"labs/{Release.Labs}/index.json", FactsJson.Default.LabIndex);
+        return index.Classes.Contains(klass) ? (await Read($"labs/{Release.Labs}/classes/{klass}.json", FactsJson.Default.ClassLabs)).Labs : [];
     }
 }

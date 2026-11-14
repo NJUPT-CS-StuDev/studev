@@ -7,10 +7,13 @@ using StuDev.Map;
 
 // These are the TypeScript implementation's released-data vectors, also read by Android's ParityTest.
 // The verification executable has no UI dependency and never substitutes a fixture implementation for app code.
+// The verification reads test-only shapes too, so it keeps reflection, with the same naming as the app's two contexts.
+var factsJson = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+var storageJson = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 var golden = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "golden.json")))!;
 var checks = 0;
 var failures = new List<string>();
-T Read<T>(JsonNode node) => node.Deserialize<T>(Facts.Json)!;
+T Read<T>(JsonNode node) => node.Deserialize<T>(factsJson)!;
 void Equal(string label, object? value, JsonNode? expected)
 {
     checks++;
@@ -61,7 +64,7 @@ foreach (var day in labData["days"]!.AsArray())
     }
 }
 var tasksData = golden["tasks"]!;
-var tasks = tasksData["list"]!.Deserialize<List<PersonalTask>>(Storage.Json)!;
+var tasks = tasksData["list"]!.Deserialize<List<PersonalTask>>(storageJson)!;
 var now = new Moment(Clock.Parse(tasksData["now"]!["date"]!.GetValue<string>()), tasksData["now"]!["min"]!.GetValue<int>());
 foreach (var item in tasksData["groups"]?.AsArray() ?? [])
 {
@@ -75,12 +78,12 @@ foreach (var item in tasksData["reminders"]?.AsArray() ?? [])
     Equal("task reminder", at is null ? null : new { date = Clock.Text(at.Value.Date), min = at.Value.Min }, item["at"]);
 }
 foreach (var test in labData["choices"]!.AsArray())
-    Equal("lab attendance", Choices.Labs(labLine.Labs, test!["choices"]!.Deserialize<LabChoices>(Storage.Json)).Select(l => l.Id), test["expected"]);
-var quickCourses = tasksData["courses"]!.Deserialize<List<QuickCourse>>(Storage.Json)!;
+    Equal("lab attendance", Choices.Labs(labLine.Labs, test!["choices"]!.Deserialize<LabChoices>(storageJson)).Select(l => l.Id), test["expected"]);
+var quickCourses = tasksData["courses"]!.Deserialize<List<QuickCourse>>(storageJson)!;
 foreach (var test in tasksData["parse"]!.AsArray())
 {
     var parsed = QuickTasks.Parse(test!["input"]!.GetValue<string>(), new(Clock.Parse("2026-11-12"), 600), quickCourses);
-    Equal("quick task " + test["input"], JsonSerializer.SerializeToNode(parsed, Storage.Json), test["result"]);
+    Equal("quick task " + test["input"], JsonSerializer.SerializeToNode(parsed, storageJson), test["result"]);
 }
 labLine.Tasks = tasks;
 foreach (var day in tasksData["days"]!.AsArray())
@@ -91,13 +94,13 @@ foreach (var day in tasksData["days"]!.AsArray())
 }
 Equal("task order", tasks.Order(TaskRules.Order).Select(t => t.Id), tasksData["order"]);
 var sync = tasksData["sync"]!;
-Equal("task merge", JsonSerializer.SerializeToNode(TaskRules.Merge(sync["mine"]!.Deserialize<List<PersonalTask>>(Storage.Json)!, sync["theirs"]!.Deserialize<List<PersonalTask>>(Storage.Json)!), Storage.Json), sync["merged"]);
+Equal("task merge", JsonSerializer.SerializeToNode(TaskRules.Merge(sync["mine"]!.Deserialize<List<PersonalTask>>(storageJson)!, sync["theirs"]!.Deserialize<List<PersonalTask>>(storageJson)!), storageJson), sync["merged"]);
 foreach (var test in tasksData["moves"]!.AsArray())
 {
     var task = tasks.First(t => t.Id == (string)test!["id"]!);
     var shown = test!["shown"]!.AsArray().Select(id => tasks.First(t => t.Id == (string)id!)).ToList();
     var changes = TaskRules.Move(task, (string)test["group"]!, (int)test["index"]!, shown, now);
-    var node = JsonSerializer.SerializeToNode(changes, Storage.Json)!;
+    var node = JsonSerializer.SerializeToNode(changes, storageJson)!;
     foreach (var changed in node.AsArray()) changed!.AsObject().Remove("modified");
     Equal("task move", node, test["changed"]);
 }
@@ -117,12 +120,12 @@ foreach (var test in golden["around"]!.AsArray())
 var semantics = golden["semantics"]!;
 foreach (var test in semantics["cases"]!.AsArray())
 {
-    var line = new CampusLine(term, periods, labLine.Meetings, labLine.Labs, labLine.Exams, holidays) { Preferences = test!["preferences"]!.Deserialize<Dictionary<string, EventChoice>>(Storage.Json) };
+    var line = new CampusLine(term, periods, labLine.Meetings, labLine.Labs, labLine.Exams, holidays) { Preferences = test!["preferences"]!.Deserialize<Dictionary<string, EventChoice>>(storageJson) };
     var date = Clock.Parse((string)semantics["request"]!["from"]!);
     var events = line.On(date);
     Equal("scheduling attitudes", events.Select(e => new { id = e.Id, avoid = e.Avoid, layer = e.Layer }), test["events"]);
     Equal("scheduling layers", CampusLine.Layers(events).Select(l => new { id = l.Event.Id, under = l.Under, over = l.Over }), test["layers"]);
-    Equal("available slots", Planning.Available(line, semantics["request"]!.Deserialize<SlotRequest>(Storage.Json)!, new(Clock.Parse((string)semantics["now"]!["date"]!), (int)semantics["now"]!["min"]!)).Take(4), test["slots"]);
+    Equal("available slots", Planning.Available(line, semantics["request"]!.Deserialize<SlotRequest>(storageJson)!, new(Clock.Parse((string)semantics["now"]!["date"]!), (int)semantics["now"]!["min"]!)).Take(4), test["slots"]);
 }
 var repositoryRoot = new DirectoryInfo(AppContext.BaseDirectory);
 while (repositoryRoot is not null && !Directory.Exists(Path.Combine(repositoryRoot.FullName, "src", "campus"))) repositoryRoot = repositoryRoot.Parent;
@@ -210,7 +213,7 @@ foreach (var test in golden["memory"]!.AsArray())
     try { Equal("memory", StuDev.Ai.Memory.Remembered((string)test!["text"]!, (string)test["fact"]!), test["next"]); }
     catch (ArgumentException error) { Equal("memory error", error.Message, test!["error"]); }
 }
-var allMaterials = JsonSerializer.Deserialize<List<CourseMaterials>>(File.ReadAllText(Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "materials.json")), Facts.Json)!;
+var allMaterials = JsonSerializer.Deserialize<List<CourseMaterials>>(File.ReadAllText(Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "materials.json")), factsJson)!;
 foreach (var test in golden["materials"]!["cases"]!.AsArray()) Same("materials said", Lessons.MaterialsSaid(allMaterials, (string)test!["course"]!), test["said"]);
 foreach (var test in golden["materials"]!["counts"]!.AsArray()) Equal("material counts", Lessons.KindCounts(allMaterials.First(m => m.Course == (string)test!["course"]!).Items).Select(k => new object[] { k.Kind, k.Count }), test!["counts"]);
 var syncCase = golden["settingsSync"]!;

@@ -8,6 +8,9 @@ public sealed record Material(string Title, string Url, string Kind, string? Ter
 public sealed record MaterialNote(string Title, string Url);
 public sealed record CourseMaterials(string Course, string Source, MaterialNote? Note, List<Material> Items);
 
+/** Where a search looks, by the name a person gives it: the search page's channels (src/campus/world/channels.json). */
+public sealed record Channel(string Id, string Label, List<string>? Sources = null, List<string>? Excluded = null, bool Dated = false);
+
 public static class Lessons
 {
     /** "1–16 周", "1–17 周（单）", "2、5、9 周". */

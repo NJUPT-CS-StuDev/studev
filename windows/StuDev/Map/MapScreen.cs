@@ -15,10 +15,6 @@ using StuDev.World;
 
 namespace StuDev.Map;
 
-public sealed record ModelBuilding(string Id, int Levels, double Height, JsonElement Geometry);
-public sealed record ModelPart(string? Id, string? Kind, JsonElement Geometry);
-public sealed record ModelFloor(int Level, JsonElement Plate, List<ModelPart> Cores, List<ModelPart> Rooms);
-public sealed record CampusModel(List<ModelBuilding> Buildings, Dictionary<string, ModelFloor> Floors);
 
 public sealed partial class MapScreen : Screen
 {
@@ -112,7 +108,7 @@ public sealed partial class MapScreen : Screen
         loading = true;
         try
         {
-            var places = Space.Load(repo); var shape = repo.Read<CampusModel>("space/仙林/model.json"); var index = repo.Rooms();
+            var places = Space.Load(repo); var shape = repo.Read("space/仙林/model.json", FactsJson.Default.CampusModel); var index = repo.Rooms();
             await Task.WhenAll(places, shape, index);
             space = places.Result; model = shape.Result; roomIndex = index.Result;
             roomById = roomIndex.Rooms.Where(r => Names.Placed(r.Id)).ToDictionary(r => r.Id);
@@ -169,7 +165,11 @@ public sealed partial class MapScreen : Screen
         await Layer("""{"id":"sel-core","type":"fill-extrusion","source":"selcore","layout":{"visibility":"none"},"paint":{"fill-extrusion-color":"#E3E5E8","fill-extrusion-height":1}}""");
     }
 
-    private Task Set(string layer, string property, object value) => surface.Map.SetStyleLayerPropertyAsync(layer, property, value is string s && s.StartsWith('#') ? $"\"{s}\"" : JsonSerializer.Serialize(value));
+    private Task Set(string layer, string property, string colour) => surface.Map.SetStyleLayerPropertyAsync(layer, property, JsonValue.Create(colour).ToJsonString());
+    private Task Set(string layer, string property, double value) => surface.Map.SetStyleLayerPropertyAsync(layer, property, JsonValue.Create(value).ToJsonString());
+    /** GeoJSON made here: features of a geometry the model carries, with their properties. */
+    private static JsonObject Feature(JsonElement geometry, JsonObject? properties = null) => new() { ["type"] = "Feature", ["geometry"] = JsonNode.Parse(geometry.GetRawText()), ["properties"] = properties ?? [] };
+    private static string Collection(IEnumerable<JsonObject> features) => new JsonObject { ["type"] = "FeatureCollection", ["features"] = new JsonArray([.. features]) }.ToJsonString();
     private Task SetRaw(string layer, string property, string json) => surface.Map.SetStyleLayerPropertyAsync(layer, property, json);
     private static string Hex(Windows.UI.Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     private string Scene(string key) => Hex(Paint.Scene(key, Paint.Dark));
@@ -395,8 +395,8 @@ public sealed partial class MapScreen : Screen
         var filter = $$"""["!=",["get","building"],"{{building}}"]""";
         await SetRaw("plain", "filter", filter);
         await Buildings();
-        await surface.Map.SetGeoJsonSourceDataAsync("sel", JsonSerializer.Serialize(new { type = "Feature", geometry = data?.Plate ?? shape.Geometry, properties = new { } }));
-        await surface.Map.SetGeoJsonSourceDataAsync("selcore", JsonSerializer.Serialize(new { type = "FeatureCollection", features = (data?.Cores ?? []).Select(c => new { type = "Feature", geometry = c.Geometry, properties = new { } }) }));
+        await surface.Map.SetGeoJsonSourceDataAsync("sel", Feature(data?.Plate ?? shape.Geometry).ToJsonString());
+        await surface.Map.SetGeoJsonSourceDataAsync("selcore", Collection((data?.Cores ?? []).Select(c => Feature(c.Geometry))));
         foreach (var layer in new[] { "sel-lower", "sel-slab", "sel-rooms", "sel-core" }) await SetRaw(layer, "visibility", "\"visible\"");
         var floorHeight = shape.Height / shape.Levels; var basis = (level - 1) * floorHeight; var wall = Math.Max(1.3, floorHeight * .42);
         await Set("sel-lower", "fill-extrusion-height", Math.Max(.01, basis));
@@ -459,14 +459,14 @@ public sealed partial class MapScreen : Screen
         var data = model.Floors.GetValueOrDefault($"{openBuilding}/{floor}");
         var night = Paint.Dark;
         string Colour(string tier) => Hex(Paint.Parse(RoomColour(tier, night)));
-        var features = new List<object>();
+        var features = new List<JsonObject>();
         foreach (var (el, _, _, _, _) in roomLabels) labels.Children.Remove(el);
         roomLabels.Clear();
         foreach (var room in data?.Rooms ?? [])
         {
             var classroom = roomById.TryGetValue(room.Id!, out var r) && World.Rooms.Classroom(r);
             var tier = room.Id == picked ? "picked" : classroom && day is not null ? reader!.At(day, room.Id!, moment.Min).Tier : "other";
-            features.Add(new { type = "Feature", geometry = room.Geometry, properties = new { id = room.Id, c = Colour(tier) } });
+            features.Add(Feature(room.Geometry, new JsonObject { ["id"] = room.Id, ["c"] = Colour(tier) }));
             var place = space!.ById.GetValueOrDefault(room.Id!);
             var label = place?.Names.FirstOrDefault() ?? room.Id![(room.Id!.LastIndexOf('-') + 1)..];
             var text = new TextBlock { Text = label, FontSize = tier == "picked" ? 12 : 10.5, FontWeight = tier == "picked" ? FontWeights.SemiBold : FontWeights.Normal, IsHitTestVisible = false,
@@ -483,7 +483,7 @@ public sealed partial class MapScreen : Screen
             var c = Centre(core.Geometry);
             roomLabels.Add((text, c, [c[2], c[3], c[4], c[5]], false, 22));
         }
-        await surface.Map.SetGeoJsonSourceDataAsync("selrooms", JsonSerializer.Serialize(new { type = "FeatureCollection", features }));
+        await surface.Map.SetGeoJsonSourceDataAsync("selrooms", Collection(features));
         surface.Redraw();
     }
 
@@ -535,11 +535,9 @@ public sealed partial class MapScreen : Screen
                 chosen = Math.Min(chosen, Math.Max(0, routes.Count - 1));
             }
         }
-        await surface.Map.SetGeoJsonSourceDataAsync("route", JsonSerializer.Serialize(new
-        {
-            type = "FeatureCollection",
-            features = routes.Select((r, i) => new { type = "Feature", properties = new { chosen = i == chosen, index = i }, geometry = new { type = "LineString", coordinates = r["geometry"] } }).OrderBy(f => f.properties.chosen),
-        }));
+        // The chosen route last, drawn over the others.
+        await surface.Map.SetGeoJsonSourceDataAsync("route", Collection(routes.Select((r, i) => (Route: r, Index: i)).OrderBy(x => x.Index == chosen)
+            .Select(x => new JsonObject { ["type"] = "Feature", ["properties"] = new JsonObject { ["chosen"] = x.Index == chosen, ["index"] = x.Index }, ["geometry"] = new JsonObject { ["type"] = "LineString", ["coordinates"] = x.Route["geometry"]!.DeepClone() } })));
         if (routes.Count > 0)
         {
             var line = routes[chosen]["geometry"]!.AsArray().Select(p => ((double)p![1]!, (double)p[0]!)).ToList();
