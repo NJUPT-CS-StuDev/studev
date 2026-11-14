@@ -81,6 +81,23 @@ export default function TimetableApp() {
         element.addEventListener('pointercancel', up);
         return () => { element.removeEventListener('wheel', wheel); element.removeEventListener('pointerdown', down); element.removeEventListener('pointermove', move); element.removeEventListener('pointerup', up); element.removeEventListener('pointercancel', up); };
     }, [stepScale]);
+    // One key for each view, as calendars have them: D 天, W 周, S 学期, L 清单, and T back to today.
+    const sheetOpen = open !== null || taskId !== null || calendar;
+    useEffect(() => {
+        const keys: Record<string, Scale> = { d: 'day', w: 'week', s: 'term', l: 'list' };
+        const press = (event: KeyboardEvent) => {
+            if (sheetOpen || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+            if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            const key = event.key.toLowerCase();
+            if (key === 't') { set({ t: null }); event.preventDefault(); return; }
+            const next = keys[key];
+            if (!next || (next === 'list' && who.type !== 'me')) return;
+            set({ scale: next, mode: null });
+            event.preventDefault();
+        };
+        window.addEventListener('keydown', press);
+        return () => window.removeEventListener('keydown', press);
+    }, [sheetOpen, set, who.type]);
 
     if (ready && who.type === 'me' && !prefs.class) return <div className="sd page"><ClassPicker /></div>;
     if (error) return <div className="sd page"><div className="wrap narrow"><p className="empty">课表暂时打不开，请刷新重试。</p></div></div>;
@@ -137,7 +154,7 @@ export default function TimetableApp() {
                     </div>
                 </header>
                 <div className="tabs" role="tablist">
-                    {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
+                    {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} title={`${label} · 按 ${({ day: 'D', week: 'W', term: 'S', list: 'L' } as const)[key]}`} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
                 </div>
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} onTask={openTask} />}

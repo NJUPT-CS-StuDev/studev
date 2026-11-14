@@ -37,6 +37,9 @@ public sealed partial class TimetableScreen : Screen
         Key(Windows.System.VirtualKey.Left, () => Shift(-1));
         Key(Windows.System.VirtualKey.Right, () => Shift(1));
         Key(Windows.System.VirtualKey.T, () => { picked = null; Draw(); });
+        // One key for each view, as calendars have them: D 天, W 周, S 学期, L 清单.
+        foreach (var (key, view) in new[] { (Windows.System.VirtualKey.D, "day"), (Windows.System.VirtualKey.W, "week"), (Windows.System.VirtualKey.S, "term"), (Windows.System.VirtualKey.L, "list") })
+            Key(key, () => { if (ScalesShown.Any(s => s.Key == view) && scale != view) { scale = view; Draw(); } });
         Key(Windows.System.VirtualKey.N, () => { if (who is null) TaskSheet.New(campus, now); }, Windows.System.VirtualKeyModifiers.Control);
         Key(Windows.System.VirtualKey.Escape, () => { if (who is not null) Mine(); });
         PointerWheelChanged += (_, e) =>
