@@ -6,6 +6,8 @@ import { parse } from 'parse5';
 import test from 'node:test';
 
 const output = resolve('dist');
+// Paths answered by cloud functions rather than built pages: /api/ and every catch-all under cloud-functions/.
+const served = ['/api/', ...(await readdir('cloud-functions', { recursive: true })).filter((file) => file.endsWith('[[path]].js')).map((file) => `/${dirname(file).replaceAll('\\', '/')}/`)];
 async function pages(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -38,7 +40,7 @@ test('every built page has valid local links and complete rendering', async () =
     walk(parse(html), (node) => {
       const attr = attributes(node);
       if (node.tagName === 'a') {
-        const target = attr.href?.startsWith('/api/') ? null : localFile(attr.href, file);
+        const target = served.some((prefix) => attr.href?.startsWith(prefix)) ? null : localFile(attr.href, file);
         if (target) assert.ok(existsSync(target), `${file}: broken link ${attr.href}`);
       }
       if (node.tagName === 'img') {

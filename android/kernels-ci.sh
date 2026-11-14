@@ -17,23 +17,23 @@ build_kernel() {
   read -r repository tag <<< "$release"
   git clone --depth 1 --branch "$tag" "https://github.com/${repository}.git" "$work/$repo"
   pushd "$work/$repo" >/dev/null
-  cargo ndk -t arm64-v8a -t x86_64 -P 21 -o android/build/jniLibs build \
+  cargo ndk -t arm64-v8a -t x86_64 -P 21 -o native/build/jniLibs build \
     --locked --release --package "$package" --lib
   # The same API 26-compatible Android cleaner settings as kernels.ps1.
-  sed 's/^\[bindings.kotlin\]/[defaults.bindings.kotlin]/' android/uniffi.toml > "$work/$repo-android.toml"
+  sed 's/^\[bindings.kotlin\]/[defaults.bindings.kotlin]/' native/uniffi.toml > "$work/$repo-android.toml"
   printf '\nandroid = true\nandroid_cleaner = false\ndisable_java_cleaner = true\n' >> "$work/$repo-android.toml"
   cargo run --locked --release --package "$package" --features bindgen \
-    --bin uniffi-bindgen -- generate "android/build/jniLibs/arm64-v8a/lib${library}.so" \
-    --language kotlin --config "$work/$repo-android.toml" --out-dir android/build/kotlin --no-format
+    --bin uniffi-bindgen -- generate "native/build/jniLibs/arm64-v8a/lib${library}.so" \
+    --language kotlin --config "$work/$repo-android.toml" --out-dir native/build/kotlin --no-format
   popd >/dev/null
 
   for abi in arm64-v8a x86_64; do
-    cp "$work/$repo/android/build/jniLibs/$abi/lib${library}.so" \
+    cp "$work/$repo/native/build/jniLibs/$abi/lib${library}.so" \
       "$root/android/kernels/jniLibs/$abi/"
   done
-  cp -R "$work/$repo/android/build/kotlin/"* "$root/android/kernels/kotlin/"
+  cp -R "$work/$repo/native/build/kotlin/"* "$root/android/kernels/kotlin/"
 }
 
-build_kernel wasm-search wasm-search-android wasm_search_android
-build_kernel wayfind wayfind-android wayfind_android
-build_kernel docstream docstream-android docstream_android
+build_kernel wasm-search wasm-search-native wasm_search_native
+build_kernel wayfind wayfind-native wayfind_native
+build_kernel docstream docstream-native docstream_native
