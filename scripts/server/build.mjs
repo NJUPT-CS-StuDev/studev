@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 // with identifier aliases so a dependency's `import { env } from 'process'` cannot collide.
 // This output is server-only and contains no build-time values or credentials.
 await build({
-  entryPoints: { platform: 'src/platform/server/entry.mjs' },
+  entryPoints: { platform: 'src/platform/server/entry.mjs', 'windows-download': 'src/download/windows.mjs' },
   outdir: '.server-build',
   outExtension: { '.js': '.mjs' },
   bundle: true,

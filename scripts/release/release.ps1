@@ -1,5 +1,5 @@
-# One release of StuDev: the Android APK of the version in product.json, put on the download store and on a GitHub
-# release; publishing the release deploys the site that links to it.
+# One release of StuDev: the Android APK and the Windows app, both of the version in product.json, put on the download
+# store and on a GitHub release; publishing the release deploys the site that links to them.
 param(
     [string]$Notes = '',
     [string[]]$GradleArgs = @()
@@ -58,8 +58,40 @@ $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.osca_download.secret_key
 & node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
 
+# The Windows app: the kernels from their pinned tags, the parity checks, a NativeAOT build, and a Velopack release whose
+# portable zip, packages and feed go to windows/ on the download store, where /download/windows/ serves them and unzipped
+# copies update themselves. Only the portable zip is offered: unzip and run, nothing to install.
+$env:DOTNET_ROOT = 'D:\Dev\dotnet'
+$env:Path = "D:\Dev\dotnet;$env:USERPROFILE\.dotnet\tools;$env:Path"
+$windows = Join-Path $repo 'windows'
+& pwsh -NoProfile -File (Join-Path $windows 'kernels.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Windows kernels failed' }
+& dotnet run --project (Join-Path $windows 'Tests') -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Windows parity checks failed' }
+$publish = Join-Path $tempRoot 'windows-publish'
+& dotnet publish (Join-Path $windows 'StuDev') -c Release -r win-x64 -p:DebugType=none -p:Version=$versionName -o $publish
+if ($LASTEXITCODE -ne 0) { throw 'Windows build failed' }
+$velopack = Join-Path $tempRoot 'windows-releases'
+New-Item -ItemType Directory -Path $velopack -Force | Out-Null
+$feed = "$($product.origin)/download/windows"
+# The releases already out, so the new one carries a delta from the last; none yet before the first.
+$known = try { Invoke-WebRequest "$feed/releases.win.json" -Method Head -MaximumRedirection 5 -ErrorAction Stop; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
+if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEXITCODE -ne 0) { throw 'Earlier Windows releases could not be read' } }
+& vpk pack --packId top.hicancan.studev --packVersion $versionName --packDir $publish --mainExe StuDev.exe --packTitle StuDev --packAuthors 'NJUPT StuDev' `
+    --icon (Join-Path $windows 'StuDev\Assets\StuDev.ico') --shortcuts 'Desktop,StartMenuRoot' --outputDir $velopack
+if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
+$portable = Join-Path $velopack 'top.hicancan.studev-win-Portable.zip'
+if (-not (Test-Path -LiteralPath $portable)) { throw "Windows portable zip is missing: $portable" }
+# Packages first, the feed last: an installed copy never reads a feed naming a package not yet there.
+$made = Get-ChildItem $velopack -File | Where-Object { $_.Extension -in '.nupkg', '.zip' -and $_.LastWriteTime -gt (Get-Item $publish).LastWriteTime.AddMinutes(-1) }
+foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
+& node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
+if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
+$fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
+Copy-Item $portable $fullPortable
+
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$assetPaths = @($fullApk)
+$assetPaths = @($fullApk, $fullPortable)
 $tag = "v$versionName"
 $repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()
@@ -82,6 +114,7 @@ $releaseUrl = (& gh release view $tag --repo $repoName --json url --jq .url).Tri
 Write-Output "release APK: $apk"
 Write-Output "release size: $((Get-Item $apk).Length) bytes"
 Write-Output "release signature SHA-1: $sha1"
+Write-Output "Windows portable: $feed/top.hicancan.studev-win-Portable.zip"
 Write-Output "GitHub release: $releaseUrl"
 $resolvedTemp = (Resolve-Path -LiteralPath $tempRoot).Path
 if (-not $resolvedTemp.StartsWith($tempBase + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe temporary directory: $resolvedTemp" }
