@@ -40,7 +40,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
             <div className="corner" />
             {days.slice(0, columns).map((date, index) => {
                 const holiday = line.holidays.get(date);
-                return <div key={date} className={`dh ${date === now.date ? 'today' : ''}`}>{WEEKDAYS[index + 1]}<small>{holiday ?? `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`}</small></div>;
+                return <div key={date} className={`dh ${date === now.date ? 'today' : ''} ${index >= 5 ? 'weekend' : ''}`}>{WEEKDAYS[index + 1]}<small>{holiday ?? `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`}</small></div>;
             })}
             {dues.slice(0, columns).some(list => list.length) && <>
                 <div className="due-k">截止</div>
@@ -63,7 +63,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                     return start !== undefined && end !== undefined && !today.some(event => event.start < end && start < event.end);
                 });
                 return (
-                    <div key={date} className={`col ${line.holidays.has(date) ? 'off' : ''}`} style={{ height }}>
+                    <div key={date} className={`col ${line.holidays.has(date) ? 'off' : index >= 5 ? 'weekend' : ''}`} style={{ height }}>
                         {lines}
                         {quiet.map(hint => {
                             const start = clock.get(hint.periods[0])!.start;

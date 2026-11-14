@@ -63,7 +63,8 @@ public static class WeekView
             var sub = Kit.Text(line.Holidays.GetValueOrDefault(date) ?? $"{date.Month}/{date.Day}", Role.Caption, line.Holidays.ContainsKey(date) ? "holiday" : today ? "brand" : "muted");
             sub.FontSize = 11.5; sub.HorizontalAlignment = HorizontalAlignment.Center;
             head.Children.Add(name); head.Children.Add(sub);
-            Place(new Border { Child = head, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) }, 0, i + 1);
+            // The weekend a shade apart, as calendars set it.
+            Place(new Border { Child = head, Background = i >= 5 ? Paint.Faded("surfaceSunken", .55) : null, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) }, 0, i + 1);
         }
 
         if (anyDue)
@@ -111,6 +112,7 @@ public static class WeekView
             var date = days[i];
             var lane = new Lane { Height = height };
             if (line.Holidays.ContainsKey(date)) lane.Background = Hatch();
+            else if (i >= 5) lane.Background = Paint.Faded("surfaceSunken", .55);
             foreach (var period in line.Periods) lane.Mark(new Rectangle { Height = 1, Fill = Paint.Brush("line"), Opacity = .65 }, Y(clock[period.Period].Start) + .5);
             var today = events[i];
             bool Past(int end) => date < now.Date || (date == now.Date && end <= now.Min);

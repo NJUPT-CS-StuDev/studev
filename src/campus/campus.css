@@ -132,6 +132,8 @@
   .wk .ax span{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
   .wk .ax small{font-size:10px;font-weight:400;color:var(--faint);line-height:1.25;text-align:right}
   .wk .col{position:relative}
+  /* The weekend a shade apart, as calendars set it. */
+  .wk .col.weekend,.wk .dh.weekend{background:color-mix(in srgb,var(--surface-sunken) 55%,transparent)}
   .wk .col.off{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--surface-sunken) 6px 8px)}
   .hl{position:absolute;left:0;right:0;height:1px;background:var(--line);opacity:.65}
   .wnow{position:absolute;left:0;right:0;border-top:1.5px solid var(--now);z-index:2;pointer-events:none}

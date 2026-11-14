@@ -355,10 +355,12 @@ import java.time.LocalDate
     val paper = Ink.paper
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().border(1.dp, hairline, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))) {
-            Row(Modifier.fillMaxWidth().bottomHairline(hairline).padding(vertical = 6.dp)) {
+            // The weekend a shade apart, as calendars set it.
+            val weekend = Ink.sunken.copy(alpha = .55f)
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).bottomHairline(hairline)) {
                 Spacer(Modifier.width(38.dp))
                 days.take(columns).forEachIndexed { index, date ->
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.weight(1f).fillMaxHeight().background(if (index >= 5) weekend else Color.Transparent).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         val color = if (date == now.date) Ink.brand else Ink.text
                         Plain(WEEKDAYS[index + 1], 12.sp, color, FontWeight.SemiBold)
                         Plain(line.holidays[date] ?: "${date.monthValue}/${date.dayOfMonth}", 11.sp, if (date == now.date) Ink.brand else Ink.muted, maxLines = 1)
@@ -393,6 +395,7 @@ import java.time.LocalDate
                 days.take(columns).forEachIndexed { index, date ->
                     val off = date in line.holidays
                     BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().drawBehind {
+                        if (!off && index >= 5) drawRect(weekend)
                         if (off) { var x = -size.height; while (x < size.width) { drawLine(soft, Offset(x, size.height), Offset(x + size.height, 0f), 1f); x += 16.dp.toPx() } }
                     }) {
                         val width = maxWidth
