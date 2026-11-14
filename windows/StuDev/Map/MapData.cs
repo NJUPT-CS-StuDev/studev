@@ -13,7 +13,9 @@ public sealed record OpeningRecord(JsonElement Hours);
 public sealed record ModelBuilding(string Id, int Levels, double Height, JsonElement Geometry);
 public sealed record ModelPart(string? Id, string? Kind, JsonElement Geometry);
 public sealed record ModelFloor(int Level, JsonElement Plate, List<ModelPart> Cores, List<ModelPart> Rooms);
-public sealed record CampusModel(List<ModelBuilding> Buildings, Dictionary<string, ModelFloor> Floors);
+/** A building around the campus, not modelled: only its footprint and height, for the shadow it casts. */
+public sealed record ModelContext(double Height, JsonElement Geometry);
+public sealed record CampusModel(List<ModelBuilding> Buildings, List<ModelContext> Context, Dictionary<string, ModelFloor> Floors);
 
 /** The campus's places and its walking network, read from the data release; the map's drawing is not here. */
 public sealed class Space(List<Place> places, string network)

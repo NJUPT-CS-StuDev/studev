@@ -34,6 +34,8 @@ public sealed partial class MapScreen : Screen
     private string? dayDate;
     private Kernels.Wayfind.Router? router;
     private Moment moment = Moment.Now();
+    /** The sun the shadows were last drawn for, to draw them again only when it has moved. */
+    private string? shadeKey;
     private bool isNow = true;
     private string? placeId, navId, origin;
     private int? floor;
@@ -131,10 +133,13 @@ public sealed partial class MapScreen : Screen
             foreach (var layer in style["layers"]!.AsArray()) if ((string?)layer!["id"] == "forms") layer["layout"] = new JsonObject { ["visibility"] = "none" };
             await surface.Map.SetStyleJsonAsync(style.ToJsonString());
             await AddLayers();
+            await surface.Map.AddImageSourceImageAsync("shadow", Shadows.Corners, Shadows.Draw([], 0, 0));
+            await Layer("""{"id":"shadow","type":"raster","source":"shadow","paint":{"raster-opacity":0,"raster-fade-duration":0}}""", "context");
             App.Watch(LoadModels(repo));
             var teach = space.ById.GetValueOrDefault("仙林/教3")?.Centre ?? [118.928, 32.113];
             surface.Move(new CameraOptions { Center = new LatLng(teach[1] - .0002, teach[0] + .0006), Zoom = 16.05, Bearing = -24, Pitch = 52 }, CameraUpdateMode.Jump);
             styled = true;
+            await Shade();
             Labels();
             await LoadDay();
             Counts();
@@ -205,6 +210,7 @@ public sealed partial class MapScreen : Screen
         await Set("sel-slab", "fill-extrusion-color", Scene("slab"));
         await Buildings();
         if (openBuilding is not null) await PaintRooms();
+        await Shade();
         foreach (var (el, _, _, _, _, _) in buildingLabels) Dress((FrameworkElement)((Tap)el).Tag);
         surface.Redraw();
     }
@@ -437,6 +443,7 @@ public sealed partial class MapScreen : Screen
         await Set("sel-core", "fill-extrusion-base", basis + .18); await Set("sel-core", "fill-extrusion-height", basis + .18 + wall * .5);
         roomTop = basis + .18 + wall;
         await Flatten(Flat);
+        await Shade();
         await PaintRooms(picked);
         // Fly over the floor, turned to the building's longest side.
         var focus = picked is not null && data?.Rooms.FirstOrDefault(r => r.Id == picked) is { } room ? room.Geometry : shape.Geometry;
@@ -456,6 +463,7 @@ public sealed partial class MapScreen : Screen
         await Buildings();
         foreach (var (el, _, _, _, _) in roomLabels) labels.Children.Remove(el);
         roomLabels.Clear();
+        await Shade();
     }
 
     private async Task Flatten(double value)
@@ -632,6 +640,30 @@ public sealed partial class MapScreen : Screen
         if (openBuilding is not null) await PaintRooms();
         FloorButtons(openBuilding);
         Draw();
+        await Shade();
+    }
+
+    /**
+     * The buildings' shadows for the map's moment, as the web casts them: in the day's colours with the sun low, the
+     * noon's shadows stand in, so a light map never goes flat; none while a building's floors are open.
+     */
+    private async Task Shade()
+    {
+        if (!styled || model is null) return;
+        var light = !Paint.Dark;
+        var min = light && World.Sun.At(moment.Date, moment.Min).Altitude < 8 ? 720 : moment.Min;
+        var (altitude, azimuth) = World.Sun.At(moment.Date, min);
+        var key = $"{moment.Date:O}:{min / 10}:{light}";
+        if (key != shadeKey)
+        {
+            shadeKey = key;
+            var shapes = model.Context.Select(c => (c.Height, c.Geometry)).Concat(model.Buildings.Select(b => (b.Height, b.Geometry))).ToList();
+            var image = await Task.Run(() => Shadows.Draw(shapes, altitude, azimuth));
+            await surface.Map.SetImageSourceImageAsync("shadow", image);
+        }
+        var opacity = openBuilding is not null && HasFloors(openBuilding) ? 0 : Shadows.Strength(altitude, !light);
+        await SetRaw("shadow", "raster-opacity", string.Create(System.Globalization.CultureInfo.InvariantCulture, $"[\"interpolate\",[\"linear\"],[\"zoom\"],16,{opacity},18.5,{opacity * .55}]"));
+        surface.Redraw();
     }
 
     // ——— the panel ———

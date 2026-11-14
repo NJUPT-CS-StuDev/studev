@@ -172,6 +172,13 @@ class ParityTest {
             val moved = Tasks.move(list.first { it.id == case.getValue("id").jsonPrimitive.content }, group, case.getValue("index").jsonPrimitive.int, shown, now)
             assertEquals(case.toString(), case.getValue("changed").jsonArray.map { json.decodeFromJsonElement<Task>(JsonObject(it.jsonObject + ("modified" to JsonPrimitive("")))) }, moved.map { it.copy(modified = "") })
         }
+        // The sun, within a billionth of a degree: each runtime's sine and arctangent may round the last bit differently.
+        golden.getValue("sun").jsonArray.forEach { item ->
+            val case = item.jsonObject
+            val (altitude, azimuth) = top.hicancan.studev.map.Sun.at(LocalDate.parse(case.getValue("date").jsonPrimitive.content), case.getValue("min").jsonPrimitive.int)
+            assertEquals(case.toString(), case.getValue("alt").jsonPrimitive.double, altitude, 1e-9)
+            assertEquals(case.toString(), case.getValue("az").jsonPrimitive.double, azimuth, 1e-9)
+        }
         tasks.getValue("nextLessons").jsonArray.forEach { item ->
             val case = item.jsonObject
             val at = case.getValue("now").jsonObject

@@ -20,6 +20,13 @@ void Equal(string label, object? value, JsonNode? expected)
     var actual = JsonSerializer.SerializeToNode(value, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     if (!JsonNode.DeepEquals(actual, expected)) failures.Add($"{label}: expected {expected?.ToJsonString()}, got {actual?.ToJsonString()}");
 }
+// The sun, within a billionth of a degree: each runtime's sine and arctangent may round the last bit differently.
+foreach (var test in golden["sun"]!.AsArray())
+{
+    checks++;
+    var (altitude, azimuth) = Sun.At(Clock.Parse((string)test!["date"]!), (int)test["min"]!);
+    if (Math.Abs(altitude - (double)test["alt"]!) > 1e-9 || Math.Abs(azimuth - (double)test["az"]!) > 1e-9) failures.Add($"sun {test.ToJsonString()}: got {altitude}, {azimuth}");
+}
 object Brief(LineEvent e) => new { kind = e.Kind, name = e.Name, @short = e.Short, start = e.Start, end = e.End, room = e.Room };
 var term = Read<TeachingTerm>(golden["term"]!);
 var periods = Read<List<TeachingPeriod>>(golden["periods"]!);
