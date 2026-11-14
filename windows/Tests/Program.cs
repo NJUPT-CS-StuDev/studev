@@ -107,6 +107,13 @@ foreach (var day in tasksData["days"]!.AsArray())
     Equal("task deadlines", labLine.DueOn(date).Select(t => t.Id), day["due"]);
 }
 Equal("task order", tasks.Order(TaskRules.Order).Select(t => t.Id), tasksData["order"]);
+foreach (var item in tasksData["reportTitles"]!.AsArray()) Equal("report title", Suggestions.ReportTitle((string)item!["project"]!), item["title"]);
+foreach (var test in tasksData["suggestions"]!.AsArray())
+{
+    var at = new Moment(Clock.Parse((string)test!["now"]!["date"]!), (int)test["now"]!["min"]!);
+    var got = Suggestions.Suggest(labLine, at, test["setAside"]!.AsArray().Select(k => (string)k!).ToList());
+    Equal("suggestions", got.Select(s => new { key = s.Key, task = new { title = s.Task.Title, course = s.Task.Course, due = new { date = s.Task.Due!.Date } } }), test["expected"]);
+}
 var sync = tasksData["sync"]!;
 Equal("task merge", JsonSerializer.SerializeToNode(TaskRules.Merge(sync["mine"]!.Deserialize<List<PersonalTask>>(storageJson)!, sync["theirs"]!.Deserialize<List<PersonalTask>>(storageJson)!), storageJson), sync["merged"]);
 foreach (var test in tasksData["moves"]!.AsArray())

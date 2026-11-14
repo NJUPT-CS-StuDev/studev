@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Documents;
 using TextDecorations = Windows.UI.Text.TextDecorations;
 using Microsoft.UI.Xaml.Controls;
+using System.Text.Json;
 using StuDev.Data;
 using StuDev.Ui;
 using StuDev.World;
@@ -17,6 +18,9 @@ public static class ListView
     private static bool showDone;
     /** One course at a time, by its name: its tasks and its exams, the rest set aside. */
     private static string? only;
+    /** What the list was told to stop offering, kept on this device, as readHints in src/campus/world/suggestions.ts. */
+    private static List<string> SetAside => Storage.Read("task-hints.json") is { } raw ? JsonSerializer.Deserialize(raw, StorageJson.Default.ListString) ?? [] : [];
+    private static void PutAside(string key) { Storage.Write(Storage.PathFor("task-hints.json"), JsonSerializer.Serialize(SetAside.Append(key).TakeLast(200).ToList(), StorageJson.Default.ListString)); Redraw(); }
 
     private static (string Text, string Tone) WhenOf(PersonalTask task, Moment now)
     {
@@ -100,6 +104,37 @@ public static class ListView
             Chip("全部", null);
             foreach (var name in filters) Chip(Names.CourseShort(name), name);
             page.Children.Add(new ScrollViewer { Content = chips, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Disabled, Margin = new Thickness(0, 0, 0, 6) });
+        }
+        var suggested = shown is null ? Suggestions.Suggest(line, now, SetAside) : [];
+        if (suggested.Count > 0)
+        {
+            var head = Kit.Text("从你的安排里", Role.Label, "brand", bold: true); head.FontSize = 13; head.Margin = new Thickness(0, 18, 0, 6);
+            page.Children.Add(head);
+            foreach (var (key, task) in suggested)
+            {
+                var row = new Grid { ColumnSpacing = 10, MinHeight = 46, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var plus = new Tap(Paint.Clear, Paint.Faded("brand", .12)) { Content = new TextBlock { Text = "+", FontSize = 15, Foreground = Paint.Brush("brand"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, -3, 0, 0) },
+                    Width = 20, Height = 20, CornerRadius = new CornerRadius(5), BorderBrush = Paint.Brush("brand"), BorderThickness = new Thickness(1.5), VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(plus, $"加上 {task.Title}");
+                var adding = task; plus.Click += (_, _) => campus.Tasks.Put(adding with { Id = TaskRules.NewId(), Order = -DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+                row.Children.Add(plus);
+                var title = Kit.Text(task.Title, Role.Body); title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); row.Children.Add(title);
+                var meta = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+                if (task.Course is { } c && courses.GetValueOrDefault(c) is { } courseName)
+                {
+                    var tone = tones.TryGetValue(c, out var t) ? t : (int?)null;
+                    meta.Children.Add(new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 2), Background = tone is { } a ? Paint.Tone(a, "bg") : Paint.Brush("surfaceSunken"),
+                        Child = new TextBlock { Text = Names.CourseShort(courseName), FontSize = 12, Foreground = tone is { } b ? Paint.Tone(b, "fg") : Paint.Brush("muted") } });
+                }
+                var due = Kit.Text($"{Clock.DayWord(task.Due!.Date, now.Date)} 截止", Role.Label, "faint"); due.FontSize = 13; meta.Children.Add(due);
+                Grid.SetColumn(meta, 2); row.Children.Add(meta);
+                var skip = new Tap(Paint.Clear, Paint.Faded("surfaceSunken", .8)) { Content = Kit.Icon(Icons.Cross, 12, "faint"), Padding = new Thickness(6), CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(skip, "不用");
+                skip.Click += (_, _) => PutAside(key);
+                Grid.SetColumn(skip, 3); row.Children.Add(skip);
+                page.Children.Add(row);
+            }
         }
         string ExamGroup(Exam x) { var days = Clock.Parse(x.Date).DayNumber - now.Date.DayNumber; return days == 0 ? "today" : days == 1 ? "tomorrow" : days <= 7 ? "week" : "later"; }
         for (var g = 0; g < TaskRules.Groups.Length; g++)
