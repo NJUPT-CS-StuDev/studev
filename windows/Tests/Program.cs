@@ -59,7 +59,7 @@ foreach (var day in labData["days"]!.AsArray())
     string[][] orders = [["exam", "lab", "class", "run"], ["class", "run", "exam", "lab"]];
     for (var order = 0; order < orders.Length; order++)
     {
-        Equal("layers", CampusLine.Layers(events, orders[order]).Select(l => new { id = l.Event.Id, under = l.Under, over = l.Over }), day["layers"]![order]);
+        Equal("layers", CampusLine.Layers(events, orders[order]).Select(l => new { id = l.Event.Id, under = l.Under }), day["layers"]![order]);
         Equal("clusters", CampusLine.Clusters(events, orders[order]).Select(c => new { front = c.Front.Id, events = c.Events.Select(e => e.Id), start = c.Start, end = c.End }), day["clusters"]![order]);
     }
 }
@@ -138,7 +138,7 @@ foreach (var test in semantics["cases"]!.AsArray())
     var date = Clock.Parse((string)semantics["request"]!["from"]!);
     var events = line.On(date);
     Equal("scheduling attitudes", events.Select(e => new { id = e.Id, avoid = e.Avoid, layer = e.Layer }), test["events"]);
-    Equal("scheduling layers", CampusLine.Layers(events).Select(l => new { id = l.Event.Id, under = l.Under, over = l.Over }), test["layers"]);
+    Equal("scheduling layers", CampusLine.Layers(events).Select(l => new { id = l.Event.Id, under = l.Under }), test["layers"]);
     Equal("available slots", Planning.Available(line, semantics["request"]!.Deserialize<SlotRequest>(storageJson)!, new(Clock.Parse((string)semantics["now"]!["date"]!), (int)semantics["now"]!["min"]!)).Take(4), test["slots"]);
 }
 var repositoryRoot = new DirectoryInfo(AppContext.BaseDirectory);

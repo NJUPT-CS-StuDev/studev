@@ -114,7 +114,7 @@ const labs = {
         return {
             date, events: events.map(labBrief),
             alongside: events.map(event => overlapping(labLine, event).map(other => other.id)),
-            layers: orders.map(order => layers(events, order).map(item => ({ id: item.event.id, under: item.under, over: item.over }))),
+            layers: orders.map(order => layers(events, order).map(item => ({ id: item.event.id, under: item.under }))),
             clusters: orders.map(order => clusters(events, order).map(run => ({ front: run.front.id, events: run.events.map(event => event.id), start: run.start, end: run.end }))),
         };
     }),
@@ -144,7 +144,7 @@ const quickCourses = [...new Map(labMeetings.map(meeting => [courseIdentity(meet
 const taskLine: Timeline = { ...labLine, tasks: taskList };
 const tasks = {
     now: taskNow, list: taskList,
-    days: ['2026-11-09', '2026-11-10', '2026-11-13'].map(date => ({ date, events: eventsOn(taskLine, date).map(labBrief), due: dueOn(taskLine, date).map(task => task.id), layers: layers(eventsOn(taskLine, date)).map(item => ({ id: item.event.id, under: item.under, over: item.over })) })),
+    days: ['2026-11-09', '2026-11-10', '2026-11-13'].map(date => ({ date, events: eventsOn(taskLine, date).map(labBrief), due: dueOn(taskLine, date).map(task => task.id), layers: layers(eventsOn(taskLine, date)).map(item => ({ id: item.event.id, under: item.under })) })),
     groups: taskList.map(task => ({ id: task.id, group: taskGroup(task, taskNow) })),
     order: [...taskList].sort(taskOrder).map(task => task.id),
     reminders: taskList.flatMap(task => (task.remind ?? []).map(remind => ({ id: task.id, remind, at: reminderAt(task, remind) }))),
@@ -191,7 +191,7 @@ const semantics = {
         const preferences: EventPreferences = Object.fromEntries(scheduled.map((event, i) => [preferenceKey(event, term.term), mode === 'layer-only' ? { layer: i + 1 } : { avoid: mode as 'must' | 'prefer' | 'allow' }]));
         const personal = { ...labLine, preferences };
         return { mode, preferences, events: eventsOn(personal, scheduleDate).map(event => ({ id: event.id, avoid: event.avoid, layer: event.layer })),
-            layers: layers(eventsOn(personal, scheduleDate)).map(item => ({ id: item.event.id, under: item.under, over: item.over })),
+            layers: layers(eventsOn(personal, scheduleDate)).map(item => ({ id: item.event.id, under: item.under })),
             slots: availableSlots(personal, slotRequest, scheduleNow).slice(0, 4) };
     }),
 };

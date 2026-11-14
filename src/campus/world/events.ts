@@ -30,14 +30,12 @@ const frontFirst = (order: readonly EventKind[]) => (left: CampusEvent, right: C
     (right.layer ?? 0) - (left.layer ?? 0) || order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 /**
  * A day's events as layers, back to front, the order they are drawn in. `under` is how many it overlaps lie
- * behind it, `over` how many in front: one in front shows the count of those behind; those behind show their
- * edges beside it and whatever part of them it does not reach.
+ * behind it; those behind show their edges beside it and whatever part of them it does not reach.
  */
 export function layers(events: CampusEvent[], order: readonly EventKind[] = LAYER_ORDER) {
     const front = [...events].sort(frontFirst(order));
     return front.map((event, rank) => ({
         event,
-        over: front.slice(0, rank).filter(other => clash(other, event)).length,
         under: front.slice(rank + 1).filter(other => clash(other, event)).length,
     })).reverse();
 }

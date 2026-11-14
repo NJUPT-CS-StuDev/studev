@@ -7,7 +7,7 @@ namespace StuDev.World;
 public sealed record LineEvent(string Kind, string Id, DateOnly Date, string Name, string Short, int Start, int End, string? Room, List<string> Teachers,
     TeachingMeeting? Meeting = null, Lab? Lab = null, Exam? Exam = null, long Layer = 0, PersonalTask? Task = null, string Avoid = "prefer");
 /** An event as drawn among those it shares a time with: how many lie behind it and how many in front. */
-public sealed record Layered(LineEvent Event, int Under, int Over);
+public sealed record Layered(LineEvent Event, int Under);
 public sealed record EventCluster(LineEvent Front, List<LineEvent> Events, int Start, int End);
 
 public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, List<TeachingMeeting> meetings, List<Lab> labs, List<Exam> exams, Dictionary<DateOnly, string> holidays)
@@ -160,7 +160,7 @@ public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, 
     public static List<Layered> Layers(List<LineEvent> events, IReadOnlyList<string>? order = null)
     {
         var front = events.OrderBy(e => e, FrontFirst(order ?? LayerOrder)).ToList();
-        var layers = front.Select((e, rank) => new Layered(e, front.Skip(rank + 1).Count(o => Clash(o, e)), front.Take(rank).Count(o => Clash(o, e)))).ToList();
+        var layers = front.Select((e, rank) => new Layered(e, front.Skip(rank + 1).Count(o => Clash(o, e)))).ToList();
         layers.Reverse();
         return layers;
     }

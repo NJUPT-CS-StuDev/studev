@@ -42,7 +42,7 @@ object Names {
     fun courseShort(name: String) = short[course(name)] ?: course(name)
     fun room(room: String?) = room.orEmpty().replaceFirst(Regex("^[^/:]*[/:]"), "").replace("/", " ")
     fun roomShort(room: String?) = room(room).removePrefix("教")
-    fun compactPlace(place: String) = Regex("\\d+(?:/\\d+){2,}").replace(place.replaceFirst(Regex("^(?:计算机学科楼|计算机楼|计科楼)[-\\s]*"), "CS-")) { rooms -> "${rooms.value.substringBefore('/')}等${rooms.value.split('/').size}间" }
+    fun compactPlace(place: String) = Regex("\\d+(?:/\\d+){2,}").replace(place.replaceFirst(Regex("^(?:计算机学科楼|计算机楼|计科楼|CS)[-\\s]*"), "计科楼")) { rooms -> "${rooms.value.substringBefore('/')}等${rooms.value.split('/').size}间" }
     /** A slash means the map has it. */
     fun placed(room: String?) = !room.isNullOrEmpty() && room.contains('/')
     /** A room in the teaching office's list, on the map or not; anything else is only a written place. */
@@ -61,7 +61,7 @@ data class LineEvent(val kind: String, val id: String, val date: LocalDate, val 
                      val room: String?, val teachers: List<String>, val meeting: TeachingMeeting? = null, val lab: Lab? = null, val exam: Exam? = null, val task: Task? = null,
                      val avoid: String? = null, val layer: Long = 0L)
 /** An event as drawn among those it shares a time with: how many lie behind it and how many in front. */
-data class Layer(val event: LineEvent, val under: Int, val over: Int)
+data class Layer(val event: LineEvent, val under: Int)
 /** Where there is no room to stack them, a run of events that overlap one another, named by the one in front. */
 data class Cluster(val front: LineEvent, val events: List<LineEvent>, val start: Int, val end: Int)
 val LineEvent.startsAt: Instant get() = date.atStartOfDay(CampusDay.zone).plusMinutes(start.toLong()).toInstant()
@@ -171,7 +171,7 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
         /** A day's events as layers, back to front, the order they are drawn in; the same answer as src/campus/world/events.ts. */
         fun layers(events: List<LineEvent>, order: List<String> = LAYER_ORDER): List<Layer> {
             val front = events.sortedWith(frontFirst(order))
-            return front.mapIndexed { rank, event -> Layer(event, front.drop(rank + 1).count { clash(it, event) }, front.take(rank).count { clash(it, event) }) }.reversed()
+            return front.mapIndexed { rank, event -> Layer(event, front.drop(rank + 1).count { clash(it, event) }) }.reversed()
         }
         /** A day's events in runs that overlap one another, each one tile from its first start to its last end. */
         fun clusters(events: List<LineEvent>, order: List<String> = LAYER_ORDER): List<Cluster> {

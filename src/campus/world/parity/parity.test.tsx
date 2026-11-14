@@ -92,7 +92,7 @@ describe('the shared web / Android real-data contract', () => {
         for (const day of t.days) {
             expect(eventsOn(taskLine, day.date).map(brief)).toEqual(day.events);
             expect(dueOn(taskLine, day.date).map(task => task.id)).toEqual(day.due);
-            expect(layers(eventsOn(taskLine, day.date)).map(item => ({ id: item.event.id, under: item.under, over: item.over }))).toEqual(day.layers);
+            expect(layers(eventsOn(taskLine, day.date)).map(item => ({ id: item.event.id, under: item.under }))).toEqual(day.layers);
         }
         expect(list.map(task => ({ id: task.id, group: taskGroup(task, t.now) }))).toEqual(t.groups);
         expect([...list].sort(taskOrder).map(task => task.id)).toEqual(t.order);
@@ -110,11 +110,11 @@ describe('the shared web / Android real-data contract', () => {
             const events = eventsOn(labLine, day.date);
             expect(events.map(brief)).toEqual(day.events);
             expect(events.map(event => overlapping(labLine, event).map(other => other.id))).toEqual(day.alongside);
-            expect(orders.map(order => layers(events, order).map(item => ({ id: item.event.id, under: item.under, over: item.over })))).toEqual(day.layers);
+            expect(orders.map(order => layers(events, order).map(item => ({ id: item.event.id, under: item.under })))).toEqual(day.layers);
             expect(orders.map(order => clusters(events, order).map(run => ({ front: run.front.id, events: run.events.map(event => event.id), start: run.start, end: run.end })))).toEqual(day.clusters);
         }
         // Two labs at once, and a lab over part of a lecture: both stand, neither is called off.
-        expect(labs.days.some(day => day.layers[0]!.some(item => item.under > 0 && item.over === 0))).toBe(true);
+        expect(labs.days.some(day => day.layers[0]!.some(item => item.under > 0))).toBe(true);
         expect(eventsOn({ ...labLine, labs: [labs.dayOff.lab as unknown as Lab], exams: [] }, labs.dayOff.lab.date).map(brief)).toEqual(labs.dayOff.events);
         for (const test of labs.moments) { const next = nextEvent(labLine, test.now); expect(next ? brief(next) : null).toEqual(test.next); }
         expect(Object.fromEntries(timelineTones(labLine))).toEqual(labs.tones);

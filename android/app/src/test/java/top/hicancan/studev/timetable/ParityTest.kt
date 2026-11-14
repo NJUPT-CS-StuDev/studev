@@ -100,7 +100,7 @@ class ParityTest {
             val personal = CampusLine(term, periods, json.decodeFromJsonElement(labs.getValue("meetings")), json.decodeFromJsonElement(labs.getValue("labs")), listOf(json.decodeFromJsonElement<Exam>(labs.getValue("exam"))), holidays, null, preferences = preferences)
             val events = personal.on(LocalDate.parse(s.getValue("scheduleDate").jsonPrimitive.content))
             assertEquals(row.getValue("events"), JsonArray(events.map { event -> buildJsonObject { put("id", event.id); put("avoid", event.avoid); put("layer", event.layer) } }))
-            assertEquals(row.getValue("layers"), JsonArray(CampusLine.layers(events).map { buildJsonObject { put("id", it.event.id); put("under", it.under); put("over", it.over) } }))
+            assertEquals(row.getValue("layers"), JsonArray(CampusLine.layers(events).map { buildJsonObject { put("id", it.event.id); put("under", it.under) } }))
             val slots = Planning.available(personal, request, now).take(4).map { slot -> buildJsonObject { put("date", slot.date.toString()); put("start", slot.start); put("end", slot.end); put("clashes", JsonArray(slot.clashes.map(::JsonPrimitive))); put("penalty", slot.penalty) } }
             assertEquals(row.getValue("slots"), JsonArray(slots))
         }
@@ -154,7 +154,7 @@ class ParityTest {
             val date = LocalDate.parse(day.getValue("date").jsonPrimitive.content)
             assertEquals(day.getValue("events"), JsonArray(taskLine.on(date).map(::taskBrief)))
             assertEquals(day.getValue("due").jsonArray.map { it.jsonPrimitive.content }, taskLine.dueOn(date).map { it.id })
-            assertEquals(day.getValue("layers"), JsonArray(CampusLine.layers(taskLine.on(date)).map { buildJsonObject { put("id", it.event.id); put("under", it.under); put("over", it.over) } }))
+            assertEquals(day.getValue("layers"), JsonArray(CampusLine.layers(taskLine.on(date)).map { buildJsonObject { put("id", it.event.id); put("under", it.under) } }))
         }
         val at = tasks.getValue("now").jsonObject
         val now = Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int)
@@ -235,7 +235,7 @@ class ParityTest {
             val events = labLine.on(date)
             assertEquals(date.toString(), day.getValue("events"), JsonArray(events.map(::labBrief)))
             assertEquals(day.getValue("alongside").jsonArray.map { row -> row.jsonArray.map { it.jsonPrimitive.content } }, events.map { event -> labLine.overlapping(event).map { it.id } })
-            assertEquals(day.getValue("layers"), JsonArray(orders.map { order -> JsonArray(CampusLine.layers(events, order).map { buildJsonObject { put("id", it.event.id); put("under", it.under); put("over", it.over) } }) }))
+            assertEquals(day.getValue("layers"), JsonArray(orders.map { order -> JsonArray(CampusLine.layers(events, order).map { buildJsonObject { put("id", it.event.id); put("under", it.under) } }) }))
             assertEquals(day.getValue("clusters"), JsonArray(orders.map { order -> JsonArray(CampusLine.clusters(events, order).map { run ->
                 buildJsonObject { put("front", run.front.id); put("events", JsonArray(run.events.map { JsonPrimitive(it.id) })); put("start", run.start); put("end", run.end) } }) }))
         }
