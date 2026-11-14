@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import top.hicancan.studev.account.PLATFORM_ORIGIN
@@ -124,9 +123,9 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
                 answer = Answer(key, ranked.results.map(::Hit), ranked.total, (System.nanoTime() - started) / 1e9)
             }
             answer = Answer(key, done.results.map(::Hit), done.total, answer?.takeIf { it.key == key }?.seconds ?: ((System.nanoTime() - started) / 1e9))
-        } catch (e: CancellationException) { throw e }
-        catch (_: Exception) {
-            // Without a network the index cannot be read; places are always on the phone.
+        } catch (_: java.io.IOException) {
+            // Without a network the index cannot be read; places are always on the phone. Anything else is a fault,
+            // not the network, and is not passed off as one.
             val rows = if (browsing) emptyList() else campus?.places.orEmpty().filter { place -> place.kind != "floor" && place.kind != "campus" && place.names.any { it.contains(query, ignoreCase = true) } }.take(30)
             if (rows.isEmpty()) failed = true
             answer = Answer(key, rows.map { place -> Hit(buildJsonObject {
