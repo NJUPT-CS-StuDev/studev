@@ -63,6 +63,7 @@ public sealed partial class SearchScreen : Screen
     {
         if (argument is ValueTuple<string, Moment> { Item1: "rooms" } rooms) { channel = Channels.First(c => c.Id == "room"); box.Text = ""; roomsAt = rooms.Item2; Draw(); }
         else if (argument is ValueTuple<string, string> { Item1: "query" } query) { box.Text = query.Item2; }
+        else if (argument is ValueTuple<string, string> { Item1: "channel" } scope && Channels.FirstOrDefault(c => c.Id == scope.Item2) is { } chosen) { channel = chosen; page = 1; Run(); Draw(); }
         DispatcherQueue.TryEnqueue(() => box.Focus(FocusState.Programmatic));
     }
 

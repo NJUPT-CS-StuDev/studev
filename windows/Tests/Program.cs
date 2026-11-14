@@ -221,6 +221,9 @@ var stamped = original.DeepClone().AsObject(); stamped["modified"] = new JsonObj
 var takenSettings = SettingsSync.Taken(stamped, syncCase["merged"]!.AsObject())!; takenSettings.Remove("modified");
 var expectedTaken = syncCase["taken"]!.DeepClone().AsObject(); expectedTaken.Remove("modified");
 Same("settings taken", takenSettings, expectedTaken);
+var recommendPlaces = Read<List<Place>>(golden["places"]!); var from = Read<double[]>(golden["from"]!);
+foreach (var test in golden["recommend"]!.AsArray())
+    Equal("recommend", Places.Recommendations(recommendPlaces, (int)test!["day"]!, (int)test["hour"]! * 60 + (int)test["minute"]!, from).Select(s => new { id = s.Place.Id, state = s.Status.Open.ToString().ToLowerInvariant() }), test["expected"]);
 foreach (var test in golden["hoursCases"]!.AsArray())
     Equal("opening", Hours.At(JsonDocument.Parse(test!["hours"]!.ToJsonString()).RootElement, (int)test["day"]!, (int)test["minute"]!).Open.ToString().ToLowerInvariant(), test["state"]);
 Console.WriteLine($"Windows parity: {checks} checks, {failures.Count} failures");

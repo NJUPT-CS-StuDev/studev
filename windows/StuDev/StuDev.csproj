@@ -26,6 +26,10 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <!-- The map: MapLibre Native through its official .NET binding, drawn with Vulkan and shown through Direct3D 11. -->
+    <PackageReference Include="Maplibre.NativeFfi" Version="0.202611.0" />
+    <PackageReference Include="Maplibre.NativeFfi.Runtime.Vulkan" Version="0.202611.0" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
   </ItemGroup>
   <ItemGroup>
     <!-- The kernels and the contracts every client reads, taken from where they are made, never copied by hand. -->

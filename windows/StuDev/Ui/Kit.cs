@@ -208,7 +208,8 @@ public static class Kit
     public static FrameworkElement Row(string key, UIElement value, Action? open = null)
     {
         var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(0, 11, 0, 11), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = key.Length > 0 ? new GridLength(64) : new GridLength(0) });
+        if (key.Length == 0) grid.ColumnSpacing = 0;
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var k = Text(key, Role.Label, "muted"); k.FontSize = 14;
         grid.Children.Add(k);
@@ -217,9 +218,19 @@ public static class Kit
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var chevron = Icon(Icons.Chevron, 14, "faint"); Grid.SetColumn(chevron, 2); chevron.VerticalAlignment = VerticalAlignment.Center; grid.Children.Add(chevron);
         var tap = new Tap(Paint.Brush("paper"), Paint.Faded("surfaceSunken", .55)) { Content = grid };
+        // Read aloud and found by name as what it says: its key, then the first words of its value.
+        AutomationProperties.SetName(tap, string.Join(" ", new[] { key, FirstWords(value) }.Where(t => t.Length > 0)));
         tap.Click += (_, _) => open();
         return tap;
     }
+
+    private static string FirstWords(UIElement element) => element switch
+    {
+        TextBlock text => text.Text,
+        Panel panel => panel.Children.Select(FirstWords).FirstOrDefault(t => t.Length > 0) ?? "",
+        Border border when border.Child is not null => FirstWords(border.Child),
+        _ => "",
+    };
 
     /** A text box in the tokens' clothes (.tf). */
     public static TextBox Field(string text, string placeholder, string label)

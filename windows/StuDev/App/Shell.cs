@@ -78,6 +78,7 @@ public sealed partial class Shell : Window
                 "me" => new Me.MeScreen(),
                 "search" => new Search.SearchScreen(),
                 "ai" => new Ai.AiScreen(),
+                "map" => new Map.MapScreen(),
                 _ => new Later(Entries.FirstOrDefault(e => e.Key == entry).Label ?? entry),
             };
             screens[entry] = screen;
