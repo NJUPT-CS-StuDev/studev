@@ -181,8 +181,8 @@ import java.time.LocalDate
     }
 }
 
-/** One thing on the line. `behind` is how many it overlaps lie behind it; one in front names the count. */
-@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, behind: Int = 0, onClick: () -> Unit) {
+/** One thing on the line; what lies behind it shows beside it, so it needs no count of its own. */
+@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, onClick: () -> Unit) {
     val mark = marks()
     val tones = toneIndex?.let { tone(it) }
     val paper = Ink.paper
@@ -197,12 +197,25 @@ import java.time.LocalDate
             else if (lab != null) lab.room?.let(Names::roomShort) ?: Names.compactPlace(lab.short) else Names.roomShort(event.room)
         TileBox(if (big) event.name else event.short, if (event.task != null) (if (big) "${hm(event.start)}–${hm(event.end)}" else "") else note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null || event.task != null)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
-        if (behind > 0) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).border(1.dp, Ink.line, RoundedCornerShape(3.dp)).padding(horizontal = 3.dp)) {
-            Plain(if (big) "同时段另有 $behind 项" else "+$behind", if (big) 11.sp else 10.sp, Ink.text, FontWeight.SemiBold)
-        }
     }
 }
 @Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?, strong: Boolean = false) {
+    // A day reads as an agenda, as on the web: left-aligned on the course's tint with its bar at the edge; a tile on
+    // the paper (a task, 早锻炼) keeps its outline, having no tint to stand on.
+    if (big) {
+        val shape = RoundedCornerShape(10.dp)
+        val tinted = bg != Ink.paper
+        var base = modifier.clip(shape).background(bg)
+        if (!tinted || strong) base = base.border(if (strong) 2.dp else 1.dp, border, shape)
+        Row(if (onClick != null) base.clickable(onClick = onClick) else base) {
+            if (tinted) Box(Modifier.width(4.dp).fillMaxHeight().background(fg.copy(alpha = .6f)))
+            Column(Modifier.fillMaxSize().padding(start = if (tinted) 16.dp else 14.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalArrangement = Arrangement.Center) {
+                Text(name, color = fg, style = TextStyle(fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp), maxLines = 2)
+                if (note.isNotEmpty()) Text(note, color = fg.copy(alpha = .82f), style = TextStyle(fontSize = 12.5.sp, lineHeight = 17.sp), maxLines = 2)
+            }
+        }
+        return
+    }
     val base = modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(if (strong) 2.dp else 1.dp, border, RoundedCornerShape(8.dp))
     Column((if (onClick != null) base.clickable(onClick = onClick) else base).padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(name, color = fg, textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 14.5.sp else 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = if (big) 19.sp else 14.sp))
@@ -270,9 +283,9 @@ import java.time.LocalDate
             @Composable fun gap(start: Int, end: Int) = Plain("空 ${durationText(end - start)} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.rooms(day to start) })
             if (awake && live.first().start - free >= 45) gap(free, live.first().start)
             // Everything on, at its own time, back to front: what is behind shows beside what is in front.
-            CampusLine.layers(live, order).forEach { (event, under, over) ->
+            CampusLine.layers(live, order).forEach { (event, under) ->
                 Tile(event, TimetablePresentation.toneOf(event, tones, line.courseMeetings), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
-                    event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
+                    event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
             }
             // Free time is between runs of things that overlap, not between any two of them.
             val runs = CampusLine.clusters(live, order)
@@ -394,10 +407,10 @@ import java.time.LocalDate
                                 Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
                         // Everything on, at its own time, back to front: what is behind shows beside what is in front.
-                        CampusLine.layers(events[index], order).forEach { (event, under, over) ->
+                        CampusLine.layers(events[index], order).forEach { (event, under) ->
                             val past = event.kind != "exam" && (date < now.date || (date == now.date && event.end <= now.min))
                             Tile(event, TimetablePresentation.toneOf(event, lineTones, line.courseMeetings), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
-                                event.exam?.let { Exams.wasChanged(record, it) } == true, if (over == 0) under else 0) { onOpen(event) }
+                                event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->
                             val start = period.getValue(meeting.periods.first()).first

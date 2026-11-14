@@ -74,12 +74,11 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                             </button>;
                         })}
                         {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
-                        {layers(today, order).map(({ event, under, over }) => {
+                        {layers(today, order).map(({ event, under }) => {
                             const tone = eventTone(tones, event, line.courseMeetings ?? line.meetings);
                             return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''} ${event.task?.done ? 'done' : ''}`}
                                 style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(tone !== undefined ? courseToneStyle(tone) : {}) }} onClick={() => onOpen(event)}>
                                 {wide ? event.name : event.short}<small>{tileNote(event, wide)}</small>
-                                {over === 0 && under > 0 && <i className="more">+{under}</i>}
                             </button>;
                         })}
                         {ghosts.filter(meeting => meeting.weekday === index + 1).map(meeting => {

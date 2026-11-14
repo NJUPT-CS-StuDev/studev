@@ -92,10 +92,9 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, o
                 {hours.map(time => <div key={time}><div className="hl" style={{ top: y(time) }} />{!(awake && Math.abs(time - now.min) < 16) && <div className="hn" style={{ top: y(time) }}>{time / 60}:00</div>}</div>)}
                 {awake && live[0]!.start - free >= 45 && gap(free, live[0]!.start, 'first')}
                 {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
-                {layers(live, order).map(({ event, under, over }) => (
+                {layers(live, order).map(({ event, under }) => (
                     <button key={event.id} className={`t ${tileClass(event, record)} ${event.task?.done ? 'done' : ''}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), right: under * 8, ...tileStyle(event, tones, line) }} onClick={() => onOpen(event)}>
                         {event.name}<small>{hm(event.start)}–{hm(event.end)}{event.lab ? ` · ${event.lab.project}` : ''}{event.room ? ` · ${roomLabel(event.room)}` : ''}</small>
-                        {over === 0 && under > 0 && <i className="more">同时段另有 {under} 项</i>}
                     </button>
                 ))}
                 {/* Free time is between runs of things that overlap, not between any two of them. */}

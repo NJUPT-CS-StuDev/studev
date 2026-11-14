@@ -33,15 +33,17 @@ public static class Tiles
     }
 
     /** A tile: its look, its two lines, and what lies behind it said in a corner. */
-    public static Tap Make(Look look, string name, string note, double nameSize, double noteSize, Action open, int behind = 0, string? behindSaid = null, bool left = false, string? badge = null)
+    /** A tile; as an agenda (the day view) it reads left-aligned on its course's tint with the course's bar at its edge, as the web's day does. */
+    public static Tap Make(Look look, string name, string note, double nameSize, double noteSize, Action open, int behind = 0, string? behindSaid = null, bool left = false, string? badge = null, bool agenda = false)
     {
+        left |= agenda;
         var radius = new CornerRadius(Paint.Number("radius", "tile"));
         var face = new Grid();
         if (look.Dashed)
             face.Children.Add(new Rectangle { RadiusX = radius.TopLeft, RadiusY = radius.TopLeft, Stroke = look.Edge, StrokeThickness = 1, StrokeDashArray = [4, 3] });
-        if (look.Stripe is not null)
-            face.Children.Add(new Border { Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Background = look.Stripe, CornerRadius = new CornerRadius(radius.TopLeft, 0, 0, radius.BottomLeft) });
-        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Center, Margin = new Thickness(look.Stripe is null ? 4 : 7, 3, 4, 3) };
+        if (look.Stripe is not null || agenda)
+            face.Children.Add(new Border { Width = agenda ? 4 : 3, HorizontalAlignment = HorizontalAlignment.Left, Background = look.Stripe ?? look.Words, Opacity = look.Stripe is null ? .6 : 1, CornerRadius = new CornerRadius(radius.TopLeft, 0, 0, radius.BottomLeft) });
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Center, Margin = agenda ? new Thickness(20, 8, 16, 8) : new Thickness(look.Stripe is null ? 4 : 7, 3, 4, 3) };
         var title = new TextBlock
         {
             Text = name, FontSize = nameSize, FontWeight = FontWeights.SemiBold, Foreground = look.Words, TextWrapping = TextWrapping.WrapWholeWords, TextAlignment = left ? TextAlignment.Left : TextAlignment.Center,
@@ -51,14 +53,14 @@ public static class Tiles
         words.Children.Add(title);
         if (note.Length > 0)
         {
-            var small = new TextBlock { Text = note, FontSize = noteSize, Foreground = look.Words, Opacity = .82, Margin = new Thickness(0, 2, 0, 0), TextAlignment = left ? TextAlignment.Left : TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
+            var small = new TextBlock { Text = note, FontSize = noteSize, Foreground = look.Words, Opacity = .82, FontWeight = FontWeights.Normal, Margin = new Thickness(0, 2, 0, 0), TextAlignment = left ? TextAlignment.Left : TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
             Typography.SetNumeralAlignment(small, FontNumeralAlignment.Tabular);
             words.Children.Add(small);
         }
         face.Children.Add(words);
         if (behind > 0) face.Children.Add(Corner(behindSaid ?? $"+{behind}", HorizontalAlignment.Right, VerticalAlignment.Bottom, "ink"));
         if (badge is not null) face.Children.Add(Corner(badge, HorizontalAlignment.Right, VerticalAlignment.Top, "warning"));
-        var tap = new Tap(look.Ground, null) { Content = face, CornerRadius = radius, BorderBrush = look.Dashed ? Paint.Clear : look.Edge, BorderThickness = new Thickness(look.Dashed ? 0 : 1) };
+        var tap = new Tap(look.Ground, null) { Content = face, CornerRadius = agenda ? new CornerRadius(10) : radius, BorderBrush = look.Dashed ? Paint.Clear : look.Edge, BorderThickness = new Thickness(look.Dashed || agenda ? 0 : 1) };
         tap.PointerEntered += (_, _) => tap.Opacity = .94; tap.PointerExited += (_, _) => tap.Opacity = 1;
         AutomationProperties.SetName(tap, name);
         tap.Click += (_, _) => open();

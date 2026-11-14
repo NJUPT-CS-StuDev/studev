@@ -12,14 +12,14 @@ namespace StuDev.Timetable;
 
 public static class DayView
 {
-    public static FrameworkElement Make(CampusLine line, DateOnly day, Moment now, Action<LineEvent> open, Action<PersonalTask> openTask, Action<DateOnly> pick)
+    public static FrameworkElement Make(CampusLine line, DateOnly day, Moment now, Action<LineEvent> open, Action<PersonalTask> openTask, Action<DateOnly> pick, bool mine = true)
     {
         var page = new StackPanel();
         var monday = Clock.WeekStart(day);
         var today = day == now.Date;
         var events = line.On(day);
         var tones = CourseTones.Of(line);
-        if (today && Next(line, now) is { } next) page.Children.Add(next);
+        if (mine && today && Next(line, now) is { } next) page.Children.Add(next);
 
         var strip = new Grid { Margin = new Thickness(0, 0, 0, 14) };
         for (var i = 0; i < 7; i++)
@@ -82,11 +82,11 @@ public static class DayView
             lane.Put(tap, Y((start + end) / 2.0) - 13, 26, 10, 0);
         }
         if (awake && live[0].Start - free >= 45) Gap(free, live[0].Start);
-        foreach (var (e, under, over) in CampusLine.Layers(live, line.Order))
+        foreach (var (e, under) in CampusLine.Layers(live, line.Order))
         {
             var look = Tiles.LookOf(e, CourseTones.ToneOf(e, tones, line.CourseMeetings), false);
             var note = $"{Clock.Hm(e.Start)}–{Clock.Hm(e.End)}{(e.Lab is { } lab ? $" · {lab.Project}" : "")}{(e.Room is not null ? $" · {Names.Room(e.Room)}" : "")}";
-            var tile = Tiles.Make(look, e.Name, note, 14.5, 12.5, () => open(e), over == 0 ? under : 0, $"同时段另有 {under} 项");
+            var tile = Tiles.Make(look, e.Name, note, 14.5, 12.5, () => open(e), agenda: true);
             lane.Put(tile, Y(e.Start) + 1, Math.Max(40, Y(e.End) - Y(e.Start) - 2), 0, under * 8);
         }
         var runs = CampusLine.Clusters(live, line.Order);

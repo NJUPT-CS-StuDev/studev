@@ -128,11 +128,11 @@ public static class WeekView
                     var tile = Tiles.Make(look, around is not null && around.Name != Names.Course(hint.Course.Name) ? around.Name : label, Lessons.WeeksText(hint.Weeks), wide ? 12.5 : 11, wide ? 11 : 10, () => { if (around is not null) open(around); });
                     lane.Put(tile, Y(a.Start) + 1, Y(b.End) - Y(a.Start) - 2);
                 }
-            foreach (var (e, under, over) in CampusLine.Layers(today, line.Order))
+            foreach (var (e, under) in CampusLine.Layers(today, line.Order))
             {
                 var tone = CourseTones.ToneOf(e, tones, line.CourseMeetings);
                 var look = Tiles.LookOf(e, tone, e.Kind != "exam" && Past(e.End));
-                var tile = Tiles.Make(look, wide ? e.Name : e.Short, Note(e, wide), wide ? 12.5 : 11, wide ? 11 : 10, () => open(e), over == 0 ? under : 0);
+                var tile = Tiles.Make(look, wide ? e.Name : e.Short, Note(e, wide), wide ? 12.5 : 11, wide ? 11 : 10, () => open(e));
                 lane.Put(tile, Y(e.Start) + 1, Math.Max(22, Y(e.End) - Y(e.Start) - 2), 2, 2 + under * Edge);
             }
             if (date == now.Date && now.Min >= from && now.Min <= until) lane.Mark(NowLine(), Y(now.Min));
