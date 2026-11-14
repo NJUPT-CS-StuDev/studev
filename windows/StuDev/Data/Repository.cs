@@ -9,7 +9,7 @@ public sealed class Repository
 {
     public const string Site = "https://studev.hicancan.top";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
-    private static readonly string Root = Storage.PathFor("campus");
+    private static readonly string Root = Storage.CacheFor("campus");
     public DataRelease Release { get; }
     private readonly string folder;
     private readonly Dictionary<string, Task<byte[]>> loading = new();

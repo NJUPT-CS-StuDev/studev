@@ -2,11 +2,18 @@ using System.Text.Json;
 
 namespace StuDev.Data;
 
-/** Device state has one home; a process may choose its home for a portable instance or isolated verification. */
+/**
+ * Where this device keeps things. One's own records (settings, tasks, conversations, account) live in the roaming
+ * application data, apart from the app's folder, so moving, updating or deleting the app never touches them; what can
+ * be fetched again (the campus data, map tiles) is cache, in local application data. A process may choose one home
+ * for both, as a separate instance or an isolated check does.
+ */
 public static class Storage
 {
-    public static string Root { get; } = Path.GetFullPath(Environment.GetEnvironmentVariable("STUDEV_DATA_DIR")
-        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StuDev"));
+    private static readonly string? Chosen = Environment.GetEnvironmentVariable("STUDEV_DATA_DIR");
+    public static string Root { get; } = Path.GetFullPath(Chosen ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "StuDev"));
+    public static string Cache { get; } = Path.GetFullPath(Chosen is not null ? Path.Combine(Chosen, "cache") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StuDev", "Cache"));
+    public static string CacheFor(string name) => Path.Combine(Cache, name);
     public static JsonSerializerOptions Json => StorageJson.Default.Options;
 
     public static string PathFor(string name) => Path.Combine(Root, name);

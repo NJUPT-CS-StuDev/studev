@@ -163,6 +163,14 @@ public sealed partial class Shell : Window
     }
     public void Apply(ElementTheme theme) { root.RequestedTheme = theme; Turned(); }
 
+    /** Shown and brought forward, from the tray, the card or a reminder. */
+    public void Bring()
+    {
+        AppWindow.Show();
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
+        Activate();
+    }
+
     private void Inset()
     {
         var scale = root.XamlRoot?.RasterizationScale ?? 1;

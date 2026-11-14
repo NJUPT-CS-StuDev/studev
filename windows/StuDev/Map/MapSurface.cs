@@ -81,7 +81,7 @@ public sealed partial class MapSurface : SwapChainPanel
         }
         done = device.CreateQuery(new QueryDescription(QueryType.Event));
         Chain();
-        runtime ??= RuntimeHandle.Create(new RuntimeOptions(Path.Combine(AppContext.BaseDirectory, "map"), Data.Storage.PathFor("map-cache.db")));
+        runtime ??= RuntimeHandle.Create(new RuntimeOptions(Path.Combine(AppContext.BaseDirectory, "map"), Data.Storage.CacheFor("map.db")));
         map = runtime.CreateMap(new MapOptions { InitialExtent = new LogicalExtent(logical.Width, logical.Height, scale), MapMode = Maplibre.NativeFfi.MapMode.Continuous });
         session = map.AttachDxgiSharedTextureRing(new DxgiSharedTextureRingDescriptor(new LogicalSize(logical.Width, logical.Height), 3), vulkan,
             new RenderSessionAttachOptions { Driver = RenderDriverKind.CoreWorker, ProducerSyncKinds = GpuSyncKindFlag.CpuComplete, RedrawWake = new Wake(() => redraw = true), FrameWake = new Wake(() => redraw = true) });

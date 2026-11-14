@@ -22,6 +22,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
+    <!-- Program.cs is the entry point: Velopack runs before the app. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <!-- JSON only through the source-generated shapes (Data/Json.cs): a shape left out fails at once, never by reflection. -->
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <!-- The generated kernel bindings are not ours to lint. -->
@@ -37,6 +39,8 @@
     <PackageReference Include="Maplibre.NativeFfi" Version="0.202611.0" />
     <PackageReference Include="Maplibre.NativeFfi.Runtime.Vulkan" Version="0.202611.0" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <!-- Installed per user and kept up to date by Velopack, from the site's download store. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
   <ItemGroup>
     <!-- The kernels and the contracts every client reads, taken from where they are made, never copied by hand. -->
