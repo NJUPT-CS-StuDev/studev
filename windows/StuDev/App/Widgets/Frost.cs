@@ -16,7 +16,8 @@ internal sealed partial class Frost : SystemBackdrop
 {
     private static Windows.UI.Composition.Compositor? compositor;
     private static nint queue;
-    private Windows.UI.Composition.CompositionColorBrush? brush;
+    /** One brush for each target: the widget's window, and any popup of it that takes the window's backdrop. */
+    private readonly Dictionary<ICompositionSupportsSystemBackdrop, Windows.UI.Composition.CompositionColorBrush> brushes = [];
     private bool dark = Paint.Dark;
     private double opacity = .88;
 
@@ -24,7 +25,7 @@ internal sealed partial class Frost : SystemBackdrop
     public double Opacity { get => opacity; set { opacity = Math.Clamp(value, .3, 1); Tint(); } }
 
     private Color Colour { get { var paper = Paint.Of("paper", dark); return Color.FromArgb((byte)Math.Round(opacity * 255), paper.R, paper.G, paper.B); } }
-    private void Tint() { if (brush is not null) brush.Color = Colour; }
+    private void Tint() { foreach (var brush in brushes.Values) brush.Color = Colour; }
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot root)
     {
@@ -37,15 +38,20 @@ internal sealed partial class Frost : SystemBackdrop
         var region = CreateRectRgn(-2, -2, -1, -1);
         Check(DwmEnableBlurBehindWindow(window, new DWM_BLURBEHIND { dwFlags = 3, fEnable = 1, hRgnBlur = region }));
         DeleteObject(region);
-        brush = compositor.CreateColorBrush(Colour);
+        var brush = compositor.CreateColorBrush(Colour);
+        brushes[target] = brush;
         target.SystemBackdrop = brush;
     }
+
+    // The brush is the theme's paper, not the system's light or dark material, so the system's configuration (which the
+    // base class applies and refuses for a popup's target) has nothing to change here.
+    protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot) { }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop target)
     {
         base.OnTargetDisconnected(target);
         target.SystemBackdrop = null;
-        brush?.Dispose(); brush = null;
+        if (brushes.Remove(target, out var brush)) brush.Dispose();
     }
 
     private static void Check(int result) { if (result < 0) System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(result); }

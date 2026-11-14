@@ -32,5 +32,7 @@ public static class Clock
         return days switch { 0 => "今天", 1 => "明天", -1 => "昨天", > 1 and < 7 => Weekdays[Weekday(date)], _ => DateLabel(date) };
     }
     public static string DayWord(string date, DateOnly today) => DayWord(Parse(date), today);
+    /** 明天 11月16日; a day further off is said once, its word being its date already. */
+    public static string DayAndDate(DateOnly date, DateOnly today, string between = " ") { var word = DayWord(date, today); var label = DateLabel(date); return word == label ? label : $"{word}{between}{label}"; }
     public static string Duration(int minutes) => minutes >= 60 ? $"{minutes / 60} 小时{(minutes % 60 > 0 ? $" {minutes % 60} 分" : "")}" : $"{minutes} 分钟";
 }

@@ -41,7 +41,7 @@ public sealed partial class CalendarWidget : DeskWidget
             case "day":
             {
                 var day = DayShown(line, now);
-                return $"{Clock.DayWord(day, now.Date)} · {Clock.DateLabel(day)}{(line.WeekOf(day) is { } w ? $" · 第 {w} 周" : "")}";
+                return $"{Clock.DayAndDate(day, now.Date, " · ")}{(line.WeekOf(day) is { } w ? $" · 第 {w} 周" : "")}";
             }
             case "week":
             {

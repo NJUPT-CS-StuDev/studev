@@ -34,7 +34,8 @@ public abstract partial class DeskWidget : Window
     private readonly DispatcherTimer keep = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly Frost frost = new();
     protected readonly nint hwnd;
-    private Flyout? shown;
+    /** What is open over the widget: a thing's detail, drawn inside the widget rather than as a popup window. */
+    private FrameworkElement? shown;
 
     protected abstract string Kind { get; }
     protected abstract (string Key, string Name)[] Views { get; }
@@ -263,12 +264,12 @@ public abstract partial class DeskWidget : Window
     protected void EventDetail(LineEvent e, Moment now)
     {
         var column = Detail(e.Name);
-        column.Children.Add(Kit.Text($"{Clock.DayWord(e.Date, now.Date)} {Clock.DateLabel(e.Date)} · {Clock.Hm(e.Start)}–{Clock.Hm(e.End)}", Role.Label, "muted"));
+        column.Children.Add(Kit.Text($"{Clock.DayAndDate(e.Date, now.Date)} · {Clock.Hm(e.Start)}–{Clock.Hm(e.End)}", Role.Label, "muted"));
         if (e.Room is not null) column.Children.Add(Kit.Text(Names.Room(e.Room), Role.Label));
         if (e.Teachers.Count > 0) column.Children.Add(Kit.Text(string.Join("、", e.Teachers), Role.Caption, "muted"));
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
-        if (Names.Placed(e.Room)) actions.Children.Add(Kit.Action("导航", () => { shown?.Hide(); App.Window?.Bring(); App.Open("map", ("nav", e.Room!)); }, go: true));
-        actions.Children.Add(Kit.Action("在课表中查看", () => { shown?.Hide(); App.Window?.Bring(); App.Open("timetable"); }));
+        if (Names.Placed(e.Room)) actions.Children.Add(Kit.Action("导航", () => { Hide(); App.Window?.Bring(); App.Open("map", ("nav", e.Room!)); }, go: true));
+        actions.Children.Add(Kit.Action("在课表中查看", () => { Hide(); App.Window?.Bring(); App.Open("timetable"); }));
         column.Children.Add(actions);
         Show(column);
     }
@@ -276,32 +277,53 @@ public abstract partial class DeskWidget : Window
     protected void TaskDetail(Campus campus, PersonalTask task, Moment now)
     {
         var column = Detail(task.Title);
-        if (task.Due is { } due) column.Children.Add(Kit.Text($"{Clock.DayWord(due.Date, now.Date)} {Clock.DateLabel(Clock.Parse(due.Date))}{(due.Time is { } t ? $" {Clock.Hm(t)}" : "")} 截止", Role.Label, "muted"));
+        if (task.Due is { } due)
+        {
+            column.Children.Add(Kit.Text($"{Clock.DayAndDate(Clock.Parse(due.Date), now.Date)}{(due.Time is { } t ? $" {Clock.Hm(t)}" : "")} 截止", Role.Label, "muted"));
+        }
         if (task.Date is { } day) column.Children.Add(Kit.Text($"{Clock.DayWord(day, now.Date)} {Clock.Hm(task.Start ?? 0)}{(task.End is { } end ? $"–{Clock.Hm(end)}" : "")}", Role.Label, "muted"));
         if (!string.IsNullOrWhiteSpace(task.Note)) { var note = Kit.Text(task.Note!, Role.Label, wrap: true); note.MaxLines = 8; column.Children.Add(note); }
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
-        actions.Children.Add(Kit.Action(task.Done is null ? "完成" : "标为未完成", () => { campus.Tasks.Toggle(task); shown?.Hide(); }, go: true));
-        actions.Children.Add(Kit.Action("打开", () => { shown?.Hide(); App.Window?.Bring(); Timetable.TaskSheet.Open(campus, task.Id, now); }));
+        actions.Children.Add(Kit.Action(task.Done is null ? "完成" : "标为未完成", () => { campus.Tasks.Toggle(task); Hide(); }, go: true));
+        actions.Children.Add(Kit.Action("打开", () => { Hide(); App.Window?.Bring(); Timetable.TaskSheet.Open(campus, task.Id, now); }));
         column.Children.Add(actions);
         Show(column);
     }
 
     private static StackPanel Detail(string name)
     {
-        var column = new StackPanel { Spacing = 6, Width = 280 };
+        var column = new StackPanel { Spacing = 6 };
         column.Children.Add(new TextBlock { Text = name, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = Paint.Brush("ink") });
         return column;
     }
 
+    private void Hide()
+    {
+        if (shown is null) return;
+        root.Children.Remove(shown);
+        shown = null;
+    }
+
+    /**
+     * A detail over the widget's body, as the widget's own card on a light veil; a tap on the veil puts it away. The
+     * widget's window is owned by the desktop, which refuses popup windows of its own, so nothing here is a popup.
+     */
     private void Show(FrameworkElement content)
     {
-        shown?.Hide();
-        shown = new Flyout { Content = content, Placement = FlyoutPlacementMode.Auto };
-        var style = new Style(typeof(FlyoutPresenter));
-        style.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(16, 14, 16, 14)));
-        style.Setters.Add(new Setter(FlyoutPresenter.CornerRadiusProperty, new CornerRadius(10)));
-        style.Setters.Add(new Setter(FrameworkElement.RequestedThemeProperty, root.RequestedTheme));
-        shown.FlyoutPresenterStyle = style;
-        shown.ShowAt(root);
+        Hide();
+        var card = new Border
+        {
+            Child = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+            Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(10, 6, 10, 10), VerticalAlignment = VerticalAlignment.Top,
+            Shadow = new Microsoft.UI.Xaml.Media.ThemeShadow(), Translation = new System.Numerics.Vector3(0, 0, 16),
+        };
+        var veil = new Grid { Background = Paint.Faded("ink", .12) };
+        veil.Children.Add(card);
+        veil.Tapped += (_, e) => { if (e.OriginalSource == veil) Hide(); };
+        veil.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape) { Hide(); e.Handled = true; } };
+        Grid.SetRow(veil, 1); Grid.SetRowSpan(veil, 2);
+        root.Children.Add(veil);
+        shown = veil;
     }
 }
