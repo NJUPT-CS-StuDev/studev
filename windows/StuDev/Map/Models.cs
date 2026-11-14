@@ -45,7 +45,7 @@ public sealed partial class Models : IDisposable
         var data = raw.ToArray();
         count = (int)(raw.Length / 12);
         vertices = device.CreateBuffer(data, BindFlags.VertexBuffer);
-        constants = device.CreateBuffer(new BufferDescription((uint)Marshal.SizeOf<Constants>(), BindFlags.ConstantBuffer, Vortice.Direct3D11.ResourceUsage.Dynamic, CpuAccessFlags.Write));
+        constants = device.CreateBuffer(new BufferDescription((uint)System.Runtime.CompilerServices.Unsafe.SizeOf<Constants>(), BindFlags.ConstantBuffer, Vortice.Direct3D11.ResourceUsage.Dynamic, CpuAccessFlags.Write));
         var vertexCode = Shader("ModelsVertex.cso");
         vertexShader = device.CreateVertexShader(vertexCode);
         pixelShader = device.CreatePixelShader(Shader("ModelsPixel.cso"));
@@ -77,7 +77,7 @@ public sealed partial class Models : IDisposable
         var look = Look;
         var matrix = Matrix(camera, width, height);
         var mapped = context.Map(constants, Vortice.Direct3D11.MapMode.WriteDiscard);
-        Marshal.StructureToPtr(new Constants { Matrix = matrix, Flatten = (float)look.Flatten, Night = (float)look.Night, Faded = (float)look.Faded, R = look.FadeTo.R, G = look.FadeTo.G, B = look.FadeTo.B }, mapped.DataPointer, false);
+        unsafe { *(Constants*)mapped.DataPointer = new Constants { Matrix = matrix, Flatten = (float)look.Flatten, Night = (float)look.Night, Faded = (float)look.Faded, R = look.FadeTo.R, G = look.FadeTo.G, B = look.FadeTo.B }; }
         context.Unmap(constants);
         context.OMSetRenderTargets(target, depthView);
         context.RSSetViewport(new Vortice.Mathematics.Viewport(0, 0, physical.Width, physical.Height));

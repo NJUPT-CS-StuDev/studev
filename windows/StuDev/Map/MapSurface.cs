@@ -45,7 +45,7 @@ public sealed partial class MapSurface : SwapChainPanel
     public MapHandle Map => map ?? throw new InvalidOperationException("地图还没准备好。");
     public RenderSessionHandle Session => session ?? throw new InvalidOperationException("地图还没准备好。");
     public Task Ready => ready.Task;
-    public MapProjectionHandle? Projection => projection;
+    public MapProjectionHandle? Projected => projection;
 
     public MapSurface()
     {
