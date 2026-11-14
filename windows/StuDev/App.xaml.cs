@@ -6,23 +6,35 @@ public partial class App : Application
 {
     internal static Shell? Window { get; private set; }
     internal static Me.Sync? Syncing { get; private set; }
-    private static Desk? desk;
+    private static readonly Dictionary<string, Widgets.DeskWidget> widgets = [];
     private static bool Quitting;
 
-    /** The tray icon and the desktop card as the settings in 我 say. */
+    /** The tray icon and the desktop widgets as the settings in 我 say: each widget made, kept current or closed. */
     private static void Presence()
     {
         var settings = Me.Device.Settings;
-        if (settings.Tray || settings.Card || Me.Device.Background) Tray.Show(); else Tray.Hide();
-        if (settings.Card) { desk ??= new Desk(); desk.OnTop(settings.CardOnTop); desk.ShowCard(); }
-        else if (desk is not null) { desk.AppWindow.Hide(); }
+        var placed = settings.WidgetsHidden ? [] : Me.Device.Widgets;
+        if (settings.Tray || placed.Count > 0 || Me.Device.Background) Tray.Show(); else Tray.Hide();
+        foreach (var id in widgets.Keys.Where(id => placed.All(w => w.Id != id)).ToList()) { widgets[id].Close(); widgets.Remove(id); }
+        foreach (var widget in placed)
+        {
+            if (!widgets.TryGetValue(widget.Id, out var shown))
+            {
+                shown = widget.Kind == "calendar" ? new Widgets.CalendarWidget(widget.Id) : new Widgets.ListWidget(widget.Id);
+                // Owned by the desktop, a widget goes when Explorer restarts; it is made again when the taskbar returns.
+                var id = widget.Id; shown.Closed += (_, _) => { if (!Quitting) widgets.Remove(id); };
+                widgets[widget.Id] = shown;
+                shown.ShowWidget();
+            }
+            else shown.Apply();
+        }
     }
 
     public static void Quit()
     {
         Quitting = true;
         Tray.Hide();
-        desk?.Close();
+        foreach (var widget in widgets.Values.ToList()) widget.Close();
         Window?.Close();
         Current.Exit();
     }
@@ -52,9 +64,11 @@ public partial class App : Application
         // Started at sign-in, StuDev stays in the tray with its card; otherwise its window opens.
         if (!Me.Device.Background) Window.Activate();
         Tray.Opened += () => Window.DispatcherQueue.TryEnqueue(() => Window.Bring());
-        Tray.CardToggled += () => Window.DispatcherQueue.TryEnqueue(() => Me.Device.Set(Me.Device.Settings with { Card = !Me.Device.Settings.Card }));
+        Tray.WidgetsToggled += () => Window.DispatcherQueue.TryEnqueue(() => Me.Device.Set(Me.Device.Settings with { WidgetsHidden = !Me.Device.Settings.WidgetsHidden }));
+        Tray.WidgetsAsked += () => Window.DispatcherQueue.TryEnqueue(() => { Window.Bring(); Me.WidgetSheet.Open(); });
         Tray.QuitAsked += () => Window.DispatcherQueue.TryEnqueue(Quit);
-        Tray.CardShown = () => Me.Device.Settings.Card;
+        Tray.Restarted += () => Window.DispatcherQueue.TryEnqueue(Presence);
+        Tray.WidgetsShown = () => Me.Device.Widgets.Count > 0 && !Me.Device.Settings.WidgetsHidden;
         Me.Device.Changed += Presence;
         Presence();
         Reminders.Start(Window.DispatcherQueue);

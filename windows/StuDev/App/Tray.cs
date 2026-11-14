@@ -8,12 +8,12 @@ namespace StuDev;
 internal static unsafe class Tray
 {
     private const uint Callback = WM_APP + 1;
-    private const nuint Open = 1, Card = 2, Quit = 3;
+    private const nuint Open = 1, Card = 2, Quit = 3, Manage = 4;
     private static nint window;
     private static uint taskbarCreated;
     private static NOTIFYICONDATAW data;
-    public static event Action? Opened, CardToggled, QuitAsked;
-    public static Func<bool>? CardShown;
+    public static event Action? Opened, WidgetsToggled, WidgetsAsked, QuitAsked, Restarted;
+    public static Func<bool>? WidgetsShown;
 
     public static void Show()
     {
@@ -37,7 +37,7 @@ internal static unsafe class Tray
     [UnmanagedCallersOnly]
     private static nint Procedure(nint hwnd, uint message, nint w, nint l)
     {
-        if (message == taskbarCreated && taskbarCreated != 0) { Add(); return 0; }
+        if (message == taskbarCreated && taskbarCreated != 0) { Add(); Restarted?.Invoke(); return 0; }
         if (message != Callback) return DefWindowProcW(hwnd, message, w, l);
         var said = (uint)(l & 0xFFFF);
         if (said == WM_LBUTTONUP) Opened?.Invoke();
@@ -49,13 +49,14 @@ internal static unsafe class Tray
     {
         var menu = CreatePopupMenu();
         AppendMenuW(menu, MF_STRING, Open, "打开 StuDev");
-        AppendMenuW(menu, MF_STRING | (CardShown?.Invoke() == true ? MF_CHECKED : 0), Card, "桌面卡片");
+        AppendMenuW(menu, MF_STRING | (WidgetsShown?.Invoke() == true ? MF_CHECKED : 0), Card, "显示桌面小组件");
+        AppendMenuW(menu, MF_STRING, Manage, "管理桌面小组件…");
         AppendMenuW(menu, MF_SEPARATOR, 0, null);
         AppendMenuW(menu, MF_STRING, Quit, "退出");
         GetCursorPos(out var at);
         SetForegroundWindow(hwnd);
         var chosen = TrackPopupMenuEx(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD, at.X, at.Y, hwnd, 0);
         DestroyMenu(menu);
-        switch (chosen) { case (uint)Open: Opened?.Invoke(); break; case (uint)Card: CardToggled?.Invoke(); break; case (uint)Quit: QuitAsked?.Invoke(); break; }
+        switch (chosen) { case (uint)Open: Opened?.Invoke(); break; case (uint)Card: WidgetsToggled?.Invoke(); break; case (uint)Manage: WidgetsAsked?.Invoke(); break; case (uint)Quit: QuitAsked?.Invoke(); break; }
     }
 }

@@ -82,7 +82,7 @@ public sealed partial class MeScreen : Screen
             var toggle = Kit.Switch(on, next => campus.Preferences.Set("run", settings with { On = next }, Data.StorageJson.Default.RunSettings), "早锻炼显示在课表上"); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
             Row("", row);
         }
-        // This computer: staying in the tray, the card on the desktop, starting at sign-in, reminders.
+        // This computer: staying in the tray, the widgets on the desktop, starting at sign-in, reminders.
         page.Children.Add(Pages.Section("这台电脑"));
         var device = Device.Settings;
         UIElement Switched(string text, string small, bool on, Action<bool> turn)
@@ -92,10 +92,10 @@ public sealed partial class MeScreen : Screen
             var toggle = Kit.Switch(on, turn, text); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
             return row;
         }
-        Row("托盘", Switched("关掉窗口后留在托盘", "桌面卡片和提醒照常工作，在托盘图标的菜单里退出", device.Tray, on => Device.Set(Device.Settings with { Tray = on })));
-        Row("桌面卡片", Switched("在桌面显示下一节课和截止", "拖动标题移动，拖边缘调大小", device.Card, on => Device.Set(Device.Settings with { Card = on })));
-        if (device.Card) Row("", Switched("卡片保持在最上层", "关掉时卡片待在其他窗口下面", device.CardOnTop, on => Device.Set(Device.Settings with { CardOnTop = on })));
-        Row("开机启动", Switched("登录 Windows 时启动", "只在托盘和桌面卡片里，不弹出窗口", Device.StartsAtSignIn, on => Device.StartsAtSignIn = on));
+        Row("托盘", Switched("关掉窗口后留在托盘", "桌面小组件和提醒照常工作，在托盘图标的菜单里退出", device.Tray, on => Device.Set(Device.Settings with { Tray = on })));
+        var placed = Device.Widgets.Count;
+        Row("小组件", Value(placed == 0 ? "把清单或日历放在桌面上" : $"桌面上有 {placed} 个{(device.WidgetsHidden ? "，暂时隐藏" : "")}", "贴在桌面，按 Win+D 也在"), WidgetSheet.Open);
+        Row("开机启动", Switched("登录 Windows 时启动", "只在托盘和桌面小组件里，不弹出窗口", Device.StartsAtSignIn, on => Device.StartsAtSignIn = on));
         Row("课前提醒", Switched("上课、实验和考试前提醒", "任务的提醒总是按你设的时间发", device.Reminders, on => Device.Set(Device.Settings with { Reminders = on })));
         if (device.Reminders)
         {

@@ -1,5 +1,5 @@
 // What this computer does in the background, kept on it alone (not synced): staying in the tray when the window is
-// closed, the desktop card and where it sits, starting at sign-in, and reminders before lessons and exams.
+// closed, the desktop widgets and where they sit, starting at sign-in, and reminders before lessons and exams.
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Win32;
@@ -7,10 +7,14 @@ using StuDev.Data;
 
 namespace StuDev.Me;
 
-public sealed record DeviceSettings(bool Tray = true, bool Card = false, bool CardOnTop = false, int[]? CardBounds = null, bool Reminders = false, int Lead = 15);
+public sealed record DeviceSettings(bool Tray = true, bool Reminders = false, int Lead = 15, List<WidgetSettings>? Widgets = null, bool WidgetsHidden = false);
+
+/** One desktop widget: a list or a calendar, the view it shows, where it sits and how it looks. */
+public sealed record WidgetSettings(string Id, string Kind, string View, int[]? Bounds = null, bool OnTop = false, bool Locked = false, int Opacity = 88);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DeviceSettings))]
+[JsonSerializable(typeof(WidgetSettings))]
 [JsonSerializable(typeof(List<string>))]
 internal sealed partial class DeviceJson : JsonSerializerContext;
 
@@ -20,6 +24,17 @@ public static class Device
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     public static DeviceSettings Settings { get; private set; } = Storage.Read(File) is { } text ? JsonSerializer.Deserialize(text, DeviceJson.Default.DeviceSettings)! : new();
     public static event Action? Changed;
+
+    public static List<WidgetSettings> Widgets => Settings.Widgets ?? [];
+    public static WidgetSettings? Widget(string id) => Widgets.FirstOrDefault(w => w.Id == id);
+    public static void PutWidget(WidgetSettings widget) => Set(Settings with { Widgets = [.. Widgets.Select(w => w.Id == widget.Id ? widget : w)] });
+    public static void RemoveWidget(string id) => Set(Settings with { Widgets = [.. Widgets.Where(w => w.Id != id)] });
+    public static WidgetSettings AddWidget(string kind)
+    {
+        var widget = new WidgetSettings(Guid.NewGuid().ToString("N")[..8], kind, kind == "calendar" ? "week" : "today");
+        Set(Settings with { Widgets = [.. Widgets, widget], WidgetsHidden = false });
+        return widget;
+    }
 
     public static void Set(DeviceSettings next)
     {

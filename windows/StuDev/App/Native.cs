@@ -1,4 +1,4 @@
-// The few Win32 calls StuDev's presence on the desktop needs (the tray icon, a borderless card dragged and kept on the
+// The few Win32 calls StuDev's presence on the desktop needs (the tray icon, a borderless card dragged and owned by the
 // desktop), declared for NativeAOT: generated marshalling, no reflection.
 using System.Runtime.InteropServices;
 
@@ -12,6 +12,8 @@ internal static unsafe partial class Native
     public const uint MF_STRING = 0, MF_SEPARATOR = 0x800, MF_CHECKED = 8, TPM_RIGHTBUTTON = 2, TPM_RETURNCMD = 0x100;
     public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10;
     public static readonly nint HWND_BOTTOM = 1, HWND_MESSAGE = -3;
+    public const int GWLP_HWNDPARENT = -8, GWLP_WNDPROC = -4;
+    public const uint WM_ERASEBKGND = 0x0014, WM_MOVING = 0x0216, MONITOR_DEFAULTTONEAREST = 2;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct WNDCLASSEXW { public uint cbSize, style; public delegate* unmanaged<nint, uint, nint, nint, nint> lpfnWndProc; public int cbClsExtra, cbWndExtra; public nint hInstance, hIcon, hCursor, hbrBackground; public char* lpszMenuName, lpszClassName; public nint hIconSm; }
@@ -23,6 +25,13 @@ internal static unsafe partial class Native
         public Guid guidItem; public nint hBalloonIcon;
     }
     public struct POINT { public int X, Y; }
+    public struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MONITORINFO { public uint cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
+    public struct MARGINS { public int Left, Right, Top, Bottom; }
+    public struct DWM_BLURBEHIND { public uint dwFlags; public int fEnable; public nint hRgnBlur; public int fTransitionOnMaximized; }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DispatcherQueueOptions { public uint Size; public int ThreadType, ApartmentType; }
 
     [LibraryImport("user32.dll", SetLastError = true)] public static partial ushort RegisterClassExW(in WNDCLASSEXW wc);
     [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
@@ -39,6 +48,23 @@ internal static unsafe partial class Native
     [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
     [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool ReleaseCapture();
     [LibraryImport("user32.dll")] public static partial nint SendMessageW(nint hwnd, uint msg, nint w, nint l);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowW(string? className, string? name);
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowExW(nint parent, nint after, string? className, string? name);
+    [LibraryImport("user32.dll")] public static partial nint SetWindowLongPtrW(nint hwnd, int index, nint value);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetClientRect(nint hwnd, out RECT rect);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetWindowRect(nint hwnd, out RECT rect);
+    [LibraryImport("user32.dll")] public static partial int FillRect(nint dc, in RECT rect, nint brush);
+    [LibraryImport("user32.dll")] public static partial nint MonitorFromRect(in RECT rect, uint flags);
+    [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetMonitorInfoW(nint monitor, ref MONITORINFO info);
+    [LibraryImport("user32.dll")] public static partial uint GetDpiForWindow(nint hwnd);
+    [LibraryImport("user32.dll")] public static partial nint CallWindowProcW(nint previous, nint hwnd, uint message, nint w, nint l);
+    [LibraryImport("gdi32.dll")] public static partial nint GetStockObject(int kind);
+    [LibraryImport("dwmapi.dll")] public static partial int DwmGetWindowAttribute(nint hwnd, uint attribute, out RECT value, int size);
+    [LibraryImport("dwmapi.dll")] public static partial int DwmExtendFrameIntoClientArea(nint hwnd, in MARGINS margins);
+    [LibraryImport("dwmapi.dll")] public static partial int DwmEnableBlurBehindWindow(nint hwnd, in DWM_BLURBEHIND behind);
+    [LibraryImport("gdi32.dll")] public static partial nint CreateRectRgn(int left, int top, int right, int bottom);
+    [LibraryImport("gdi32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool DeleteObject(nint handle);
+    [LibraryImport("CoreMessaging.dll")] public static partial int CreateDispatcherQueueController(DispatcherQueueOptions options, out nint controller);
     [LibraryImport("shell32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool Shell_NotifyIconW(uint message, in NOTIFYICONDATAW data);
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] public static partial nint GetModuleHandleW(string? name);
 }
