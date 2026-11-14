@@ -319,7 +319,8 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         var query by remember { mutableStateOf("") }
         PlainSheet(if (origin) "从哪里出发" else "到哪里", { picker = null }) {
             top.hicancan.studev.timetable.SearchField(query, "搜地点或教室", Modifier.padding(vertical = 8.dp)) { query = it }
-            val hits = remember(query) { if (query.isBlank()) emptyList() else campus.places.filter { place -> place.kind != "floor" && place.kind != "campus" && (place.names + place.id).any { it.contains(query.trim(), true) } }.take(40) }
+            // Found by what a row says (a room as 教1-101, a place by its names), never by its id, which no one reads.
+            val hits = remember(query) { if (query.isBlank()) emptyList() else campus.places.filter { place -> place.kind != "floor" && place.kind != "campus" && ((if (place.kind == "room") listOf(Names.room(place.id)) else emptyList()) + place.names).any { it.contains(query.trim(), true) } }.take(40) }
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 if (origin) item { KeyRow(null, "我的位置", onClick = { runtime.origin(null); picker = null }) }
                 items(hits, key = { it.id }) { place -> KeyRow(null, if (place.kind == "room") Names.room(place.id) else place.displayName(campus.byId), place.category, onClick = { if (origin) runtime.origin(place) else runtime.destination(place); picker = null }) }
