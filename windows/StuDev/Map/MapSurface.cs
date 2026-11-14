@@ -29,6 +29,8 @@ public sealed partial class MapSurface : SwapChainPanel
     /** The baked buildings drawn over each frame, once they have arrived. */
     public Models? Models { get; set; }
     public ID3D11Device1? Device => device;
+    /** The camera of the last frame shown. */
+    public Camera? Shot => camera;
     private (uint Width, uint Height) logical, physical;
     private double scale = 1;
     private volatile bool redraw = true;

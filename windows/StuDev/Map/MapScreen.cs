@@ -45,6 +45,7 @@ public sealed partial class MapScreen : Screen
     private bool styled;
     private string? openBuilding;
     private double flattened = 1;
+    private Ball ball = null!;
     private HashSet<string> modelled = [];
     private double night = -1;
     private readonly List<(FrameworkElement El, double[] At, double Height, LabelRule Rule, string Id, bool Place)> buildingLabels = [];
@@ -63,7 +64,8 @@ public sealed partial class MapScreen : Screen
         // Labels of rooms near the edge stay inside the map, never over the panel.
         stage.SizeChanged += (_, e) => stage.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
         var controls = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 16, 16, 0) };
-        controls.Children.Add(Round("回正视角", "M10,3.5 L13.5,10 H6.5 Z M10,16.5 L6.5,10 H13.5 Z", Square));
+        ball = new Ball(Steer, Square, () => steering = null) { HorizontalAlignment = HorizontalAlignment.Center };
+        controls.Children.Add(ball);
         controls.Children.Add(new Border { Child = floorsBar, CornerRadius = new CornerRadius(8), Background = Paint.Brush("paper"), Translation = new System.Numerics.Vector3(0, 0, 6), Shadow = new ThemeShadow() });
         controls.Children.Add(Round("我的位置", "M13,10 A3,3 0 1 1 7,10 A3,3 0 1 1 13,10 Z M17.5,10 A7.5,7.5 0 1 1 2.5,10 A7.5,7.5 0 1 1 17.5,10 Z", () => _ = Locate()));
         stage.Children.Add(controls);
@@ -76,6 +78,7 @@ public sealed partial class MapScreen : Screen
         stage.Children.Add(credit);
         Grid.SetColumn(stage, 1); Children.Add(stage);
         surface.Shown += Place;
+        surface.Shown += _ => { if (surface.Shot is { } shot) ball.Show(shot.Bearing, shot.Pitch); };
         surface.Tapped2 += point => _ = Tap(point);
         Paint.Turned += () => { Repaint(); Draw(); };
         campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (space is null) _ = Load(); });
@@ -596,6 +599,17 @@ public sealed partial class MapScreen : Screen
         }
         catch (Exception error) when (error is UnauthorizedAccessException or System.Runtime.InteropServices.COMException or TaskCanceledException)
         { notice = "没有拿到你的位置：在 Windows 设置里允许定位，或选一个出发地。"; Draw(); }
+    }
+
+    /** Where a drag on the ball has turned the camera so far: taken from the camera when it starts, as the web's jumpTo. */
+    private (double Bearing, double Pitch)? steering;
+    private void Steer(double turn, double lean)
+    {
+        if (steering is null && surface.Shot is { } shot) steering = (shot.Bearing, shot.Pitch);
+        if (steering is not { } at) return;
+        var (bearing, pitch) = at;
+        steering = (bearing + turn, Math.Clamp(pitch + lean, 0, openBuilding is not null ? 44 : 72));
+        surface.Move(new CameraOptions { Bearing = steering.Value.Bearing, Pitch = steering.Value.Pitch }, CameraUpdateMode.Jump);
     }
 
     private void Square()

@@ -34,3 +34,6 @@ public sealed class Space(List<Place> places, string network)
         return new Space(joined, System.Text.Encoding.UTF8.GetString(network.Result));
     }
 }
+
+/** The baked campus buildings' buffer: its origin, the metres of one unit, and each building's vertex range. */
+public sealed record ModelIndex(double[] Origin, double Scale, Dictionary<string, int[]> Buildings);

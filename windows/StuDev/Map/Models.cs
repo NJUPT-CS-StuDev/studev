@@ -11,8 +11,6 @@ using Vortice.DXGI;
 
 namespace StuDev.Map;
 
-public sealed record ModelIndex(double[] Origin, double Scale, Dictionary<string, int[]> Buildings);
-
 /** How the models look this frame: one building left out while its floors are open, the others faded, by night darker. */
 public sealed record ModelLook(string? Hidden, double Flatten, double Night, double Faded, (float R, float G, float B) FadeTo);
 
