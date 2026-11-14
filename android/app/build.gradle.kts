@@ -117,6 +117,13 @@ abstract class VerifyMapInputsTask : DefaultTask() {
         check(kernels.resolve("kotlin").walkTopDown().any { it.extension == "kt" }) {
             "Generated kernel bindings missing. Run pwsh ./kernels.ps1 from android/."
         }
+        // A binding loads its library by name: one asking for a library the app does not carry crashes when first used.
+        val shipped = listOf("wasm_search", "wayfind", "docstream").map { "${it}_native" }.toSet()
+        kernels.resolve("kotlin").walkTopDown().filter { it.extension == "kt" }.forEach { binding ->
+            val name = Regex("""(?s)private fun findLibraryName\(componentName: String\): String \{.*?return "([^"]+)"""").find(binding.readText())?.groupValues?.get(1)
+                ?: error("${binding.name} names no library to load; the binding generator changed. Read it before building.")
+            check(name in shipped) { "${binding.name} loads lib$name.so, which the app does not carry ($shipped). Run pwsh ./kernels.ps1 from android/." }
+        }
     }
 }
 val generateDesignTokens = tasks.register<DesignTokensTask>("generateDesignTokens") {
