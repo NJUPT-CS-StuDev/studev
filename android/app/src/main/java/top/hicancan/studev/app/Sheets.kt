@@ -309,11 +309,14 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             }
             Plain("桌面小组件", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Plain("显示", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
-                Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
+                Plain("日历显示", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
+                Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周", "term" to "学期"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
             }
-            KeyRow(null, "添加到桌面", "也可以长按桌面空白处，在窗口小工具里找 StuDev", chevron = true, onClick = {
+            KeyRow(null, "添加日历", "课程、实验和考试；也可以长按桌面空白处，在窗口小工具里找 StuDev", chevron = true, onClick = {
                 if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev")
+            })
+            KeyRow(null, "添加清单", "过期的、这一周要做的和考试，在桌面上直接勾掉", chevron = true, onClick = {
+                if (!top.hicancan.studev.widget.CampusWidget.pin(context, "list")) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev 清单")
             })
             val background = remember(settings) { top.hicancan.studev.device.BackgroundSettings.status(context) }
             KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {

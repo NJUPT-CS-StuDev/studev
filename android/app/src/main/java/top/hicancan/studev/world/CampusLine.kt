@@ -25,6 +25,10 @@ fun clock(value: String) = value.substring(0, 2).toInt() * 60 + value.substring(
 fun hm(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
 fun dateLabel(date: LocalDate) = "${date.monthValue}月${date.dayOfMonth}日"
 val WEEKDAYS = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
+/** A day said from today: 今天, 明天, 昨天, a weekday within the week ahead, else its date (time.ts dayWord). */
+fun dayWord(date: java.time.LocalDate, today: java.time.LocalDate): String = when (val days = java.time.temporal.ChronoUnit.DAYS.between(today, date).toInt()) {
+    0 -> "今天"; 1 -> "明天"; -1 -> "昨天"; in 2..6 -> WEEKDAYS[date.dayOfWeek.value]; else -> dateLabel(date)
+}
 fun durationText(minutes: Int) = if (minutes >= 60) "${minutes / 60} 小时" + (if (minutes % 60 != 0) " ${minutes % 60} 分" else "") else "$minutes 分钟"
 
 /** How names are shortened; same table and results as the web (src/campus/world/names.ts). */

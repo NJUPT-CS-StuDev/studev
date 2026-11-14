@@ -14,7 +14,11 @@ class TaskStore(context: Context) {
     private val context = context.applicationContext
     private val store = this.context.getSharedPreferences("tasks", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
-    private val _all = MutableStateFlow(store.getString("tasks", null)?.let { runCatching { json.decodeFromString<List<Task>>(it) }.getOrNull() }.orEmpty().map(top.hicancan.studev.world.Tasks::sanitize))
+    private fun load() = store.getString("tasks", null)?.let { runCatching { json.decodeFromString<List<Task>>(it) }.getOrNull() }.orEmpty().map(top.hicancan.studev.world.Tasks::sanitize)
+    private val _all = MutableStateFlow(load())
+    /** A task ticked off on the home screen is written by another store; every store reads it back at once. */
+    private val reread = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key == "tasks") _all.value = load() }
+    init { store.registerOnSharedPreferenceChangeListener(reread) }
     /** Every task kept here, deleted ones included. */
     val all = _all.asStateFlow()
     /** A change reaches the home-screen widget and the phone's reminders as a settings change does. */

@@ -34,15 +34,19 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
-        <receiver android:name=".widget.LineWidgetReceiver" android:exported="true" android:label="课表 · 一行">
+        <receiver android:name=".widget.LineWidgetReceiver" android:exported="true" android:label="日历 · 下一节">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_line" />
         </receiver>
-        <receiver android:name=".widget.DayWidgetReceiver" android:exported="true" android:label="课表 · 一天">
+        <receiver android:name=".widget.DayWidgetReceiver" android:exported="true" android:label="日历 · 一天">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_day" />
         </receiver>
-        <receiver android:name=".widget.WeekWidgetReceiver" android:exported="true" android:label="课表 · 一周">
+        <receiver android:name=".widget.ListWidgetReceiver" android:exported="true" android:label="清单">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_list" />
+        </receiver>
+        <receiver android:name=".widget.WeekWidgetReceiver" android:exported="true" android:label="日历 · 一周">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_week" />
         </receiver>

@@ -18,6 +18,10 @@ import androidx.glance.*
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.*
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.*
@@ -43,28 +47,30 @@ import java.time.LocalDate
 private val KEY = stringPreferencesKey("line")
 
 /**
- * The one widget. What it shows follows its size, or the person's preference: the next lesson,
- * today, or the week. The three receivers differ only in the size they start at, since not every
- * launcher resizes a widget once it is placed.
+ * The calendar widget and the list widget, the app's two kinds of view on the home screen, as on the Windows desktop.
+ * The calendar shows the next lesson, a day, the week or the term, as its size or the person's preference has it; the
+ * three calendar receivers differ only in the size they start at, since not every launcher resizes a widget once it
+ * is placed. The list shows what is late and what falls in the coming week, with the exams, ticked off where it is.
+ * Both read the same published line, made with the shared glance rules.
  */
 open class CampusWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Responsive(setOf(DpSize(110.dp, 40.dp), DpSize(250.dp, 40.dp), DpSize(250.dp, 110.dp), DpSize(250.dp, 180.dp), DpSize(250.dp, 250.dp), DpSize(320.dp, 330.dp)))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) = provideContent {
         val state = currentState<Preferences>()
-        val line = state[KEY]?.let { Json.parseToJsonElement(it).jsonObject } ?: placeholder("StuDev", "打开 StuDev 选择班级")
-        Body(context, line)
+        val line = state[KEY]?.let { Json.parseToJsonElement(it).jsonObject } ?: placeholder("StuDev", "正在更新…")
+        if (this@CampusWidget is ListWidget) ListBody(context, line) else Body(context, line)
     }
 
     companion object {
-        private val all = listOf(LineWidget(), DayWidget(), WeekWidget())
-        val receivers = listOf(LineWidgetReceiver::class.java, DayWidgetReceiver::class.java, WeekWidgetReceiver::class.java)
+        private val all = listOf(LineWidget(), DayWidget(), WeekWidget(), ListWidget())
+        val receivers = listOf(LineWidgetReceiver::class.java, DayWidgetReceiver::class.java, WeekWidgetReceiver::class.java, ListWidgetReceiver::class.java)
 
         /** Asks the launcher to place one. False when it cannot be asked. */
         fun pin(context: Context, view: String): Boolean {
             val manager = context.getSystemService(AppWidgetManager::class.java)
             if (!manager.isRequestPinAppWidgetSupported) return false
-            val receiver = when (view) { "next" -> LineWidgetReceiver::class.java; "week" -> WeekWidgetReceiver::class.java; else -> DayWidgetReceiver::class.java }
+            val receiver = when (view) { "list" -> ListWidgetReceiver::class.java; "next" -> LineWidgetReceiver::class.java; "week", "term" -> WeekWidgetReceiver::class.java; else -> DayWidgetReceiver::class.java }
             return manager.requestPinAppWidget(ComponentName(context, receiver), null, null)
         }
 
@@ -100,6 +106,19 @@ open class CampusWidget : GlanceAppWidget() {
 class LineWidget : CampusWidget()
 class DayWidget : CampusWidget()
 class WeekWidget : CampusWidget()
+class ListWidget : CampusWidget()
+
+private val TASK = ActionParameters.Key<String>("task")
+
+/** A task ticked off on the home screen is done in the app too, and every widget redraws. */
+class ToggleTask : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val id = parameters[TASK] ?: return
+        val store = top.hicancan.studev.me.TaskStore(context)
+        store.all.value.firstOrNull { it.id == id }?.let(store::toggleDone)
+        CampusWidget.refreshAll(context)
+    }
+}
 
 private fun placeholder(title: String, hint: String) = buildJsonObject { put("title", title); put("hint", hint); put("view", "auto"); put("theme", "system") }
 
@@ -124,6 +143,31 @@ private fun published(line: CampusLine, now: Moment, view: String, theme: String
     val monday = line.weekShown(now)
     val ahead = CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7
     put("weekTitle", (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + (line.weekOf(monday)?.let { "第 $it 周" } ?: "假期"))
+    put("term", buildJsonArray { Glance.term(line).forEach { week -> addJsonObject {
+        put("week", week.week); put("current", week.days.any { it.date == now.date })
+        put("days", buildJsonArray { week.days.forEach { day -> addJsonObject { put("lessons", day.lessons); put("exam", day.exam); put("off", day.off); put("today", day.date == now.date); put("past", day.date < now.date) } } })
+    } } })
+    // The list: the app's own groups of what is late and the coming week, exams in the group of their day.
+    val examsAhead = (0L..Glance.EXAM_DAYS.toLong()).map { now.date.plusDays(it) }.flatMap { date -> line.on(date).filter { it.kind == "exam" && (date > now.date || it.end > now.min) } }
+    fun examGroup(event: LineEvent) = when (val days = java.time.temporal.ChronoUnit.DAYS.between(now.date, event.date).toInt()) { 0 -> "today"; 1 -> "tomorrow"; in 2..6 -> "week"; else -> "later" }
+    val dueTasks = Glance.due(line, now)
+    put("list", buildJsonArray { Tasks.GROUPS.forEach { (key, name) ->
+        val tasks = dueTasks.filter { Tasks.group(it, now) == key }
+        val exams = examsAhead.filter { examGroup(it) == key }
+        if (tasks.isEmpty() && exams.isEmpty()) return@forEach
+        addJsonObject {
+            put("name", name)
+            put("items", buildJsonArray {
+                exams.forEach { exam -> addJsonObject { put("kind", "exam"); put("title", exam.name); put("when", (if (exam.date == now.date) "今天 " else if (exam.date == now.date.plusDays(1)) "明天 " else "${WEEKDAYS[exam.date.dayOfWeek.value]} ") + hm(exam.start)); put("late", false) } }
+                tasks.forEach { task -> addJsonObject {
+                    put("kind", "task"); put("id", task.id); put("title", task.title); put("priority", task.priority ?: 0); put("late", key == "overdue")
+                    val at = Tasks.at(task)
+                    val minute = if (task.date != null && task.date == at?.first && task.start != null) task.start else at?.second?.takeIf { it < 1440 }
+                    put("when", at?.let { (date, _) -> dayWord(java.time.LocalDate.parse(date), now.date) + (minute?.let { " ${hm(it)}" } ?: "") } ?: "")
+                } }
+            })
+        }
+    } })
     put("week", buildJsonArray { Glance.week(line, now).forEach { (date, events) ->
         addJsonObject {
             val count = line.dueOn(date).count { it.done == null }
@@ -156,6 +200,7 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
         "next" -> "next"
         "day" -> if (short) "next" else "day"
         "week" -> if (short) "next" else "week"
+        "term" -> if (short) "next" else "term"
         else -> if (short) "next" else if (size.height < 200.dp) "day" else "week"
     }
     val shape = if (Build.VERSION.SDK_INT >= 31) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier
@@ -181,6 +226,7 @@ private fun open(context: Context, path: String) = actionStartActivity(Intent(co
                 if (due.isNotEmpty()) Text("今天截止 · " + due.joinToString("、"), style = TextStyle(color = paint.brand, fontSize = 12.sp), maxLines = 1)
                 rows.take(((size.height - (if (due.isNotEmpty()) 62.dp else 44.dp)) / 32.dp).toInt().coerceIn(1, 5)).forEach { LessonRow(context, it, paint, false) }
             }
+            view == "term" -> TermGrid(context, line["term"]?.jsonArray?.map { it.jsonObject }.orEmpty(), paint, size.height - 20.dp)
             else -> {
                 Text(line.getValue("weekTitle").jsonPrimitive.content, style = TextStyle(color = paint.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(bottom = 6.dp))
                 WeekGrid(week, paint, size.height - 54.dp)
@@ -279,6 +325,91 @@ private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tok
     }
 }
 
+/** The term as weeks of days: a dot a day, heavier with more lessons; exams in the exam colour, today ringed. */
+@Composable private fun TermGrid(context: Context, weeks: List<JsonObject>, paint: Paint, height: Dp) {
+    val current = weeks.indexOfFirst { it["current"]?.jsonPrimitive?.boolean == true }.coerceAtLeast(0)
+    // As many weeks as fit, the current one among the first shown.
+    val fit = ((height.value - 18f) / 16f).toInt().coerceIn(3, weeks.size.coerceAtLeast(3))
+    val first = (current - 1).coerceIn(0, (weeks.size - fit).coerceAtLeast(0))
+    Column(GlanceModifier.fillMaxWidth().clickable(open(context, "/?scale=term"))) {
+        Text("学期 · 第 ${weeks.getOrNull(current)?.get("week")?.jsonPrimitive?.int ?: "-"} 周", style = TextStyle(color = paint.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.padding(bottom = 4.dp))
+        weeks.drop(first).take(fit).chunked(9).forEach { part ->
+            Column(GlanceModifier.fillMaxWidth()) {
+                part.forEach { week ->
+                    Row(GlanceModifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(week.getValue("week").jsonPrimitive.int.toString(), style = TextStyle(color = if (week["current"]?.jsonPrimitive?.boolean == true) paint.ink else paint.muted, fontSize = 10.sp), modifier = GlanceModifier.width(22.dp))
+                        week.getValue("days").jsonArray.map { it.jsonObject }.forEach { day ->
+                            val lessons = day.getValue("lessons").jsonPrimitive.int
+                            val exam = day.getValue("exam").jsonPrimitive.boolean
+                            val keep = when { exam -> 1f; lessons == 0 || day.getValue("off").jsonPrimitive.boolean -> 0f; lessons <= 2 -> .35f; lessons <= 4 -> .6f; else -> .9f }
+                            val brand = if (paint.dark) Tokens.Color.Dark.brand else Tokens.Color.Light.brand
+                            val exams = if (paint.dark) Tokens.Color.Dark.exam else Tokens.Color.Light.exam
+                            val dot = (if (exam) exams else brand).copy(alpha = if (day.getValue("past").jsonPrimitive.boolean) keep * .45f else keep)
+                            Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
+                                val ring = day.getValue("today").jsonPrimitive.boolean
+                                Box(GlanceModifier.size(12.dp).cornerRadius(6.dp).background(if (ring) paint.ink else androidx.glance.unit.ColorProvider(Color.Transparent)).padding(if (ring) 2.dp else 0.dp)) {
+                                    Box(GlanceModifier.fillMaxSize().cornerRadius(6.dp).background(androidx.glance.unit.ColorProvider(dot))) {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The list: groups of what is late and what falls in the coming week, exams among them; a box ticks a task off here. */
+@Composable private fun ListBody(context: Context, line: JsonObject) {
+    val theme = line.getValue("theme").jsonPrimitive.content
+    fun color(light: Color, dark: Color): androidx.glance.unit.ColorProvider = when (theme) {
+        "light" -> androidx.glance.unit.ColorProvider(light); "dark" -> androidx.glance.unit.ColorProvider(dark); else -> ColorProvider(light, dark)
+    }
+    val ink = color(Tokens.Color.Light.ink, Tokens.Color.Dark.ink); val muted = color(Tokens.Color.Light.muted, Tokens.Color.Dark.muted)
+    val brand = color(Tokens.Color.Light.brand, Tokens.Color.Dark.brand); val danger = color(Tokens.Color.Light.danger, Tokens.Color.Dark.danger)
+    val exam = color(Tokens.Color.Light.exam, Tokens.Color.Dark.exam); val onExam = color(Tokens.Color.Light.onExam, Tokens.Color.Dark.onExam)
+    val ring = listOf(color(Tokens.Color.Light.faint, Tokens.Color.Dark.faint), androidx.glance.unit.ColorProvider(Color(0xFF4F8CFF)), androidx.glance.unit.ColorProvider(Color(0xFFE8A33A)), danger)
+    val shape = if (Build.VERSION.SDK_INT >= 31) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier
+    val groups = line["list"]?.jsonArray?.map { it.jsonObject }.orEmpty()
+    val size = LocalSize.current
+    var room = ((size.height.value - 44f) / 30f).toInt().coerceAtLeast(1)
+    Column(GlanceModifier.fillMaxSize().then(shape).background(color(Tokens.Color.Light.paper, Tokens.Color.Dark.paper)).appWidgetBackground().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Row(GlanceModifier.fillMaxWidth().padding(bottom = 4.dp).clickable(open(context, "/?scale=list")), verticalAlignment = Alignment.CenterVertically) {
+            Text("清单", style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
+            Text("＋", style = TextStyle(color = muted, fontSize = 18.sp))
+        }
+        if (groups.isEmpty()) { Text(line["hint"]?.jsonPrimitive?.content?.takeIf { line["list"] == null } ?: "这一周没有要做的事", style = TextStyle(color = muted, fontSize = 13.sp)); return@Column }
+        groups.forEach { group ->
+            // A group's name goes only with at least one of its items under it.
+            if (room < 2) return@forEach
+            Text(group.getValue("name").jsonPrimitive.content, style = TextStyle(color = muted, fontSize = 11.5.sp, fontWeight = FontWeight.Medium), modifier = GlanceModifier.padding(top = 4.dp))
+            room--
+            group.getValue("items").jsonArray.map { it.jsonObject }.take(room.coerceAtLeast(0)).chunked(8).forEach { part ->
+                Column(GlanceModifier.fillMaxWidth()) {
+                    part.forEach { item ->
+                        room--
+                        val isExam = item.getValue("kind").jsonPrimitive.content == "exam"
+                        Row(GlanceModifier.fillMaxWidth().height(30.dp).clickable(open(context, "/?scale=list")), verticalAlignment = Alignment.CenterVertically) {
+                            if (isExam) Box(GlanceModifier.cornerRadius(4.dp).background(exam).padding(horizontal = 3.dp)) { Text("考", style = TextStyle(color = onExam, fontSize = 10.sp, fontWeight = FontWeight.Bold)) }
+                            else {
+                                val id = item.getValue("id").jsonPrimitive.content
+                                Box(GlanceModifier.size(26.dp).clickable(actionRunCallback<ToggleTask>(actionParametersOf(TASK to id))), contentAlignment = Alignment.Center) {
+                                    Box(GlanceModifier.size(16.dp).cornerRadius(4.dp).background(ring[item.getValue("priority").jsonPrimitive.int.coerceIn(0, 3)]).padding(1.5.dp)) {
+                                        Box(GlanceModifier.fillMaxSize().cornerRadius(3.dp).background(color(Tokens.Color.Light.paper, Tokens.Color.Dark.paper))) {}
+                                    }
+                                }
+                            }
+                            Spacer(GlanceModifier.width(6.dp))
+                            Text(item.getValue("title").jsonPrimitive.content, style = TextStyle(color = ink, fontSize = 13.5.sp), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                            Text(item.getValue("when").jsonPrimitive.content, style = TextStyle(color = if (item.getValue("late").jsonPrimitive.boolean) danger else if (isExam) exam else brand, fontSize = 12.sp), maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 open class CampusWidgetReceiver(override val glanceAppWidget: GlanceAppWidget) : GlanceAppWidgetReceiver() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
@@ -290,3 +421,4 @@ open class CampusWidgetReceiver(override val glanceAppWidget: GlanceAppWidget) :
 class LineWidgetReceiver : CampusWidgetReceiver(LineWidget())
 class DayWidgetReceiver : CampusWidgetReceiver(DayWidget())
 class WeekWidgetReceiver : CampusWidgetReceiver(WeekWidget())
+class ListWidgetReceiver : CampusWidgetReceiver(ListWidget())

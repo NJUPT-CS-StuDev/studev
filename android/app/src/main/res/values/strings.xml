@@ -1,5 +1,6 @@
 <resources>
-    <string name="widget_description">下一节课、一天或一周，随大小变化</string>
+    <string name="widget_description">下一节课、一天、一周或学期，随大小变化</string>
+    <string name="widget_list_description">过期的、这一周要做的和考试，在桌面上勾掉</string>
   <string name="app_name">StuDev</string>
   <string name="location_title">在校园里找到自己</string>
   <string name="location_rationale">允许 StuDev 在使用期间访问位置，以显示你在地图上的位置和朝向。精确位置能帮助你找到所在的楼宇；也可以选择大致位置。位置仅在设备上使用，不会上传。</string>
