@@ -43,13 +43,21 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
     const [hints, setHints] = useState(readHints);
     // Groups folded away, as a list keeps them closed while one works on another.
     const [folded, setFolded] = useState<TaskGroup[]>([]);
+    // One course at a time, by its name: its tasks and its exams, the rest set aside.
+    const [only, setOnly] = useState<string | null>(null);
     const tones = useMemo(() => timelineTones(line), [line]);
     const listRef = useRef<HTMLDivElement>(null);
     const hold = useRef<{ timer: number; pointer: number; x: number; y: number; id: string; row: HTMLElement } | null>(null);
-    const top = line.tasks.filter(task => !task.parent);
+    const nameOf = (task: Task) => task.course ? courses.get(task.course) ?? null : null;
+    const allTop = line.tasks.filter(task => !task.parent);
+    const allExams = upcomingExams(line, now.date).map(({ exam }) => exam);
+    // The courses there is something open for, in the order they first come up.
+    const filters = [...new Set([...allTop.filter(task => !task.done).map(nameOf), ...allExams.map(exam => courseName(exam.course.name))].filter((name): name is string => name !== null))];
+    const shown = only !== null && filters.includes(only) ? only : null;
+    const top = shown === null ? allTop : allTop.filter(task => nameOf(task) === shown);
     const open = top.filter(task => !task.done).sort(taskOrder);
     const done = top.filter(task => task.done).sort((left, right) => (right.done ?? '').localeCompare(left.done ?? ''));
-    const exams = upcomingExams(line, now.date).map(({ exam }) => exam);
+    const exams = shown === null ? allExams : allExams.filter(exam => courseName(exam.course.name) === shown);
     const steps = (task: Task) => line.tasks.filter(item => item.parent === task.id);
     const quickCourses = useMemo(() => [...new Map(line.meetings.map(meeting => [courseIdentity(meeting), { identity: courseIdentity(meeting), names: [courseName(meeting.course.name), courseShort(meeting.course.name)] }])).values()], [line.meetings]);
     const quick = draft.trim() ? parseQuickTask(draft, now, quickCourses) : null;
@@ -59,8 +67,9 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
     const add = () => {
         if (!quick?.title) return;
         const { marks, ...task } = quick;
-        // A task just added goes first in its group, where it is seen.
-        saveTask({ id: newTaskId(), ...task, order: -Date.now() });
+        // A task just added goes first in its group, where it is seen; with a course picked, it is that course's.
+        const course = task.course ?? (shown === null ? undefined : [...courses].find(([, value]) => value === shown)?.[0]);
+        saveTask({ id: newTaskId(), ...task, ...(course ? { course } : {}), order: -Date.now() });
         setDraft('');
     };
     const grouped = (key: TaskGroup) => open.filter(task => taskGroup(task, now) === key);
@@ -165,7 +174,14 @@ export function ListView({ line, now, courses, onTask, onOpen }: { line: Timelin
                 {!draft && !open.length && <p className="tread examples">{TASK_EXAMPLES.map(example => <button key={example} onClick={() => setDraft(example)}>{example}</button>)}</p>}
                 {open.length > 1 && !hints.dragTold && <p className="thint">按住一件事可以拖动，拖到“今天”“明天”就改了日期<button aria-label="知道了" onClick={() => setHints(writeHints(current => ({ ...current, dragTold: true })))}>×</button></p>}
             </div>
-            {suggested.length > 0 && !drag && <section className="tgroup suggest">
+            {filters.length > 1 && <div className="tfilter" role="tablist" aria-label="按课程看">
+                <button role="tab" aria-selected={shown === null} className={shown === null ? 'on' : ''} onClick={() => setOnly(null)}>全部</button>
+                {filters.map(name => {
+                    const identity = [...courses].find(([, value]) => value === name)?.[0];
+                    return <button key={name} role="tab" aria-selected={shown === name} className={shown === name ? 'on' : ''} style={identity && tones.has(identity) ? courseToneStyle(tones.get(identity)!) : undefined} onClick={() => setOnly(shown === name ? null : name)}>{courseShort(name)}</button>;
+                })}
+            </div>}
+            {suggested.length > 0 && !drag && shown === null && <section className="tgroup suggest">
                 <h3 className="sh">从你的安排里</h3>
                 {suggested.map(({ key, task }) => <div key={key} className="trow-i">
                     <button className="tplus" aria-label="加上" onClick={() => saveTask({ id: newTaskId(), ...task, order: -Date.now() })}>+</button>

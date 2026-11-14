@@ -15,6 +15,8 @@ public static class ListView
 {
     private static readonly HashSet<string> Folded = [];
     private static bool showDone;
+    /** One course at a time, by its name: its tasks and its exams, the rest set aside. */
+    private static string? only;
 
     private static (string Text, string Tone) WhenOf(PersonalTask task, Moment now)
     {
@@ -65,12 +67,40 @@ public static class ListView
         var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Width = 760 };
         var courses = TaskSheet.CourseNames(line);
         var tones = CourseTones.Of(line);
-        var top = campus.Tasks.Live.Where(t => t.Parent is null).ToList();
+        string? NameOf(PersonalTask t) => t.Course is { } c ? courses.GetValueOrDefault(c) : null;
+        var allTop = campus.Tasks.Live.Where(t => t.Parent is null).ToList();
+        var allExams = line.Exams.Where(x => string.CompareOrdinal(x.Date, Clock.Text(now.Date)) >= 0).OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList();
+        // The courses there is something open for, in the order they first come up.
+        var filters = allTop.Where(t => t.Done is null).Select(NameOf).Concat(allExams.Select(x => Names.Course(x.Course.Name))).OfType<string>().Distinct().ToList();
+        var shown = only is not null && filters.Contains(only) ? only : null;
+        var top = shown is null ? allTop : allTop.Where(t => NameOf(t) == shown).ToList();
         var open_ = top.Where(t => t.Done is null).Order(TaskRules.Order).ToList();
         var done = top.Where(t => t.Done is not null).OrderByDescending(t => t.Done, StringComparer.Ordinal).ToList();
-        var exams = line.Exams.Where(x => string.CompareOrdinal(x.Date, Clock.Text(now.Date)) >= 0).OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList();
-        var adder = TaskSheet.Adder(campus, line, now, _ => { }, open_.Count == 0); adder.Margin = new Thickness(0, 0, 0, 16);
+        var exams = shown is null ? allExams : allExams.Where(x => Names.Course(x.Course.Name) == shown).ToList();
+        var identity = shown is null ? null : courses.FirstOrDefault(p => p.Value == shown).Key;
+        var adder = TaskSheet.Adder(campus, line, now, _ => { }, open_.Count == 0, identity); adder.Margin = new Thickness(0, 0, 0, filters.Count > 1 ? 12 : 16);
         page.Children.Add(adder);
+        if (filters.Count > 1)
+        {
+            // The courses as a row of tabs over the list: one picked shows only its tasks and exams.
+            var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            void Chip(string label, string? name)
+            {
+                var on = shown == name;
+                var key = name is null ? null : courses.FirstOrDefault(p => p.Value == name).Key;
+                var tone = key is not null && tones.TryGetValue(key, out var t) ? t : (int?)null;
+                var text = new TextBlock { Text = label, FontSize = 13, FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal,
+                    Foreground = !on ? Paint.Brush("muted") : name is null ? Paint.Brush("paper") : tone is { } f ? Paint.Tone(f, "fg") : Paint.Brush("ink") };
+                var chip = new Tap(!on ? Paint.Brush("surfaceSunken") : name is null ? Paint.Brush("ink") : tone is { } b ? Paint.Tone(b, "bg") : Paint.Brush("surfaceSunken"), Paint.Brush("line"))
+                    { Content = text, Padding = new Thickness(11, 4, 11, 5), CornerRadius = new CornerRadius(13) };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, label);
+                chip.Click += (_, _) => { only = on ? null : name; Redraw(); };
+                chips.Children.Add(chip);
+            }
+            Chip("全部", null);
+            foreach (var name in filters) Chip(Names.CourseShort(name), name);
+            page.Children.Add(new ScrollViewer { Content = chips, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Disabled, Margin = new Thickness(0, 0, 0, 6) });
+        }
         string ExamGroup(Exam x) { var days = Clock.Parse(x.Date).DayNumber - now.Date.DayNumber; return days == 0 ? "today" : days == 1 ? "tomorrow" : days <= 7 ? "week" : "later"; }
         for (var g = 0; g < TaskRules.Groups.Length; g++)
         {

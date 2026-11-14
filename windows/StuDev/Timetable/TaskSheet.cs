@@ -36,7 +36,8 @@ public static class TaskSheet
     }
 
     /** The line a task is added with, and what it was read as under it; Enter adds it. */
-    public static FrameworkElement Adder(Campus campus, CampusLine line, Moment now, Action<PersonalTask> added, bool examples = true)
+    /** The one-line adder; with `course` given, a task said without a course is that course's. */
+    public static FrameworkElement Adder(Campus campus, CampusLine line, Moment now, Action<PersonalTask> added, bool examples = true, string? course = null)
     {
         var courses = CourseNames(line); var quick = QuickCourses(line);
         var column = new StackPanel { Spacing = 8 };
@@ -54,7 +55,7 @@ public static class TaskSheet
             var parsed = QuickTasks.Parse(box.Text, now, quick);
             if (parsed.Title.Length == 0) return;
             // A task just added goes first in its group, where it is seen.
-            var task = new PersonalTask { Id = TaskRules.NewId(), Title = parsed.Title, Modified = "", Date = parsed.Date, Start = parsed.Start, End = parsed.End, Due = parsed.Due, Priority = parsed.Priority, Course = parsed.Course, Order = -DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+            var task = new PersonalTask { Id = TaskRules.NewId(), Title = parsed.Title, Modified = "", Date = parsed.Date, Start = parsed.Start, End = parsed.End, Due = parsed.Due, Priority = parsed.Priority, Course = parsed.Course ?? course, Order = -DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
             campus.Tasks.Put(task);
             box.Text = "";
             added(campus.Tasks.All.First(t => t.Id == task.Id));

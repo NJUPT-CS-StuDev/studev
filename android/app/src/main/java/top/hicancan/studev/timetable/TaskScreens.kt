@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -240,11 +241,20 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
     // Groups folded away, as a list keeps them closed while one works on another.
     var folded by remember { mutableStateOf(emptySet<String>()) }
     val tones = remember(line) { TimetablePresentation.tones(line) }
-    val top = line.tasks.filter { it.parent == null }
+    val courses = line.meetings.associate { TimetablePresentation.identity(it) to (line.names[TimetablePresentation.identity(it)] ?: Names.course(it.course.name)) }
+    // One course at a time, by its name: its tasks and its exams, the rest set aside.
+    var only by remember { mutableStateOf<String?>(null) }
+    val official = line.meetings.associate { TimetablePresentation.identity(it) to Names.course(it.course.name) }
+    fun nameOf(task: Task) = task.course?.let { official[it] }
+    val allTop = line.tasks.filter { it.parent == null }
+    val allExams = line.upcomingExams(now.date)
+    // The courses there is something open for, in the order they first come up.
+    val filters = (allTop.filter { it.done == null }.map(::nameOf) + allExams.map { Names.course(it.course.name) }).filterNotNull().distinct()
+    val picked = only?.takeIf { it in filters }
+    val top = if (picked == null) allTop else allTop.filter { nameOf(it) == picked }
     val open = top.filter { it.done == null }.sortedWith(Tasks.order)
     val done = top.filter { it.done != null }.sortedByDescending { it.done }
-    val exams = line.upcomingExams(now.date)
-    val courses = line.meetings.associate { TimetablePresentation.identity(it) to (line.names[TimetablePresentation.identity(it)] ?: Names.course(it.course.name)) }
+    val exams = if (picked == null) allExams else allExams.filter { Names.course(it.course.name) == picked }
     val quickCourses = remember(line.meetings) { line.meetings.distinctBy { TimetablePresentation.identity(it) }.map { Tasks.QuickCourse(TimetablePresentation.identity(it), listOf(Names.course(it.course.name), Names.courseShort(it.course.name))) } }
     val quick = if (draft.isNotBlank()) Tasks.parse(draft, now, quickCourses) else null
     // What the list was told to stop offering, kept on this device, as readHints in src/campus/world/suggestions.ts.
@@ -254,8 +264,9 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
     val suggested = Suggestions.suggest(line, now, setAside)
     fun add() {
         val read = quick ?: return
-        // A task just added goes first in its group, where it is seen.
-        store.save(Task(store.newId(), read.title, date = read.date, start = read.start, end = read.end, due = read.due, priority = read.priority, course = read.course, order = -System.currentTimeMillis().toDouble(), modified = ""))
+        // A task just added goes first in its group, where it is seen; with a course picked, it is that course's.
+        val course = read.course ?: picked?.let { name -> official.entries.firstOrNull { it.value == name }?.key }
+        store.save(Task(store.newId(), read.title, date = read.date, start = read.start, end = read.end, due = read.due, priority = read.priority, course = course, order = -System.currentTimeMillis().toDouble(), modified = ""))
         draft = ""
     }
     fun dayWord(value: String): String {
@@ -381,7 +392,23 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
             Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { dragTold = true; prefs.edit().putBoolean("dragTold", true).apply() }.padding(horizontal = 6.dp))
         }
         Spacer(Modifier.height(8.dp))
-        if (suggested.isNotEmpty() && dragId == null) {
+        if (filters.size > 1) {
+            // The courses as a row of tabs over the list: one picked shows only its tasks and exams.
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                @Composable fun FilterChip(label: String, name: String?) {
+                    val on = picked == name
+                    val mark = name?.let { n -> official.entries.firstOrNull { it.value == n }?.key }?.let { tones[it] }?.let { tone(it) }
+                    val ground = if (!on) Ink.sunken else if (name == null) Ink.text else mark?.bg ?: Ink.sunken
+                    val ink = if (!on) Ink.muted else if (name == null) Ink.paper else mark?.fg ?: Ink.text
+                    Box(Modifier.clip(RoundedCornerShape(50)).background(ground).clickable { only = if (on) null else name }.padding(horizontal = 11.dp, vertical = 5.dp)) {
+                        Plain(label, 13.sp, ink, if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                    }
+                }
+                FilterChip("全部", null)
+                filters.forEach { FilterChip(Names.courseShort(it), it) }
+            }
+        }
+        if (suggested.isNotEmpty() && dragId == null && picked == null) {
             Plain("从你的安排里", 13.sp, brand, FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
             suggested.forEach { (key, task) ->
                 Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
