@@ -52,4 +52,8 @@
     <Content Include="..\..\public\assets\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\StuDev.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Map\Shaders\ModelsVertex.cso" LogicalName="StuDev.Map.Shaders.ModelsVertex.cso" />
+    <EmbeddedResource Include="Map\Shaders\ModelsPixel.cso" LogicalName="StuDev.Map.Shaders.ModelsPixel.cso" />
+  </ItemGroup>
 </Project>

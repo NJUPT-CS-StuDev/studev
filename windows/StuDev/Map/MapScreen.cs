@@ -44,6 +44,8 @@ public sealed partial class MapScreen : Screen
     private double[]? me;
     private bool styled;
     private string? openBuilding;
+    private double flattened = 1;
+    private HashSet<string> modelled = [];
     private double night = -1;
     private readonly List<(FrameworkElement El, double[] At, double Height, LabelRule Rule, string Id, bool Place)> buildingLabels = [];
     private readonly List<(FrameworkElement El, double[] At, double[] Box, bool Picked, double Min)> roomLabels = [];
@@ -126,6 +128,7 @@ public sealed partial class MapScreen : Screen
             foreach (var layer in style["layers"]!.AsArray()) if ((string?)layer!["id"] == "forms") layer["layout"] = new JsonObject { ["visibility"] = "none" };
             await surface.Map.SetStyleJsonAsync(style.ToJsonString());
             await AddLayers();
+            App.Watch(LoadModels(repo));
             var teach = space.ById.GetValueOrDefault("仙林/教3")?.Centre ?? [118.928, 32.113];
             surface.Move(new CameraOptions { Center = new LatLng(teach[1] - .0002, teach[0] + .0006), Zoom = 16.05, Bearing = -24, Pitch = 52 }, CameraUpdateMode.Jump);
             styled = true;
@@ -203,8 +206,35 @@ public sealed partial class MapScreen : Screen
         surface.Redraw();
     }
 
+    /** The baked buildings, put over the map once they arrive; the plain footprints keep standing until then. */
+    private async Task LoadModels(Data.Repository repo)
+    {
+        var index = await repo.Read("space/仙林/models.json", FactsJson.Default.ModelIndex);
+        var bytes = await repo.Bytes("space/仙林/models.bin.gzip");
+        surface.Models = new Models(surface.Device!, index, bytes);
+        modelled = [.. surface.Models.Buildings];
+        await SetRaw("plain", "filter", PlainFilter());
+        await Buildings();
+        surface.Redraw();
+    }
+
+    /** The plain footprints: none for a modelled building, and none for the building whose floors are open. */
+    private string PlainFilter()
+    {
+        var parts = new List<string>();
+        if (openBuilding is not null) parts.Add("[\"!=\",[\"get\",\"building\"],\"" + openBuilding + "\"]");
+        if (modelled.Count > 0) parts.Add("[\"!\",[\"in\",[\"get\",\"building\"],[\"literal\",[" + string.Join(",", modelled.Select(id => "\"" + id + "\"")) + "]]]]");
+        return parts.Count == 0 ? "null" : parts.Count == 1 ? parts[0] : "[\"all\"," + string.Join(",", parts) + "]";
+    }
+
     private async Task Buildings()
     {
+        if (surface.Models is { } models)
+        {
+            var open = openBuilding is not null && HasFloors(openBuilding);
+            var fade = Paint.Blend(Paint.Parse(Scene("model")), Paint.Parse(Scene("campus")), .28);
+            models.Look = new ModelLook(open ? openBuilding : null, flattened, Paint.Dark ? 1 : 0, open ? 1 : 0, (fade.R / 255f, fade.G / 255f, fade.B / 255f));
+        }
         var model = Scene("model"); var campusColour = Scene("campus");
         var faded = Hex(Paint.Blend(Paint.Parse(model), Paint.Parse(campusColour), .28));
         var lit = Paint.Dark ? """["rgba",["*",["at",0,["to-rgba",["to-color",["get","color"]]]],0.22],["*",["at",1,["to-rgba",["to-color",["get","color"]]]],0.22],["*",["at",2,["to-rgba",["to-color",["get","color"]]]],0.22],1]""" : """["to-color",["get","color"]]""";
@@ -392,8 +422,7 @@ public sealed partial class MapScreen : Screen
         var data = model.Floors.GetValueOrDefault($"{building}/{level}");
         var same = openBuilding == building;
         openBuilding = building;
-        var filter = $$"""["!=",["get","building"],"{{building}}"]""";
-        await SetRaw("plain", "filter", filter);
+        await SetRaw("plain", "filter", PlainFilter());
         await Buildings();
         await surface.Map.SetGeoJsonSourceDataAsync("sel", Feature(data?.Plate ?? shape.Geometry).ToJsonString());
         await surface.Map.SetGeoJsonSourceDataAsync("selcore", Collection((data?.Cores ?? []).Select(c => Feature(c.Geometry))));
@@ -418,7 +447,7 @@ public sealed partial class MapScreen : Screen
     {
         if (openBuilding is null) return;
         openBuilding = null;
-        await SetRaw("plain", "filter", "null");
+        await SetRaw("plain", "filter", PlainFilter());
         foreach (var layer in new[] { "sel-lower", "sel-slab", "sel-rooms", "sel-core" }) await SetRaw(layer, "visibility", "\"none\"");
         await Flatten(1);
         await Buildings();
@@ -428,6 +457,7 @@ public sealed partial class MapScreen : Screen
 
     private async Task Flatten(double value)
     {
+        flattened = value;
         foreach (var layer in new[] { "plain" })
         {
             await SetRaw(layer, "fill-extrusion-height", $"""["*",["get","top"],{value}]""");

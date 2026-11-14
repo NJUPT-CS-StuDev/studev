@@ -25,6 +25,10 @@ public sealed partial class MapSurface : SwapChainPanel
     private ID3D11Query? done;
     private readonly Dictionary<long, ID3D11Texture2D> opened = new();
     private MapProjectionHandle? projection;
+    private Camera? camera;
+    /** The baked buildings drawn over each frame, once they have arrived. */
+    public Models? Models { get; set; }
+    public ID3D11Device1? Device => device;
     private (uint Width, uint Height) logical, physical;
     private double scale = 1;
     private volatile bool redraw = true;
@@ -137,6 +141,7 @@ public sealed partial class MapSurface : SwapChainPanel
         if (redraw) { redraw = false; session.DemandFrame(new FrameDemand(FrameDemandFlag.Force, 0)); }
         MapView? view = null;
         foreach (var result in session.DrainFrameResults()) { view = result.View; if (result.NeedsRepaint) redraw = true; }
+        if (view is { } latest) camera = latest.Camera;
         var frame = session.AcquireFrame();
         if (frame is null) return;
         try
@@ -151,6 +156,7 @@ public sealed partial class MapSurface : SwapChainPanel
             var size = source!.Description;
             if (size.Width == physical.Width && size.Height == physical.Height) context!.CopyResource(back, source);
             else context!.CopySubresourceRegion(back, 0, 0, 0, 0, source, 0, new Vortice.Mathematics.Box(0, 0, 0, (int)Math.Min(size.Width, physical.Width), (int)Math.Min(size.Height, physical.Height), 1));
+            if (Models is { } models && camera is { } shot) models.Draw(device!, context, back, shot, logical.Width, logical.Height, physical);
             // The texture goes back to the map only once the copy has finished on the GPU.
             context.End(done!);
             context.Flush();
