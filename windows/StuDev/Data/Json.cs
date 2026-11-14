@@ -22,6 +22,7 @@ namespace StuDev.Data;
 [JsonSerializable(typeof(CalendarFile))]
 [JsonSerializable(typeof(ExamIndex))]
 [JsonSerializable(typeof(ClassExams))]
+[JsonSerializable(typeof(List<Exam>))]
 [JsonSerializable(typeof(LabIndex))]
 [JsonSerializable(typeof(ClassLabs))]
 [JsonSerializable(typeof(List<Place>))]

@@ -28,6 +28,18 @@ function Together({ label, classes, people }: { label: string; classes: string[]
     );
 }
 
+/** Who teaches it, in one row as the classes are: each name opens that teacher's timetable. */
+function Teachers({ names }: { names: string[] }) {
+    const each = [...new Set(names.flatMap(name => name.split('、')).map(name => name.trim()).filter(Boolean))];
+    if (each.length === 0) return null;
+    return (
+        <div className="kv">
+            <span className="k">老师</span>
+            <span className="v people">{each.map(name => <a key={name} href={whoLink('teacher', name)} aria-label={`${name} 的课表`}>{name}</a>)}</span>
+        </div>
+    );
+}
+
 /** A material's name as shown: its file's name, with the folder it is in when the file's name alone says little. */
 const shownTitle = (title: string) => {
     const parts = title.replace(/\.[a-z0-9]+$/i, '').split(' · ');
@@ -113,7 +125,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
         <a className="btn" href={`/map/?place=${encodeURI(event.room!)}&t=${momentText({ date: event.date, min: event.start })}`}>在地图上看</a>
         <a className="btn go" href={`/map/?nav=${encodeURI(event.room!)}`}>去这里</a>
     </div> : <div style={{ height: 12 }} />;
-    const teachers = event.teachers.flatMap(teacher => teacher.split('、')).map(teacher => <a key={teacher} className="kv" href={whoLink('teacher', teacher)}><span className="k">老师</span><span className="v">{teacher} 的课表</span><Chevron /></a>);
+    const teachers = <Teachers names={event.teachers} />;
     const courseTitle = courseName(event.meeting?.course.name ?? event.lab?.course.name ?? event.exam?.course.name ?? event.name);
     const course = <><a className="kv" href={whoLink('course', courseTitle)}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a><Materials course={courseTitle} /></>;
 

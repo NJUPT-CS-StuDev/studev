@@ -16,13 +16,14 @@ public static class Events
     private static readonly Dictionary<string, string> Kinds = new() { ["class"] = "课", ["lab"] = "实验", ["exam"] = "考试", ["run"] = "早锻炼", ["task"] = "任务" };
     private static List<CourseMaterials>? materials;
 
-    public static void Open(Campus campus, LineEvent e, Moment now)
+    /** Opens a thing from one's own line, or from someone else's when `other` is given: then nothing in it changes one's own. */
+    public static void Open(Campus campus, LineEvent e, Moment now, CampusLine? other = null)
     {
-        if (campus.Line is not { } line) return;
-        App.Window?.Sheet(Make(campus, line, e, now), 480);
+        if ((other ?? campus.Line) is not { } line) return;
+        App.Window?.Sheet(Make(campus, line, e, now, other is null), 480);
     }
 
-    private static FrameworkElement Make(Campus campus, CampusLine line, LineEvent e, Moment now)
+    private static FrameworkElement Make(Campus campus, CampusLine line, LineEvent e, Moment now, bool mine)
     {
         var tones = CourseTones.Of(line);
         var tone = CourseTones.ToneOf(e, tones, line.CourseMeetings);
@@ -30,7 +31,8 @@ public static class Events
         var exam = e.Kind == "exam";
         var term = line.Term.Term;
         void Close() => App.Window?.Close();
-        void Again(LineEvent other) => App.Window?.Sheet(Make(campus, line, other, now), 480);
+        void Again(LineEvent other) => App.Window?.Sheet(Make(campus, line, other, now, mine), 480);
+        void See(string type, string id) { Close(); App.Open("timetable", new Who(type, id)); }
 
         var root = new StackPanel();
         // What else is on at the same time, in the order it is stacked, switched in place.
@@ -92,7 +94,24 @@ public static class Events
             buttons.Children.Add(look); buttons.Children.Add(go);
             body.Children.Add(buttons);
         }
-        void Teachers() { foreach (var teacher in e.Teachers.SelectMany(t => t.Split('、')).Distinct()) Row("老师", Value(teacher)); }
+        // Who teaches it, in one row as the classes are: each name opens that teacher's timetable.
+        void Teachers()
+        {
+            var names = e.Teachers.SelectMany(t => t.Split('、')).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList();
+            if (names.Count == 0) return;
+            var row = new WrapRow { Gap = 6 };
+            foreach (var name in names)
+            {
+                var chip = new Tap(Paint.Brush("surfaceSunken"), Paint.Brush("line")) { Content = new TextBlock { Text = name, FontSize = 13.5, Foreground = Paint.Brush("ink") }, Padding = new Thickness(10, 3, 10, 4), CornerRadius = new CornerRadius(12) };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, $"{name} 的课表");
+                chip.Click += (_, _) => See("teacher", name);
+                row.Children.Add(chip);
+            }
+            Row("老师", row);
+        }
+        // Where it is and what it is, each opening the whole of it: the room's week, the course's every slot.
+        void Place(string key) { if (Names.IsRoom(e.Room)) Row(key, Value($"{Names.Room(e.Room!)} 的课表"), () => See("room", e.Room!)); }
+        void Course(string course) => Row("课程", Value("这门课的全部时段"), () => See("course", course));
         void Together(string key, List<string> classes, int? people)
         {
             if (classes.Count < 2 && people is null) return;
@@ -158,7 +177,10 @@ public static class Events
             if (System.Text.RegularExpressions.Regex.IsMatch(lab.Location, "排|[（(]")) Row("座位", Value(lab.Location.Replace(",", "、")));
             Together("一起上", lab.Classes, lab.Students);
             Teachers();
+            Place("教室");
+            Course(courseName);
             Materials(courseName);
+            if (!mine) return root;
             Danger("不上这次实验", () => { Choices.LeaveLab(campus.Preferences, "skip", lab.Id); Close(); });
             var count = line.Labs.Count(o => Choices.LabCourse(o) == Choices.LabCourse(lab));
             Danger("不上这门实验", () => { Choices.LeaveLab(campus.Preferences, "drop", Choices.LabCourse(lab)); Close(); }, $"共 {count} 次，可在“我 · 实验安排”里恢复");
@@ -172,9 +194,11 @@ public static class Events
             Together("同考场", x.Classes, x.Students);
             if (x.Note is { Length: > 0 } note) Row("备注", Value(note));
             Teachers();
+            Place("考场");
+            Course(courseName);
             Materials(courseName);
-            Row("考试", Value($"全部考试 · {line.Exams.Select(o => o.Course.Code ?? o.Course.Name).Distinct().Count()} 门"));
-            if (campus.Preferences.Class is { } klass) Danger("不参加这场考试", () => { Choices.SkipExam(campus.Preferences, term, klass, x.Id); Close(); });
+            Row("考试", Value($"全部考试 · {line.Exams.Select(o => o.Course.Code ?? o.Course.Name).Distinct().Count()} 门"), mine ? () => { Close(); App.Open("timetable", "exams"); } : null);
+            if (mine && campus.Preferences.Class is { } klass) Danger("不参加这场考试", () => { Choices.SkipExam(campus.Preferences, term, klass, x.Id); Close(); });
             return root;
         }
 
@@ -189,12 +213,15 @@ public static class Events
             Together("合班", meeting.Classes, meeting.TeachingClass.Size);
         }
         Teachers();
+        Place("教室");
+        Course(courseName);
         Materials(courseName);
         foreach (var other in Lessons.SharingSlot(line, e))
             Row("同时段", Value(Names.Course(other.Course.Name), $"{Lessons.WeeksText(other.Weeks)} · 本周不上"), () => { if (line.Around(other.Id, e.Date) is { } found) Again(found); });
         if (meeting is not null && line.Exams.Where(o => (o.Course.Code ?? o.Course.Name) == (meeting.Course.Code ?? meeting.Course.Name)).OrderBy(o => o.Date, StringComparer.Ordinal).FirstOrDefault() is { } next
             && line.On(Clock.Parse(next.Date)).FirstOrDefault(o => o.Exam?.Id == next.Id) is { } examEvent)
             Row("考试", Value($"{Clock.DateLabel(Clock.Parse(next.Date))} {Clock.Weekdays[Clock.Weekday(Clock.Parse(next.Date))]} {next.Start}"), () => Again(examEvent));
+        if (!mine) return root;
         if (meeting is not null && !meeting.TeachingClass.Id.StartsWith("custom:"))
         {
             var identity = CourseTones.Identity(meeting.Course.Code, meeting.Course.Name);

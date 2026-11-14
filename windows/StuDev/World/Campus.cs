@@ -5,6 +5,12 @@ using StuDev.Me;
 
 namespace StuDev.World;
 
+/** Whose timetable is shown when it is not one's own: a class, a teacher, a room or a course, by its name. */
+public sealed record Who(string Type, string Id)
+{
+    public string Title => Type switch { "teacher" => $"{Id} 老师", "room" => Names.Room(Id), _ => Id };
+}
+
 public sealed class Campus
 {
     public static Campus Shared { get; } = new();
@@ -34,6 +40,34 @@ public sealed class Campus
     }
 
     public Task Load() => loading ??= Fetch();
+
+    /** Someone else's line through the term, as Android's TimetableScreen gathers it: their lessons, labs and exams. */
+    public async Task<CampusLine?> LineOf(Who who)
+    {
+        if (Repository is not { } repo || Term is not { } term) return null;
+        var meetings = who.Type switch
+        {
+            "class" => (await repo.Schedule(who.Id)).Meetings,
+            "teacher" => (await repo.Meetings()).Where(m => m.Teachers.Any(t => t.Name == who.Id)).ToList(),
+            "course" => (await repo.Meetings()).Where(m => Names.Course(m.Course.Name) == who.Id).ToList(),
+            "room" => (await repo.Meetings()).Where(m => m.Room == who.Id).ToList(),
+            _ => throw new ArgumentException($"no timetable of a {who.Type}"),
+        };
+        var labs = who.Type switch
+        {
+            "class" => await repo.Labs(who.Id),
+            "teacher" => (await repo.AllLabs()).Where(l => l.Teachers.Contains(who.Id)).ToList(),
+            "course" => (await repo.AllLabs()).Where(l => Names.Course(l.Course.Name) == who.Id).ToList(),
+            _ => (await repo.AllLabs()).Where(l => l.Room == who.Id).ToList(),
+        };
+        var exams = who.Type switch
+        {
+            "class" => await repo.Exams(who.Id),
+            "course" => (await repo.AllExams()).Where(x => Names.Course(x.Course.Name) == who.Id).ToList(),
+            _ => [],
+        };
+        return new CampusLine(term, Periods, meetings, labs, exams, CampusLine.HolidaysOf(Calendar)) { Order = Line?.Order ?? CampusLine.LayerOrder };
+    }
     /** After a failure: start again from the release kept on disk, or the site's latest. */
     /** Asks every page to draw again, as after a change only the page itself knows of. */
     public void Touch() => Changed?.Invoke();

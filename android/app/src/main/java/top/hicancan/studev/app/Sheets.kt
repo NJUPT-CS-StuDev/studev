@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.account.roleName
 import top.hicancan.studev.app.AcademicState
@@ -78,6 +81,23 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
 
 /** One thing on the timetable, wherever it was tapped: a lesson, an exam or 早锻炼. It says what matters
  *  for going there and preparing, and links on to the course, the people and the rest. */
+/** Who teaches it, in one row as the classes are: each name opens that teacher's timetable. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun TeacherRow(teachers: List<String>, onOpen: (String) -> Unit) {
+    val names = teachers.flatMap { it.split("、") }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    if (names.isEmpty()) return
+    Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Plain("老师", 12.5.sp, Ink.faint, modifier = Modifier.width(40.dp))
+        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            names.forEach { name ->
+                Surface({ onOpen(name) }, shape = RoundedCornerShape(50), color = Ink.sunken, modifier = Modifier.semantics { contentDescription = "$name 的课表" }) {
+                    Plain(name, 13.5.sp, Ink.text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable fun EventSheet(event: LineEvent, line: CampusLine, isMe: Boolean, route: Route, model: CampusModel, settings: PersonalSettings, state: AcademicState, now: Moment, onOpen: (LineEvent) -> Unit, onClose: () -> Unit) {
     val mark = marks()
     val date = event.date
@@ -165,7 +185,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             KeyRow("周次", Exams.weeksText(meeting.weeks), if (left > 0) "还剩 $left 次" else "已经上完")
             Together("合班", meeting.classes, meeting.teaching_class.size)
         }
-        event.teachers.flatMap { it.split("、") }.forEach { teacher -> KeyRow("老师", "$teacher 的课表", chevron = true, onClick = { onClose(); route.timetable("teacher", teacher) }) }
+        TeacherRow(event.teachers) { teacher -> onClose(); route.timetable("teacher", teacher) }
         if (lab != null) KeyRow("来源", Exams.sheetName(lab.source), "实验中心排课表，${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本；调整以老师通知为准")
         if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
         val courseTitle = Names.course(event.meeting?.course?.name ?: event.lab?.course?.name ?: event.exam?.course?.name ?: event.name)

@@ -112,6 +112,7 @@ public sealed class Repository
     public Task<Dictionary<string, MorningRun>> Runs() => Read("morning-run.json", FactsJson.Default.DictionaryStringMorningRun);
     public Task<List<Lab>> AllLabs() => Release.Labs is null ? Task.FromResult(new List<Lab>()) : Read($"labs/{Release.Labs}/labs.json", FactsJson.Default.ListLab);
     public async Task<List<CalendarTerm>> Calendar() => (await Read("calendar.json", FactsJson.Default.CalendarFile)).Terms;
+    public Task<List<Exam>> AllExams() => Release.Exams is null ? Task.FromResult(new List<Exam>()) : Read($"exams/{Release.Exams}/exams.json", FactsJson.Default.ListExam);
     public async Task<List<Exam>> Exams(string klass)
     {
         if (Release.Exams is null) return [];

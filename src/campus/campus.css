@@ -340,6 +340,9 @@
   .v{flex:1;min-width:0;font-variant-numeric:tabular-nums}
   .v small{display:block;color:var(--muted);font-size:12px}
   .v.danger{color:var(--danger)}
+  .v.people{display:flex;flex-wrap:wrap;gap:6px}
+  .v.people a{padding:3px 10px;border-radius:999px;background:var(--surface-sunken);font-size:13.5px}
+  .v.people a:hover{background:var(--line)}
   .choice{display:flex;margin-left:auto;padding:2px;border-radius:8px;background:var(--surface-sunken)}
   .choice button{padding:5px 14px;border-radius:6px;font-size:13px;color:var(--muted)}
   .choice button.on{background:var(--paper);color:var(--ink);font-weight:500}

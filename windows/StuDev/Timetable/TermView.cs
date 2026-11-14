@@ -18,7 +18,7 @@ public static class TermView
     private static string DayHead(DateOnly date) => $"{Clock.DateLabel(date)} {Clock.Weekdays[Clock.Weekday(date)]}";
     private static string PlaceOf(Exam exam) => exam.Room is not null ? Names.Room(exam.Room) : exam.Location;
 
-    public static FrameworkElement Make(CampusLine line, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open)
+    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open)
     {
         var campus = Campus.Shared;
         var hasExams = line.Exams.Count > 0;
@@ -182,7 +182,7 @@ public static class TermView
                 else card.Children.Add(Kit.Text("都考完了", Role.Label, "muted"));
                 right.Children.Add(Card(card, () => onMode("exam")));
             }
-            var practice = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class)?.Practice ?? [];
+            var practice = campus.Classes.FirstOrDefault(c => c.Id == klass)?.Practice ?? [];
             var offGrid = practice.DistinctBy(p => $"{p.Name}|{string.Join(",", p.Weeks)}").OrderBy(p => p.Weeks.FirstOrDefault()).ThenBy(p => p.Name).ToList();
             if (offGrid.Count > 0)
             {
