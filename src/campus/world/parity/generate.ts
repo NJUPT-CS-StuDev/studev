@@ -28,7 +28,7 @@ import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
-import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
+import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, nextLesson, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { compactPlace, courseName, courseShort, roomLabel } from '@/world/names';
 import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
@@ -158,6 +158,8 @@ const tasks = {
     buildings: ['教三', '教三楼', '教3', '教学楼', '图科楼', '楼', '教十'].map(said => ({ said, word: buildingWord(said) })),
     suggestions: [{ now: { date: '2026-09-10', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-10-01', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: [] as string[] }, { now: { date: '2026-11-09', min: 600 }, setAside: ['lab:' + classLabs.filter(lab => lab.date >= '2026-11-09')[0]!.id] }]
         .map(test => ({ ...test, expected: suggestTasks(taskLine, test.now, test.setAside) })),
+    nextLessons: [...new Set(labMeetings.map(meeting => courseIdentity(meeting)))].slice(0, 6).flatMap(course => [{ date: '2026-11-09', min: 934 }, { date: '2026-11-09', min: 935 }, { date: '2026-11-09', min: 600 }, { date: '2026-11-13', min: 1200 }, { date: '2027-01-30', min: 600 }]
+        .map(at => { const next = nextLesson(taskLine, course, at, courseIdentity); return { course, now: at, next: next && { date: next.date, start: next.start, id: next.id } }; })),
     reportTitles: ['实验二：组网与路由器配置', 'Cachelab实验(上)', '数据库设计', '实验3: 进程调度'].map(project => ({ project, title: reportTitle(project) })),
     manual: [{ ...taskList[2]!, order: 1 }, { ...taskList[3]!, order: 0 }, ...taskList.filter((_, at) => at !== 2 && at !== 3)].sort(taskOrder).map(task => task.id),
     moves: ([['d', 'today', 0], ['c', 'tomorrow', 1], ['a', 'tomorrow', 0], ['b', 'someday', 0], ['a', 'later', 0], ['g', 'today', 5]] as [string, TaskGroup, number][]).map(([id, group, index]) => {

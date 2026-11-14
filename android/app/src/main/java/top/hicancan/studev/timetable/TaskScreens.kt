@@ -175,7 +175,15 @@ private fun quickDays(today: LocalDate): List<Pair<String, LocalDate>> {
                     }
                 }
                 "due" -> Panel {
-                    Picks(quickDays(now.date).mapIndexed { index, (name, _) -> index to name }, { quickDays(now.date)[it].second.toString() == task.due?.date }) { index -> save { it.copy(due = (it.due ?: TaskDeadline("")).copy(date = quickDays(now.date)[index].second.toString())) } }
+                    // A task for a course is most often due at its next class: one tap sets the deadline to when that class begins.
+                    val nextClass = task.course?.let { line.nextLesson(it, now) }
+                    val atClass = nextClass != null && task.due?.date == nextClass.date.toString() && task.due.time == nextClass.start
+                    val days = quickDays(now.date)
+                    Picks((if (nextClass != null) listOf(-1 to "下节课前") else emptyList()) + days.mapIndexed { index, (name, _) -> index to name },
+                        { if (it < 0) atClass else !atClass && days[it].second.toString() == task.due?.date }) { index ->
+                        if (index < 0) save { it.copy(due = TaskDeadline(nextClass!!.date.toString(), nextClass.start)) }
+                        else save { it.copy(due = (it.due ?: TaskDeadline("")).copy(date = days[index].second.toString())) }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Chip(task.due?.date?.let { dateLabel(LocalDate.parse(it)) } ?: "选日期", {
                             val start = task.due?.date?.let(LocalDate::parse) ?: now.date

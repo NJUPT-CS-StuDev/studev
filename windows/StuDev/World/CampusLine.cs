@@ -80,6 +80,14 @@ public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, 
                 if (e.Kind is not ("run" or "task") && (i > 0 || e.End > now.Min)) return e;
         return null;
     }
+    /** The next lesson of a course not yet begun, by its identity: what "before the next class" means for a task. */
+    public LineEvent? NextLesson(string course, Moment now, int horizon = 140)
+    {
+        for (var i = 0; i < horizon; i++)
+            foreach (var e in On(now.Date.AddDays(i)))
+                if (e.Kind == "class" && e.Meeting is { } m && CourseTones.Identity(m.Course.Code, m.Course.Name) == course && (i > 0 || e.Start > now.Min)) return e;
+        return null;
+    }
     public DateOnly WeekShown(Moment now)
     {
         for (var i = 0; i < 60; i++)

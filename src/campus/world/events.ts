@@ -177,6 +177,18 @@ export function nextEvent(line: Timeline, now: Moment, horizon = 40): CampusEven
     return null;
 }
 
+/**
+ * The next lesson of a course not yet begun, by the course's identity: what "before the next class" means for a task.
+ * A lesson already under way does not count; the one after it does.
+ */
+export function nextLesson(line: Timeline, course: string, now: Moment, identity: (meeting: TeachingMeeting) => string, horizon = 140): CampusEvent | null {
+    for (let offset = 0; offset < horizon; offset++) {
+        const date = addDays(now.date, offset);
+        for (const event of eventsOn(line, date)) if (event.kind === 'class' && event.meeting && identity(event.meeting) === course && (offset > 0 || event.start > now.min)) return event;
+    }
+    return null;
+}
+
 export function upcomingExams(line: Timeline, today: string) {
     return line.exams.filter(exam => exam.date >= today).sort((left, right) => left.date.localeCompare(right.date) || left.start.localeCompare(right.start))
         .map(exam => ({ exam, days: daysBetween(today, exam.date) }));

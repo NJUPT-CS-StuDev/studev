@@ -107,6 +107,11 @@ foreach (var day in tasksData["days"]!.AsArray())
     Equal("task deadlines", labLine.DueOn(date).Select(t => t.Id), day["due"]);
 }
 Equal("task order", tasks.Order(TaskRules.Order).Select(t => t.Id), tasksData["order"]);
+foreach (var test in tasksData["nextLessons"]!.AsArray())
+{
+    var next = labLine.NextLesson((string)test!["course"]!, new Moment(Clock.Parse((string)test["now"]!["date"]!), (int)test["now"]!["min"]!));
+    Equal("next lesson", next is null ? null : new { date = Clock.Text(next.Date), start = next.Start, id = next.Id }, test["next"]);
+}
 foreach (var item in tasksData["reportTitles"]!.AsArray()) Equal("report title", Suggestions.ReportTitle((string)item!["project"]!), item["title"]);
 foreach (var test in tasksData["suggestions"]!.AsArray())
 {

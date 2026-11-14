@@ -125,6 +125,12 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
         for (offset in 0 until horizon) for (event in on(now.date.plusDays(offset.toLong()))) if (event.kind != "run" && event.kind != "task" && (offset > 0 || event.end > now.min)) return event
         return null
     }
+    /** The next lesson of a course not yet begun, by its identity: what "before the next class" means for a task. */
+    fun nextLesson(course: String, now: Moment, horizon: Int = 140): LineEvent? {
+        for (offset in 0 until horizon) for (event in on(now.date.plusDays(offset.toLong())))
+            if (event.kind == "class" && event.meeting?.let { top.hicancan.studev.timetable.TimetablePresentation.identity(it) } == course && (offset > 0 || event.start > now.min)) return event
+        return null
+    }
     fun upcomingExams(today: LocalDate) = exams.filter { it.date >= today.toString() }.sortedWith(compareBy({ it.date }, { it.start }))
     /** Exams still ahead, one entry per day, in order: people prepare by the day, not by the paper. */
     fun examDays(today: LocalDate) = upcomingExams(today).groupBy { it.date }.map { (date, list) -> Triple(LocalDate.parse(date), daysBetween(today, LocalDate.parse(date)), list) }

@@ -203,7 +203,19 @@ public static class TaskSheet
         {
             var p = Panel();
             void DueOn(string date) => Save(task with { Due = task.Due is null ? new(date) : task.Due with { Date = date } }, "due");
-            p.Children.Add(Kit.Picks([.. quickDays.Select(q => (UIElement)Kit.Pick(q.Name, task.Due?.Date == q.Date, () => DueOn(q.Date))), DatePick(task.Due?.Date, DueOn)]));
+            // A task for a course is most often due at its next class: one tap sets the deadline to when that class begins.
+            var nextClass = task.Course is { } taskCourse ? line.NextLesson(taskCourse, now) : null;
+            var atClass = nextClass is not null && task.Due?.Date == Clock.Text(nextClass.Date) && task.Due.Time == nextClass.Start;
+            var duePicks = new List<UIElement>();
+            if (nextClass is not null)
+            {
+                var pick = Kit.Pick("下节课前", atClass, () => Save(task with { Due = new(Clock.Text(nextClass.Date), nextClass.Start) }, "due"));
+                ToolTipService.SetToolTip(pick, $"{Clock.DayWord(Clock.Text(nextClass.Date), now.Date)} {Clock.Hm(nextClass.Start)} 上课");
+                duePicks.Add(pick);
+            }
+            duePicks.AddRange(quickDays.Select(q => (UIElement)Kit.Pick(q.Name, task.Due?.Date == q.Date && !atClass, () => DueOn(q.Date))));
+            duePicks.Add(DatePick(task.Due?.Date, DueOn));
+            p.Children.Add(Kit.Picks([.. duePicks]));
             if (task.Due is { } dueSet)
             {
                 var time = TimeField(dueSet.Time, "时间", minutes => Save(task with { Due = dueSet with { Time = minutes, Remind = null } }, "due"), true);

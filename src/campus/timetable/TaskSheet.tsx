@@ -3,7 +3,7 @@
 // in place; then its steps and a note. Everything is kept as it is changed.
 import { useEffect, useState, type ReactNode } from 'react';
 import { courseIdentity } from '@/timetable/model/courseColors';
-import type { Timeline } from '@/world/events';
+import { nextLesson, type Timeline } from '@/world/events';
 import { courseName, courseShort } from '@/world/names';
 import { DAY_REMINDERS, deleteTask, newTaskId, saveTask, TIMED_REMINDERS, toggleDone, type Task } from '@/world/tasks';
 import { addDays, dayWord, hm, minutesOf, momentNow, weekdayOf } from '@/world/time';
@@ -44,6 +44,8 @@ export function TaskSheet({ task, line, top, onClose }: { task: Task; line: Time
     const due = task.due ? `${dayWord(task.due.date, now.date)}${task.due.time !== undefined ? ` ${hm(task.due.time)}` : ''} 截止` : '截止';
     const late = Boolean(task.due && (task.due.date < now.date || (task.due.date === now.date && (task.due.time ?? 1440) <= now.min)) && !task.done);
     const course = task.course ? courses.find(([id]) => id === task.course)?.[1] : undefined;
+    // A task for a course is most often due at its next class: one tap sets the deadline to when that class begins.
+    const nextClass = task.course ? nextLesson(line, task.course, now, courseIdentity) : null;
     return (
         <Sheet top={top} className={`toned task p${task.priority ?? 0}`} onClose={onClose} title={<span className="ttitle">
             <button className={`tcheck ${task.done ? 'on' : ''}`} aria-label={task.done ? '标为未完成' : '完成'} onClick={() => toggleDone(task)} />
@@ -74,7 +76,8 @@ export function TaskSheet({ task, line, top, onClose }: { task: Task; line: Time
                     : <p className="meta">截止前的七天里没有合适的空闲，可以缩短用时。</p>}</div>}
             </div>}
             {panel === 'due' && <div className="tpanel">
-                <div className="picks">{quickDays(now.date).map(day => <button key={day.name} className={task.due?.date === day.date ? 'on' : ''} onClick={() => save({ due: { ...task.due, date: day.date } })}>{day.name}</button>)}
+                <div className="picks">{nextClass && <button className={task.due?.date === nextClass.date && task.due.time === nextClass.start ? 'on' : ''} title={`${dayWord(nextClass.date, now.date)} ${hm(nextClass.start)} 上课`} onClick={() => save({ due: { date: nextClass.date, time: nextClass.start } })}>下节课前</button>}
+                    {quickDays(now.date).map(day => <button key={day.name} className={task.due?.date === day.date && !(nextClass && task.due.time === nextClass.start && day.date === nextClass.date) ? 'on' : ''} onClick={() => save({ due: { ...task.due, date: day.date } })}>{day.name}</button>)}
                     <input className="tf" type="date" aria-label="截止日期" value={task.due?.date ?? ''} onChange={event => event.target.value && save({ due: { ...task.due, date: event.target.value } })} /></div>
                 {task.due && <>
                     <label className="tline"><span>时间</span><input className="tf" type="time" value={task.due.time !== undefined ? hm(task.due.time) : ''} onChange={event => save({ due: { ...task.due!, time: event.target.value ? minutesOf(event.target.value) : undefined, remind: undefined } })} /><small>留空就是当天结束前</small></label>

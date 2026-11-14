@@ -172,6 +172,14 @@ class ParityTest {
             val moved = Tasks.move(list.first { it.id == case.getValue("id").jsonPrimitive.content }, group, case.getValue("index").jsonPrimitive.int, shown, now)
             assertEquals(case.toString(), case.getValue("changed").jsonArray.map { json.decodeFromJsonElement<Task>(JsonObject(it.jsonObject + ("modified" to JsonPrimitive("")))) }, moved.map { it.copy(modified = "") })
         }
+        tasks.getValue("nextLessons").jsonArray.forEach { item ->
+            val case = item.jsonObject
+            val at = case.getValue("now").jsonObject
+            val next = taskLine.nextLesson(case.getValue("course").jsonPrimitive.content, Moment(LocalDate.parse(at.getValue("date").jsonPrimitive.content), at.getValue("min").jsonPrimitive.int))
+            val expected = case.getValue("next")
+            if (expected is JsonNull) assertEquals(case.toString(), null, next)
+            else assertEquals(case.toString(), Triple(expected.jsonObject.getValue("date").jsonPrimitive.content, expected.jsonObject.getValue("start").jsonPrimitive.int, expected.jsonObject.getValue("id").jsonPrimitive.content), next?.let { Triple(it.date.toString(), it.start, it.id) })
+        }
         tasks.getValue("reportTitles").jsonArray.forEach { item -> assertEquals(item.jsonObject.getValue("title").jsonPrimitive.content, Suggestions.reportTitle(item.jsonObject.getValue("project").jsonPrimitive.content)) }
         tasks.getValue("suggestions").jsonArray.forEach { item ->
             val case = item.jsonObject
