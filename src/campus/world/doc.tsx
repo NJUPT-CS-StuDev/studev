@@ -1,5 +1,5 @@
 // A document as docstream reads it, drawn as the page's own elements: one reading of Markdown for the web, the app
-// and the blog alike (the kernel is Rust; see NJUPT-CS-StuDev/docstream). Each top-level block is drawn once and
+// and the blog alike (the kernel is Rust; see hicancan/docstream). Each top-level block is drawn once and
 // kept while its key is the same, so text streaming in redraws only the block being written. Formulas are typeset and
 // Mermaid diagrams laid out by the same kernel, as SVG in the colour of the text around them.
 import { memo, useMemo, useState, type CSSProperties } from 'react';

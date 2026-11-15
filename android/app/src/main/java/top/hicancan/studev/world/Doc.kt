@@ -36,7 +36,7 @@ import top.hicancan.studev.app.marks
 
 /**
  * A document as docstream reads it, drawn as Compose: the same reading of Markdown as the web's (src/campus/world/doc.tsx);
- * the kernel is Rust (NJUPT-CS-StuDev/docstream). Each top-level block is keyed, so streaming text redraws only the
+ * the kernel is Rust (hicancan/docstream). Each top-level block is keyed, so streaming text redraws only the
  * block being written. A link inside the site is opened by `onLink`; one outside it in the browser.
  */
 object Docs {
