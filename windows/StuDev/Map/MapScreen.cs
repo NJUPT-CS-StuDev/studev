@@ -124,10 +124,12 @@ public sealed partial class MapScreen : Screen
             await surface.Ready;
             var style = JsonNode.Parse(System.Text.Encoding.UTF8.GetString(await repo.Bytes("space/仙林/style.json"))
                 .Replace("{data}", $"{Repository.Site}{repo.Release.Base}/space/{Uri.EscapeDataString("仙林")}").Replace("{assets}", $"{Repository.Site}/map"))!.AsObject();
-            // Chinese labels from Microsoft YaHei, which every Chinese Windows has, as the web draws them from the system's font.
+            // Labels from Microsoft YaHei, which every Chinese Windows has, as the web draws Chinese from the system's font:
+            // every character, so a label is one typeface and no range is left to the glyph files, whose Latin range
+            // MapLibre Native fails to load beside a local face.
             var faces = new JsonObject();
             foreach (var stack in new[] { "Noto-Sans-Regular", "Noto-Sans-Medium", "Noto-Sans-Italic" })
-                faces[stack] = new JsonArray(new JsonObject { ["url"] = "file:///C:/Windows/Fonts/msyh.ttc", ["unicode-range"] = new JsonArray("U+2E80-9FFF", "U+F900-FAFF", "U+FF00-FFEF") });
+                faces[stack] = new JsonArray(new JsonObject { ["url"] = "file:///C:/Windows/Fonts/msyh.ttc", ["unicode-range"] = new JsonArray("U+0000-FFFF") });
             style["font-faces"] = faces;
             // The invisible tap-target copy of the buildings fights the drawn one for depth here; the drawn one is tapped instead.
             foreach (var layer in style["layers"]!.AsArray()) if ((string?)layer!["id"] == "forms") layer["layout"] = new JsonObject { ["visibility"] = "none" };
