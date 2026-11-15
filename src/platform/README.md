@@ -73,16 +73,15 @@ Every form is answered by someone signed in; `access` says only who can see it
 The campus's own three forms are named in `product.json` under `forms`: feedback,
 photos of places and data the teaching office does not publish. The web and
 native Android entries read them, and fill fields they know (`a.<field>=` in the
-link). The data form's approved material goes to njupt-data. Review does not directly change
+link). The data form's approved material goes to the private data pipeline. Review does not directly change
 public campus facts. Export approved material with `STUDEV_PRIVATE_DIR` pointing
 to the existing external private storage:
 
 ```powershell
-node scripts/platform/export-contributions.mjs --output D:\code\github\hicancan\njupt-suite\njupt-data\evidence\contributions
+node scripts/platform/export-contributions.mjs --output <the private evidence directory for contributions>
 ```
 
 The export includes public answers, original files and review provenance; account
 identity and signed download credentials stay out of the acquisition evidence.
-An explicit `njupt-data acquire contributions` selection places a reviewed lab
-sheet in the normal `evidence/labs/<term>/` path. The normal evidence parser and
+The private pipeline places a reviewed lab sheet with its other lab evidence. The normal evidence parser and
 release pipeline then apply, including stopping on undecided cells.

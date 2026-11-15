@@ -247,7 +247,8 @@ async function locateData(): Promise<{ dir: string; version: string; index: Data
     if (!asset) {
         throw new Error('latest data release has no facts archive');
     }
-    const version = latest.tag_name;
+    // The published name says when the data was built, not where it came from.
+    const version = latest.tag_name.replace(/^data-/, '');
     const dir = join(root, '.data', version);
     if (!existsSync(join(dir, 'index.json'))) {
         await mkdir(dir, { recursive: true });
@@ -471,8 +472,10 @@ const group = <T>(rows: T[], key: (row: T) => string[]) => {
 };
 
 /** Courses, people, classes, exams and places as documents, so one index answers everything. */
-function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[], rooms: Room[]): SearchDocument[] {
+function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[], rooms: Room[], nicknames: Map<string, string[]>): SearchDocument[] {
     const docs: SearchDocument[] = [];
+    /** What students call a course (the course plans' aliases in the data release), so 计网 finds 计算机网络. */
+    const called = (name: string) => nicknames.get(name) ?? [];
     const byId = new Map(places.map(place => [place.id, place]));
     /** An entity and everything that contains it. */
     const chain = (id: string | null | undefined): string[] => {
@@ -483,7 +486,7 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
     for (const [name, rows] of group(meetings, row => [plainCourse(row.course.name)])) {
         const teachers = rows.flatMap(row => row.teachers.map(teacher => teacher.name));
         const count = new Set(rows.map(row => row.teaching_class.id)).size;
-        docs.push(entity('courses', name, `/?who=course:${encodeURI(name)}&scale=week`, name, `${count} 个教学班`, [...rows.map(row => row.course.code ?? ''), ...teachers, ...rows.map(row => row.course.category ?? '')]));
+        docs.push(entity('courses', name, `/?who=course:${encodeURI(name)}&scale=week`, name, `${count} 个教学班`, [...new Set(rows.flatMap(row => called(row.course.name))), ...rows.map(row => row.course.code ?? ''), ...teachers, ...rows.map(row => row.course.category ?? '')]));
     }
     for (const [name, rows] of group(meetings, row => row.teachers.map(teacher => teacher.name))) {
         docs.push(entity('teachers', name, `/?who=teacher:${encodeURI(name)}&scale=week`, name, null, rows.map(row => plainCourse(row.course.name))));
@@ -495,11 +498,11 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
         const first = rows[0]!;
         const teachers = [...new Set(rows.flatMap(row => row.teachers.map(teacher => teacher.name)))];
         docs.push(entity('teaching-classes', id, `/?preview=${encodeURIComponent(id)}&scale=week`, [plainCourse(first.course.name), ...teachers].join(' '), first.campus,
-            [...slotText(rows), first.course.code ?? '', ...rows.flatMap(row => row.classes)], rows.flatMap(row => chain(row.room))));
+            [...called(first.course.name), ...slotText(rows), first.course.code ?? '', ...rows.flatMap(row => row.classes)], rows.flatMap(row => chain(row.room))));
     }
     for (const exam of exams) {
         docs.push(entity('exams', exam.id, `/?who=course:${encodeURI(plainCourse(exam.course.name))}&t=${exam.date}&scale=day`, `${plainCourse(exam.course.name)} 考试`, exam.classes.length > 3 ? `${exam.classes.slice(0, 3).join(' ')} 等 ${exam.classes.length} 个班` : exam.classes.join(' '),
-            [`${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), ...exam.classes, exam.teacher ?? '', exam.course.code ?? ''], chain(exam.room)));
+            [...called(exam.course.name), `${exam.date} ${exam.start}–${exam.end}`, roomText(exam.room ?? exam.location), ...exam.classes, exam.teacher ?? '', exam.course.code ?? ''], chain(exam.room)));
     }
     for (const place of places) {
         if (place.kind === 'floor' || place.kind === 'campus') continue;
@@ -572,7 +575,9 @@ async function main() {
     }
     const teachingDir = join(out, 'teaching', terms.teaching);
     const examRows = terms.exams ? await read<Exam[]>(join(data.dir, 'exams', terms.exams, 'exams.json')) : [];
-    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, places, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms);
+    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, places, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms,
+        new Map((await read<{ items: { subtype: string; names: string[]; aliases: string[] }[] }>(join(data.dir, 'entities', 'information.json'))).items
+            .filter(item => item.subtype === 'information:course-plan' && item.aliases.length).map(item => [item.names[0]!, item.aliases])));
     for await (const doc of searchDocuments(data.dir)) {
         docs.push(doc);
     }

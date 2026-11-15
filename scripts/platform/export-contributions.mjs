@@ -1,4 +1,4 @@
-// Run with --output <njupt-data/evidence/contributions>. The existing private owner files stay outside the repo.
+// Run with --output <the private evidence directory for contributions>. The existing private owner files stay outside the repo.
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';

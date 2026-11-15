@@ -15,7 +15,7 @@ export const roomLabel = (room: string | null | undefined) => (room ?? '').repla
 export const roomShort = (room: string | null | undefined) => roomLabel(room).replace(/^教/, '');
 /**
  * A place as a tight tile says it: the building's word set against its rooms, which then break as a pair, and a run of
- * rooms as the first and how many. What the building is called is the data's (labs.yaml in njupt-data), not this.
+ * rooms as the first and how many. What the building is called is the data's (the data release's labs), not this.
  */
 export const compactPlace = (place: string) => place.replace(/^([^\d\s/-]+)[-\s]+(?=\d)/, '$1')
     .replace(/\d+(?:\/\d+){2,}/g, rooms => `${rooms.split('/')[0]}等${rooms.split('/').length}间`);
