@@ -1,6 +1,4 @@
-// Run from the repo root. No network; freezes the web's actual results for Android to pass.
-// node_modules/.bin/esbuild src/campus/world/parity/generate.ts --bundle --platform=node --format=esm --packages=external --alias:@=./src/campus --loader:.json=json --outfile=D:/Temp/claude-wsl/parity/generate.mjs
-// node D:/Temp/claude-wsl/parity/generate.mjs
+// `npm run golden` after the data or a shared rule changes. No network; freezes the web's actual results for Android to pass.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { sunAt } from '@/map/model/sun';
 import { campusFrame } from '@/map/model/frame';
