@@ -13,8 +13,11 @@ export const unplaced = (room: string | null | undefined) => !room || !room.incl
 export const isRoom = (room: string | null | undefined) => Boolean(room) && /[/:]/.test(room!);
 export const roomLabel = (room: string | null | undefined) => (room ?? '').replace(/^[^/:]*[/:]/, '').replaceAll('/', ' ');
 export const roomShort = (room: string | null | undefined) => roomLabel(room).replace(/^教/, '');
-/** Tight tiles keep the building and the first room; the detail keeps every room. */
-export const compactPlace = (place: string) => place.replace(/^(?:计算机学科楼|计算机楼|计科楼|CS)[-\s]*/, '计科楼')
+/**
+ * A place as a tight tile says it: the building's word set against its rooms, which then break as a pair, and a run of
+ * rooms as the first and how many. What the building is called is the data's (labs.yaml in njupt-data), not this.
+ */
+export const compactPlace = (place: string) => place.replace(/^([^\d\s/-]+)[-\s]+(?=\d)/, '$1')
     .replace(/\d+(?:\/\d+){2,}/g, rooms => `${rooms.split('/')[0]}等${rooms.split('/').length}间`);
 /** The building of a room id; the id itself when it is not a room. */
 export const buildingOf = (id: string) => {

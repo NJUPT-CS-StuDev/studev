@@ -19,7 +19,7 @@ public static partial class Names
     public static string Room(string? room) => Campus().Replace(room ?? "", "", 1).Replace('/', ' ');
     /** A room said short on a tight tile: 教4 101 becomes 4 101. */
     public static string RoomShort(string? room) { var label = Room(room); return label.StartsWith('教') ? label[1..] : label; }
-    public static string CompactPlace(string place) => Regex.Replace(Regex.Replace(place, @"^(?:计算机学科楼|计算机楼|计科楼|CS)[-\s]*", "计科楼"), @"\d+(?:/\d+){2,}", rooms => $"{rooms.Value.Split('/')[0]}等{rooms.Value.Split('/').Length}间");
+    public static string CompactPlace(string place) => Regex.Replace(Regex.Replace(place, @"^([^\d\s/-]+)[-\s]+(?=\d)", "$1"), @"\d+(?:/\d+){2,}", rooms => $"{rooms.Value.Split('/')[0]}等{rooms.Value.Split('/').Length}间");
     /** A room with a timetable of its own: a building and a room, or a campus and a place. */
     public static bool IsRoom(string? room) => !string.IsNullOrEmpty(room) && (room.Contains('/') || room.Contains(':'));
     /** A slash means the map has it. */
