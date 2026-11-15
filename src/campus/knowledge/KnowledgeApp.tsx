@@ -28,7 +28,7 @@ export default function KnowledgeApp() {
     const topic = knowledge?.topics.find(item => item.id === topicId) ?? null;
     const material = knowledge?.materials.find(item => item.path === materialPath) ?? null;
     // The course in view: as asked, or the one that teaches the topic, or the one the document belongs to.
-    const course = knowledge?.courses.find(item => item.code === (params.get('course') ?? topic?.taught_by[0] ?? material?.course)) ?? null;
+    const course = knowledge?.courses.find(item => item.id === (params.get('course') ?? topic?.taught_by[0] ?? material?.course)) ?? null;
 
     const open = (to: Open) => {
         set({ course: to.course ?? null, topic: to.topic ?? null, material: to.material ?? null }, { push: true });
@@ -42,16 +42,16 @@ export default function KnowledgeApp() {
         open: href => {
             const to = knowledgePlace(href);
             if (!to) return null;
-            if ('topic' in to) return () => open({ topic: to.topic, course: course?.code });
+            if ('topic' in to) return () => open({ topic: to.topic, course: course?.id });
             if ('course' in to) return () => open({ course: to.course });
-            return () => open({ material: to.material, anchor: to.anchor, course: course?.code });
+            return () => open({ material: to.material, anchor: to.anchor, course: course?.id });
         },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [course?.code]);
+    }), [course?.id]);
 
     if (failed) return <div className="sd page"><div className="wrap narrow"><p className="muted">{failed}</p></div></div>;
     if (!knowledge || !ready) return <div className="sd page"><div className="wrap"><p className="muted">正在打开知识…</p></div></div>;
-    if (!course) return <Home knowledge={knowledge} onOpen={code => open({ course: code })} />;
+    if (!course) return <Home knowledge={knowledge} onOpen={id => open({ course: id })} />;
 
     const tree = <Outline course={course} knowledge={knowledge} topic={topic} material={material} onOpen={open} />;
     return <DocPlaceProvider value={place}>
@@ -86,10 +86,10 @@ function Home({ knowledge, onOpen }: { knowledge: Knowledge; onOpen: (code: stri
         <div className="ph"><div><h1>知识</h1><p>按课程组织的知识点，每个知识点连着它依赖的、建立在它之上的，以及考过它的题。</p></div></div>
         <div className="kn-courses">{knowledge.courses.map(course => {
             const topics = new Set(course.chapters.flatMap(chapter => chapter.topics)).size;
-            const materials = knowledge.materials.filter(item => item.course === course.code).length;
-            return <button key={course.code} className="kn-course" onClick={() => onOpen(course.code)}>
+            const materials = knowledge.materials.filter(item => item.course === course.id).length;
+            return <button key={course.id} className="kn-course" onClick={() => onOpen(course.id)}>
                 <b>{course.name}</b>
-                <small>{course.code}{course.former.length ? ` · 曾用 ${course.former.join('、')}` : ''}</small>
+                <small>{course.id}{course.former.length ? ` · 曾用 ${course.former.join('、')}` : ''}</small>
                 <span>{course.chapters.length} 章 · {topics} 个知识点 · {materials} 份资料</span>
                 <Chevron />
             </button>;
@@ -100,13 +100,13 @@ function Home({ knowledge, onOpen }: { knowledge: Knowledge; onOpen: (code: stri
 function Outline({ course, knowledge, topic, material, onOpen }: { course: KnowledgeCourse; knowledge: Knowledge; topic: KnowledgeTopic | null; material: KnowledgeMaterial | null; onOpen: (to: Open) => void }) {
     const title = (id: string) => knowledge.topics.find(item => item.id === id)?.title ?? id;
     return <nav className="kn-outline" aria-label="课程目录">
-        <button className={`kn-course-head ${!topic && !material ? 'on' : ''}`} onClick={() => onOpen({ course: course.code })}>{course.name}</button>
+        <button className={`kn-course-head ${!topic && !material ? 'on' : ''}`} onClick={() => onOpen({ course: course.id })}>{course.name}</button>
         {course.chapters.map(chapter => <section key={chapter.title}>
             <h3>{chapter.title}</h3>
-            {chapter.topics.map(id => <button key={id} className={topic?.id === id ? 'on' : ''} onClick={() => onOpen({ topic: id, course: course.code })}>{title(id)}</button>)}
+            {chapter.topics.map(id => <button key={id} className={topic?.id === id ? 'on' : ''} onClick={() => onOpen({ topic: id, course: course.id })}>{title(id)}</button>)}
         </section>)}
-        <section><h3>资料</h3>{knowledge.materials.filter(item => item.course === course.code).map(item =>
-            <button key={item.path} className={material?.path === item.path ? 'on' : ''} onClick={() => onOpen({ material: item.path, course: course.code })}>{item.title}</button>)}</section>
+        <section><h3>资料</h3>{knowledge.materials.filter(item => item.course === course.id).map(item =>
+            <button key={item.path} className={material?.path === item.path ? 'on' : ''} onClick={() => onOpen({ material: item.path, course: course.id })}>{item.title}</button>)}</section>
     </nav>;
 }
 
@@ -124,7 +124,7 @@ function CourseView({ course, knowledge, onOpen }: { course: KnowledgeCourse; kn
         {text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
         {most.length ? <section className="kn-most"><h2>考得最多的知识点</h2>{most.map(item => {
             const count = tested(item);
-            return <button key={item.id} onClick={() => onOpen({ topic: item.id, course: course.code })}><b>{item.title}</b><small>{count.questions} 道题 · {count.materials} 份资料</small></button>;
+            return <button key={item.id} onClick={() => onOpen({ topic: item.id, course: course.id })}><b>{item.title}</b><small>{count.questions} 道题 · {count.materials} 份资料</small></button>;
         })}</section> : null}
     </article>;
 }
@@ -177,14 +177,14 @@ function Relations({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic
     const title = (id: string) => knowledge.topics.find(item => item.id === id)?.title ?? id;
     const byMaterial = new Map<string, typeof topic.tested_by>();
     for (const ref of topic.tested_by) byMaterial.set(ref.material, [...(byMaterial.get(ref.material) ?? []), ref]);
-    const link = (id: string) => <button key={id} onClick={() => onOpen({ topic: id, course: course.code })}>{title(id)}</button>;
+    const link = (id: string) => <button key={id} onClick={() => onOpen({ topic: id, course: course.id })}>{title(id)}</button>;
     return <div className="kn-rel">
         {topic.requires.length ? <section><h3>先要懂</h3>{topic.requires.map(link)}</section> : null}
         {topic.leads_to.length ? <section><h3>用到它的</h3>{topic.leads_to.map(link)}</section> : null}
         <section><h3>考过它的题</h3>{byMaterial.size ? [...byMaterial].map(([path, refs]) => {
             const material = knowledge.materials.find(item => item.path === path);
             return <div key={path} className="kn-refs"><small>{material?.title ?? path}</small>
-                {refs.map(ref => <button key={ref.anchor} onClick={() => onOpen({ material: path, anchor: ref.anchor, course: course.code })}>{ref.heading}</button>)}</div>;
+                {refs.map(ref => <button key={ref.anchor} onClick={() => onOpen({ material: path, anchor: ref.anchor, course: course.id })}>{ref.heading}</button>)}</div>;
         }) : <p className="muted">还没有</p>}</section>
     </div>;
 }
@@ -193,10 +193,10 @@ function Relations({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic
 function Tested({ material, knowledge, course, onOpen }: { material: KnowledgeMaterial; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
     const counts = knowledge.topics.map(topic => ({ topic, n: topic.tested_by.filter(ref => ref.material === material.path).length })).filter(row => row.n).sort((a, b) => b.n - a.n);
     return <div className="kn-rel"><section><h3>这份资料考到的知识点</h3>{counts.map(({ topic, n }) =>
-        <button key={topic.id} onClick={() => onOpen({ topic: topic.id, course: course.code })}>{topic.title}<small>{n} 题</small></button>)}</section></div>;
+        <button key={topic.id} onClick={() => onOpen({ topic: topic.id, course: course.id })}>{topic.title}<small>{n} 题</small></button>)}</section></div>;
 }
 
 function Materials({ course, knowledge, onOpen }: { course: KnowledgeCourse; knowledge: Knowledge; onOpen: (to: Open) => void }) {
-    return <div className="kn-rel"><section><h3>资料</h3>{knowledge.materials.filter(item => item.course === course.code).map(item =>
-        <button key={item.path} onClick={() => onOpen({ material: item.path, course: course.code })}>{item.title}<small>{item.questions ? `${item.questions} 题` : item.kind}</small></button>)}</section></div>;
+    return <div className="kn-rel"><section><h3>资料</h3>{knowledge.materials.filter(item => item.course === course.id).map(item =>
+        <button key={item.path} onClick={() => onOpen({ material: item.path, course: course.id })}>{item.title}<small>{item.questions ? `${item.questions} 题` : item.kind}</small></button>)}</section></div>;
 }

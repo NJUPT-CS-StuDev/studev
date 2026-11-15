@@ -249,7 +249,7 @@ async function locateKnowledge(): Promise<{ dir: string; version: string }> {
 }
 
 interface KnowledgeIndex {
-    courses: { code: string; name: string; former: string[]; subject: string; chapters: { title: string; topics: string[] }[]; path: string }[];
+    courses: { id: string; name: string; codes: string[]; former: string[]; chapters: { title: string; topics: string[] }[]; path: string }[];
     topics: { id: string; title: string; requires: string[]; path: string; taught_by: string[]; tested_by: { material: string; heading: string; anchor: string }[]; leads_to: string[] }[];
     materials: { path: string; title: string; kind: string; course: string; term: string | null; source: string; questions: number }[];
 }
@@ -257,7 +257,7 @@ interface KnowledgeIndex {
 /** Topics and questions as documents, so a search finds a piece of knowledge and opens it where it is. */
 async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<SearchDocument[]> {
     const plain = (markdown: string) => markdown.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[#*`$>|]/g, ' ').replace(/\s+/g, ' ').trim();
-    const names = new Map(index.courses.map(course => [course.code, course.name]));
+    const names = new Map(index.courses.map(course => [course.id, course.name]));
     const docs: SearchDocument[] = [];
     for (const topic of index.topics) {
         const body = await readFile(join(dir, topic.path), 'utf8');
@@ -640,7 +640,8 @@ async function main() {
     // The knowledge names its courses by the codes taught now; one that is not stops the build.
     const taught = new Set((await read<{ items: { id: string }[] }>(join(data.dir, 'entities', 'information.json'))).items.map(item => item.id));
     for (const course of knowledgeIndex.courses) {
-        if (!taught.has(`information/course-plan/${course.code}`)) throw new Error(`knowledge course ${course.code} (${course.name}) is not taught this term`);
+        const gone = course.codes.filter(code => !taught.has(`information/course-plan/${code}`));
+        if (gone.length) throw new Error(`knowledge course ${course.name} names codes not taught this term: ${gone.join(', ')}`);
     }
     await cp(knowledge.dir, join(out, 'knowledge'), { recursive: true });
     docs.push(...await knowledgeDocuments(knowledge.dir, knowledgeIndex));

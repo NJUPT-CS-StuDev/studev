@@ -5,7 +5,8 @@ import { DATA_RELEASE } from '@/world/config';
 import { fetchJson } from '@/world/fetch';
 import { plainText, type Inline, type Keyed } from '@/world/doc';
 
-export interface KnowledgeCourse { code: string; name: string; former: string[]; subject: string; chapters: { title: string; topics: string[] }[]; path: string }
+/** A subject's outline; codes are the course plans taught now that teach it, former the codes it had before. */
+export interface KnowledgeCourse { id: string; name: string; codes: string[]; former: string[]; chapters: { title: string; topics: string[] }[]; path: string }
 export interface QuestionRef { material: string; heading: string; anchor: string }
 export interface KnowledgeTopic { id: string; title: string; requires: string[]; path: string; taught_by: string[]; tested_by: QuestionRef[]; leads_to: string[] }
 export interface KnowledgeMaterial { path: string; title: string; kind: string; course: string; term: string | null; source: string; questions: number }
