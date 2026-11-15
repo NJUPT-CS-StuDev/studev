@@ -45,6 +45,9 @@ if (-not $sha1Match.Success) { throw 'APK signature SHA-1 was not reported' }
 $sha1 = ($sha1Match.Groups[1].Value -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
 if ($sha1.Length -eq 40) { $sha1 = ($sha1 -split '(?<=\G..)(?=.)') -join ':' }
 if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificate SHA-1 prefix: $sha1" }
+# The APK as it ships, used on an emulator before anything is uploaded: it must open, search, route and not crash.
+& node (Join-Path $repo 'scripts/smoke/android.mjs') $apk
+if ($LASTEXITCODE -ne 0) { throw 'Android smoke test failed' }
 
 $tempBase = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd([char[]]'\/')
 $tempRoot = Join-Path $tempBase ("studev-apk-release-" + [guid]::NewGuid().ToString('N'))
@@ -71,6 +74,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows parity checks failed' }
 $publish = Join-Path $tempRoot 'windows-publish'
 & dotnet publish (Join-Path $windows 'StuDev') -c Release -r win-x64 -p:DebugType=none -p:Version=$versionName -o $publish
 if ($LASTEXITCODE -ne 0) { throw 'Windows build failed' }
+# The Windows app as it ships, used in a home of its own before it is packaged: the same, and a desktop widget opened.
+& pwsh -NoProfile -File (Join-Path $repo 'scripts/smoke/windows.ps1') -Exe (Join-Path $publish 'StuDev.exe')
+if ($LASTEXITCODE -ne 0) { throw 'Windows smoke test failed' }
 $velopack = Join-Path $tempRoot 'windows-releases'
 New-Item -ItemType Directory -Path $velopack -Force | Out-Null
 $feed = "$($product.origin)/download/windows"
