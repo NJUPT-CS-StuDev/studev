@@ -1,5 +1,5 @@
 // A widget on the desktop, as TickTick's are: a window of its own that belongs to the desktop, see-through over the
-// wallpaper, dragged by its head and snapped to the screen's edges and to the other widgets, never in the taskbar or
+// wallpaper, moved by its surface and drawn to the screen's edges and to the other widgets, never in the taskbar or
 // Alt+Tab. What it shows is a lens of the app's own (the list or the calendar) read through the shared glance rules;
 // each kind of widget only draws its body. StuDev keeps every widget current from the tray.
 using Microsoft.UI.Input;
@@ -22,14 +22,13 @@ namespace StuDev.Widgets;
 public abstract partial class DeskWidget : Window
 {
     public string Id { get; }
-    protected readonly Grid root = new();
+    protected readonly Surface root;
     protected readonly StackPanel body = new();
-    protected readonly Grid head = new() { Padding = new Thickness(16, 12, 8, 8), Background = Paint.Clear };
+    protected readonly Grip head = new() { Padding = new Thickness(16, 12, 8, 8), Background = Paint.Clear };
     protected readonly StackPanel tools = new() { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Top };
     private readonly TextBlock title = new() { FontSize = 17, FontWeight = Microsoft.UI.Text.FontWeights.Bold };
     private readonly TextBlock subtitle = new() { FontSize = 12 };
     private readonly Tap pick;
-    private readonly List<FrameworkElement> clickable = [];
     private readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly DispatcherTimer keep = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly Frost frost = new();
@@ -52,6 +51,7 @@ public abstract partial class DeskWidget : Window
         Id = id;
         Title = "StuDev 桌面小组件";
         hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        root = new Surface(hwnd);
         var presenter = OverlappedPresenter.Create();
         presenter.SetBorderAndTitleBar(true, false);
         presenter.IsMaximizable = false; presenter.IsMinimizable = false; presenter.IsResizable = true;
@@ -79,8 +79,6 @@ public abstract partial class DeskWidget : Window
         clock.Tick += (_, _) => Redraw(); clock.Start();
         AppWindow.Changed += (_, e) => { if (e.DidPositionChange || e.DidSizeChange) { keep.Stop(); keep.Start(); } };
         keep.Tick += (_, _) => { keep.Stop(); var p = AppWindow.Position; var s = AppWindow.Size; if (Device.Widget(Id) is { } mine) Device.PutWidget(mine with { Bounds = [p.X, p.Y, s.Width, s.Height] }); };
-        head.SizeChanged += (_, _) => Regions();
-        root.Loaded += (_, _) => Regions();
         Closed += (_, _) => Snapping.Detach(hwnd);
         Theme();
         Redraw();
@@ -103,7 +101,7 @@ public abstract partial class DeskWidget : Window
         // Owned by the desktop's icon view it stays on the desktop and survives Win+D; on top it floats over every window.
         SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, settings.OnTop ? 0 : DesktopIcons());
         frost.Opacity = settings.Opacity / 100.0;
-        Regions();
+        root.Movable = head.Movable = !settings.Locked;
         Redraw();
     }
 
@@ -122,22 +120,6 @@ public abstract partial class DeskWidget : Window
         root.RequestedTheme = Paint.Dark ? ElementTheme.Dark : ElementTheme.Light;
         frost.Dark = Paint.Dark;
         title.Foreground = Paint.Brush("ink"); subtitle.Foreground = Paint.Brush("muted");
-    }
-
-    /** The head is the handle: the system drags the window from it, except where its buttons are. */
-    private void Regions()
-    {
-        if (root.XamlRoot is null) return;
-        var source = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
-        if (Settings.Locked) { source.ClearRegionRects(NonClientRegionKind.Caption); source.ClearRegionRects(NonClientRegionKind.Passthrough); return; }
-        var scale = root.XamlRoot.RasterizationScale;
-        Windows.Graphics.RectInt32 Of(FrameworkElement element)
-        {
-            var box = element.TransformToVisual(root).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
-            return new((int)(box.X * scale), (int)(box.Y * scale), (int)Math.Ceiling(box.Width * scale), (int)Math.Ceiling(box.Height * scale));
-        }
-        source.SetRegionRects(NonClientRegionKind.Caption, [Of(head)]);
-        source.SetRegionRects(NonClientRegionKind.Passthrough, [.. clickable.Where(e => e.ActualWidth > 0).Select(Of)]);
     }
 
     private Tap Picker()
@@ -172,19 +154,17 @@ public abstract partial class DeskWidget : Window
         var words = new StackPanel { Spacing = 1 };
         words.Children.Add(pick); words.Children.Add(subtitle);
         head.Children.Add(words);
-        clickable.Add(pick);
         tools.Children.Add(Tool("M4 10h.01M10 10h.01M16 10h.01", "更多", More, 2.6));
         Grid.SetColumn(tools, 1); head.Children.Add(tools);
     }
 
-    /** A small button in the head, kept out of the drag handle. */
+    /** A small button in the head. */
     protected Tap Tool(string icon, string name, Action<Tap> act, double stroke = 1.6)
     {
         var tap = new Tap(Paint.Clear, Paint.Faded("ink", .08)) { Content = Kit.Icon(icon, 16, "muted", 20, stroke), Width = 30, Height = 30, CornerRadius = new CornerRadius(6) };
         ((FrameworkElement)tap.Content).HorizontalAlignment = HorizontalAlignment.Center; ((FrameworkElement)tap.Content).VerticalAlignment = VerticalAlignment.Center;
         AutomationProperties.SetName(tap, name); ToolTipService.SetToolTip(tap, name);
         tap.Click += (_, _) => act(tap);
-        clickable.Add(tap);
         return tap;
     }
 

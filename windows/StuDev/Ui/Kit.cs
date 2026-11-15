@@ -27,6 +27,8 @@ public partial class Tap : Button
     public Tap(Brush? rest = null, Brush? hover = null)
     {
         this.rest = rest ?? Paint.Clear; this.hover = hover;
+        // A hand over anything pressable, as the web's buttons show one, even where what it sits on can be dragged.
+        ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Hand);
         Background = this.rest; BorderBrush = Paint.Clear; BorderThickness = new Thickness(0);
         Padding = new Thickness(0); HorizontalAlignment = HorizontalAlignment.Stretch; VerticalAlignment = VerticalAlignment.Stretch; HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch;
         MinWidth = 0; MinHeight = 0; IsTabStop = true; UseSystemFocusVisuals = true;

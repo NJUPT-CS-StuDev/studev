@@ -13,7 +13,7 @@ internal static unsafe partial class Native
     public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10;
     public static readonly nint HWND_BOTTOM = 1, HWND_MESSAGE = -3;
     public const int GWLP_HWNDPARENT = -8, GWLP_WNDPROC = -4;
-    public const uint WM_ERASEBKGND = 0x0014, WM_MOVING = 0x0216, MONITOR_DEFAULTTONEAREST = 2;
+    public const uint WM_ERASEBKGND = 0x0014, MONITOR_DEFAULTTONEAREST = 2;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct WNDCLASSEXW { public uint cbSize, style; public delegate* unmanaged<nint, uint, nint, nint, nint> lpfnWndProc; public int cbClsExtra, cbWndExtra; public nint hInstance, hIcon, hCursor, hbrBackground; public char* lpszMenuName, lpszClassName; public nint hIconSm; }
