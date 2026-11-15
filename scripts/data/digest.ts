@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -219,6 +219,60 @@ async function locateMap() {
         await rm(archive, { force: true });
     }
     return verifyMap(versionDir);
+}
+
+/** The knowledge: KNOWLEDGE_DIR (a built njupt-knowledge, for development) or the latest knowledge release. */
+async function locateKnowledge(): Promise<{ dir: string; version: string }> {
+    const local = process.env.KNOWLEDGE_DIR?.trim();
+    if (local) return { dir: local, version: 'local' };
+    const repository = process.env.KNOWLEDGE_REPOSITORY?.trim() || 'hicancan/njupt-knowledge';
+    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
+        headers: { Accept: 'application/vnd.github+json', ...(process.env.DATA_TOKEN?.trim() ? { Authorization: `Bearer ${process.env.DATA_TOKEN.trim()}` } : {}) },
+    });
+    if (!response.ok) throw new Error(`reading latest knowledge release: HTTP ${response.status}`);
+    const latest = await response.json() as { tag_name: string; assets: { browser_download_url: string; name: string }[] };
+    const asset = latest.assets.find(item => item.name === `njupt-knowledge-${latest.tag_name}.tar.gz`);
+    if (!asset) throw new Error(`latest knowledge release ${latest.tag_name} has no archive`);
+    const version = latest.tag_name.replace(/^knowledge-/, '');
+    const dir = join(root, '.data', latest.tag_name);
+    if (!existsSync(join(dir, 'knowledge.json'))) {
+        await mkdir(join(root, '.data'), { recursive: true });
+        const download = await fetch(asset.browser_download_url);
+        if (!download.ok) throw new Error(`downloading ${latest.tag_name}: HTTP ${download.status}`);
+        const archive = join(root, '.data', `${latest.tag_name}.tar.gz`);
+        await writeFile(archive, Buffer.from(await download.arrayBuffer()));
+        await rm(dir, { recursive: true, force: true });
+        await extractArchive(archive, dir);
+        await rm(archive, { force: true });
+    }
+    return { dir, version };
+}
+
+interface KnowledgeIndex {
+    courses: { code: string; name: string; former: string[]; subject: string; chapters: { title: string; topics: string[] }[]; path: string }[];
+    topics: { id: string; title: string; requires: string[]; path: string; taught_by: string[]; tested_by: { material: string; heading: string; anchor: string }[]; leads_to: string[] }[];
+    materials: { path: string; title: string; kind: string; course: string; term: string | null; source: string; questions: number }[];
+}
+
+/** Topics and questions as documents, so a search finds a piece of knowledge and opens it where it is. */
+async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<SearchDocument[]> {
+    const plain = (markdown: string) => markdown.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[#*`$>|]/g, ' ').replace(/\s+/g, ' ').trim();
+    const names = new Map(index.courses.map(course => [course.code, course.name]));
+    const docs: SearchDocument[] = [];
+    for (const topic of index.topics) {
+        const body = await readFile(join(dir, topic.path), 'utf8');
+        docs.push(entity('topics', topic.id, `/knowledge/?topic=${encodeURIComponent(topic.id)}`, topic.title,
+            topic.taught_by.map(code => names.get(code) ?? code).join(' '), [plain(body).slice(0, 1200)]));
+    }
+    for (const material of index.materials) {
+        const body = await readFile(join(dir, material.path), 'utf8');
+        for (const part of body.split(/^### /m).slice(1)) {
+            const heading = part.slice(0, part.indexOf('\n')).trim();
+            docs.push(entity('questions', `${material.path}#${heading}`, `/knowledge/?material=${encodeURIComponent(material.path)}#${encodeURIComponent(heading.replace(/\s+/g, '-'))}`,
+                `${heading} · ${material.title}`, material.kind, [plain(part).slice(0, 600)]));
+        }
+    }
+    return docs;
 }
 
 async function locateData(): Promise<{ dir: string; version: string; index: DataIndex; staged?: boolean }> {
@@ -549,7 +603,9 @@ async function main() {
         }
     }
     // Packaging policy changes must invalidate already-downloaded offline data.
-    const version = `${map.version}__${data.version}__p10`;
+    const knowledge = await locateKnowledge();
+    const knowledgeIndex = await read<KnowledgeIndex>(join(knowledge.dir, 'knowledge.json'));
+    const version = `${map.version}__${data.version}__k${knowledge.version}__p10`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });
@@ -581,12 +637,20 @@ async function main() {
     for await (const doc of searchDocuments(data.dir)) {
         docs.push(doc);
     }
+    // The knowledge names its courses by the codes taught now; one that is not stops the build.
+    const taught = new Set((await read<{ items: { id: string }[] }>(join(data.dir, 'entities', 'information.json'))).items.map(item => item.id));
+    for (const course of knowledgeIndex.courses) {
+        if (!taught.has(`information/course-plan/${course.code}`)) throw new Error(`knowledge course ${course.code} (${course.name}) is not taught this term`);
+    }
+    await cp(knowledge.dir, join(out, 'knowledge'), { recursive: true });
+    docs.push(...await knowledgeDocuments(knowledge.dir, knowledgeIndex));
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
     await writeTexts(docs, join(out, 'texts'));
     await mirrorSearch(join(out, 'search'), version);
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,
         data_version: data.version,
+        knowledge_version: knowledge.version,
         version,
         base: `/data/${version}`,
         built_at: data.index.built_at,

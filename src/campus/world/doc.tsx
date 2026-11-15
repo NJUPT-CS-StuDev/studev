@@ -2,13 +2,13 @@
 // and the blog alike (the kernel is Rust; see hicancan/docstream). Each top-level block is drawn once and
 // kept while its key is the same, so text streaming in redraws only the block being written. Formulas are typeset and
 // Mermaid diagrams laid out by the same kernel, as SVG in the colour of the text around them.
-import { memo, useMemo, useState, type CSSProperties } from 'react';
+import { createContext, memo, useContext, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 import { diagram, initialize, math, read, Stream, type Block, type Inline, type Keyed, type Update } from 'docstream';
 
 let ready: Promise<void> | undefined;
 /** The kernel, loaded once. */
 export const docReady = () => ready ??= initialize();
-export { read as readDoc, Stream as DocStream, type Keyed, type Update };
+export { read as readDoc, Stream as DocStream, type Block, type Inline, type Keyed, type Update };
 
 /** What the kernel drew, kept by what it was drawn from: a streamed answer draws the same formula many times over. */
 const drawn = new Map<string, string | undefined>();
@@ -33,6 +33,23 @@ function Diagram({ text }: { text: string }) {
     return <figure className="doc-diagram" style={{ '--w': width } as CSSProperties} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
+/**
+ * Where a document's own links and pictures lead. A document published with paths from its collection's root (the
+ * knowledge's `topics/…`, `materials/…#question`) is read inside a page that knows where those live; elsewhere links
+ * stay as written.
+ */
+export interface DocPlace {
+    image: (src: string) => string;
+    /** A link this page opens itself, or null to follow it as written. */
+    open: (href: string) => (() => void) | null;
+}
+const Place = createContext<DocPlace | null>(null);
+export const DocPlaceProvider = Place.Provider;
+/** A heading's anchor: its text with spaces as hyphens, as the knowledge's build names its questions. */
+export const headingAnchor = (text: string) => text.trim().replace(/\s+/g, '-');
+/** An inline run as plain text, for recognising what a paragraph is. */
+export const plainText = (inlines: Inline[]): string => inlines.map(inline => 'text' in inline ? inline.text : 'children' in inline ? plainText(inline.children) : '').join('');
+
 const ALERTS = { note: '说明', tip: '提示', important: '重要', warning: '注意', caution: '小心' } as const;
 
 function Inlines({ inlines }: { inlines: Inline[] }) {
@@ -49,13 +66,22 @@ function InlineView({ inline }: { inline: Inline }) {
         case 'subscript': return <sub><Inlines inlines={inline.children} /></sub>;
         case 'code': return <code>{inline.text}</code>;
         case 'math': return <Tex tex={inline.tex} display={inline.display} />;
-        case 'link': {
-            const inside = inline.href.startsWith('/');
-            return <a href={inline.href} {...(inside ? {} : { target: '_blank', rel: 'noreferrer' })}><Inlines inlines={inline.children} /></a>;
-        }
-        case 'image': return <img src={inline.src} alt={inline.alt} loading="lazy" />;
+        case 'link': return <Link href={inline.href}><Inlines inlines={inline.children} /></Link>;
+        case 'image': return <Picture src={inline.src} alt={inline.alt} />;
         case 'break': return <br />;
     }
+}
+
+function Link({ href, children }: { href: string; children: React.ReactNode }) {
+    const place = useContext(Place);
+    const open = place?.open(href);
+    if (open) return <a href={href} onClick={(event: MouseEvent) => { if (event.metaKey || event.ctrlKey) return; event.preventDefault(); open(); }}>{children}</a>;
+    const inside = href.startsWith('/');
+    return <a href={href} {...(inside ? {} : { target: '_blank', rel: 'noreferrer' })}>{children}</a>;
+}
+function Picture({ src, alt }: { src: string; alt: string }) {
+    const place = useContext(Place);
+    return <img src={place && !/^[a-z]+:|^\//i.test(src) ? place.image(src) : src} alt={alt} loading="lazy" />;
 }
 
 function CodeView({ language, text }: { language: string; text: string }) {
@@ -69,7 +95,7 @@ function CodeView({ language, text }: { language: string; text: string }) {
 function BlockView({ block, writing = false }: { block: Block; writing?: boolean }) {
     switch (block.type) {
         case 'paragraph': return <p><Inlines inlines={block.inlines} /></p>;
-        case 'heading': { const Tag = (`h${Math.min(6, block.level + 1)}`) as 'h2'; return <Tag><Inlines inlines={block.inlines} /></Tag>; }
+        case 'heading': { const Tag = (`h${Math.min(6, block.level + 1)}`) as 'h2'; return <Tag id={headingAnchor(plainText(block.inlines))}><Inlines inlines={block.inlines} /></Tag>; }
         case 'quote': return <blockquote>{block.blocks.map((inner, at) => <BlockView key={at} block={inner} />)}</blockquote>;
         case 'alert': return <aside className={`doc-alert ${block.kind}`}><b>{ALERTS[block.kind]}</b>{block.blocks.map((inner, at) => <BlockView key={at} block={inner} />)}</aside>;
         case 'list': {
