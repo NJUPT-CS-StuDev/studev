@@ -74,12 +74,15 @@ internal fun CampusMapController.routes(state: PlannerState, dark: Boolean, dens
     }
     if (fit && routes.isNotEmpty() && !state.active) {
         stopFollow()
-        val bounds = LatLngBounds.Builder().includes(routes.flatMap { it.geometry }.map { LatLng(it[1], it[0]) }).build()
+        val points = routes.flatMap { it.geometry }.map { LatLng(it[1], it[0]) }.distinct()
         // A second fit may have the same destination as a canceled in-flight animation.
         // Resolve it immediately, so MapLibre's cached animation target cannot skip the new fit.
         ready.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(ready.cameraPosition)
             .bearing(0.0).tilt(0.0).padding(0.0, 0.0, 0.0, 0.0).build()))
-        ready.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 0.0, 0.0,
+        // Between two rooms of one building the route is a single point outside: the camera goes to it, as Windows
+        // caps its zoom, rather than fitting bounds that have no size.
+        if (points.size == 1) ready.moveCamera(CameraUpdateFactory.newLatLngZoom(points.single(), 18.0))
+        else ready.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), 0.0, 0.0,
             (36 * density).toInt(), controllerPadding(plannerTop, 260, density),
             (36 * density).toInt(), controllerPadding(plannerBottom, 300, density)))
     }
