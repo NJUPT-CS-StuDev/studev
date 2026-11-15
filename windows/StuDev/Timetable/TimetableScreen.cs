@@ -27,6 +27,8 @@ public sealed partial class TimetableScreen : Screen
     private Who? who;
     private CampusLine? others;
     private string? othersError;
+    /** The class picker while one is being chosen: kept across redraws, so what is typed in it stays. */
+    private (List<Data.TeachingClass> Classes, FrameworkElement View)? picker;
 
     public TimetableScreen()
     {
@@ -113,11 +115,16 @@ public sealed partial class TimetableScreen : Screen
         if (campus.Repository is null) return;
         if (campus.Preferences.Class is null || campus.Line is null && campus.Classes.All(c => c.Id != campus.Preferences.Class))
         {
-            var picker = Me.ClassPicker.Make(campus.Classes, c => campus.Preferences.SetClass(c.Id));
-            picker.Margin = new Thickness(0, 48, 0, 0);
-            Children.Add(Pages.Frame(picker));
+            if (picker is not { } kept || kept.Classes != campus.Classes)
+            {
+                var made = Me.ClassPicker.Make(campus.Classes, c => campus.Preferences.SetClass(c.Id));
+                made.Margin = new Thickness(0, 48, 0, 0);
+                picker = (campus.Classes, Pages.Frame(made));
+            }
+            Children.Add(picker.Value.View);
             return;
         }
+        picker = null;
         if (who is { } other)
         {
             if (othersError is { } message) { Children.Add(Pages.Frame(Pages.Empty(message, Kit.Action("重试", () => { othersError = null; Gather(other); Draw(); })))); return; }
