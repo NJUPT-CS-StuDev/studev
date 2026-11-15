@@ -40,6 +40,7 @@ public sealed partial class FactsJson : JsonSerializerContext;
 [JsonSerializable(typeof(Dictionary<string, EventChoice>))]
 [JsonSerializable(typeof(RunSettings))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(List<Channel>))]
 [JsonSerializable(typeof(List<Ai.TaskProposal>))]
 [JsonSerializable(typeof(StoredAccount))]

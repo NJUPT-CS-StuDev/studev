@@ -8,7 +8,7 @@ import type { EventPreferences } from './schedule';
 import { initialModified, SECTIONS } from './merge.mjs';
 
 /** A part of the settings that goes with one to one's other devices. */
-export type Section = 'class' | 'campus' | 'timetable' | 'examAttendance' | 'examReminders' | 'labs' | 'layers' | 'events' | 'run';
+export type Section = 'class' | 'campus' | 'timetable' | 'examAttendance' | 'examReminders' | 'labs' | 'layers' | 'events' | 'run' | 'appearance' | 'memory' | 'hints';
 
 export interface TimetableEdits {
     /** Teaching classes of the class timetable this person does not attend. */
@@ -39,6 +39,12 @@ export interface Preferences {
     /** Lab sheets left out, lab courses not taken and single sittings missed. */
     labs?: { off?: string[]; drop?: string[]; skip?: string[]; classes?: string[] };
     events?: EventPreferences;
+    /** Light or dark held; absent follows the system and, on the map, the sun. */
+    appearance?: 'light' | 'dark';
+    /** What the AI keeps in mind about one, and whether it may. */
+    memory?: { on: boolean; text: string };
+    /** Suggestions put aside, and whether dragging was told of. */
+    hints?: { setAside: string[]; dragTold?: true };
     /** When each part last changed here or on another device, so that the later change wins when they meet. */
     modified?: Partial<Record<Section, string>>;
 }
@@ -127,6 +133,15 @@ const sanitize = (raw: unknown): Preferences => {
     if (record.modified && typeof record.modified === 'object' && !Array.isArray(record.modified)) {
         const modified = Object.fromEntries(Object.entries(record.modified as Record<string, unknown>).filter((entry): entry is [Section, string] => (SECTIONS as string[]).includes(entry[0]) && typeof entry[1] === 'string' && entry[1].length < 40));
         if (Object.keys(modified).length) result.modified = modified;
+    }
+    if (record.appearance === 'light' || record.appearance === 'dark') result.appearance = record.appearance;
+    if (record.memory && typeof record.memory === 'object' && !Array.isArray(record.memory)) {
+        const memory = record.memory as Record<string, unknown>;
+        if (typeof memory.on === 'boolean' && typeof memory.text === 'string') result.memory = { on: memory.on, text: memory.text.slice(0, 8000) };
+    }
+    if (record.hints && typeof record.hints === 'object' && !Array.isArray(record.hints)) {
+        const hints = record.hints as Record<string, unknown>;
+        result.hints = { setAside: ids(hints.setAside).slice(-200), ...(hints.dragTold === true ? { dragTold: true as const } : {}) };
     }
     if (record.run && typeof record.run === 'object' && !Array.isArray(record.run)) {
         const run = record.run as Record<string, unknown>;

@@ -1,4 +1,5 @@
-// One's tasks and timetable settings, the same on every device one signs in on. Nothing leaves the device unless one is
+// One's tasks and the parts of oneself (timetable settings, appearance, what the AI keeps in mind, suggestions put
+// aside), the same on every device one signs in on. Nothing leaves the device unless one is
 // signed in; then the device sends what it has, the platform merges it with what the other devices sent, and both keep
 // the merge, by the rules in merge.mjs that the platform and Android share. AI conversations stay on each device.
 import type { Task } from './tasks';
@@ -57,8 +58,13 @@ export function startSync() {
             writing = true;
             try {
                 if (!same(merged, now)) writeTasks(() => merged);
-                const taken = settingsTaken(readPreferences(), reply.settings ?? {});
-                if (taken) writePreferences(() => taken, true);
+                const before = readPreferences();
+                const taken = settingsTaken(before, reply.settings ?? {});
+                if (taken) {
+                    writePreferences(() => taken, true);
+                    // An appearance chosen on another device shows here at once.
+                    if (taken.appearance !== before.appearance) (await import('./appearance')).show(taken.appearance ?? 'auto');
+                }
             } finally { writing = false; }
         } catch { /* Offline or signed out: they stay here and go next time. */ }
         finally { running = false; if (again) { again = false; schedule(); } }

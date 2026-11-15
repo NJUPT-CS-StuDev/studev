@@ -79,10 +79,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var own by remember { mutableStateOf(Models.read(modelPrefs).second) }
     var picking by remember { mutableStateOf(false) }
     var setting by remember { mutableStateOf(false) }
-    val memoryPrefs = remember { context.getSharedPreferences("ai_memory", android.content.Context.MODE_PRIVATE) }
-    var memory by remember { mutableStateOf(Memory.read(memoryPrefs)) }
+    val memory = model.settings.state.collectAsState().value.memory
     var minding by remember { mutableStateOf(false) }
-    LaunchedEffect(memory) { Memory.write(memoryPrefs, memory) }
     val asking = own.takeIf { useOwn && it.key.isNotBlank() }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
@@ -96,7 +94,12 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     val fresh = remember { mutableSetOf<String>() }
     val busy = job != null
     val tools = remember { CampusTools(context, { model.state.value.repository }, { model.myLine(model.state.value, model.settings.state.value) }, model.tasks,
-        remember = { fact -> check(memory.on) { "记忆已关闭。" }; memory = memory.copy(text = Memory.remembered(memory.text, fact)) }) { proposal -> proposals = proposals + proposal } }
+        remember = { fact ->
+            val now = model.settings.state.value.memory
+            check(now.on) { "记忆已关闭。" }
+            val text = Memory.remembered(now.text, fact)
+            model.settings.update { it.copy(memory = it.memory.copy(text = text)) }
+        }) { proposal -> proposals = proposals + proposal } }
     DisposableEffect(tools) { onDispose { tools.close() } }
     LaunchedEffect(thread) {
         if (opening) { opening = false; return@LaunchedEffect }
@@ -206,7 +209,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
     val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
-    if (minding) MemorySettings(memory, onClose = { minding = false }) { next -> memory = next; minding = false }
+    if (minding) MemorySettings(memory, onClose = { minding = false }) { next -> model.settings.update { it.copy(memory = next) }; minding = false }
     if (setting) OwnSettings(own, onClose = { setting = false }) { next -> own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
     renaming?.let { chat ->
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }

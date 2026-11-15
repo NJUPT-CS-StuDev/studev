@@ -243,7 +243,7 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
  * elsewhere in its group, or into today, tomorrow or no day at all.
  */
 @OptIn(ExperimentalLayoutApi::class)
-@Composable fun TaskList(line: CampusLine, now: Moment, store: TaskStore, onOpen: (LineEvent) -> Unit) {
+@Composable fun TaskList(line: CampusLine, now: Moment, store: TaskStore, settings: top.hicancan.studev.me.CampusSettings, onOpen: (LineEvent) -> Unit) {
     var draft by remember { mutableStateOf("") }
     var showDone by remember { mutableStateOf(false) }
     // Groups folded away, as a list keeps them closed while one works on another.
@@ -265,10 +265,10 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
     val exams = if (picked == null) allExams else allExams.filter { Names.course(it.course.name) == picked }
     val quickCourses = remember(line.meetings) { line.meetings.distinctBy { TimetablePresentation.identity(it) }.map { Tasks.QuickCourse(TimetablePresentation.identity(it), listOf(Names.course(it.course.name), Names.courseShort(it.course.name))) } }
     val quick = if (draft.isNotBlank()) Tasks.parse(draft, now, quickCourses) else null
-    // What the list was told to stop offering, kept on this device, as readHints in src/campus/world/suggestions.ts.
-    val prefs = LocalContext.current.getSharedPreferences("task_hints", android.content.Context.MODE_PRIVATE)
-    var setAside by remember { mutableStateOf(prefs.getStringSet("setAside", emptySet()).orEmpty()) }
-    var dragTold by remember { mutableStateOf(prefs.getBoolean("dragTold", false)) }
+    // What the list was told to stop offering, kept in one's settings and going with one, as readHints in src/campus/world/suggestions.ts.
+    val hints = settings.state.collectAsState().value.hints
+    val setAside = hints.setAside
+    val dragTold = hints.dragTold
     val suggested = Suggestions.suggest(line, now, setAside)
     fun add() {
         val read = quick ?: return
@@ -397,7 +397,7 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
         }
         if (open.size > 1 && !dragTold) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Plain("按住一件事可以拖动，拖到“今天”“明天”就改了日期", 12.5.sp, Ink.faint, modifier = Modifier.weight(1f))
-            Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { dragTold = true; prefs.edit().putBoolean("dragTold", true).apply() }.padding(horizontal = 6.dp))
+            Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { settings.update { it.copy(hints = it.hints.copy(dragTold = true)) } }.padding(horizontal = 6.dp))
         }
         Spacer(Modifier.height(8.dp))
         if (filters.size > 1) {
@@ -424,7 +424,7 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
                     Plain(task.title, 15.sp, maxLines = 1, modifier = Modifier.weight(1f))
                     task.course?.let { id -> courses[id]?.let { CourseTag(Names.courseShort(it), tones[id]) } }
                     Plain("${dayWord(task.due!!.date)} 截止", 12.sp, Ink.muted, maxLines = 1)
-                    Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { setAside = setAside + key; prefs.edit().putStringSet("setAside", setAside).apply() }.padding(horizontal = 4.dp))
+                    Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { settings.update { it.copy(hints = it.hints.copy(setAside = (it.hints.setAside - key + key).takeLast(200))) } }.padding(horizontal = 4.dp))
                 }
             }
         }

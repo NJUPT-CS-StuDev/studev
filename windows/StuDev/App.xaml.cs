@@ -58,6 +58,7 @@ public partial class App : Application
         Window = new Shell();
         Window.AppWindow.Closing += (_, e) => { if (Me.Device.Settings.Tray && !Quitting) { e.Cancel = true; Window.AppWindow.Hide(); } };
         Me.Appearance.Apply();
+        Me.Appearance.Follow();
         Window.Open("timetable");
         Syncing = new Me.Sync(World.Campus.Shared, Window.DispatcherQueue);
         Watch(Me.Updates.Check());

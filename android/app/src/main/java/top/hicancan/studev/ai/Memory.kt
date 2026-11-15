@@ -1,7 +1,7 @@
 package top.hicancan.studev.ai
 
 /**
- * What the AI keeps in mind about the person asking, as src/campus/ai/memory.ts: plain lines kept on this device, shown
+ * What the AI keeps in mind about the person asking, as src/campus/ai/memory.ts: plain lines kept in one's settings and going with one to one's other devices, shown
  * and changed in “记忆”, turned off there too (then nothing is sent and nothing is kept).
  */
 data class Memory(val on: Boolean = true, val text: String = "") {
@@ -20,7 +20,5 @@ data class Memory(val on: Boolean = true, val text: String = "") {
             require(next.length <= LIMIT) { "记忆已经满了，请对方在“记忆”里删掉一些再记。" }
             return next
         }
-        fun read(prefs: android.content.SharedPreferences) = Memory(prefs.getBoolean("on", true), prefs.getString("text", null).orEmpty())
-        fun write(prefs: android.content.SharedPreferences, memory: Memory) = prefs.edit().putBoolean("on", memory.on).putString("text", memory.text).apply()
     }
 }

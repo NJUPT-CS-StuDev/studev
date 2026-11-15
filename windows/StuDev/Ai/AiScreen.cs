@@ -37,7 +37,12 @@ public sealed partial class AiScreen : Screen
     private ChatThread thread = ChatThread.Empty;
     private List<TaskProposal> proposals = [];
     private readonly Dictionary<string, List<TaskProposal>> keptProposals = new();
-    private (bool On, string Text) memory = (true, "");
+    /** What the AI keeps in mind, one of the parts of oneself (preferences "memory"), so it goes with one to one's other devices. */
+    private (bool On, string Text) memory
+    {
+        get => Campus.Shared.Preferences.Part("memory") is JsonObject kept ? ((bool)kept["on"]!, (string)kept["text"]!) : (true, "");
+        set => Campus.Shared.Preferences.Change("memory", new JsonObject { ["on"] = value.On, ["text"] = value.Text });
+    }
     private (bool Own, Own Mine) choice = (false, Models.Starting);
     private bool busy;
     private string error = "";
@@ -81,7 +86,6 @@ public sealed partial class AiScreen : Screen
             current = (string?)kept["current"];
             if (chats.FirstOrDefault(c => c.Id == current) is { } open) { thread = open.Thread; proposals = keptProposals.GetValueOrDefault(open.Id) ?? []; } else current = null;
         }
-        if (Storage.Read("ai/memory.json") is { } m) { var node = JsonNode.Parse(m)!; memory = ((bool)node["on"]!, (string)node["text"]!); }
         if (Storage.Read("ai/model.json") is { } c)
         {
             var node = JsonNode.Parse(c)!;
@@ -94,7 +98,6 @@ public sealed partial class AiScreen : Screen
         ["chats"] = new JsonArray([.. chats.Select(c => { var o = c.ToJson(); o["proposals"] = JsonSerializer.SerializeToNode(keptProposals.GetValueOrDefault(c.Id) ?? [], StorageJson.Default.ListTaskProposal); return (JsonNode)o; })]),
         ["current"] = current,
     }.ToJsonString());
-    private void WriteMemory() => Storage.Write(Storage.PathFor("ai/memory.json"), new JsonObject { ["on"] = memory.On, ["text"] = memory.Text }.ToJsonString());
     private void WriteChoice()
     {
         Storage.Write(Storage.PathFor("ai/model.json"), new JsonObject { ["use"] = choice.Own && choice.Mine.Key.Length > 0 ? "own" : "free", ["base"] = choice.Mine.Base, ["model"] = choice.Mine.Model }.ToJsonString());
@@ -246,7 +249,7 @@ public sealed partial class AiScreen : Screen
     private bool Remember(string fact)
     {
         if (!memory.On) throw new ArgumentException("记忆已关闭。");
-        memory = (true, Memory.Remembered(memory.Text, fact)); WriteMemory();
+        memory = (true, Memory.Remembered(memory.Text, fact));
         DispatcherQueue.TryEnqueue(DrawSide);
         return true;
     }
@@ -685,7 +688,7 @@ public sealed partial class AiScreen : Screen
         var save = Pill("保存", () =>
         {
             var kept = string.Join("\n", text.Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Select(l => $"- {l}"));
-            memory = (on, on ? kept : memory.Text); WriteMemory(); App.Window?.Close(); DrawSide();
+            memory = (on, on ? kept : memory.Text); App.Window?.Close(); DrawSide();
         }, true);
         Grid.SetColumn(save, 3); buttons.Children.Add(save);
         column.Children.Add(buttons);

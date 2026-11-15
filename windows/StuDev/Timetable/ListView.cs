@@ -21,9 +21,19 @@ public static class ListView
     /** On a wide window, the task open beside the list, and which of its choices are open. */
     private static string? beside;
     private static string? besideOpen;
-    /** What the list was told to stop offering, kept on this device, as readHints in src/campus/world/suggestions.ts. */
-    private static List<string> SetAside => Storage.Read("task-hints.json") is { } raw ? JsonSerializer.Deserialize(raw, StorageJson.Default.ListString) ?? [] : [];
-    private static void PutAside(string key) { Storage.Write(Storage.PathFor("task-hints.json"), JsonSerializer.Serialize(SetAside.Append(key).TakeLast(200).ToList(), StorageJson.Default.ListString)); Redraw(); }
+    /**
+     * What the list was told to stop offering, as readHints in src/campus/world/suggestions.ts: one of the parts of
+     * oneself (preferences "hints"), so a suggestion put aside here is put aside on one's other devices too.
+     */
+    private static Me.Preferences Kept => Campus.Shared.Preferences;
+    private static List<string> SetAside => Kept.Part("hints")?["setAside"]?.AsArray().Select(k => (string)k!).ToList() ?? [];
+    private static void PutAside(string key)
+    {
+        var hints = Kept.Part("hints") as System.Text.Json.Nodes.JsonObject ?? [];
+        hints["setAside"] = new System.Text.Json.Nodes.JsonArray([.. SetAside.Append(key).TakeLast(200).Select(k => (System.Text.Json.Nodes.JsonNode)k)]);
+        Kept.Change("hints", hints);
+        Redraw();
+    }
 
     private static (string Text, string Tone) WhenOf(PersonalTask task, Moment now)
     {

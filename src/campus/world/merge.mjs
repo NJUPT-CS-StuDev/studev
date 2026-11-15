@@ -1,4 +1,4 @@
-// How what one keeps is merged across one's devices, the same on the platform (src/platform/server/sync.mjs), the web
+// How what one keeps is merged across one's devices: two collections, one's tasks and the parts of oneself, by one rule; the same on the platform (src/platform/server/sync.mjs), the web
 // (sync.ts) and Android (android/.../me/Sync.kt): of two versions, the later change wins, and a deletion is a change
 // like any other. The platform merges by when things changed alone and keeps the rest as a device wrote it.
 
@@ -12,8 +12,12 @@ export function mergeTasks(mine, theirs) {
     return [...merged.values()].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 }
 
-/** The parts of one's timetable settings that go with one: each part is merged whole, by when it last changed. */
-export const SECTIONS = ['class', 'campus', 'timetable', 'examAttendance', 'examReminders', 'labs', 'layers', 'events', 'run'];
+/**
+ * The parts of oneself that go with one, each merged whole by when it last changed: the timetable's settings, the
+ * appearance chosen, what the AI keeps in mind, and the suggestions put aside. What stays on a device is not here: one's
+ * own model key, AI conversations, where the desktop widgets sit.
+ */
+export const SECTIONS = ['class', 'campus', 'timetable', 'examAttendance', 'examReminders', 'labs', 'layers', 'events', 'run', 'appearance', 'memory', 'hints'];
 
 // A part with no time it was changed counts as changed at the start of time: it travels, and any part changed at a
 // known time wins over it.

@@ -1,5 +1,7 @@
-// What the AI keeps in mind about the person asking, written by them or by the AI when asked to remember: plain lines
-// kept on this device, shown and changed in “记忆”, turned off there too (then nothing is sent and nothing is kept).
+import { readPreferences, writePreferences } from '@/world/preferences';
+// What the AI keeps in mind about the person asking, written by them or by the AI when asked to remember: plain lines,
+// shown and changed in “记忆”, turned off there too (then nothing is sent to the model and nothing is kept), and gone
+// with one to one's other devices while signed in.
 // The same rules are android/.../ai/Memory.kt.
 export interface Memory { on: boolean; text: string }
 export const STARTING_MEMORY: Memory = { on: true, text: '' };
@@ -19,9 +21,6 @@ export function remembered(text: string, fact: string): string {
     return next;
 }
 
-const KEY = 'studev_ai_memory';
-export function readMemory(): Memory {
-    try { const kept = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Memory | null; if (kept && typeof kept.on === 'boolean' && typeof kept.text === 'string') return kept; } catch { /* None kept. */ }
-    return STARTING_MEMORY;
-}
-export function writeMemory(memory: Memory) { try { localStorage.setItem(KEY, JSON.stringify(memory)); } catch { /* This page only. */ } }
+/** Kept with the other parts of oneself (preferences.ts), so it goes with one to one's other devices. */
+export function readMemory(): Memory { return readPreferences().memory ?? STARTING_MEMORY; }
+export function writeMemory(memory: Memory) { writePreferences(current => ({ ...current, memory })); }

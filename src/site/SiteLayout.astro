@@ -43,7 +43,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       // Signed-in people see their member links from the first frame.
       try { if (localStorage.getItem('studev_auth_user')) document.documentElement.dataset.authenticated = ''; } catch { /* Storage may be unavailable. */ }
       let preference;
-      try { preference = localStorage.getItem('site-theme'); } catch { /* Storage may be unavailable. */ }
+      // The appearance is one of the parts of oneself kept in studev_prefs (preferences.ts), applied before first paint.
+      try { preference = JSON.parse(localStorage.getItem('studev_prefs') ?? '{}')?.appearance; } catch { /* Storage may be unavailable or the record unreadable. */ }
       const root = document.documentElement;
       const system = matchMedia('(prefers-color-scheme: dark)');
       const paint = theme => {

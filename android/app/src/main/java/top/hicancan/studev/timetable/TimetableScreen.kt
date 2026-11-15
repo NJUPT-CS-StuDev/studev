@@ -135,7 +135,7 @@ import java.time.LocalDate
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
             when (scale) {
-                "list" -> TaskList(line, now, model.tasks) { onEvent(it, line) }
+                "list" -> TaskList(line, now, model.tasks, model.settings) { onEvent(it, line) }
                 "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
                 "term" -> TermView(line, state, model, now, isMe, record, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
                 else -> DayView(line, day, now, isMe, record, route, walk, settings.layers, model.tasks) { onEvent(it, line) }

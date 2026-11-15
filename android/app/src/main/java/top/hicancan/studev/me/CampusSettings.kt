@@ -26,6 +26,10 @@ data class TimetableEdits(
 @Serializable
 data class LabChoices(val off: List<String> = emptyList(), val drop: List<String> = emptyList(), val skip: List<String> = emptyList(), val classes: List<String> = emptyList())
 
+/** Suggestions put aside and whether dragging a task has been explained, as hints in src/campus/world/preferences.ts. */
+@Serializable
+data class TaskHints(val setAside: List<String> = emptyList(), val dragTold: Boolean = false)
+
 data class PersonalSettings(
     val klass: String? = null,
     val campus: String = top.hicancan.studev.BuildConfig.DEFAULT_CAMPUS,
@@ -59,6 +63,9 @@ data class PersonalSettings(
     val layers: List<String> = top.hicancan.studev.world.CampusLine.LAYER_ORDER,
     val labs: LabChoices = LabChoices(),
     val events: Map<String, top.hicancan.studev.world.EventPreference> = emptyMap(),
+    /** What the AI keeps in mind about this person. */
+    val memory: top.hicancan.studev.ai.Memory = top.hicancan.studev.ai.Memory(),
+    val hints: TaskHints = TaskHints(),
     /** When each part that goes with one to one's other devices last changed (CampusSettings.SECTIONS). */
     val modified: Map<String, String> = emptyMap(),
 ) {
@@ -125,6 +132,8 @@ class CampusSettings(context: Context) {
         layers = store.getString("layers", null)?.let { Json.decodeFromString<List<String>>(it) }?.takeIf { it.sorted() == top.hicancan.studev.world.CampusLine.LAYER_ORDER.sorted() } ?: top.hicancan.studev.world.CampusLine.LAYER_ORDER,
         labs = store.getString("labs", null)?.let { Json.decodeFromString<LabChoices>(it) } ?: LabChoices(),
         events = store.getString("events", null)?.let { Json.decodeFromString<Map<String, top.hicancan.studev.world.EventPreference>>(it) } ?: emptyMap(),
+        memory = top.hicancan.studev.ai.Memory(store.getBoolean("memory-on", true), store.getString("memory", null).orEmpty()),
+        hints = store.getString("hints", null)?.let { Json.decodeFromString<TaskHints>(it) } ?: TaskHints(),
         modified = store.getString("modified", null)?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull() }.orEmpty().filterKeys { it in SECTIONS },
     ).let(::initial))
     val state = _state.asStateFlow()
@@ -152,7 +161,7 @@ class CampusSettings(context: Context) {
             .putString("timetable", if (next.timetable.isEmpty()) null else Json.encodeToString(next.timetable))
             .putString("exam-attendance", if (next.examAttendance.isEmpty()) null else Json.encodeToString(next.examAttendance))
             .putBoolean("calendar-exams", next.calendarExams).putBoolean("calendar-tasks", next.calendarTasks).putString("events", Json.encodeToString(next.events))
-            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders)).putString("layers", Json.encodeToString(next.layers)).putString("labs", Json.encodeToString(next.labs)).putString("modified", Json.encodeToString(next.modified))
+            .putString("run-days", Json.encodeToString(next.runDays)).putInt("run-adjust", next.runAdjust).putBoolean("calendar-run", next.calendarRun).putString("widget-view", next.widgetView).putString("exams-seen", next.examsSeen).putString("exam-reminders", Json.encodeToString(next.examReminders)).putString("layers", Json.encodeToString(next.layers)).putString("labs", Json.encodeToString(next.labs)).putBoolean("memory-on", next.memory.on).putString("memory", next.memory.text).putString("hints", Json.encodeToString(next.hints)).putString("modified", Json.encodeToString(next.modified))
             .apply { if (next.runShown == null) remove("run-shown") else putBoolean("run-shown", next.runShown) }.apply()
         _state.value = next
         top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
@@ -164,7 +173,7 @@ class CampusSettings(context: Context) {
 
     companion object {
         /** The parts of one's settings that go with one, as SECTIONS in src/campus/world/merge.mjs. */
-        val SECTIONS = listOf("class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run")
+        val SECTIONS = listOf("class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run", "appearance", "memory", "hints")
         private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
         /** Choices made before sync existed travel too, without replacing a later explicit choice on another device. */
@@ -184,6 +193,10 @@ class CampusSettings(context: Context) {
             "layers" to json.encodeToJsonElement(s.layers),
             "events" to json.encodeToJsonElement(s.events),
             "run" to kotlinx.serialization.json.buildJsonObject { s.runShown?.let { put("on", JsonPrimitive(it)) }; put("days", json.encodeToJsonElement(s.runDays)); put("adjust", JsonPrimitive(s.runAdjust)) },
+            // As the web leaves them out until chosen: following the system, the memory as it starts, nothing put aside.
+            "appearance" to (if (s.theme == "system") kotlinx.serialization.json.JsonNull else JsonPrimitive(s.theme)),
+            "memory" to (if (s.memory == top.hicancan.studev.ai.Memory()) kotlinx.serialization.json.JsonNull else kotlinx.serialization.json.buildJsonObject { put("on", JsonPrimitive(s.memory.on)); put("text", JsonPrimitive(s.memory.text)) }),
+            "hints" to (if (s.hints == TaskHints()) kotlinx.serialization.json.JsonNull else kotlinx.serialization.json.buildJsonObject { put("setAside", json.encodeToJsonElement(s.hints.setAside)); if (s.hints.dragTold) put("dragTold", JsonPrimitive(true)) }),
         )
 
         /** A part taken from another device into these settings; a part cleared there goes back to how it starts. */
@@ -201,6 +214,11 @@ class CampusSettings(context: Context) {
                 "run" -> if (none) s.copy(runShown = null, runDays = emptyList(), runAdjust = 0) else (value as kotlinx.serialization.json.JsonObject).let { run ->
                     s.copy(runShown = (run["on"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull(), runDays = run["days"]?.let { json.decodeFromJsonElement<List<String>>(it) }.orEmpty(), runAdjust = (run["adjust"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0)
                 }
+                "appearance" -> s.copy(theme = if (none) "system" else (value as JsonPrimitive).content.takeIf { it == "light" || it == "dark" } ?: "system")
+                "memory" -> s.copy(memory = if (none) top.hicancan.studev.ai.Memory() else (value as kotlinx.serialization.json.JsonObject).let { m ->
+                    top.hicancan.studev.ai.Memory((m["on"] as JsonPrimitive).content.toBooleanStrict(), (m["text"] as JsonPrimitive).content)
+                })
+                "hints" -> s.copy(hints = if (none) TaskHints() else json.decodeFromJsonElement(value))
                 else -> s
             }
         }

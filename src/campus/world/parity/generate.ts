@@ -263,10 +263,11 @@ const oldSettings: Preferences = {
     examReminders: [], labs: { off: [], drop: [], skip: [classLabs[0]!.id], classes: [] },
     layers: [...LAYER_ORDER].reverse(), events: { [scheduled[0]!.id]: { avoid: 'allow', layer: 5 } },
     run: { on: false, days: line.run!.days.slice(0, 2), adjust: 2 },
+    appearance: 'dark', memory: { on: true, text: '- 在准备考研' }, hints: { setAside: [`exam:${labExam.id}`], dragTold: true },
 };
 const initialSettings = { ...oldSettings, modified: initialModified(oldSettings) };
 const settingsMine = settingsOf(initialSettings);
-const settingsTheirs = { class: { value: schedules[1]!.class, modified: '2026-11-13T01:00:00.000Z' }, labs: { value: null, modified: '2026-11-13T02:00:00.000Z' } };
+const settingsTheirs = { class: { value: schedules[1]!.class, modified: '2026-11-13T01:00:00.000Z' }, labs: { value: null, modified: '2026-11-13T02:00:00.000Z' }, memory: { value: { on: true, text: '- 在准备考研\n- 喜欢早上自习' }, modified: '2026-11-13T03:00:00.000Z' } };
 const settingsMerged = mergeSettings(settingsMine, settingsTheirs);
 const settingsSync = { original: oldSettings, initial: settingsMine, theirs: settingsTheirs, merged: settingsMerged, taken: settingsTaken(initialSettings, settingsMerged) };
 const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadPath(threadChain([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }], ['x', 'y'])).map(node => [node.id, node.parent]) };

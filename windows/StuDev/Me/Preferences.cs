@@ -17,10 +17,13 @@ public sealed class Preferences
     }
     public string? Class => value["class"]?.GetValue<string>();
     public string Campus => value["campus"]?.GetValue<string>() ?? StuDev.Product.Campus;
-    public event Action? Changed;
+    /** Which parts changed, here or as taken from another device. */
+    public event Action<IReadOnlySet<string>>? Changed;
     public event Action<bool>? Saved;
     public T? Get<T>(string section, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape) => value[section] is { } node ? node.Deserialize(shape) : default;
     public JsonObject Snapshot() => (JsonObject)value.DeepClone();
+    /** One part as it is kept, a copy: absent when it was never set. */
+    public JsonNode? Part(string section) => value[section]?.DeepClone();
     public void Set<T>(string section, T next, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape) => Change(section, JsonSerializer.SerializeToNode(next, shape));
     public void Change(string section, JsonNode? next)
     {
@@ -45,8 +48,9 @@ public sealed class Preferences
     private void Save(JsonObject next, bool adopt = false)
     {
         Data.Storage.Write(File, next.ToJsonString(Data.Storage.Json));
+        var changed = next.Select(p => p.Key).Union(value.Select(p => p.Key)).Where(key => key != "modified" && !JsonNode.DeepEquals(value[key], next[key])).ToHashSet();
         value = next;
-        Changed?.Invoke();
+        Changed?.Invoke(changed);
         Saved?.Invoke(adopt);
     }
 }
@@ -54,7 +58,9 @@ public sealed class Preferences
 /** How settings travel between devices, as settingsOf, mergeSettings and settingsTaken on the web: part by part, the later change wins. */
 public static class SettingsSync
 {
-    public static readonly string[] Sections = ["class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run"];
+    public static readonly string[] Sections = ["class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run", "appearance", "memory", "hints"];
+    /** The parts the campus line is drawn from: a change to one of them draws the line again. */
+    public static readonly string[] Line = ["class", "campus", "timetable", "examAttendance", "examReminders", "labs", "layers", "events", "run"];
     private const string Never = "1970-01-01T00:00:00.000Z";
 
     /** Every part present, with when it last changed; a part kept from before changes were stamped counts as changed never. */

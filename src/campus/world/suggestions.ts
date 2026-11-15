@@ -2,6 +2,7 @@
 // week after each lab. Offered in the list until taken or put aside, they are real things to do and, by doing so,
 // show what a task can carry (a deadline, a course). Nothing is added without being asked for.
 import { courseIdentity, linkedCourse } from '@/timetable/model/courseColors';
+import { readPreferences, writePreferences } from './preferences';
 import { upcomingExams, type Timeline } from './events';
 import { courseShort } from './names';
 import type { Task } from './tasks';
@@ -27,19 +28,12 @@ export function suggestTasks(line: Timeline, now: Moment, setAside: readonly str
         .filter(item => !setAside.includes(item.key) && !titles.has(item.task.title)).slice(0, OFFERED);
 }
 
-/** What the list has been told to stop offering, kept on this device: suggestions put aside, and the dragging told of. */
+/** What the list has been told to stop offering: suggestions put aside, and the dragging told of. One of the parts of
+ * oneself (preferences.ts), so it goes with one to one's other devices. */
 export interface TaskHints { setAside: string[]; dragTold?: true }
-const HINTS = 'studev_task_hints';
-export function readHints(): TaskHints {
-    try {
-        const raw = JSON.parse(window.localStorage.getItem(HINTS) ?? '{}') as Record<string, unknown>;
-        return { setAside: Array.isArray(raw.setAside) ? raw.setAside.filter((key): key is string => typeof key === 'string').slice(-200) : [], ...(raw.dragTold === true ? { dragTold: true as const } : {}) };
-    } catch { return { setAside: [] }; }
-}
+export function readHints(): TaskHints { return readPreferences().hints ?? { setAside: [] }; }
 export function writeHints(change: (hints: TaskHints) => TaskHints): TaskHints {
-    const next = change(readHints());
-    try { window.localStorage.setItem(HINTS, JSON.stringify(next)); } catch { /* Blocked storage: told again next time. */ }
-    return next;
+    return writePreferences(current => ({ ...current, hints: change(current.hints ?? { setAside: [] }) })).hints ?? { setAside: [] };
 }
 /** What one can type, offered while the list is empty: tapping one puts it in the box, read back as typed. */
 export const TASK_EXAMPLES = ['明天下午3点 交毛概作业 !!', '周五前 交实验报告', '晚上8点到10点 自习', '下周三 答辩 #'];

@@ -35,7 +35,7 @@ public sealed class Campus
 
     private Campus()
     {
-        Preferences.Changed += () => { loading = null; _ = Load(); };
+        Preferences.Changed += changed => { if (changed.Overlaps(SettingsSync.Line)) { loading = null; _ = Load(); } };
         Tasks.Changed += () => { if (Line is { } line) line.Tasks = Tasks.Live.ToList(); Changed?.Invoke(); };
     }
 
