@@ -40,20 +40,21 @@ import top.hicancan.studev.world.WEEKDAYS
 
 private const val PAGE = 10
 private val SINCE = listOf("" to "全部时间", "3" to "近三天", "7" to "近一周", "30" to "近一月", "365" to "近一年")
-private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places")
+private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "questions")
 private val OTHERS = listOf("njupt-general-free-exams", "njupt-survival-guide")
 private class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false)
 /** Same channels as campus.config.ts. */
 private val CHANNELS = listOf(
-    Channel("all", "全部", excluded = listOf("teaching-classes", "exams")),
+    Channel("all", "全部", excluded = listOf("teaching-classes", "exams", "questions")),
     Channel("room", "教室", listOf("rooms")),
     Channel("academic", "教务", listOf("courses", "teachers", "classes", "teaching-classes", "exams")),
     Channel("place", "地点", listOf("places")),
+    Channel("knowledge", "知识", listOf("topics", "questions")),
     Channel("notice", "通知", excluded = ENTITIES.toList() + OTHERS, dated = true),
     Channel("material", "考试资料", listOf(OTHERS[0])),
     Channel("community", "社区", listOf(OTHERS[1])),
 )
-private val LABELS = mapOf("courses" to "课程", "teachers" to "老师", "classes" to "班级", "teaching-classes" to "教学班", "exams" to "考试安排", "rooms" to "教室", "places" to "地点")
+private val LABELS = mapOf("courses" to "课程", "teachers" to "老师", "classes" to "班级", "teaching-classes" to "教学班", "exams" to "考试安排", "rooms" to "教室", "places" to "地点", "topics" to "知识点", "questions" to "真题")
 private data class Hit(val raw: JsonObject) {
     fun text(key: String) = raw[key]?.jsonPrimitive?.contentOrNull
     val id get() = text("id").orEmpty()

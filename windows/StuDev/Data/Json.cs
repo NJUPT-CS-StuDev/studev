@@ -29,6 +29,8 @@ namespace StuDev.Data;
 [JsonSerializable(typeof(Dictionary<string, OpeningRecord>))]
 [JsonSerializable(typeof(CampusModel))]
 [JsonSerializable(typeof(StuDev.Map.ModelIndex))]
+[JsonSerializable(typeof(KnowledgeIndex))]
+[JsonSerializable(typeof(List<CurriculumCourse>))]
 public sealed partial class FactsJson : JsonSerializerContext;
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]

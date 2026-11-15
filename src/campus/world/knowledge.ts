@@ -12,9 +12,19 @@ export interface KnowledgeTopic { id: string; title: string; requires: string[];
 export interface KnowledgeMaterial { path: string; title: string; kind: string; course: string; term: string | null; source: string; questions: number }
 export interface Knowledge { courses: KnowledgeCourse[]; topics: KnowledgeTopic[]; materials: KnowledgeMaterial[] }
 
+/** A training-plan course from njupt-data curriculum/courses.json, unifying codes, classification and prerequisites. */
+export interface CurriculumCourse {
+    code: string; name: string; credits: number; hours: string; exam_mode: string;
+    category: string; nature: string; categories: string[]; natures: string[];
+    colleges: string[]; majors: string[]; terms: number[]; grades: string[];
+    requires: string[]; former: string[];
+}
+
 const base = `${DATA_RELEASE.base}/knowledge`;
 let index: Promise<Knowledge> | null = null;
 export const loadKnowledge = () => index ??= fetchJson<Knowledge>(`${base}/knowledge.json`).catch(error => { index = null; throw error; });
+let curriculum: Promise<CurriculumCourse[]> | null = null;
+export const loadCurriculum = () => curriculum ??= fetchJson<CurriculumCourse[]>(`${DATA_RELEASE.base}/curriculum/courses.json`).catch(() => []);
 const texts = new Map<string, Promise<string>>();
 /** One document's Markdown, by its path from the knowledge's root. */
 export function loadKnowledgeText(path: string) {
@@ -59,8 +69,8 @@ export type MaterialPart =
     | { kind: 'text'; blocks: Keyed[] }
     | { kind: 'group'; title: string; questions: number }
     | { kind: 'question'; title: string; anchor: string; asks: Keyed[]; answer: { label: AnswerLabel; blocks: Keyed[] }[]; topics: { title: string; href: string }[] };
-export type AnswerLabel = '答案' | '参考解答' | '订正' | '补充';
-const LABELS: AnswerLabel[] = ['参考解答', '答案', '订正', '补充'];
+export type AnswerLabel = '答案' | '参考解答' | '订正' | '补充' | '原文';
+const LABELS: AnswerLabel[] = ['参考解答', '答案', '订正', '补充', '原文'];
 
 function linksOf(inlines: Inline[], out: { title: string; href: string }[] = []) {
     for (const inline of inlines) {
@@ -104,3 +114,12 @@ export function materialParts(blocks: Keyed[]): MaterialPart[] {
     }
     return parts;
 }
+
+/** A subject's colour: one of the course tones, fixed by its name so it is the same everywhere. */
+export function toneOf(id: string): number {
+    let hash = 0;
+    for (const char of id) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
+    return hash % 24;
+}
+/** The colour a kind of document wears. */
+export const KIND_TONE: Record<string, string> = { 期末试卷: 'danger', 答案: 'success', 习题: 'shop', 复习要点: 'warning', 课件: 'brand', 实验: 'food' };

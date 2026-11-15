@@ -27,6 +27,10 @@ class Route {
     var scope by mutableStateOf("all")
     /** Search only inside this entity. */
     var within by mutableStateOf<String?>(null)
+    var knowledgeCourse by mutableStateOf<String?>(null)
+    var knowledgeTopic by mutableStateOf<String?>(null)
+    var knowledgeMaterial by mutableStateOf<String?>(null)
+    var knowledgeAnchor by mutableStateOf<String?>(null)
     /** Opens a site link, relative or absolute. Anything this app has no screen for returns false. */
     fun open(link: String, origin: String): Boolean {
         val uri = Uri.parse(absolute(link, origin))
@@ -49,10 +53,20 @@ class Route {
                 moment = param("t")?.let { text -> runCatching { LocalDate.parse(text.take(10)) to (text.drop(11).take(2).toInt() * 60 + text.drop(14).take(2).toInt()) }.getOrNull() }
                 tab = "map"
             }
+            "/knowledge" -> {
+                knowledgeCourse = param("course")
+                knowledgeTopic = param("topic")
+                knowledgeMaterial = param("material")
+                knowledgeAnchor = uri.fragment?.takeIf { it.isNotEmpty() }
+                tab = "knowledge"
+            }
             "/search" -> { query = param("q").orEmpty(); scope = param("scope") ?: "all"; within = param("within"); tab = "search" }
             else -> return false
         }
         return true
+    }
+    fun knowledge(course: String? = null, topic: String? = null, material: String? = null, anchor: String? = null) {
+        knowledgeCourse = course; knowledgeTopic = topic; knowledgeMaterial = material; knowledgeAnchor = anchor; tab = "knowledge"
     }
     fun timetable(type: String, id: String, newScale: String = "week", at: LocalDate? = null) { whoType = type; whoId = id; scale = newScale; day = at; preview = null; tab = "timetable" }
     fun map(place: String? = null, at: Pair<LocalDate, Int>? = null, nav: String? = null) { this.place = place; this.moment = at; this.nav = nav; floor = null; tab = "map" }

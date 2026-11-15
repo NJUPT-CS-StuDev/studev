@@ -42,7 +42,8 @@ class AcademicFactsTest {
         val plans = file.items.filter { it["subtype"]?.jsonPrimitive?.content == "information:course-plan" }
             .map { Json.decodeFromJsonElement<CoursePlan>(it) }
         assertTrue(plans.isNotEmpty())
-        assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() })
+        assertTrue(plans.filter { it.source?.startsWith("teaching/") == true }.all { it.teaching_class_ids.isNotEmpty() })
+        assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() || it.colleges.isNotEmpty() })
     }
     @Test fun theReleaseManifestNamesTheCurrentApp() {
         val app = appInManifest("""{"version":"v","base":"/data/v","android":{"versionName":"2.3.5","versionCode":29},"core":[]}""")

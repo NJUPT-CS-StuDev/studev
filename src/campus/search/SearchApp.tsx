@@ -64,7 +64,7 @@ function Result({ result, roomState, onCourse }: { result: SearchResult; roomSta
     return (
         <article className="hit doc">
             <div className="crumb">{crumbs}{date ? <time> · {date.slice(0, 10)}</time> : null}{result.kind === 'file' ? ' · 文件' : result.kind === 'link' ? ' · 站外' : ''}</div>
-            <h3><a href={result.url} target="_blank" rel="noopener noreferrer">{title}</a></h3>
+            <h3>{result.url.startsWith('/') ? <a href={result.url}>{title}</a> : <a href={result.url} target="_blank" rel="noopener noreferrer">{title}</a>}</h3>
             {snippet ? <p>{snippet}</p> : result.snippet === null ? <p className="wait" aria-hidden="true" /> : null}
             {result.attachments.length > 0 && <div className="files">{result.attachments.slice(0, 4).map(file => <a key={file.url} href={file.url} target="_blank" rel="noopener noreferrer">{file.name}</a>)}{result.attachments.length > 4 && <span>等 {result.attachments.length} 个附件</span>}</div>}
         </article>

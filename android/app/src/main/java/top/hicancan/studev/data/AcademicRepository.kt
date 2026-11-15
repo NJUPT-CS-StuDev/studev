@@ -56,7 +56,14 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val file = File(root, "$path.$offset")
         if (file.isFile) return@withContext file.readBytes()
         val address = "${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }
-        val bytes = try { mirror?.let { runCatching { download(it, offset, length) }.getOrNull() } ?: download(address, offset, length) } catch (e: IOException) { throw DataUnavailableException(e) }
+        val activeMirror = mirror?.takeIf { m -> URI(m).host?.let { it !in deadMirrors } ?: true }
+        val bytes = try {
+            activeMirror?.let { m ->
+                runCatching { download(m, offset, length, connectTimeoutMs = 3_500) }
+                    .onFailure { URI(m).host?.let(deadMirrors::add) }
+                    .getOrNull()
+            } ?: download(address, offset, length)
+        } catch (e: IOException) { throw DataUnavailableException(e) }
         file.parentFile!!.mkdirs()
         val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
         try { pending.writeBytes(bytes); pending.renameTo(file) } finally { pending.delete() }
@@ -163,12 +170,13 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }
     companion object {
         private val locks = Array(64) { Mutex() }
+        private val deadMirrors = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
-        fun download(address: String, offset: Long? = null, length: Int = 0): ByteArray {
+        fun download(address: String, offset: Long? = null, length: Int = 0, connectTimeoutMs: Int = 8_000): ByteArray {
             val url = URI(address).toURL()
             require(url.protocol == "https" || (BuildConfig.DEBUG && url.protocol == "http" && address.startsWith(BuildConfig.DATA_HOST + "/")))
             val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 8_000; connection.readTimeout = 15_000
+            connection.connectTimeout = connectTimeoutMs; connection.readTimeout = 15_000
             connection.setRequestProperty("User-Agent", "studev-android")
             if (offset != null) connection.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
             try {

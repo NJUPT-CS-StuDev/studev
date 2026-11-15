@@ -56,7 +56,12 @@ public abstract partial class DeskWidget : Window
         presenter.SetBorderAndTitleBar(true, false);
         presenter.IsMaximizable = false; presenter.IsMinimizable = false; presenter.IsResizable = true;
         AppWindow.SetPresenter(presenter);
-        AppWindow.IsShownInSwitchers = false;
+        try { AppWindow.IsShownInSwitchers = false; }
+        catch (NotImplementedException)
+        {
+            // Windows App SDK 2.x throws E_NOTIMPL for SetShownInSwitchers; hide via Win32 tool-window style.
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, (GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & ~WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW);
+        }
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "StuDev.ico"));
         var bounds = Settings.Bounds ?? DefaultBounds();
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(bounds[0], bounds[1], bounds[2], bounds[3]));

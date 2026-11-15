@@ -72,7 +72,7 @@ import top.hicancan.studev.world.Moment
     }
     Scaffold(containerColor = Ink.paper, snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
         if (!navigation.active) Row(Modifier.fillMaxWidth().background(Ink.paper).topHairline(Ink.line).navigationBarsPadding().height(50.dp)) {
-            listOf("timetable" to "课表", "map" to "地图", "search" to "搜索", "ai" to "AI").forEach { (key, label) ->
+            listOf("timetable" to "课表", "map" to "地图", "knowledge" to "知识", "search" to "搜索", "ai" to "AI").forEach { (key, label) ->
                 val on = route.tab == key
                 Box(Modifier.weight(1f).fillMaxHeight().clickable { route.tab = key }.testTag("tab-$key"), contentAlignment = Alignment.Center) {
                     Plain(label, 14.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Medium)
@@ -86,6 +86,7 @@ import top.hicancan.studev.world.Moment
             if (mapOpened) campus?.let { loaded -> MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) }
             when (route.tab) {
                 "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
+                "knowledge" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.knowledge.KnowledgeScreen(route, state) }
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }
                 "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model, route) }
             }

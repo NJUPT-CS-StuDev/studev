@@ -1,0 +1,663 @@
+package top.hicancan.studev.knowledge
+
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonPrimitive
+import top.hicancan.studev.app.*
+import top.hicancan.studev.timetable.SearchField
+import top.hicancan.studev.world.Doc
+import top.hicancan.studev.world.DocText
+import top.hicancan.studev.world.Docs
+import java.net.URLDecoder
+import kotlin.math.abs
+
+@Serializable data class KnowledgeChapter(val title: String, val topics: List<String>)
+@Serializable data class KnowledgeCourse(val id: String, val name: String, val codes: List<String> = emptyList(), val former: List<String> = emptyList(), val chapters: List<KnowledgeChapter> = emptyList(), val path: String)
+@Serializable data class QuestionRef(val material: String, val heading: String, val anchor: String)
+@Serializable data class KnowledgeTopic(val id: String, val title: String, val requires: List<String> = emptyList(), val path: String, val taught_by: List<String> = emptyList(), val tested_by: List<QuestionRef> = emptyList(), val leads_to: List<String> = emptyList())
+@Serializable data class KnowledgeMaterial(val path: String, val title: String, val kind: String, val course: String, val term: String? = null, val source: String = "", val questions: Int = 0)
+@Serializable data class KnowledgeIndex(val courses: List<KnowledgeCourse>, val topics: List<KnowledgeTopic>, val materials: List<KnowledgeMaterial>)
+
+@Serializable data class CurriculumCourse(
+    val code: String,
+    val name: String,
+    val credits: Double = 0.0,
+    val hours: String = "",
+    val exam_mode: String = "",
+    val category: String = "",
+    val nature: String = "",
+    val categories: List<String> = emptyList(),
+    val natures: List<String> = emptyList(),
+    val colleges: List<String> = emptyList(),
+    val majors: List<String> = emptyList(),
+    val terms: List<Int> = emptyList(),
+    val grades: List<String> = emptyList(),
+    val requires: List<String> = emptyList(),
+    val former: List<String> = emptyList(),
+)
+
+private sealed interface KnowledgePlace {
+    class Topic(val id: String) : KnowledgePlace
+    class Course(val id: String) : KnowledgePlace
+    class Material(val path: String, val anchor: String?) : KnowledgePlace
+}
+
+private fun knowledgePlace(href: String): KnowledgePlace? {
+    val (rawPath, rawAnchor) = href.split('#', limit = 2).let { it[0] to it.getOrNull(1) }
+    val decoded = runCatching { URLDecoder.decode(rawPath, "UTF-8") }.getOrDefault(rawPath)
+    val anchor = rawAnchor?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+    return when {
+        decoded.startsWith("topics/") && decoded.endsWith(".md") -> KnowledgePlace.Topic(decoded.removePrefix("topics/").removeSuffix(".md"))
+        decoded.startsWith("courses/") && decoded.endsWith(".md") -> KnowledgePlace.Course(decoded.removePrefix("courses/").removeSuffix(".md"))
+        decoded.startsWith("materials/") && decoded.endsWith(".md") -> KnowledgePlace.Material(decoded, anchor)
+        else -> null
+    }
+}
+
+private fun toneIndex(id: String): Int {
+    var hash = 0L
+    for (ch in id) hash = ((hash * 31L) + ch.code.toLong()) and 0xFFFFFFFFL
+    return (hash % 12L).toInt()
+}
+
+private fun safeMermaidLabel(text: String): String {
+    val clean = text.replace(Regex("[\"\n\r\\[\\]{}]"), "").replace(Regex("[（(][^）)]*[）)]"), "").trim()
+    return clean.ifEmpty { text.replace(Regex("[\"\n\r\\[\\]{}]"), "").trim() }
+}
+
+private sealed interface MatPart {
+    class Text(val blocks: MutableList<JsonObject>) : MatPart
+    class Group(val title: String, var questions: Int = 0) : MatPart
+    class Question(
+        val title: String,
+        val anchor: String,
+        val asks: MutableList<JsonObject> = mutableListOf(),
+        val answer: MutableList<Pair<String, MutableList<JsonObject>>> = mutableListOf(),
+        val topics: MutableList<Pair<String, String>> = mutableListOf(),
+    ) : MatPart
+}
+
+private val ANSWER_LABELS = listOf("参考解答", "答案", "订正", "补充", "原文")
+private fun plainInlines(inlines: JsonArray?): String = inlines.orEmpty().joinToString("") { el ->
+    val obj = el as? JsonObject ?: return@joinToString ""
+    when (obj["type"]?.jsonPrimitive?.content) {
+        "text", "code" -> obj["text"]?.jsonPrimitive?.content.orEmpty()
+        "math" -> obj["tex"]?.jsonPrimitive?.content.orEmpty()
+        else -> plainInlines(obj["children"] as? JsonArray)
+    }
+}
+
+private fun linkInlines(inlines: JsonArray?, out: MutableList<Pair<String, String>>) {
+    inlines.orEmpty().forEach { el ->
+        val obj = el as? JsonObject ?: return@forEach
+        if (obj["type"]?.jsonPrimitive?.content == "link") {
+            out += plainInlines(obj["children"] as? JsonArray) to (obj["href"]?.jsonPrimitive?.content.orEmpty())
+        } else {
+            linkInlines(obj["children"] as? JsonArray, out)
+        }
+    }
+}
+
+private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
+    val parts = mutableListOf<MatPart>()
+    var question: MatPart.Question? = null
+    var group: MatPart.Group? = null
+    for (keyed in blocks) {
+        val block = keyed["block"] as? JsonObject ?: continue
+        val type = block["type"]?.jsonPrimitive?.content
+        if (type == "heading") {
+            val level = block["level"]?.jsonPrimitive?.int ?: 1
+            if (level <= 2) {
+                question = null
+                if (level == 1) continue
+                group = MatPart.Group(plainInlines(block["inlines"] as? JsonArray))
+                parts += group
+                continue
+            }
+            if (level == 3) {
+                val title = plainInlines(block["inlines"] as? JsonArray)
+                question = MatPart.Question(title, title.trim().replace(Regex("\\s+"), "-"))
+                parts += question
+                group?.let { it.questions++ }
+                continue
+            }
+        }
+        val currentQ = question
+        if (currentQ == null) {
+            val last = parts.lastOrNull()
+            if (last is MatPart.Text) last.blocks += keyed else parts += MatPart.Text(mutableListOf(keyed))
+            continue
+        }
+        val text = if (type == "paragraph") plainInlines(block["inlines"] as? JsonArray).trim() else ""
+        if (text.startsWith("知识点：") && type == "paragraph") {
+            linkInlines(block["inlines"] as? JsonArray, currentQ.topics)
+            continue
+        }
+        val label = ANSWER_LABELS.firstOrNull { text.startsWith("$it：") || text.startsWith("$it（") || text == it }
+        if (label != null) {
+            currentQ.answer += label to mutableListOf(keyed)
+            continue
+        }
+        if (currentQ.answer.isNotEmpty()) currentQ.answer.last().second += keyed else currentQ.asks += keyed
+    }
+    return parts
+}
+
+@Composable fun KnowledgeScreen(route: Route, state: AcademicState) {
+    val context = LocalContext.current
+    val repo = state.repository
+    var knowledge by remember(repo) { mutableStateOf<KnowledgeIndex?>(null) }
+    var curriculum by remember(repo) { mutableStateOf<List<CurriculumCourse>>(emptyList()) }
+    var failed by remember(repo) { mutableStateOf(false) }
+
+    LaunchedEffect(repo) {
+        if (repo == null) return@LaunchedEffect
+        failed = false
+        runCatching { repo.read<KnowledgeIndex>("knowledge/knowledge.json") }
+            .onSuccess { knowledge = it }
+            .onFailure { failed = true }
+        runCatching { repo.read<List<CurriculumCourse>>("curriculum/courses.json") }
+            .onSuccess { curriculum = it }
+    }
+
+    val index = knowledge
+    if (failed) {
+        Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
+            Plain("知识库加载失败，请检查网络后重试", 14.sp, Ink.muted)
+        }
+        return
+    }
+    if (index == null) {
+        Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
+            Plain("正在打开知识…", 14.sp, Ink.muted)
+        }
+        return
+    }
+
+    val topic = index.topics.firstOrNull { it.id == route.knowledgeTopic }
+    val material = index.materials.firstOrNull { it.path == route.knowledgeMaterial }
+    val courseId = route.knowledgeCourse ?: topic?.taught_by?.firstOrNull() ?: material?.course
+    val course = index.courses.firstOrNull { it.id == courseId }
+
+    BackHandler(enabled = course != null || topic != null || material != null) {
+        when {
+            topic != null || material != null -> route.knowledge(course = course?.id)
+            course != null -> route.knowledge()
+        }
+    }
+
+    if (course == null) {
+        KnowledgeHome(index, curriculum) { route.knowledge(course = it) }
+        return
+    }
+
+    var showOutline by remember { mutableStateOf(false) }
+    val courseTone = tone(toneIndex(course.id))
+    val imageBytes: suspend (String) -> ByteArray? = { raw ->
+        val clean = raw.removePrefix("../").removePrefix("./")
+        repo?.bytes("knowledge/$clean")
+    }
+    val onDocLink: (String) -> Unit = { href ->
+        when (val to = knowledgePlace(href)) {
+            is KnowledgePlace.Topic -> route.knowledge(course = course.id, topic = to.id)
+            is KnowledgePlace.Course -> route.knowledge(course = to.id)
+            is KnowledgePlace.Material -> route.knowledge(course = course.id, material = to.path, anchor = to.anchor)
+            null -> if (!route.open(href, top.hicancan.studev.account.PLATFORM_ORIGIN) && href.startsWith("http")) {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(href))) }
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Row(
+            Modifier.fillMaxWidth().bottomHairline(Ink.line).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Plain("‹ 知识", 14.sp, Ink.brand, FontWeight.Medium, Modifier.clickable { route.knowledge() }.padding(vertical = 4.dp))
+            Box(Modifier.weight(1f)) {
+                Plain(course.name, 16.sp, courseTone.fg, FontWeight.SemiBold, maxLines = 1)
+            }
+            Box(Modifier.padding(end = 36.dp)) {
+                Chip("目录 ▾", { showOutline = true })
+            }
+        }
+
+        val relPath = topic?.path ?: material?.path ?: course.path
+        var text by remember(repo, relPath) { mutableStateOf<String?>(null) }
+        var textErr by remember(repo, relPath) { mutableStateOf(false) }
+        LaunchedEffect(repo, relPath) {
+            text = null; textErr = false
+            runCatching { repo?.bytes("knowledge/$relPath")?.decodeToString() }
+                .onSuccess { text = it }
+                .onFailure { textErr = true }
+        }
+
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            when {
+                textErr -> Plain("这篇内容没能加载，请稍后重试。", 14.sp, Ink.muted)
+                text == null -> Plain("正在打开…", 14.sp, Ink.muted)
+                topic != null -> TopicDetail(topic, text!!, index, course, courseTone, onDocLink, imageBytes) { t, m, a ->
+                    route.knowledge(course = course.id, topic = t, material = m, anchor = a)
+                }
+                material != null -> MaterialDetail(material, text!!, index, route.knowledgeAnchor, courseTone, onDocLink, imageBytes)
+                else -> CourseDetail(course, text!!, index, courseTone, onDocLink, imageBytes) { t, m ->
+                    route.knowledge(course = course.id, topic = t, material = m)
+                }
+            }
+        }
+    }
+
+    if (showOutline) {
+        PlainSheet(course.name, { showOutline = false }, head = courseTone.bg to courseTone.fg) {
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                KeyRow(null, "${course.name} · 课程概览", chevron = true, onClick = { showOutline = false; route.knowledge(course = course.id) })
+                course.chapters.forEach { chapter ->
+                    Plain(chapter.title, 12.5.sp, courseTone.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+                    chapter.topics.forEach { tid ->
+                        val tTitle = index.topics.firstOrNull { it.id == tid }?.title ?: tid
+                        KeyRow(null, tTitle, color = if (tid == topic?.id) courseTone.fg else Ink.text, chevron = true, onClick = {
+                            showOutline = false; route.knowledge(course = course.id, topic = tid)
+                        })
+                    }
+                }
+                val mats = index.materials.filter { it.course == course.id }
+                if (mats.isNotEmpty()) {
+                    Plain("资料", 12.5.sp, courseTone.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+                    mats.forEach { mat ->
+                        KeyRow(mat.kind, mat.title, color = if (mat.path == material?.path) courseTone.fg else Ink.text, chevron = true, onClick = {
+                            showOutline = false; route.knowledge(course = course.id, material = mat.path)
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun KnowledgeHome(
+    index: KnowledgeIndex,
+    curriculum: List<CurriculumCourse>,
+    onOpen: (String) -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    var view by remember { mutableStateOf("list") }
+    var category by remember { mutableStateOf("全部") }
+    var nature by remember { mutableStateOf("全部") }
+    var major by remember { mutableStateOf("全部专业") }
+    var majorMenu by remember { mutableStateOf(false) }
+
+    val byCode = remember(curriculum) { curriculum.associateBy { it.code } }
+    val compiledByCode = remember(index) {
+        buildMap {
+            index.courses.forEach { c -> (c.codes + c.former).forEach { code -> put(code, c) } }
+        }
+    }
+    val metaMap = remember(index, byCode) {
+        index.courses.associate { c ->
+            val matched = (c.codes + c.former).mapNotNull { byCode[it] }.distinctBy { it.code }
+            c.id to Triple(
+                matched.flatMap { it.categories.ifEmpty { listOf(it.category) } }.filter { it.isNotBlank() }.distinct(),
+                matched.flatMap { it.natures.ifEmpty { listOf(it.nature) } }.filter { it.isNotBlank() }.distinct(),
+                matched.flatMap { it.majors }.filter { it.isNotBlank() }.distinct(),
+            )
+        }
+    }
+    val creditsMap = remember(index, byCode) {
+        index.courses.associate { c ->
+            c.id to (c.codes + c.former).mapNotNull { byCode[it]?.credits }.firstOrNull { it > 0 }
+        }
+    }
+    val majors = remember(curriculum) {
+        val preferred = listOf("计算机科学与技术", "软件工程", "信息安全", "计算机科学与技术(创新班)")
+        val found = curriculum.flatMap { it.majors }.distinct()
+        listOf("全部专业") + preferred.filter { it in found } + found.filter { it !in preferred }
+    }
+
+    val q = query.trim().lowercase()
+    val filtered = remember(index, metaMap, category, nature, major, q) {
+        index.courses.filter { c ->
+            val (cats, nats, majs) = metaMap[c.id] ?: Triple(emptyList(), emptyList(), emptyList())
+            if (category != "全部" && category !in cats) return@filter false
+            if (nature != "全部" && nature !in nats) return@filter false
+            if (major != "全部专业" && major !in majs) return@filter false
+            if (q.isEmpty()) return@filter true
+            q in c.name.lowercase() || c.codes.any { q in it.lowercase() } || c.chapters.any { q in it.title.lowercase() }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(end = 40.dp)) {
+            SearchField(query, "筛选课程名称、课程代码或章节…") { query = it }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Choice(listOf("list" to "课程分类", "graph" to "依赖关系图"), view) { view = it }
+            Box {
+                Chip(if (major == "全部专业") "全部专业 ▾" else "${major.take(6)} ▾", { majorMenu = true })
+                DropdownMenu(majorMenu, { majorMenu = false }, containerColor = Ink.paper) {
+                    majors.forEach { m -> DropdownMenuItem({ Plain(m, 14.sp) }, { majorMenu = false; major = m }) }
+                }
+            }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("全部", "专业基础课", "专业课", "通识教育课").forEach { item ->
+                FilterChipPill(item, category == item) { category = item }
+            }
+            listOf("全部" to "全部性质", "必修" to "必修", "限选" to "限选").forEach { (value, label) ->
+                FilterChipPill(label, nature == value) { nature = value }
+            }
+        }
+
+        if (view == "graph") {
+            val (doc, linked) = remember(curriculum, major, category, nature, q, filtered, compiledByCode) {
+                val scoped = curriculum.filter { item ->
+                    (major == "全部专业" || major in item.majors) &&
+                        (category == "全部" || category in item.categories || item.category == category) &&
+                        (nature == "全部" || nature in item.natures || item.nature == nature)
+                }
+                val scopedCodes = scoped.map { it.code }.toSet()
+                val connected = mutableSetOf<String>()
+                for (item in scoped) {
+                    val reqs = item.requires.filter { it in scopedCodes }
+                    if (reqs.isNotEmpty()) { connected += item.code; connected.addAll(reqs) }
+                }
+                val nodes = scoped.filter { it.code in connected && (q.isEmpty() || q in it.name.lowercase() || q in it.code.lowercase()) }.toMutableList()
+                val nodeCodes = nodes.map { it.code }.toMutableSet()
+                for (n in nodes.toList()) {
+                    for (req in n.requires) {
+                        if (req in scopedCodes && req !in nodeCodes) {
+                            byCode[req]?.let { nodes += it; nodeCodes += req }
+                        }
+                    }
+                }
+                if (nodes.isNotEmpty()) {
+                    val idOf = nodes.mapIndexed { i, n -> n.code to "P$i" }.toMap()
+                    val md = buildString {
+                        appendLine("```mermaid")
+                        appendLine("flowchart LR")
+                        nodes.forEach { n -> appendLine("  ${idOf[n.code]}[\"${safeMermaidLabel(n.name)}\"]") }
+                        nodes.forEach { n -> n.requires.forEach { req -> if (req in idOf) appendLine("  ${idOf[req]} --> ${idOf[n.code]}") } }
+                        appendLine("```")
+                    }
+                    val linkedCourses = nodes.mapNotNull { compiledByCode[it.code] }.distinctBy { it.id }
+                    md to linkedCourses
+                } else {
+                    val md = buildString {
+                        appendLine("```mermaid")
+                        appendLine("flowchart LR")
+                        filtered.forEachIndexed { i, c -> appendLine("  C$i[\"${safeMermaidLabel(c.name)}\"]") }
+                        appendLine("```")
+                    }
+                    md to filtered
+                }
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                DocText(doc)
+                if (linked.isNotEmpty()) {
+                    Plain("图中有已编译资料的课程（点击进入）", 12.5.sp, Ink.muted)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        linked.forEach { c ->
+                            val ct = tone(toneIndex(c.id))
+                            Surface({ onOpen(c.id) }, shape = RoundedCornerShape(8.dp), color = ct.bg, border = BorderStroke(1.dp, ct.border)) {
+                                Plain(c.name, 13.sp, ct.fg, FontWeight.Medium, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+                items(filtered, key = { it.id }) { course ->
+                    val ct = tone(toneIndex(course.id))
+                    val topicsCount = course.chapters.flatMap { it.topics }.distinct().size
+                    val materialsCount = index.materials.count { it.course == course.id }
+                    val (cats, nats, _) = metaMap[course.id] ?: Triple(emptyList(), emptyList(), emptyList())
+                    val credits = creditsMap[course.id]
+                    val subtitle = (listOf(course.codes.joinToString(" · ").ifEmpty { "培养方案课程" }) +
+                        listOfNotNull(cats.firstOrNull(), nats.takeIf { it.isNotEmpty() }?.joinToString("/"), credits?.let { "$it 学分" })).joinToString(" · ")
+                    Surface(
+                        onClick = { onOpen(course.id) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Ink.paper,
+                        border = BorderStroke(1.dp, ct.border),
+                    ) {
+                        Column(Modifier.fillMaxWidth().background(ct.bg.copy(alpha = 0.25f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Plain(course.name, 16.sp, ct.fg, FontWeight.SemiBold)
+                            Plain(subtitle, 12.5.sp, Ink.muted)
+                            Plain("${course.chapters.size} 章 · $topicsCount 个知识点 · $materialsCount 份资料", 12.5.sp, Ink.muted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun FilterChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Ink.paper,
+        border = BorderStroke(1.dp, if (selected) Ink.brand.copy(alpha = .4f) else Ink.line),
+    ) {
+        Plain(
+            label,
+            12.5.sp,
+            if (selected) MaterialTheme.colorScheme.onPrimaryContainer else Ink.muted,
+            if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+        )
+    }
+}
+
+@Composable private fun CourseDetail(
+    course: KnowledgeCourse,
+    text: String,
+    index: KnowledgeIndex,
+    ct: Tone,
+    onLink: (String) -> Unit,
+    imageBytes: suspend (String) -> ByteArray?,
+    onOpen: (topic: String?, material: String?) -> Unit,
+) {
+    DocText(text, onLink = onLink, imageBytes = imageBytes)
+    val topics = course.chapters.flatMap { it.topics }.mapNotNull { id -> index.topics.firstOrNull { it.id == id } }
+        .sortedByDescending { it.tested_by.size }.filter { it.tested_by.isNotEmpty() }.take(8)
+    if (topics.isNotEmpty()) {
+        Plain("考得最多的知识点", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+        Column {
+            topics.forEach { t ->
+                val mats = t.tested_by.map { it.material }.distinct().size
+                KeyRow(null, t.title, "${t.tested_by.size} 道题 · $mats 份资料", color = ct.fg, chevron = true) { onOpen(t.id, null) }
+            }
+        }
+    }
+    val mats = index.materials.filter { it.course == course.id }
+    if (mats.isNotEmpty()) {
+        Plain("资料", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+        Column {
+            mats.forEach { m ->
+                KeyRow(m.kind, m.title, if (m.questions > 0) "${m.questions} 题" else m.term, chevron = true) { onOpen(null, m.path) }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun TopicDetail(
+    topic: KnowledgeTopic,
+    text: String,
+    index: KnowledgeIndex,
+    course: KnowledgeCourse,
+    ct: Tone,
+    onLink: (String) -> Unit,
+    imageBytes: suspend (String) -> ByteArray?,
+    onOpen: (topic: String?, material: String?, anchor: String?) -> Unit,
+) {
+    val matsCount = topic.tested_by.map { it.material }.distinct().size
+    Plain(
+        if (topic.tested_by.isNotEmpty()) "考过 ${topic.tested_by.size} 次 · 出现在 $matsCount 份资料里" else "收录的资料里还没有考到它",
+        13.sp,
+        ct.fg,
+    )
+    DocText(text, onLink = onLink, imageBytes = imageBytes)
+
+    // Tested past-exam links directly below explanation
+    Plain("考过的真题链接", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 8.dp))
+    val byMaterial = topic.tested_by.groupBy { it.material }
+    if (byMaterial.isEmpty()) {
+        Plain("收录的资料里还没有直接考到它的真题。", 13.5.sp, Ink.muted)
+    } else {
+        byMaterial.forEach { (path, refs) ->
+            val mat = index.materials.firstOrNull { it.path == path }
+            Column(Modifier.fillMaxWidth().bottomHairline(Ink.line).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Plain(mat?.title ?: path, 13.sp, Ink.text, FontWeight.Medium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    refs.forEach { ref ->
+                        Surface(
+                            onClick = { onOpen(null, path, ref.anchor) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = ct.bg,
+                            border = BorderStroke(1.dp, ct.border),
+                        ) {
+                            Plain(ref.heading, 13.sp, ct.fg, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Knowledge graph relations
+    if (topic.requires.isNotEmpty() || topic.leads_to.isNotEmpty()) {
+        val titleOf = { id: String -> index.topics.firstOrNull { it.id == id }?.title ?: id }
+        val miniDoc = remember(topic.id, index.topics) {
+            buildString {
+                appendLine("```mermaid")
+                appendLine("flowchart TB")
+                appendLine("  CUR[\"${safeMermaidLabel(topic.title)}\"]")
+                topic.requires.take(5).forEachIndexed { i, id ->
+                    appendLine("  R$i[\"${safeMermaidLabel(titleOf(id))}\"]")
+                    appendLine("  R$i --> CUR")
+                }
+                topic.leads_to.take(5).forEachIndexed { i, id ->
+                    appendLine("  L$i[\"${safeMermaidLabel(titleOf(id))}\"]")
+                    appendLine("  CUR --> L$i")
+                }
+                appendLine("```")
+            }
+        }
+        Plain("知识图谱关系", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 8.dp))
+        DocText(miniDoc)
+        if (topic.requires.isNotEmpty()) {
+            Plain("先要懂", 13.sp, Ink.muted)
+            topic.requires.forEach { id -> KeyRow(null, titleOf(id), color = ct.fg, chevron = true) { onOpen(id, null, null) } }
+        }
+        if (topic.leads_to.isNotEmpty()) {
+            Plain("用到它的", 13.sp, Ink.muted)
+            topic.leads_to.forEach { id -> KeyRow(null, titleOf(id), color = ct.fg, chevron = true) { onOpen(id, null, null) } }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun MaterialDetail(
+    material: KnowledgeMaterial,
+    text: String,
+    index: KnowledgeIndex,
+    anchor: String?,
+    ct: Tone,
+    onLink: (String) -> Unit,
+    imageBytes: suspend (String) -> ByteArray?,
+) {
+    val parts = remember(text) { materialParts(Docs.read(text)) }
+    var shown by remember(material.path) { mutableStateOf(emptySet<String>()) }
+    val withAnswerCount = remember(parts) { parts.count { it is MatPart.Question && it.answer.isNotEmpty() } }
+
+    Plain(material.title, 20.sp, Ink.text, FontWeight.Bold)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        SmallTag(material.kind, ct.bg, ct.fg)
+        val meta = listOfNotNull(material.term, material.questions.takeIf { it > 0 }?.let { "$it 题" }).joinToString(" · ")
+        if (meta.isNotEmpty()) Plain(meta, 12.5.sp, Ink.muted)
+        if (withAnswerCount > 0 && material.kind != "课件") {
+            Plain(
+                if (shown.isNotEmpty()) "收起全部解答" else "展开全部解答",
+                13.sp,
+                Ink.brand,
+                modifier = Modifier.clickable {
+                    shown = if (shown.isNotEmpty()) emptySet()
+                    else parts.filterIsInstance<MatPart.Question>().map { it.anchor }.toSet()
+                },
+            )
+        }
+    }
+
+    parts.forEach { part ->
+        when (part) {
+            is MatPart.Text -> Doc(part.blocks, onLink = onLink, imageBytes = imageBytes)
+            is MatPart.Group -> Plain("${part.title}${if (part.questions > 0) " (${part.questions} 题)" else ""}", 17.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 10.dp))
+            is MatPart.Question -> {
+                val open = part.anchor in shown
+                val here = anchor == part.anchor
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Ink.paper,
+                    border = BorderStroke(if (here) 1.5.dp else 1.dp, if (here) Ink.brand else ct.border),
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Plain(part.title, 13.sp, ct.fg, FontWeight.SemiBold)
+                        if (part.topics.isNotEmpty()) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                part.topics.forEach { (title, href) ->
+                                    Surface(onClick = { onLink(href) }, shape = RoundedCornerShape(999.dp), color = ct.bg, border = BorderStroke(1.dp, ct.border)) {
+                                        Plain(title, 12.sp, ct.fg, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                    }
+                                }
+                            }
+                        }
+                        Doc(part.asks, onLink = onLink, imageBytes = imageBytes)
+                        if (part.answer.isNotEmpty()) {
+                            val label = if (part.answer[0].first == "原文") (if (open) "收起原文" else "看原文") else (if (open) "收起解答" else "看解答")
+                            Plain(label, 13.sp, Ink.brand, modifier = Modifier.clickable {
+                                shown = if (open) shown - part.anchor else shown + part.anchor
+                            })
+                            if (open) {
+                                Column(Modifier.fillMaxWidth().topHairline(Ink.line).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    part.answer.forEach { (_, blocks) -> Doc(blocks, onLink = onLink, imageBytes = imageBytes) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

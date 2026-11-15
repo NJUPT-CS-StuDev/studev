@@ -12,7 +12,8 @@ internal static unsafe partial class Native
     public const uint MF_STRING = 0, MF_SEPARATOR = 0x800, MF_CHECKED = 8, TPM_RIGHTBUTTON = 2, TPM_RETURNCMD = 0x100;
     public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10;
     public static readonly nint HWND_BOTTOM = 1, HWND_MESSAGE = -3;
-    public const int GWLP_HWNDPARENT = -8, GWLP_WNDPROC = -4;
+    public const int GWLP_HWNDPARENT = -8, GWLP_WNDPROC = -4, GWL_EXSTYLE = -20;
+    public const nint WS_EX_TOOLWINDOW = 0x00000080, WS_EX_APPWINDOW = 0x00040000;
     public const uint WM_ERASEBKGND = 0x0014, MONITOR_DEFAULTTONEAREST = 2;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -50,6 +51,7 @@ internal static unsafe partial class Native
     [LibraryImport("user32.dll")] public static partial nint SendMessageW(nint hwnd, uint msg, nint w, nint l);
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowW(string? className, string? name);
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowExW(nint parent, nint after, string? className, string? name);
+    [LibraryImport("user32.dll")] public static partial nint GetWindowLongPtrW(nint hwnd, int index);
     [LibraryImport("user32.dll")] public static partial nint SetWindowLongPtrW(nint hwnd, int index, nint value);
     [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetClientRect(nint hwnd, out RECT rect);
     [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool GetWindowRect(nint hwnd, out RECT rect);

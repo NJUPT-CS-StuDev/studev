@@ -20,7 +20,7 @@ public abstract partial class Screen : Grid
 
 public sealed partial class Shell : Window
 {
-    public static readonly (string Key, string Label)[] Entries = [("timetable", "课表"), ("map", "地图"), ("search", "搜索"), ("ai", "AI")];
+    public static readonly (string Key, string Label)[] Entries = [("timetable", "课表"), ("map", "地图"), ("knowledge", "知识"), ("search", "搜索"), ("ai", "AI")];
     private readonly Grid root = new();
     private readonly Grid body = new();
     private readonly StackPanel nav = new() { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Stretch };
@@ -79,6 +79,7 @@ public sealed partial class Shell : Window
             {
                 "timetable" => new Timetable.TimetableScreen(),
                 "me" => new Me.MeScreen(),
+                "knowledge" => new Knowledge.KnowledgeScreen(),
                 "search" => new Search.SearchScreen(),
                 "ai" => new Ai.AiScreen(),
                 "map" => new Map.MapScreen(),

@@ -8,9 +8,11 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using StuDev.Kernels.Docstream;
 using StuDev.Ui;
+using Windows.Storage.Streams;
 using TextDecorations = Windows.UI.Text.TextDecorations;
 
 namespace StuDev.Ai;
@@ -31,25 +33,31 @@ public static class Doc
     private static string Str(JsonNode n, string key) => n[key]?.GetValue<string>() ?? "";
     private static List<JsonNode> List(JsonNode n, string key) => n[key]?.AsArray().Select(x => x!).ToList() ?? [];
 
-    public static FrameworkElement Make(List<JsonObject> blocks, bool live = false, Action<string>? link = null)
+    public static FrameworkElement Make(List<JsonObject> blocks, bool live = false, Action<string>? link = null, Func<string, Task<byte[]?>>? image = null)
     {
         var column = new StackPanel { Spacing = 10 };
-        for (var i = 0; i < blocks.Count; i++) column.Children.Add(Block(blocks[i]["block"]!, link, live && i == blocks.Count - 1));
+        for (var i = 0; i < blocks.Count; i++) column.Children.Add(Block(blocks[i]["block"]!, link, live && i == blocks.Count - 1, image));
         return column;
     }
 
-    private static FrameworkElement Block(JsonNode block, Action<string>? link, bool writing)
+    private static FrameworkElement Block(JsonNode block, Action<string>? link, bool writing, Func<string, Task<byte[]?>>? image = null)
     {
         switch (Type(block))
         {
             case "paragraph":
             {
                 var inlines = List(block, "inlines");
-                if (!inlines.Any(i => Type(i) == "math" && i["display"]?.GetValue<bool>() == true)) return Text(inlines, 16, link: link, caret: writing);
-                // Display math amid the text is set on a line of its own.
-                var column = new StackPanel { Spacing = 4 }; var run = new List<JsonNode>();
+                var hasMedia = inlines.Any(i => (Type(i) == "math" && i["display"]?.GetValue<bool>() == true) || (image is not null && Type(i) == "image"));
+                if (!hasMedia) return Text(inlines, 16, link: link, caret: writing);
+                // Display math or images amid the text are set on lines of their own.
+                var column = new StackPanel { Spacing = 6 }; var run = new List<JsonNode>();
                 void Flush() { if (run.Any(r => Type(r) != "text" || Str(r, "text").Trim().Length > 0)) column.Children.Add(Text(run, 16, link: link)); run = []; }
-                foreach (var inline in inlines) { if (Type(inline) == "math" && inline["display"]?.GetValue<bool>() == true) { Flush(); column.Children.Add(MathBlock(Str(inline, "tex"))); } else run.Add(inline); }
+                foreach (var inline in inlines)
+                {
+                    if (Type(inline) == "math" && inline["display"]?.GetValue<bool>() == true) { Flush(); column.Children.Add(MathBlock(Str(inline, "tex"))); }
+                    else if (image is not null && Type(inline) == "image") { Flush(); column.Children.Add(PictureBlock(Str(inline, "src"), Str(inline, "alt"), image)); }
+                    else run.Add(inline);
+                }
                 Flush();
                 return column;
             }
@@ -57,17 +65,17 @@ public static class Doc
             case "quote":
             {
                 var inner = new StackPanel { Spacing = 8 };
-                foreach (var b in List(block, "blocks")) inner.Children.Add(Block(b, link, false));
+                foreach (var b in List(block, "blocks")) inner.Children.Add(Block(b, link, false, image));
                 return new Border { BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(3, 0, 0, 0), Padding = new Thickness(12, 0, 0, 0), Child = inner };
             }
             case "alert":
             {
-                var danger = Str(block, "kind") is "warning" or "caution";
-                var tone = danger ? "danger" : "brand";
+                var kind = Str(block, "kind");
+                var tone = kind switch { "tip" => "free", "important" => "shop", "warning" => "warning", "caution" => "danger", _ => "brand" };
                 var inner = new StackPanel { Spacing = 6 };
-                inner.Children.Add(Kit.Text(Alerts.GetValueOrDefault(Str(block, "kind")) ?? "", Role.Label, tone, bold: true));
-                foreach (var b in List(block, "blocks")) inner.Children.Add(Block(b, link, false));
-                return new Border { CornerRadius = new CornerRadius(10), Background = Paint.Faded(tone, .07), Padding = new Thickness(14, 10, 14, 10), Child = inner };
+                inner.Children.Add(Kit.Text(Alerts.GetValueOrDefault(kind) ?? "", Role.Label, tone, bold: true));
+                foreach (var b in List(block, "blocks")) inner.Children.Add(Block(b, link, false, image));
+                return new Border { CornerRadius = new CornerRadius(10), BorderBrush = Paint.Brush(tone), BorderThickness = new Thickness(3, 0, 0, 0), Background = Paint.Faded(tone, .08), Padding = new Thickness(14, 10, 14, 10), Child = inner };
             }
             case "list":
             {
@@ -85,7 +93,7 @@ public static class Doc
                     mark.HorizontalAlignment = HorizontalAlignment.Right; mark.VerticalAlignment = VerticalAlignment.Top;
                     row.Children.Add(mark);
                     var inner = new StackPanel { Spacing = 4 };
-                    foreach (var b in List(item, "blocks")) inner.Children.Add(Block(b, link, false));
+                    foreach (var b in List(item, "blocks")) inner.Children.Add(Block(b, link, false, image));
                     Grid.SetColumn(inner, 1); row.Children.Add(inner);
                     column.Children.Add(row);
                 }
@@ -153,7 +161,7 @@ public static class Doc
                     case "strong": { var s = new Span { FontWeight = FontWeights.SemiBold }; Walk(List(inline, "children"), s.Inlines); into.Add(s); break; }
                     case "emphasis": { var s = new Span { FontStyle = Windows.UI.Text.FontStyle.Italic }; Walk(List(inline, "children"), s.Inlines); into.Add(s); break; }
                     case "strike": { var s = new Span { TextDecorations = TextDecorations.Strikethrough }; Walk(List(inline, "children"), s.Inlines); into.Add(s); break; }
-                    case "highlight": { var s = new Span { Foreground = Paint.Brush("ink"), FontWeight = FontWeights.SemiBold }; Walk(List(inline, "children"), s.Inlines); into.Add(s); break; }
+                    case "highlight": { var s = new Span { Foreground = Paint.Brush("warning"), FontWeight = FontWeights.SemiBold }; Walk(List(inline, "children"), s.Inlines); into.Add(s); break; }
                     case "superscript": case "subscript":
                     {
                         var s = new Span { FontSize = size * .72 }; Typography.SetVariants(s, Type(inline) == "superscript" ? FontVariants.Superscript : FontVariants.Subscript);
@@ -284,5 +292,41 @@ public static class Doc
         frame.Children.Add(scroll);
         frame.SizeChanged += (_, e) => { var fit = Math.Clamp(e.NewSize.Width / width, Smallest, 1); box.Width = width * fit; box.Height = height * fit; };
         return frame;
+    }
+
+    private static FrameworkElement PictureBlock(string src, string alt, Func<string, Task<byte[]?>> loader)
+    {
+        var box = new Border { CornerRadius = new CornerRadius(8), Background = Paint.Brush("surface"), Padding = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var fallback = Kit.Text($"正在加载图片 {alt}…", Role.Caption, "muted", wrap: true);
+        box.Child = fallback;
+        _ = LoadPicture(src, alt, loader, box);
+        return box;
+    }
+
+    private static async Task LoadPicture(string src, string alt, Func<string, Task<byte[]?>> loader, Border host)
+    {
+        try
+        {
+            var bytes = await loader(src);
+            if (bytes is null || bytes.Length == 0) { host.Child = Kit.Text($"［图片：{(alt.Length > 0 ? alt : src)}］", Role.Caption, "muted", wrap: true); return; }
+            var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+            {
+                writer.WriteBytes(bytes);
+                await writer.StoreAsync();
+                await writer.FlushAsync();
+            }
+            stream.Seek(0);
+            var bmp = new BitmapImage();
+            await bmp.SetSourceAsync(stream);
+            var img = new Microsoft.UI.Xaml.Controls.Image { Source = bmp, Stretch = Stretch.Uniform, MaxHeight = 620, HorizontalAlignment = HorizontalAlignment.Center };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(img, alt);
+            host.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255));
+            host.Child = img;
+        }
+        catch
+        {
+            host.Child = Kit.Text($"［图片：{(alt.Length > 0 ? alt : src)}］", Role.Caption, "muted", wrap: true);
+        }
     }
 }

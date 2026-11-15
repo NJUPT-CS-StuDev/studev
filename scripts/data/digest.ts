@@ -617,6 +617,10 @@ async function main() {
         await copyFile(join(data.dir, file), join(out, file));
     }
     await copyFile(join(data.dir, 'materials', 'courses.json'), join(out, 'materials.json'));
+    if (existsSync(join(data.dir, 'curriculum', 'courses.json'))) {
+        await mkdir(join(out, 'curriculum'), { recursive: true });
+        await copyFile(join(data.dir, 'curriculum', 'courses.json'), join(out, 'curriculum', 'courses.json'));
+    }
     const dataEntities = join(data.dir, 'entities');
     for (const file of ['index.json', 'agent.json', 'information.json', 'time.json']) {
         if (existsSync(join(dataEntities, file))) {

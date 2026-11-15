@@ -18,7 +18,7 @@ public sealed partial class SearchScreen : Screen
 {
     private const int PageSize = 10;
     private static readonly List<Channel> Channels = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), StorageJson.Default.ListChannel)!;
-    private static readonly HashSet<string> Entities = ["courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places"];
+    private static readonly HashSet<string> Entities = ["courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "questions"];
     private static readonly (string Value, string Label)[] Since = [("", "全部时间"), ("3", "近三天"), ("7", "近一周"), ("30", "近一月"), ("365", "近一年")];
     private static readonly string[] Campuses = ["仙林", "三牌楼", "锁金"];
     private readonly Campus campus = Campus.Shared;
@@ -102,8 +102,8 @@ public sealed partial class SearchScreen : Screen
             if (cancel.IsCancellationRequested) return;
             answer = (done.Results, done.Total, answer?.Seconds ?? started.Elapsed.TotalSeconds);
         }
-        catch (OperationCanceledException) { return; }
-        catch (Exception error) when (error is HttpRequestException or IOException or System.Text.Json.JsonException) { failed = true; }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested) { return; }
+        catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException or System.Text.Json.JsonException) { failed = true; }
         Draw();
     }
 
@@ -232,7 +232,11 @@ public sealed partial class SearchScreen : Screen
         return doc;
     }
 
-    private static async void Browse(string url) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url.StartsWith("http") ? url : Repository.Site + url));
+    private static async void Browse(string url)
+    {
+        if (url.StartsWith("/knowledge/", StringComparison.Ordinal)) { App.Open("knowledge", url); return; }
+        await Windows.System.Launcher.LaunchUriAsync(new Uri(url.StartsWith("http") ? url : Repository.Site + url));
+    }
 
     private RoomIndex? roomIndex;
     private Rooms? reader;

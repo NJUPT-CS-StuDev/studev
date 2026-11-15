@@ -1,5 +1,7 @@
 package top.hicancan.studev.world
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.*
@@ -51,10 +56,14 @@ private val JsonObject.type get() = getValue("type").jsonPrimitive.content
 private fun JsonObject.list(key: String) = get(key)?.jsonArray.orEmpty().map { it.jsonObject }
 private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull.orEmpty()
 
-private sealed interface Run { class Text(val inlines: List<JsonObject>) : Run; class Display(val tex: String) : Run }
+private sealed interface Run {
+    class Text(val inlines: List<JsonObject>) : Run
+    class Display(val tex: String) : Run
+    class Picture(val src: String, val alt: String) : Run
+}
 
-/** A paragraph's inlines cut at each display formula; the line breaks beside a formula go with it. */
-private fun displayRuns(inlines: List<JsonObject>): List<Run> {
+/** A paragraph's inlines cut at each display formula or standalone image when an image loader is provided. */
+private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): List<Run> {
     val runs = mutableListOf<Run>()
     var text = mutableListOf<JsonObject>()
     fun flush() {
@@ -65,16 +74,18 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
         text = mutableListOf()
     }
     for (inline in inlines) {
-        if (inline.type == "math" && inline["display"]?.jsonPrimitive?.booleanOrNull == true) { flush(); runs += Run.Display(inline.str("tex")) } else text += inline
+        if (inline.type == "math" && inline["display"]?.jsonPrimitive?.booleanOrNull == true) { flush(); runs += Run.Display(inline.str("tex")) }
+        else if (hasImages && inline.type == "image") { flush(); runs += Run.Picture(inline.str("src"), inline.str("alt")) }
+        else text += inline
     }
     flush()
     return runs
 }
 
-@Composable fun Doc(blocks: List<JsonObject>, live: Boolean = false, onLink: (String) -> Unit = {}) {
+@Composable fun Doc(blocks: List<JsonObject>, live: Boolean = false, onLink: (String) -> Unit = {}, imageBytes: (suspend (String) -> ByteArray?)? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         blocks.forEachIndexed { at, keyed ->
-            key(at, keyed.str("key")) { BlockView(keyed.getValue("block").jsonObject, onLink, live && at == blocks.lastIndex) }
+            key(at, keyed.str("key")) { BlockView(keyed.getValue("block").jsonObject, onLink, live && at == blocks.lastIndex, imageBytes) }
         }
     }
 }
@@ -127,17 +138,33 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
     Text(text, if (align != null) Modifier.fillMaxWidth() else Modifier, color = color, style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.625f).sp, fontWeight = weight), textAlign = align, inlineContent = drawings)
 }
 
-@Composable private fun BlockView(block: JsonObject, onLink: (String) -> Unit, caret: Boolean = false) {
+@Composable private fun PictureBlock(src: String, alt: String, loader: suspend (String) -> ByteArray?) {
+    var bitmap by remember(src) { mutableStateOf<ImageBitmap?>(null) }
+    var failed by remember(src) { mutableStateOf(false) }
+    LaunchedEffect(src) {
+        val bytes = runCatching { loader(src) }.getOrNull()
+        val decoded = bytes?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }.getOrNull() }
+        if (decoded != null) bitmap = decoded else failed = true
+    }
+    when {
+        bitmap != null -> Image(bitmap!!, alt, Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.FillWidth)
+        failed -> Plain("［图片：${alt.ifEmpty { src }}］", 13.sp, Ink.muted)
+        else -> Box(Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(Ink.sunken))
+    }
+}
+
+@Composable private fun BlockView(block: JsonObject, onLink: (String) -> Unit, caret: Boolean = false, imageBytes: (suspend (String) -> ByteArray?)? = null) {
     val shape = RoundedCornerShape(10.dp)
     when (block.type) {
         "paragraph" -> {
             // Display math written amid the text is set on a line of its own, between the text before and after it.
-            val runs = displayRuns(block.list("inlines"))
-            if (runs.size == 1 && runs[0] !is Run.Display) InlineText(block.list("inlines"), caret = caret, onLink = onLink)
-            else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val runs = displayRuns(block.list("inlines"), imageBytes != null)
+            if (runs.size == 1 && runs[0] is Run.Text) InlineText(block.list("inlines"), caret = caret, onLink = onLink)
+            else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 runs.forEachIndexed { at, run ->
                     when (run) {
                         is Run.Display -> MathBlock(run.tex, 16.sp)
+                        is Run.Picture -> PictureBlock(run.src, run.alt, imageBytes!!)
                         is Run.Text -> InlineText(run.inlines, caret = caret && at == runs.lastIndex, onLink = onLink)
                     }
                 }
@@ -146,14 +173,21 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
         "heading" -> InlineText(block.list("inlines"), size = when (block.getValue("level").jsonPrimitive.int) { 1 -> 20f; 2 -> 18f; else -> 16.5f }, weight = FontWeight.SemiBold, caret = caret, onLink = onLink)
         "quote" -> Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(3.dp).fillMaxHeight().background(Ink.line))
-            Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { block.list("blocks").forEach { BlockView(it, onLink) } }
+            Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { block.list("blocks").forEach { BlockView(it, onLink, imageBytes = imageBytes) } }
         }
         "alert" -> {
-            val danger = block.str("kind") in setOf("warning", "caution")
-            val tone = if (danger) marks().danger else Ink.brand
-            Column(Modifier.fillMaxWidth().clip(shape).background(tone.copy(alpha = .07f)).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Plain(ALERTS[block.str("kind")].orEmpty(), 13.sp, tone, FontWeight.SemiBold)
-                block.list("blocks").forEach { BlockView(it, onLink) }
+            val m = marks()
+            val kind = block.str("kind")
+            val tone = when (kind) {
+                "tip" -> m.free
+                "warning" -> m.warning
+                "caution" -> m.danger
+                "important" -> Color(0xFF9334E6)
+                else -> Ink.brand
+            }
+            Column(Modifier.fillMaxWidth().clip(shape).background(tone.copy(alpha = .08f)).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Plain(ALERTS[kind].orEmpty(), 13.sp, tone, FontWeight.SemiBold)
+                block.list("blocks").forEach { BlockView(it, onLink, imageBytes = imageBytes) }
             }
         }
         "list" -> {
@@ -170,7 +204,7 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
                                 else -> Plain("•", 15.5.sp, Ink.muted)
                             }
                         }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) { item.list("blocks").forEach { BlockView(it, onLink) } }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) { item.list("blocks").forEach { BlockView(it, onLink, imageBytes = imageBytes) } }
                     }
                 }
             }
@@ -219,7 +253,7 @@ private fun displayRuns(inlines: List<JsonObject>): List<Run> {
 }
 
 /** A whole text, read at once and drawn. */
-@Composable fun DocText(text: String, onLink: (String) -> Unit = {}) {
+@Composable fun DocText(text: String, onLink: (String) -> Unit = {}, imageBytes: (suspend (String) -> ByteArray?)? = null) {
     val blocks = remember(text) { Docs.read(text) }
-    Doc(blocks, onLink = onLink)
+    Doc(blocks, onLink = onLink, imageBytes = imageBytes)
 }

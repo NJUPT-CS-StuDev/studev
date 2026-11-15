@@ -15,7 +15,7 @@ class Discovery(val app: AppRelease, val repository: AcademicRepository?, val un
     val appBehind get() = app.versionCode > top.hicancan.studev.BuildConfig.VERSION_CODE
 }
 internal fun appInManifest(text: String): AppRelease = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<ReleaseManifest>(text).android
-@Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val labs: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null)
+@Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val labs: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null, val knowledge_version: String? = null)
 @Serializable data class TeachingWeek(val week: Int, val start: String, val end: String)
 @Serializable data class TeachingTerm(val term: String, val year: Int, val number: Int, val weeks: List<TeachingWeek>, val observed_at: String)
 @Serializable data class TeachingPeriod(val period: Int, val start: String, val end: String, val part: String?)
@@ -23,7 +23,23 @@ internal fun appInManifest(text: String): AppRelease = kotlinx.serialization.jso
 /** Coursework off the timetable (课程设计, 实践): its weeks, and its name as far as the data proves it. */
 @Serializable data class Practice(val name: String, val weeks: List<Int>, val text: String)
 @Serializable data class Course(val code: String?, val name: String, val category: String?, val nature: String?, val credits: Double?, val hours: Double?, val hours_composition: String?, val assessment: String?, val exam: String?)
-@Serializable data class CoursePlan(val id: String, val kind: String, val subtype: String, val names: List<String>, val aliases: List<String>, val source: String? = null, val teaching_class_ids: List<String> = emptyList())
+@Serializable data class CoursePlan(
+    val id: String,
+    val kind: String,
+    val subtype: String,
+    val names: List<String>,
+    val aliases: List<String>,
+    val source: String? = null,
+    val teaching_class_ids: List<String> = emptyList(),
+    val category: String? = null,
+    val nature: String? = null,
+    val credits: Double? = null,
+    val terms: List<Int> = emptyList(),
+    val majors: List<String> = emptyList(),
+    val colleges: List<String> = emptyList(),
+    val requires: List<String> = emptyList(),
+    val former: List<String> = emptyList(),
+)
 @Serializable data class InformationEntityFile(val schema_version: String, val kind: String, val items: List<JsonObject>)
 @Serializable data class AgentEntity(val id: String, val kind: String, val subtype: String, val names: List<String>, val aliases: List<String>, val source: String? = null, val role: String? = null, val size: Int? = null, val enrolled: Int? = null, val capacity: Int? = null)
 @Serializable data class AgentEntityFile(val schema_version: String, val kind: String, val items: List<AgentEntity>)

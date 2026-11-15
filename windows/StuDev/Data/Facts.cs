@@ -36,6 +36,19 @@ public sealed record RoomIndex(string Term, List<TeachingWeek> Weeks, List<Teach
 public sealed record RoomOccupant(string Kind, string Id, string Course, List<string> Teachers, List<string> Classes, List<int> Periods);
 public sealed record RoomDay(string Date, int Week, int Weekday, Dictionary<string, List<string>>? Free, Dictionary<string, List<RoomOccupant>> Occupied, string? ObservedAt);
 
+public sealed record KnowledgeChapter(string Title, List<string> Topics);
+public sealed record KnowledgeCourse(string Id, string Name, List<string> Codes, List<string> Former, List<KnowledgeChapter> Chapters, string Path);
+public sealed record QuestionRef(string Material, string Heading, string Anchor);
+public sealed record KnowledgeTopic(string Id, string Title, List<string> Requires, string Path, List<string> TaughtBy, List<QuestionRef> TestedBy, List<string> LeadsTo);
+public sealed record KnowledgeMaterial(string Path, string Title, string Kind, string Course, string? Term, string Source, int Questions);
+public sealed record KnowledgeIndex(List<KnowledgeCourse> Courses, List<KnowledgeTopic> Topics, List<KnowledgeMaterial> Materials);
+
+public sealed record CurriculumCourse(
+    string Code, string Name, double Credits, string Hours, string ExamMode,
+    string Category, string Nature, List<string> Categories, List<string> Natures,
+    List<string> Colleges, List<string> Majors, List<int> Terms, List<string> Grades,
+    List<string> Requires, List<string> Former);
+
 public static class Facts
 {
     /** How every file of the release is read: snake_case names, numbers as numbers, unknown fields ignored. */

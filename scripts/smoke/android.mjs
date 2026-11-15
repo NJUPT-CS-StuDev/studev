@@ -101,6 +101,7 @@ if (screen().some(node => node.text === '选择起点')) {
 }
 await find(node => /条可选路线|分钟/.test(node.text), 'a route (the wayfind kernel)', 30);
 alive('a route');
+await tap('知识', 'the knowledge board');
 await tap('AI', 'the AI board');
 await tap('课表', 'back to the timetable');
 console.log('Android smoke passed');

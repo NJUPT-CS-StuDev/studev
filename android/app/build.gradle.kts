@@ -85,7 +85,7 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
             if (!bundleAllData.get()) {
                 include("space/**")
                 include("entities/**")
-                include("hours.json", "calendar.json", "morning-run.json")
+                include("hours.json", "calendar.json", "morning-run.json", "curriculum/**", "knowledge/knowledge.json")
                 include("search/manifest.json", "search/documents-*.bin", "search/lexicon-index.bin")
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "teaching/${metadata["teaching"]}/meetings.json", "rooms/index.json")

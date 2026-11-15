@@ -1,4 +1,4 @@
-# The Windows app as it ships, opened and used before it is released, in a home of its own so no one's records are
+﻿# The Windows app as it ships, opened and used before it is released, in a home of its own so no one's records are
 # touched: a class chosen, the four boards, a search, and a desktop widget opened on one of its lessons. After every
 # step the app must still be running and must not have written a crash log. Usage: pwsh windows.ps1 -Exe <StuDev.exe>
 param([Parameter(Mandatory)] [string]$Exe)
@@ -77,6 +77,7 @@ try {
     Fill $window { param($e) $e.Current.Name -eq '搜索' } '计算机' 'search 计算机'
     Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '条结果' } 'search results (the search kernel)' 30 | Out-Null
     Alive 'search results'
+    Press $window '知识' 'the knowledge board'
     Press $window 'AI' 'the AI board'
     Press $window '我' 'the me board'
     Press $window { param($e) $e.Current.Name -like '小组件*' } 'the widgets sheet'
