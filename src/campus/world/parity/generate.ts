@@ -3,6 +3,8 @@
 // node D:/Temp/claude-wsl/parity/generate.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { sunAt } from '@/map/model/sun';
+import { campusFrame } from '@/map/model/frame';
+import { PRODUCT_CONFIG } from '@/world/product';
 import { courseIdentity, courseTones, linkedCourse, sameCourse, timelineTones } from '@/timetable/model/courseColors';
 import { attendingLabs, labCourseKey, labSheet, personalLabs } from '@/timetable/model/labs';
 import { offWeekLessons } from '@/timetable/model/weekPattern';
@@ -73,7 +75,7 @@ const colours = [
 ].map(course => ({ course, identity: courseIdentity({ course }) }));
 const tones = schedules.map(schedule => ({ class: schedule.class, tones: Object.fromEntries(courseTones(schedule.meetings)) }));
 const names = ['操作系统基础', '计算机通信与网络（双语）', '习近平新时代中国特色社会主义思想概论', '仙林/教4-309', '仙林/图书馆-201', '翻转课堂线上自学'].map(value => ({ value, course: courseName(value), short: courseShort(value), room: roomLabel(value) }));
-const compactPlaces = ['计算机学科楼 401', '计科楼-401/403', '计算机楼-401/403/405/407', '仙林教4-309', 'CS-306', '计科楼'].map(value => ({ value, compact: compactPlace(value) }));
+const compactPlaces = ['计科楼-401/403', '计科楼-401/403/405/407', '计科楼-306', 'T1-101', '教2-305', '计科楼'].map(value => ({ value, compact: compactPlace(value) }));
 const attendanceExams = [{ id: 'a', course: { code: 'X1', name: '甲' } }, { id: 'b', course: { code: 'X2', name: '乙' } }, { id: 'c', course: { code: null, name: '丙' } }] as Exam[];
 const examAttendance = [
     { choices: {}, ownCodes: null }, { choices: { a: false }, ownCodes: null }, { choices: {}, ownCodes: ['X1'] }, { choices: { b: true }, ownCodes: ['X1'] },
@@ -88,7 +90,8 @@ const placeById = new Map(placeRows.map(place => [place.id, place]));
 const entities = placeRows.filter(place => ['campus', 'building', 'place', 'room'].includes(place.kind))
     .map(({ id, kind, parent, names, centre, category, group, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(centre ? { centre } : {}), ...(category ? { category } : {}), ...(group ? { group } : {}), ...(tier ? { tier } : {}), sources, routing }));
 const labels = placeRows.filter(place => place.kind === 'building' || place.kind === 'place').map(place => ({ id: place.id, rule: labelRule(place, placeById), teaching: place.kind === 'building' ? labelRule(place, placeById, true) : null }));
-const from: [number, number] = [118.9262, 32.1146];
+// Nearest first from the middle of the campus, as the map reads it when one's own place is not known.
+const from = placeById.get(PRODUCT_CONFIG.CAMPUS.id)!.centre as [number, number];
 const recommend = [1, 3, 6, 7].flatMap(day => [6, 8, 12, 15, 17, 18, 20, 23].map(hour => ({ day, hour, minute: 30, expected: recommendations(places, { day, hour, minute: 30 }, from).map(({ place, status }) => ({ id: place.id, state: status.state })) })));
 const hoursCases = [{ week: { '5': [['08:00', '12:00'], ['13:30', '17:00']] } }, { week: { '7': [['22:00', '02:00']] } }, { week: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(day => [String(day), [['00:00', '00:00']]])) }].flatMap(hours => [[5, 8, 0], [5, 11, 40], [5, 12, 0], [5, 13, 30], [1, 1, 50], [1, 2, 0], [7, 22, 0], [3, 12, 0]].map(([day, hour, minute]) => ({ hours, day, minute: hour! * 60 + minute!, state: openingStatus(hours as Place['hours'], { day: day!, hour: hour!, minute: minute! }).state })));
 // Labs: a class whose lab takes a lecture's slot, one on a day off, and what hiding or adding a course does to them.
@@ -301,7 +304,9 @@ const glance = {
     term: glanceTerm(taskLine),
 };
 // Where the sun is over the campus, which lights the scene and casts the buildings' shadows on every map.
+// Where the campus is, from its own footprints; the sun is reckoned for its middle.
+const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
-    .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ sun, glance, materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+    .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

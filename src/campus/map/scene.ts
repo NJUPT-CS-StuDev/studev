@@ -10,6 +10,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import tokens from '../../../design/tokens.json';
 import type { RoomTier } from '@/world/rooms';
 import { modelLayer, type ModelIndex, type ModelLook } from './models';
+import { campusFrame, polygons, type CampusFrame } from './model/frame';
 import { sunAt } from './model/sun';
 
 interface ModelFloor { level: number; plate: Geometry; cores: { kind: string; geometry: Geometry }[]; rooms: { id: string; geometry: Geometry }[] }
@@ -26,16 +27,14 @@ export interface SceneHandlers { onBuilding: (id: string) => void; onRoom: (id: 
 
 const NONE = { type: 'FeatureCollection' as const, features: [] };
 const FLAT = 0.14;
-const SHADOW = { w: 118.912, e: 118.938, s: 32.102, n: 32.128, W: 1664, H: 2048 };
+/** The shadow picture's width in pixels; its height follows the campus frame's shape. */
+const SHADOW_WIDTH = 1664;
 const rgb = (hex: string): [number, number, number] => [parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255];
 const mix = (a: string, b: string, t: number) => '#' + [1, 3, 5].map(i => {
     const left = parseInt(a.slice(i, i + 2), 16);
     return Math.round(left + (parseInt(b.slice(i, i + 2), 16) - left) * t).toString(16).padStart(2, '0');
 }).join('');
 const merc = (lat: number) => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
-const shadowX = (lon: number) => (lon - SHADOW.w) / (SHADOW.e - SHADOW.w) * SHADOW.W;
-const shadowY = (lat: number) => (merc(SHADOW.n) - merc(lat)) / (merc(SHADOW.n) - merc(SHADOW.s)) * SHADOW.H;
-const polygons = (geometry: Geometry): Position[][][] => geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
 const ring = (geometry: Geometry) => polygons(geometry)[0]?.[0] ?? [];
 const bounds = (geometry: Geometry) => {
     let box = [Infinity, Infinity, -Infinity, -Infinity] as [number, number, number, number];
@@ -55,7 +54,8 @@ const shrink = (geometry: Geometry, by: number): Geometry => {
 };
 const principalBearing = (geometry: Geometry) => {
     const points = ring(geometry);
-    const cosine = Math.cos(32.11 * Math.PI / 180);
+    // East and north at the footprint's own latitude, so a degree east weighs what a metre does there.
+    const cosine = Math.cos((points[0]?.[1] ?? 0) * Math.PI / 180);
     let best = 0, angle = 0;
     for (let i = 0; i < points.length - 1; i++) {
         const dx = (points[i + 1]![0]! - points[i]![0]!) * cosine;
@@ -75,6 +75,9 @@ export class CampusScene {
     private readonly host: HTMLElement;
     private readonly labelHost: HTMLElement;
     private readonly model: CampusModel;
+    /** Where the campus is, from its footprints: the sun is reckoned for it and its shadows drawn over it. */
+    private readonly frame: CampusFrame;
+    private readonly shadowHeight: number;
     private readonly handlers: SceneHandlers;
     private readonly byId: Map<string, CampusModel['buildings'][number]>;
     private shadowCanvas = document.createElement('canvas');
@@ -105,10 +108,12 @@ export class CampusScene {
         this.host = host;
         this.labelHost = labelHost;
         this.model = model;
+        this.frame = campusFrame(model);
+        this.shadowHeight = Math.round(SHADOW_WIDTH * (merc(this.frame.north) - merc(this.frame.south)) / ((this.frame.east - this.frame.west) * Math.PI / 180));
         this.handlers = handlers;
         this.byId = new Map(model.buildings.map(building => [building.id, building]));
-        this.shadowCanvas.width = this.shadowDraft.width = SHADOW.W;
-        this.shadowCanvas.height = this.shadowDraft.height = SHADOW.H;
+        this.shadowCanvas.width = this.shadowDraft.width = SHADOW_WIDTH;
+        this.shadowCanvas.height = this.shadowDraft.height = this.shadowHeight;
         this.me = document.createElement('div');
         this.me.className = 'you';
         labelHost.appendChild(this.me);
@@ -132,7 +137,7 @@ export class CampusScene {
 
     private onLoad() {
         const map = this.map;
-        map.addSource('shadow', { type: 'canvas', canvas: this.shadowCanvas, coordinates: [[SHADOW.w, SHADOW.n], [SHADOW.e, SHADOW.n], [SHADOW.e, SHADOW.s], [SHADOW.w, SHADOW.s]], animate: false });
+        map.addSource('shadow', { type: 'canvas', canvas: this.shadowCanvas, coordinates: [[this.frame.west, this.frame.north], [this.frame.east, this.frame.north], [this.frame.east, this.frame.south], [this.frame.west, this.frame.south]], animate: false });
         map.addLayer({ id: 'shadow', type: 'raster', source: 'shadow', paint: { 'raster-opacity': .16, 'raster-fade-duration': 0 } }, 'context');
         for (const id of ['route', 'sel', 'selshell', 'selcore', 'selrooms']) map.addSource(id, { type: 'geojson', data: NONE });
         this.routeColours = (map.getStyle().metadata as { route: NonNullable<CampusScene['routeColours']> }).route;
@@ -157,7 +162,7 @@ export class CampusScene {
     /** The light of a moment. A chosen appearance holds it at day or night; "auto" follows the sun. */
     setMoment(date: string, min: number, appearance: Appearance) {
         if (!this.ready) return;
-        const altitude = sunAt(date, min).alt;
+        const altitude = sunAt(date, min, this.frame).alt;
         const night = appearance === 'dark' ? 1 : appearance === 'light' ? 0 : altitude >= 8 ? 0 : altitude <= -5 ? 1 : (8 - altitude) / 13;
         if (night.toFixed(2) !== this.night.toFixed(2) || !this.painted) {
             this.night = night;
@@ -221,15 +226,18 @@ export class CampusScene {
         if (wait <= 0) draw(); else this.shadowTimer = window.setTimeout(draw, wait);
     }
     private drawShadows(date: string, min: number) {
-        const sun = sunAt(date, min);
+        const sun = sunAt(date, min, this.frame);
+        const { west, east, north, south } = this.frame, height = this.shadowHeight;
+        const shadowX = (lon: number) => (lon - west) / (east - west) * SHADOW_WIDTH;
+        const shadowY = (lat: number) => (merc(north) - merc(lat)) / (merc(north) - merc(south)) * height;
         const draft = this.shadowDraft.getContext('2d')!;
         const out = this.shadowCanvas.getContext('2d')!;
-        draft.clearRect(0, 0, SHADOW.W, SHADOW.H);
-        out.clearRect(0, 0, SHADOW.W, SHADOW.H);
+        draft.clearRect(0, 0, SHADOW_WIDTH, height);
+        out.clearRect(0, 0, SHADOW_WIDTH, height);
         if (sun.alt > 1.5) {
             const length = 1 / Math.tan(Math.max(sun.alt, 7) * Math.PI / 180);
             const azimuth = sun.az * Math.PI / 180;
-            const dLon = -Math.sin(azimuth) * length / (111320 * Math.cos(32.11 * Math.PI / 180));
+            const dLon = -Math.sin(azimuth) * length / (111320 * Math.cos(this.frame.latitude * Math.PI / 180));
             const dLat = -Math.cos(azimuth) * length / 110574;
             draft.fillStyle = '#000';
             for (const { geometry, height } of [...this.model.context, ...this.model.buildings]) {
@@ -463,7 +471,7 @@ export class CampusScene {
         const zoom = map.getZoom();
         const pitch = map.getPitch() * Math.PI / 180;
         const { clientWidth: width, clientHeight: height } = this.host;
-        const perMetre = 512 * Math.pow(2, zoom) / (40075016.686 * Math.cos(32.11 * Math.PI / 180));
+        const perMetre = 512 * Math.pow(2, zoom) / (40075016.686 * Math.cos(map.getCenter().lat * Math.PI / 180));
         const distance = .5 * height / Math.tan(map.getVerticalFieldOfView() * Math.PI / 360);
         const centre = map.project(map.getCenter());
         const project = (at: Position, metres: number) => {

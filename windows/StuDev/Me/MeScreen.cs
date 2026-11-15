@@ -11,7 +11,6 @@ namespace StuDev.Me;
 public sealed partial class MeScreen : Screen
 {
     private static readonly Dictionary<string, string> KindNames = new() { ["exam"] = "考试", ["task"] = "任务", ["lab"] = "实验", ["class"] = "课", ["run"] = "早锻炼" };
-    private static readonly System.Text.Json.JsonElement Product = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "product.json"))).RootElement;
     private readonly Campus campus = Campus.Shared;
 
     public MeScreen()
@@ -26,7 +25,7 @@ public sealed partial class MeScreen : Screen
     public override void Shown(object? argument) => Draw();
 
     private static string Form(string kind, string? where = null) =>
-        $"{Repository.Site}/fill/?id={Product.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
+        $"{Repository.Site}/fill/?id={StuDev.Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
     private static async void Browse(string url) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
 
     private static UIElement Value(string text, string? small = null, string colour = "ink")

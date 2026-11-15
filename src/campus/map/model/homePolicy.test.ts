@@ -21,22 +21,24 @@ describe('home policy', () => {
         expect(openingStatus(hours('00:00', '24:00'), time(23, 59)).state).toBe('open');
         expect(openingStatus({ week: { '5': [['08:00', '12:00'], ['12:00', '17:00']] } }, time(11, 55))).toMatchObject({ state: 'open', closesAt: '17:00' });
     });
+    // Nearest first from a point on the campus, as the map passes the campus's middle when one's own place is unknown.
+    const middle: [number, number] = [118.926, 32.114];
     it('changes candidates by time, never recommends closed food, category includes closed', () => {
         const items = [place('class', '教学楼'), place('library', '图书馆', hours('08:00', '22:00')), place('canteen', '食堂', hours('07:00', '21:00')), place('closed', '食堂', hours('17:00', '21:00')), place('dorm', '宿舍'), place('store', '超市便利', hours('00:00', '24:00')), place('outside', '食堂', hours('00:00', '24:00'), '周边')];
-        expect(ids(recommendations(items, time(7)))[0]).toBe('class');
-        expect(ids(recommendations(items, time(12)))[0]).toBe('canteen');
-        expect(ids(recommendations(items, time(12)))).not.toContain('closed');
-        expect(ids(recommendations(items, time(12)))).not.toContain('outside');
-        expect(ids(recommendations(items, time(20)))[0]).toBe('library');
-        expect(new Set(ids(recommendations(items, time(23))))).toEqual(new Set(['dorm', 'store']));
-        expect(recommendations(items, time(12), null, '食堂')).toHaveLength(3);
+        expect(ids(recommendations(items, time(7), middle))[0]).toBe('class');
+        expect(ids(recommendations(items, time(12), middle))[0]).toBe('canteen');
+        expect(ids(recommendations(items, time(12), middle))).not.toContain('closed');
+        expect(ids(recommendations(items, time(12), middle))).not.toContain('outside');
+        expect(ids(recommendations(items, time(20), middle))[0]).toBe('library');
+        expect(new Set(ids(recommendations(items, time(23), middle)))).toEqual(new Set(['dorm', 'store']));
+        expect(recommendations(items, time(12), middle, '食堂')).toHaveLength(3);
     });
-    it('uses position or explicit centre and caps each featured category at three', () => {
+    it('measures from the point given and caps each featured category at three', () => {
         const p = place('near', '教学楼');
-        expect(recommendations([p], time(8), p.centre)[0]!.distance).toBeCloseTo(0);
-        expect(recommendations([p], time(8))[0]!.distance).toBeGreaterThan(0);
+        expect(recommendations([p], time(8), p.centre!)[0]!.distance).toBeCloseTo(0);
+        expect(recommendations([p], time(8), [118.93, 32.12])[0]!.distance).toBeGreaterThan(0);
         expect(distance([0, 0], [0, 0])).toBe(0);
-        expect(ids(recommendations(['d', 'c', 'b', 'a'].map(id => place(id, '教学楼')), time(8)))).toEqual(['a', 'b', 'c']);
+        expect(ids(recommendations(['d', 'c', 'b', 'a'].map(id => place(id, '教学楼')), time(8), middle))).toEqual(['a', 'b', 'c']);
     });
     it('uses campus timezone and tests moment boundaries', () => {
         expect(campusTime(new Date('2026-10-30T23:40:00Z'))).toEqual(time(7, 40, 6));

@@ -6,7 +6,6 @@ public sealed record Suggested(Place Place, double Distance, HoursNow Status);
 
 public static class Places
 {
-    public static readonly double[] CampusCentre = [118.9262, 32.1146];
 
     /** A place's title: its own name, or for a nameless building its kind and what it stands in. */
     public static string DisplayName(Place place, IReadOnlyDictionary<string, Place> byId)
@@ -22,7 +21,7 @@ public static class Places
     }
 
     /** Route text without the campus name, which the person already knows. */
-    public static string RouteText(string text) => text.Replace("仙林/", "");
+    public static string RouteText(string text) => text.Replace($"{Product.Campus}/", "");
 
     public static readonly Dictionary<Open, string> OpenLabel = new() { [Open.Open] = "营业中", [Open.Closing] = "即将关闭", [Open.Closed] = "已关闭", [Open.Unknown] = "" };
 
@@ -41,13 +40,14 @@ public static class Places
         return 6371008.8 * 2 * Math.Asin(Math.Sqrt(Math.Clamp(h, 0, 1)));
     }
 
-    public static List<Suggested> Recommendations(IEnumerable<Place> places, int day, int minute, double[]? position = null, string? category = null)
+    /** What is good to go to now, nearest first from `from`: where one is, or the middle of the campus. */
+    public static List<Suggested> Recommendations(IEnumerable<Place> places, int day, int minute, double[] from, string? category = null)
     {
         int Rank(Open o) => o is Open.Open or Open.Closing ? 0 : o == Open.Unknown ? 1 : 2;
         var order = MomentAt(minute / 60);
         var shown = new Dictionary<string, int>();
-        return places.Where(p => p.Kind is "building" or "place" && p.Centre is not null && (category is not null ? p.Category == category : p.Id.StartsWith("仙林/") && order.Contains(p.Category ?? "")))
-            .Select(p => new Suggested(p, Distance(position ?? CampusCentre, p.Centre!), Hours.At(p.Hours, day, minute)))
+        return places.Where(p => p.Kind is "building" or "place" && p.Centre is not null && (category is not null ? p.Category == category : p.Id.StartsWith($"{Product.Campus}/") && order.Contains(p.Category ?? "")))
+            .Select(p => new Suggested(p, Distance(from, p.Centre!), Hours.At(p.Hours, day, minute)))
             .Where(s => category is not null || !(Closes.Contains(s.Place.Category ?? "") && s.Status.Open == Open.Closed))
             .OrderBy(s => category is not null ? 0 : Array.IndexOf(order, s.Place.Category)).ThenBy(s => Rank(s.Status.Open)).ThenBy(s => s.Distance).ThenBy(s => s.Place.Id, StringComparer.Ordinal)
             .Where(s => { if (category is not null) return true; var key = s.Place.Category ?? ""; var n = shown.GetValueOrDefault(key); shown[key] = n + 1; return n < 3; })

@@ -1,5 +1,5 @@
 import { PRODUCT_CONFIG } from '@/world/product';
-import { CAMPUS_CENTRE, type Place } from './space';
+import type { Place } from './space';
 import type { Position } from 'wayfind';
 
 export type OpenState = 'open' | 'closing' | 'closed' | 'unknown';
@@ -59,12 +59,13 @@ export function distance(a: Position, b: Position): number {
     return 6371008.8 * 2 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, h))));
 }
 
-export function recommendations(places: Place[], now: CampusTime, position?: Position | null, category?: string | null) {
+/** What is good to go to now, nearest first from `from`: where one is, or the middle of the campus. */
+export function recommendations(places: Place[], now: CampusTime, from: Position, category?: string | null) {
     const stateOrder = { open: 0, closing: 0, unknown: 1, closed: 2 };
     const shown = new Map<string | undefined, number>();
     const order = momentAt(now.hour);
     return places.filter(p => (p.kind === 'building' || p.kind === 'place') && p.centre && (category ? p.category === category : onCampus(p) && order.includes(p.category ?? '')))
-        .map(place => ({ place, distance: distance(position ?? CAMPUS_CENTRE, place.centre!), status: openingStatus(place.hours, now) }))
+        .map(place => ({ place, distance: distance(from, place.centre!), status: openingStatus(place.hours, now) }))
         .filter(item => category || !(CLOSES.includes(item.place.category ?? '') && item.status.state === 'closed'))
         .sort((a, b) => (category ? 0 : order.indexOf(a.place.category!) - order.indexOf(b.place.category!)) || stateOrder[a.status.state] - stateOrder[b.status.state] || a.distance - b.distance || (a.place.id < b.place.id ? -1 : a.place.id > b.place.id ? 1 : 0))
         .filter(({ place }) => { if (category) return true; const count = shown.get(place.category) ?? 0; shown.set(place.category, count + 1); return count < 3; });

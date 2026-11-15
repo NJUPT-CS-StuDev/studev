@@ -21,10 +21,18 @@ void Equal(string label, object? value, JsonNode? expected)
     if (!JsonNode.DeepEquals(actual, expected)) failures.Add($"{label}: expected {expected?.ToJsonString()}, got {actual?.ToJsonString()}");
 }
 // The sun, within a billionth of a degree: each runtime's sine and arctangent may round the last bit differently.
+// Where the campus is, from the footprints of the same model the web read, within a billionth of a degree.
+var repoRoot = new DirectoryInfo(AppContext.BaseDirectory);
+while (!Directory.Exists(Path.Combine(repoRoot.FullName, "public", "data"))) repoRoot = repoRoot.Parent ?? throw new DirectoryNotFoundException("public/data");
+var model = JsonSerializer.Deserialize<StuDev.Map.CampusModel>(File.ReadAllText(Path.Combine(repoRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "space", "仙林", "model.json")), factsJson)!;
+var campusFrame = StuDev.Map.CampusFrame.Of(model);
+checks++;
+foreach (var (name, got) in new[] { ("west", campusFrame.West), ("south", campusFrame.South), ("east", campusFrame.East), ("north", campusFrame.North), ("longitude", campusFrame.Longitude), ("latitude", campusFrame.Latitude) })
+    if (Math.Abs(got - (double)golden["frame"]![name]!) > 1e-9) failures.Add($"campus frame {name}: expected {golden["frame"]![name]}, got {got}");
 foreach (var test in golden["sun"]!.AsArray())
 {
     checks++;
-    var (altitude, azimuth) = Sun.At(Clock.Parse((string)test!["date"]!), (int)test["min"]!);
+    var (altitude, azimuth) = Sun.At(Clock.Parse((string)test!["date"]!), (int)test["min"]!, campusFrame.Longitude, campusFrame.Latitude);
     if (Math.Abs(altitude - (double)test["alt"]!) > 1e-9 || Math.Abs(azimuth - (double)test["az"]!) > 1e-9) failures.Add($"sun {test.ToJsonString()}: got {altitude}, {azimuth}");
 }
 object Brief(LineEvent e) => new { kind = e.Kind, name = e.Name, @short = e.Short, start = e.Start, end = e.End, room = e.Room };

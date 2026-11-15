@@ -17,6 +17,42 @@ public sealed record ModelFloor(int Level, JsonElement Plate, List<ModelPart> Co
 public sealed record ModelContext(double Height, JsonElement Geometry);
 public sealed record CampusModel(List<ModelBuilding> Buildings, List<ModelContext> Context, Dictionary<string, ModelFloor> Floors);
 
+/**
+ * Where the campus is, read from its own footprints rather than written down, as src/campus/map/model/frame.ts reads it:
+ * the box around every building and the buildings around it, a little wider, and its middle, which the sun is reckoned
+ * for and its shadows are drawn over.
+ */
+public sealed record CampusFrame(double West, double South, double East, double North)
+{
+    /** How far past its outermost footprints the frame reaches, in degrees: room for the longest shadows. */
+    private const double Margin = .002;
+    public double Longitude => (West + East) / 2;
+    public double Latitude => (South + North) / 2;
+
+    public static CampusFrame Of(CampusModel model)
+    {
+        double west = double.PositiveInfinity, south = double.PositiveInfinity, east = double.NegativeInfinity, north = double.NegativeInfinity;
+        foreach (var geometry in model.Buildings.Select(b => b.Geometry).Concat(model.Context.Select(c => c.Geometry)))
+        {
+            var coordinates = geometry.GetProperty("coordinates");
+            var rings = geometry.GetProperty("type").GetString() switch
+            {
+                "Polygon" => [coordinates[0]],
+                "MultiPolygon" => coordinates.EnumerateArray().Select(polygon => polygon[0]).ToList(),
+                _ => new List<JsonElement>(),
+            };
+            foreach (var ring in rings)
+                foreach (var point in ring.EnumerateArray())
+                {
+                    double x = point[0].GetDouble(), y = point[1].GetDouble();
+                    west = Math.Min(west, x); east = Math.Max(east, x); south = Math.Min(south, y); north = Math.Max(north, y);
+                }
+        }
+        if (double.IsInfinity(west)) throw new InvalidDataException("the campus model has no footprints");
+        return new(west - Margin, south - Margin, east + Margin, north + Margin);
+    }
+}
+
 /** The campus's places and its walking network, read from the data release; the map's drawing is not here. */
 public sealed class Space(List<Place> places, string network)
 {

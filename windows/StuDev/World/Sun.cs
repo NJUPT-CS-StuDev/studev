@@ -5,10 +5,10 @@ namespace StuDev.World;
 public static class Sun
 {
     /** Altitude above the horizon and azimuth clockwise from north, in degrees. */
-    public static (double Altitude, double Azimuth) At(DateOnly date, int minutes)
+    public static (double Altitude, double Azimuth) At(DateOnly date, int minutes, double longitude, double latitudeDegrees)
     {
         const double radian = Math.PI / 180;
-        const double latitude = 32.11 * radian, longitude = 118.92;
+        var latitude = latitudeDegrees * radian;
         double day = date.DayOfYear;
         var declination = 23.44 * Math.Sin(2 * Math.PI * (284 + day) / 365) * radian;
         var b = 2 * Math.PI * (day - 81) / 364;

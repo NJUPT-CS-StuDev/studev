@@ -173,9 +173,17 @@ class ParityTest {
             assertEquals(case.toString(), case.getValue("changed").jsonArray.map { json.decodeFromJsonElement<Task>(JsonObject(it.jsonObject + ("modified" to JsonPrimitive("")))) }, moved.map { it.copy(modified = "") })
         }
         // The sun, within a billionth of a degree: each runtime's sine and arctangent may round the last bit differently.
+        // Where the campus is, from the footprints of the same model the web read, within a billionth of a degree.
+        val root = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }.first { File(it, "public/data").isDirectory }
+        val release = golden.getValue("source").jsonObject.getValue("release").jsonPrimitive.content
+        val model = json.decodeFromString<top.hicancan.studev.map.CampusModel>(File(root, "public/data/$release/space/仙林/model.json").readText())
+        val frame = top.hicancan.studev.map.CampusFrame.of(model)
+        val expected = golden.getValue("frame").jsonObject
+        for ((name, got) in listOf("west" to frame.west, "south" to frame.south, "east" to frame.east, "north" to frame.north, "longitude" to frame.longitude, "latitude" to frame.latitude))
+            assertEquals("campus frame $name", expected.getValue(name).jsonPrimitive.double, got, 1e-9)
         golden.getValue("sun").jsonArray.forEach { item ->
             val case = item.jsonObject
-            val (altitude, azimuth) = top.hicancan.studev.map.Sun.at(LocalDate.parse(case.getValue("date").jsonPrimitive.content), case.getValue("min").jsonPrimitive.int)
+            val (altitude, azimuth) = top.hicancan.studev.map.Sun.at(LocalDate.parse(case.getValue("date").jsonPrimitive.content), case.getValue("min").jsonPrimitive.int, frame.longitude, frame.latitude)
             assertEquals(case.toString(), case.getValue("alt").jsonPrimitive.double, altitude, 1e-9)
             assertEquals(case.toString(), case.getValue("az").jsonPrimitive.double, azimuth, 1e-9)
         }

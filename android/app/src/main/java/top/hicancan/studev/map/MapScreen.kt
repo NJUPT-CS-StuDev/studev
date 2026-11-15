@@ -173,7 +173,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     Box(Modifier.fillMaxSize().background(Ink.sunken)) {
         var canvas by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
         Box(Modifier.fillMaxSize().onSizeChanged { canvas = it }) {
-            CampusMap(controller, campus.style, (scene?.night ?: 0f) > .55f, access.granted, onLocationStatus = { status = it },
+            CampusMap(controller, campus.style, opening(campus), (scene?.night ?: 0f) > .55f, access.granted, onLocationStatus = { status = it },
                 onReady = { map: MapLibreMap, style: Style -> mapRef = map; model?.let { scene?.destroy(); scene = Scene(map, style, it) } },
                 onTap = { point ->
                     val active = scene
@@ -198,9 +198,9 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                     val camera = map.cameraPosition
                     val zoom = camera.zoom
                     val pitch = camera.tilt * PI / 180
-                    val perMetre = density * 512 * 2.0.pow(zoom) / (40075016.686 * cos(32.11 * PI / 180))
+                    val perMetre = density * 512 * 2.0.pow(zoom) / (40075016.686 * cos(camera.target!!.latitude * PI / 180))
                     val distance = .5 * canvas.height / tan(36.87 * PI / 360)
-                    val centre = map.projection.toScreenLocation(camera.target ?: LatLng(32.113, 118.928))
+                    val centre = map.projection.toScreenLocation(camera.target!!)
                     fun project(at: DoubleArray, metres: Double): Pair<Float, Float> {
                         val point = map.projection.toScreenLocation(LatLng(at[1], at[0]))
                         val rise = metres * perMetre
@@ -478,7 +478,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     }
     // The moment on the ruler decides what is worth going to; rooms are one kind of place among them.
     val weekday = moment.date.dayOfWeek.value
-    val spots = remember(campus, weekday, moment.min) { Recommendations.of(campus.byId.values, weekday, moment.min, listOf(top.hicancan.studev.BuildConfig.CAMPUS_LONGITUDE, top.hicancan.studev.BuildConfig.CAMPUS_LATITUDE)) }
+    val spots = remember(campus, weekday, moment.min) { Recommendations.of(campus.byId.values, weekday, moment.min, checkNotNull(campus.byId[top.hicancan.studev.BuildConfig.DEFAULT_CAMPUS]?.centre) { "the map data has no campus ${top.hicancan.studev.BuildConfig.DEFAULT_CAMPUS}" }) }
     val free = if (day == null) null else classrooms.count { !reader.at(day, it.id, moment.min).busy }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item { Plain("此刻可以去", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
@@ -522,4 +522,14 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             }
         }
     }
+}
+
+/**
+ * Where the campus map opens: over the place product.json names, a little to its south-east as the web and Windows open;
+ * a map without it is a broken release, not a place to guess.
+ */
+private fun opening(campus: top.hicancan.studev.data.CampusPackage): LatLng {
+    val opens = top.hicancan.studev.BuildConfig.CAMPUS_OPENS
+    val centre = checkNotNull(campus.byId[opens]?.centre) { "the map data has no $opens" }
+    return LatLng(centre[1] - .0002, centre[0] + .0006)
 }

@@ -16,7 +16,7 @@ public sealed class Preferences
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return new([]); }
     }
     public string? Class => value["class"]?.GetValue<string>();
-    public string Campus => value["campus"]?.GetValue<string>() ?? "仙林";
+    public string Campus => value["campus"]?.GetValue<string>() ?? StuDev.Product.Campus;
     public event Action? Changed;
     public event Action<bool>? Saved;
     public T? Get<T>(string section, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape) => value[section] is { } node ? node.Deserialize(shape) : default;

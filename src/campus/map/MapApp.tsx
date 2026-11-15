@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { initialize as initializeRouting, Router, type Mode, type Route } from 'wayfind';
 import type { Position } from 'geojson';
+import { PRODUCT_CONFIG } from '@/world/product';
 import type { Room, RoomDay, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { loadCalendar, loadPeriods, loadRoomDay, loadRoomIndex, loadTerm } from '@/world/data';
 import { courseName, roomLabel, unplaced } from '@/world/names';
@@ -119,7 +120,9 @@ export default function MapApp() {
         let cancelled = false;
         void loadStyle().then(style => {
             if (cancelled || !canvas.current || !labels.current) return;
-            const teach = world.space.byId.get('仙林/教3')?.centre ?? [118.928, 32.113];
+            // The campus opens over the place product.json names; a map without it is a broken release, not a place to guess.
+            const teach = world.space.byId.get(PRODUCT_CONFIG.CAMPUS.opens)?.centre;
+            if (!teach) throw new Error(`the map data has no ${PRODUCT_CONFIG.CAMPUS.opens}`);
             instance = new CampusScene(canvas.current, labels.current, style, world.model, [teach[0]! + .0006, teach[1]! - .0002], pitch, {
                 onBuilding: id => handlers.current.onBuilding(id), onRoom: id => handlers.current.onRoom(id),
                 onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
@@ -366,7 +369,7 @@ export default function MapApp() {
         const at = { day: weekdayOf(moment.date), hour: Math.floor(moment.min / 60), minute: moment.min % 60 };
         body = <>
             <div className="msum">此刻可以去</div>
-            {recommendations(world.space.places, at, me as [number, number] | null).map(({ place, distance, status }) => (
+            {recommendations(world.space.places, at, (me as [number, number] | null) ?? world.space.byId.get(PRODUCT_CONFIG.CAMPUS.id)!.centre!).map(({ place, distance, status }) => (
                 <button key={place.id} className="rrow" onClick={() => set({ place: place.id }, { push: true })}>
                     <span className="m"><span className="a">{displayName(place, world.space.byId)}</span><span className="b">{[place.category, status.state === 'unknown' ? null : openingLabel[status.state], me ? metres(distance) : null].filter(Boolean).join(' · ')}</span></span>
                 </button>

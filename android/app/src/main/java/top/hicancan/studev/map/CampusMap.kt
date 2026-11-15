@@ -98,6 +98,8 @@ internal class CampusMapController(initial3d: Boolean = false, initialFollow: Fo
 internal fun CampusMap(
     controller: CampusMapController,
     styleJson: String,
+    /** Where the camera opens when nothing was restored. */
+    opening: LatLng,
     dark: Boolean,
     locationGranted: Boolean,
     onLocationStatus: (LocationStatus) -> Unit,
@@ -130,7 +132,7 @@ internal fun CampusMap(
             if (!holder.destroyed) {
                 map = ready; controller.map = ready
                 if (!holder.isRestored) ready.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(32.1131, 118.9286)).zoom(15.75).tilt(52.0).bearing(-24.0).build()
+                    .target(opening).zoom(15.75).tilt(52.0).bearing(-24.0).build()
                 ready.setMinZoomPreference(13.5); ready.setMaxZoomPreference(21.0)
                 ready.uiSettings.isAttributionEnabled = false; ready.uiSettings.isLogoEnabled = false; ready.uiSettings.isCompassEnabled = false
                 ready.addOnCameraMoveListener { controller.bearing = ready.cameraPosition.bearing; cameraCallback() }

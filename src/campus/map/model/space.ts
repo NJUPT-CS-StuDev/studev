@@ -7,7 +7,6 @@ import { DATA_RELEASE } from '@/world/config';
 import { fetchJson } from '@/world/fetch';
 
 const CAMPUS = PRODUCT_CONFIG.CAMPUS.id;
-export const CAMPUS_CENTRE = PRODUCT_CONFIG.CAMPUS.centre as Position;
 
 interface Entrance { at: Position; source: string }
 export interface Place {

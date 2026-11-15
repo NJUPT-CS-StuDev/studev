@@ -39,6 +39,28 @@ import kotlin.math.*
 @Serializable data class ModelContext(val height: Double, val geometry: JsonObject)
 @Serializable data class CampusModel(val buildings: List<ModelBuilding>, val context: List<ModelContext>, val floors: Map<String, ModelFloor>)
 
+/**
+ * Where the campus is, read from its own footprints rather than written down, as src/campus/map/model/frame.ts reads it:
+ * the box around every building and the buildings around it, a little wider, and its middle, which the sun is reckoned
+ * for and its shadows are drawn over.
+ */
+data class CampusFrame(val west: Double, val south: Double, val east: Double, val north: Double) {
+    val longitude get() = (west + east) / 2
+    val latitude get() = (south + north) / 2
+    companion object {
+        /** How far past its outermost footprints the frame reaches, in degrees: room for the longest shadows. */
+        private const val MARGIN = .002
+        fun of(model: CampusModel): CampusFrame {
+            var west = Double.POSITIVE_INFINITY; var south = Double.POSITIVE_INFINITY; var east = Double.NEGATIVE_INFINITY; var north = Double.NEGATIVE_INFINITY
+            for (geometry in model.buildings.map { it.geometry } + model.context.map { it.geometry }) for (polygon in polygons(geometry)) for (point in polygon.first()) {
+                west = min(west, point[0]); east = max(east, point[0]); south = min(south, point[1]); north = max(north, point[1])
+            }
+            check(west.isFinite()) { "the campus model has no footprints" }
+            return CampusFrame(west - MARGIN, south - MARGIN, east + MARGIN, north + MARGIN)
+        }
+    }
+}
+
 private typealias Ring = List<DoubleArray>
 private fun polygons(geometry: JsonObject): List<List<Ring>> {
     fun ring(value: JsonElement): Ring = value.jsonArray.map { doubleArrayOf(it.jsonArray[0].jsonPrimitive.double, it.jsonArray[1].jsonPrimitive.double) }
@@ -69,7 +91,8 @@ private fun inset(geometry: JsonObject, by: Double): JsonObject {
 }
 private fun principalBearing(geometry: JsonObject): Double {
     val ring = polygons(geometry).first().first()
-    val cosine = cos(32.11 * PI / 180)
+    // East and north at the footprint's own latitude, so a degree east weighs what a metre does there.
+    val cosine = cos(ring[0][1] * PI / 180)
     var best = 0.0; var angle = 0.0
     for (i in 0 until ring.size - 1) {
         val dx = (ring[i + 1][0] - ring[i][0]) * cosine; val dy = ring[i + 1][1] - ring[i][1]
@@ -82,13 +105,13 @@ private fun principalBearing(geometry: JsonObject): Double {
 }
 object Sun {
     /** Altitude and azimuth over the campus, in degrees. Same formula as the web's sun.ts. */
-    fun at(date: LocalDate, minutes: Int): Pair<Double, Double> {
-        val radian = PI / 180; val latitude = 32.11 * radian
+    fun at(date: LocalDate, minutes: Int, longitude: Double, latitudeDegrees: Double): Pair<Double, Double> {
+        val radian = PI / 180; val latitude = latitudeDegrees * radian
         val n = date.dayOfYear.toDouble()
         val declination = 23.44 * sin(2 * PI * (284 + n) / 365) * radian
         val b = 2 * PI * (n - 81) / 364
         val equation = 9.87 * sin(2 * b) - 7.53 * cos(b) - 1.5 * sin(b)
-        val hour = ((minutes + 4 * (118.92 - 120) + equation) / 4 - 180) * radian
+        val hour = ((minutes + 4 * (longitude - 120) + equation) / 4 - 180) * radian
         val altitude = asin(sin(latitude) * sin(declination) + cos(latitude) * cos(declination) * cos(hour))
         val azimuth = atan2(-sin(hour) * cos(declination), cos(latitude) * sin(declination) - sin(latitude) * cos(declination) * cos(hour))
         return altitude / radian to (azimuth / radian + 360) % 360
@@ -111,8 +134,12 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     private val day = Tokens.Scene.Day; private val dusk = Tokens.Scene.Night
     private fun ground() = mix(day.ground, dusk.ground, night); private fun campus() = mix(day.campus, dusk.campus, night)
     private fun modelColor() = mix(day.model, dusk.model, night)
-    private val shadowW = 1024; private val shadowH = 1260
-    private val north = 32.128; private val south = 32.102; private val west = 118.912; private val east = 118.938
+    /** Where the campus is, from its footprints: the sun is reckoned for it and its shadows drawn over it. */
+    private val frame = CampusFrame.of(model)
+    private val north = frame.north; private val south = frame.south; private val west = frame.west; private val east = frame.east
+    /** The shadow picture: so many pixels across, its height following the campus frame's shape. */
+    private val shadowW = 1024
+    private val shadowH = (shadowW * (ln(tan(PI / 4 + north * PI / 360)) - ln(tan(PI / 4 + south * PI / 360))) / ((east - west) * PI / 180)).roundToInt()
     private val shadow = Bitmap.createBitmap(shadowW, shadowH, Bitmap.Config.ARGB_8888)
     private val shadowSource = ImageSource("shadow", LatLngQuad(LatLng(north, west), LatLng(north, east), LatLng(south, east), LatLng(south, west)), shadow)
     private var lastSun = ""
@@ -158,7 +185,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
     private fun set(layer: String, vararg properties: PropertyValue<*>) { style.getLayer(layer)?.setProperties(*properties) }
     /** The light of a moment. A chosen appearance holds it at day or night; "system" follows the sun. */
     fun moment(at: Moment, appearance: String) {
-        val (altitude, azimuth) = Sun.at(at.date, if (appearance == "light" && Sun.at(at.date, at.min).first < 8) 720 else at.min)
+        val (altitude, azimuth) = Sun.at(at.date, if (appearance == "light" && Sun.at(at.date, at.min, frame.longitude, frame.latitude).first < 8) 720 else at.min, frame.longitude, frame.latitude)
         val value = if (appearance == "dark") 1f else if (appearance == "light") 0f else if (altitude >= 8) 0f else if (altitude <= -5) 1f else ((8 - altitude) / 13).toFloat()
         if (abs(value - night) > .005f || lastSun.isEmpty()) { night = value; paintGround(); paintBuildings() }
         val key = "${at.date}:${at.min / 10}:$appearance"
@@ -198,7 +225,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
         if (altitude > 1.5) {
             val length = 1 / tan(max(altitude, 7.0) * PI / 180)
             val turn = azimuth * PI / 180
-            val dLon = -sin(turn) * length / (111320 * cos(32.11 * PI / 180)); val dLat = -cos(turn) * length / 110574
+            val dLon = -sin(turn) * length / (111320 * cos(frame.latitude * PI / 180)); val dLat = -cos(turn) * length / 110574
             val canvas = Canvas(shadow)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK }
             for ((geometry, height) in model.context.map { it.geometry to it.height } + model.buildings.map { it.geometry to it.height }) for (polygon in polygons(geometry)) {
@@ -335,7 +362,7 @@ class Scene(private val map: MapLibreMap, private val style: Style, val model: C
      */
     fun hitBuilding(point: android.graphics.PointF, density: Float): String? {
         val camera = map.cameraPosition
-        val perMetre = density / map.projection.getMetersPerPixelAtLatitude(camera.target?.latitude ?: 32.11)
+        val perMetre = density / map.projection.getMetersPerPixelAtLatitude(camera.target!!.latitude)
         val rise = kotlin.math.sin(Math.toRadians(camera.tilt)) * perMetre
         var down = 0f
         while (down <= 40 * rise) {

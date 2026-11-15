@@ -14,6 +14,8 @@
     <Compile Include="../kernels/bindings/wayfind_native.cs" Link="Kernels/wayfind_native.cs" />
     <None Include="../kernels/wayfind_native.dll" Link="wayfind_native.dll" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../StuDev/World/*.cs" Exclude="../StuDev/World/Campus.cs" Link="World/%(Filename)%(Extension)" />
+    <Compile Include="../StuDev/App/Product.cs" Link="App/Product.cs" />
+    <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/campus/world/parity/golden.json" Link="golden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

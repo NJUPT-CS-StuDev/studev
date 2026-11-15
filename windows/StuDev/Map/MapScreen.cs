@@ -36,6 +36,8 @@ public sealed partial class MapScreen : Screen
     private Moment moment = Moment.Now();
     /** The sun the shadows were last drawn for, to draw them again only when it has moved. */
     private string? shadeKey;
+    /** Where the campus is, from its footprints, once the model is in. */
+    private CampusFrame? frame;
     private bool isNow = true;
     private string? placeId, navId, origin;
     private int? floor;
@@ -115,7 +117,7 @@ public sealed partial class MapScreen : Screen
         loading = true;
         try
         {
-            var places = Space.Load(repo); var shape = repo.Read("space/仙林/model.json", FactsJson.Default.CampusModel); var index = repo.Rooms();
+            var places = Space.Load(repo); var shape = repo.Read("space/{Product.Campus}/model.json", FactsJson.Default.CampusModel); var index = repo.Rooms();
             await Task.WhenAll(places, shape, index);
             space = places.Result; model = shape.Result; roomIndex = index.Result;
             roomById = roomIndex.Rooms.Where(r => Names.Placed(r.Id)).ToDictionary(r => r.Id);
@@ -123,7 +125,7 @@ public sealed partial class MapScreen : Screen
             router = new Kernels.Wayfind.Router(space.Network);
             await surface.Ready;
             var style = JsonNode.Parse(System.Text.Encoding.UTF8.GetString(await repo.Bytes("space/仙林/style.json"))
-                .Replace("{data}", $"{Repository.Site}{repo.Release.Base}/space/{Uri.EscapeDataString("仙林")}").Replace("{assets}", $"{Repository.Site}/map"))!.AsObject();
+                .Replace("{data}", $"{Repository.Site}{repo.Release.Base}/space/{Uri.EscapeDataString(Product.Campus)}").Replace("{assets}", $"{Repository.Site}/map"))!.AsObject();
             // Labels from Microsoft YaHei, which every Chinese Windows has, as the web draws Chinese from the system's font:
             // every character, so a label is one typeface and no range is left to the glyph files, whose Latin range
             // MapLibre Native fails to load beside a local face.
@@ -135,10 +137,12 @@ public sealed partial class MapScreen : Screen
             foreach (var layer in style["layers"]!.AsArray()) if ((string?)layer!["id"] == "forms") layer["layout"] = new JsonObject { ["visibility"] = "none" };
             await surface.Map.SetStyleJsonAsync(style.ToJsonString());
             await AddLayers();
-            await surface.Map.AddImageSourceImageAsync("shadow", Shadows.Corners, Shadows.Draw([], 0, 0));
+            frame = CampusFrame.Of(model!);
+            await surface.Map.AddImageSourceImageAsync("shadow", Shadows.Corners(frame), Shadows.Draw(frame, [], 0, 0));
             await Layer("""{"id":"shadow","type":"raster","source":"shadow","paint":{"raster-opacity":0,"raster-fade-duration":0}}""", "context");
             App.Watch(LoadModels(repo));
-            var teach = space.ById.GetValueOrDefault("仙林/教3")?.Centre ?? [118.928, 32.113];
+            // The campus opens over the place product.json names; a map without it is a broken release, not a place to guess.
+            var teach = space.ById.GetValueOrDefault(Product.Opens)?.Centre ?? throw new InvalidDataException($"the map data has no {Product.Opens}");
             surface.Move(new CameraOptions { Center = new LatLng(teach[1] - .0002, teach[0] + .0006), Zoom = 16.05, Bearing = -24, Pitch = 52 }, CameraUpdateMode.Jump);
             styled = true;
             await Shade();
@@ -332,7 +336,7 @@ public sealed partial class MapScreen : Screen
         if (buildingLabels.Count == 0) return;
         var camera = projection.GetCamera().Camera;
         var zoom = camera.Zoom; var pitch = camera.Pitch * Math.PI / 180;
-        var perMetre = 1 / projection.MetersPerPixelAtLatitude(32.11);
+        var perMetre = 1 / projection.MetersPerPixelAtLatitude(camera.Center.Latitude);
         var width = surface.ActualWidth; var height = surface.ActualHeight;
         var open = openBuilding is not null && HasFloors(openBuilding);
         (double X, double Y) Project(double[] at, double metres)
@@ -482,7 +486,8 @@ public sealed partial class MapScreen : Screen
     private static double Bearing(JsonElement geometry)
     {
         var ring = geometry.GetProperty("type").GetString() == "Polygon" ? geometry.GetProperty("coordinates")[0] : geometry.GetProperty("coordinates")[0][0];
-        var cosine = Math.Cos(32.11 * Math.PI / 180); double best = 0, angle = 0;
+        // East and north at the footprint's own latitude, so a degree east weighs what a metre does there.
+        var cosine = Math.Cos(ring[0][1].GetDouble() * Math.PI / 180); double best = 0, angle = 0;
         for (var i = 0; i < ring.GetArrayLength() - 1; i++)
         {
             var dx = (ring[i + 1][0].GetDouble() - ring[i][0].GetDouble()) * cosine; var dy = ring[i + 1][1].GetDouble() - ring[i][1].GetDouble();
@@ -651,16 +656,16 @@ public sealed partial class MapScreen : Screen
      */
     private async Task Shade()
     {
-        if (!styled || model is null) return;
+        if (!styled || model is null || frame is not { } campusFrame) return;
         var light = !Paint.Dark;
-        var min = light && World.Sun.At(moment.Date, moment.Min).Altitude < 8 ? 720 : moment.Min;
-        var (altitude, azimuth) = World.Sun.At(moment.Date, min);
+        var min = light && World.Sun.At(moment.Date, moment.Min, campusFrame.Longitude, campusFrame.Latitude).Altitude < 8 ? 720 : moment.Min;
+        var (altitude, azimuth) = World.Sun.At(moment.Date, min, campusFrame.Longitude, campusFrame.Latitude);
         var key = $"{moment.Date:O}:{min / 10}:{light}";
         if (key != shadeKey)
         {
             shadeKey = key;
             var shapes = model.Context.Select(c => (c.Height, c.Geometry)).Concat(model.Buildings.Select(b => (b.Height, b.Geometry))).ToList();
-            var image = await Task.Run(() => Shadows.Draw(shapes, altitude, azimuth));
+            var image = await Task.Run(() => Shadows.Draw(campusFrame, shapes, altitude, azimuth));
             await surface.Map.SetImageSourceImageAsync("shadow", image);
         }
         var opacity = openBuilding is not null && HasFloors(openBuilding) ? 0 : Shadows.Strength(altitude, !light);
@@ -790,7 +795,7 @@ public sealed partial class MapScreen : Screen
         else
         {
             var head = Kit.Text("此刻可以去", Role.Label, "muted", bold: true); head.Margin = new Thickness(0, 10, 0, 4); body.Children.Add(head);
-            foreach (var s in Places.Recommendations(space.Places, Clock.Weekday(moment.Date), moment.Min, me))
+            foreach (var s in Places.Recommendations(space.Places, Clock.Weekday(moment.Date), moment.Min, me ?? space.ById[Product.Campus].Centre!))
                 Row("", Value(Places.DisplayName(s.Place, space.ById), string.Join(" · ", new[] { s.Place.Category, s.Status.Open == Open.Unknown ? null : Places.OpenLabel[s.Status.Open], me is not null ? Metres(s.Distance) : null }.Where(x => !string.IsNullOrEmpty(x)))), () => Select(s.Place.Id));
             if (day is not null && reader is not null && roomIndex is not null)
             {

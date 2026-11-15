@@ -1,8 +1,8 @@
 /** Where the sun is over the campus at a moment: altitude above the horizon and azimuth, in degrees. */
-export function sunAt(date: string, minutes: number) {
+export function sunAt(date: string, minutes: number, at: { longitude: number; latitude: number }) {
     const radian = Math.PI / 180;
-    const latitude = 32.11 * radian;
-    const longitude = 118.92;
+    const latitude = at.latitude * radian;
+    const longitude = at.longitude;
     const year = Number(date.slice(0, 4));
     const dayOfYear = (Date.parse(`${date}T00:00:00Z`) - Date.UTC(year, 0, 0)) / 864e5;
     const declination = 23.44 * Math.sin(2 * Math.PI * (284 + dayOfYear) / 365) * radian;

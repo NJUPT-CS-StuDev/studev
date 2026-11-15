@@ -186,11 +186,10 @@ android {
         for ((kind, field) in listOf("feedback" to "FORM_FEEDBACK", "place" to "FORM_PLACE", "data" to "FORM_DATA")) buildConfigField("String", field, "\"${checkNotNull(forms[kind]) { "product.json forms.$kind" }}\"")
         buildConfigField("String", "APP_FILING", "\"${(product["filings"] as Map<*, *>)["app"]}\"")
         buildConfigField("String", "CAMPUS_TIME_ZONE", "\"${product["timeZone"]}\"")
+        // Which campus is shown first and where its map opens are ours to choose; where they are is the data's.
         val campus = product["campus"] as Map<*, *>
-        val centre = campus["centre"] as List<*>
         buildConfigField("String", "DEFAULT_CAMPUS", "\"${campus["id"]}\"")
-        buildConfigField("double", "CAMPUS_LONGITUDE", centre[0].toString())
-        buildConfigField("double", "CAMPUS_LATITUDE", centre[1].toString())
+        buildConfigField("String", "CAMPUS_OPENS", "\"${checkNotNull(campus["opens"]) { "product.json campus.opens" }}\"")
         versionCode = (androidProduct["versionCode"] as Number).toInt()
         versionName = androidProduct["versionName"] as String
         manifestPlaceholders["siteHost"] = URI(productOrigin).host
