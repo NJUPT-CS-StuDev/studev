@@ -43,7 +43,7 @@ export default function KnowledgeApp({ catalog }: { catalog: KnowledgeCatalog })
         let current = true;
         setFailed('');
         void loadKnowledge().then(index => { if (current) setKnowledge(index); })
-            .catch(() => { if (current) { void reloadIfGone(); setFailed('课程资料没能加载，请稍后重试。'); } });
+            .catch(() => { if (current) { void reloadIfGone(); setFailed('知识暂时无法加载。'); } });
         return () => { current = false; };
     }, [requested, knowledge, attempt]);
     const topic = knowledge?.topics.find(item => item.id === topicId) ?? null;

@@ -18,7 +18,7 @@ export interface CurriculumCourse {
 }
 export interface CurriculumEntry {
     college: string; major: string; grade: string; term: number | null; credits: number | null;
-    hours: string; exam_mode: string; category: string; nature: string;
+    hours: string; exam_mode: string; category: string; nature: string; weeks: string;
 }
 
 const base = `${DATA_RELEASE.base}/knowledge`;

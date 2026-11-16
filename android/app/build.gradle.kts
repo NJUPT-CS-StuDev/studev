@@ -149,6 +149,7 @@ val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtu
         rootProject.file("../public/data/${metadata["version"]}")
     }) {
         include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/B240402.json")
+        include("knowledge/knowledge.json", "curriculum/courses.json")
         include("knowledge/materials/batch-2/B0300053S/数据结构第5章-树课件.md")
     }
     from(manifest) { rename { "release.json" } }

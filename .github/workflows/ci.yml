@@ -55,9 +55,9 @@ jobs:
       - run: npm run digest
       - name: Build native search, routing and document kernels
         run: bash android/kernels-ci.sh
-      - name: Assemble debug APK
+      - name: Build and verify Android
         working-directory: android
-        run: ./gradlew :app:assembleDebug --no-daemon -Pstudev.compileSdk=37
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lint --no-daemon -Pstudev.compileSdk=37
       - name: Upload debug APK
         uses: actions/upload-artifact@v6
         with:

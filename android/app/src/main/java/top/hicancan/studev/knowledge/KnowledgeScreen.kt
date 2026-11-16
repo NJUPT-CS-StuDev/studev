@@ -2,6 +2,7 @@ package top.hicancan.studev.knowledge
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -64,7 +65,7 @@ import kotlin.math.abs
 )
 @Serializable data class CurriculumEntry(
     val college: String, val major: String, val grade: String,
-    val term: Int?, val credits: Double?, val hours: String,
+    val term: Int?, val credits: Double?, val hours: String, val weeks: String,
     val exam_mode: String, val category: String, val nature: String,
 )
 
@@ -186,8 +187,9 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     var knowledge by remember(repo) { mutableStateOf<KnowledgeIndex?>(null) }
     var curriculum by remember(repo) { mutableStateOf<List<CurriculumCourse>>(emptyList()) }
     var failed by remember(repo) { mutableStateOf(false) }
+    var loadRevision by remember(repo) { mutableIntStateOf(0) }
 
-    LaunchedEffect(repo) {
+    LaunchedEffect(repo, loadRevision) {
         if (repo == null) return@LaunchedEffect
         failed = false
         try {
@@ -198,14 +200,23 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
                 knowledge = k.await()
             }
         } catch (e: CancellationException) { throw e }
-        catch (_: IOException) { failed = true }
-        catch (_: SerializationException) { failed = true }
+        catch (e: IOException) {
+            Log.e("Knowledge", "Could not read knowledge/knowledge.json or curriculum/courses.json from release ${repo.release.version}", e)
+            failed = true
+        }
+        catch (e: SerializationException) {
+            Log.e("Knowledge", "Could not decode knowledge/knowledge.json or curriculum/courses.json from release ${repo.release.version}", e)
+            failed = true
+        }
     }
 
     val index = knowledge
     if (failed) {
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
-            Plain("知识与培养方案没能加载，请稍后重试", 14.sp, Ink.muted)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Plain("知识暂时无法加载", 14.sp, Ink.muted)
+                ActionButton("重试") { loadRevision++ }
+            }
         }
         return
     }

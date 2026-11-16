@@ -113,6 +113,7 @@ public sealed partial class KnowledgeScreen : Screen
         }
         catch (Exception error) when (error is HttpRequestException or IOException or JsonException or OperationCanceledException)
         {
+            System.Diagnostics.Trace.TraceError("Knowledge release {0}: {1}", repo?.Release.Version, error);
             if (generation == loadGeneration && ReferenceEquals(repo, campus.Repository)) failed = true;
         }
         finally
@@ -144,7 +145,7 @@ public sealed partial class KnowledgeScreen : Screen
         host.Children.Clear();
         if (failed)
         {
-            host.Children.Add(Pages.Frame(Pages.Empty("知识库加载失败，请检查网络后重试。", Kit.Action("重试", () => _ = Load(), go: true))));
+            host.Children.Add(Pages.Frame(Pages.Empty("知识暂时无法加载", Kit.Action("重试", () => _ = Load(), go: true))));
             return;
         }
         if (knowledge is null)

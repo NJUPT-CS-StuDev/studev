@@ -46,7 +46,7 @@ public sealed record KnowledgeIndex(List<KnowledgeCourse> Courses, List<Knowledg
 public sealed record CurriculumCourse(
     string Code, string Name, List<CurriculumEntry> Plans, List<string> Requires, List<string> Former);
 public sealed record CurriculumEntry(string College, string Major, string Grade, int? Term, double? Credits,
-    string Hours, string ExamMode, string Category, string Nature);
+    string Hours, string ExamMode, string Category, string Nature, string Weeks);
 
 public static class Facts
 {

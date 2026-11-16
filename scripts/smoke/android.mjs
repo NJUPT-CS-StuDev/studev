@@ -78,7 +78,7 @@ function screen() {
     });
 }
 function healthy(step, nodes = screen()) {
-    const error = nodes.find(node => /没能加载|没能打开|搜索需要联网|搜索数据有误|地图加载失败|无法规划|找不到路线|没有可用路线/.test(node.text));
+    const error = nodes.find(node => /暂时无法加载|没能加载|没能打开|搜索需要联网|搜索数据有误|地图加载失败|无法规划|找不到路线|没有可用路线/.test(node.text));
     if (error) throw new Error(`${step}: ${error.text}`);
     alive(step);
 }
