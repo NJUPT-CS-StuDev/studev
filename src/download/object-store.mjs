@@ -15,7 +15,7 @@ export function downloadStore(env = process.env) {
     return { endpoint: env.OSCA_DOWNLOAD_ENDPOINT, bucket: env.OSCA_DOWNLOAD_BUCKET, accessKey: env.OSCA_DOWNLOAD_ACCESS_KEY, secretKey: env.OSCA_DOWNLOAD_SECRET_KEY };
 }
 
-export async function signedFetch(store, method, key, { body = '', headers = {}, query = '' } = {}) {
+export async function signedFetch(store, method, key, { body = '', headers = {}, query = '', signal } = {}) {
     const url = new URL(`/${store.bucket}/${encodePath(key)}`, store.endpoint);
     url.search = query;
     const { stamp, day, scope } = clock();
@@ -27,7 +27,7 @@ export async function signedFetch(store, method, key, { body = '', headers = {},
     const canonical = [method, url.pathname, params.toString(), names.map(name => `${name}:${all[name]}\n`).join(''), names.join(';'), payload].join('\n');
     const signature = createHmac('sha256', signingKey(store.secretKey, day)).update(['AWS4-HMAC-SHA256', stamp, scope, sha256(canonical)].join('\n')).digest('hex');
     const { host: _host, ...sent } = all;
-    return fetch(url, { method, body: method === 'GET' || method === 'HEAD' ? undefined : body, headers: { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${store.accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` } });
+    return fetch(url, { method, signal, body: method === 'GET' || method === 'HEAD' ? undefined : body, headers: { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${store.accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` } });
 }
 
 /** The longest a signed link may last. */

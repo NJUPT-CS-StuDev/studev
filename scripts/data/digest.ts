@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { compileBundle } from 'wasm-search/compile';
 import { mirrorSearch } from './mirror-search.mjs';
+import { isKnowledgeMedia, mirrorKnowledge } from './mirror-knowledge.mjs';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
@@ -647,7 +648,11 @@ async function main() {
         const gone = course.codes.filter(code => !taught.has(`information/course-plan/${code}`));
         if (gone.length) throw new Error(`knowledge course ${course.name} names codes not taught this term: ${gone.join(', ')}`);
     }
-    await cp(knowledge.dir, join(out, 'knowledge'), { recursive: true });
+    const knowledgeMirror = await mirrorKnowledge(knowledge.dir, knowledge.version);
+    await cp(knowledge.dir, join(out, 'knowledge'), {
+        recursive: true,
+        filter: source => !knowledgeMirror.offloaded || !isKnowledgeMedia(source),
+    });
     docs.push(...await knowledgeDocuments(knowledge.dir, knowledgeIndex));
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
     await writeTexts(docs, join(out, 'texts'));
