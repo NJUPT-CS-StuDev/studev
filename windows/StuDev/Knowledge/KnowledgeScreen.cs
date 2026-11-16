@@ -31,6 +31,7 @@ public sealed partial class KnowledgeScreen : Screen
     private string homeView = "list";
     private string categoryFilter = "全部";
     private string natureFilter = "全部";
+    private string gradeFilter = "全部";
     private string majorFilter = "全部专业";
 
     public KnowledgeScreen()
@@ -146,7 +147,7 @@ public sealed partial class KnowledgeScreen : Screen
         var compiledByCode = new Dictionary<string, KnowledgeCourse>();
         foreach (var c in idx.Courses) foreach (var code in c.Codes.Concat(c.Former)) compiledByCode.TryAdd(code, c);
 
-        var metaMap = new Dictionary<string, (List<string> Cats, List<string> Nats, List<string> Majs, double? Cred)>();
+        var metaMap = new Dictionary<string, (List<string> Cats, List<string> Nats, List<string> Majs, double? Cred, List<int> Terms)>();
         foreach (var c in idx.Courses)
         {
             var matched = c.Codes.Concat(c.Former).Select(code => byCode.GetValueOrDefault(code)).Where(m => m is not null).Cast<CurriculumCourse>().DistinctBy(m => m.Code).ToList();
@@ -154,7 +155,8 @@ public sealed partial class KnowledgeScreen : Screen
                 matched.SelectMany(m => m.Categories.Count > 0 ? m.Categories : [m.Category]).Where(s => s.Length > 0).Distinct().ToList(),
                 matched.SelectMany(m => m.Natures.Count > 0 ? m.Natures : [m.Nature]).Where(s => s.Length > 0).Distinct().ToList(),
                 matched.SelectMany(m => m.Majors).Where(s => s.Length > 0).Distinct().ToList(),
-                matched.Select(m => m.Credits).FirstOrDefault(x => x > 0) is > 0 and var cr ? cr : null
+                matched.Select(m => m.Credits).FirstOrDefault(x => x > 0) is > 0 and var cr ? cr : null,
+                matched.SelectMany(m => m.Terms).Where(t => t is >= 1 and <= 8).Distinct().OrderBy(t => t).ToList()
             );
         }
 
@@ -164,6 +166,7 @@ public sealed partial class KnowledgeScreen : Screen
         allMajors.AddRange(preferredMajors.Where(foundMajors.Contains));
         allMajors.AddRange(foundMajors.Where(m => !preferredMajors.Contains(m)));
 
+        var gradeNum = gradeFilter switch { "大一" => 1, "大二" => 2, "大三" => 3, "大四" => 4, _ => 0 };
         var q = query.Trim().ToLowerInvariant();
         var filtered = idx.Courses.Where(c =>
         {
@@ -171,6 +174,7 @@ public sealed partial class KnowledgeScreen : Screen
             if (categoryFilter != "全部" && !meta.Cats.Contains(categoryFilter)) return false;
             if (natureFilter != "全部" && !meta.Nats.Contains(natureFilter)) return false;
             if (majorFilter != "全部专业" && !meta.Majs.Contains(majorFilter)) return false;
+            if (gradeNum > 0 && !meta.Terms.Any(t => (t + 1) / 2 == gradeNum)) return false;
             if (q.Length == 0) return true;
             return c.Name.ToLowerInvariant().Contains(q)
                 || c.Codes.Any(code => code.ToLowerInvariant().Contains(q))
@@ -178,7 +182,7 @@ public sealed partial class KnowledgeScreen : Screen
         }).ToList();
 
         var rootCol = new StackPanel { Spacing = 14 };
-        rootCol.Children.Add(Pages.Header("知识", "按培养方案与课程分类组织的知识体系，每门课连着先修依赖、课件与历年考题。"));
+        rootCol.Children.Add(Pages.Header("知识", "按培养方案与学期组织的知识体系，每门课连着先修依赖、课件与历年考题。"));
 
         var topRow = new Grid { ColumnSpacing = 12 };
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 380 });
@@ -186,12 +190,14 @@ public sealed partial class KnowledgeScreen : Screen
         var searchBox = Kit.Field(query, "筛选课程名称、课程代码或章节…", "筛选课程");
         searchBox.TextChanged += (_, _) => { query = searchBox.Text; Render(); };
         topRow.Children.Add(searchBox);
-        var modeSwitch = Kit.Choice([("list", "课程分类"), ("graph", "培养方案依赖图")], homeView, v => { homeView = v; Render(); });
+        var modeSwitch = Kit.Choice([("list", "按学期看"), ("graph", "培养方案依赖图")], homeView, v => { homeView = v; Render(); });
         Grid.SetColumn(modeSwitch, 1);
         topRow.Children.Add(modeSwitch);
         rootCol.Children.Add(topRow);
 
         var filterWrap = new WrapRow { Gap = 8 };
+        foreach (var (gVal, gLabel) in new[] { ("全部", "全部年级"), ("大一", "大一"), ("大二", "大二"), ("大三", "大三"), ("大四", "大四") })
+            filterWrap.Children.Add(Kit.Pick(gLabel, gradeFilter == gVal, () => { gradeFilter = gVal; Render(); }, 30));
         foreach (var cat in new[] { "全部", "专业基础课", "专业课", "通识教育课" })
             filterWrap.Children.Add(Kit.Pick(cat, categoryFilter == cat, () => { categoryFilter = cat; Render(); }, 30));
         foreach (var (val, label) in new[] { ("全部", "全部性质"), ("必修", "必修"), ("限选", "限选") })
@@ -265,28 +271,48 @@ public sealed partial class KnowledgeScreen : Screen
         }
         else
         {
-            var grid = new WrapRow { Gap = 12 };
-            foreach (var c in filtered)
+            var termTitles = new[] { "", "大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下" };
+            var grouped = filtered.GroupBy(c =>
             {
-                var t = ToneOf(c.Id);
-                var topicsCount = c.chaptersCountTopics(out var chCount);
-                var matsCount = idx.Materials.Count(m => m.Course == c.Id);
-                var meta = metaMap[c.Id];
-                var sub = string.Join(" · ", new[] { c.Codes.Count > 0 ? string.Join(" · ", c.Codes) : "培养方案课程", meta.Cats.FirstOrDefault(), meta.Nats.Count > 0 ? string.Join("/", meta.Nats) : null, meta.Cred is { } cr ? $"{cr} 学分" : null }.Where(s => !string.IsNullOrEmpty(s)));
-                var stack = new StackPanel { Spacing = 4, Width = 310 };
-                var title = Kit.Text(c.Name, Role.Body, bold: true); title.Foreground = Paint.Tone(t, "fg");
-                stack.Children.Add(title);
-                stack.Children.Add(Kit.Text(sub, Role.Caption, "muted", wrap: true));
-                stack.Children.Add(Kit.Text($"{chCount} 章 · {topicsCount} 个知识点 · {matsCount} 份资料", Role.Caption, "muted"));
-                var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
+                var terms = metaMap[c.Id].Terms;
+                return gradeNum > 0 ? (terms.FirstOrDefault(t => (t + 1) / 2 == gradeNum) is > 0 and var gt ? gt : 99) : (terms.FirstOrDefault() is > 0 and var ft ? ft : 99);
+            }).OrderBy(g => g.Key).ToList();
+
+            if (grouped.Count == 0) rootCol.Children.Add(Pages.Empty("没有符合当前筛选条件的课程"));
+            foreach (var group in grouped)
+            {
+                var termTitle = group.Key is >= 1 and <= 8 ? termTitles[group.Key] : "其他与通识课程";
+                var termSub = group.Key is >= 1 and <= 8 ? $"第 {group.Key} 学期 · {group.Count()} 门" : $"{group.Count()} 门";
+                var head = new Grid { Padding = new Thickness(0, 8, 0, 4), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) };
+                head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var hTitle = Kit.Text(termTitle, Role.Heading); hTitle.FontSize = 17; head.Children.Add(hTitle);
+                var hSub = Kit.Text(termSub, Role.Caption, "muted"); hSub.VerticalAlignment = VerticalAlignment.Bottom; Grid.SetColumn(hSub, 1); head.Children.Add(hSub);
+                rootCol.Children.Add(head);
+
+                var grid = new WrapRow { Gap = 12 };
+                foreach (var c in group)
                 {
-                    CornerRadius = new CornerRadius(10), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
-                    Padding = new Thickness(16, 14, 16, 14), Content = stack,
-                };
-                tap.Click += (_, _) => Open(course: c.Id);
-                grid.Children.Add(tap);
+                    var t = ToneOf(c.Id);
+                    var topicsCount = c.chaptersCountTopics(out var chCount);
+                    var matsCount = idx.Materials.Count(m => m.Course == c.Id);
+                    var meta = metaMap[c.Id];
+                    var codeLabel = c.Codes.Count > 1 ? $"{c.Codes[0]} +{c.Codes.Count - 1}" : c.Codes.FirstOrDefault() ?? "培养方案课程";
+                    var sub = string.Join(" · ", new[] { codeLabel, meta.Cats.FirstOrDefault(), meta.Nats.Count > 0 ? string.Join("/", meta.Nats) : null, meta.Cred is { } cr ? $"{cr} 学分" : null }.Where(s => !string.IsNullOrEmpty(s)));
+                    var stack = new StackPanel { Spacing = 4, Width = 310 };
+                    var title = Kit.Text(c.Name, Role.Body, bold: true); title.Foreground = Paint.Tone(t, "fg");
+                    stack.Children.Add(title);
+                    stack.Children.Add(Kit.Text(sub, Role.Caption, "muted", wrap: true));
+                    stack.Children.Add(Kit.Text($"{chCount} 章 · {topicsCount} 个知识点 · {matsCount} 份资料", Role.Caption, "muted"));
+                    var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
+                    {
+                        CornerRadius = new CornerRadius(10), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
+                        Padding = new Thickness(16, 14, 16, 14), Content = stack,
+                    };
+                    tap.Click += (_, _) => Open(course: c.Id);
+                    grid.Children.Add(tap);
+                }
+                rootCol.Children.Add(grid);
             }
-            rootCol.Children.Add(grid);
         }
 
         host.Children.Add(Pages.Frame(rootCol, 1160));

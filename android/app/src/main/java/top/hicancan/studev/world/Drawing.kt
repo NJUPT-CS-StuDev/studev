@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.PathParser
 import kotlinx.serialization.json.*
 import top.hicancan.studev.app.Ink
@@ -120,7 +121,9 @@ fun DrawScope.drawFormula(f: Drawings.Formula, em: Float, baseline: Float, color
     val density = LocalDensity.current.density
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         val fit = (maxWidth.value / d.width).coerceIn(SMALLEST, 1f)
-        Box(if (d.width * fit > maxWidth.value) Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()) else Modifier) {
+        val clipped = d.width * fit > maxWidth.value
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(if (clipped) Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()) else Modifier) {
         Canvas(Modifier.size((d.width * fit).dp, (d.height * fit).dp).semantics { contentDescription = source }) {
             val unit = density * fit
             val canvas = drawContext.canvas.nativeCanvas
@@ -157,8 +160,10 @@ fun DrawScope.drawFormula(f: Drawings.Formula, em: Float, baseline: Float, color
             canvas.restore()
         }
         }
+        if (clipped) top.hicancan.studev.app.Plain("左右滑动查看全图", 11.sp, top.hicancan.studev.app.Ink.faint, modifier = Modifier.padding(top = 4.dp))
+        }
     }
 }
 
-/** The smallest a diagram is drawn, as a share of its size: its 14dp words stay about 10dp. */
-private const val SMALLEST = 0.72f
+/** The smallest a diagram is drawn, as a share of its size: stays crisp and readable on phone widths. */
+private const val SMALLEST = 0.62f

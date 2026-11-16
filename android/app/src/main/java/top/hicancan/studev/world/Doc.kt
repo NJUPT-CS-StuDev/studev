@@ -125,7 +125,7 @@ private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): 
                     }
                     "link" -> {
                         val href = inline.str("href")
-                        withLink(LinkAnnotation.Clickable(href, TextLinkStyles(SpanStyle(color = brand, textDecoration = TextDecoration.Underline))) { if (Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").containsMatchIn(href)) runCatching { uri.openUri(href) } else onLink(href) }) { walk(inline.list("children")) }
+                        withLink(LinkAnnotation.Clickable(href, TextLinkStyles(SpanStyle(color = brand, fontWeight = FontWeight.Medium))) { if (Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").containsMatchIn(href)) runCatching { uri.openUri(href) } else onLink(href) }) { walk(inline.list("children")) }
                     }
                     "image" -> append("［图片：${inline.str("alt")}］")
                     "break" -> append("\n")

@@ -93,12 +93,17 @@ export default function KnowledgeApp() {
 
 const safeMermaidLabel = (text: string) => text.replace(/["\[\]{}]/g, '').replace(/[（(][^）)]*[）)]/g, '').trim() || text.replace(/["\[\]{}]/g, '');
 
-/** Every course in the unified training-plan model: classification filter list (like search) + curriculum dependency graph rendered by docstream. */
+const TERM_TITLES = ['', '大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
+const GRADE_OPTIONS: [string, number | null][] = [['全部', null], ['大一', 1], ['大二', 2], ['大三', 3], ['大四', 4]];
+const primaryCodeLabel = (codes: string[]) => codes.length > 1 ? `${codes[0]} +${codes.length - 1}` : codes[0] || '培养方案课程';
+
+/** Every course in the unified training-plan model: term-grouped course cards (like RoomsBrowse) + curriculum dependency graph. */
 function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curriculum: CurriculumCourse[]; onOpen: (code: string) => void }) {
     const [query, setQuery] = useState('');
     const [view, setView] = useState<'list' | 'graph'>('list');
     const [category, setCategory] = useState('全部');
     const [nature, setNature] = useState('全部');
+    const [grade, setGrade] = useState('全部');
     const [major, setMajor] = useState('全部专业');
 
     const byCode = useMemo(() => {
@@ -143,18 +148,39 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     }, [curriculum]);
 
     const q = query.trim().toLowerCase();
+    const targetGrade = GRADE_OPTIONS.find(([label]) => label === grade)?.[1] ?? null;
     const courses = useMemo(() => {
         return knowledge.courses.filter(course => {
             const meta = courseMeta.get(course.id);
             if (category !== '全部' && !meta?.categories.includes(category)) return false;
             if (nature !== '全部' && !meta?.natures.includes(nature)) return false;
             if (major !== '全部专业' && !meta?.majors.includes(major)) return false;
+            if (targetGrade !== null && !meta?.terms.some(t => Math.ceil(t / 2) === targetGrade)) return false;
             if (!q) return true;
             return course.name.toLowerCase().includes(q)
                 || course.codes.some(c => c.toLowerCase().includes(q))
                 || course.chapters.some(ch => ch.title.toLowerCase().includes(q));
         });
-    }, [knowledge.courses, courseMeta, category, nature, major, q]);
+    }, [knowledge.courses, courseMeta, category, nature, major, targetGrade, q]);
+
+    const groupedByTerm = useMemo(() => {
+        const groups = new Map<number, KnowledgeCourse[]>();
+        for (const course of courses) {
+            const terms = courseMeta.get(course.id)?.terms ?? [];
+            const primary = targetGrade !== null
+                ? (terms.find(t => Math.ceil(t / 2) === targetGrade) ?? 99)
+                : (terms.find(t => t >= 1 && t <= 8) ?? 99);
+            const list = groups.get(primary) ?? [];
+            list.push(course);
+            groups.set(primary, list);
+        }
+        return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([term, list]) => ({
+            term,
+            title: term >= 1 && term <= 8 ? TERM_TITLES[term]! : '其他与通识课程',
+            sub: term >= 1 && term <= 8 ? `第 ${term} 学期 · ${list.length} 门` : `${list.length} 门`,
+            courses: list,
+        }));
+    }, [courses, courseMeta, targetGrade]);
 
     const graphNodes = useMemo(() => {
         if (view !== 'graph') return { doc: '', linked: [] as KnowledgeCourse[] };
@@ -219,15 +245,18 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     }, [view, curriculum, byCode, compiledByCode, knowledge.courses, courses, major, category, nature, q]);
 
     return <div className="sd page knowledge"><div className="wrap">
-        <div className="ph"><div><h1>知识</h1><p>按培养方案与课程分类组织的知识体系，每门课连着它的先修依赖、课件与历年考题。</p></div></div>
+        <div className="ph"><div><h1>知识</h1><p>按培养方案与学期组织的知识体系，每门课连着它的先修依赖、课件与历年考题。</p></div></div>
         <div className="kn-tools">
             <input className="kn-search" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="筛选课程名称、课程代码或章节…" aria-label="筛选课程" />
             <div className="kn-tabs" role="tablist" aria-label="视图切换">
-                <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>课程分类</button>
+                <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>按学期看</button>
                 <button role="tab" aria-selected={view === 'graph'} className={view === 'graph' ? 'on' : ''} onClick={() => setView('graph')}>培养方案依赖图</button>
             </div>
         </div>
         <div className="kn-filters">
+            <div className="kn-chips" role="group" aria-label="年级">
+                {GRADE_OPTIONS.map(([label]) => <button key={label} className={grade === label ? 'on' : ''} onClick={() => setGrade(label)}>{label === '全部' ? '全部年级' : label}</button>)}
+            </div>
             <div className="kn-chips" role="group" aria-label="课程类别">
                 {categories.map(item => <button key={item} className={category === item ? 'on' : ''} onClick={() => setCategory(item)}>{item}</button>)}
             </div>
@@ -246,22 +275,30 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
                     <div>{graphNodes.linked.map(c => <button key={c.id} style={tone(c.id)} onClick={() => onOpen(c.id)}>{c.name}</button>)}</div>
                 </div> : null}
             </div>
-            : <div className="kn-courses">{courses.map(course => {
-                const topics = new Set(course.chapters.flatMap(chapter => chapter.topics)).size;
-                const materials = knowledge.materials.filter(item => item.course === course.id).length;
-                const meta = courseMeta.get(course.id);
-                const badges = [
-                    meta?.categories[0],
-                    meta?.natures.join('/'),
-                    meta?.credits.length ? `${meta.credits[0]} 学分` : null,
-                ].filter(Boolean);
-                return <button key={course.id} className="kn-course" style={tone(course.id)} onClick={() => onOpen(course.id)}>
-                    <b>{course.name}</b>
-                    <small>{[course.codes.join(' · ') || '培养方案课程', ...badges].join(' · ')}</small>
-                    <span>{course.chapters.length} 章 · {topics} 个知识点 · {materials} 份资料</span>
-                    <Chevron />
-                </button>;
-            })}</div>}
+            : groupedByTerm.length === 0
+                ? <p className="empty">没有符合当前筛选条件的课程</p>
+                : <div className="kn-term-groups">{groupedByTerm.map(section => (
+                    <section key={section.term} className="kn-term-group">
+                        <header className="kn-term-head"><h2>{section.title}</h2><small>{section.sub}</small></header>
+                        <div className="kn-courses">{section.courses.map(course => {
+                            const topics = new Set(course.chapters.flatMap(chapter => chapter.topics)).size;
+                            const materials = knowledge.materials.filter(item => item.course === course.id).length;
+                            const meta = courseMeta.get(course.id);
+                            const badges = [
+                                primaryCodeLabel(course.codes),
+                                meta?.categories[0],
+                                meta?.natures.join('/'),
+                                meta?.credits.length ? `${meta.credits[0]} 学分` : null,
+                            ].filter(Boolean);
+                            return <button key={course.id} className="kn-course" style={tone(course.id)} onClick={() => onOpen(course.id)}>
+                                <b>{course.name}</b>
+                                <small>{badges.join(' · ')}</small>
+                                <span>{course.chapters.length} 章 · {topics} 个知识点 · {materials} 份资料</span>
+                                <Chevron />
+                            </button>;
+                        })}</div>
+                    </section>
+                ))}</div>}
     </div></div>;
 }
 

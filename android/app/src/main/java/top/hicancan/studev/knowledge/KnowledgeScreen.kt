@@ -10,6 +10,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -181,11 +185,14 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     LaunchedEffect(repo) {
         if (repo == null) return@LaunchedEffect
         failed = false
-        runCatching { repo.read<KnowledgeIndex>("knowledge/knowledge.json") }
-            .onSuccess { knowledge = it }
-            .onFailure { failed = true }
-        runCatching { repo.read<List<CurriculumCourse>>("curriculum/courses.json") }
-            .onSuccess { curriculum = it }
+        coroutineScope {
+            val k = async { runCatching { repo.read<KnowledgeIndex>("knowledge/knowledge.json") }.getOrNull() }
+            val c = async { runCatching { repo.read<List<CurriculumCourse>>("curriculum/courses.json") }.getOrNull() }
+            val cList = c.await()
+            val kIdx = k.await()
+            if (cList != null) curriculum = cList
+            if (kIdx != null) knowledge = kIdx else failed = true
+        }
     }
 
     val index = knowledge
@@ -259,7 +266,11 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
                 .onFailure { textErr = true }
         }
 
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        val scrollState = rememberScrollState()
+        LaunchedEffect(course.id, topic?.id, material?.path, route.knowledgeAnchor) {
+            if (route.knowledgeAnchor == null) scrollState.scrollTo(0)
+        }
+        Column(Modifier.weight(1f).verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when {
                 textErr -> Plain("这篇内容没能加载，请稍后重试。", 14.sp, Ink.muted)
                 text == null -> Plain("正在打开…", 14.sp, Ink.muted)
@@ -301,6 +312,10 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     }
 }
 
+private val TERM_TITLES = listOf("", "大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下")
+private val GRADE_OPTIONS = listOf("全部" to null, "大一" to 1, "大二" to 2, "大三" to 3, "大四" to 4)
+private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes.first()} +${codes.size - 1}" else codes.firstOrNull() ?: "培养方案课程"
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable private fun KnowledgeHome(
     index: KnowledgeIndex,
@@ -311,6 +326,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     var view by remember { mutableStateOf("list") }
     var category by remember { mutableStateOf("全部") }
     var nature by remember { mutableStateOf("全部") }
+    var grade by remember { mutableStateOf("全部") }
     var major by remember { mutableStateOf("全部专业") }
     var majorMenu by remember { mutableStateOf(false) }
 
@@ -330,6 +346,11 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
             )
         }
     }
+    val termsMap = remember(index, byCode) {
+        index.courses.associate { c ->
+            c.id to (c.codes + c.former).mapNotNull { byCode[it] }.flatMap { it.terms }.filter { it in 1..8 }.distinct().sorted()
+        }
+    }
     val creditsMap = remember(index, byCode) {
         index.courses.associate { c ->
             c.id to (c.codes + c.former).mapNotNull { byCode[it]?.credits }.firstOrNull { it > 0 }
@@ -342,23 +363,41 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     }
 
     val q = query.trim().lowercase()
-    val filtered = remember(index, metaMap, category, nature, major, q) {
+    val targetGrade = GRADE_OPTIONS.firstOrNull { it.first == grade }?.second
+    val filtered = remember(index, metaMap, termsMap, category, nature, major, targetGrade, q) {
         index.courses.filter { c ->
             val (cats, nats, majs) = metaMap[c.id] ?: Triple(emptyList(), emptyList(), emptyList())
+            val terms = termsMap[c.id].orEmpty()
             if (category != "全部" && category !in cats) return@filter false
             if (nature != "全部" && nature !in nats) return@filter false
             if (major != "全部专业" && major !in majs) return@filter false
+            if (targetGrade != null && terms.none { (it + 1) / 2 == targetGrade }) return@filter false
             if (q.isEmpty()) return@filter true
             q in c.name.lowercase() || c.codes.any { q in it.lowercase() } || c.chapters.any { q in it.title.lowercase() }
         }
     }
+    val groupedByTerm = remember(filtered, termsMap, targetGrade) {
+        filtered.groupBy { c ->
+            val terms = termsMap[c.id].orEmpty()
+            if (targetGrade != null) terms.firstOrNull { (it + 1) / 2 == targetGrade } ?: 99
+            else terms.firstOrNull() ?: 99
+        }.entries.sortedBy { it.key }.map { (term, list) ->
+            Triple(
+                term,
+                if (term in 1..8) TERM_TITLES[term] else "其他与通识课程",
+                if (term in 1..8) "第 $term 学期 · ${list.size} 门" else "${list.size} 门",
+            ) to list
+        }
+    }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(Modifier.padding(end = 40.dp)) {
-            SearchField(query, "筛选课程名称、课程代码或章节…") { query = it }
+        Column(Modifier.fillMaxWidth().padding(end = 40.dp)) {
+            Plain("知识", 22.sp, weight = FontWeight.SemiBold)
+            Plain("按学期与培养方案组织的知识点与历年考题", 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp))
         }
+        SearchField(query, "筛选课程名称、课程代码或章节…") { query = it }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Choice(listOf("list" to "课程分类", "graph" to "依赖关系图"), view) { view = it }
+            Choice(listOf("list" to "按学期看", "graph" to "依赖关系图"), view) { view = it }
             Box {
                 Chip(if (major == "全部专业") "全部专业 ▾" else "${major.take(6)} ▾", { majorMenu = true })
                 DropdownMenu(majorMenu, { majorMenu = false }, containerColor = Ink.paper) {
@@ -367,9 +406,16 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            GRADE_OPTIONS.forEach { (value, _) ->
+                FilterChipPill(if (value == "全部") "全部年级" else value, grade == value) { grade = value }
+            }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("全部", "专业基础课", "专业课", "通识教育课").forEach { item ->
                 FilterChipPill(item, category == item) { category = item }
             }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("全部" to "全部性质", "必修" to "必修", "限选" to "限选").forEach { (value, label) ->
                 FilterChipPill(label, nature == value) { nature = value }
             }
@@ -434,24 +480,35 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
             }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-                items(filtered, key = { it.id }) { course ->
-                    val ct = tone(toneIndex(course.id))
-                    val topicsCount = course.chapters.flatMap { it.topics }.distinct().size
-                    val materialsCount = index.materials.count { it.course == course.id }
-                    val (cats, nats, _) = metaMap[course.id] ?: Triple(emptyList(), emptyList(), emptyList())
-                    val credits = creditsMap[course.id]
-                    val subtitle = (listOf(course.codes.joinToString(" · ").ifEmpty { "培养方案课程" }) +
-                        listOfNotNull(cats.firstOrNull(), nats.takeIf { it.isNotEmpty() }?.joinToString("/"), credits?.let { "$it 学分" })).joinToString(" · ")
-                    Surface(
-                        onClick = { onOpen(course.id) },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Ink.paper,
-                        border = BorderStroke(1.dp, ct.border),
-                    ) {
-                        Column(Modifier.fillMaxWidth().background(ct.bg.copy(alpha = 0.25f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Plain(course.name, 16.sp, ct.fg, FontWeight.SemiBold)
-                            Plain(subtitle, 12.5.sp, Ink.muted)
-                            Plain("${course.chapters.size} 章 · $topicsCount 个知识点 · $materialsCount 份资料", 12.5.sp, Ink.muted)
+                if (groupedByTerm.isEmpty()) {
+                    item { Plain("没有符合当前筛选条件的课程", 14.sp, Ink.faint, modifier = Modifier.padding(vertical = 24.dp)) }
+                }
+                groupedByTerm.forEach { (header, groupCourses) ->
+                    val (termKey, termTitle, termSub) = header
+                    item(key = "h-$termKey") {
+                        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Plain(termTitle, 16.sp, Ink.text, FontWeight.SemiBold)
+                            Plain(termSub, 12.sp, Ink.muted)
+                        }
+                    }
+                    items(groupCourses, key = { it.id }) { course ->
+                        val ct = tone(toneIndex(course.id))
+                        val topicsCount = course.chapters.flatMap { it.topics }.distinct().size
+                        val materialsCount = index.materials.count { it.course == course.id }
+                        val (cats, nats, _) = metaMap[course.id] ?: Triple(emptyList(), emptyList(), emptyList())
+                        val credits = creditsMap[course.id]
+                        val subtitle = listOfNotNull(primaryCodeLabel(course.codes), cats.firstOrNull(), nats.takeIf { it.isNotEmpty() }?.joinToString("/"), credits?.let { "$it 学分" }).joinToString(" · ")
+                        Surface(
+                            onClick = { onOpen(course.id) },
+                            shape = RoundedCornerShape(10.dp),
+                            color = Ink.paper,
+                            border = BorderStroke(1.dp, ct.border),
+                        ) {
+                            Column(Modifier.fillMaxWidth().background(ct.bg.copy(alpha = 0.25f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Plain(course.name, 16.sp, ct.fg, FontWeight.SemiBold)
+                                Plain(subtitle, 12.5.sp, Ink.muted, maxLines = 1)
+                                Plain("${course.chapters.size} 章 · $topicsCount 个知识点 · $materialsCount 份资料", 12.5.sp, Ink.muted)
+                            }
                         }
                     }
                 }
@@ -560,7 +617,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         val miniDoc = remember(topic.id, index.topics) {
             buildString {
                 appendLine("```mermaid")
-                appendLine("flowchart TB")
+                appendLine("flowchart LR")
                 appendLine("  CUR[\"${safeMermaidLabel(topic.title)}\"]")
                 topic.requires.take(5).forEachIndexed { i, id ->
                     appendLine("  R$i[\"${safeMermaidLabel(titleOf(id))}\"]")
@@ -586,7 +643,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable private fun MaterialDetail(
     material: KnowledgeMaterial,
     text: String,
@@ -597,6 +654,13 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     imageBytes: suspend (String) -> ByteArray?,
 ) {
     val parts = remember(text) { materialParts(Docs.read(text)) }
+    val requesters = remember(parts) { parts.filterIsInstance<MatPart.Question>().associate { it.anchor to BringIntoViewRequester() } }
+    LaunchedEffect(parts, anchor) {
+        if (anchor != null) {
+            withFrameNanos {}
+            requesters[anchor]?.bringIntoView()
+        }
+    }
     var shown by remember(material.path) { mutableStateOf(emptySet<String>()) }
     val withAnswerCount = remember(parts) { parts.count { it is MatPart.Question && it.answer.isNotEmpty() } }
 
@@ -626,6 +690,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
                 val open = part.anchor in shown
                 val here = anchor == part.anchor
                 Surface(
+                    modifier = Modifier.then(requesters[part.anchor]?.let { Modifier.bringIntoViewRequester(it) } ?: Modifier),
                     shape = RoundedCornerShape(12.dp),
                     color = Ink.paper,
                     border = BorderStroke(if (here) 1.5.dp else 1.dp, if (here) Ink.brand else ct.border),
