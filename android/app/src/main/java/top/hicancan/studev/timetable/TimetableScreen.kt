@@ -89,7 +89,7 @@ import java.time.LocalDate
     val title = when {
         !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
         scale == "list" -> "任务"
-        scale == "term" -> "${term.year}–${term.year + 1}\n第${if (term.number == 1) "一" else "二"}学期"
+        scale == "term" -> "${term.year}–${term.year + 1} 第${if (term.number == 1) "一" else "二"}学期"
         scale == "week" -> if (week != null) "第 $week 周" else "假期"
         else -> "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
     }

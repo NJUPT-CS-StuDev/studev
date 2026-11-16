@@ -290,8 +290,8 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         key(relPath) { DocAnchors(route.knowledgeAnchor.takeIf { material != null }, scrollState) { anchors ->
         Column(Modifier.weight(1f).then(anchors).verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when {
-                textErr -> Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Plain("内容暂时无法加载", 14.sp, Ink.muted); TextAction("重试", { textRevision++ }, refresh = true) }
-                text == null -> Plain("正在打开…", 14.sp, Ink.muted)
+                textErr -> Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("内容暂时无法加载", 14.sp, Ink.muted); TextAction("重试", { textRevision++ }, refresh = true) }
+                text == null -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("正在打开…", 14.sp, Ink.muted) }
                 topic != null -> TopicDetail(topic, text!!, index, course, courseTone, onDocLink, imageBytes, { path -> repo?.bytes("knowledge/$path")?.decodeToString() }) { t, m, a ->
                     route.knowledge(course = course.id, topic = t, material = m, anchor = a)
                 }

@@ -474,7 +474,7 @@ public sealed partial class KnowledgeScreen : Screen
 
         // Middle: Main content + below tested questions
         var midStack = new StackPanel { Spacing = 14 };
-        var backBtn = Kit.Button("知识", () => Open(), Icons.Back);
+        var backBtn = Kit.TextAction("知识", () => Open(), Icons.Back);
         backBtn.HorizontalAlignment = HorizontalAlignment.Left;
         midStack.Children.Add(backBtn);
 
@@ -677,6 +677,8 @@ public sealed partial class KnowledgeScreen : Screen
 
     private async Task LoadDocument(StackPanel container, KnowledgeIndex idx, KnowledgeCourse course, KnowledgeTopic? topic, KnowledgeMaterial? material, string relPath, int toneIdx)
     {
+        var documentTitle = topic?.Title ?? material?.Title ?? course.Name;
+        container.Children.Add(Kit.Text(documentTitle, Role.Title, bold: true));
         container.Children.Add(Kit.Text("正在打开…", Role.Body, "muted"));
         var repo = repository;
         var generation = renderGeneration;
@@ -687,7 +689,7 @@ public sealed partial class KnowledgeScreen : Screen
         try { md = Encoding.UTF8.GetString(await repo.Bytes($"knowledge/{relPath}")); }
         catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
         {
-            if (Current()) { container.Children.Clear(); container.Children.Add(Kit.Text("内容暂时无法加载", Role.Body, "muted")); container.Children.Add(Kit.TextAction("重试", () => { container.Children.Clear(); _ = LoadDocument(container, idx, course, topic, material, relPath, toneIdx); }, Icons.Again)); }
+            if (Current()) { container.Children.Clear(); container.Children.Add(Kit.Text(documentTitle, Role.Title, bold: true)); container.Children.Add(Kit.Text("内容暂时无法加载", Role.Body, "muted")); container.Children.Add(Kit.TextAction("重试", () => { container.Children.Clear(); _ = LoadDocument(container, idx, course, topic, material, relPath, toneIdx); }, Icons.Again)); }
             return;
         }
         if (!Current()) return;
