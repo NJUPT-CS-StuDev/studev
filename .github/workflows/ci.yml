@@ -53,6 +53,7 @@ jobs:
           "$sdkmanager_path" --channel=1 "platforms;android-37.0" "ndk;28.2.13676358" "cmake;3.22.1"
       - run: npm ci
       - run: npm run digest
+      - run: npm run golden
       - name: Build native search, routing and document kernels
         run: bash android/kernels-ci.sh
       - name: Build and verify Android

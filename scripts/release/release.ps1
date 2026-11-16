@@ -98,12 +98,14 @@ $env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id)
 $env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
 $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
-$made = Get-ChildItem $velopack -File | Where-Object { $_.Extension -in '.nupkg', '.zip' -and $_.LastWriteTime -gt (Get-Item $publish).LastWriteTime.AddMinutes(-1) }
-foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
-& node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
-if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
 $fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
 Copy-Item $portable $fullPortable
+$made = Get-ChildItem $velopack -File -Filter "*-$versionName-*.nupkg"
+foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
+& node (Join-Path $repo 'scripts/release/put.mjs') $fullPortable "windows/studev-$versionName-windows.zip"
+if ($LASTEXITCODE -ne 0) { throw 'Windows portable upload failed' }
+& node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
+if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
 
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
 $assetPaths = @($fullApk, $fullPortable, $campusData)
@@ -129,7 +131,7 @@ $releaseUrl = (& gh release view $tag --repo $repoName --json url --jq .url).Tri
 Write-Output "release APK: $apk"
 Write-Output "release size: $((Get-Item $apk).Length) bytes"
 Write-Output "release signature SHA-1: $sha1"
-Write-Output "Windows portable: $feed/top.hicancan.studev-win-Portable.zip"
+Write-Output "Windows portable: $feed/studev-$versionName-windows.zip"
 Write-Output "GitHub release: $releaseUrl"
 $resolvedTemp = (Resolve-Path -LiteralPath $tempRoot).Path
 if (-not $resolvedTemp.StartsWith($tempBase + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe temporary directory: $resolvedTemp" }

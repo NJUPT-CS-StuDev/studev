@@ -23,6 +23,17 @@ async function pages(directory) {
 
 const walk = (node, fn) => { fn(node); node.childNodes?.forEach((child) => walk(child, fn)); };
 const attributes = (node) => Object.fromEntries((node.attrs ?? []).map(({ name, value }) => [name, value]));
+
+test('download links name the immutable Windows package of this product version', async () => {
+  const product = JSON.parse(await readFile('product.json', 'utf8'));
+  const hrefs = [];
+  walk(parse(await readFile(join(output, 'download/index.html'), 'utf8')), node => {
+    if (node.tagName === 'a') hrefs.push(attributes(node).href);
+  });
+  assert.deepEqual(hrefs.filter(href => href?.startsWith('/download/windows/')),
+    [`/download/windows/studev-${product.android.versionName}-windows.zip`]);
+});
+
 const localFile = (url, document) => {
   if (!url || /^(?:[a-z]+:|\/\/|#)/i.test(url)) return null;
   const pathname = decodeURI(url.split(/[?#]/)[0]);
