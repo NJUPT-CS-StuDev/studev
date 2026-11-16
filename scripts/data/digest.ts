@@ -256,24 +256,47 @@ interface KnowledgeIndex {
 }
 
 /** Topics and questions as documents, so a search finds a piece of knowledge and opens it where it is. */
-async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<SearchDocument[]> {
+async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<{ docs: SearchDocument[]; readable: Map<string, Readable> }> {
     const plain = (markdown: string) => markdown.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[#*`$>|]/g, ' ').replace(/\s+/g, ' ').trim();
+    // What the AI's read tool gets: the Markdown without pictures, links kept as their words.
+    const prose = (markdown: string) => markdown.replace(/!\[[^\]]*\]\([^)]*\)\n?/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\n{3,}/g, '\n\n').trim();
     const names = new Map(index.courses.map(course => [course.id, course.name]));
+    const titles = new Map(index.topics.map(topic => [topic.id, topic.title]));
+    const materialTitles = new Map(index.materials.map(material => [material.path, material.title]));
     const docs: SearchDocument[] = [];
+    const readable = new Map<string, Readable>();
     for (const topic of index.topics) {
         const body = await readFile(join(dir, topic.path), 'utf8');
-        docs.push(entity('topics', topic.id, `/knowledge/?topic=${encodeURIComponent(topic.id)}`, topic.title,
-            topic.taught_by.map(code => names.get(code) ?? code).join(' '), [plain(body).slice(0, 1200)]));
+        const url = `/knowledge/?topic=${encodeURIComponent(topic.id)}`;
+        const course = topic.taught_by.map(code => names.get(code) ?? code).join(' ');
+        docs.push(entity('topics', topic.id, url, topic.title, course, [plain(body).slice(0, 1200)]));
+        const said = (ids: string[]) => ids.map(id => titles.get(id) ?? id).join('、') || '无';
+        const tested = topic.tested_by.slice(0, 12).map(test => `- ${test.heading} · ${materialTitles.get(test.material) ?? test.material}（id questions/${test.material}#${test.heading}）`);
+        readable.set(`topics/${topic.id}`, { title: topic.title, url, source: `知识点 · ${course}`,
+            text: [prose(body), `先要懂：${said(topic.requires)}`, `接着学：${said(topic.leads_to)}`, ...(tested.length ? ['考过它的题（用 read 读题和解答）：', ...tested] : [])].join('\n\n') });
     }
     for (const material of index.materials) {
         const body = await readFile(join(dir, material.path), 'utf8');
         for (const part of body.split(/^### /m).slice(1)) {
             const heading = part.slice(0, part.indexOf('\n')).trim();
-            docs.push(entity('questions', `${material.path}#${heading}`, `/knowledge/?material=${encodeURIComponent(material.path)}#${encodeURIComponent(heading.replace(/\s+/g, '-'))}`,
-                `${heading} · ${material.title}`, material.kind, [plain(part).slice(0, 600)]));
+            const url = `/knowledge/?material=${encodeURIComponent(material.path)}#${encodeURIComponent(heading.replace(/\s+/g, '-'))}`;
+            docs.push(entity('questions', `${material.path}#${heading}`, url, `${heading} · ${material.title}`, material.kind, [plain(part).slice(0, 600)]));
         }
+        // Every section a question or a backlink may name (any heading, as the knowledge build reads them), read to the
+        // next heading of its level or above.
+        const lines = body.split('\n');
+        const levelOf = (line: string) => /^(#{1,6})\s+\S/.exec(line)?.[1]!.length ?? 0;
+        lines.forEach((line, at) => {
+            const found = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+            if (!found) return;
+            const level = found[1]!.length, heading = found[2]!;
+            const end = lines.findIndex((next, i) => i > at && levelOf(next) > 0 && levelOf(next) <= level);
+            const url = `/knowledge/?material=${encodeURIComponent(material.path)}#${encodeURIComponent(heading.replace(/\s+/g, '-'))}`;
+            readable.set(`questions/${material.path}#${heading}`, { title: `${heading} · ${material.title}`, url, source: `${material.kind} · ${names.get(material.course) ?? material.course}`,
+                text: prose(lines.slice(at + 1, end < 0 ? undefined : end).join('\n')) });
+        });
     }
-    return docs;
+    return { docs, readable };
 }
 
 async function locateData(): Promise<{ dir: string; version: string; index: DataIndex; staged?: boolean }> {
@@ -396,14 +419,22 @@ async function* searchDocuments(dir: string): AsyncGenerator<SearchDocument> {
 }
 
 /** Each article's own text, for the AI to read once search has found it: texts/<first two hex digits of its id>.json. */
-async function writeTexts(docs: SearchDocument[], to: string) {
+/** Where a document's text is kept: an article by its own id, anything else (a topic, a question) by the first 16
+ * hex digits of the SHA-256 of its search id; every client's read tool computes the same. */
+export const textKey = (id: string) => /^[0-9a-f]{16}$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 16);
+interface Readable { title: string; url: string; source: string; text: string }
+async function writeTexts(docs: SearchDocument[], readable: Map<string, Readable>, to: string) {
     const shards = new Map<string, Record<string, unknown>>();
+    const keep = (id: string, value: unknown) => {
+        const key = textKey(id), shard = shards.get(key.slice(0, 2)) ?? {};
+        shard[key] = value;
+        shards.set(key.slice(0, 2), shard);
+    };
     for (const doc of docs) {
         if (!/^[0-9a-f]{16}$/.test(doc.id)) continue;
-        const shard = shards.get(doc.id.slice(0, 2)) ?? {};
-        shard[doc.id] = { title: doc.title, url: doc.url, source: doc.source_name ?? doc.source, published: doc.published ?? null, text: (doc.text ?? '').slice(0, TEXT_KEPT), files: (doc.files ?? []).map(file => ({ name: file.name, url: file.url })) };
-        shards.set(doc.id.slice(0, 2), shard);
+        keep(doc.id, { title: doc.title, url: doc.url, source: doc.source_name ?? doc.source, published: doc.published ?? null, text: (doc.text ?? '').slice(0, TEXT_KEPT), files: (doc.files ?? []).map(file => ({ name: file.name, url: file.url })) });
     }
+    for (const [id, doc] of readable) keep(id, { ...doc, published: null, text: doc.text.slice(0, TEXT_KEPT), files: [] });
     await mkdir(to, { recursive: true });
     for (const [key, shard] of shards) await write(join(to, `${key}.json`), shard);
 }
@@ -651,9 +682,10 @@ async function main() {
     // The knowledge release is text; its pictures are named by full address on the knowledge's own static hosts.
     if (!knowledgeIndex.media?.length) throw new Error('the knowledge release names no media hosts');
     await cp(knowledge.dir, join(out, 'knowledge'), { recursive: true });
-    docs.push(...await knowledgeDocuments(knowledge.dir, knowledgeIndex));
+    const knowledgeTexts = await knowledgeDocuments(knowledge.dir, knowledgeIndex);
+    docs.push(...knowledgeTexts.docs);
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
-    await writeTexts(docs, join(out, 'texts'));
+    await writeTexts(docs, knowledgeTexts.readable, join(out, 'texts'));
     await mirrorSearch(join(out, 'search'), version);
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,

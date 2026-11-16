@@ -12,7 +12,7 @@ public static class Steps
 {
     private static readonly Dictionary<string, string> Labels = new()
     {
-        ["search"] = "搜索资料", ["read"] = "读原文", ["materials"] = "找课程资料", ["find_place"] = "找地点", ["nearby"] = "找附近", ["route"] = "规划路线", ["timeline"] = "查看安排",
+        ["search"] = "搜索资料", ["read"] = "读原文", ["course"] = "看课程", ["schedule"] = "查上课安排", ["curriculum"] = "查培养方案", ["find_place"] = "找地点", ["nearby"] = "找附近", ["route"] = "规划路线", ["timeline"] = "查看安排",
         ["exams"] = "查考试", ["list_tasks"] = "读取任务", ["suggest_slots"] = "找空闲时间", ["free_rooms"] = "查空教室", ["propose_task"] = "起草任务", ["remember"] = "记住",
     };
     private static string Text(JsonNode? value) => value is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
@@ -28,11 +28,9 @@ public static class Steps
         switch (name)
         {
             case "search": return Quoted("query") + (args["in"] is { } scope && Text(scope) != "全部" ? $" · {Text(scope)}" : "") + (done ? $" · {Count(result)} 条" : "");
-            case "materials":
-                if (!done) return Quoted("course");
-                var all = new List<JsonNode?>(); if (result is not null) all.Add(result); if (Field(result, "courses") is JsonArray more) all.AddRange(more);
-                var n = all.Sum(one => Field(one, "kinds") is JsonObject kinds ? kinds.Sum(k => k.Value is JsonArray list ? list.Count : 0) : 0);
-                return Quoted("course") + (n > 0 ? $" · {n} 份" : " · 没有");
+            case "course": { var course = Text(Field(result, "course")); return (course.Length > 0 ? $"《{course}》" : Quoted("course")) + (done ? Field(result, "chapters") is JsonArray chapters ? $" · {chapters.Count} 章" : " · 没找到" : ""); }
+            case "schedule": return Quoted("of") + (done ? Field(result, "count") is JsonValue c && c.TryGetValue<int>(out var n) && n > 0 ? $" · {n} 次课" : " · 没有" : "");
+            case "curriculum": { var major = Text(Field(result, "major")); var grade = Text(args["grade"]); return (major.Length > 0 ? major : Text(args["major"])) + (grade.Length > 0 ? $" {grade} 级" : "") + (done ? Field(result, "terms") is JsonArray terms ? $" · {terms.Count} 个学期" : " · 没找到" : ""); }
             case "read": { var title = Text(Field(result, "title")); return done && title.Length > 0 ? $"《{title}》" : ""; }
             case "find_place": { var first = result is JsonArray found && found.Count > 0 ? Text(Field(found[0], "name")) : ""; return Quoted("query") + (done ? first.Length > 0 ? $" → {first}" : " · 没找到" : ""); }
             case "nearby": { var near = Text(Field(result, "near")); return $"{(near.Length > 0 ? near : Text(args["near"]))}附近的{Text(args["what"])}" + (Field(result, "places") is JsonArray places && done ? $" · {places.Count} 处" : ""); }

@@ -182,7 +182,9 @@ export default function AiApp() {
         const args = toolArguments(name, raw), line = latest.current;
         if (name === 'search') return services.query(String(args.query), args.in === undefined ? undefined : String(args.in));
         if (name === 'read') return services.read(String(args.id));
-        if (name === 'materials') return services.materials(String(args.course));
+        if (name === 'course') return services.course(String(args.course));
+        if (name === 'schedule') return services.schedule(String(args.of));
+        if (name === 'curriculum') return services.curriculum(String(args.major), args.grade === undefined ? undefined : String(args.grade));
         if (name === 'find_place') return services.findPlace(String(args.query));
         if (name === 'nearby') return services.nearby(String(args.near), String(args.what));
         if (name === 'free_rooms') return services.rooms(args);

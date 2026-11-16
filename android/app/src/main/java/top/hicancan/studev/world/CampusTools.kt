@@ -60,15 +60,24 @@ class CampusTools(private val context: android.content.Context, private val repo
                 result["snippet"]?.let { put("snippet", it) }; put("url", result.getValue("url"))
             } })
         }
-        if (name == "materials") {
+        if (name == "course") {
             val repo = repository() ?: error("校园数据还没准备好。")
-            return Materials.said(repo.materials(), args.getValue("course").jsonPrimitive.content)
+            return Answers.course(repo.read<top.hicancan.studev.knowledge.KnowledgeIndex>("knowledge/knowledge.json"), repo.materials(), args.getValue("course").jsonPrimitive.content)
+        }
+        if (name == "schedule") {
+            val repo = repository() ?: error("校园数据还没准备好。")
+            return Answers.schedule(repo.meetings(), args.getValue("of").jsonPrimitive.content)
+        }
+        if (name == "curriculum") {
+            val repo = repository() ?: error("校园数据还没准备好。")
+            return Answers.curriculum(repo.read<List<top.hicancan.studev.knowledge.CurriculumCourse>>("curriculum/courses.json"), args.getValue("major").jsonPrimitive.content, args["grade"]?.jsonPrimitive?.content)
         }
         if (name == "read") {
             val repo = repository() ?: error("校园数据还没准备好。")
             val id = args.getValue("id").jsonPrimitive.content
-            require(Regex("[0-9a-f]{16}").matches(id)) { "这条不是文章，课程、教室、地点请用对应的方式查。" }
-            val doc = Json.parseToJsonElement(repo.bytes("texts/${id.take(2)}.json").decodeToString()).jsonObject[id]?.jsonObject ?: error("找不到这篇资料。")
+            require(!Regex("^(courses|teachers|classes|rooms|places|buildings)/.*").matches(id)) { "这条不是文章：上课安排用 schedule，地点用 find_place。" }
+            val key = Answers.textKey(id)
+            val doc = Json.parseToJsonElement(repo.bytes("texts/${key.take(2)}.json").decodeToString()).jsonObject[key]?.jsonObject ?: error("找不到这篇资料。")
             val text = doc.getValue("text").jsonPrimitive.content
             return buildJsonObject {
                 put("title", doc.getValue("title")); put("source", doc.getValue("source"))

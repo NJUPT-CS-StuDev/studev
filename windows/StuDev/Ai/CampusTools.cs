@@ -90,12 +90,15 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
                     return (JsonNode)o;
                 })]);
             }
-            case "materials": return Lessons.MaterialsSaid(await Repo.Materials(), Text("course"));
+            case "course": return Answers.Course(JsonSerializer.Deserialize(await Repo.Bytes("knowledge/knowledge.json"), FactsJson.Default.KnowledgeIndex)!, await Repo.Materials(), Text("course"));
+            case "schedule": return Answers.Schedule(await Repo.Meetings(), Text("of"));
+            case "curriculum": return Answers.Curriculum(JsonSerializer.Deserialize(await Repo.Bytes("curriculum/courses.json"), FactsJson.Default.ListCurriculumCourse)!, Text("major"), (string?)args["grade"]);
             case "read":
             {
                 var id = Text("id");
-                if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[0-9a-f]{16}$")) throw new ArgumentException("这条不是文章，课程、教室、地点请用对应的方式查。");
-                var doc = JsonNode.Parse(await Repo.Bytes($"texts/{id[..2]}.json"))![id] ?? throw new ArgumentException("找不到这篇资料。");
+                if (System.Text.RegularExpressions.Regex.IsMatch(id, "^(courses|teachers|classes|rooms|places|buildings)/")) throw new ArgumentException("这条不是文章：上课安排用 schedule，地点用 find_place。");
+                var key = Answers.TextKey(id);
+                var doc = JsonNode.Parse(await Repo.Bytes($"texts/{key[..2]}.json"))![key] ?? throw new ArgumentException("找不到这篇资料。");
                 var text = (string)doc["text"]!;
                 var said = new JsonObject { ["title"] = doc["title"]!.DeepClone(), ["source"] = doc["source"]!.DeepClone() };
                 if (doc["published"]?.GetValue<string>() is { } published) said["date"] = published[..10];

@@ -55,7 +55,7 @@ public static class Lessons
     }
 
     public static readonly string[] MaterialKinds = ["试卷", "答案", "复习", "习题", "课件", "实验", "资料"];
-    private static string Key(string name) => System.Text.RegularExpressions.Regex.Replace(name.Replace('（', '(').Replace('）', ')'), "[ \t　]", "").ToLowerInvariant();
+    public static string Key(string name) => System.Text.RegularExpressions.Regex.Replace(name.Replace('（', '(').Replace('）', ')'), "[ \t　]", "").ToLowerInvariant();
     public static CourseMaterials? MaterialsOf(List<CourseMaterials> all, string course) => all.FirstOrDefault(m => Key(m.Course) == Key(course));
     public static IEnumerable<(string Kind, int Count)> KindCounts(List<Material> items) =>
         MaterialKinds.Select(kind => (kind, items.Count(i => i.Kind == kind))).Where(k => k.Item2 > 0);

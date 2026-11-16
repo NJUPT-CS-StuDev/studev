@@ -25,6 +25,9 @@ import { findPlaces, placeMeant, placesAround } from '../../map/model/find';
 import { stepsLine, stepsOf } from '../../ai/steps';
 import { remembered } from '../../ai/memory';
 import { kindCounts, materialsSaid, type CourseMaterials } from '../materials';
+import { courseSaid, curriculumSaid, scheduleSaid, weeksText } from '../answers';
+import type { CurriculumCourse, Knowledge } from '../knowledge';
+import { createHash } from 'node:crypto';
 import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
@@ -291,6 +294,18 @@ const memoryCases = [['', '在准备考研'], ['- 在准备考研', ' 在准备�
 const allMaterials = JSON.parse(readFileSync(`public/data/${release.version}/materials.json`, 'utf8')) as CourseMaterials[];
 const materialCases = ['数字电路与逻辑设计B', '高等数学A(上)', '信号与系统 A', '高等数学', '计算机组成原理', '大学物理（上）'].map(course => ({ course, said: materialsSaid(allMaterials, course) }));
 const materialCounts = allMaterials.slice(0, 6).map(item => ({ course: item.course, counts: kindCounts(item.items) }));
+// What the AI is told about a course, a schedule and a training plan, and where a result's text is kept.
+const knowledgeIndex = JSON.parse(readFileSync(`public/data/${release.version}/knowledge/knowledge.json`, 'utf8')) as Knowledge;
+const allMeetings = JSON.parse(readFileSync(`public/data/${release.version}/teaching/${release.teaching}/meetings.json`, 'utf8')) as TeachingMeeting[];
+const planCourses = JSON.parse(readFileSync(`public/data/${release.version}/curriculum/courses.json`, 'utf8')) as CurriculumCourse[];
+const someMeeting = allMeetings.find(meeting => meeting.room && meeting.teachers.length && meeting.classes.length)!;
+const answers = {
+    weeks: [[1, 2, 3, 5, 7, 8], [1], [], [2, 4, 6], [9, 10, 11, 12, 13, 14, 15, 16]].map(weeks => ({ weeks, text: weeksText(weeks) })),
+    keys: ['217f18e4a94128cf', 'topics/数据结构/栈', 'questions/materials/cs-free/B0301152S/x.md#选择 1'].map(id => ({ id, key: /^[0-9a-f]{16}$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 16) })),
+    course: ['计算机通信与网络', 'JS160201S', '离散', '不存在的课'].map(course => ({ course, said: courseSaid(knowledgeIndex, allMaterials, course) })),
+    schedule: [someMeeting.course.name, someMeeting.course.code ?? '', someMeeting.teachers[0]!.name, someMeeting.classes[0]!, (someMeeting.room ?? '').replace(/^[^/:]*[/:]/, ''), '没有这个人'].map(of => ({ of, said: scheduleSaid(allMeetings, of) })),
+    curriculum: [['计算机科学与技术'], ['软件工程', '2024'], ['计算机'], ['不存在的专业']].map(([major, grade]) => ({ major, grade: grade ?? null, said: curriculumSaid(planCourses, major!, grade) })),
+};
 // What a glance outside the app shows at a few moments: the day, the week, what is due, exams ahead, when it changes next.
 const glance = {
     moments: [{ date: '2026-11-09', min: 16 * 60 }, { date: '2026-11-09', min: 7 * 60 }, { date: '2026-11-14', min: 20 * 60 }, { date: '2026-11-13', min: 23 * 60 }, { date: '2027-01-14', min: 22 * 60 }, { date: addDays(examined.date, -5), min: 9 * 60 }, { date: examined.date, min: 7 * 60 }].map(now => ({
@@ -307,5 +322,5 @@ const glance = {
 const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
     .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

@@ -257,6 +257,19 @@ foreach (var test in golden["memory"]!.AsArray())
 var allMaterials = JsonSerializer.Deserialize<List<CourseMaterials>>(File.ReadAllText(Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!, "materials.json")), factsJson)!;
 foreach (var test in golden["materials"]!["cases"]!.AsArray()) Same("materials said", Lessons.MaterialsSaid(allMaterials, (string)test!["course"]!), test["said"]);
 foreach (var test in golden["materials"]!["counts"]!.AsArray()) Equal("material counts", Lessons.KindCounts(allMaterials.First(m => m.Course == (string)test!["course"]!).Items).Select(k => new object[] { k.Kind, k.Count }), test!["counts"]);
+// What the AI is told about a course, a schedule and a training plan.
+{
+    var dataBase = Path.Combine(repositoryRoot.FullName, "public", "data", (string)golden["source"]!["release"]!);
+    var knowledgeIndex = JsonSerializer.Deserialize(File.ReadAllBytes(Path.Combine(dataBase, "knowledge", "knowledge.json")), StuDev.Data.FactsJson.Default.KnowledgeIndex)!;
+    var plan = JsonSerializer.Deserialize(File.ReadAllBytes(Path.Combine(dataBase, "curriculum", "courses.json")), StuDev.Data.FactsJson.Default.ListCurriculumCourse)!;
+    var allMeetings = JsonSerializer.Deserialize(File.ReadAllBytes(Path.Combine(dataBase, "teaching", (string)golden["source"]!["teaching"]!, "meetings.json")), StuDev.Data.FactsJson.Default.ListTeachingMeeting)!;
+    var answers = golden["answers"]!;
+    foreach (var test in answers["weeks"]!.AsArray()) Equal("weeks text", StuDev.Ai.Answers.WeeksText(test!["weeks"]!.AsArray().Select(w => (int)w!)), test["text"]);
+    foreach (var test in answers["keys"]!.AsArray()) Equal("text key", StuDev.Ai.Answers.TextKey((string)test!["id"]!), test["key"]);
+    foreach (var test in answers["course"]!.AsArray()) Same($"course {(string)test!["course"]!}", StuDev.Ai.Answers.Course(knowledgeIndex, allMaterials, (string)test["course"]!), test["said"]);
+    foreach (var test in answers["schedule"]!.AsArray()) Same($"schedule {(string)test!["of"]!}", StuDev.Ai.Answers.Schedule(allMeetings, (string)test["of"]!), test["said"]);
+    foreach (var test in answers["curriculum"]!.AsArray()) Same($"curriculum {(string)test!["major"]!}", StuDev.Ai.Answers.Curriculum(plan, (string)test["major"]!, (string?)test["grade"]), test["said"]);
+}
 var syncCase = golden["settingsSync"]!;
 var original = syncCase["original"]!.DeepClone().AsObject();
 Same("settings parts", SettingsSync.PartsOf(original), syncCase["initial"]);

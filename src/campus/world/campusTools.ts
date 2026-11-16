@@ -8,14 +8,22 @@ import { findPlaces, placeMeant, placesAround } from '@/map/model/find';
 import { campusTime, openingStatus } from '@/map/model/homePolicy';
 import { fetchJson } from './fetch';
 import { toolDate } from './tools';
-import { loadMaterials } from './data';
-import { materialsSaid } from './materials';
+import { loadMaterials, loadMeetings } from './data';
+import { courseSaid, curriculumSaid, scheduleSaid } from './answers';
+import { loadCurriculum, loadKnowledge } from './knowledge';
 import { campusConfig } from '../../../campus.config';
 
 /** Where a search looks, by the name a person gives it: the same channels as the search page. */
 const CHANNELS = campusConfig.search.channels as readonly { label: string; sources?: readonly string[]; excluded?: readonly string[] }[];
 /** How much of an article the model reads at once. */
 const READ = 8000;
+/** Where a result's text is kept, as the data build writes it (scripts/data/digest.ts textKey): an article by its own
+ * id, anything else by the first 16 hex digits of the SHA-256 of its search id. */
+async function textKey(id: string) {
+    if (/^[0-9a-f]{16}$/.test(id)) return id;
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(id)));
+    return [...hash.slice(0, 8)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
 /** Adapters call the same released search/routing kernels and room interpreter as the visual entries. */
 export class CampusTools {
@@ -31,11 +39,13 @@ export class CampusTools {
         const answer = await this.search.search({ query, offset: 0, limit: 6, sort: 'relevance', filters }).response;
         return answer.results.map(item => ({ id: item.id, title: item.title, source: item.sourceName, ...(item.publishedAt ? { date: item.publishedAt.slice(0, 10) } : {}), snippet: item.snippet, url: item.url }));
     }
-    /** One article's own text, as far as it is kept; what is not an article is not read here. */
+    /** One result's own text, as far as it is kept: an article, a knowledge topic or a question. Courses, teachers,
+     * classes, rooms and places are not texts; their own tools answer for them. */
     async read(id: string) {
-        if (!/^[0-9a-f]{16}$/.test(id)) throw new Error('这条不是文章，课程、教室、地点请用对应的方式查。');
+        if (/^(courses|teachers|classes|rooms|places|buildings)\//.test(id)) throw new Error('这条不是文章：上课安排用 schedule，地点用 find_place。');
+        const key = await textKey(id);
         const shard = await fetchJson<Record<string, { title: string; url: string; source: string; published: string | null; text: string; files: { name: string; url: string }[] }>>(`${APP_CONFIG.DATA_URLS.TEXTS}/${id.slice(0, 2)}.json`);
-        const doc = shard[id];
+        const doc = shard[key];
         if (!doc) throw new Error('找不到这篇资料。');
         return { title: doc.title, source: doc.source, ...(doc.published ? { date: doc.published.slice(0, 10) } : {}), url: doc.url, text: doc.text.slice(0, READ) || '这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。', ...(doc.text.length > READ ? { cut: true } : {}), files: doc.files.slice(0, 10) };
     }
@@ -50,8 +60,12 @@ export class CampusTools {
             where: !parent ? '校外' : parent.kind === 'campus' ? '校内' : `${parent.names[0] ?? parent.id}里`,
             ...(status.state === 'unknown' ? {} : status.today === '00:00–24:00' ? { today: '全天', now: '24 小时开放' } : { today: status.today, now: status.state === 'closed' ? '已关闭' : status.state === 'closing' ? `快关门了，${status.closesAt} 关` : `开着，${status.closesAt} 关` }) };
     }
-    /** A course's shared materials, or the courses a name may mean. */
-    async materials(course: string) { return materialsSaid(await loadMaterials(), course); }
+    /** A course: its knowledge outline, compiled materials and shared links, or the courses a name may mean. */
+    async course(course: string) { const [index, shared] = await Promise.all([loadKnowledge(), loadMaterials()]); return courseSaid(index, shared, course); }
+    /** When a course, a teacher, a class or a room meets this term. */
+    async schedule(of: string) { return scheduleSaid(await loadMeetings(), of); }
+    /** A major's training plan, term by term. */
+    async curriculum(major: string, grade?: string) { return curriculumSaid(await loadCurriculum(), major, grade); }
     /** The places a name may mean. */
     async findPlace(query: string) {
         const space = await this.places();

@@ -461,6 +461,26 @@ class ParityTest {
             val found = all.first { it.course == case.getValue("course").jsonPrimitive.content }
             assertEquals(case.getValue("counts").jsonArray.map { it.jsonArray[0].jsonPrimitive.content to it.jsonArray[1].jsonPrimitive.int }, Materials.counts(found.items)) }
     }
+    @Test fun courseScheduleAndPlanAnswersAreTheSame() {
+        val root = generateSequence(File(checkNotNull(System.getProperty("user.dir"))).canonicalFile) { it.parentFile }.first { File(it, "src/campus/world/parity/golden.json").isFile }
+        val release = golden.getValue("source").jsonObject; val base = File(root, "public/data/${release.getValue("release").jsonPrimitive.content}")
+        val lenient = Json { ignoreUnknownKeys = true }
+        val index = lenient.decodeFromString<top.hicancan.studev.knowledge.KnowledgeIndex>(File(base, "knowledge/knowledge.json").readText())
+        val shared = lenient.decodeFromString<List<CourseMaterials>>(File(base, "materials.json").readText())
+        val meetings = lenient.decodeFromString<List<top.hicancan.studev.data.TeachingMeeting>>(File(base, "teaching/${release.getValue("teaching").jsonPrimitive.content}/meetings.json").readText())
+        val plan = lenient.decodeFromString<List<top.hicancan.studev.knowledge.CurriculumCourse>>(File(base, "curriculum/courses.json").readText())
+        val answers = golden.getValue("answers").jsonObject
+        answers.getValue("weeks").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.getValue("text").jsonPrimitive.content, top.hicancan.studev.world.Answers.weeksText(case.getValue("weeks").jsonArray.map { it.jsonPrimitive.int })) }
+        answers.getValue("keys").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.getValue("key").jsonPrimitive.content, top.hicancan.studev.world.Answers.textKey(case.getValue("id").jsonPrimitive.content)) }
+        answers.getValue("course").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.getValue("course").toString(), case.getValue("said"), top.hicancan.studev.world.Answers.course(index, shared, case.getValue("course").jsonPrimitive.content)) }
+        answers.getValue("schedule").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.getValue("of").toString(), case.getValue("said"), top.hicancan.studev.world.Answers.schedule(meetings, case.getValue("of").jsonPrimitive.content)) }
+        answers.getValue("curriculum").jsonArray.forEach { item -> val case = item.jsonObject
+            assertEquals(case.getValue("major").toString(), case.getValue("said"), top.hicancan.studev.world.Answers.curriculum(plan, case.getValue("major").jsonPrimitive.content, case["grade"]?.jsonPrimitive?.contentOrNull)) }
+    }
     @Test fun rememberingIsTheSame() {
         golden.getValue("memory").jsonArray.forEach { item -> val case = item.jsonObject
             val got = runCatching { top.hicancan.studev.ai.Memory.remembered(case.getValue("text").jsonPrimitive.content, case.getValue("fact").jsonPrimitive.content) }
