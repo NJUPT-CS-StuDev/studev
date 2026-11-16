@@ -146,8 +146,37 @@ data class Own(val base: String, val model: String, val key: String)
 
 /** Which model answers, as src/campus/ai/model.ts: the free quota, or one's own key. */
 object Models {
-    val STARTING = Own("https://api.deepseek.com", "deepseek-flash", "")
+    const val OWNER_QQ = "2366522877"
+    val STARTING = Own("https://api.deepseek.com", "deepseek-chat", "")
     fun endpoint(base: String): String { val root = base.trim().trimEnd('/'); return if (root.endsWith("/chat/completions")) root else "$root/chat/completions" }
+    fun modelsEndpoints(base: String): List<String> {
+        val root = base.trim().trimEnd('/').removeSuffix("/chat/completions").removeSuffix("/models")
+        val first = "$root/models"
+        return if (Regex("/v\\d+$").containsMatchIn(root)) listOf(first) else listOf(first, "$root/v1/models")
+    }
+    suspend fun fetchModels(base: String, key: String): List<String> = withContext(Dispatchers.IO) {
+        require(addressError(base) == null) { "接口地址格式不对" }
+        val trimmed = key.trim()
+        require(trimmed.isNotEmpty()) { "请先填写 API Key" }
+        for (url in modelsEndpoints(base)) {
+            val conn = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000; readTimeout = 15_000
+                setRequestProperty("Authorization", "Bearer $trimmed")
+                setRequestProperty("Accept", "application/json")
+            }
+            try {
+                val status = conn.responseCode
+                if (status == 404) continue
+                if (status !in 200..299) throw IllegalStateException(if (status == 401) "API Key 无效或无权限" else "请求失败（$status）")
+                val text = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val ids = Json.parseToJsonElement(text).jsonObject["data"]?.jsonArray
+                    ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { id -> id.isNotEmpty() } }
+                    ?.distinct().orEmpty()
+                if (ids.isNotEmpty()) return@withContext ids
+            } finally { conn.disconnect() }
+        }
+        error("接口没有返回模型列表，可直接手动填写模型名")
+    }
     fun addressError(base: String): String? = runCatching {
         val uri = URI(base.trim())
         if (uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.userInfo == null && uri.rawQuery == null && uri.rawFragment == null) null

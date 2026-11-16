@@ -29,6 +29,19 @@ import kotlinx.coroutines.withContext
 import top.hicancan.studev.account.AccountUser
 import top.hicancan.studev.account.Accounts
 
+/** Loads a public QQ avatar image cleanly when given a valid QQ number. */
+@Composable fun QqAvatarImage(qq: String, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
+    val face by produceState<ImageBitmap?>(null, qq) {
+        value = if (!Regex("[1-9]\\d{4,11}").matches(qq)) null else withContext(Dispatchers.IO) {
+            runCatching { java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100").openStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
+        }
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        if (face != null) Image(face!!, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else fallback()
+    }
+}
+
 /** Who is signed in, at a glance: their QQ face, the first letter of their name, or the outline of nobody. */
 @Composable fun MeAvatar() {
     val context = LocalContext.current
@@ -36,16 +49,10 @@ import top.hicancan.studev.account.Accounts
     val user by accounts.user.collectAsStateWithLifecycle()
     LaunchedEffect(accounts) { accounts.current() }
     val qq = user?.qq.orEmpty()
-    val face by produceState<ImageBitmap?>(null, qq) {
-        value = if (!Regex("[1-9]\\d{4,11}").matches(qq)) null else withContext(Dispatchers.IO) {
-            runCatching { java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100").openStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
-        }
-    }
     val ink = Ink.muted
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    QqAvatarImage(qq, Modifier.fillMaxSize()) {
         val shown = user
         when {
-            face != null -> Image(face!!, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             shown != null -> Plain(shown.nickname.take(1).ifEmpty { "我" }, 12.5.sp, ink, FontWeight.SemiBold)
             else -> Canvas(Modifier.size(18.dp)) {
                 val unit = size.width / 24

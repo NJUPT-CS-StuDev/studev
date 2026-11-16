@@ -23,7 +23,7 @@ namespace StuDev.Ai;
 
 public sealed partial class AiScreen : Screen
 {
-    private static readonly string[] Examples = ["这周有哪些截止和考试？", "今天下午哪里有空教室？", "帮我在下周找三次一小时复习，周五前完成", "从教三到图书馆怎么走？"];
+    private static readonly string[] Examples = ["这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？"];
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
     private readonly Campus campus = Campus.Shared;
     private readonly Assistant assistant = Assistant.Load(Path.Combine(AppContext.BaseDirectory, "world"));
@@ -355,11 +355,14 @@ public sealed partial class AiScreen : Screen
         // The bar: which model answers, and the conversation's name.
         var bar = new Grid { Padding = new Thickness(14, 8, 14, 0), ColumnSpacing = 6, MinHeight = 48 };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
-        var model = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = Kit.Line(4, Kit.Text(own ? Models.Name(choice.Mine) : "免费额度", Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted")), Height = 34, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10) };
+        var modelFace = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Child = new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(Models.OwnerAvatar)) } };
+        var modelContent = own ? Kit.Line(4, Kit.Text(Models.Name(choice.Mine), Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted"))
+            : Kit.Line(6, modelFace, Kit.Text("免费额度", Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted"));
+        var model = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = modelContent, Height = 34, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10) };
         ((StackPanel)model.Content).VerticalAlignment = VerticalAlignment.Center;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(model, "选择模型");
         var pick = new MenuFlyout();
-        var free = new ToggleMenuFlyoutItem { Text = "免费额度 · 为爱发电", IsChecked = !own }; ToolTipService.SetToolTip(free, "登录后可用");
+        var free = new ToggleMenuFlyoutItem { Text = "免费额度 · hicancan 为爱发电提供", IsChecked = !own }; ToolTipService.SetToolTip(free, "登录后可用");
         free.Click += (_, _) => { choice = (false, choice.Mine); WriteChoice(); Draw(); };
         var mine = new ToggleMenuFlyoutItem { Text = choice.Mine.Key.Length > 0 ? $"我的 API · {Models.Name(choice.Mine)}" : "我的 API · 填上自己的 Key 就能用", IsChecked = own };
         mine.Click += (_, _) => { if (choice.Mine.Key.Length > 0) { choice = (true, choice.Mine); WriteChoice(); Draw(); } else OwnSheet(); };
@@ -388,7 +391,7 @@ public sealed partial class AiScreen : Screen
             }
             hello.Children.Add(examples);
             if (campus.Preferences.Class is null) hello.Children.Add(Fine("先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。"));
-            hello.Children.Add(Fine("可以问课表、地图和校园资料：查安排、找空闲、找空教室、问路、读通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。"));
+            hello.Children.Add(Fine("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。"));
             if (error.Length > 0) hello.Children.Add(Kit.Text(error, Role.Body, "danger", wrap: true));
             var centred = Pages.Centre(hello, 768); centred.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(centred, 1); main.Children.Add(centred);
@@ -715,8 +718,29 @@ public sealed partial class AiScreen : Screen
         column.Children.Add(Pages.SheetHead(Pages.SheetTitle("我的 API"), () => App.Window?.Close()));
         column.Children.Add(Kit.Text("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。", Role.Label, "muted", wrap: true));
         column.Children.Add(Label("接口地址")); column.Children.Add(address); column.Children.Add(hint);
-        column.Children.Add(Label("模型")); column.Children.Add(model);
         column.Children.Add(Label("API Key")); column.Children.Add(key);
+        var modelPick = new ComboBox { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var fetchStatus = Kit.Text("", Role.Caption, "muted", wrap: true);
+        var fetchBtn = Kit.Action("拉取模型列表", async () =>
+        {
+            fetchStatus.Text = "正在拉取模型列表…";
+            fetchStatus.Foreground = Paint.Brush("muted");
+            try
+            {
+                var ids = await Models.FetchModelsAsync(Http, address.Text, key.Password);
+                modelPick.ItemsSource = ids;
+                modelPick.Visibility = Visibility.Visible;
+                if (ids.Contains(model.Text.Trim())) modelPick.SelectedItem = model.Text.Trim();
+                else if (ids.Count > 0) { modelPick.SelectedIndex = 0; model.Text = ids[0]; }
+                fetchStatus.Text = $"已获取 {ids.Count} 个模型";
+            }
+            catch (Exception ex) { fetchStatus.Text = ex.Message; fetchStatus.Foreground = Paint.Brush("danger"); }
+        });
+        modelPick.SelectionChanged += (_, _) => { if (modelPick.SelectedItem is string picked) model.Text = picked; };
+        var modelRow = new Grid { ColumnSpacing = 8 };
+        modelRow.ColumnDefinitions.Add(new ColumnDefinition()); modelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        modelRow.Children.Add(model); Grid.SetColumn(fetchBtn, 1); modelRow.Children.Add(fetchBtn);
+        column.Children.Add(Label("模型")); column.Children.Add(modelPick); column.Children.Add(modelRow); column.Children.Add(fetchStatus);
         var buttons = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 6, 0, 0) };
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (mine.Key.Length > 0) buttons.Children.Add(Pill("清除 Key", () => { choice = (false, mine with { Key = "" }); WriteChoice(); App.Window?.Close(); Draw(); }));

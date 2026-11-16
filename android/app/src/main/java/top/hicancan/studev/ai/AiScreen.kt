@@ -26,8 +26,10 @@ import kotlinx.serialization.json.*
 import top.hicancan.studev.account.Accounts
 import top.hicancan.studev.account.PlatformFailure
 import top.hicancan.studev.app.CampusModel
+import top.hicancan.studev.app.Chip
 import top.hicancan.studev.app.Ink
 import top.hicancan.studev.app.Plain
+import top.hicancan.studev.app.QqAvatarImage
 import top.hicancan.studev.app.Route
 import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.CampusTools
@@ -46,7 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 
 /** What one can ask, offered while the conversation is empty, as AI_EXAMPLES in src/campus/ai/AiApp.tsx. */
-private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午哪里有空教室？", "帮我在下周找三次一小时复习，周五前完成", "从教三到图书馆怎么走？")
+private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？")
 
 /**
  * The fourth entry beside the timetable, the map and search, as src/campus/ai/AiApp.tsx: one conversation over the
@@ -253,15 +255,22 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 48.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
             Box {
-                Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (asking == null) QqAvatarImage(Models.OWNER_QQ, Modifier.size(18.dp).clip(CircleShape))
                     Plain(asking?.let(Models::name) ?: "免费额度", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
                     Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Ink.muted)
                 }
                 DropdownMenu(picking, { picking = false }, containerColor = Ink.paper) {
-                    DropdownMenuItem({ Column { Text("免费额度 · 为爱发电"); Plain("登录后可用", 12.sp, Ink.muted) } }, { useOwn = false; Models.write(modelPrefs, false, own); picking = false },
+                    DropdownMenuItem({ Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            QqAvatarImage(Models.OWNER_QQ, Modifier.size(18.dp).clip(CircleShape))
+                            Text("免费额度")
+                        }
+                        Plain("hicancan 为爱发电提供 · 登录后可用", 12.sp, Ink.muted)
+                    } }, { useOwn = false; Models.write(modelPrefs, false, own); picking = false },
                         trailingIcon = { if (asking == null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
                     DropdownMenuItem({ Column { Text("我的 API"); Plain(if (own.key.isNotBlank()) "${Models.name(own)} · 存在这台设备上" else "填上自己的 Key 就能用", 12.sp, Ink.muted) } },
                         { picking = false; if (own.key.isNotBlank()) { useOwn = true; Models.write(modelPrefs, true, own) } else setting = true },
@@ -280,7 +289,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
                 }
-                Plain("可以问课表、地图和校园资料：查安排、找空闲、找空教室、问路、读通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
+                Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
             }
             return@Column
         }
@@ -353,14 +362,38 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var base by remember { mutableStateOf(own.base) }
     var model by remember { mutableStateOf(own.model) }
     var key by remember { mutableStateOf(own.key) }
+    var models by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pickingModel by remember { mutableStateOf(false) }
+    var fetching by remember { mutableStateOf(false) }
+    var fetchNote by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     val invalid = Models.addressError(base)
     AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("我的 API") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Plain("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台手机上，提问从这里直接发给服务商。", 13.sp, Ink.muted, lineHeight = 20.sp)
             OutlinedTextField(base, { base = it }, label = { Text("接口地址") }, singleLine = true)
             if (invalid != null) Plain(invalid, 12.sp, marks().danger)
-            OutlinedTextField(model, { model = it }, label = { Text("模型") }, singleLine = true)
             OutlinedTextField(key, { key = it }, label = { Text("API Key") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                if (models.isNotEmpty()) Box {
+                    Chip("选模型 (${models.size}) ▾", { pickingModel = true })
+                    DropdownMenu(pickingModel, { pickingModel = false }, containerColor = Ink.paper, modifier = Modifier.heightIn(max = 280.dp)) {
+                        models.forEach { id -> DropdownMenuItem({ Plain(id, 13.5.sp) }, { pickingModel = false; model = id }) }
+                    }
+                } else Spacer(Modifier.width(1.dp))
+                Chip(if (fetching) "拉取中…" else "拉取模型列表", {
+                    if (fetching || invalid != null || key.isBlank()) return@Chip
+                    fetching = true; fetchNote = ""
+                    scope.launch {
+                        runCatching { Models.fetchModels(base, key) }
+                            .onSuccess { list -> models = list; if (list.isNotEmpty() && model.trim() !in list) model = list.first(); fetchNote = "已获取 ${list.size} 个模型" }
+                            .onFailure { fetchNote = it.message ?: "拉取模型失败" }
+                        fetching = false
+                    }
+                })
+            }
+            OutlinedTextField(model, { model = it }, label = { Text("模型") }, singleLine = true)
+            if (fetchNote.isNotEmpty()) Plain(fetchNote, 12.sp, Ink.muted)
         } },
         confirmButton = { TextButton({ onSave(Own(base.trim(), model.trim(), key.trim())) }, enabled = invalid == null && model.isNotBlank() && key.isNotBlank()) { Text("保存并使用") } },
         dismissButton = { Row { if (own.key.isNotBlank()) TextButton({ onSave(own.copy(key = "")) }) { Text("清除 Key", color = marks().danger) }; TextButton(onClose) { Text("取消") } } })

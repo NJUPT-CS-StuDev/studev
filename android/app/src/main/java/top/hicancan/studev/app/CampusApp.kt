@@ -90,7 +90,7 @@ import top.hicancan.studev.world.Moment
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }
                 "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model, route) }
             }
-            if (route.tab != "map" && route.tab != "ai") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 14.dp).size(32.dp).testTag("me"), shape = CircleShape, color = Ink.sunken) {
+            if (route.tab != "map") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 14.dp).size(32.dp).testTag("me"), shape = CircleShape, color = Ink.sunken) {
                 MeAvatar()
             }
         }

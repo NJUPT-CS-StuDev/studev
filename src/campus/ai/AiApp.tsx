@@ -20,7 +20,7 @@ import { roomLabel } from '@/world/names';
 import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up } from '@/world/ui';
 import { definitions, readExams, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, askOwn, type Message } from './stream';
-import { addressError, endpoint, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
+import { addressError, endpoint, fetchModels, OWNER_AVATAR, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
 import { append, chain, choose, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
@@ -29,7 +29,7 @@ import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
 
 /** What one can ask, offered while the conversation is empty. */
-const AI_EXAMPLES = ['这周有哪些截止和考试？', '今天下午哪里有空教室？', '帮我在下周找三次一小时复习，周五前完成', '从教三到图书馆怎么走？'];
+const AI_EXAMPLES = ['这周有哪些截止和考试？', '今天下午哪里有空教室？', '计网里 TCP 拥塞控制有哪些真题考过？', '按培养方案看大二有哪些核心课？'];
 const KEY = 'studev_ai_chats';
 
 interface ModelContext { registerTool(tool: { name: string; description: string; inputSchema: object; execute(args: unknown): Promise<unknown> }): void; unregisterTool(name: string): void }
@@ -323,10 +323,12 @@ export default function AiApp() {
         <div className="ai-bar">
             <button className="ai-icon ai-menu-btn" aria-label="对话列表" onClick={() => setSide(true)}><Bars /></button>
             <div className="ai-model">
-                <button className={`ai-model-b ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>{own ? ownName(own) : '免费额度'}<Chevron /></button>
+                <button className={`ai-model-b ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>
+                    {!own && <img className="ai-quota-avatar" src={OWNER_AVATAR} referrerPolicy="no-referrer" alt="" />}
+                    {own ? ownName(own) : '免费额度'}<Chevron /></button>
                 {picking && <div className="ai-menu ai-model-menu" role="menu">
                     <button role="menuitemradio" aria-checked={!own} onClick={() => { setChoice(current => ({ ...current, use: 'free' })); setPicking(false); }}>
-                        <b>免费额度 · 为爱发电</b><small>登录后可用</small>{!own && <Tick />}</button>
+                        <b><img className="ai-quota-avatar" src={OWNER_AVATAR} referrerPolicy="no-referrer" alt="hicancan" />免费额度</b><small>hicancan 为爱发电提供 · 登录后可用</small>{!own && <Tick />}</button>
                     <button role="menuitemradio" aria-checked={Boolean(own)} onClick={() => { if (choice.own.key) setChoice(current => ({ ...current, use: 'own' })); else setSetting(true); setPicking(false); }}>
                         <b>我的 API</b><small>{choice.own.key ? `${ownName(choice.own)} · 存在这台设备上` : '填上自己的 Key 就能用'}</small>{own && <Tick />}</button>
                     <button role="menuitem" className="ai-model-set" onClick={() => { setSetting(true); setPicking(false); }}>设置我的 API…</button>
@@ -341,7 +343,7 @@ export default function AiApp() {
             {composer}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
             {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
-            <p className="fine">可以问课表、地图和校园资料：查安排、找空闲、找空教室、问路、读通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。</p>
+            <p className="fine">可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。</p>
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
         <div className="ai-turns" aria-live="polite">{turns.map(turn => {
@@ -424,16 +426,38 @@ function MemorySettings({ memory, onClose, onSave }: { memory: Memory; onClose: 
 /** One's own provider: where, which model, and the key, kept only on this device. */
 function OwnSettings({ own, onClose, onSave }: { own: Own; onClose: () => void; onSave: (own: Own) => void }) {
     const [value, setValue] = useState(own);
+    const [models, setModels] = useState<string[]>([]);
+    const [fetching, setFetching] = useState(false);
+    const [fetchNote, setFetchNote] = useState('');
     const invalid = addressError(value.base);
     const set = (part: Partial<Own>) => setValue(current => ({ ...current, ...part }));
+    const pull = async () => {
+        setFetching(true); setFetchNote('');
+        try {
+            const list = await fetchModels(value.base, value.key);
+            setModels(list);
+            if (list.length && !list.includes(value.model.trim())) set({ model: list[0]! });
+            setFetchNote(`已获取 ${list.length} 个模型`);
+        } catch (err) {
+            setFetchNote(err instanceof Error ? err.message : '拉取模型失败');
+        } finally { setFetching(false); }
+    };
     return <div className="ai-modal" role="dialog" aria-label="我的 API" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
         <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); onSave({ base: value.base.trim(), model: value.model.trim(), key: value.key.trim() }); }}>
             <h2>我的 API</h2>
             <p className="fine">填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。</p>
             <label>接口地址<input value={value.base} onChange={event => set({ base: event.target.value })} placeholder="https://api.deepseek.com" required /></label>
             <small className="fine">{invalid ?? `会请求 ${endpoint(value.base)}`}</small>
-            <label>模型<input value={value.model} onChange={event => set({ model: event.target.value })} placeholder="deepseek-flash" required /></label>
             <label>API Key<input type="password" value={value.key} onChange={event => set({ key: event.target.value })} placeholder="sk-…" autoComplete="off" /></label>
+            <div className="ai-model-field">
+                <div className="ai-model-head"><span>模型</span><button type="button" className="ai-fetch-btn" disabled={fetching || Boolean(invalid) || !value.key.trim()} onClick={() => void pull()}>{fetching ? '拉取中…' : '拉取模型'}</button></div>
+                {models.length > 0 && <select className="ai-model-select" aria-label="从已拉取列表选择模型" value={models.includes(value.model) ? value.model : ''} onChange={event => { if (event.target.value) set({ model: event.target.value }); }}>
+                    {!models.includes(value.model) && <option value="">手动填的模型：{value.model}</option>}
+                    {models.map(id => <option key={id} value={id}>{id}</option>)}
+                </select>}
+                <input value={value.model} onChange={event => set({ model: event.target.value })} placeholder="deepseek-chat" required />
+                {fetchNote && <small className="fine">{fetchNote}</small>}
+            </div>
             <div className="ai-modal-btns">
                 {own.key && <button type="button" className="ai-pill" onClick={() => onSave({ ...value, key: '' })}>清除 Key</button>}
                 <span />

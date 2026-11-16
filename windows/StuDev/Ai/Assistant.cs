@@ -122,8 +122,35 @@ public sealed record Own(string Base, string Model, string Key);
 /** Which model answers, as src/campus/ai/model.ts. */
 public static class Models
 {
-    public static readonly Own Starting = new("https://api.deepseek.com", "deepseek-flash", "");
+    public const string OwnerAvatar = "https://q1.qlogo.cn/g?b=qq&nk=2366522877&s=100";
+    public static readonly Own Starting = new("https://api.deepseek.com", "deepseek-chat", "");
     public static string Endpoint(string @base) { var root = @base.Trim().TrimEnd('/'); return root.EndsWith("/chat/completions") ? root : root + "/chat/completions"; }
+    public static List<string> ModelsEndpoints(string @base)
+    {
+        var root = @base.Trim().TrimEnd('/');
+        if (root.EndsWith("/chat/completions")) root = root[..^"/chat/completions".Length];
+        if (root.EndsWith("/models")) root = root[..^"/models".Length];
+        var first = root + "/models";
+        return Regex.IsMatch(root, @"/v\d+$") ? [first] : [first, root + "/v1/models"];
+    }
+    public static async Task<List<string>> FetchModelsAsync(HttpClient http, string @base, string key)
+    {
+        if (AddressError(@base) is not null) throw new InvalidOperationException("接口地址格式不对");
+        var trimmed = key.Trim();
+        if (trimmed.Length == 0) throw new InvalidOperationException("请先填写 API Key");
+        foreach (var url in ModelsEndpoints(@base))
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", trimmed);
+            using var res = await http.SendAsync(req);
+            if ((int)res.StatusCode == 404) continue;
+            if (!res.IsSuccessStatusCode) throw new InvalidOperationException((int)res.StatusCode == 401 ? "API Key 无效或无权限" : $"请求失败（{(int)res.StatusCode}）");
+            var root = JsonNode.Parse(await res.Content.ReadAsStringAsync())?.AsObject();
+            var ids = root?["data"]?.AsArray().Select(item => (string?)item?["id"]).Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id!.Trim()).Distinct().ToList() ?? [];
+            if (ids.Count > 0) return ids;
+        }
+        throw new InvalidOperationException("接口没有返回模型列表，可直接手动填写模型名");
+    }
     public static string? AddressError(string @base)
     {
         const string said = "接口地址以 https:// 开头，只写地址本身。";
