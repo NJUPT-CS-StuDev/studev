@@ -28,7 +28,32 @@ import '../platform/platform.css';
           <input id="login-totp" name="totp" autocomplete="one-time-code" maxlength="64" placeholder="6 位动态码或恢复码" />
         </div>
         <button class="p-button wide" type="submit">立即登录</button>
-        <details style="margin-top:16px"><summary class="p-help">忘记密码？</summary><p class="p-help">若忘记密码，请联系社团管理员重置。</p></details>
+        <details style="margin-top:16px" data-forgot><summary class="p-help">忘记密码？</summary>
+          <p class="p-help">在上面填好学号，点下面的按钮，重设链接会发到这个账号绑定的 QQ 邮箱，30 分钟内有效。</p>
+          <button class="p-button secondary" type="button" data-forgot-send>发送重设链接</button>
+        </details>
+      </form>
+      <form data-reset-form hidden>
+        <p class="p-help">为你的账号设置新密码。设置后，所有设备都会退出登录。</p>
+        <div class="p-field">
+          <label for="reset-password">新密码</label>
+          <div class="p-password-wrap">
+            <input id="reset-password" name="password" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="至少 12 位密码" required />
+            <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+          </div>
+        </div>
+        <div class="p-field">
+          <label for="reset-confirm">确认新密码</label>
+          <div class="p-password-wrap">
+            <input id="reset-confirm" name="confirm" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="再次输入新密码" required />
+            <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
+          </div>
+        </div>
+        <button class="p-button wide" type="submit">设置新密码</button>
+      </form>
+      <form data-delete-form hidden>
+        <p class="p-help">确认后，你的账号、学号绑定和所有登录设备会立即删除，无法恢复。</p>
+        <button class="p-button wide danger" type="submit">确认注销账号</button>
       </form>
       <form id="register-panel" role="tabpanel" aria-labelledby="register-tab" data-register-form hidden>
         <div class="p-field">

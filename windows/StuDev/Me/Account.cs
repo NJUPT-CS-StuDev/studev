@@ -47,6 +47,9 @@ public sealed class Account
     private static AccountSession Tokens(JsonObject value, AccountUser user) => new((string)value["accessToken"]!, (string)value["refreshToken"]!,
         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)value["expiresIn"]! * 1000, (string)value["deviceSessionId"]!, user);
 
+    /// <summary>Asks for a password-reset link, mailed to the account's QQ mailbox; the reset itself happens on the website.</summary>
+    public static async Task Forgot(string studentId) => Checked(await Send("/auth/password/forgot", new JsonObject { ["studentId"] = studentId.Trim().ToUpperInvariant() }, null));
+
     public async Task<AccountUser> SignIn(string studentId, string password, string totp)
     {
         await gate.WaitAsync();

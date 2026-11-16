@@ -103,3 +103,51 @@ q<HTMLInputElement>('#register-student-id').addEventListener('blur',event=>{cons
 q<HTMLInputElement>('#login-student-id').addEventListener('blur',event=>{const input=event.currentTarget as HTMLInputElement;input.value=input.value.trim().toUpperCase();});
 
 initPasswordToggles();
+
+// Links from account mail: ?reset=<token> sets a new password, ?delete=<token> confirms deleting the account.
+const mailed = new URLSearchParams(location.search);
+const resetForm = q<HTMLFormElement>('[data-reset-form]');
+const deleteForm = q<HTMLFormElement>('[data-delete-form]');
+function onlyForm(form: HTMLFormElement, title: string) {
+    login.hidden = true; register.hidden = true; form.hidden = false;
+    q('.p-auth-tabs').hidden = true;
+    q('.p-auth h1').textContent = title;
+    history.replaceState(null, '', location.pathname);
+}
+const resetToken = mailed.get('reset');
+const deleteToken = mailed.get('delete');
+if (resetToken) {
+    onlyForm(resetForm, '设置新密码');
+    resetForm.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<HTMLButtonElement>('button[type=submit]', resetForm); try {
+        const password = q<HTMLInputElement>('#reset-password').value;
+        if (password !== q<HTMLInputElement>('#reset-confirm').value) throw new Error('两次输入的密码不一致。');
+        await busy(b, async () => {
+            const done = await api<{ studentId: string }>('/auth/password/reset', { token: resetToken, password });
+            resetForm.hidden = true; login.hidden = false; q('.p-auth-tabs').hidden = false; q('.p-auth h1').textContent = '登录';
+            q<HTMLInputElement>('#login-student-id').value = done.studentId;
+            q<HTMLInputElement>('#login-password').focus();
+            message(status, '新密码已设置，请用它登录。', 'success');
+        });
+    } catch (e) { message(status, errorText(e), 'error'); } });
+} else if (deleteToken) {
+    onlyForm(deleteForm, '注销账号');
+    deleteForm.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<HTMLButtonElement>('button[type=submit]', deleteForm); try {
+        await busy(b, async () => {
+            await api('/auth/account/delete/confirm', { token: deleteToken });
+            try { localStorage.removeItem('studev_auth_user'); } catch {}
+            deleteForm.hidden = true;
+            message(status, '账号已注销。感谢你用过 StuDev。', 'success');
+        });
+    } catch (e) { message(status, errorText(e), 'error'); } });
+}
+q<HTMLButtonElement>('[data-forgot-send]').addEventListener('click', async (e) => {
+    const b = e.currentTarget as HTMLButtonElement;
+    const studentId = q<HTMLInputElement>('#login-student-id').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6,20}$/.test(studentId)) { message(status, '请先在上面填写学号。', 'error'); q<HTMLInputElement>('#login-student-id').focus(); return; }
+    try {
+        await busy(b, async () => {
+            await api('/auth/password/forgot', { studentId });
+            message(status, '如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，请在 30 分钟内打开。没收到的话看看垃圾箱。', 'success');
+        });
+    } catch (e) { message(status, errorText(e), 'error'); }
+});

@@ -67,6 +67,7 @@ public sealed partial class MeScreen : Screen
             var leave = Kit.Button("退出登录", async () => { try { await Account.Shared.SignOut(); } catch (Exception e) when (e is PlatformFailure or HttpRequestException or TaskCanceledException) { Account.Shared.Forget(); } });
             leave.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(leave, 1); account.Children.Add(leave);
             Row("账号", account);
+            Row("账号管理", Value("资料、密码、两步验证、登录设备、注销账号", "在网站上管理，和手机、网页是同一个账号"), () => Browse($"{Repository.Site}/account/"));
         }
         Row("反馈", Value("哪里不顺手、哪里不对", "写一句就行，我们会看每一条"), () => Browse(Form("feedback", "Windows · 我")));
         Row("补充数据", Value("实验课表、讲座、校车、营业时间", "教务系统里没有的，审核后放进课表和地图"), () => Browse(Form("data")));

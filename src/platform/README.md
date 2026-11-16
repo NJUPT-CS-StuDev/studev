@@ -12,6 +12,21 @@ Web and Android use the same `/api/platform` identity endpoints and errors:
   Missing/invalid factors return `MFA_REQUIRED`/`MFA_INVALID`; used factors return
   `MFA_REPLAYED`, identically for both clients. Temporary-password and owner TOTP
   setup use the same restricted session and endpoints on either client.
+- `POST /auth/password/forgot`: `studentId`. Mails a reset link to the account's
+  QQ mailbox and answers `{ ok }` whether or not the student ID has an account.
+  One mail per account per five minutes.
+- `POST /auth/password/reset`: `token` (from the link `/login/?reset=<token>`),
+  `password`. Sets the password, marks the mailbox verified and signs every device
+  out. A link lasts 30 minutes, works once, and dies with any password change.
+- `POST /auth/account/delete` (signed in, CSRF): `password`. Mails a confirmation
+  link `/login/?delete=<token>`; `POST /auth/account/delete/confirm` with that
+  `token` deletes the account, its student-ID claim and every device. The owner
+  cannot be deleted.
+- Mail is Resend's free plan (`RESEND_API_KEY`), capped at 90 a day so it is
+  refused here before Resend refuses it. Every password change or reset also mails
+  the account a note.
+  Web does all four; Android and Windows ask for reset links, and the links and the
+  rest of account management open on the website.
 - `POST /auth/refresh`: `deviceId`, plus a bearer client's `refreshToken`.
 - `GET /auth/session`, `POST /auth/logout`, `/auth/profile`, `/auth/password`,
   `/auth/totp/setup`, `/auth/totp/confirm`, `/auth/totp/disable` are shared.

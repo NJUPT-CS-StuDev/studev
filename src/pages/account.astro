@@ -134,6 +134,17 @@ import '../platform/platform.css';
             </div>
           </div>
         </section>
+        <section class="p-card" data-account-delete style="margin-top:20px">
+          <h2>注销账号</h2>
+          <p class="p-muted">输入当前密码后，确认信会发到你绑定的 QQ 邮箱 <span data-delete-email></span>。点信里的按钮才会真正注销，注销后账号、学号绑定和登录设备都会删除，无法恢复。</p>
+          <form data-delete-request style="margin-top:16px">
+            <div class="p-field">
+              <label for="delete-password">当前密码</label>
+              <input id="delete-password" name="password" type="password" maxlength="256" autocomplete="current-password" required />
+            </div>
+            <button class="p-button danger" type="submit">发送注销确认信</button>
+          </form>
+        </section>
       </div>
 
       <section data-account-panel="members" hidden>

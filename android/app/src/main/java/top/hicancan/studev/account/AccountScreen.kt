@@ -164,7 +164,13 @@ import top.hicancan.studev.app.Tokens
                 } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && nickname.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (register) "创建账号" else "登录")
                 }
-                Text("密码需要 12–256 个字符。忘记密码或学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!register) TextButton(onClick = { run {
+                    val id = student.trim().uppercase()
+                    if (!Regex("[A-Z0-9]{6,20}").matches(id)) { error = "请先在上面填写学号。"; return@run }
+                    client.request("/auth/password/forgot", buildJsonObject { put("studentId", id) })
+                    notice = "如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，请在 30 分钟内打开。没收到的话看看垃圾箱。"
+                } }, enabled = !busy, contentPadding = PaddingValues(0.dp)) { Text("忘记密码？发送重设链接到 QQ 邮箱") }
+                Text("密码需要 12–256 个字符。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     listOf("profile" to "资料", "security" to "安全", "devices" to "设备").forEachIndexed { i, (value, label) ->
@@ -252,6 +258,15 @@ import top.hicancan.studev.app.Tokens
                             client.request("/auth/totp/disable", buildJsonObject { put("password", password); put("code", totp) }, authenticated = true)
                             client.forget(); user = null; state = null; password = ""; totp = ""; notice = "认证器已解绑，请重新登录。"
                         } }, enabled = !busy && password.isNotBlank() && totp.isNotBlank()) { Text("解绑认证器并重新登录") }
+                        if (user!!.role != "owner") {
+                            HorizontalDivider()
+                            Text("注销账号", style = MaterialTheme.typography.titleLarge)
+                            Text("填好上面的当前密码后，确认信会发到 ${user!!.email}。点信里的按钮才会真正注销，账号、学号绑定和登录设备都会删除，无法恢复。", style = MaterialTheme.typography.bodyMedium)
+                            OutlinedButton(onClick = { run {
+                                client.request("/auth/account/delete", buildJsonObject { put("password", password) }, authenticated = true)
+                                password = ""; notice = "注销确认信已发到 ${user!!.email}，30 分钟内点信里的按钮完成注销。"
+                            } }, enabled = !busy && password.isNotBlank()) { Text("发送注销确认信", color = MaterialTheme.colorScheme.error) }
+                        }
                     }
                 }
                 OutlinedButton(onClick = { confirmOut = true }, enabled = !busy) { Text("退出登录") }

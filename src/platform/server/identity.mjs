@@ -4,6 +4,7 @@ import { fail, platformOrigin, readJson, requireOrigin, response, text } from '.
 import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
+import { createMailer, letter } from './mail.mjs';
 import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl } from './roster.mjs';
 
 const API = '/api/platform';
@@ -51,7 +52,7 @@ function cookieValue(request, name) {
   return matches.length === 1 ? matches[0].slice(name.length + 1) : null;
 }
 
-export function createIdentity({ repo, env, now = Date.now }) {
+export function createIdentity({ repo, env, now = Date.now, mailer = createMailer({ env, repo }) }) {
   const origin = platformOrigin(env);
   const local = origin.startsWith('http://');
   const cookieName = local ? 'studev_platform_dev' : '__Host-studev_platform';
@@ -233,6 +234,37 @@ export function createIdentity({ repo, env, now = Date.now }) {
     if (!user) fail(404, 'USER_NOT_FOUND', '账号不存在。');
     return user;
   }
+  // Account mail: a link carries a one-time token whose hash names a record that knows the purpose, the account and
+  // the account's security version, so a password change or a newer link makes an older one useless.
+  const tokenKey = (token) => `identity/tokens/${digest(token)}.json`;
+  async function mailLink(user, purpose, path, minutes) {
+    const token = secretToken();
+    await repo.put(tokenKey(token), { purpose, userId: user.id, securityVersion: user.securityVersion, expiresAt: now() + minutes * 60_000 });
+    return `${origin}${path}?${purpose}=${token}`;
+  }
+  async function spendToken(purpose, token) {
+    if (typeof token !== 'string' || !TOKEN.test(token)) fail(400, 'LINK_INVALID', '链接无效或已过期，请重新申请。');
+    const record = await repo.get(tokenKey(token));
+    if (record) await repo.remove(tokenKey(token));
+    const user = record?.purpose === purpose && record.expiresAt > now() ? await repo.latest(userKey(record.userId)) : null;
+    if (!user || user.status !== 'active' || user.securityVersion !== record.securityVersion) fail(400, 'LINK_INVALID', '链接无效或已过期，请重新申请。');
+    return user;
+  }
+  async function deleteUser(user) {
+    if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
+    await repo.remove(`identity/qq/${user.qq}.json`);
+    if (user.studentId) await repo.remove(studentKey(user.studentId));
+    for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
+    if (user.term) await rebuildRoster(user.term);
+  }
+  // After a password changes, the account's mailbox hears of it, so a change nobody asked for is noticed at once.
+  async function tellPasswordChanged(user) {
+    if (!mailer.enabled) return;
+    try {
+      await mailer.deliver({ to: user.email, subject: 'StuDev 密码已修改',
+        ...letter({ greeting: `${user.nickname}，你好：`, lines: [`你的 StuDev 账号（学号 ${user.studentId}）的密码刚刚修改，所有设备都已退出登录。`, '如果是你自己改的，忽略这封信即可。'], action: { label: '不是我改的？重设密码', url: `${origin}/login/` }, footer: '如果不是你本人操作，请立刻用“忘记密码”重设，并联系管理员。' }) });
+    } catch { /* The change itself stands even when the note cannot go out. */ }
+  }
   async function loadAllUsers() {
     const keys = await repo.list('identity/qq/');
     const indices = await Promise.all(keys.slice(0, 1000).map((key) => repo.get(key)));
@@ -347,7 +379,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       await repo.audit(auth.user.id, 'identity.device.revoked', device[1]);
       return response({ ok: true });
     }
-    if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: true, emailDeliveryEnabled: false });
+    if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: true, emailDeliveryEnabled: mailer.enabled });
     if (method === 'GET' && route === '/public/roster') {
       const url = new URL(request.url);
       const term = (url.searchParams.get('term') || '2026-2027').trim();
@@ -454,6 +486,55 @@ export function createIdentity({ repo, env, now = Date.now }) {
       await repo.audit(user.id, changedIdentity ? 'identity.profile.bound' : 'identity.profile.updated', user.id, { profileComplete: profileComplete(user), identityVerified: user.identityVerified === true });
       return response({ user: publicUser(user) });
     }
+    if (method === 'POST' && route === '/auth/password/forgot') {
+      if (!bearerBootstrap(request, path)) requireOrigin(request, env);
+      const body = await readJson(request, 8192);
+      await repo.throttle('password-forgot-client', clientId(context), 10, 600);
+      const studentId = normalizeStudentId(body.studentId);
+      const index = await repo.get(studentKey(studentId));
+      const user = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
+      // The answer is the same whether or not the student ID has an account, so it cannot be used to find accounts.
+      if (user?.status === 'active' && user.studentId === studentId) {
+        await repo.throttle('password-forgot-account', user.id, 1, 300);
+        const url = await mailLink(user, 'reset', '/login/', 30);
+        await mailer.deliver({ to: user.email, subject: 'StuDev 重设密码',
+          ...letter({ greeting: `${user.nickname}，你好：`, lines: ['有人（希望是你）申请重设 StuDev 账号的密码。点下面的按钮设置新密码，链接 30 分钟内有效，只能用一次。', '设置新密码后，所有设备都会退出登录。'], action: { label: '设置新密码', url }, footer: '如果不是你申请的，忽略这封信即可，密码不会改变。' }) });
+        await repo.audit(user.id, 'identity.password.reset_mailed', user.id);
+      }
+      return response({ ok: true, email: mailer.enabled });
+    }
+    if (method === 'POST' && route === '/auth/password/reset') {
+      if (!bearerBootstrap(request, path)) requireOrigin(request, env);
+      const body = await readJson(request, 8192);
+      await repo.throttle('password-reset-client', clientId(context), 10, 600);
+      const password = validatePassword(body.password);
+      const user = await spendToken('reset', body.token);
+      await saveUser(user, { passwordHash: await hashPassword(password), mustChangePassword: false, emailVerified: true, securityVersion: secretToken() });
+      await repo.audit(user.id, 'identity.password.reset_by_email', user.id);
+      await tellPasswordChanged(user);
+      return response({ ok: true, studentId: user.studentId });
+    }
+    if (method === 'POST' && route === '/auth/account/delete') {
+      const auth = await authenticate(request, { required: true, csrf: true });
+      const body = await readJson(request, 8192);
+      await repo.throttle('account-delete', auth.user.id, 3, 600);
+      if (auth.user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
+      if (!await verifyPassword(body.password, auth.user.passwordHash)) fail(401, 'PASSWORD_INVALID', '当前密码不正确。');
+      const url = await mailLink(auth.user, 'delete', '/login/', 30);
+      await mailer.deliver({ to: auth.user.email, subject: 'StuDev 确认注销账号',
+        ...letter({ greeting: `${auth.user.nickname}，你好：`, lines: ['你申请注销 StuDev 账号。点下面的按钮确认后，账号、学号绑定和登录设备会立即删除，无法恢复。', '链接 30 分钟内有效。'], action: { label: '确认注销', url }, footer: '如果不是你申请的，请忽略这封信，并尽快修改密码。' }) });
+      await repo.audit(auth.user.id, 'identity.delete.mailed', auth.user.id);
+      return response({ ok: true });
+    }
+    if (method === 'POST' && route === '/auth/account/delete/confirm') {
+      if (!bearerBootstrap(request, path)) requireOrigin(request, env);
+      const body = await readJson(request, 8192);
+      await repo.throttle('account-delete-client', clientId(context), 10, 600);
+      const user = await spendToken('delete', body.token);
+      await deleteUser(user);
+      await repo.audit(user.id, 'identity.user.deleted_by_self', user.id);
+      return signedOutResponse(bearerBootstrap(request, path) ? 'bearer' : 'cookie');
+    }
     if (method === 'POST' && route === '/auth/password') {
       const auth = await authenticate(request, { required: true, csrf: true, allowEnrollment: true });
       const body = await readJson(request, 8192);
@@ -464,6 +545,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       if (await verifyPassword(body.newPassword, auth.user.passwordHash)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
       await saveUser(auth.user, { passwordHash, mustChangePassword: false, securityVersion: secretToken() });
       await repo.audit(auth.user.id, 'identity.password.changed', auth.user.id);
+      await tellPasswordChanged(auth.user);
       return signedOutResponse(auth.kind);
     }
     if (method === 'POST' && route === '/auth/totp/setup') {
@@ -552,12 +634,7 @@ export function createIdentity({ repo, env, now = Date.now }) {
       const user = await loadUser(management[1]);
       if (auth.user.role !== 'owner' && user.role !== 'user') fail(403, 'OWNER_REQUIRED', '管理员账号由所有者管理。');
       if (management[2] === '/delete' || method === 'DELETE') {
-        if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
-        await repo.remove(`identity/qq/${user.qq}.json`);
-        if (user.studentId) await repo.remove(studentKey(user.studentId));
-        const userKeys = await repo.list(`identity/users/${user.id}`);
-        for (const k of userKeys) await repo.remove(k);
-        if (user.term) await rebuildRoster(user.term);
+        await deleteUser(user);
         await repo.audit(auth.user.id, 'identity.user.deleted', user.id, { studentId: user.studentId, qq: user.qq });
         return response({ ok: true });
       }

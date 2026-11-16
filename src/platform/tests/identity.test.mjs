@@ -11,7 +11,7 @@ const CHANGED = 'synthetic-owner-password-changed-123';
 const MEMBER_PASSWORD = 'synthetic-member-password-123';
 const ownerHash = await hashPassword(INITIAL);
 
-function fixture() {
+function fixture({ mailer } = {}) {
   let clock = Date.UTC(2026, 9, 21, 15);
   const values = new Map();
   const store = {
@@ -24,7 +24,7 @@ function fixture() {
     PLATFORM_SESSION_SECRET: 'synthetic-platform-session-secret-'.repeat(2), PLATFORM_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64') };
   const now = () => clock;
   const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET });
-  const identity = createIdentity({ repo, env, now });
+  const identity = createIdentity({ repo, env, now, ...(mailer ? { mailer } : {}) });
   const request = (route, method = 'GET', body, auth, extra = {}) => new Request(`${ORIGIN}/api/platform${route}`, { method, headers: { ...(method === 'POST' ? { 'Content-Type': 'application/json', Origin: ORIGIN } : {}), ...(auth ? { Cookie: auth.cookie, 'X-CSRF-Token': auth.csrfToken } : {}), ...extra }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
   async function call(route, method = 'GET', body, auth, extra = {}) {
     if (route === '/auth/login') body = { deviceId: crypto.randomUUID(), deviceName: '测试浏览器', ...body };
@@ -346,4 +346,80 @@ test('pre-recorded staff use managed password and status operations to activate,
   const login = await f.call('/auth/login', 'POST', { studentId: 'STAFF00001', password: MEMBER_PASSWORD });
   assert.equal(login.user.role, 'admin'); assert.equal(login.passwordChangeRequired, true);
   await rejects(f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, login), { staff: true }), 'AUTH_SETUP_REQUIRED', 403);
+});
+
+function postbox() {
+  const sent = [];
+  return { sent, mailer: { enabled: true, async deliver(message) { sent.push(message); } }, link: (purpose) => sent.at(-1).text.match(new RegExp(`\\?${purpose}=([A-Za-z0-9_-]{43})`))[1] };
+}
+
+test('a reset link mailed to the account sets a new password once, signs every device out and proves the inbox', async () => {
+  const box = postbox();
+  const { call, member, advance } = fixture({ mailer: box.mailer });
+  const auth = await member('10000333');
+  const unknown = await call('/auth/password/forgot', 'POST', { studentId: 'NOSUCH123' });
+  assert.equal(unknown.status, 200);
+  assert.equal(box.sent.filter((m) => m.subject === 'StuDev 重设密码').length, 0);
+  const asked = await call('/auth/password/forgot', 'POST', { studentId: auth.user.studentId });
+  assert.equal(asked.status, 200);
+  const letter = box.sent.at(-1);
+  assert.equal(letter.to, '10000333@qq.com');
+  assert.match(letter.text, /https:\/\/studev\.example\.test\/login\/\?reset=/);
+  const token = box.link('reset');
+  await rejects(call('/auth/password/forgot', 'POST', { studentId: auth.user.studentId }), 'RATE_LIMITED', 429);
+  const reset = await call('/auth/password/reset', 'POST', { token, password: 'a-brand-new-password-456' });
+  assert.equal(reset.status, 200);
+  assert.equal(reset.studentId, auth.user.studentId);
+  await assert.rejects(call('/auth/session', 'GET', undefined, auth));
+  await rejects(call('/auth/password/reset', 'POST', { token, password: 'another-password-7890' }), 'LINK_INVALID');
+  const fresh = await call('/auth/login', 'POST', { studentId: auth.user.studentId, password: 'a-brand-new-password-456' });
+  assert.equal(fresh.status, 200);
+  assert.equal(fresh.user.emailVerified, true);
+  advance(6 * 60_000);
+  await call('/auth/password/forgot', 'POST', { studentId: auth.user.studentId });
+  const late = box.link('reset');
+  advance(31 * 60_000);
+  await rejects(call('/auth/password/reset', 'POST', { token: late, password: 'too-late-password-123' }), 'LINK_INVALID');
+});
+
+test('a password change makes an earlier reset link useless', async () => {
+  const box = postbox();
+  const { call, member } = fixture({ mailer: box.mailer });
+  const auth = await member('10000444');
+  await call('/auth/password/forgot', 'POST', { studentId: auth.user.studentId });
+  const token = box.link('reset');
+  await call('/auth/password', 'POST', { currentPassword: MEMBER_PASSWORD, newPassword: 'changed-in-the-meantime-1' }, auth);
+  await rejects(call('/auth/password/reset', 'POST', { token, password: 'hijacked-password-1234' }), 'LINK_INVALID');
+});
+
+test('a student deletes their own account only through the link mailed after giving the password', async () => {
+  const box = postbox();
+  const { call, member, owner } = fixture({ mailer: box.mailer });
+  const auth = await member('10000555');
+  await rejects(call('/auth/account/delete', 'POST', { password: 'wrong-password-000' }, auth), 'PASSWORD_INVALID');
+  assert.equal((await call('/auth/account/delete', 'POST', { password: MEMBER_PASSWORD }, auth)).status, 200);
+  assert.equal(box.sent.at(-1).subject, 'StuDev 确认注销账号');
+  const token = box.link('delete');
+  await rejects(call('/auth/account/delete/confirm', 'POST', { token: 'x'.repeat(43) }), 'LINK_INVALID');
+  assert.equal((await call('/auth/account/delete/confirm', 'POST', { token })).status, 200);
+  await assert.rejects(call('/auth/session', 'GET', undefined, auth));
+  await rejects(call('/auth/login', 'POST', { studentId: auth.user.studentId, password: MEMBER_PASSWORD }), 'LOGIN_FAILED');
+  const again = await call('/auth/register', 'POST', { qq: '10000555', password: MEMBER_PASSWORD, studentId: auth.user.studentId });
+  assert.equal(again.status, 201);
+  const own = await owner();
+  await rejects(call('/auth/account/delete', 'POST', { password: CHANGED, totp: '' }, own), 'CANNOT_DELETE_OWNER');
+});
+
+test('every password change or reset mails the account, and a mail failure never undoes the change', async () => {
+  const box = postbox();
+  const { call, member } = fixture({ mailer: box.mailer });
+  const auth = await member('10000666');
+  await call('/auth/password', 'POST', { currentPassword: MEMBER_PASSWORD, newPassword: 'changed-password-0001' }, auth);
+  assert.equal(box.sent.at(-1).subject, 'StuDev 密码已修改');
+  assert.equal(box.sent.at(-1).to, '10000666@qq.com');
+  assert.equal(box.sent.filter((m) => /注册/.test(m.subject)).length, 0);
+  const broken = fixture({ mailer: { enabled: true, async deliver() { throw new Error('down'); } } });
+  const other = await broken.member('10000777');
+  assert.equal((await broken.call('/auth/password', 'POST', { currentPassword: MEMBER_PASSWORD, newPassword: 'changed-password-0002' }, other)).status, 200);
+  assert.equal((await broken.call('/auth/config')).emailDeliveryEnabled, true);
 });

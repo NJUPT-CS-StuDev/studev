@@ -225,6 +225,8 @@ function renderIdCard(user: User) {
     refreshAvatarBtn.addEventListener('click', () => {
       avatarCacheBust = String(Date.now());
       renderIdCard(user);
+  q('[data-delete-email]').textContent = user.email || '';
+  q('[data-account-delete]').hidden = user.role === 'owner';
       if (members.length) renderMembers();
       message(status, '已从腾讯官方 CDN 同步最新 1080P 高清头像。', 'success');
     });
@@ -663,6 +665,20 @@ q<HTMLFormElement>('[data-password-form]').addEventListener('submit', async (e) 
       });
       q<HTMLFormElement>('[data-password-form]').reset();
       location.assign('/login/?next=%2Faccount%2F');
+    });
+  } catch (e) {
+    message(status, errorText(e), 'error');
+  }
+});
+
+q<HTMLFormElement>('[data-delete-request]').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget as HTMLFormElement;
+  try {
+    await busy(q<HTMLButtonElement>('button[type=submit]', form), async () => {
+      await api('/auth/account/delete', { password: q<HTMLInputElement>('#delete-password').value });
+      form.reset();
+      message(status, `注销确认信已发到 ${current?.user.email || '你的 QQ 邮箱'}，30 分钟内点信里的按钮完成注销。`, 'success');
     });
   } catch (e) {
     message(status, errorText(e), 'error');
