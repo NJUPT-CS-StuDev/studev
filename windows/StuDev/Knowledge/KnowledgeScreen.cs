@@ -35,14 +35,20 @@ public sealed partial class KnowledgeScreen : Screen
     private string categoryFilter = "全部";
     private string natureFilter = "全部";
     private string gradeFilter = "全部";
-    private string majorFilter = "全部专业";
+    private string majorFilter = "";
     private string cohortFilter = "";
+    private string relationFocus = "all";
+    private string? personalClass;
 
     public KnowledgeScreen()
     {
         Children.Add(host);
         Paint.Turned += Render;
-        campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (!ReferenceEquals(repository, campus.Repository)) _ = Load(); });
+        personalClass = campus.Preferences.Class;
+        campus.Changed += () => DispatcherQueue.TryEnqueue(() => {
+            if (!ReferenceEquals(repository, campus.Repository)) _ = Load();
+            else if (personalClass != campus.Preferences.Class) { personalClass = campus.Preferences.Class; Render(); }
+        });
         _ = Load();
     }
 
@@ -65,6 +71,8 @@ public sealed partial class KnowledgeScreen : Screen
         if (hashAt >= 0) { hash = Uri.UnescapeDataString(url[(hashAt + 1)..]); main = url[..hashAt]; }
         var qAt = main.IndexOf('?');
         string? c = null, t = null, m = null;
+        query = ""; homeView = "list"; categoryFilter = "全部"; natureFilter = "全部"; gradeFilter = "全部";
+        majorFilter = ""; cohortFilter = ""; relationFocus = "all";
         if (qAt >= 0)
         {
             foreach (var part in main[(qAt + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries))
@@ -76,6 +84,14 @@ public sealed partial class KnowledgeScreen : Screen
                 if (k == "course") c = v;
                 else if (k == "topic") t = v;
                 else if (k == "material") m = v;
+                else if (k == "cohort") cohortFilter = v;
+                else if (k == "major") majorFilter = v;
+                else if (k == "grade") gradeFilter = v;
+                else if (k == "category") categoryFilter = v;
+                else if (k == "nature") natureFilter = v;
+                else if (k == "view") homeView = v == "graph" ? "graph" : "list";
+                else if (k == "focus") relationFocus = v;
+                else if (k == "q") query = v;
             }
         }
         Open(c, t, m, hash.Length > 0 ? hash : null);
@@ -145,7 +161,7 @@ public sealed partial class KnowledgeScreen : Screen
         host.Children.Clear();
         if (failed)
         {
-            host.Children.Add(Pages.Frame(Pages.Empty("知识暂时无法加载", Kit.Action("重试", () => _ = Load(), go: true))));
+            host.Children.Add(Pages.Frame(Pages.Empty("知识暂时无法加载", Kit.TextAction("重试", () => _ = Load(), Icons.Again))));
             return;
         }
         if (knowledge is null)
@@ -167,8 +183,12 @@ public sealed partial class KnowledgeScreen : Screen
     {
         var byCode = curriculum.ToDictionary(c => c.Code);
         var cohorts = curriculum.SelectMany(c => c.Plans.Select(p => p.Grade)).Distinct().OrderDescending().ToList();
-        var planYear = cohortFilter.Length > 0 ? cohortFilter : cohorts.FirstOrDefault() ?? "";
-        bool InPlan(CurriculumEntry p) => p.Grade == planYear && (majorFilter == "全部专业" || p.Major == majorFilter)
+        var person = campus.Classes.FirstOrDefault(item => item.Id == campus.Preferences.Class);
+        var planYear = cohorts.Contains(cohortFilter) ? cohortFilter : person?.Grade is { } year && cohorts.Contains(year) ? year : cohorts.FirstOrDefault() ?? "";
+        var majorsInPlan = curriculum.SelectMany(course => course.Plans.Where(plan => plan.Grade == planYear).Select(plan => plan.Major)).Distinct().ToList();
+        var wantedMajor = majorFilter.Length > 0 ? majorFilter : person?.Major;
+        var major = wantedMajor is not null && majorsInPlan.Contains(wantedMajor) ? wantedMajor : "全部专业";
+        bool InPlan(CurriculumEntry p) => p.Grade == planYear && (major == "全部专业" || p.Major == major)
             && (categoryFilter == "全部" || p.Category == categoryFilter) && (natureFilter == "全部" || p.Nature == natureFilter);
         var compiledByCode = new Dictionary<string, KnowledgeCourse>();
         foreach (var c in idx.Courses) foreach (var code in c.Codes.Concat(c.Former)) compiledByCode.TryAdd(code, c);
@@ -187,40 +207,84 @@ public sealed partial class KnowledgeScreen : Screen
         }
 
         var preferredMajors = new[] { "计算机科学与技术", "软件工程", "信息安全", "计算机科学与技术(创新班)" };
-        var allMajors = new List<string> { "全部专业" };
-        var foundMajors = curriculum.SelectMany(c => c.Plans.Select(p => p.Major)).Distinct().ToList();
-        allMajors.AddRange(preferredMajors.Where(foundMajors.Contains));
-        allMajors.AddRange(foundMajors.Where(m => !preferredMajors.Contains(m)));
+        List<string> MajorsFor(string cohortYear)
+        {
+            var found = curriculum.SelectMany(course => course.Plans.Where(plan => plan.Grade == cohortYear).Select(plan => plan.Major)).Distinct().ToList();
+            return ["全部专业", .. preferredMajors.Where(found.Contains), .. found.Where(item => !preferredMajors.Contains(item))];
+        }
 
         var rootCol = new StackPanel { Spacing = 14 };
         var results = new StackPanel { Spacing = 14 };
-        rootCol.Children.Add(Pages.Header("知识", "按培养方案与学期组织的知识体系，每门课连着先修依赖、课程资料。"));
+        rootCol.Children.Add(Pages.Header("知识", ""));
 
         var topRow = new Grid { ColumnSpacing = 12 };
-        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 380 });
+        topRow.ColumnDefinitions.Add(new ColumnDefinition());
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var searchBox = Kit.Field(query, "筛选课程名称、课程代码或章节…", "筛选课程");
+        var searchBox = Kit.Field(query, homeView == "graph" ? "搜索课程或代码" : "搜索课程、代码或章节", "筛选课程");
         searchBox.TextChanged += (_, _) => { query = searchBox.Text; RenderResults(); };
-        topRow.Children.Add(searchBox);
-        var modeSwitch = Kit.Choice([("list", "按学期看"), ("graph", "培养方案依赖图")], homeView, v => { homeView = v; Render(); });
-        Grid.SetColumn(modeSwitch, 1);
+        rootCol.Children.Add(Kit.SearchField(searchBox));
+        var modeSwitch = Kit.Choice([("list", "课程目录"), ("graph", "课程关系")], homeView, v => { homeView = v; Render(); });
         topRow.Children.Add(modeSwitch);
+        var filterButton = Kit.TextAction("筛选", ShowFilters);
+        Grid.SetColumn(filterButton, 1); topRow.Children.Add(filterButton);
         rootCol.Children.Add(topRow);
+        var filterCount = new[] { gradeFilter, categoryFilter, natureFilter }.Count(value => value != "全部");
+        rootCol.Children.Add(Kit.Text($"{planYear}级 · {major}{(filterCount > 0 ? $" · {filterCount}项筛选" : "")}", Role.Caption, "muted", wrap: true));
 
-        var filterWrap = new WrapRow { Gap = 8 };
-        var cohortBox = new ComboBox { ItemsSource = cohorts, SelectedItem = planYear, Header = "培养方案入学年份" };
-        cohortBox.SelectionChanged += (_, _) => { if (cohortBox.SelectedItem is string year && year != planYear) { cohortFilter = year; Render(); } };
-        filterWrap.Children.Add(cohortBox);
-        foreach (var (gVal, gLabel) in new[] { ("全部", "全部年级"), ("大一", "大一"), ("大二", "大二"), ("大三", "大三"), ("大四", "大四") })
-            filterWrap.Children.Add(Kit.Pick(gLabel, gradeFilter == gVal, () => { gradeFilter = gVal; Render(); }, 30));
-        foreach (var cat in new[] { "全部", "专业基础课", "专业课", "通识教育课" })
-            filterWrap.Children.Add(Kit.Pick(cat, categoryFilter == cat, () => { categoryFilter = cat; Render(); }, 30));
-        foreach (var (val, label) in new[] { ("全部", "全部性质"), ("必修", "必修"), ("限选", "限选") })
-            filterWrap.Children.Add(Kit.Pick(label, natureFilter == val, () => { natureFilter = val; Render(); }, 30));
-        var majorBox = new ComboBox { ItemsSource = allMajors, SelectedItem = majorFilter, Height = 30 };
-        majorBox.SelectionChanged += (_, _) => { if (majorBox.SelectedItem is string s && s != majorFilter) { majorFilter = s; Render(); } };
-        filterWrap.Children.Add(majorBox);
-        rootCol.Children.Add(filterWrap);
+        void ShowFilters()
+        {
+            var draftCohort = planYear; var draftMajor = major;
+            var draftGrade = gradeFilter; var draftCategory = categoryFilter; var draftNature = natureFilter;
+            var inheritCohort = cohortFilter.Length == 0; var inheritMajor = majorFilter.Length == 0;
+            var updating = false;
+            var body = new StackPanel { Padding = new Thickness(20, 18, 20, 22), Spacing = 14 };
+            body.Children.Add(Pages.SheetHead(Pages.SheetTitle("筛选课程"), () => App.Window?.Close()));
+            ComboBox Field(string label, List<string> items, string selected)
+            {
+                var box = new ComboBox { Header = label, ItemsSource = items, SelectedItem = selected, HorizontalAlignment = HorizontalAlignment.Stretch };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, label);
+                body.Children.Add(box); return box;
+            }
+            var cohortBox = Field("入学年份", cohorts, draftCohort);
+            var majorBox = Field("专业", MajorsFor(draftCohort), draftMajor);
+            var gradeBox = Field("学年", ["全部", "大一", "大二", "大三", "大四"], draftGrade);
+            var categoryBox = Field("课程类别", ["全部", "专业基础课", "专业课", "通识教育课"], draftCategory);
+            var natureBox = Field("修读要求", ["全部", "必修", "限选"], draftNature);
+            void UpdateMajors()
+            {
+                var options = MajorsFor(draftCohort);
+                var wanted = inheritMajor ? person?.Major : draftMajor;
+                draftMajor = wanted is not null && options.Contains(wanted) ? wanted : "全部专业";
+                majorBox.ItemsSource = options; majorBox.SelectedItem = draftMajor;
+            }
+            cohortBox.SelectionChanged += (_, _) => {
+                if (updating || cohortBox.SelectedItem is not string value || value == draftCohort) return;
+                draftCohort = value; inheritCohort = false;
+                updating = true; UpdateMajors(); updating = false;
+            };
+            majorBox.SelectionChanged += (_, _) => { if (!updating && majorBox.SelectedItem is string value) { draftMajor = value; inheritMajor = false; } };
+            gradeBox.SelectionChanged += (_, _) => { if (!updating && gradeBox.SelectedItem is string value) draftGrade = value; };
+            categoryBox.SelectionChanged += (_, _) => { if (!updating && categoryBox.SelectedItem is string value) draftCategory = value; };
+            natureBox.SelectionChanged += (_, _) => { if (!updating && natureBox.SelectedItem is string value) draftNature = value; };
+            var footer = new Grid { ColumnSpacing = 14, Margin = new Thickness(0, 8, 0, 0) };
+            footer.ColumnDefinitions.Add(new ColumnDefinition()); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var reset = Kit.TextAction("重置", () => {
+                updating = true; inheritCohort = true; inheritMajor = true;
+                draftCohort = person?.Grade is { } defaultYear && cohorts.Contains(defaultYear) ? defaultYear : cohorts.FirstOrDefault() ?? "";
+                cohortBox.SelectedItem = draftCohort; UpdateMajors();
+                draftGrade = draftCategory = draftNature = "全部";
+                gradeBox.SelectedItem = draftGrade; categoryBox.SelectedItem = draftCategory; natureBox.SelectedItem = draftNature;
+                updating = false;
+            }, colour: "muted");
+            reset.HorizontalAlignment = HorizontalAlignment.Left; footer.Children.Add(reset);
+            var actions = Kit.Line(14, Kit.TextAction("取消", () => App.Window?.Close(), colour: "muted"), Kit.Action("应用筛选", () => {
+                cohortFilter = inheritCohort ? "" : draftCohort; majorFilter = inheritMajor ? "" : draftMajor;
+                gradeFilter = draftGrade; categoryFilter = draftCategory; natureFilter = draftNature;
+                relationFocus = "all"; App.Window?.Close(); Render();
+            }, go: true));
+            Grid.SetColumn(actions, 1); footer.Children.Add(actions); body.Children.Add(footer);
+            App.Window?.Sheet(body, 520);
+        }
 
         void RenderResults()
         {
@@ -232,7 +296,7 @@ public sealed partial class KnowledgeScreen : Screen
                 var meta = metaMap[c.Id];
                 if (categoryFilter != "全部" && !meta.Cats.Contains(categoryFilter)) return false;
                 if (natureFilter != "全部" && !meta.Nats.Contains(natureFilter)) return false;
-                if (majorFilter != "全部专业" && !meta.Majs.Contains(majorFilter)) return false;
+                if (major != "全部专业" && !meta.Majs.Contains(major)) return false;
                 if (gradeNum > 0 && !meta.Terms.Any(t => (t + 1) / 2 == gradeNum)) return false;
                 if (q.Length == 0) return true;
                 return c.Name.ToLowerInvariant().Contains(q)
@@ -242,40 +306,48 @@ public sealed partial class KnowledgeScreen : Screen
 
             if (homeView == "graph")
             {
-                var scoped = curriculum.Where(item => item.Plans.Any(InPlan)).ToList();
-                var scopedCodes = scoped.Select(i => i.Code).ToHashSet();
-                var nodes = scoped.Where(item => (q.Length == 0 || item.Name.ToLowerInvariant().Contains(q) || item.Code.ToLowerInvariant().Contains(q))).ToList();
-                var nodeSet = nodes.Select(n => n.Code).ToHashSet();
-                foreach (var n in nodes.ToList())
-                    foreach (var r in n.Requires)
-                        if (scopedCodes.Contains(r) && !nodeSet.Contains(r) && byCode.TryGetValue(r, out var reqCourse)) { nodes.Add(reqCourse); nodeSet.Add(r); }
-
+                var selected = curriculum.Where(item => item.Plans.Any(p => InPlan(p) && (gradeNum == 0 || p.Term.HasValue && (p.Term.Value + 1) / 2 == gradeNum))
+                    && (q.Length == 0 || item.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || item.Code.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+                var selectedCodes = selected.Select(course => course.Code).ToHashSet();
+                var edges = curriculum.SelectMany(course => course.Requires.Where(byCode.ContainsKey).Select(code => (From: code, To: course.Code)))
+                    .Where(edge => selectedCodes.Contains(edge.From) || selectedCodes.Contains(edge.To)).ToList();
+                var connected = edges.SelectMany(edge => new[] { edge.From, edge.To }).ToHashSet();
+                var choices = selected.Where(course => connected.Contains(course.Code)).ToList();
+                var focus = choices.Any(course => course.Code == relationFocus) ? relationFocus : "all";
+                var focusBox = new ComboBox { Header = "查看课程", MinWidth = 220 };
+                focusBox.Items.Add(new ComboBoxItem { Content = "全部关系", Tag = "all" });
+                foreach (var c in choices) focusBox.Items.Add(new ComboBoxItem { Content = c.Name, Tag = c.Code });
+                focusBox.SelectedItem = focusBox.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == focus);
+                focusBox.SelectionChanged += (_, _) => { if (focusBox.SelectedItem is ComboBoxItem { Tag: string code } && code != focus) { relationFocus = code; RenderResults(); } };
+                results.Children.Add(focusBox);
+                var shown = focus == "all" ? edges : edges.Where(edge => edge.From == focus || edge.To == focus).ToList();
+                var nodeSet = shown.SelectMany(edge => new[] { edge.From, edge.To }).ToHashSet();
+                var nodes = curriculum.Where(course => nodeSet.Contains(course.Code)).ToList();
                 var md = new StringBuilder();
                 md.AppendLine("```mermaid");
                 md.AppendLine("flowchart LR");
-                List<KnowledgeCourse> linkedCourses;
-                {
-                    var idOf = nodes.Select((n, i) => (n.Code, Id: $"P{i}")).ToDictionary(x => x.Code, x => x.Id);
-                    foreach (var n in nodes) md.AppendLine($"  {idOf[n.Code]}[\"{SafeMermaidLabel(n.Name)}\"]");
-                    foreach (var n in nodes) foreach (var req in n.Requires) if (idOf.TryGetValue(req, out var fromId)) md.AppendLine($"  {fromId} --> {idOf[n.Code]}");
-                    linkedCourses = nodes.Select(n => compiledByCode.GetValueOrDefault(n.Code)).Where(c => c is not null).Cast<KnowledgeCourse>().DistinctBy(c => c.Id).ToList();
-                }
+                var idOf = nodes.Select((n, i) => (n.Code, Id: $"P{i}")).ToDictionary(x => x.Code, x => x.Id);
+                foreach (var n in nodes) md.AppendLine($"  {idOf[n.Code]}[\"{SafeMermaidLabel(n.Name)}\"]");
+                foreach (var edge in shown) md.AppendLine($"  {idOf[edge.From]} --> {idOf[edge.To]}");
+                var linkedCourses = nodes.Select(n => compiledByCode.GetValueOrDefault(n.Code)).Where(c => c is not null).Cast<KnowledgeCourse>().DistinctBy(c => c.Id).ToList();
                 md.AppendLine("```");
 
-                var card = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(18) };
+                var card = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Paint.Number("radius", "card")), Padding = new Thickness(18) };
                 var graphStack = new StackPanel { Spacing = 14 };
-                graphStack.Children.Add(Doc.Make(Doc.Read(nodes.Count > 0 ? md.ToString() : "当前筛选没有培养方案课程。")));
+                graphStack.Children.Add(Kit.Text("箭头表示作者整理的建议先修顺序，学期安排以培养方案为准。", Role.Caption, "muted", wrap: true));
+                graphStack.Children.Add(Doc.Make(Doc.Read(shown.Count > 0 ? md.ToString() : "当前筛选暂无已收录的先修关系。课程仍可在课程目录查看。")));
+                if (selected.Any(course => !connected.Contains(course.Code)) && shown.Count > 0) graphStack.Children.Add(Kit.Text("仅显示已收录的关系，未连线课程仍可在课程目录查看。", Role.Caption, "muted", wrap: true));
                 if (linkedCourses.Count > 0)
                 {
                     graphStack.Children.Add(Kit.Hairline());
-                    graphStack.Children.Add(Kit.Text("图中有已编译资料的课程（点击进入）", Role.Caption, "muted"));
+                    graphStack.Children.Add(Kit.Text("查看课程内容", Role.Caption, "muted"));
                     var pills = new WrapRow { Gap = 8 };
                     foreach (var c in linkedCourses)
                     {
                         var t = ToneOf(c.Id);
                         var pill = new Tap(Paint.Tone(t, "bg"), Paint.ToneFaded(t, "bg", .85))
                         {
-                            CornerRadius = new CornerRadius(8), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(1),
+                            MinHeight = 32, CornerRadius = Kit.Capsule(32), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(1),
                             Padding = new Thickness(11, 5, 11, 5), Content = Kit.Text(c.Name, Role.Label),
                         };
                         ((TextBlock)pill.Content).Foreground = Paint.Tone(t, "fg");
@@ -284,6 +356,12 @@ public sealed partial class KnowledgeScreen : Screen
                         pills.Children.Add(pill);
                     }
                     graphStack.Children.Add(pills);
+                }
+                var planned = nodes.Where(node => !compiledByCode.ContainsKey(node.Code)).ToList();
+                if (planned.Count > 0)
+                {
+                    var unavailable = new Expander { Header = $"{planned.Count} 门课程暂未收录内容", Content = Kit.Text(string.Join("、", planned.Select(node => node.Name)), Role.Label, "muted", wrap: true), HorizontalAlignment = HorizontalAlignment.Stretch };
+                    graphStack.Children.Add(unavailable);
                 }
                 card.Child = graphStack;
                 results.Children.Add(card);
@@ -323,7 +401,7 @@ public sealed partial class KnowledgeScreen : Screen
                         stack.Children.Add(Kit.Text($"{chCount} 章 · {topicsCount} 个知识点 · {matsCount} 份资料", Role.Caption, "muted"));
                         var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
                         {
-                            CornerRadius = new CornerRadius(10), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
+                            CornerRadius = new CornerRadius(Paint.Number("radius", "card")), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
                             Padding = new Thickness(16, 14, 16, 14), Content = stack,
                         };
                         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, c.Name);
@@ -343,8 +421,9 @@ public sealed partial class KnowledgeScreen : Screen
     private void RenderDetail(KnowledgeIndex idx, KnowledgeCourse course, KnowledgeTopic? topic, KnowledgeMaterial? material)
     {
         var t = ToneOf(course.Id);
+        var courseHome = topic is null && material is null;
         var layout = new Grid { MaxWidth = 1440, HorizontalAlignment = HorizontalAlignment.Stretch, ColumnSpacing = 28, Padding = new Thickness(24, 16, 24, 32) };
-        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });
+        if (!courseHome) layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 780 });
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
 
@@ -391,7 +470,7 @@ public sealed partial class KnowledgeScreen : Screen
             leftTree.Children.Add(msec);
         }
         var leftScroll = new ScrollViewer { Content = leftTree, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        layout.Children.Add(leftScroll);
+        if (topic is not null || material is not null) layout.Children.Add(leftScroll);
 
         // Middle: Main content + below tested questions
         var midStack = new StackPanel { Spacing = 14 };
@@ -404,7 +483,7 @@ public sealed partial class KnowledgeScreen : Screen
         var relPath = topic?.Path ?? material?.Path ?? course.Path;
         _ = LoadDocument(contentHost, idx, course, topic, material, relPath, t);
         var midScroll = new ScrollViewer { Content = midStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetColumn(midScroll, 1);
+        Grid.SetColumn(midScroll, courseHome ? 0 : 1);
         layout.Children.Add(midScroll);
 
         // Right: Knowledge graph relations (or material/course sidebar)
@@ -430,29 +509,40 @@ public sealed partial class KnowledgeScreen : Screen
                     mini.AppendLine($"  CUR --> L{i}");
                 }
                 mini.AppendLine("```");
-                var rHead = Kit.Text("知识图谱关系", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
+                var rHead = Kit.Text("相关知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
                 rightStack.Children.Add(rHead);
-                var gCard = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(8) };
+                var gCard = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Paint.Number("radius", "card")), Padding = new Thickness(8) };
                 gCard.Child = Doc.Make(Doc.Read(mini.ToString()));
                 rightStack.Children.Add(gCard);
             }
-            if (topic.Requires.Count > 0)
+            void Related(string label, List<string> ids)
             {
-                var rHead = Kit.Text("先要懂", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
-                rightStack.Children.Add(rHead);
-                foreach (var id in topic.Requires) rightStack.Children.Add(RelLink(idx.Topics.FirstOrDefault(x => x.Id == id)?.Title ?? id, () => Open(course: course.Id, topic: id)));
+                if (ids.Count == 0) return;
+                var section = new StackPanel { Spacing = 3 };
+                var heading = Kit.Text(label, Role.Caption); heading.Foreground = Paint.Tone(t, "fg"); section.Children.Add(heading);
+                var links = new StackPanel(); section.Children.Add(links);
+                var expanded = false;
+                Tap? toggle = null;
+                void DrawLinks()
+                {
+                    links.Children.Clear();
+                    foreach (var id in expanded ? ids : ids.Take(5)) links.Children.Add(RelLink(idx.Topics.FirstOrDefault(x => x.Id == id)?.Title ?? id, () => Open(course: course.Id, topic: id)));
+                    if (toggle is not null) {
+                        var label = expanded ? "收起" : $"展开全部 {ids.Count} 个";
+                        toggle.Content = Kit.Text(label, Role.Label);
+                        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, label);
+                    }
+                }
+                if (ids.Count > 5) { toggle = Kit.Button($"展开全部 {ids.Count} 个", () => { expanded = !expanded; DrawLinks(); }); toggle.HorizontalAlignment = HorizontalAlignment.Left; section.Children.Add(toggle); }
+                DrawLinks(); rightStack.Children.Add(section);
             }
-            if (topic.LeadsTo.Count > 0)
-            {
-                var rHead = Kit.Text("用到它的", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
-                rightStack.Children.Add(rHead);
-                foreach (var id in topic.LeadsTo) rightStack.Children.Add(RelLink(idx.Topics.FirstOrDefault(x => x.Id == id)?.Title ?? id, () => Open(course: course.Id, topic: id)));
-            }
+            Related("先要懂", topic.Requires);
+            Related("用到它的", topic.LeadsTo);
             if (topic.Requires.Count == 0 && topic.LeadsTo.Count == 0)
             {
-                var rHead = Kit.Text("知识图谱关系", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
+                var rHead = Kit.Text("相关知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
                 rightStack.Children.Add(rHead);
-                rightStack.Children.Add(Kit.Text("本知识点暂无前后置关联", Role.Label, "muted"));
+                rightStack.Children.Add(Kit.Text("暂未收录相关知识点", Role.Label, "muted"));
             }
         }
         else if (material is not null)
@@ -469,7 +559,7 @@ public sealed partial class KnowledgeScreen : Screen
             foreach (var m in courseMats) rightStack.Children.Add(RelLink($"{m.Title} ({(m.Sections > 0 ? $"{m.Sections} 处关联" : m.Kind)})", () => Open(course: course.Id, material: m.Path)));
         }
         var rightScroll = new ScrollViewer { Content = rightStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetColumn(rightScroll, 2);
+        Grid.SetColumn(rightScroll, courseHome ? 1 : 2);
         layout.Children.Add(rightScroll);
 
         host.Children.Add(layout);
@@ -480,6 +570,109 @@ public sealed partial class KnowledgeScreen : Screen
         var tap = new Tap(Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 5, 8, 5), Content = Kit.Text(label, Role.Label, wrap: true) };
         tap.Click += (_, _) => act();
         return tap;
+    }
+
+    private sealed class ReferencePreview(string title, string context)
+    {
+        public string Title { get; } = title;
+        public string Context { get; } = context;
+        public string Excerpt { get; set; } = "";
+    }
+
+    private static Dictionary<string, ReferencePreview> ReferencePreviews(List<JsonObject> blocks)
+    {
+        static string Plain(JsonArray? inlines) => inlines is null ? "" : string.Concat(inlines.Select(inline => inline is null ? "" :
+            (string?)inline["type"] is "text" or "code" ? (string?)inline["text"] ?? "" : (string?)inline["type"] == "math" ? (string?)inline["tex"] ?? "" : Plain(inline["children"] as JsonArray)));
+        var found = new Dictionary<string, ReferencePreview>();
+        var headings = new List<(int Level, string Title)>();
+        ReferencePreview? current = null;
+        foreach (var keyed in blocks)
+        {
+            if (keyed["block"] is not JsonObject block) continue;
+            if ((string?)block["type"] == "heading")
+            {
+                var level = (int?)block["level"] ?? 1;
+                while (headings.Count > 0 && headings[^1].Level >= level) headings.RemoveAt(headings.Count - 1);
+                var title = Plain(block["inlines"] as JsonArray);
+                current = new(title, string.Join(" › ", headings.Where(heading => heading.Level > 1).Select(heading => heading.Title)));
+                found[(string)block["anchor"]!] = current;
+                headings.Add((level, title));
+            }
+            else if ((string?)block["type"] == "paragraph" && current is { Excerpt.Length: 0 })
+            {
+                var text = Plain(block["inlines"] as JsonArray).Trim();
+                if (Regex.IsMatch(text, "^(?:答案|参考解答|订正|补充|知识点)(?:[：:（(]|$)")) current = null;
+                else if (text.Length > 0)
+                {
+                    text = Regex.Replace(text, "^题干[：:]\\s*", "");
+                    current.Excerpt = text[..Math.Min(160, text.Length)];
+                }
+            }
+        }
+        return found;
+    }
+
+    private UIElement ReferenceGroup(Repository repo, string path, List<MaterialRef> refs, string title, string course, int tone, Func<bool> current)
+    {
+        var group = new StackPanel { Spacing = 6 };
+        var header = new Grid { ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(Kit.Text(title, Role.Label, bold: true, wrap: true));
+        var count = Kit.Text($"{refs.Count} 处", Role.Caption, "muted"); Grid.SetColumn(count, 1); header.Children.Add(count);
+        group.Children.Add(header);
+        var previewStatus = new StackPanel { Spacing = 4 }; group.Children.Add(previewStatus);
+        var rows = new StackPanel { Spacing = 2 };
+        group.Children.Add(rows);
+        var expanded = false;
+        var previews = new Dictionary<string, ReferencePreview>();
+        Tap? toggle = null;
+        void DrawRows()
+        {
+            rows.Children.Clear();
+            foreach (var reference in expanded ? refs : refs.Take(3))
+            {
+                previews.TryGetValue(reference.Anchor, out var preview);
+                var name = preview is null ? reference.Heading : string.Join(" · ", new[] { preview.Context, preview.Title }.Where(value => value.Length > 0));
+                var content = new StackPanel { Spacing = 4 };
+                var heading = Kit.Text(name, Role.Label, wrap: true); heading.Foreground = Paint.Tone(tone, "fg"); content.Children.Add(heading);
+                if (preview?.Excerpt is { Length: > 0 } excerpt) content.Children.Add(Kit.Text(excerpt, Role.Caption, "muted", wrap: true));
+                var row = new Tap(Paint.Clear, Paint.Brush("surface")) { Padding = new Thickness(8, 8, 8, 8), CornerRadius = new CornerRadius(6), Content = content };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, $"{name}{(preview?.Excerpt is { Length: > 0 } brief ? $" · {brief}" : "")}");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(row, $"knowledge-reference:{path}#{reference.Anchor}");
+                row.Click += (_, _) => Open(course: course, material: path, anchor: reference.Anchor);
+                rows.Children.Add(row);
+            }
+            if (toggle is not null) {
+                var label = expanded ? "收起" : $"展开全部 {refs.Count} 处";
+                toggle.Content = Kit.Text(label, Role.Label);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, label);
+            }
+        }
+        if (refs.Count > 3)
+        {
+            toggle = Kit.Button($"展开全部 {refs.Count} 处", () => { expanded = !expanded; DrawRows(); });
+            toggle.HorizontalAlignment = HorizontalAlignment.Left; group.Children.Insert(1, toggle);
+        }
+        DrawRows();
+        _ = LoadPreviews();
+        async Task LoadPreviews()
+        {
+            previewStatus.Children.Clear();
+            try
+            {
+                var text = Encoding.UTF8.GetString(await repo.Bytes($"knowledge/{path}"));
+                if (!current()) return;
+                previews = ReferencePreviews(Doc.Read(text));
+                DrawRows();
+            }
+            catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException) {
+                if (!current()) return;
+                System.Diagnostics.Trace.TraceError("Knowledge preview {0}: {1}", path, error);
+                previewStatus.Children.Add(Kit.Text("题干预览暂时无法加载", Role.Caption, "muted"));
+                previewStatus.Children.Add(Kit.TextAction("重试", () => _ = LoadPreviews(), Icons.Again));
+            }
+        }
+        return group;
     }
 
     private async Task LoadDocument(StackPanel container, KnowledgeIndex idx, KnowledgeCourse course, KnowledgeTopic? topic, KnowledgeMaterial? material, string relPath, int toneIdx)
@@ -494,7 +687,7 @@ public sealed partial class KnowledgeScreen : Screen
         try { md = Encoding.UTF8.GetString(await repo.Bytes($"knowledge/{relPath}")); }
         catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
         {
-            if (Current()) { container.Children.Clear(); container.Children.Add(Kit.Text("这篇内容没能加载，请稍后重试。", Role.Body, "muted")); }
+            if (Current()) { container.Children.Clear(); container.Children.Add(Kit.Text("内容暂时无法加载", Role.Body, "muted")); container.Children.Add(Kit.TextAction("重试", () => { container.Children.Clear(); _ = LoadDocument(container, idx, course, topic, material, relPath, toneIdx); }, Icons.Again)); }
             return;
         }
         if (!Current()) return;
@@ -534,21 +727,8 @@ public sealed partial class KnowledgeScreen : Screen
             {
                 foreach (var g in byMat)
                 {
-                    var matTitle = idx.Materials.FirstOrDefault(m => m.Path == g.Key)?.Title ?? g.Key;
-                    container.Children.Add(Kit.Text(matTitle, Role.Caption, "ink", bold: true, wrap: true));
-                    var row = new WrapRow { Gap = 8 };
-                    foreach (var qref in g)
-                    {
-                        var pill = new Tap(Paint.Tone(toneIdx, "bg"), Paint.ToneFaded(toneIdx, "bg", .85))
-                        {
-                            CornerRadius = new CornerRadius(8), BorderBrush = Paint.Tone(toneIdx, "border"), BorderThickness = new Thickness(1),
-                            Padding = new Thickness(10, 5, 10, 5), Content = Kit.Text(qref.Heading, Role.Label),
-                        };
-                        ((TextBlock)pill.Content).Foreground = Paint.Tone(toneIdx, "fg");
-                        pill.Click += (_, _) => Open(course: course.Id, material: g.Key, anchor: qref.Anchor);
-                        row.Children.Add(pill);
-                    }
-                    container.Children.Add(row);
+                    var matTitle = idx.Materials.FirstOrDefault(m => m.Path == g.Key)?.Title ?? "课程资料";
+                    container.Children.Add(ReferenceGroup(repo, g.Key, g.ToList(), matTitle, course.Id, toneIdx, Current));
                 }
             }
         }

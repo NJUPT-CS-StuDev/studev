@@ -32,11 +32,13 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .site-nav { display: flex; gap: 28px; flex: 1; }
 .site-nav a { font-size: 14px; font-weight: 500; color: var(--muted); }
 .site-nav a.active { color: var(--ink); font-weight: 600; }
-.avatar { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--surface-sunken); color: var(--muted); font: 600 12.5px var(--font-sans); cursor: pointer; flex: none; }
+.avatar { height: 36px; max-width: 108px; border: 0; border-radius: 18px; background: var(--surface-sunken); color: var(--muted); font: 500 12px var(--font-sans); cursor: pointer; flex: none; }
 .club-nav { display: flex; gap: 22px; padding: 0 24px; border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .club-nav a { height: 36px; line-height: 36px; font-size: 13.5px; color: var(--muted); flex: none; }
 .club-nav a.active { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
-.avatar { padding: 0; overflow: hidden; display: grid; place-items: center; }
+.avatar { padding: 2px 10px 2px 2px; overflow: hidden; display: flex; align-items: center; gap: 4px; }
+.avatar-face { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: none; }
+.avatar-name { max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .share-entry.text-copy, .about-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); }
@@ -60,7 +62,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
   .site-header { position: static; border-bottom: 0; }
   .site-nav, .wordmark, .share-entry, .about-entry, .app-entry { display: none; }
   .header-inner { height: 0; padding: 0; }
-  .avatar { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 45; }
+  .avatar { position: absolute; top: calc(6px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 45; }
   body:has(.mapview) .avatar { display: none; }
   .club-nav { padding: 12px 56px 0 16px; }
 }

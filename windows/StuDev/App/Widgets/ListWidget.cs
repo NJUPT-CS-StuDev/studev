@@ -1,4 +1,4 @@
-// The list on the desktop: the app's 清单 as a glance. 今天 is what is late and what falls in the coming week, in the
+// Tasks on the desktop: the app's 任务 as a glance. 今天 is what is late and what falls in the coming week, in the
 // list's own groups, with the exams among them; 全部 is every open task. One line adds a task as the task sheet reads
 // it; from 今天 a task given no day is for today.
 using Microsoft.UI.Xaml;

@@ -104,8 +104,8 @@ class CampusLine(val term: TeachingTerm, val periods: List<TeachingPeriod>, val 
     }.map { event ->
         val preference = Schedule.preference(event, term.term, preferences)
         val course = event.meeting?.course?.let { it.code to it.name } ?: event.lab?.course?.let { it.code to it.name } ?: event.exam?.course?.let { it.code to it.name }
-        val name = course?.let { top.hicancan.studev.timetable.Courses.personalName(it.first, it.second, courseMeetings, names) }
-            ?: event.meeting?.takeIf { top.hicancan.studev.timetable.Courses.isCustom(it.teaching_class.id) }?.course?.name
+        val name = event.meeting?.takeIf { top.hicancan.studev.timetable.Courses.isCustom(it.teaching_class.id) }?.course?.name
+            ?: course?.let { top.hicancan.studev.timetable.Courses.personalName(it.first, it.second, courseMeetings, names) }
         event.copy(name = name ?: event.name, short = name ?: event.short, avoid = preference.avoid, layer = preference.layer ?: 0L)
     }
         .sortedWith(compareBy<LineEvent> { it.start }.then(frontFirst(LAYER_ORDER)))

@@ -12,6 +12,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Media;
 using StuDev.Data;
 using StuDev.Me;
@@ -176,6 +177,7 @@ public sealed partial class AiScreen : Screen
                     JsonNode? result;
                     try { result = await tools.Execute((string)function["name"]!, JsonNode.Parse((string)function["arguments"]!)!.AsObject(), (string)call["id"]!); }
                     // A tool that fails tells the model why, as the web and Android do; the answer goes on.
+                    catch (UnknownReference failure) { result = new JsonObject { ["error"] = failure.Message, ["code"] = "unknown-reference" }; }
                     catch (Exception failure) when (failure is ArgumentException or InvalidOperationException or InvalidDataException) { result = new JsonObject { ["error"] = failure.Message }; }
                     catch (Exception failure) when (failure is HttpRequestException or IOException or JsonException or TaskCanceledException) { result = new JsonObject { ["error"] = "校园数据暂不可读，请重试。" }; }
                     var message = new JsonObject { ["role"] = "tool", ["tool_call_id"] = (string)call["id"]!, ["content"] = result?.ToJsonString() ?? "null" };
@@ -391,7 +393,7 @@ public sealed partial class AiScreen : Screen
             }
             hello.Children.Add(examples);
             if (campus.Preferences.Class is null) hello.Children.Add(Fine("先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。"));
-            hello.Children.Add(Fine("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。"));
+            hello.Children.Add(Fine("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。"));
             if (error.Length > 0) hello.Children.Add(Kit.Text(error, Role.Body, "danger", wrap: true));
             var centred = Pages.Centre(hello, 768); centred.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(centred, 1); main.Children.Add(centred);
@@ -405,7 +407,7 @@ public sealed partial class AiScreen : Screen
             var row = Kit.Line(10, Kit.Text(error, Role.Body, "danger", wrap: true));
             ((TextBlock)row.Children[0]).MaxWidth = 600;
             var lastQuestion = thread.Path().LastOrDefault(n => (string?)n.Message["role"] == "user");
-            if (lastQuestion is not null) row.Children.Add(Pill("重试", () => { if (!busy) App.Watch(Run(thread, lastQuestion.Id)); }));
+            if (lastQuestion is not null) row.Children.Add(Kit.TextAction("重试", () => { if (!busy) App.Watch(Run(thread, lastQuestion.Id)); }, Icons.Again));
             row.Margin = new Thickness(0, 14, 0, 0);
             column.Children.Add(row);
         }
@@ -487,17 +489,34 @@ public sealed partial class AiScreen : Screen
                 ((FrameworkElement)summary.Children[1]).RenderTransformOrigin = new Windows.Foundation.Point(.5, .5);
                 ((FrameworkElement)summary.Children[1]).RenderTransform = new RotateTransform { Angle = open ? 90 : 0 };
                 var head = new Tap { Content = summary, HorizontalAlignment = HorizontalAlignment.Left };
+                AutomationProperties.SetName(head, Steps.Line(steps));
+                AutomationProperties.SetAutomationId(head, $"ai-steps:{question.Id}");
                 var id = question.Id; head.Click += (_, _) => { if (!openSteps.Remove(id)) openSteps.Add(id); DrawTurns(); };
                 turn.Children.Add(head);
                 if (open)
                 {
                     var list = new StackPanel { Spacing = 4, Padding = new Thickness(14, 0, 0, 0), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(2, 0, 0, 0) };
-                    foreach (var step in steps)
+                    for (var index = 0; index < steps.Count; index++)
                     {
+                        var step = steps[index]; var call = calls[index];
                         var line = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13.5, Foreground = Paint.Brush(step.Failed ? "danger" : "muted") };
                         line.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = step.Label, FontWeight = FontWeights.SemiBold, Foreground = Paint.Brush(step.Failed ? "danger" : "ink") });
                         if (step.Detail.Length > 0) line.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "  " + step.Detail });
-                        list.Children.Add(line);
+                        var inspect = new Tap { Content = line, HorizontalAlignment = HorizontalAlignment.Stretch };
+                        AutomationProperties.SetName(inspect, $"{step.Label}：{step.Detail}，查看调用详情");
+                        AutomationProperties.SetAutomationId(inspect, $"ai-call:{(string)call["id"]!}");
+                        inspect.Click += (_, _) =>
+                        {
+                            var column = new StackPanel { Padding = new Thickness(20, 18, 20, 22), Spacing = 10 };
+                            column.Children.Add(Pages.SheetHead(Pages.SheetTitle(step.Label), () => App.Window?.Close()));
+                            var arguments = (string?)call["function"]?["arguments"] ?? "";
+                            var result = results.GetValueOrDefault((string)call["id"]!);
+                            try { arguments = CallText(JsonNode.Parse(arguments)); } catch (JsonException) { }
+                            var words = Kit.Text($"调用参数\n{arguments}\n\n调用结果\n{(result is null ? "正在等待结果…" : CallText(result))}", Role.Caption, "muted", wrap: true);
+                            words.IsTextSelectionEnabled = true; column.Children.Add(words);
+                            App.Window?.Sheet(column, 620);
+                        };
+                        list.Children.Add(inspect);
                     }
                     turn.Children.Add(list);
                 }
@@ -523,6 +542,16 @@ public sealed partial class AiScreen : Screen
             }
             turns.Children.Add(turn);
         }
+    }
+
+    /** Parsed tool messages are JSON DOM values. Write them directly so this works with NativeAOT's reflection off. */
+    private static string CallText(JsonNode? value)
+    {
+        using var stream = new MemoryStream();
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        if (value is null) writer.WriteNullValue(); else value.WriteTo(writer);
+        writer.Flush();
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     private void DrawLive()
@@ -611,10 +640,10 @@ public sealed partial class AiScreen : Screen
         var picked = open.Select(d => d.Key).ToHashSet();
         var today = CampusDay.Today();
         var column = new StackPanel();
-        var h = Kit.Text(open.Count > 0 ? $"起草了 {drafts.Count} 个任务" : $"已加到清单 · {drafts.Count} 个任务", Role.Label, "muted", bold: true); h.Margin = new Thickness(0, 0, 0, 6);
+        var h = Kit.Text(open.Count > 0 ? $"起草了 {drafts.Count} 个任务" : $"任务已添加 · {drafts.Count} 个任务", Role.Label, "muted", bold: true); h.Margin = new Thickness(0, 0, 0, 6);
         column.Children.Add(h);
         Tap? add = null;
-        void Count() { if (add is not null) { ((TextBlock)add.Content).Text = picked.Count == open.Count ? "全部加到清单" : $"加 {picked.Count} 个到清单"; add.IsEnabled = picked.Count > 0; add.Opacity = picked.Count > 0 ? 1 : .5; } }
+        void Count() { if (add is not null) { ((TextBlock)add.Content).Text = picked.Count == open.Count ? "添加全部任务" : $"添加 {picked.Count} 个任务"; add.IsEnabled = picked.Count > 0; add.Opacity = picked.Count > 0 ? 1 : .5; } }
         for (var i = 0; i < drafts.Count; i++)
         {
             var d = drafts[i]; var t = d.Task;
@@ -643,7 +672,7 @@ public sealed partial class AiScreen : Screen
         }
         if (open.Count > 0)
         {
-            add = Kit.Action("全部加到清单", () => Confirm(picked), go: true); add.HorizontalAlignment = HorizontalAlignment.Stretch; add.Margin = new Thickness(0, 10, 0, 0);
+            add = Kit.Action("添加全部任务", () => Confirm(picked), go: true); add.HorizontalAlignment = HorizontalAlignment.Stretch; add.Margin = new Thickness(0, 10, 0, 0);
             column.Children.Add(add);
         }
         return new Border { BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16), Padding = new Thickness(14, 12, 14, 12), Background = Paint.Brush("paper"), Child = column };
@@ -682,7 +711,7 @@ public sealed partial class AiScreen : Screen
         Switch();
         column.Children.Add(head); column.Children.Add(body); Fill();
         text.TextChanged += (_, _) => { if (body.Children.FirstOrDefault() is Border b && b.Child is StackPanel s && s.Children[1] is TextBlock foot) { var n = text.Text.Split('\n').Count(l => l.Trim().Length > 0); foot.Text = n > 0 ? $"记着 {n} 件事" : "聊天时说“记住……”，AI 也会写进来"; } };
-        column.Children.Add(Kit.Text("只存在这台设备上，提问时随问题一起发给模型。", Role.Caption, "muted"));
+        column.Children.Add(Kit.Text("未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。", Role.Caption, "muted"));
         var buttons = new Grid { ColumnSpacing = 8 };
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var clear = new Tap { Content = Kit.Text("全部清空", Role.Label, "muted"), VerticalAlignment = VerticalAlignment.Center }; clear.Click += (_, _) => text.Text = "";

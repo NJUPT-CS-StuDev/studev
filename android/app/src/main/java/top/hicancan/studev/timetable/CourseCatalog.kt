@@ -174,6 +174,7 @@ object CourseCatalog {
         val ownIds = ownMeetings.mapTo(HashSet()) { it.id }
         val wanted = edits.added.toSet()
         val addedMeetings = if (wanted.isEmpty()) emptyList() else catalog.filter { catalogId(it) in wanted }.flatMap { it.meetings }.filter { it.id !in ownIds }
-        return groupCourses(ownMeetings, "class", hidden) + groupCourses(addedMeetings, "added", emptySet())
+        return groupCourses(ownMeetings, "class", hidden) + groupCourses(addedMeetings, "added", emptySet()) +
+            groupCourses(edits.custom.flatMap(Courses::meetings), "custom", emptySet())
     }
 }

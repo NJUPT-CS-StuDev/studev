@@ -17,14 +17,23 @@ public static class SignIn
         var totp = Kit.Field("", "开了两步验证时填 6 位验证码", "验证码");
         var said = Kit.Text("", Role.Label, "danger", wrap: true);
         Tap? go = null;
+        var signingIn = false;
         async void Go()
         {
-            if (student.Text.Trim().Length == 0 || password.Password.Length == 0) return;
-            go!.IsEnabled = false; said.Text = "";
+            if (signingIn || student.Text.Trim().Length == 0 || password.Password.Length == 0) return;
+            signingIn = true; go!.IsEnabled = false; said.Text = "";
+            student.IsEnabled = password.IsEnabled = totp.IsEnabled = false;
+            ((TextBlock)go.Content).Text = "正在登录…";
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(go, "正在登录…");
             try { await Account.Shared.SignIn(student.Text, password.Password, totp.Text); App.Window?.Close(); signedIn?.Invoke(); }
             catch (PlatformFailure failure) { said.Text = failure.Message; }
             catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "连不上 StuDev，检查一下网络。"; }
-            finally { go.IsEnabled = true; }
+            finally {
+                signingIn = false; go.IsEnabled = true;
+                student.IsEnabled = password.IsEnabled = totp.IsEnabled = true;
+                ((TextBlock)go.Content).Text = "登录";
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(go, "登录");
+            }
         }
         password.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Go(); };
         totp.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Go(); };

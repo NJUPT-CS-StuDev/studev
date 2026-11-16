@@ -45,6 +45,8 @@ public partial class Tap : Button
 
 public static class Kit
 {
+    // WinUI scales an oversized corner to both axes and draws an ellipse; a capsule uses half its actual height.
+    public static CornerRadius Capsule(double height) => new(height / 2);
     public static double Size(Role role) => Paint.Number("type", Key(role), "size");
     private static string Key(Role role) => role switch { Role.Title => "title", Role.Heading => "heading", Role.Body => "body", Role.Label => "label", _ => "caption" };
     public static readonly FontFamily Mono = new("Cascadia Mono, Consolas");
@@ -86,26 +88,36 @@ public static class Kit
         var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
         {
             Content = row, Height = 32, MinWidth = 32, Padding = new Thickness(iconOnly ? 0 : 10, 0, iconOnly ? 0 : 10, 0),
-            CornerRadius = new CornerRadius(Paint.Number("radius", "control")), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1),
+            CornerRadius = Capsule(32), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1),
         };
         AutomationProperties.SetName(tap, label);
         tap.Click += (_, _) => act();
         return tap;
     }
 
-    /** The button that does what a sheet is for (.btn, .btn.go): 36 high, brand when it is the one to press. */
+    /** The primary action of a page or sheet: the shared control height, brand when it is the one to press. */
     public static Tap Action(string label, Action act, bool go = false, string colour = "ink")
     {
         var words = Text(label, Role.Label, go ? "onBrand" : colour, bold: true);
         words.HorizontalAlignment = HorizontalAlignment.Center; words.VerticalAlignment = VerticalAlignment.Center; words.FontSize = 14;
         var tap = new Tap(go ? Paint.Brush("brand") : Paint.Brush("paper"), go ? Paint.Mix("brand.hover", dark => Paint.Blend(Paint.Of("brand", dark), Paint.Of("ink", dark), .92)) : Paint.Brush("surfaceSunken"))
         {
-            Content = words, Height = 36, Padding = new Thickness(16, 0, 16, 0), CornerRadius = new CornerRadius(Paint.Number("radius", "control")),
+            Content = words, Height = Paint.Number("size", "control"), Padding = new Thickness(16, 0, 16, 0), CornerRadius = Capsule(Paint.Number("size", "control")),
             BorderBrush = go ? Paint.Brush("brand") : Paint.Brush("line"), BorderThickness = new Thickness(1),
         };
         AutomationProperties.SetName(tap, label);
         tap.Click += (_, _) => act();
         return tap;
+    }
+
+    /** A secondary text action, with an optional small icon and a normal keyboard/pointer target. */
+    public static Tap TextAction(string label, Action act, string? icon = null, string colour = "brand")
+    {
+        var words = Text(label, Role.Label, colour); words.FontSize = 14;
+        var row = Line(5, icon is null ? [] : [Icon(icon, 14, colour)]);
+        row.Children.Add(words); row.VerticalAlignment = VerticalAlignment.Center;
+        var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = row, MinHeight = Paint.Number("size", "control"), Padding = new Thickness(0, 4, 0, 4), CornerRadius = Capsule(Paint.Number("size", "control")), HorizontalAlignment = HorizontalAlignment.Left };
+        AutomationProperties.SetName(tap, label); tap.Click += (_, _) => act(); return tap;
     }
 
     /** One choice among a few (.picks button): brand ground when chosen. */
@@ -115,7 +127,7 @@ public static class Kit
         words.HorizontalAlignment = HorizontalAlignment.Center; words.VerticalAlignment = VerticalAlignment.Center; words.FontSize = 13;
         var tap = new Tap(on ? Paint.Brush("brand") : Paint.Brush("paper"), on ? null : Paint.Brush("surfaceSunken"))
         {
-            Content = words, Height = height, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(Paint.Number("radius", "control")),
+            Content = words, Height = height, Padding = new Thickness(12, 0, 12, 0), CornerRadius = Capsule(height),
             BorderBrush = on ? Paint.Brush("brand") : Paint.Brush("line"), BorderThickness = new Thickness(1),
         };
         AutomationProperties.SetName(tap, label);
@@ -132,11 +144,12 @@ public static class Kit
     }
 
     /** Tabs: muted words, the chosen one in ink with a line under it, all over one hairline (.tabs). */
-    public static FrameworkElement Tabs(IReadOnlyList<(string Key, string Label)> tabs, string chosen, Action<string> pick, double gap = 22)
+    public static FrameworkElement Tabs(IReadOnlyList<(string Key, string Label)> tabs, string chosen, Action<string> pick, double gap = 22, string? separateBefore = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = gap };
         foreach (var (key, label) in tabs)
         {
+            if (key == separateBefore) row.Children.Add(new Border { Width = 1, Height = 16, Background = Paint.Brush("line"), VerticalAlignment = VerticalAlignment.Center });
             var on = key == chosen;
             var words = Text(label, Role.Label, on ? "ink" : "muted", bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
             var cell = new Grid { Height = 38 };
@@ -160,12 +173,12 @@ public static class Kit
         {
             var on = key == chosen;
             var words = Text(label, Role.Label, on ? "ink" : "muted", bold: on); words.FontSize = 13;
-            var tap = new Tap(on ? Paint.Brush("paper") : Paint.Clear, on ? null : Paint.Brush("line")) { Content = words, Padding = new Thickness(14, 5, 14, 6), CornerRadius = new CornerRadius(6) };
+            var tap = new Tap(on ? Paint.Brush("paper") : Paint.Clear, on ? null : Paint.Brush("line")) { Content = words, MinHeight = Paint.Number("size", "search"), Padding = new Thickness(14, 5, 14, 6), CornerRadius = Capsule(Paint.Number("size", "search")) };
             AutomationProperties.SetName(tap, label);
             tap.Click += (_, _) => pick(key);
             row.Children.Add(tap);
         }
-        return new Border { Child = row, Padding = new Thickness(2), CornerRadius = new CornerRadius(8), Background = Paint.Brush("surfaceSunken"), HorizontalAlignment = HorizontalAlignment.Left };
+        return new Border { Child = row, Padding = new Thickness(2), CornerRadius = Capsule(Paint.Number("size", "control")), Background = Paint.Brush("surfaceSunken"), HorizontalAlignment = HorizontalAlignment.Left };
     }
 
     /** The switch (.toggle): 36 by 22, the line when off, the brand when on. */
@@ -226,9 +239,20 @@ public static class Kit
     /** A text box in the tokens' clothes (.tf). */
     public static TextBox Field(string text, string placeholder, string label)
     {
-        var box = new TextBox { Text = text, PlaceholderText = placeholder, FontSize = 14.5, MinHeight = 40 };
+        var box = new TextBox { Text = text, PlaceholderText = placeholder, FontSize = 14.5, MinHeight = Paint.Number("size", "control") };
         AutomationProperties.SetName(box, label);
         return box;
+    }
+
+    /** A search entry is a capsule with its magnifier, distinct from ordinary form fields. */
+    public static FrameworkElement SearchField(TextBox box)
+    {
+        box.Resources["ControlCornerRadius"] = Capsule(Paint.Number("size", "control"));
+        foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundFocused", "TextControlBackgroundPointerOver" }) box.Resources[key] = Paint.Brush("surfaceSunken");
+        box.MinHeight = Paint.Number("size", "control"); box.Padding = new Thickness(38, 8, 12, 8);
+        var field = new Grid(); field.Children.Add(box);
+        var glass = Icon(Icons.Magnifier, 16, "muted", 20); glass.HorizontalAlignment = HorizontalAlignment.Left; glass.Margin = new Thickness(14, 0, 0, 0); glass.IsHitTestVisible = false;
+        field.Children.Add(glass); return field;
     }
 
     public static StackPanel Column(double spacing, params UIElement[] children)

@@ -1,5 +1,5 @@
 // One timetable's colours, as src/campus/timetable/model/courseColors.ts: courses meeting on the same day get different
-// tones, at least one tone apart where they can; a lab takes its course's tone.
+// tones, using all twelve before repeating across the week; a lab takes its course's tone.
 using StuDev.Data;
 
 namespace StuDev.World;
@@ -39,7 +39,7 @@ public static class CourseTones
         foreach (var id in ids.OrderByDescending(id => neighbours[id].Count).ThenBy(id => id, StringComparer.Ordinal))
         {
             var near = neighbours[id].Where(tones.ContainsKey).Select(o => tones[o]).ToList();
-            int[] Score(int tone) => [near.Contains(tone) ? 0 : 1, near.Select(o => Apart(tone, o)).Append(2).Min(), -used[tone], -Array.IndexOf(Order, tone)];
+            int[] Score(int tone) => [near.Contains(tone) ? 0 : 1, used[tone] == 0 ? 1 : 0, near.Select(o => Apart(tone, o)).Append(2).Min(), -used[tone], -Array.IndexOf(Order, tone)];
             static bool Better(int[] l, int[] r) { for (var i = 0; i < l.Length; i++) if (l[i] != r[i]) return l[i] > r[i]; return false; }
             var best = Order[0];
             foreach (var tone in Order) if (Better(Score(tone), Score(best))) best = tone;

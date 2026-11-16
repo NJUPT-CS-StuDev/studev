@@ -1,6 +1,6 @@
 // What the AI looked up, as the steps under a question say it: one line for the whole (搜索资料 ×2 · 读原文 · 规划路线),
-// and each step with what it asked and what came back (搜索资料 “补考报名” · 6 条). The same call made twice is one
-// step, where it was first taken, with what it last found. The same words are android/.../ai/Steps.kt.
+// and each call with what it asked and what came back (搜索资料 “补考报名” · 6 条), including failed attempts and retries.
+// The same words are android/.../ai/Steps.kt.
 import { dateLabel, hm } from '@/world/time';
 
 export interface Step { name: string; label: string; detail: string; failed: boolean; pending: boolean }
@@ -23,7 +23,7 @@ function detail(name: string, args: Record<string, unknown>, result: unknown, do
         case 'course': { const chapters = field(result, 'chapters'); return `${text(field(result, 'course')) ? `《${text(field(result, 'course'))}》` : quoted('course')}${done ? Array.isArray(chapters) ? ` · ${chapters.length} 章` : ' · 没找到' : ''}`; }
         case 'schedule': { const n = field(result, 'count'); return `${quoted('of')}${done ? typeof n === 'number' && n ? ` · ${n} 次课` : ' · 没有' : ''}`; }
         case 'curriculum': { const terms = field(result, 'terms'); return `${text(field(result, 'major')) || text(args.major)}${args.grade ? ` ${text(args.grade)} 级` : ''}${done ? Array.isArray(terms) ? ` · ${terms.length} 个学期` : ' · 没找到' : ''}`; }
-        case 'read': return done && text(field(result, 'title')) ? `《${text(field(result, 'title'))}》` : '';
+        case 'read': return done && text(field(result, 'title')) ? `《${text(field(result, 'title'))}》` : quoted('id');
         case 'find_place': { const first = Array.isArray(result) ? text(field(result[0], 'name')) : ''; return `${quoted('query')}${done ? first ? ` → ${first}` : ' · 没找到' : ''}`; }
         case 'nearby': { const places = field(result, 'places'); return `${text(field(result, 'near')) || text(args.near)}附近的${text(args.what)}${done && Array.isArray(places) ? ` · ${places.length} 处` : ''}`; }
         case 'route': { const metres = field(result, 'distance_m'); return `${text(field(result, 'from')) || text(args.from)} → ${text(field(result, 'to')) || text(args.to)}${typeof metres === 'number' ? ` · ${Math.round(metres)} 米` : ''}`; }
@@ -38,23 +38,26 @@ function detail(name: string, args: Record<string, unknown>, result: unknown, do
     }
 }
 
-/** The steps of one answer, in the order they were taken, the same call made again taken once. */
+/** Every call in order; a retry never overwrites an earlier attempt. */
 export function stepsOf(calls: readonly Call[], results: ReadonlyMap<string, unknown>): Step[] {
-    const steps = new Map<string, Step>();
+    const steps: Step[] = [];
     for (const call of calls) {
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(call.arguments) as Record<string, unknown>; } catch { /* Said badly: shown by its name alone. */ }
         const done = results.has(call.id), result = results.get(call.id);
         const error = text(field(result, 'error'));
-        const key = `${call.name} ${JSON.stringify(args)}`;
-        steps.set(key, { name: call.name, label: LABELS[call.name] ?? call.name, detail: error ? `${detail(call.name, args, undefined, false)}：${error}`.replace(/^：/, '') : detail(call.name, args, result, done), failed: Boolean(error), pending: !done });
+        steps.push({ name: call.name, label: LABELS[call.name] ?? call.name, detail: error ? `${detail(call.name, args, undefined, false)}：${error}`.replace(/^：/, '') : detail(call.name, args, result, done), failed: Boolean(error), pending: !done });
     }
-    return [...steps.values()];
+    return steps;
 }
 
 /** The steps in one line: what was done, each kind once, with how many times. */
 export function stepsLine(steps: readonly Step[]): string {
-    const counts = new Map<string, number>();
-    for (const step of steps) counts.set(step.label, (counts.get(step.label) ?? 0) + 1);
-    return `${steps.some(step => step.pending) ? '正在' : '已'}${[...counts].map(([label, n]) => n > 1 ? `${label} ×${n}` : label).join(' · ')}`;
+    const counts = new Map<string, { total: number; failed: number; pending: number }>();
+    for (const step of steps) {
+        const count = counts.get(step.label) ?? { total: 0, failed: 0, pending: 0 };
+        count.total++; count.failed += Number(step.failed); count.pending += Number(step.pending);
+        counts.set(step.label, count);
+    }
+    return [...counts].map(([label, n]) => `${label}${n.total > 1 ? ` ×${n.total}` : ''}${n.failed ? `（失败 ${n.failed}）` : ''}${n.pending ? `（进行中 ${n.pending}）` : ''}`).join(' · ');
 }

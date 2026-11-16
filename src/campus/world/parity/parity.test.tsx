@@ -17,12 +17,17 @@ import type { Preferences } from '../preferences';
 import { append as threadAppend, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
+import { momentNow } from '../time';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
 const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], labs: [], exams: [], holidays, tasks: [], run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('uses campus time across midnight, the year boundary and a device daylight-saving transition', () => {
+        for (const test of golden.campusTimes) expect(momentNow(new Date(test.instant))).toEqual(test.now);
+        expect(momentNow(new Date('2026-11-16T16:00:00Z'))).toEqual({ date: '2026-11-17', min: 0 });
+    });
     it('a glance outside the app shows the same day, week, term, due tasks and exams at the same moment', () => {
         const taskLine: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.labs.meetings as unknown as TeachingMeeting[], labs: golden.labs.labs as unknown as Lab[], exams: [golden.labs.exam as unknown as Exam], holidays, run: null, tasks: golden.tasks.list as unknown as Task[] };
         for (const test of golden.glance.moments) {

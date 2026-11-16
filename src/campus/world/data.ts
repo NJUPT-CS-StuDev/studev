@@ -37,7 +37,7 @@ export const loadMaterials = once(() => fetchJson<CourseMaterials[]>(`${base}/ma
 const classFiles = new Map<string, Promise<TeachingMeeting[]>>();
 export const loadClassMeetings = (id: string) => {
     let file = classFiles.get(id);
-    if (!file) classFiles.set(id, file = fetchJson<{ meetings: TeachingMeeting[] }>(`${teaching}/classes/${encodeURIComponent(id)}.json`).then(value => value.meetings));
+    if (!file) classFiles.set(id, file = fetchJson<{ meetings: TeachingMeeting[] }>(`${teaching}/classes/${encodeURIComponent(id)}.json`).then(value => value.meetings).catch(error => { classFiles.delete(id); throw error; }));
     return file;
 };
 

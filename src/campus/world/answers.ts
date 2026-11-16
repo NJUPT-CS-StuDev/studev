@@ -4,9 +4,15 @@ import type { CourseMaterials } from './materials';
 import { courseKey, materialsSaid } from './materials';
 import type { CurriculumCourse, Knowledge } from './knowledge';
 import type { TeachingMeeting } from './facts';
+import { textKey } from './texts';
 
 const WEEKDAY = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const SHOWN = 24;
+
+export class UnknownReference extends Error {
+    readonly code = 'unknown-reference';
+    constructor() { super('未知资料引用。请重新查询，并原样使用结果中的原文标识。'); }
+}
 
 /** Teaching weeks as read aloud: [1,2,3,5,7,8] → 1–3、5、7–8 周. */
 export function weeksText(weeks: readonly number[]): string {
@@ -35,16 +41,16 @@ export function courseSaid(index: Knowledge, shared: readonly CourseMaterials[],
         const sharedOnly = materialsSaid(shared, asked);
         return { found: false, courses: near, ...(sharedOnly && 'kinds' in sharedOnly ? { shared: sharedOnly } : {}) };
     }
-    const titles = new Map(index.topics.map(topic => [topic.id, topic.title]));
-    const materials: Record<string, { title: string; id: string }[]> = {};
+    const topics = new Map(index.topics.map(topic => [topic.id, topic]));
+    const materials: Record<string, { title: string; id: string; path: string; url: string }[]> = {};
     for (const material of index.materials.filter(item => item.course === course.id)) {
         const list = materials[material.kind] ??= [];
-        if (list.length < 12) list.push({ title: material.title, id: `sections/${material.path}` });
+        if (list.length < 12) list.push({ title: material.title, id: textKey(`sections/${material.path}`), path: material.path, url: `/knowledge/?material=${encodeURIComponent(material.path)}` });
     }
     const sharedLinks = materialsSaid(shared, course.name);
     return {
         found: true, course: course.name, codes: course.codes, url: `/knowledge/?course=${encodeURIComponent(course.id)}`,
-        chapters: course.chapters.map(chapter => ({ title: chapter.title, topics: chapter.topics.map(id => ({ id: `topics/${id}`, title: titles.get(id) ?? id })) })),
+        chapters: course.chapters.map(chapter => ({ title: chapter.title, topics: chapter.topics.map(id => ({ id: textKey(`topics/${id}`), title: topics.get(id)?.title ?? id, path: topics.get(id)?.path ?? `topics/${id}.md`, url: `/knowledge/?topic=${encodeURIComponent(id)}` })) })),
         materials,
         ...(sharedLinks && 'kinds' in sharedLinks ? { shared: sharedLinks.kinds } : {}),
     };

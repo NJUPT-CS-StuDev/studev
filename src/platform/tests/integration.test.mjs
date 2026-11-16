@@ -87,6 +87,25 @@ test('real identity shows a public form to a visitor and asks them to sign in to
   assert.equal((await a.client.call(`/submissions/${id}`)).status, 200);
 });
 
+test('a published public form opens independently of a stale cookie while private reads and submissions remain authenticated', async () => {
+  const f = await fixture(), guest = f.client();
+  const make = async (extra) => {
+    const result = await f.owner.call('/admin/forms', { method: 'POST', body: { title: '访问规则测试', status: 'published', access: 'public', fields: [{ id: 'note', type: 'text', label: '说明' }], ...extra } });
+    assert.equal(result.status, 201); return result.body.form.id;
+  };
+  const publicId = await make({}), privateId = await make({ access: 'members' }), draftId = await make({ status: 'draft' });
+  const staleCookie = { Cookie: '__Host-studev_platform=' + 'A'.repeat(43) + '.' + 'B'.repeat(43) };
+  const read = f.store.get; let identityReads = 0;
+  f.store.get = async (key, ...args) => { if (key.startsWith('platform-v1/identity/')) identityReads++; return read(key, ...args); };
+  const opened = await guest.call(`/forms/${publicId}`, { headers: staleCookie });
+  assert.equal(opened.status, 200);
+  assert.equal(identityReads, 0, 'public content does not wait for owner/account/device storage');
+  assert.equal((await guest.call(`/forms/${privateId}`, { headers: staleCookie })).status, 401);
+  assert.equal((await guest.call(`/forms/${draftId}`, { headers: staleCookie })).status, 401);
+  assert.equal((await guest.call(`/forms/${publicId}/submissions`, { method: 'POST', body: { answers: {}, files: [] } })).status, 401);
+  assert.equal((await guest.call(`/forms/${publicId}`, { headers: { Authorization: 'Bearer ' + 'A'.repeat(43) } })).status, 401, 'an explicit bearer credential is still validated at the API boundary');
+});
+
 test('role promotion and suspension revoke existing sessions; admin can manage forms and look up users but cannot delete forms', async () => {
   const f = await fixture(); const member = await f.member('100002', '待提升成员');
   const promoted = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: member.user.revision, role: 'admin' } });

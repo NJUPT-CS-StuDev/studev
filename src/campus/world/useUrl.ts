@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { replaceSheetRoute } from './ui';
 
 const URL_CHANGE = 'studev:url-change';
 const subscribeUrl = (change: () => void) => {
@@ -20,7 +21,8 @@ export function useUrl() {
         }
         const query = params.toString().replaceAll('%2F', '/').replaceAll('%3A', ':');
         const next = `${location.pathname}${query ? `?${query}` : ''}`;
-        if (options.push) history.pushState(null, '', next); else history.replaceState(null, '', next);
+        if (options.push) { if (!replaceSheetRoute(next)) history.pushState(null, '', next); }
+        else history.replaceState(history.state, '', next);
         dispatchEvent(new Event(URL_CHANGE));
     }, []);
     // The same object until the address changes, so effects that depend on it settle.

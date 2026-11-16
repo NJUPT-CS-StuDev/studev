@@ -61,9 +61,9 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     /** The request a provider is sent: OpenAI's chat completions, as every provider speaks it. */
     public JsonObject Request(string model, List<JsonObject> messages, Situation s, DateTimeOffset now, bool last = false)
     {
-        var request = new JsonObject { ["model"] = model, ["stream"] = true, ["max_tokens"] = 4096, ["temperature"] = 0.2, ["tools"] = new JsonArray([.. ToolsFor(s).Select(t => t.DeepClone())]) };
-        if (last) request["tool_choice"] = "none";
-        request["messages"] = new JsonArray([new JsonObject { ["role"] = "system", ["content"] = Instructions(s, now) }, .. messages.Select(m => m.DeepClone())]);
+        var request = new JsonObject { ["model"] = model, ["stream"] = true, ["max_tokens"] = 4096, ["temperature"] = 0.2 };
+        if (!last) request["tools"] = new JsonArray([.. ToolsFor(s).Select(t => t.DeepClone())]);
+        request["messages"] = new JsonArray([new JsonObject { ["role"] = "system", ["content"] = Instructions(s, now) + (last ? "\n" + (string)contract["finish"]! : "") }, .. messages.Select(m => m.DeepClone())]);
         return request;
     }
 
@@ -75,6 +75,8 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         private readonly StringBuilder content = new();
         private string? finish;
         private readonly SortedDictionary<int, (StringBuilder Id, StringBuilder Name, StringBuilder Arguments)> calls = new();
+        private string pending = "";
+        private bool protocolError;
 
         /** One line of the stream; the piece of the answer it adds, or "". */
         public string Take(string line)
@@ -96,7 +98,23 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
                 }
             }
             if (choice["finish_reason"] is JsonValue f && f.TryGetValue<string>(out var reason)) finish = reason;
-            var piece = delta["content"] is JsonValue c && c.TryGetValue<string>(out var text) ? text : "";
+            if (protocolError) return "";
+            pending += delta["content"] is JsonValue c && c.TryGetValue<string>(out var text) ? text : "";
+            string[] markers = ["<｜DSML｜", "<|DSML|"];
+            var found = markers.Select(m => pending.IndexOf(m, StringComparison.Ordinal)).Where(at => at >= 0).DefaultIfEmpty(-1).Min();
+            if (found >= 0)
+            {
+                var before = pending[..found]; content.Append(before); pending = ""; protocolError = true;
+                return before;
+            }
+            var held = 0;
+            for (var size = 1; size <= pending.Length && size < 8; size++) if (markers.Any(m => m.StartsWith(pending[^size..], StringComparison.Ordinal))) held = size;
+            if (finish is not null)
+            {
+                if (held > 1) { protocolError = true; pending = ""; return ""; }
+                held = 0;
+            }
+            var piece = pending[..(pending.Length - held)]; pending = pending[(pending.Length - held)..];
             content.Append(piece);
             return piece;
         }
@@ -104,6 +122,7 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         /** The turn, once the stream has ended; thrown when it is not one. */
         public JsonObject Result()
         {
+            if (protocolError) throw new InvalidOperationException("模型未能正确发起查询，请重试。");
             var made = calls.Values.Select(c => new JsonObject { ["id"] = c.Id.ToString(), ["type"] = "function", ["function"] = new JsonObject { ["name"] = c.Name.ToString(), ["arguments"] = c.Arguments.ToString() } }).ToList();
             // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
             var whole = finish is "stop" or "tool_calls" || (finish == "length" && made.Count == 0 && content.Length > 0);

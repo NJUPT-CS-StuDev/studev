@@ -11,7 +11,7 @@ namespace StuDev.Timetable;
 
 public sealed partial class TimetableScreen : Screen
 {
-    private static readonly (string Key, string Label)[] Scales = [("day", "天"), ("week", "周"), ("term", "学期"), ("list", "清单")];
+    private static readonly (string Key, string Label)[] Scales = [("day", "天"), ("week", "周"), ("term", "学期"), ("list", "任务")];
     private readonly Campus campus = Campus.Shared;
     private readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(30) };
     private string scale = "week";
@@ -41,7 +41,7 @@ public sealed partial class TimetableScreen : Screen
         Key(Windows.System.VirtualKey.Left, () => Shift(-1));
         Key(Windows.System.VirtualKey.Right, () => Shift(1));
         Key(Windows.System.VirtualKey.T, () => { picked = null; Draw(); });
-        // One key for each view, as calendars have them: D 天, W 周, S 学期, L 清单.
+        // One key for each view, as calendars have them: D 天, W 周, S 学期, L 任务.
         foreach (var (key, view) in new[] { (Windows.System.VirtualKey.D, "day"), (Windows.System.VirtualKey.W, "week"), (Windows.System.VirtualKey.S, "term"), (Windows.System.VirtualKey.L, "list") })
             Key(key, () => { if (ScalesShown.Any(s => s.Key == view) && scale != view) { scale = view; Draw(); } });
         Key(Windows.System.VirtualKey.N, () => { if (who is null) TaskSheet.New(campus, now); }, Windows.System.VirtualKeyModifiers.Control);
@@ -49,7 +49,8 @@ public sealed partial class TimetableScreen : Screen
         PointerWheelChanged += (_, e) =>
         {
             if (!e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
-            var shown = ScalesShown;
+            if (scale == "list") return;
+            var shown = ScalesShown.Where(s => s.Key != "list").ToArray();
             var at = Array.FindIndex(shown, s => s.Key == scale) + (e.GetCurrentPoint(this).Properties.MouseWheelDelta < 0 ? 1 : -1);
             if (at >= 0 && at < shown.Length) { scale = shown[at].Key; Draw(); }
             e.Handled = true;
@@ -109,7 +110,7 @@ public sealed partial class TimetableScreen : Screen
         Children.Clear();
         if (campus.Error is { } error && campus.Line is null && campus.Repository is null)
         {
-            Children.Add(Pages.Frame(Pages.Empty(error, Kit.Action("重试", () => { campus.Retry(); Draw(); }))));
+            Children.Add(Pages.Frame(Pages.Empty(error, Kit.TextAction("重试", () => { campus.Retry(); Draw(); }, Icons.Again))));
             return;
         }
         if (campus.Repository is null) return;
@@ -127,7 +128,7 @@ public sealed partial class TimetableScreen : Screen
         picker = null;
         if (who is { } other)
         {
-            if (othersError is { } message) { Children.Add(Pages.Frame(Pages.Empty(message, Kit.Action("重试", () => { othersError = null; Gather(other); Draw(); })))); return; }
+            if (othersError is { } message) { Children.Add(Pages.Frame(Pages.Empty(message, Kit.TextAction("重试", () => { othersError = null; Gather(other); Draw(); }, Icons.Again)))); return; }
             if (others is null) { Children.Add(Pages.Frame(Pages.Header(other.Title, "正在读取这份课表…", Kit.Button("我的课表", Mine)))); return; }
             if (scale == "list") scale = "week";
         }
@@ -141,7 +142,7 @@ public sealed partial class TimetableScreen : Screen
         var termName = $"{term.Year}–{term.Year + 1} 学年第{(term.Number == 1 ? "一" : "二")}学期";
         var last = scale == "term" ? line.LastLesson() : null;
         var pending = line.Tasks.Count(t => t.Parent is null && t.Done is null && t.Deleted != true);
-        var title = who is { } named ? named.Title : scale switch { "list" => "清单", "term" => termName, "week" => week is { } w ? $"第 {w} 周" : "假期", _ => $"{Clock.DateLabel(day)} {Clock.Weekdays[Clock.Weekday(day)]}" };
+        var title = who is { } named ? named.Title : scale switch { "list" => "任务", "term" => termName, "week" => week is { } w ? $"第 {w} 周" : "假期", _ => $"{Clock.DateLabel(day)} {Clock.Weekdays[Clock.Weekday(day)]}" };
         var first = Clock.Parse(term.Weeks[0].Start); var end = Clock.Parse(term.Weeks[^1].End);
         var subtitle = scale switch
         {
@@ -154,9 +155,22 @@ public sealed partial class TimetableScreen : Screen
         var actions = new List<UIElement>();
         if (scale is "day" or "week")
         {
-            actions.Add(Kit.Button("上一个", () => Shift(-1), Icons.Back, iconOnly: true));
-            actions.Add(Kit.Button("今天", () => { picked = null; Draw(); }));
-            actions.Add(Kit.Button("下一个", () => Shift(1), Icons.Chevron, iconOnly: true));
+            Tap DateStep(string label, Action act, string? icon = null)
+            {
+                var target = Paint.Number("size", "target");
+                var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) {
+                    Content = icon is null ? Kit.Text(label, Role.Label) : Kit.Icon(icon, 16),
+                    MinWidth = target, Height = target, Padding = new Thickness(8, 0, 8, 0),
+                    CornerRadius = new CornerRadius(Paint.Number("radius", "control")),
+                    HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+                };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, label);
+                tap.Click += (_, _) => act(); return tap;
+            }
+            actions.Add(Kit.Line(0,
+                DateStep("上一个", () => Shift(-1), Icons.Back),
+                DateStep("今天", () => { picked = null; Draw(); }),
+                DateStep("下一个", () => Shift(1), Icons.Chevron)));
         }
         if (mine) actions.Add(Kit.Button("加课", () => App.Open("search", "course")));
         if (mine) actions.Add(Kit.Button("新任务", () => TaskSheet.New(campus, now), Icons.Plus, 20));
@@ -164,7 +178,7 @@ public sealed partial class TimetableScreen : Screen
 
         var page = new StackPanel();
         page.Children.Add(Pages.Header(title, subtitle, actions.ToArray()));
-        var tabs = Kit.Tabs(ScalesShown, scale, key => { scale = key; Draw(); }); tabs.Margin = new Thickness(0, 0, 0, 20);
+        var tabs = Kit.Tabs(ScalesShown, scale, key => { scale = key; Draw(); }, separateBefore: "list"); tabs.Margin = new Thickness(0, 0, 0, 20);
         page.Children.Add(tabs);
         void Open(LineEvent e) { if (e.Task is { } task) TaskSheet.Open(campus, task.Id, now); else Events.Open(campus, e, now, mine ? null : line); }
         void OpenTask(World.PersonalTask task) => TaskSheet.Open(campus, task.Id, now);

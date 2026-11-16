@@ -50,8 +50,8 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     /** The request a provider is sent, OpenAI's chat completions as every provider speaks it. */
     fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now(), last: Boolean = false) = buildJsonObject {
         put("model", model); put("stream", true); put("max_tokens", 4096); put("temperature", 0.2)
-        put("tools", JsonArray(toolsFor(s))); if (last) put("tool_choice", "none")
-        put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(s, now)) }) + messages))
+        if (!last) put("tools", JsonArray(toolsFor(s)))
+        put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(s, now) + if (last) "\n${contract.getValue("finish").jsonPrimitive.content}" else "") }) + messages))
     }
 
     /** A streamed answer read line by line, as Completion in assistant.mjs. */
@@ -59,6 +59,8 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
         private val content = StringBuilder()
         private var finish: String? = null
         private val calls = sortedMapOf<Int, Triple<StringBuilder, StringBuilder, StringBuilder>>()
+        private var pending = ""
+        private var protocolError = false
 
         /** One line of the stream; the piece of the answer it adds, or "". */
         fun take(line: String): String {
@@ -77,13 +79,29 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
                 }
             }
             choice["finish_reason"]?.jsonPrimitive?.contentOrNull?.let { finish = it }
-            val piece = (delta["content"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+            if (protocolError) return ""
+            pending += (delta["content"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+            val markers = listOf("<｜DSML｜", "<|DSML|")
+            val found = markers.map { pending.indexOf(it) }.filter { it >= 0 }.minOrNull()
+            if (found != null) {
+                val piece = pending.take(found)
+                content.append(piece); pending = ""; protocolError = true
+                return piece
+            }
+            var held = (1..minOf(pending.length, 7)).filter { size -> markers.any { it.startsWith(pending.takeLast(size)) } }.maxOrNull() ?: 0
+            if (finish != null) {
+                if (held > 1) { protocolError = true; pending = ""; return "" }
+                held = 0
+            }
+            val piece = pending.dropLast(held)
+            pending = pending.takeLast(held)
             content.append(piece)
             return piece
         }
 
         /** The turn, once the stream has ended, or why it is not one. */
         fun result(): Result<JsonObject> {
+            if (protocolError) return Result.failure(IllegalStateException("模型未能正确发起查询，请重试。"))
             val made = calls.values.map { (id, name, arguments) -> buildJsonObject { put("id", id.toString()); put("type", "function"); put("function", buildJsonObject { put("name", name.toString()); put("arguments", arguments.toString()) }) } }
             // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
             val whole = finish in setOf("stop", "tool_calls") || (finish == "length" && made.isEmpty() && content.isNotEmpty())

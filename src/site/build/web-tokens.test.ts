@@ -26,7 +26,10 @@ describe('web design tokens', () => {
     expect(renderWebTokens(changed)).toContain('--brand: #123456');
     expect(renderWebTokens(changed)).not.toContain(`--brand: ${tokens.color.light.brand}`);
     expect(css).toContain('--motion-standard: 280ms');
-    expect(css).toContain('--radius-sheet: 14px');
+    expect(css).toContain('--radius-sheet: 20px');
+    expect(css).toContain('--size-search: 36px');
+    expect(css).toContain('--size-control: 40px');
+    expect(css).toContain('--size-target: 44px');
   });
   it('keeps 24 mathematically distinct course mixtures, including reversed pairs', () => {
     const mixtures = [...css.matchAll(/--course-tone-\d+-bg: color-mix\(in srgb, (.*?) 12%,/g)].map(match => {

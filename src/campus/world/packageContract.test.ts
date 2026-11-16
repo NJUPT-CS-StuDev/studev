@@ -4,6 +4,7 @@ import { join, resolve, sep } from 'node:path';
 import { packageFacts } from '../../../scripts/data/package-facts';
 import type { Exam, ExamChange, Room, Building, TeachingClass, TeachingMeeting } from './facts';
 import { CampusTools } from './campusTools';
+import { textKey } from './texts';
 
 const tempRoot = process.platform === 'win32' ? 'D:/Temp/codex' : '/tmp/codex';
 const read = async <T>(path: string): Promise<T> => JSON.parse(await readFile(path, 'utf8')) as T;
@@ -30,9 +31,9 @@ describe('the production map and data package contract', () => {
         vi.stubGlobal('fetch', fetch);
         const tools = new CampusTools();
         try {
-            const topic = await tools.read(`topics/${index.topics[0]!.id}`);
+            const topic = await tools.read(textKey(`topics/${index.topics[0]!.id}`));
             expect(topic.text.length).toBeGreaterThan(0);
-            const id = `sections/${index.materials[0]!.path}`;
+            const id = textKey(`sections/${index.materials[0]!.path}`);
             let offset = 0, text = '';
             do {
                 const page = await tools.read(id, offset);

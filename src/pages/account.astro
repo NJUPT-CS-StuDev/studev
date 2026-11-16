@@ -3,24 +3,19 @@ import SiteLayout from '../site/SiteLayout.astro';
 import '../platform/platform.css';
 ---
 <SiteLayout title="账号 — StuDev" active="account" noindex={true}>
-  <script is:inline>
-    // Decided before first paint: who this is, from the last session on this browser.
-    try {
-      const known = JSON.parse(localStorage.getItem('studev_auth_user') || 'null');
-      if (!known) location.replace('/login/?next=' + encodeURIComponent(location.pathname + location.search));
-      else document.documentElement.dataset.role = known.role || 'user';
-    } catch {}
-  </script>
   <div class="platform" data-account-shell>
     <nav class="p-nav" aria-label="账号与组织导航">
       <div class="p-nav-group" role="tablist">
         <button type="button" role="tab" aria-selected="true" data-account-tab="profile">我的账号</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="security">账号安全</button>
+        <button type="button" role="tab" aria-selected="false" data-account-tab="devices">登录设备</button>
         <button type="button" role="tab" aria-selected="false" data-account-tab="members" data-staff-only hidden>用户管理</button>
         <button type="button" role="tab" aria-selected="false" data-account-tab="audit" data-owner-only hidden>操作记录</button>
       </div>
     </nav>
-    <div class="p-message" role="status" aria-live="polite" data-account-status hidden></div>
-    <div data-account-content>
+    <div class="p-message" role="status" aria-live="polite" data-account-status>正在读取账号…</div>
+    <button class="p-button secondary" type="button" data-account-retry hidden>重新读取账号</button>
+    <div data-account-content hidden>
       <div class="p-message" data-account-required hidden></div>
 
       <div data-account-panel="profile">
@@ -34,13 +29,6 @@ import '../platform/platform.css';
           </div>
         </header>
         <section class="p-id-card" data-account-id-card aria-label="数字身份名片"></section>
-        <section class="p-card" aria-labelledby="devices-title" style="margin-bottom:20px">
-          <h2 id="devices-title">已登录的设备</h2>
-          <p class="p-muted">查看使用此账号的网页与 App。退出设备后，该设备需要重新登录。</p>
-          <div data-account-devices style="margin-top:16px"></div>
-          <p class="p-message" data-devices-status role="status"></p>
-        </section>
-        <div class="p-grid">
           <section class="p-card">
             <h2>个人资料</h2>
             <dl class="p-meta" data-account-info></dl>
@@ -68,6 +56,9 @@ import '../platform/platform.css';
               <button class="p-button" type="submit" data-profile-save>保存个人资料</button>
             </form>
           </section>
+      </div>
+      <div data-account-panel="security" hidden>
+        <header class="p-heading"><div><h1>账号安全</h1><p>管理密码与双重验证。</p></div></header>
           <section class="p-card">
             <h2>修改密码</h2>
             <form data-password-form>
@@ -89,10 +80,9 @@ import '../platform/platform.css';
                 <label for="password-totp">双重验证码</label>
                 <input id="password-totp" name="totp" maxlength="64" autocomplete="one-time-code" placeholder="6 位动态码或恢复码" />
               </div>
-              <button class="p-button secondary" type="submit">修改密码</button>
+              <button class="p-button" type="submit">修改密码</button>
             </form>
           </section>
-        </div>
         <section class="p-card" data-account-mfa hidden style="margin-top:20px">
           <h2>双重验证（TOTP 动态码）</h2>
           <p class="p-muted" data-mfa-state></p>
@@ -147,6 +137,12 @@ import '../platform/platform.css';
         </section>
       </div>
 
+      <section data-account-panel="devices" hidden>
+        <header class="p-heading"><div><h1>登录设备</h1><p>查看使用此账号的网页与 App，退出设备后需要重新登录。</p></div></header>
+        <div class="p-actions"><button class="p-button secondary small" type="button" data-devices-refresh>刷新设备</button></div>
+        <p class="p-message" data-devices-status role="status"></p>
+        <div data-account-devices></div>
+      </section>
       <section data-account-panel="members" hidden>
         <header class="p-heading">
           <div>

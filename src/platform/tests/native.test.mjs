@@ -140,6 +140,36 @@ test('native recovery codes remain single-use, setup gates mint no credentials, 
   assert.equal((await f.call('/auth/refresh', { deviceId, refreshToken: fresh.body.refreshToken })).status, 401);
 });
 
+test('login and device reads stay bounded by current families, not obsolete device history', async () => {
+  const f = await fixture();
+  const first = await f.login();
+  // Retired installations remain in storage, but must not add a remote read to
+  // every future login or appear as a live device.
+  for (let i = 0; i < 200; i++) f.store.values.set(`platform-v1/identity/devices/by-user/${f.user.id}/retired-${i}.json`, { id: `retired-${i}` });
+  const read = f.store.get, list = f.store.list, reads = [], lists = [];
+  f.store.get = async (key, ...args) => { reads.push(key); return read(key, ...args); };
+  f.store.list = async (options) => {
+    lists.push(options.prefix);
+    assert.ok(!options.prefix.includes('/by-user/'), 'historical installations are not the current-family index');
+    return list(options);
+  };
+  const second = await f.login({ deviceId: 'another-current-installation-0001' });
+  assert.equal(second.status, 200);
+  assert.ok(!reads.some(key => key.includes('retired-')));
+  reads.length = 0; lists.length = 0;
+  const devices = await f.call('/auth/devices', undefined, second.body.accessToken);
+  assert.equal(devices.status, 200);
+  assert.equal(devices.body.items.length, 3);
+  assert.equal(lists.filter(key => key.includes('/devices/logins/')).length, 1, 'all device checks share this request’s authenticated login head');
+  assert.equal(reads.filter(key => key.startsWith(`platform-v1/identity/users/${f.user.id}/`) && /\/\d{8}\.json$/.test(key)).length, 1, 'all device checks share this request’s authenticated immutable account revision');
+  assert.ok(!reads.some(key => key.startsWith('platform-v1/identity/qq/')), 'existing credentials do not reinitialize the owner');
+  assert.ok(!reads.some(key => key.includes('retired-')));
+  assert.equal((await f.call(`/auth/devices/${first.body.deviceSessionId}/revoke`, {}, second.body.accessToken)).status, 200);
+  const after = await f.call('/auth/devices', undefined, second.body.accessToken);
+  assert.equal(after.body.items.length, 2);
+  assert.equal((await f.call('/auth/session', undefined, first.body.accessToken)).status, 401, 'bounded reads still enforce live revocation');
+});
+
 test('refresh endpoint rate limit ignores spoofed forwarding headers', async () => {
   const f = await fixture();
   for (let i = 0; i < 60; i++) assert.equal((await f.call('/auth/refresh', {}, undefined, { 'X-Forwarded-For': `192.0.2.${i}` })).status, 400);
@@ -154,7 +184,7 @@ test('overlapping logins from one installation cannot leave two usable device fa
   const ready = new Promise(resolve => { release = resolve; });
   f.store.list = async (options) => {
     const result = await list(options);
-    if (options.prefix === `platform-v1/identity/devices/by-user/${f.user.id}/`) {
+    if (options.prefix === `platform-v1/identity/devices/logins/${f.user.id}/`) {
       if (++arrivals === 2) release();
       await ready;
     }
@@ -200,7 +230,7 @@ test('concurrent logins cannot bypass the per-account active-device ceiling', as
   const ready = new Promise(resolve => { release = resolve; });
   f.store.list = async (options) => {
     const result = await list(options);
-    if (options.prefix === `platform-v1/identity/devices/by-user/${f.user.id}/`) {
+    if (options.prefix === `platform-v1/identity/devices/logins/${f.user.id}/`) {
       if (++arrivals === 2) release();
       await ready;
     }

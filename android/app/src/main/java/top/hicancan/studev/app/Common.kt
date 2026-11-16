@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,6 +38,10 @@ object Ink {
 fun Modifier.topHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1f) }
 fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), 1f) }
 
+/** The campus's top row shares a centre line with the account pill at 6 + 36/2 dp. */
+@Composable fun CampusHeader(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) =
+    Row(modifier.fillMaxWidth().height(48.dp).padding(end = 100.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content)
+
 /** A plain row under a hairline, the one list item used everywhere. A trailing lambda is what a tap does; a control
  * at its end is passed by name (trailing = …). */
 @Composable fun KeyRow(key: String?, value: String, note: String? = null, color: Color = Ink.text, chevron: Boolean = false, trailing: @Composable (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
@@ -48,9 +53,10 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
         if (chevron) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(16.dp), tint = Ink.faint)
     }
 }
-@Composable fun TextTabs(items: List<Pair<String, String>>, selected: String, gap: Dp = 22.dp, onSelect: (String) -> Unit) {
+@Composable fun TextTabs(items: List<Pair<String, String>>, selected: String, gap: Dp = 22.dp, separateBefore: String? = null, onSelect: (String) -> Unit) {
     Row(Modifier.fillMaxWidth().bottomHairline(Ink.line), horizontalArrangement = Arrangement.spacedBy(gap)) {
         for ((key, label) in items) {
+            if (key == separateBefore) Box(Modifier.width(1.dp).height(16.dp).background(Ink.line).align(Alignment.CenterVertically))
             val on = key == selected
             val ink = Ink.text
             Box(Modifier.height(36.dp).clickable { onSelect(key) }.drawBehind { if (on) drawRect(ink, Offset(0f, size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx())) }, contentAlignment = Alignment.Center) {
@@ -62,10 +68,10 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
 /** One of a few, all in view. */
 @Composable fun Choice(items: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     val padH = if (items.size >= 5) 10.dp else 14.dp
-    Row(Modifier.clip(RoundedCornerShape(8.dp)).background(Ink.sunken).padding(2.dp)) {
+    Row(Modifier.clip(RoundedCornerShape(Tokens.Radius.pill.dp)).background(Ink.sunken).padding(2.dp)) {
         items.forEach { (key, label) ->
             val on = key == selected
-            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(if (on) Ink.paper else Color.Transparent).clickable { onSelect(key) }.padding(horizontal = padH, vertical = 6.dp)) {
+            Box(Modifier.clip(RoundedCornerShape(Tokens.Radius.pill.dp)).background(if (on) Ink.paper else Color.Transparent).clickable { onSelect(key) }.heightIn(min = Tokens.Size.search.dp).padding(horizontal = padH, vertical = 6.dp), contentAlignment = Alignment.Center) {
                 Plain(label, 13.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.Medium else FontWeight.Normal, maxLines = 1)
             }
         }
@@ -75,12 +81,19 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
 @Composable fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) = androidx.compose.material3.Switch(on, onChange, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Ink.brand))
 
 @Composable fun Chip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
-    Surface(onClick, modifier.heightIn(min = 32.dp), shape = RoundedCornerShape(8.dp), color = Ink.paper, border = BorderStroke(1.dp, Ink.line)) {
+    Surface(onClick, modifier.heightIn(min = 32.dp), shape = RoundedCornerShape(Tokens.Radius.pill.dp), color = Ink.paper, border = BorderStroke(1.dp, Ink.line)) {
         Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) { Plain(text, 13.sp) }
     }
 @Composable fun ActionButton(text: String, go: Boolean = false, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) =
-    Surface(onClick, modifier.heightIn(min = 40.dp), enabled = enabled, shape = RoundedCornerShape(8.dp), color = if (go) Ink.brand else Ink.paper, border = if (go) null else BorderStroke(1.dp, Ink.line)) {
+    Surface(onClick, modifier.heightIn(min = Tokens.Size.control.dp), enabled = enabled, shape = RoundedCornerShape(Tokens.Radius.pill.dp), color = if (go) Ink.brand else Ink.paper, border = if (go) null else BorderStroke(1.dp, Ink.line)) {
         Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) { Plain(text, 14.sp, if (go) MaterialTheme.colorScheme.onPrimary else Ink.text, FontWeight.Medium, maxLines = 1) }
+    }
+
+/** Secondary actions stay with the text they act on; their touch target is larger than their visible ink. */
+@Composable fun TextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, refresh: Boolean = false, muted: Boolean = false) =
+    TextButton(onClick, modifier.heightIn(min = Tokens.Size.control.dp), enabled = enabled, shape = RoundedCornerShape(Tokens.Radius.pill.dp), contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
+        if (refresh) { Icon(Icons.Outlined.Refresh, null, Modifier.size(16.dp), tint = if (enabled) Ink.brand else Ink.faint); Spacer(Modifier.width(5.dp)) }
+        Plain(text, 14.sp, if (!enabled) Ink.faint else if (muted) Ink.muted else Ink.brand, FontWeight.Medium, maxLines = 1)
     }
 @Composable fun SmallTag(text: String, bg: Color, fg: Color) =
     Box(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp)) { Plain(text, 11.sp, fg, FontWeight.SemiBold) }
@@ -90,7 +103,7 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
  * dresses the sheet it opens.
  */
 @Composable fun PlainSheet(title: String, onClose: () -> Unit, top: (@Composable () -> Unit)? = null, head: Pair<Color, Color>? = null, content: @Composable ColumnScope.() -> Unit) {
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = Ink.paper, shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp), dragHandle = null, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = Ink.paper, shape = RoundedCornerShape(topStart = Tokens.Radius.sheet.dp, topEnd = Tokens.Radius.sheet.dp), dragHandle = null, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(top = if (top != null) 12.dp else if (head != null) 0.dp else 18.dp, bottom = 24.dp).navigationBarsPadding()) {
             if (top != null) Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp)) { top() }
             // A sheet whose content names itself (a task, its title editable) has no title row.

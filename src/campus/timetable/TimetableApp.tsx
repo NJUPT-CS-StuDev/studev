@@ -4,12 +4,12 @@ import { updateExamAttendance, updateRun, updateTimetableEdits, writePreferences
 import { courseIdentity } from '@/timetable/model/courseColors';
 import { usePreferences } from '@/world/usePreferences';
 import { useTasks } from '@/world/useTasks';
-import { LAYER_ORDER, lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
+import { LAYER_ORDER, eventsOn, lastLesson, toggleRun, weekOfDate, weekShown, type CampusEvent } from '@/world/events';
 import { loadExamRecord, type ExamRecord } from '@/world/data';
 import { roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, momentNow, startOfWeek, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { useUrl, useWide } from '@/world/useUrl';
-import { Back, Chevron } from '@/world/ui';
+import { Back, Chevron, CampusHeader } from '@/world/ui';
 import { parseWho, useTimeline, type Who } from './useTimeline';
 import { ClassPicker } from './ClassPicker';
 import { DayView } from './views/DayView';
@@ -26,7 +26,7 @@ import { labCourseKey } from './model/labs';
 import '../campus.css';
 
 // The list is one's own: tasks by when they are due, exams among them.
-const SCALES = [['day', '天'], ['week', '周'], ['term', '学期'], ['list', '清单']] as const;
+const SCALES = [['day', '天'], ['week', '周'], ['term', '学期'], ['list', '任务']] as const;
 type Scale = typeof SCALES[number][0];
 const whoTitle = (who: Exclude<Who, { type: 'me' }>) => who.type === 'teacher' ? `${who.id} 老师` : who.type === 'room' ? roomLabel(who.id) : who.id;
 
@@ -54,7 +54,8 @@ export default function TimetableApp() {
     const page = useRef<HTMLDivElement>(null);
     // Pinching, or ctrl with the wheel, moves between day, week and term.
     const stepScale = useCallback((direction: number) => {
-        const order = SCALES.map(item => item[0]);
+        if (scale === 'list') return;
+        const order = SCALES.map(item => item[0]).filter(item => item !== 'list');
         const next = order[order.indexOf(scale) + direction];
         if (next) set({ scale: next });
     }, [scale, set]);
@@ -63,7 +64,7 @@ export default function TimetableApp() {
         if (!element) return;
         let last = 0;
         const step = (direction: number) => { const time = performance.now(); if (time - last > 450) { last = time; stepScale(direction); } };
-        const wheel = (event: WheelEvent) => { if (event.ctrlKey) { event.preventDefault(); step(event.deltaY > 0 ? 1 : -1); } };
+        const wheel = (event: WheelEvent) => { if (event.ctrlKey && scale !== 'list') { event.preventDefault(); step(event.deltaY > 0 ? 1 : -1); } };
         const points = new Map<number, [number, number]>();
         let span = 0;
         const distance = () => { const [a, b] = [...points.values()]; return Math.hypot(a![0] - b![0], a![1] - b![1]); };
@@ -80,8 +81,8 @@ export default function TimetableApp() {
         element.addEventListener('pointerup', up);
         element.addEventListener('pointercancel', up);
         return () => { element.removeEventListener('wheel', wheel); element.removeEventListener('pointerdown', down); element.removeEventListener('pointermove', move); element.removeEventListener('pointerup', up); element.removeEventListener('pointercancel', up); };
-    }, [stepScale]);
-    // One key for each view, as calendars have them: D 天, W 周, S 学期, L 清单, and T back to today.
+    }, [scale, stepScale]);
+    // One key for each view, as calendars have them: D 天, W 周, S 学期, L 任务, and T back to today.
     const sheetOpen = open !== null || taskId !== null || calendar;
     useEffect(() => {
         const keys: Record<string, Scale> = { d: 'day', w: 'week', s: 'term', l: 'list' };
@@ -114,7 +115,7 @@ export default function TimetableApp() {
     const last = scale === 'term' ? lastLesson(line) : null;
     const monday = startOfWeek(day);
     const termName = `${term.year}–${term.year + 1} 学年第${term.number === 1 ? '一' : '二'}学期`;
-    const title = !isMe ? whoTitle(who) : scale === 'list' ? '清单' : scale === 'term' ? termName : scale === 'week' ? (week ? `第 ${week} 周` : '假期') : `${dateLabel(day)} ${WEEKDAYS[weekdayOf(day)]}`;
+    const title = !isMe ? whoTitle(who) : scale === 'list' ? '任务' : scale === 'term' ? termName : scale === 'week' ? (week ? `第 ${week} 周` : '假期') : `${dateLabel(day)} ${WEEKDAYS[weekdayOf(day)]}`;
     const pending = line.tasks.filter(task => !task.parent && !task.done).length;
     const subtitle = scale === 'list' ? (pending ? `${pending} 件要做` : '没有要做的事') : scale === 'term'
         ? `${dateLabel(term.weeks[0]!.start)} – ${dateLabel(term.weeks.at(-1)!.end)} · ${nowWeek ? `第 ${nowWeek} / ${term.weeks.length} 周` : `${term.weeks.length} 周`}${last ? ` · 课上到 ${dateLabel(last)}` : ''}`
@@ -134,27 +135,27 @@ export default function TimetableApp() {
     };
 
     return (
-        <div className="sd page" ref={page}>
+        <div className="sd page campus-entry timetable-page" ref={page}>
             {/* One width for every scale: the title, buttons and tabs stay put when switching. */}
             <div className="wrap">
                 <header className="ph">
                     <div>
-                        {!isMe && <button className="back" onClick={() => set({ who: null, scale: null, preview: null }, { push: true })}><Back />我的课表</button>}
-                        <h1>{title}</h1>
+                        {!isMe && <CampusHeader><button className="back" onClick={() => set({ who: null, scale: null, preview: null }, { push: true })}><Back />我的课表</button></CampusHeader>}
+                        {isMe ? <CampusHeader><h1>{title}</h1></CampusHeader> : <h1>{title}</h1>}
                         <p>{subtitle}{isMe && wide && prefs.class ? ` · ${prefs.class}` : ''}</p>
                     </div>
                     <div className="acts">
-                        {showShift && <>
-                            <button className="ib" aria-label="上一个" onClick={() => shift(-1)}><Back /></button>
-                            <button className="ib" onClick={() => set({ t: rolled ? now.date : null })}>今天</button>
-                            <button className="ib" aria-label="下一个" onClick={() => shift(1)}><Chevron /></button>
-                        </>}
+                        {showShift && <div className="time-nav" role="group" aria-label="日期切换">
+                            <button aria-label="上一个" onClick={() => shift(-1)}><Back /></button>
+                            <button onClick={() => set({ t: rolled ? now.date : null })}>今天</button>
+                            <button aria-label="下一个" onClick={() => shift(1)}><Chevron /></button>
+                        </div>}
                         {isMe && prefs.class && <button className="ib" onClick={() => setCalendar(true)}>日历</button>}
                         {isMe && <a className="ib" href="/search/?scope=course">{wide || !showShift ? '加课' : '+'}</a>}
                     </div>
                 </header>
                 <div className="tabs" role="tablist">
-                    {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={scale === key ? 'on' : ''} title={`${label} · 按 ${({ day: 'D', week: 'W', term: 'S', list: 'L' } as const)[key]}`} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
+                    {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={`${scale === key ? 'on' : ''}${key === 'list' ? ' tasks-tab' : ''}`} title={`${label} · 按 ${({ day: 'D', week: 'W', term: 'S', list: 'L' } as const)[key]}`} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
                 </div>
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} onTask={openTask} />}
@@ -168,7 +169,7 @@ export default function TimetableApp() {
             {editing && <TaskSheet key={editing.id} task={editing} line={line} onClose={() => setTaskId(null)} />}
             {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} order={prefs.layers ?? LAYER_ORDER} onClose={() => setOpen(null)} onOpen={setOpen}
                 onSkipLab={event => { mine.labs('skip', event.lab!.id); setOpen(null); }}
-                onRename={(event, name) => { const id = courseIdentity(event.meeting!); updateTimetableEdits(term.term, edits => { const names = { ...edits.names }; if (name) names[id] = name; else delete names[id]; return { ...edits, names: Object.keys(names).length ? names : undefined }; }); setOpen(null); }}
+                onRename={(event, name) => { const id = courseIdentity(event.meeting!); const next = updateTimetableEdits(term.term, edits => { const names = { ...edits.names }; if (name) names[id] = name; else delete names[id]; return { ...edits, names: Object.keys(names).length ? names : undefined }; }); setOpen(eventsOn({ ...line, names: next.timetable?.[term.term]?.names }, event.date).find(item => item.id === event.id) ?? event); }}
                 onDropLab={event => { mine.labs('drop', labCourseKey(event.lab!)); setOpen(null); }}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
                 onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}

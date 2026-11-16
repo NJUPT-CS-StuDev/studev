@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import tokens from '../../../../design/tokens.json';
+import golden from '@/world/parity/golden.json';
 import { courseIdentity, courseTones } from './courseColors';
 const luminance = (hex: string) => hex.slice(1).match(/../g)!.map(v => parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i]!,0);
 describe('shared course palette', () => {
@@ -19,6 +20,13 @@ describe('shared course palette', () => {
         const tones = courseTones(courses);
         for (const left of courses) for (const right of courses) {
             if (left !== right && left.weekday === right.weekday) expect(tones.get(left.course.code)).not.toBe(tones.get(right.course.code));
+        }
+    });
+    it('uses the whole palette before repeating a colour across a real week', () => {
+        for (const schedule of golden.schedules) {
+            const tones = courseTones(schedule.meetings);
+            expect(new Set(tones.values()).size, schedule.class).toBe(Math.min(12, tones.size));
+            expect(courseTones([...schedule.meetings].reverse())).toEqual(tones);
         }
     });
     it('has twelve distinct hues with WCAG AA normal-text contrast in both themes', () => {

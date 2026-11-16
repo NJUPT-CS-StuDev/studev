@@ -33,8 +33,8 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     if (!event) return null;
     const today = event.date === now.date;
     const during = today && event.start <= now.min;
-    const caption = during ? `正在上，到 ${hm(event.end)}` : today ? `下一节 · 还有 ${durationText(event.start - now.min)}`
-        : `下一节 · ${daysBetween(now.date, event.date) === 1 ? '明天' : dateLabel(event.date)}`;
+    const caption = during ? `进行中，至 ${hm(event.end)}` : today ? `下一项 · 还有 ${durationText(event.start - now.min)}`
+        : `下一项 · ${daysBetween(now.date, event.date) === 1 ? '明天' : dateLabel(event.date)}`;
     const exam = examDays(line, now.date)[0];
     return (
         <section className="next">

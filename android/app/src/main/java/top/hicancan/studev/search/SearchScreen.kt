@@ -146,10 +146,11 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     fun open(link: String) {
         if (!route.open(link, PLATFORM_ORIGIN)) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(top.hicancan.studev.app.absolute(link, PLATFORM_ORIGIN)))) }
     }
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp)) {
-        Box(Modifier.padding(end = 40.dp, bottom = 12.dp)) {
-            SearchField(route.query, "搜课程、老师、地点、通知、资料", Modifier.focusRequester(searchFocus)) { route.query = it; page = 1 }
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
+        CampusHeader {
+            SearchField(route.query, "搜索课程、老师、地点、通知、资料", Modifier.focusRequester(searchFocus), height = Tokens.Size.search.dp) { route.query = it; page = 1 }
         }
+        Spacer(Modifier.height(6.dp))
         route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; page = 1 }) } }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             TextTabs(channels.map { it.id to it.label }, channel.id, gap = 12.dp) { next -> route.scope = next; source = null; if (next != "all" && channels.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }

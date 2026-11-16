@@ -144,7 +144,6 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     };
   }
   async function authenticate(request, { required = false, staff = false, owner = false, csrf = false, allowEnrollment = false } = {}) {
-    await bootstrap();
     const kind = hasAuthorization(request) ? 'bearer' : 'cookie';
     const header = request.headers.get('authorization') || '';
     const token = kind === 'bearer' ? /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header)?.[1] : cookieCredentials(cookieValue(request, cookieName))?.accessToken;
@@ -165,7 +164,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       requireOrigin(request, env);
       if (!safeEqual(request.headers.get('x-csrf-token') || '', session.csrfToken)) fail(403, 'CSRF_REJECTED', '页面已失效，请刷新后重试。');
     }
-    return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind };
+    return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind, loginHead: auth.loginHead };
   }
   async function sessionResponse(user, mfaVerified, body, kind) {
     const started = await sessions.start(user, body, { kind, mfaVerified });
@@ -356,10 +355,12 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
     if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
-    await bootstrap();
     const request = context.request;
     const route = path.slice(API.length);
     const method = request.method;
+    // Existing credentials and public reads do not need to initialize the owner
+    // again. Registration/login/reset-mail remain the account bootstrap paths.
+    if (method === 'POST' && ['/auth/register', '/auth/login', '/auth/password/forgot'].includes(route)) await bootstrap();
     if (method === 'POST' && route === '/auth/refresh') {
       const kind = bearerBootstrap(request, path) ? 'bearer' : 'cookie';
       if (kind === 'cookie') requireOrigin(request, env);
@@ -370,7 +371,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     if (method === 'GET' && route === '/auth/devices') {
       const auth = await authenticate(request, { required: true });
-      return response({ items: (await sessions.list(auth.user.id)).map(item => ({ ...item, current: item.id === auth.sessionId })) });
+      return response({ items: (await sessions.list(auth.user, auth.loginHead)).map(item => ({ ...item, current: item.id === auth.sessionId })) });
     }
     const device = route.match(/^\/auth\/devices\/([a-f0-9-]{36})\/revoke$/);
     if (method === 'POST' && device) {
@@ -386,7 +387,10 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (!/^[0-9]{4}-[0-9]{4}$/.test(term)) fail(400, 'INVALID_TERM', '届别格式无效。');
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
-      if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) snapshot = await seedAndSyncRoster(term);
+      if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) {
+        await bootstrap();
+        snapshot = await seedAndSyncRoster(term);
+      }
       return response(snapshot);
     }
     const userLookup = route.match(/^\/admin\/users\/([a-f0-9-]{36})$/);

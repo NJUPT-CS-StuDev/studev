@@ -22,6 +22,24 @@ class ParityTest {
     private val holidays = CampusLine.holidays(json.decodeFromJsonElement<List<CalendarTerm>>(golden.getValue("calendar")))
     private val run = RunPlan(json.decodeFromJsonElement<MorningRun>(golden.getValue("run")), json.decodeFromJsonElement<List<String>>(golden.getValue("runDays")), 5)
     private val line = CampusLine(term, periods, json.decodeFromJsonElement(golden.getValue("schedules").jsonArray[0].jsonObject.getValue("meetings")), emptyList(), emptyList(), holidays, run)
+    @Test fun aCustomCourseKeepsItsOwnNameWhenAPublicCourseWithTheSameNameHasAnAlias() {
+        val source = line.meetings.first()
+        val custom = CustomCourse("independent-name", source.course.name, listOf(source.weekday), source.periods, source.weeks)
+        val named = CampusLine(term, periods, listOf(source) + Courses.meetings(custom), emptyList(), emptyList(), holidays, null,
+            names = mapOf(TimetablePresentation.identity(source) to "PersonalAlias"), courseMeetings = listOf(source))
+        val events = named.lessonsAndExams()
+        assertEquals(source.course.name, events.first { it.meeting?.teaching_class?.id == "custom:${custom.id}" }.name)
+        assertEquals("PersonalAlias", events.first { it.meeting?.id == source.id }.name)
+    }
+    @Test fun campusTimeMatchesAcrossMidnightAndDeviceDaylightSaving() {
+        golden.getValue("campusTimes").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            val at = CampusDay.now(java.time.Clock.fixed(java.time.Instant.parse(test.getValue("instant").jsonPrimitive.content), java.time.ZoneOffset.UTC))
+            val expected = test.getValue("now").jsonObject
+            assertEquals(expected.getValue("date").jsonPrimitive.content, at.toLocalDate().toString())
+            assertEquals(expected.getValue("min").jsonPrimitive.int, at.hour * 60 + at.minute)
+        }
+    }
     @Test fun settingsSyncMatches() {
         val test = golden.getValue("settingsSync").jsonObject
         fun settings(value: JsonObject): top.hicancan.studev.me.PersonalSettings = value.entries.filter { it.key != "modified" }

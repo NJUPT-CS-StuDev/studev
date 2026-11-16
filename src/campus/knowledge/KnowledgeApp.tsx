@@ -2,12 +2,16 @@
 // beside it what the topic builds on, what builds on it and every question that tested it. A question opens the
 // document where it is and leads back. Everything shown is a link someone can send (?course, ?topic, ?material#题).
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Doc, docReady, DocPlaceProvider, DocStream, DocText, type DocPlace } from '@/world/doc';
+import { Doc, readDoc, docReady, DocPlaceProvider, DocStream, DocText, type DocPlace } from '@/world/doc';
 import { containsAnchor, knowledgeFile, knowledgePlace, loadKnowledge, loadKnowledgeText, materialParts, referenced, toneOf, KIND_TONE, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
-import type { CatalogCourse, CatalogCurriculum, KnowledgeCatalog } from './catalog';
+import { referencePreviews } from './references';
+import { catalogScope, courseRelations, type CatalogCourse, type CatalogCurriculum, type KnowledgeCatalog } from './catalog';
 import { reloadIfGone } from '@/world/stale';
+import { usePreferences } from '@/world/usePreferences';
+import { loadClasses } from '@/world/data';
+import type { TeachingClass } from '@/world/facts';
 import { useUrl, useWide } from '@/world/useUrl';
-import { Back, Bars, Chevron, Sheet } from '@/world/ui';
+import { Back, Chevron, Sheet, TextAction, CampusHeader } from '@/world/ui';
 import '../campus.css';
 
 /** The subject's colour as the variables the page's styles read. */
@@ -75,35 +79,35 @@ export default function KnowledgeApp({ catalog }: { catalog: KnowledgeCatalog })
         const name = catalog.courses.find(item => item.id === courseId)?.name ?? '课程资料';
         const error = failed || (document.status === 'failed' ? '内容没能打开，请稍后重试。' : '')
             || (knowledge && !course ? '没有找到这个课程或资料。' : '');
-        return <div className="sd page knowledge"><div className="wrap">
-            <div className="kn-bar"><button className="back" onClick={() => open({})}><Back />知识</button></div>
+        return <div className="sd page campus-entry knowledge"><div className="wrap">
+            <CampusHeader className="kn-bar"><button className="back" onClick={() => open({})}><Back />知识</button></CampusHeader>
             <h1>{name}</h1>
             <p className="muted" role={error ? 'alert' : 'status'}>{error || '正在打开课程资料…'}</p>
-            {failed || document.status === 'failed' ? <button onClick={() => { setAttempt(value => value + 1); document.retry(); }}>重试</button> : null}
+            {failed || document.status === 'failed' ? <TextAction refresh onClick={() => { setAttempt(value => value + 1); document.retry(); }}>重试</TextAction> : null}
         </div></div>;
     }
 
     const tree = <Outline course={course} knowledge={knowledge} topic={topic} material={material} onOpen={open} />;
     return <DocPlaceProvider value={place}>
-        <div className="sd page knowledge" style={tone(course.id)}>
-            <div className="kn">
-                {wide ? <aside className="kn-tree">{tree}</aside> : null}
+        <div className="sd page campus-entry knowledge" style={tone(course.id)}>
+            <div className={`kn${!topic && !material ? ' kn-home' : ''}`}>
+                {wide && (topic || material) ? <aside className="kn-tree">{tree}</aside> : null}
                 <main className="kn-main">
-                    <div className="kn-bar">
+                    <CampusHeader className="kn-bar">
                         <button className="back" onClick={() => open({})}><Back />知识</button>
-                        {!wide ? <button className="ib" onClick={() => setOutline(true)}><Bars />{course.name}</button> : null}
-                    </div>
+                        {!wide && (topic || material) ? <button className="kn-course-switch" aria-label={`${course.name}课程目录`} aria-expanded={outline} onClick={() => setOutline(true)}><span>{course.name}</span><Chevron /></button> : null}
+                    </CampusHeader>
                     {topic ? <>
                         <TopicView topic={topic} />
                         <TopicReferences topic={topic} knowledge={knowledge} course={course} onOpen={open} />
                     </>
                         : material ? <MaterialView material={material} anchor={anchor} onTopic={href => place.open(href)?.()} />
                             : <CourseView course={course} knowledge={knowledge} onOpen={open} />}
-                    {!wide && topic ? <Relations topic={topic} knowledge={knowledge} course={course} onOpen={open} /> : null}
+                    {!wide && topic ? <Relations key={topic.id} topic={topic} knowledge={knowledge} course={course} onOpen={open} /> : null}
                     {!wide && material ? <MaterialTopics material={material} knowledge={knowledge} onOpen={open} course={course} /> : null}
                 </main>
                 {wide ? <aside className="kn-side">
-                    {topic ? <Relations topic={topic} knowledge={knowledge} course={course} onOpen={open} />
+                    {topic ? <Relations key={topic.id} topic={topic} knowledge={knowledge} course={course} onOpen={open} />
                         : material ? <MaterialTopics material={material} knowledge={knowledge} onOpen={open} course={course} />
                             : <Materials course={course} knowledge={knowledge} onOpen={open} />}
                 </aside> : null}
@@ -133,19 +137,34 @@ const safeMermaidLabel = (text: string) => text.replace(/["\[\]{}]/g, '').replac
 const TERM_TITLES = ['', '大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
 const GRADE_OPTIONS: [string, number | null][] = [['全部', null], ['大一', 1], ['大二', 2], ['大三', 3], ['大四', 4]];
 const primaryCodeLabel = (codes: string[]) => codes.length > 1 ? `${codes[0]} +${codes.length - 1}` : codes[0] || '培养方案课程';
+type FilterDraft = { cohort: string; major: string; grade: string; category: string; nature: string; inheritCohort: boolean; inheritMajor: boolean };
+const courseMajors = (curriculum: CatalogCurriculum[], cohort: string) => {
+    const preferred = ['计算机科学与技术', '软件工程', '信息安全', '计算机科学与技术(创新班)'];
+    const found = new Set(curriculum.flatMap(item => item.plans.filter(plan => plan.grade === cohort).map(plan => plan.major)));
+    return ['全部专业', ...preferred.filter(item => found.has(item)), ...[...found].filter(item => !preferred.includes(item))];
+};
 
 /** Every course in the unified training-plan model: term-grouped course cards (like RoomsBrowse) + curriculum dependency graph. */
 function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: KnowledgeCatalog; onOpen: (code: string) => void }) {
-    const [query, setQuery] = useState('');
-    const [view, setView] = useState<'list' | 'graph'>('list');
+    const { params, set } = useUrl();
+    const { prefs } = usePreferences();
+    const [classes, setClasses] = useState<TeachingClass[]>([]);
+    useEffect(() => { if (prefs.class) void loadClasses().then(setClasses).catch(() => undefined); }, [prefs.class]);
+    const person = classes.find(item => item.id === prefs.class) ?? null;
+    const scope = catalogScope(curriculum, person, { cohort: params.get('cohort'), major: params.get('major') });
+    const query = params.get('q') ?? '';
+    const view = params.get('view') === 'graph' ? 'graph' : 'list';
     const document = useDocument(view === 'graph');
-    const [category, setCategory] = useState('全部');
-    const [nature, setNature] = useState('全部');
-    const [grade, setGrade] = useState('全部');
-    const [major, setMajor] = useState('全部专业');
-    const [cohort, setCohort] = useState('');
+    const category = params.get('category') ?? '全部';
+    const nature = params.get('nature') ?? '全部';
+    const grade = params.get('grade') ?? '全部';
+    const major = scope.major;
+    const planYear = scope.cohort;
+    const [draft, setDraft] = useState<FilterDraft | null>(null);
+    const advanced = [grade, category, nature].filter(value => value !== '全部').length;
+    const focus = params.get('focus') ?? '';
+    const wide = useWide();
     const cohorts = [...new Set(curriculum.flatMap(course => course.plans.map(plan => plan.grade)))].sort().reverse();
-    const planYear = cohort || cohorts[0] || '';
     const inPlan = (plan: CatalogCurriculum['plans'][number]) => plan.grade === planYear && (major === '全部专业' || plan.major === major)
         && (category === '全部' || plan.category === category) && (nature === '全部' || plan.nature === nature);
 
@@ -183,12 +202,7 @@ function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: 
         return ['全部', ...['专业基础课', '专业课', '通识教育课'].filter(c => all.has(c))];
     }, [courseMeta]);
 
-    const majors = useMemo(() => {
-        const preferred = ['计算机科学与技术', '软件工程', '信息安全', '计算机科学与技术(创新班)'];
-        const found = new Set<string>();
-        for (const item of curriculum) for (const plan of item.plans) found.add(plan.major);
-        return ['全部专业', ...preferred.filter(m => found.has(m)), ...[...found].filter(m => !preferred.includes(m))];
-    }, [curriculum]);
+    const majors = useMemo(() => courseMajors(curriculum, draft?.cohort ?? planYear), [curriculum, draft?.cohort, planYear]);
 
     const q = query.trim().toLowerCase();
     const targetGrade = GRADE_OPTIONS.find(([label]) => label === grade)?.[1] ?? null;
@@ -225,84 +239,46 @@ function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: 
         }));
     }, [courses, courseMeta, targetGrade]);
 
+    const selected = useMemo(() => curriculum.filter(item => item.plans.some(plan => inPlan(plan) && (targetGrade === null || plan.term !== null && Math.ceil(plan.term / 2) === targetGrade))
+        && (!q || item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q))), [curriculum, planYear, major, category, nature, targetGrade, q]);
+    const overview = useMemo(() => courseRelations(curriculum, selected), [curriculum, selected]);
+    const graphFocus = focus === 'all' || overview.choices.some(course => course.code === focus) ? focus : wide ? 'all' : overview.choices[0]?.code ?? 'all';
+    const relations = useMemo(() => courseRelations(curriculum, selected, graphFocus), [curriculum, selected, graphFocus]);
     const graphNodes = useMemo(() => {
-        if (view !== 'graph') return { doc: '', linked: [] as CatalogCourse[] };
-        const scoped = curriculum.filter(item => item.plans.some(inPlan));
-        const scopedCodes = new Set(scoped.map(item => item.code));
-        const nodes = scoped.filter(item => (!q || item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q) || item.requires.some(r => r.toLowerCase().includes(q))));
-        const nodeSet = new Set(nodes.map(n => n.code));
-        // Add direct prerequisite targets even if filtered by query so edges never dangle
-        for (const item of [...nodes]) {
-            for (const req of item.requires) {
-                if (scopedCodes.has(req) && !nodeSet.has(req)) {
-                    const found = byCode.get(req);
-                    if (found) { nodes.push(found); nodeSet.add(req); }
-                }
-            }
-        }
+        const idOf = new Map(relations.nodes.map((node, i) => [node.code, `P${i}`]));
+        const lines = ['```mermaid', `flowchart ${wide ? 'LR' : 'TB'}`];
+        for (const node of relations.nodes) lines.push(`  ${idOf.get(node.code)}["${safeMermaidLabel(node.name)}"]`);
+        for (const edge of relations.edges) lines.push(`  ${idOf.get(edge.from)} --> ${idOf.get(edge.to)}`);
+        lines.push('```');
+        const linked = [...new Map(relations.nodes.flatMap(node => { const course = compiledByCode.get(node.code); return course ? [[course.id, course] as const] : []; })).values()];
+        return { doc: relations.edges.length ? lines.join('\n') : '', linked, planned: relations.nodes.filter(node => !compiledByCode.has(node.code)) };
+    }, [relations.nodes, relations.edges, compiledByCode, wide]);
 
-        {
-            const idOf = new Map(nodes.map((n, i) => [n.code, `P${i}`]));
-            const lines = ['```mermaid', 'flowchart LR'];
-            for (const n of nodes) {
-                const label = safeMermaidLabel(n.name);
-                lines.push(`  ${idOf.get(n.code)}["${label}"]`);
-            }
-            for (const n of nodes) {
-                for (const req of n.requires) {
-                    if (idOf.has(req)) lines.push(`  ${idOf.get(req)} --> ${idOf.get(n.code)}`);
-                }
-            }
-            lines.push('```');
-            const linked: CatalogCourse[] = [];
-            const seenCourses = new Set<string>();
-            for (const n of nodes) {
-                const kc = compiledByCode.get(n.code);
-                if (kc && !seenCourses.has(kc.id)) {
-                    seenCourses.add(kc.id);
-                    linked.push(kc);
-                }
-            }
-            return { doc: nodes.length ? lines.join('\n') : '当前筛选没有培养方案课程。', linked };
-        }
-
-    }, [view, curriculum, byCode, compiledByCode, courses, major, category, nature, q, planYear]);
-
-    return <div className="sd page knowledge"><div className="wrap">
-        <div className="ph"><div><h1>知识</h1><p>按培养方案与学期组织的知识体系，每门课连着它的先修依赖、课程资料。</p></div></div>
+    return <div className="sd page campus-entry knowledge"><div className="wrap">
+        <CampusHeader className="ph"><div><h1>知识</h1></div></CampusHeader>
         <div className="kn-tools">
-            <input className="kn-search" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="筛选课程名称、课程代码或章节…" aria-label="筛选课程" />
-            <div className="kn-tabs" role="tablist" aria-label="视图切换">
-                <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>按学期看</button>
-                <button role="tab" aria-selected={view === 'graph'} className={view === 'graph' ? 'on' : ''} onClick={() => setView('graph')}>培养方案依赖图</button>
-            </div>
+            <input className="kn-search" type="search" value={query} onChange={e => set({ q: e.target.value })} placeholder={view === 'graph' ? '搜索课程或代码' : '搜索课程、代码或章节'} aria-label="筛选课程" />
+            <div className="kn-view-row"><div className="kn-tabs" role="tablist" aria-label="视图切换">
+                <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => set({ view: null })}>课程目录</button>
+                <button role="tab" aria-selected={view === 'graph'} className={view === 'graph' ? 'on' : ''} onClick={() => set({ view: 'graph' })}>课程关系</button>
+            </div><TextAction muted onClick={() => setDraft({ cohort: planYear, major, grade, category, nature, inheritCohort: !params.has('cohort'), inheritMajor: !params.has('major') })}>筛选</TextAction></div>
         </div>
-        <div className="kn-filters">
-            <select className="kn-select" value={planYear} onChange={e => setCohort(e.target.value)} aria-label="培养方案入学年份">
-                {cohorts.map(year => <option key={year} value={year}>{year} 级培养方案</option>)}
-            </select>
-            <div className="kn-chips" role="group" aria-label="年级">
-                {GRADE_OPTIONS.map(([label]) => <button key={label} className={grade === label ? 'on' : ''} onClick={() => setGrade(label)}>{label === '全部' ? '全部年级' : label}</button>)}
-            </div>
-            <div className="kn-chips" role="group" aria-label="课程类别">
-                {categories.map(item => <button key={item} className={category === item ? 'on' : ''} onClick={() => setCategory(item)}>{item}</button>)}
-            </div>
-            <div className="kn-chips" role="group" aria-label="课程性质">
-                {['全部', '必修', '限选'].map(item => <button key={item} className={nature === item ? 'on' : ''} onClick={() => setNature(item)}>{item === '全部' ? '全部性质' : item}</button>)}
-            </div>
-            <select className="kn-select" value={major} onChange={e => setMajor(e.target.value)} aria-label="专业筛选">
-                {majors.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-        </div>
+        <p className="kn-scope"><span>{planYear}级 · {major}</span>{advanced ? <small>{advanced} 项筛选</small> : null}</p>
+        {view === 'graph' ? <div className="kn-focus"><label>查看课程<select className="kn-select" value={graphFocus} onChange={e => set({ focus: e.target.value })}>
+                <option value="all">全部关系</option>{overview.choices.map(course => <option key={course.code} value={course.code}>{course.name}</option>)}
+            </select></label></div> : null}
         {view === 'graph'
             ? <div className="kn-graph">
-                {document.status === 'ready' ? <DocText text={graphNodes.doc} />
-                    : document.status === 'failed' ? <p role="alert">依赖图没能打开。<button onClick={document.retry}>重试</button></p>
-                        : <p className="muted" role="status">正在打开依赖图…</p>}
+                <p className="fine">箭头表示作者整理的建议先修顺序，学期安排以培养方案为准。</p>
+                {!graphNodes.doc ? <p className="muted">当前筛选暂无已收录的先修关系。课程仍可在课程目录查看。</p> : document.status === 'ready' ? <DocText text={graphNodes.doc} />
+                    : document.status === 'failed' ? <div role="alert" className="content-failure"><p>课程关系暂时无法加载。</p><TextAction refresh onClick={document.retry}>重试</TextAction></div>
+                        : <p className="muted" role="status">正在打开课程关系…</p>}
+                {relations.unlinked > 0 && graphNodes.doc ? <p className="fine">仅显示已收录的关系，未连线课程仍可在课程目录查看。</p> : null}
                 {graphNodes.linked.length ? <div className="kn-graph-links">
-                    <small>图中有已编译资料的课程（点击进入）</small>
+                    <small>查看课程内容</small>
                     <div>{graphNodes.linked.map(c => <button key={c.id} style={tone(c.id)} onClick={() => onOpen(c.id)}>{c.name}</button>)}</div>
                 </div> : null}
+                {graphNodes.planned.length ? <details className="kn-planned"><summary>{graphNodes.planned.length} 门课程暂未收录内容</summary><p className="fine">{graphNodes.planned.map(course => course.name).join('、')}</p></details> : null}
             </div>
             : groupedByTerm.length === 0
                 ? <p className="empty">没有符合当前筛选条件的课程</p>
@@ -326,6 +302,26 @@ function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: 
                         })}</div>
                     </section>
                 ))}</div>}
+        {draft ? <Sheet title="筛选课程" className="knowledge-filter-sheet" onClose={() => setDraft(null)}>
+            <div className="kn-filter-fields">
+                <label>入学年份<select className="tf" value={draft.cohort} onChange={e => {
+                    const cohort = e.target.value;
+                    const nextMajor = draft.inheritMajor ? catalogScope(curriculum, person, { cohort }).major : courseMajors(curriculum, cohort).includes(draft.major) ? draft.major : '全部专业';
+                    setDraft({ ...draft, cohort, major: nextMajor, inheritCohort: false });
+                }}>{cohorts.map(year => <option key={year} value={year}>{year} 级</option>)}</select></label>
+                <label>专业<select className="tf" value={draft.major} onChange={e => setDraft({ ...draft, major: e.target.value, inheritMajor: false })}>{majors.map(item => <option key={item}>{item}</option>)}</select></label>
+                <label>学年<select className="tf" value={draft.grade} onChange={e => setDraft({ ...draft, grade: e.target.value })}>{GRADE_OPTIONS.map(([item]) => <option key={item} value={item}>{item === '全部' ? '全部学年' : item}</option>)}</select></label>
+                <label>课程类别<select className="tf" value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })}>{categories.map(item => <option key={item}>{item}</option>)}</select></label>
+                <label>修读要求<select className="tf" value={draft.nature} onChange={e => setDraft({ ...draft, nature: e.target.value })}>{['全部', '必修', '限选'].map(item => <option key={item}>{item}</option>)}</select></label>
+            </div>
+            <div className="kn-filter-actions"><TextAction muted onClick={() => {
+                const defaults = catalogScope(curriculum, person, {});
+                setDraft({ ...defaults, grade: '全部', category: '全部', nature: '全部', inheritCohort: true, inheritMajor: true });
+            }}>重置</TextAction><span /><TextAction muted onClick={() => setDraft(null)}>取消</TextAction><button className="btn go" onClick={() => {
+                set({ cohort: draft.inheritCohort ? null : draft.cohort, major: draft.inheritMajor ? null : draft.major, grade: draft.grade === '全部' ? null : draft.grade, category: draft.category === '全部' ? null : draft.category, nature: draft.nature === '全部' ? null : draft.nature, focus: null }, { push: true });
+                setDraft(null);
+            }}>应用筛选</button></div>
+        </Sheet> : null}
     </div></div>;
 }
 
@@ -343,22 +339,28 @@ function Outline({ course, knowledge, topic, material, onOpen }: { course: Knowl
 }
 
 function useText(path: string) {
-    const [loaded, setLoaded] = useState<{ path: string; text: string } | null>(null);
+    const [loaded, setLoaded] = useState<{ path: string; text: string | null; failed: boolean } | null>(null);
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
         let current = true;
         setLoaded(null);
-        void loadKnowledgeText(path).then(text => { if (current) setLoaded({ path, text }); }).catch(() => { if (current) setLoaded({ path, text: '这篇内容没能加载，请稍后重试。' }); });
+        void loadKnowledgeText(path).then(text => { if (current) setLoaded({ path, text, failed: false }); }).catch(() => { if (current) setLoaded({ path, text: null, failed: true }); });
         return () => { current = false; };
-    }, [path]);
-    return loaded?.path === path ? loaded.text : null;
+    }, [path, attempt]);
+    return { text: loaded?.path === path ? loaded.text : null, failed: loaded?.path === path && loaded.failed, retry: () => setAttempt(value => value + 1) };
+}
+
+function TextFailure({ onRetry }: { onRetry: () => void }) {
+    return <div role="alert" className="content-failure"><p className="muted">内容暂时无法加载</p><TextAction refresh onClick={onRetry}>重试</TextAction></div>;
 }
 
 function CourseView({ course, knowledge, onOpen }: { course: KnowledgeCourse; knowledge: Knowledge; onOpen: (to: Open) => void }) {
-    const text = useText(course.path);
+    const { text, failed, retry } = useText(course.path);
     const topics = course.chapters.flatMap(chapter => chapter.topics).map(id => knowledge.topics.find(item => item.id === id)!).filter(Boolean);
     const most = [...topics].sort((a, b) => b.references.length - a.references.length).filter(item => item.references.length).slice(0, 6);
     return <article className="kn-doc">
-        {text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
+        {text === null ? <h2 className="kn-title">{course.name}</h2> : null}
+        {failed ? <TextFailure onRetry={retry} /> : text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
         {most.length ? <section className="kn-most"><h2>资料中的知识点</h2>{most.map(item => {
             const count = referenced(item);
             return <button key={item.id} onClick={() => onOpen({ topic: item.id, course: course.id })}><b>{item.title}</b><small>{count.references} 处 · {count.materials} 份资料</small></button>;
@@ -367,17 +369,18 @@ function CourseView({ course, knowledge, onOpen }: { course: KnowledgeCourse; kn
 }
 
 function TopicView({ topic }: { topic: KnowledgeTopic }) {
-    const text = useText(topic.path);
+    const { text, failed, retry } = useText(topic.path);
     const count = referenced(topic);
     return <article className="kn-doc">
+        {text === null ? <h2 className="kn-title">{topic.title}</h2> : null}
         {count.references ? <p className="kn-count">关联 {count.references} 处 · 出现在 {count.materials} 份资料里</p> : <p className="kn-count">收录的资料里还没有与它关联的片段</p>}
-        {text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
+        {failed ? <TextFailure onRetry={retry} /> : text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
     </article>;
 }
 
 function MaterialView({ material, anchor, onTopic }: { material: KnowledgeMaterial; anchor: string | null; onTopic: (href: string) => void }) {
     const documentRef = useRef<HTMLElement>(null);
-    const text = useText(material.path);
+    const { text, failed, retry } = useText(material.path);
     const parts = useMemo(() => {
         if (text === null) return null;
         const stream = new DocStream(); stream.push(text); const { blocks } = stream.finish(); stream.free();
@@ -417,9 +420,10 @@ function MaterialView({ material, anchor, onTopic }: { material: KnowledgeMateri
     }, [material.path, anchor]);
     const all = parts?.filter(part => part.kind === 'section' && part.answer.length).length ?? 0;
     return <article className="kn-doc" ref={documentRef}>
+        {text === null ? <h2 className="kn-title">{material.title}</h2> : null}
         <p className="kn-count"><span className="kn-kind" style={{ '--kind': `var(--${KIND_TONE[material.kind] ?? 'muted'})` } as CSSProperties}>{material.kind}</span>{[material.term].filter(Boolean).map(term => ` · ${term}`)}{material.sections ? ` · ${material.sections} 处关联` : ''}{/^https?:\/\//.test(material.source) ? <> · <a href={material.source} target="_blank" rel="noreferrer">原件</a></> : null}
             {all && material.kind !== '课件' ? <button className="kn-toggle" onClick={() => setShown(shown.size ? new Set() : new Set(parts!.flatMap(part => part.kind === 'section' ? [part.anchor] : [])))}>{shown.size ? '收起全部解答' : '展开全部解答'}</button> : null}</p>
-        {parts === null ? <p className="muted">正在打开…</p> : parts.map((part, at) => {
+        {failed ? <TextFailure onRetry={retry} /> : parts === null ? <p className="muted">正在打开…</p> : parts.map((part, at) => {
             if (part.kind === 'text') return <Doc key={at} blocks={part.blocks} />;
             if (part.kind === 'group') return <h2 key={at} id={part.anchor} className="kn-group">{part.title}{part.sections ? <small>{part.sections} 节</small> : null}</h2>;
             const open = shown.has(part.anchor);
@@ -441,6 +445,7 @@ function MaterialView({ material, anchor, onTopic }: { material: KnowledgeMateri
 /** Right sidebar for a topic: knowledge-graph relations (prerequisite and downstream concepts + mini docstream DAG). */
 function Relations({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
     const title = (id: string) => knowledge.topics.find(item => item.id === id)?.title ?? id;
+    const [more, setMore] = useState(false);
     const link = (id: string) => <button key={id} onClick={() => onOpen({ topic: id, course: course.id })}>{title(id)}</button>;
     const miniGraph = useMemo(() => {
         if (!topic.requires.length && !topic.leads_to.length) return '';
@@ -458,10 +463,11 @@ function Relations({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [topic.id, topic.requires, topic.leads_to, knowledge.topics]);
     return <div className="kn-rel">
-        {miniGraph ? <section><h3>知识图谱关系</h3><div className="kn-mini-graph"><DocText text={miniGraph} /></div></section> : null}
-        {topic.requires.length ? <section><h3>先要懂</h3>{topic.requires.map(link)}</section> : null}
-        {topic.leads_to.length ? <section><h3>用到它的</h3>{topic.leads_to.map(link)}</section> : null}
-        {!topic.requires.length && !topic.leads_to.length ? <section><h3>知识图谱关系</h3><p className="muted">本知识点暂无前后置关联</p></section> : null}
+        {miniGraph ? <section><h3>相关知识点</h3><div className="kn-mini-graph"><DocText text={miniGraph} /></div></section> : null}
+        {topic.requires.length ? <section><h3>先要懂</h3>{(more ? topic.requires : topic.requires.slice(0, 5)).map(link)}</section> : null}
+        {topic.leads_to.length ? <section><h3>用到它的</h3>{(more ? topic.leads_to : topic.leads_to.slice(0, 5)).map(link)}</section> : null}
+        {topic.requires.length > 5 || topic.leads_to.length > 5 ? <button className="kn-more" onClick={() => setMore(value => !value)} aria-expanded={more}>{more ? '收起' : '展开全部相关知识点'}</button> : null}
+        {!topic.requires.length && !topic.leads_to.length ? <section><h3>相关知识点</h3><p className="muted">暂未收录相关知识点</p></section> : null}
     </div>;
 }
 
@@ -471,23 +477,35 @@ function TopicReferences({ topic, knowledge, course, onOpen }: { topic: Knowledg
     for (const ref of topic.references) byMaterial.set(ref.material, [...(byMaterial.get(ref.material) ?? []), ref]);
     return <section className="kn-most kn-tested">
         <h2>关联资料</h2>
-        {byMaterial.size ? [...byMaterial].map(([path, refs]) => {
-            const material = knowledge.materials.find(item => item.path === path);
-            return <div key={path} className="kn-refs">
-                <small>{material?.title ?? path}</small>
-                <div className="kn-ref-list">
-                    {refs.map((ref, i) => <button key={`${ref.anchor}-${i}`} onClick={() => onOpen({ material: path, anchor: ref.anchor, course: course.id })}>{ref.heading}</button>)}
-                </div>
-            </div>;
-        }) : <p className="muted">收录的资料里还没有与它关联的片段。</p>}
+        {byMaterial.size ? [...byMaterial].map(([path, refs]) => <ReferenceGroup key={`${topic.id}:${path}`} path={path} refs={refs} material={knowledge.materials.find(item => item.path === path)} onOpen={anchor => onOpen({ material: path, anchor, course: course.id })} />)
+            : <p className="muted">暂未收录相关资料。</p>}
     </section>;
+}
+
+function ReferenceGroup({ path, refs, material, onOpen }: { path: string; refs: KnowledgeTopic['references']; material?: KnowledgeMaterial; onOpen: (anchor: string) => void }) {
+    const [expanded, setExpanded] = useState(false);
+    const { text, failed, retry } = useText(path);
+    const previews = useMemo(() => text === null ? new Map() : referencePreviews(readDoc(text).map(block => ({ block }))), [text]);
+    const shown = expanded ? refs : refs.slice(0, 3);
+    return <div className="kn-refs">
+        <div className="kn-ref-head"><b>{material?.title ?? '课程资料'}</b><small>{refs.length} 处</small></div>
+        {refs.length > 3 ? <button className="kn-more" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? '收起' : `展开全部 ${refs.length} 处`}</button> : null}
+        {failed ? <p className="muted">题干预览暂时无法加载 <TextAction refresh onClick={retry}>重试</TextAction></p> : null}
+        <div className="kn-ref-list">{shown.map(ref => {
+            const preview = previews.get(ref.anchor);
+            return <button key={ref.anchor} onClick={() => onOpen(ref.anchor)}>
+                <span><b>{preview?.context ? `${preview.context} · ` : ''}{preview?.title ?? ref.heading}</b>{preview?.excerpt ? <small>{preview.excerpt}</small> : null}</span><Chevron />
+            </button>;
+        })}</div>
+    </div>;
 }
 
 /** Beside a document: the topics its passages name, most linked first. */
 function MaterialTopics({ material, knowledge, course, onOpen }: { material: KnowledgeMaterial; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
+    const [expanded, setExpanded] = useState(false);
     const counts = knowledge.topics.map(topic => ({ topic, n: topic.references.filter(ref => ref.material === material.path).length })).filter(row => row.n).sort((a, b) => b.n - a.n);
-    return <div className="kn-rel"><section><h3>这份资料关联的知识点</h3>{counts.map(({ topic, n }) =>
-        <button key={topic.id} onClick={() => onOpen({ topic: topic.id, course: course.id })}>{topic.title}<small>{n} 处</small></button>)}</section></div>;
+    return <div className="kn-rel"><section><h3>这份资料关联的知识点</h3>{(expanded ? counts : counts.slice(0, 8)).map(({ topic, n }) =>
+        <button key={topic.id} onClick={() => onOpen({ topic: topic.id, course: course.id })}>{topic.title}<small>{n} 处</small></button>)}{counts.length > 8 ? <button className="kn-more" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? '收起' : `展开全部 ${counts.length} 个知识点`}</button> : null}</section></div>;
 }
 
 function Materials({ course, knowledge, onOpen }: { course: KnowledgeCourse; knowledge: Knowledge; onOpen: (to: Open) => void }) {

@@ -3,7 +3,11 @@ package top.hicancan.studev.app
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -12,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
@@ -36,7 +41,7 @@ import top.hicancan.studev.account.Accounts
             runCatching { java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100").openStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
         }
     }
-    Box(modifier, contentAlignment = Alignment.Center) {
+    Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
         if (face != null) Image(face!!, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else fallback()
     }
@@ -50,7 +55,8 @@ import top.hicancan.studev.account.Accounts
     LaunchedEffect(accounts) { accounts.current() }
     val qq = user?.qq.orEmpty()
     val ink = Ink.muted
-    QqAvatarImage(qq, Modifier.fillMaxSize()) {
+    Row(Modifier.padding(start = 3.dp, end = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+    QqAvatarImage(qq, Modifier.size((Tokens.Size.search - 8).dp)) {
         val shown = user
         when {
             shown != null -> Plain(shown.nickname.take(1).ifEmpty { "我" }, 12.5.sp, ink, FontWeight.SemiBold)
@@ -61,5 +67,7 @@ import top.hicancan.studev.account.Accounts
                 drawPath(Path().apply { moveTo(5 * unit, 20 * unit); quadraticTo(6.5f * unit, 14.2f * unit, 12 * unit, 14.2f * unit); quadraticTo(17.5f * unit, 14.2f * unit, 19 * unit, 20 * unit) }, ink, style = line)
             }
         }
+    }
+    Plain(user?.nickname ?: "未登录", 12.sp, ink, modifier = Modifier.padding(start = 4.dp).widthIn(max = 48.dp), maxLines = 1)
     }
 }

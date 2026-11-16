@@ -37,6 +37,11 @@ foreach (var test in golden["sun"]!.AsArray())
 }
 object Brief(LineEvent e) => new { kind = e.Kind, name = e.Name, @short = e.Short, start = e.Start, end = e.End, room = e.Room };
 var term = Read<TeachingTerm>(golden["term"]!);
+foreach (var item in golden["campusTimes"]!.AsArray())
+{
+    var at = CampusDay.At(DateTimeOffset.Parse((string)item!["instant"]!));
+    Equal("campus time", new { date = Clock.Text(DateOnly.FromDateTime(at)), min = at.Hour * 60 + at.Minute }, item["now"]);
+}
 var periods = Read<List<TeachingPeriod>>(golden["periods"]!);
 var holidays = CampusLine.HolidaysOf(Read<List<CalendarTerm>>(golden["calendar"]!));
 var meetings = Read<List<TeachingMeeting>>(golden["schedules"]![0]!["meetings"]!);
@@ -46,6 +51,19 @@ var basic = new CampusLine(term, periods, meetings, [], [], holidays)
     RunDays = Read<List<string>>(golden["runDays"]!),
     RunAdjust = 5,
 };
+{
+    var source = meetings[0];
+    var custom = new CustomCourse("independent-name", source.Course.Name, [source.Weekday], source.Periods, source.Weeks);
+    var named = new CampusLine(term, periods, [source, .. Choices.CustomMeetings(custom)], [], [], holidays)
+    {
+        CourseNames = new() { [CourseTones.Identity(source.Course.Code, source.Course.Name)] = "PersonalAlias" },
+        CourseMeetings = [source],
+    };
+    var first = Clock.Parse(term.Weeks[0].Start); var lastCourseDay = Clock.Parse(term.Weeks[^1].End);
+    var events = Enumerable.Range(0, lastCourseDay.DayNumber - first.DayNumber + 1).SelectMany(offset => named.On(first.AddDays(offset))).ToList();
+    Equal("custom name independent from public alias", events.First(e => e.Meeting?.TeachingClass.Id == $"custom:{custom.Id}").Name, JsonValue.Create(source.Course.Name));
+    Equal("public course retains personal alias", events.First(e => e.Meeting?.Id == source.Id).Name, JsonValue.Create("PersonalAlias"));
+}
 foreach (var day in golden["days"]!.AsArray())
     Equal("day " + day!["date"], basic.On(Clock.Parse(day["date"]!.GetValue<string>())).Select(Brief), day["events"]);
 foreach (var item in golden["edgeCases"]!["names"]!.AsArray())

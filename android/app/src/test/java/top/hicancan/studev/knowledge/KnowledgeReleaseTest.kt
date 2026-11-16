@@ -31,4 +31,18 @@ class KnowledgeReleaseTest {
         assertTrue(expectedWeeks.all { it.isNotBlank() })
         assertEquals(expectedWeeks, weeks(Json.encodeToJsonElement(curriculum).jsonArray))
     }
+
+    @Test fun followTheClassPlanUnlessADeepLinkSelectsAnotherAndKeepOnlyRecordedGraphEdges() {
+        val curriculum = Json.decodeFromString<List<CurriculumCourse>>(text("curriculum/courses.json"))
+        assertEquals("2024" to "计算机科学与技术", catalogScope(curriculum, "2024", "计算机科学与技术", null, null))
+        assertEquals("2026" to "软件工程", catalogScope(curriculum, "2024", "计算机科学与技术", "2026", "软件工程"))
+        assertEquals("2024" to "全部专业", catalogScope(curriculum, "2024", "计算机科学与技术", null, "全部专业"))
+        for (year in listOf("2024", "2026")) {
+            val selected = curriculum.filter { course -> course.plans.any { it.grade == year && it.major == "计算机科学与技术" } }
+            val graph = courseRelations(curriculum, selected)
+            assertTrue(graph.edges.isNotEmpty())
+            assertEquals(graph.edges.flatMap { listOf(it.from, it.to) }.toSet(), graph.nodes.map { it.code }.toSet())
+            assertTrue(graph.edges.all { edge -> edge.from in curriculum.first { it.code == edge.to }.requires })
+        }
+    }
 }

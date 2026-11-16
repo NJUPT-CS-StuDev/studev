@@ -5,6 +5,8 @@ import top.hicancan.studev.data.TeachingMeeting
 import top.hicancan.studev.knowledge.CurriculumCourse
 import top.hicancan.studev.knowledge.KnowledgeIndex
 
+class UnknownReference : IllegalArgumentException("未知资料引用。请重新查询，并原样使用结果中的原文标识。")
+
 /** What the AI is told when it asks about a course, a schedule or a training plan: src/campus/world/answers.ts. */
 object Answers {
     private val WEEKDAY = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -42,18 +44,18 @@ object Answers {
             val sharedOnly = Materials.said(shared, asked)
             return buildJsonObject { put("found", false); put("courses", JsonArray(near)); if ("kinds" in sharedOnly) put("shared", sharedOnly) }
         }
-        val titles = index.topics.associate { it.id to it.title }
+        val topics = index.topics.associateBy { it.id }
         val materials = linkedMapOf<String, MutableList<JsonObject>>()
         index.materials.filter { it.course == course.id }.forEach { material ->
             val list = materials.getOrPut(material.kind) { mutableListOf() }
-            if (list.size < 12) list += buildJsonObject { put("title", material.title); put("id", "sections/${material.path}") }
+            if (list.size < 12) list += buildJsonObject { put("title", material.title); put("id", textKey("sections/${material.path}")); put("path", material.path); put("url", "/knowledge/?material=${component(material.path)}") }
         }
         val sharedLinks = Materials.said(shared, course.name)
         return buildJsonObject {
             put("found", true); put("course", course.name); put("codes", JsonArray(course.codes.map(::JsonPrimitive))); put("url", "/knowledge/?course=${component(course.id)}")
             put("chapters", JsonArray(course.chapters.map { chapter -> buildJsonObject {
                 put("title", chapter.title)
-                put("topics", JsonArray(chapter.topics.map { id -> buildJsonObject { put("id", "topics/$id"); put("title", titles[id] ?: id) } }))
+                put("topics", JsonArray(chapter.topics.map { id -> buildJsonObject { put("id", textKey("topics/$id")); put("title", topics[id]?.title ?: id); put("path", topics[id]?.path ?: "topics/$id.md"); put("url", "/knowledge/?topic=${component(id)}") } }))
             } }))
             put("materials", JsonObject(materials.mapValues { JsonArray(it.value) }))
             sharedLinks["kinds"]?.let { put("shared", it) }

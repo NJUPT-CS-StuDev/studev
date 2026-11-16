@@ -14,6 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,9 +29,11 @@ import kotlinx.serialization.json.*
 import top.hicancan.studev.account.Accounts
 import top.hicancan.studev.account.PlatformFailure
 import top.hicancan.studev.app.CampusModel
+import top.hicancan.studev.app.CampusHeader
 import top.hicancan.studev.app.Chip
 import top.hicancan.studev.app.Ink
 import top.hicancan.studev.app.Plain
+import top.hicancan.studev.app.PlainSheet
 import top.hicancan.studev.app.QqAvatarImage
 import top.hicancan.studev.app.Route
 import top.hicancan.studev.app.marks
@@ -60,7 +65,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
  * Asking is for someone signed in;
  * signing in opens over it and the question goes on.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable fun AiScreen(model: CampusModel, route: Route) {
     val context = LocalContext.current
     val client = remember { Accounts.get(context) }
@@ -91,6 +96,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var error by remember { mutableStateOf("") }
     var job by remember { mutableStateOf<Job?>(null) }
     var editing by remember { mutableStateOf<String?>(null) }
+    var inspectingCall by remember { mutableStateOf<Pair<String, String>?>(null) }
     // While answering after a message, only what this answer says shows after it, not the answer it had before.
     var from by remember { mutableStateOf<String?>(null) }
     val fresh = remember { mutableSetOf<String>() }
@@ -157,7 +163,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                     val call = item.jsonObject; val function = call.getValue("function").jsonObject
                     val result = try { withContext(Dispatchers.IO) { tools.execute(function.getValue("name").jsonPrimitive.content, Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject, call.getValue("id").jsonPrimitive.content) } }
                     catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { buildJsonObject { put("error", if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "工具执行失败。" else "校园数据暂不可读，请重试。") } }
+                    catch (e: Exception) { buildJsonObject { put("error", if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "工具执行失败。" else "校园数据暂不可读，请重试。"); if (e is top.hicancan.studev.world.UnknownReference) put("code", "unknown-reference") } }
                     val message = buildJsonObject { put("role", "tool"); put("tool_call_id", call.getValue("id")); put("content", result.toString()) }
                     history = history + message; grow(message)
                 }
@@ -212,6 +218,11 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
     val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
     if (minding) MemorySettings(memory, onClose = { minding = false }) { next -> model.settings.update { it.copy(memory = next) }; minding = false }
+    inspectingCall?.let { (title, body) -> PlainSheet(title, { inspectingCall = null }) {
+        androidx.compose.foundation.text.selection.SelectionContainer {
+            Column(Modifier.verticalScroll(rememberScrollState())) { Plain(body, 13.sp, Ink.muted) }
+        }
+    } }
     if (setting) OwnSettings(own, onClose = { setting = false }) { next -> own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
     renaming?.let { chat ->
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
@@ -255,12 +266,12 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 48.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        CampusHeader(Modifier.padding(start = 6.dp)) {
             IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
-            Box {
-                Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (asking == null) QqAvatarImage(Models.OWNER_QQ, Modifier.size(18.dp).clip(CircleShape))
-                    Plain(asking?.let(Models::name) ?: "免费额度", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                    Plain(asking?.let(Models::name) ?: "免费额度", 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
                     Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Ink.muted)
                 }
                 DropdownMenu(picking, { picking = false }, containerColor = Ink.paper) {
@@ -279,7 +290,6 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                     DropdownMenuItem({ Text("设置我的 API…", color = Ink.muted) }, { picking = false; setting = true })
                 }
             }
-            Plain(if (shown.isEmpty()) "" else Chats.titleOf(chats.firstOrNull { it.id == current }?.title.orEmpty(), thread), 14.sp, Ink.muted, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 2.dp))
             if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null) }
         }
         if (shown.isEmpty()) {
@@ -289,7 +299,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
                 }
-                Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
+                Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
             }
             return@Column
         }
@@ -313,10 +323,18 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                     var open by remember(question.id) { mutableStateOf(false) }
                     val steps = Steps.of(calls.map { call -> val function = call.getValue("function").jsonObject; Steps.Call(call.getValue("id").jsonPrimitive.content, function.getValue("name").jsonPrimitive.content, function.getValue("arguments").jsonPrimitive.content) },
                         results.filterValues { it != null }.mapValues { it.value!! })
-                    Plain(Steps.line(steps) + if (open) "  ⌃" else "  ›", 13.5.sp, Ink.muted, modifier = Modifier.clickable { open = !open })
+                    Plain(Steps.line(steps) + if (open) "  ⌃" else "  ›", 13.5.sp, Ink.muted, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("ai-steps:${question.id}").clickable { open = !open })
                     if (open) Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        steps.forEach { step ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        steps.forEachIndexed { index, step ->
+                            Row(Modifier.semantics { testTagsAsResourceId = true }.testTag("ai-call:${calls[index].getValue("id").jsonPrimitive.content}").clickable {
+                                val call = calls[index]; val function = call.getValue("function").jsonObject
+                                val arguments = function.getValue("arguments").jsonPrimitive.content
+                                val result = results[call.getValue("id").jsonPrimitive.content]
+                                val pretty = Json { prettyPrint = true }
+                                fun shown(value: JsonElement) = pretty.encodeToString(JsonElement.serializer(), value)
+                                val args = runCatching { shown(Json.parseToJsonElement(arguments)) }.getOrDefault(arguments)
+                                inspectingCall = step.label to "调用参数\n$args\n\n调用结果\n${result?.let(::shown) ?: "正在等待结果…"}"
+                            }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Plain(step.label, 13.sp, if (step.failed) marks().danger else Ink.text, weight = FontWeight.Medium)
                                 Plain(step.detail + if (step.pending) "……" else "", 13.sp, if (step.failed) marks().danger else Ink.muted, modifier = Modifier.weight(1f, fill = false))
                             }
@@ -348,7 +366,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             }
             if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
-                turns.lastOrNull()?.let { (question, _) -> top.hicancan.studev.app.Chip("重试", { again(question.id) }) }
+                turns.lastOrNull()?.let { (question, _) -> top.hicancan.studev.app.TextAction("重试", { again(question.id) }, refresh = true) }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -460,7 +478,7 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
         val ink = Ink.text
         androidx.compose.foundation.text.BasicTextField(value, { value = it.copy(text = it.text.take(4000)) }, Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 240.dp).focusRequester(focus), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 26.sp, color = ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(ink))
         Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCancel, shape = RoundedCornerShape(18.dp)) { Text("取消", color = ink) }
+            top.hicancan.studev.app.TextAction("取消", onCancel)
             Button(onClick = { onSend(value.text.trim()) }, enabled = value.text.isNotBlank(), shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = ink, contentColor = Ink.paper)) { Text("发送") }
         }
     }
@@ -539,7 +557,7 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
                     Plain("记忆已关闭，AI 看不到这些内容，也不再记新的。" + if (count > 0) "记着的 $count 件事还在，打开就接着用。" else "", 13.5.sp, Ink.muted, lineHeight = 21.sp)
                 }
             }
-            Plain("只存在这台设备上，提问时随问题一起发给模型。", 12.sp, Ink.faint)
+            Plain("未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。", 12.sp, Ink.faint)
         } },
         confirmButton = { TextButton({ onSave(Memory(on, text.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n") { "- $it" })) }) { Text("保存") } },
         dismissButton = { Row { if (on && text.isNotEmpty()) TextButton({ text = "" }) { Text("全部清空", color = Ink.muted) }; TextButton(onClose) { Text("取消") } } })
@@ -550,7 +568,7 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
     val open = drafts.filter { it.key !in saved }
     var picked by remember(drafts.size) { mutableStateOf(open.map { it.key }.toSet()) }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, Ink.line, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp)) {
-        Plain(if (open.isNotEmpty()) "起草了 ${drafts.size} 个任务" else "已加到清单 · ${drafts.size} 个任务", 13.sp, Ink.muted, FontWeight.SemiBold)
+        Plain(if (open.isNotEmpty()) "起草了 ${drafts.size} 个任务" else "任务已添加 · ${drafts.size} 个任务", 13.sp, Ink.muted, FontWeight.SemiBold)
         drafts.forEach { draft ->
             val done = draft.key in saved
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clickable(enabled = !done) { picked = if (draft.key in picked) picked - draft.key else picked + draft.key }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -563,7 +581,7 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
             }
         }
         val chosen = open.filter { it.key in picked }
-        if (open.isNotEmpty()) Button(onClick = { onAdd(chosen.map { it.key }) }, enabled = chosen.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text(if (chosen.size == open.size) "全部加到清单" else "加 ${chosen.size} 个到清单") }
+        if (open.isNotEmpty()) Button(onClick = { onAdd(chosen.map { it.key }) }, enabled = chosen.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) { Text(if (chosen.size == open.size) "添加全部任务" else "添加 ${chosen.size} 个任务") }
     }
 }
 

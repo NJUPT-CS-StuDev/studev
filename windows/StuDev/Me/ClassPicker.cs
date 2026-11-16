@@ -21,7 +21,7 @@ public static class ClassPicker
             column.Children.Add(lead);
         }
         var box = Kit.Field("", "比如 B240402", "班号或专业");
-        column.Children.Add(box);
+        column.Children.Add(Kit.SearchField(box));
         var results = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         column.Children.Add(results);
         void Show()

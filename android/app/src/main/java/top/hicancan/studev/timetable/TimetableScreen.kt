@@ -15,6 +15,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
@@ -25,6 +27,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -84,7 +88,7 @@ import java.time.LocalDate
     val record = examRecordOf(state, classId)
     val title = when {
         !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
-        scale == "list" -> "清单"
+        scale == "list" -> "任务"
         scale == "term" -> "${term.year}–${term.year + 1}\n第${if (term.number == 1) "一" else "二"}学期"
         scale == "week" -> if (week != null) "第 $week 周" else "假期"
         else -> "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
@@ -113,14 +117,14 @@ import java.time.LocalDate
             addingCourse = false; customCourseOpen = true
         }
     }
-    if (customCourseOpen) CustomCourseSheet(settings.timetableEdits(term.term), term.weeks.size, line.periods.size, model) { customCourseOpen = false }
+    if (customCourseOpen) CustomCourseSheet(term.weeks.size, line.periods.size, model) { customCourseOpen = false }
     Column(Modifier.fillMaxSize().pointerInput(scale) {
         detectTransformGestures { _, _, zoom, _ ->
             pinch *= zoom
             val step = if (pinch < .72f) 1 else if (pinch > 1.38f) -1 else 0
-            if (step != 0) { order.getOrNull(order.indexOf(scale) + step)?.let { route.scale = it }; pinch = 1f }
+            if (step != 0 && scale != "list") { order.getOrNull(order.indexOf(scale) + step)?.let { route.scale = it }; pinch = 1f }
         }
-    }.statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp)) {
+    }.statusBarsPadding().padding(horizontal = 16.dp)) {
         // A newer app is out: said once, quietly, above the timetable, until it is installed.
         state.app?.takeIf { state.appBehind }?.let { app ->
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -131,20 +135,30 @@ import java.time.LocalDate
                 Plain(" · 更新 ›", 13.5.sp, Ink.brand)
             }
         }
-        Row(Modifier.fillMaxWidth().padding(end = 40.dp, bottom = 16.dp), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                if (!isMe) Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.whoType = "me"; route.whoId = ""; route.scale = "day"; route.preview = null }.padding(bottom = 6.dp))
+        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            // The avatar has its own place beside the title. Week navigation must not squeeze the title into it.
+            if (isMe) CampusHeader { Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 1) }
+            else {
+                CampusHeader { Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.whoType = "me"; route.whoId = ""; route.scale = "day"; route.preview = null }.padding(vertical = 10.dp)) }
                 Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 2)
-                Plain(sub, 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 4.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (scale == "week") { Chip("‹", { route.day = day.minusDays(7) }); Chip("今天", { route.day = if (ahead > 0) now.date else null }); Chip("›", { route.day = day.plusDays(7) }) }
-                if (isMe) Chip(if (scale == "week") "+" else "加课", { addingCourse = true })
-                if (isMe && scale != "week") Chip("日历", { calendar = true })
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Plain(sub, 13.5.sp, Ink.muted, modifier = Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (scale == "week") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(44.dp).clickable { route.day = day.minusDays(7) }.semantics { contentDescription = "上一周" }, contentAlignment = Alignment.Center) { Plain("‹", 24.sp, Ink.muted) }
+                            TextAction("今天", { route.day = if (ahead > 0) now.date else null }, modifier = Modifier.heightIn(min = 44.dp), muted = true)
+                            Box(Modifier.size(44.dp).clickable { route.day = day.plusDays(7) }.semantics { contentDescription = "下一周" }, contentAlignment = Alignment.Center) { Plain("›", 24.sp, Ink.muted) }
+                        }
+                    }
+                    if (isMe) Chip(if (scale == "week") "+" else "加课", { addingCourse = true })
+                    if (isMe && scale != "week") Chip("日历", { calendar = true })
+                }
             }
         }
         // The list is one's own: tasks by when they are due, exams among them.
-        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期") + if (isMe) listOf("list" to "清单") else emptyList(), scale) { route.scale = it }
+        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期") + if (isMe) listOf("list" to "任务") else emptyList(), scale, separateBefore = "list") { route.scale = it }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
             when (scale) {
@@ -185,8 +199,10 @@ import java.time.LocalDate
     }
 }
 
-@Composable fun SearchField(value: String, hint: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
-    Row(modifier.fillMaxWidth().height(44.dp).border(1.dp, Ink.line, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+@Composable fun SearchField(value: String, hint: String, modifier: Modifier = Modifier, height: Dp = Tokens.Size.target.dp, onChange: (String) -> Unit) {
+    val shape = RoundedCornerShape(Tokens.Radius.pill.dp)
+    Row(modifier.fillMaxWidth().height(height).clip(shape).background(Ink.sunken).border(1.dp, Ink.line, shape).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(Icons.Outlined.Search, null, Modifier.size(16.dp), tint = Ink.muted)
         BasicTextField(value, onChange, Modifier.weight(1f), singleLine = true, textStyle = TextStyle(fontSize = 15.sp, color = Ink.text), cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.brand), decorationBox = { inner ->
             if (value.isEmpty()) Plain(hint, 14.5.sp, Ink.faint, maxLines = 1)
             inner()
@@ -201,9 +217,9 @@ import java.time.LocalDate
     val paper = Ink.paper
     fun faded(color: Color, amount: Float) = if (past) Color(color.red + (paper.red - color.red) * amount, color.green + (paper.green - color.green) * amount, color.blue + (paper.blue - color.blue) * amount) else color
     val done = event.task?.done != null
-    val bg = when (event.kind) { "exam" -> mark.exam; "run", "task" -> paper; else -> faded(tones?.bg ?: Ink.sunken, .35f) }
-    val fg = when (event.kind) { "exam" -> mark.onExam; "run" -> Ink.muted; "task" -> if (done) Ink.faint else Ink.text; else -> faded(tones?.fg ?: Ink.text, .42f) }
-    val border = when (event.kind) { "exam" -> mark.exam; "run" -> Ink.line; "task" -> if (done) Ink.line else Ink.brand; else -> faded(tones?.border ?: Ink.line, .55f) }
+    val bg = when (event.kind) { "exam" -> mark.exam; "run", "task" -> paper; else -> faded(tones?.bg ?: Ink.sunken, .25f) }
+    val fg = when (event.kind) { "exam" -> mark.onExam; "run" -> Ink.muted; "task" -> if (done) Ink.faint else Ink.text; else -> tones?.fg ?: Ink.text }
+    val border = when (event.kind) { "exam" -> mark.exam; "run" -> Ink.line; "task" -> if (done) Ink.line else Ink.brand; else -> faded(tones?.border ?: Ink.line, .35f) }
     Box(modifier) {
         val lab = event.lab
         val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
@@ -224,7 +240,7 @@ import java.time.LocalDate
             if (tinted) Box(Modifier.width(4.dp).fillMaxHeight().background(fg.copy(alpha = .6f)))
             Column(Modifier.fillMaxSize().padding(start = if (tinted) 16.dp else 14.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalArrangement = Arrangement.Center) {
                 Text(name, color = fg, style = TextStyle(fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp), maxLines = 2)
-                if (note.isNotEmpty()) Text(note, color = fg.copy(alpha = .82f), style = TextStyle(fontSize = 12.5.sp, lineHeight = 17.sp), maxLines = 2)
+                if (note.isNotEmpty()) Text(note, color = fg, style = TextStyle(fontSize = 12.5.sp, lineHeight = 17.sp), maxLines = 2)
             }
         }
         return
@@ -232,7 +248,7 @@ import java.time.LocalDate
     val base = modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(if (strong) 2.dp else 1.dp, border, RoundedCornerShape(8.dp))
     Column((if (onClick != null) base.clickable(onClick = onClick) else base).padding(start = 2.dp, end = 2.dp, top = maxOf(3.dp, topInset), bottom = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (topInset > 0.dp) Arrangement.Top else Arrangement.Center) {
         Text(name, color = fg, textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 14.5.sp else 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = if (big) 19.sp else 14.sp))
-        if (note.isNotEmpty()) Text(note, color = fg.copy(alpha = .82f), textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 12.5.sp else 10.sp, lineHeight = if (big) 17.sp else 13.sp))
+        if (note.isNotEmpty()) Text(note, color = fg, textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 12.5.sp else 10.sp, lineHeight = if (big) 17.sp else 13.sp))
     }
 }
 
@@ -329,10 +345,10 @@ private fun goneSummary(events: List<LineEvent>): String {
     val today = event.date == now.date
     val during = today && event.start <= now.min
     val caption = when {
-        during -> "正在上，到 ${hm(event.end)}"
-        today -> "下一节 · 还有 ${durationText(event.start - now.min)}"
-        CampusLine.daysBetween(now.date, event.date) == 1 -> "下一节 · 明天"
-        else -> "下一节 · ${dateLabel(event.date)}"
+        during -> "进行中，至 ${hm(event.end)}"
+        today -> "下一项 · 还有 ${durationText(event.start - now.min)}"
+        CampusLine.daysBetween(now.date, event.date) == 1 -> "下一项 · 明天"
+        else -> "下一项 · ${dateLabel(event.date)}"
     }
     val exam = line.examDays(now.date).firstOrNull()
     val mark = marks()
@@ -709,7 +725,7 @@ private fun goneSummary(events: List<LineEvent>): String {
                 if (first != null) Plain("与${Names.courseShort(first.course.name)}时间冲突", 12.sp, marks().danger, maxLines = 1)
                 else Plain("${rows.first().teachers.joinToString(" ") { it.name }} · $slots", 12.sp, Ink.muted, maxLines = 1)
             }
-            ActionButton("取消", onClick = onCancel)
+            TextAction("取消", onCancel)
             ActionButton(if (added) "已加入" else "加入课表", go = true, enabled = !added, onClick = onAdd)
         }
     }

@@ -16,13 +16,18 @@ const activeXHR = new Set<XMLHttpRequest>();
 let canceled = false;
 let latestId = '';
 let canSubmit = false;
+let identityLoading = true;
+let identityFailed = false;
+let submitting = false;
+let returning = false;
 /** Signing in happens in another tab, so that what is filled in here, files included, stays as it is. */
 let signingIn = false;
 const saveReceipt = (value: LocalReceipt) => rememberReceipt(value);
 function showIdentity() {
-    q('[data-fill-identity]').textContent = identity
+    q('[data-fill-identity]').textContent = identityLoading ? '正在确认登录状态；可以先填写。' : identityFailed ? '登录状态暂时无法确认；可以先填写，提交时重试。' : identity
         ? `以 ${identity.user.realName || identity.user.nickname}${identity.user.studentId ? `（${identity.user.studentId}）` : ''} 的身份提交；学号和姓名由账号自动关联，无需重复填写`
         : '可以先填写，提交时需要登录；没有账号可以当场注册，填好的内容不会丢。';
+    q('[data-fill-preview]').hidden = canSubmit || !identity || identity.user.role === 'user';
 }
 function signIn() {
     signingIn = true;
@@ -37,18 +42,22 @@ function signIn() {
 }
 // Back from signing in: the submission goes on by itself.
 async function returned() {
-    if (!signingIn || document.visibilityState !== 'visible') return;
-    identity = await session(false);
-    if (!identity) return;
-    signingIn = false;
-    showIdentity();
-    message(status, '已登录，正在提交……');
-    formElement.requestSubmit();
+    if (!signingIn || returning || document.visibilityState !== 'visible') return;
+    returning = true;
+    try {
+        identity = await session(false);
+        if (!identity || !signingIn) return;
+        signingIn = false;
+        showIdentity();
+        formElement.requestSubmit();
+    } catch (error) { message(status, errorText(error), 'error'); }
+    finally { returning = false; }
 }
 window.addEventListener('focus', () => { void returned(); });
 document.addEventListener('visibilitychange', () => { void returned(); });
 function setLocked(locked: boolean) {
     q<HTMLFieldSetElement>('[data-fill-fieldset]').disabled = locked || !!pending || !canSubmit;
+    q<HTMLButtonElement>('[data-fill-submit]').disabled = locked || !!pending || !canSubmit || identityLoading;
 }
 function pendingActions(visible: boolean) {
     q('[data-fill-complete]').hidden = !visible;
@@ -126,8 +135,9 @@ function upload(file: File, target: Upload, fileIndex: number, total: number, pr
 }
 formElement.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!definition || !canSubmit || pending)
+    if (!definition || !canSubmit || pending || submitting || identityLoading)
         return;
+    submitting = true;
     try {
         const answers = readAnswers(formElement, definition.fields);
         const files: File[] = [];
@@ -159,6 +169,10 @@ formElement.addEventListener('submit', async (event) => {
             throw new Error('每次提交最多 10 个附件。');
         if (files.reduce((sum, file) => sum + file.size, 0) > 20971520)
             throw new Error('本次所有附件合计超过 20 MB，请压缩或减少文件后提交。');
+        if (identityFailed) {
+            message(status, '正在确认登录状态…');
+            identity = await session(false); identityFailed = false; showIdentity();
+        }
         if (!identity) { signIn(); return; }
         setLocked(true);
         canceled = false;
@@ -202,6 +216,7 @@ formElement.addEventListener('submit', async (event) => {
             pendingActions(true);
         setLocked(false);
     }
+    finally { submitting = false; }
 });
 q('[data-fill-cancel]').addEventListener('click', () => { canceled = true; for (const xhr of activeXHR) xhr.abort(); });
 q<HTMLButtonElement>('[data-fill-complete]').addEventListener('click', event => {
@@ -243,14 +258,25 @@ void (async () => {
             canSubmit: boolean;
             reason?: string;
         }>(`/forms/${encodeURIComponent(id)}`);
-        // A form is read without signing in; signing in is asked for when it is sent.
-        identity = await session(false);
-        pending = identity && receipts().filter(value => value.formId === id && !value.completed && !value.abandoned).at(-1) || null;
+        // Public fields can be filled while account verification is still in flight.
+        const identityRequest = session(false).then(value => {
+            identity = value;
+            pending = identity && receipts().filter(value => value.formId === id && !value.completed && !value.abandoned).at(-1) || null;
+            return pending;
+        }).catch(() => { identityFailed = true; return null; }).finally(() => {
+            identityLoading = false;
+            showIdentity();
+            if (definition) {
+                setLocked(false);
+                if (pending) { pendingActions(true); message(status, '你有一条尚未确认的提交，请先重试确认或放弃后重新填写。'); }
+            }
+        });
         let result:{form:FormDefinition;canSubmit:boolean;reason?:string};
         try {result = await formRequest;}
         catch(error){
-            if(!pending)throw error;
-            const previous=await api<{submission:Submission;form:FormDefinition}>(`/submissions/${encodeURIComponent(pending.id)}`);
+            const previousReceipt = await identityRequest;
+            if(!previousReceipt)throw error;
+            const previous=await api<{submission:Submission;form:FormDefinition}>(`/submissions/${encodeURIComponent(previousReceipt.id)}`);
             result={form:previous.form,canSubmit:false,reason:'此表目前无法新填写。你仍可重试确认此前已申请的提交，或明确放弃。'};
         }
         definition = result.form;
@@ -278,7 +304,6 @@ void (async () => {
         q('[data-fill-card]').hidden = false;
         if (!canSubmit) {
             message(status, result.reason || '此表单暂时不能提交。');
-            q('[data-fill-preview]').hidden = identity?.user.role === 'user' || !identity;
         }
         else
             message(status);

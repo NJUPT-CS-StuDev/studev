@@ -3,12 +3,12 @@ import { loadMaterials } from '@/world/data';
 import { loadKnowledge, type KnowledgeCourse } from '@/world/knowledge';
 import { kindCounts, MATERIAL_KINDS, materialsOf, type CourseMaterials, type Material } from '@/world/materials';
 import { clusters, eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
-import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
+import { courseIdentity, courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import type { ExamRecord } from '@/world/data';
 import { changeLines, changesOf, courseOf, lessonsLeft, publishedOn, sheetName, weeksText } from '@/world/exams';
 import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
 import { dateLabel, hm, momentText, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
-import { Chevron, Sheet } from '@/world/ui';
+import { Chevron, Sheet, TextAction } from '@/world/ui';
 import { TaskSheet } from './TaskSheet';
 import { EventChoices } from './EventChoices';
 import { labCourseKey } from './model/labs';
@@ -91,6 +91,10 @@ function KnowledgeLink({ code, course }: { code?: string | null; course: string 
     return <a className="kv" href={`/knowledge/?course=${encodeURIComponent(found.id)}`}><span className="k">知识</span><span className="v">查看这门课的知识与真题<small>{found.chapters.length} 章 · {topics} 个知识点</small></span><Chevron /></a>;
 }
 
+export function CourseResources({ code, course }: { code?: string | null; course: string }) {
+    return <><KnowledgeLink code={code} course={course} /><Materials course={course} /></>;
+}
+
 /**
  * One thing on the timetable, wherever it was tapped: a lesson, a lab, an exam or 早锻炼. It says what
  * matters for going there and preparing, and links on to the course, the people and the rest.
@@ -147,7 +151,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
     const teachers = <Teachers names={event.teachers} />;
     const courseTitle = courseName(event.meeting?.course.name ?? event.lab?.course.name ?? event.exam?.course.name ?? event.name);
     const courseCode = event.meeting?.course.code ?? event.lab?.course.code ?? event.exam?.course.code;
-    const course = <><a className="kv" href={whoLink('course', courseTitle)}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a><KnowledgeLink code={courseCode} course={courseTitle} /><Materials course={courseTitle} /></>;
+    const course = <><a className="kv" href={whoLink('course', courseTitle)}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a><CourseResources code={courseCode} course={courseTitle} /></>;
 
     const dayOff = line.holidays.get(event.date);
 
@@ -169,7 +173,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 <div className="kv"><span className="k">来源</span><span className="v">{sheetName(lab.source)}<small>实验中心排课表，{dateLabel(publishedOn(lab.source))} 的版本；调整以老师通知为准</small></span></div>
                 {choices}
                 {isMe && <button className="kv" onClick={() => onSkipLab(event)}><span className="k" /><span className="v danger">不上这次实验</span></button>}
-                {isMe && <button className="kv" onClick={() => onDropLab(event)}><span className="k" /><span className="v danger">不上这门实验<small>共 {line.labs.filter(other => labCourseKey(other) === labCourseKey(lab)).length} 次，可在“我 · 实验安排”里恢复</small></span></button>}
+                {isMe && <button className="kv" onClick={() => onDropLab(event)}><span className="k" /><span className="v danger">不上这门实验<small>共 {line.labs.filter(other => labCourseKey(other) === labCourseKey(lab)).length} 次，可在课表设置的实验安排中恢复</small></span></button>}
             </Sheet>
         );
     }
@@ -220,12 +224,11 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
             {examEvent && <button className="kv" onClick={() => onOpen(examEvent)}><span className="k">考试</span><span className="v">{dateLabel(exam.date)} {WEEKDAYS[weekdayOf(exam.date)]} {exam.start}</span><Chevron /></button>}
             {/* A name of one's own for the course: 板块课 becomes the sport actually taken. One's own course is named where it was added. */}
             {isMe && meeting && !meeting.teaching_class.id.startsWith('custom:') && (naming === null
-                ? <button className="kv" onClick={() => setNaming(event.name)}><span className="k">名称</span><span className="v">改名<small>比如把板块课改成具体上的课</small></span><Chevron /></button>
-                : <div className="kv rename">
-                    <input className="tf" autoFocus value={naming} onChange={change => setNaming(change.target.value)} onKeyDown={key => { if (key.key === 'Enter' && naming.trim()) { onRename(event, naming.trim()); setNaming(null); } }} />
-                    <button className="ib" disabled={!naming.trim()} onClick={() => { onRename(event, naming.trim()); setNaming(null); }}>保存</button>
-                    <button className="ib" onClick={() => { onRename(event, null); setNaming(null); }}>原名</button>
-                </div>)}
+                ? <button className="kv" onClick={() => setNaming(event.name)}><span className="k">名称</span><span className="v">{event.name}</span><span className="text-action">编辑名称</span></button>
+                : <><div className="kv rename">
+                    <input className="tf" aria-label="课程显示名称" maxLength={60} autoFocus value={naming} onChange={change => setNaming(change.target.value)} onKeyDown={key => { if (key.key === 'Enter' && !key.nativeEvent.isComposing && naming.trim() && naming.trim() !== event.name) { onRename(event, naming.trim()); setNaming(null); } }} />
+                    <TextAction disabled={!naming.trim() || naming.trim() === event.name} onClick={() => { onRename(event, naming.trim()); setNaming(null); }}>保存名称</TextAction>
+                </div><TextAction muted onClick={() => setNaming(null)}>取消</TextAction>{line.names?.[courseIdentity(meeting)] && <TextAction muted onClick={() => { onRename(event, null); setNaming(null); }}>恢复原名</TextAction>}</>)}
             {choices}
             {isMe && <button className="kv" onClick={() => onHide(event)}><span className="k" /><span className="v danger">{meeting?.teaching_class.id.startsWith('custom:') ? '删除这门课' : '从我的课表移除'}</span></button>}
         </Sheet>

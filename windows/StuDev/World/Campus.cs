@@ -23,7 +23,9 @@ public sealed class Campus
     public List<TeachingPeriod> Periods { get; private set; } = [];
     public List<CalendarTerm> Calendar { get; private set; } = [];
     public List<Lab> ClassLabs { get; private set; } = [];
+    public List<Lab> PersonalLabs { get; private set; } = [];
     public List<TeachingMeeting> ClassMeetings { get; private set; } = [];
+    public MorningRun? Run { get; private set; }
     public string? Error { get; private set; }
     public string? UpdateError { get; private set; }
     public event Action? Changed;
@@ -98,7 +100,7 @@ public sealed class Campus
             if (version != generation) return;
             var classes = classesTask.Result;
             var term = termTask.Result; var periods = periodsTask.Result; var calendar = calendarTask.Result;
-            CampusLine? nextLine = null; List<TeachingMeeting> classMeetings = []; List<Lab> classLabs = [];
+            CampusLine? nextLine = null; List<TeachingMeeting> classMeetings = []; List<Lab> classLabs = []; List<Lab> personalLabs = []; MorningRun? runRule = null;
             if (Preferences.Class is { } klass && classes.Any(c => c.Id == klass))
             {
                 var schedule = repo.Schedule(klass); var exams = repo.Exams(klass); var labs = repo.Labs(klass);
@@ -110,29 +112,30 @@ public sealed class Campus
                 var chosen = classMeetings.Concat(facts.Where(m => edits.Added.Contains(m.TeachingClass.Id))).DistinctBy(m => m.Id).ToList();
                 var meetings = chosen.Where(m => !edits.Hidden.Contains(m.TeachingClass.Id)).Concat((edits.Custom ?? []).SelectMany(Choices.CustomMeetings)).ToList();
                 var labChoices = Preferences.Get("labs", Data.StorageJson.Default.LabChoices);
-                var labFacts = classLabs.Concat(labChoices?.Classes is { Count: > 0 } extra
-                    ? (await repo.AllLabs()).Where(l => l.Classes.Any(extra.Contains)) : []).DistinctBy(l => l.Id);
+                personalLabs = classLabs.Concat(labChoices?.Classes is { Count: > 0 } extra
+                    ? (await repo.AllLabs()).Where(l => l.Classes.Any(extra.Contains)) : []).DistinctBy(l => l.Id).OrderBy(l => l.Date).ThenBy(l => l.Start).ToList();
                 var examChoices = Preferences.Get("examAttendance", Data.StorageJson.Default.DictionaryStringDictionaryStringBoolean)?.GetValueOrDefault($"{term.Term}:{klass}");
                 var codes = meetings.Select(m => m.Course.Code).Where(code => !string.IsNullOrEmpty(code)).ToHashSet();
                 var attendingExams = exams.Result.Where(e => examChoices?.GetValueOrDefault(e.Id, e.Course.Code is null || codes.Contains(e.Course.Code))
                     ?? (e.Course.Code is null || codes.Contains(e.Course.Code))).ToList();
                 var run = Preferences.Get("run", Data.StorageJson.Default.RunSettings);
                 var runs = await repo.Runs();
+                runRule = runs.GetValueOrDefault(term.Term);
                 var grade = int.TryParse(schedule.Result.Klass.Grade, out var year) ? term.Year - year + 1 : 0;
                 if (version != generation) return;
-                nextLine = new CampusLine(term, periods, meetings, Choices.Labs(labFacts, labChoices), attendingExams, CampusLine.HolidaysOf(calendar))
+                nextLine = new CampusLine(term, periods, meetings, Choices.Labs(personalLabs, labChoices), attendingExams, CampusLine.HolidaysOf(calendar))
                 {
                     Tasks = Tasks.Live.ToList(), CourseMeetings = chosen, CourseNames = edits.Names,
                     Preferences = Preferences.Get("events", Data.StorageJson.Default.DictionaryStringEventChoice),
                     Order = Preferences.Get("layers", Data.StorageJson.Default.ListString) is { } order && order.Count == CampusLine.LayerOrder.Length && CampusLine.LayerOrder.All(order.Contains) ? order : CampusLine.LayerOrder,
-                    Run = (run?.On ?? (grade is 1 or 2)) ? runs.GetValueOrDefault(term.Term) : null,
+                    Run = (run?.On ?? (grade is 1 or 2)) ? runRule : null,
                     RunDays = run?.Days ?? [], RunAdjust = run?.Adjust ?? 0,
                 };
             }
             if (version != generation) return;
             repo.Activate();
             Repository = repo; Classes = classes; Term = term; Periods = periods; Calendar = calendar;
-            ClassMeetings = classMeetings; ClassLabs = classLabs; Line = nextLine;
+            ClassMeetings = classMeetings; ClassLabs = classLabs; PersonalLabs = personalLabs; Line = nextLine; Run = runRule;
             Error = null;
         }
         catch (NotSupportedException error) { Error = error.Message; loading = null; _ = Updates.Check(); }

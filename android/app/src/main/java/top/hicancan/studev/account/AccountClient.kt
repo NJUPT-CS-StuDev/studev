@@ -18,12 +18,8 @@ const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 @Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0,
     val department: String = "", val title: String = "", val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true)
-/** What an account's state is called, as on the web. */
-val AccountUser.statusName: String get() = when (status) { "active" -> "启用"; "disabled" -> "停用"; "pending" -> "待注册"; else -> status }
 /** The nickname shown after the real name; blank when it only repeats the name, student ID or QQ (same rule as the web). */
 val AccountUser.displayNickname: String get() = nickname.trim().takeUnless { it.isEmpty() || it == realName || it == studentId || it == qq }.orEmpty()
-/** What a role is called: the same three names as the web. */
-val AccountUser.roleName: String get() = when (role) { "owner" -> "所有者"; "admin" -> "管理员"; else -> "用户" }
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
@@ -126,15 +122,15 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         now() + value.getValue("expiresIn").jsonPrimitive.long * 1000,
         value.getValue("deviceSessionId").jsonPrimitive.content, user,
     )
-    suspend fun signIn(studentId: String, password: String, totp: String, deviceName: String): AccountUser = lock.withLock {
+    suspend fun signIn(studentId: String, password: String, totp: String, deviceName: String): AccountState = lock.withLock {
         val stored = storage.read()
         val value = checked(transport.send("/auth/login", buildJsonObject {
             put("studentId", studentId.trim()); put("password", password); put("deviceId", stored.deviceId); put("deviceName", deviceName.take(80))
             if (totp.isNotBlank()) put("totp", totp.trim())
         }, null))
-        val user = accountJson.decodeFromJsonElement<AccountUser>(value.getValue("user"))
-        keep(stored.copy(session = tokens(value, user)))
-        user
+        val state = accountJson.decodeFromJsonElement<AccountState>(value)
+        keep(stored.copy(session = tokens(value, state.user)))
+        state
     }
     suspend fun register(studentId: String, realName: String, nickname: String, qq: String, password: String) {
         checked(transport.send("/auth/register", buildJsonObject {

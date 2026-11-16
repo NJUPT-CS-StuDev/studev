@@ -7,6 +7,8 @@ using StuDev.World;
 
 namespace StuDev.Ai;
 
+public sealed class UnknownReference() : ArgumentException("未知资料引用。请重新查询，并原样使用结果中的原文标识。");
+
 public static class Answers
 {
     private static readonly string[] Weekday = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -50,12 +52,12 @@ public static class Answers
             if (sharedOnly.ContainsKey("kinds")) missing["shared"] = sharedOnly;
             return missing;
         }
-        var titles = index.Topics.ToDictionary(t => t.Id, t => t.Title);
+        var topics = index.Topics.ToDictionary(t => t.Id);
         var materials = new JsonObject();
         foreach (var material in index.Materials.Where(m => m.Course == course.Id))
         {
             if (materials[material.Kind] is not JsonArray list) { list = []; materials[material.Kind] = list; }
-            if (list.Count < 12) list.Add((JsonNode)new JsonObject { ["title"] = material.Title, ["id"] = $"sections/{material.Path}" });
+            if (list.Count < 12) list.Add((JsonNode)new JsonObject { ["title"] = material.Title, ["id"] = TextKey($"sections/{material.Path}"), ["path"] = material.Path, ["url"] = $"/knowledge/?material={Component(material.Path)}" });
         }
         var said = new JsonObject
         {
@@ -63,7 +65,7 @@ public static class Answers
             ["chapters"] = new JsonArray([.. course.Chapters.Select(chapter => (JsonNode)new JsonObject
             {
                 ["title"] = chapter.Title,
-                ["topics"] = new JsonArray([.. chapter.Topics.Select(id => (JsonNode)new JsonObject { ["id"] = $"topics/{id}", ["title"] = titles.GetValueOrDefault(id, id) })]),
+                ["topics"] = new JsonArray([.. chapter.Topics.Select(id => (JsonNode)new JsonObject { ["id"] = TextKey($"topics/{id}"), ["title"] = topics.GetValueOrDefault(id)?.Title ?? id, ["path"] = topics.GetValueOrDefault(id)?.Path ?? $"topics/{id}.md", ["url"] = $"/knowledge/?topic={Component(id)}" })]),
             })]),
             ["materials"] = materials,
         };

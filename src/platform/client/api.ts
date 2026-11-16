@@ -203,7 +203,7 @@ export function initPasswordToggles(root: Document | HTMLElement = document) {
     });
 }
 export function pill(state: string): HTMLElement { const n = el('span', labels[state] || state, 'p-pill'); n.dataset.state = state; return n; }
-export function message(node: HTMLElement, text = '', kind = 'info') { node.textContent = text; node.dataset.kind = kind; }
+export function message(node: HTMLElement, text = '', kind = 'info') { node.textContent = text; node.dataset.kind = kind; node.hidden = !text; }
 export function errorText(error: unknown): string { return error instanceof Error ? error.message : '操作未完成，请稍后重试。'; }
 function browserDevice() {
     let deviceId = localStorage.getItem('studev_device_id');
@@ -280,6 +280,7 @@ async function loadSession(): Promise<Session | null> {
                         qq: currentSession.user.qq,
                         verifiedAt: Date.now()
                     }));
+                    window.dispatchEvent(new Event('studev:account'));
                 } catch {}
             }
         }
@@ -287,6 +288,7 @@ async function loadSession(): Promise<Session | null> {
             if (e instanceof PlatformError && e.status === 401) {
                 currentSession = null;
                 try { localStorage.removeItem('studev_auth_user'); } catch {}
+                window.dispatchEvent(new Event('studev:account'));
             }
             else
                 throw e;
@@ -331,11 +333,12 @@ catch {
     if (status)
         message(status, '浏览器未允许复制，请手动选择并复制。', 'error');
 } }
-export async function busy<T>(b: HTMLButtonElement, fn: () => Promise<T>): Promise<T> { const original = b.textContent; b.disabled = true; b.textContent = '请稍候…'; try {
+export async function busy<T>(b: HTMLButtonElement, fn: () => Promise<T>, pendingText = '请稍候…'): Promise<T> { const original = b.textContent; b.disabled = true; b.setAttribute('aria-busy', 'true'); b.textContent = pendingText; try {
     return await fn();
 }
 finally {
     b.disabled = false;
+    b.removeAttribute('aria-busy');
     b.textContent = original;
 } }
 export function empty(title: string, description = '') { const box = el('div', undefined, 'p-empty'); box.append(el('h2', title)); if (description) box.append(el('p', description)); return box; }

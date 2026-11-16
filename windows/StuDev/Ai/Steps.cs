@@ -1,5 +1,5 @@
 // What the AI looked up, as src/campus/ai/steps.ts says it: one line for the whole (搜索资料 ×2 · 读原文), and each step
-// with what it asked and what came back. The same call made twice is one step.
+// with what it asked and what came back, including failed attempts and retries.
 using System.Text.Json.Nodes;
 using StuDev.World;
 
@@ -31,7 +31,7 @@ public static class Steps
             case "course": { var course = Text(Field(result, "course")); return (course.Length > 0 ? $"《{course}》" : Quoted("course")) + (done ? Field(result, "chapters") is JsonArray chapters ? $" · {chapters.Count} 章" : " · 没找到" : ""); }
             case "schedule": return Quoted("of") + (done ? Field(result, "count") is JsonValue c && c.TryGetValue<int>(out var n) && n > 0 ? $" · {n} 次课" : " · 没有" : "");
             case "curriculum": { var major = Text(Field(result, "major")); var grade = Text(args["grade"]); return (major.Length > 0 ? major : Text(args["major"])) + (grade.Length > 0 ? $" {grade} 级" : "") + (done ? Field(result, "terms") is JsonArray terms ? $" · {terms.Count} 个学期" : " · 没找到" : ""); }
-            case "read": { var title = Text(Field(result, "title")); return done && title.Length > 0 ? $"《{title}》" : ""; }
+            case "read": { var title = Text(Field(result, "title")); return done && title.Length > 0 ? $"《{title}》" : Quoted("id"); }
             case "find_place": { var first = result is JsonArray found && found.Count > 0 ? Text(Field(found[0], "name")) : ""; return Quoted("query") + (done ? first.Length > 0 ? $" → {first}" : " · 没找到" : ""); }
             case "nearby": { var near = Text(Field(result, "near")); return $"{(near.Length > 0 ? near : Text(args["near"]))}附近的{Text(args["what"])}" + (Field(result, "places") is JsonArray places && done ? $" · {places.Count} 处" : ""); }
             case "route":
@@ -52,31 +52,31 @@ public static class Steps
         }
     }
 
-    /** The steps of one answer, in the order they were taken, the same call made again taken once. */
+    /** Every call in order; a retry never overwrites an earlier attempt. */
     public static List<Step> Of(List<Call> calls, Dictionary<string, JsonNode?> results)
     {
-        var steps = new List<(string Key, Step Step)>();
+        var steps = new List<Step>();
         foreach (var call in calls)
         {
             JsonObject args;
             try { args = JsonNode.Parse(call.Arguments) as JsonObject ?? []; } catch (System.Text.Json.JsonException) { args = []; }
             var done = results.ContainsKey(call.Id); var result = results.GetValueOrDefault(call.Id);
             var error = Text(Field(result, "error"));
-            var key = $"{call.Name} {args.ToJsonString()}";
             var detail = error.Length > 0 ? $"{Detail(call.Name, args, null, false)}：{error}" : Detail(call.Name, args, result, done);
             if (error.Length > 0 && detail.StartsWith('：')) detail = detail[1..];
             var step = new Step(call.Name, Labels.GetValueOrDefault(call.Name) ?? call.Name, detail, error.Length > 0, !done);
-            var at = steps.FindIndex(s => s.Key == key);
-            if (at >= 0) steps[at] = (key, step); else steps.Add((key, step));
+            steps.Add(step);
         }
-        return steps.Select(s => s.Step).ToList();
+        return steps;
     }
 
     /** The steps in one line: what was done, each kind once, with how many times. */
     public static string Line(List<Step> steps)
     {
-        var counts = new List<(string Label, int Count)>();
-        foreach (var step in steps) { var at = counts.FindIndex(c => c.Label == step.Label); if (at >= 0) counts[at] = (step.Label, counts[at].Count + 1); else counts.Add((step.Label, 1)); }
-        return (steps.Any(s => s.Pending) ? "正在" : "已") + string.Join(" · ", counts.Select(c => c.Count > 1 ? $"{c.Label} ×{c.Count}" : c.Label));
+        return string.Join(" · ", steps.GroupBy(s => s.Label).Select(group =>
+        {
+            var failed = group.Count(s => s.Failed); var pending = group.Count(s => s.Pending);
+            return group.Key + (group.Count() > 1 ? $" ×{group.Count()}" : "") + (failed > 0 ? $"（失败 {failed}）" : "") + (pending > 0 ? $"（进行中 {pending}）" : "");
+        }));
     }
 }

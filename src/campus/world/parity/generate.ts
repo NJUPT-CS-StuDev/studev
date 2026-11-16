@@ -15,7 +15,7 @@ import { initialModified } from '@/world/merge.mjs';
 import type { Preferences } from '@/world/preferences';
 import { preferenceKey, type EventPreferences } from '@/world/schedule';
 import { dueOn, timeBounds, LAYER_ORDER } from '@/world/events';
-import { addDays } from '@/world/time';
+import { addDays, momentNow } from '@/world/time';
 import { glanceDay, glanceDue, glanceExams, glanceNextChange, glanceTerm, glanceWeek } from '@/world/glance';
 import { readTimeline, schedulingTool, taskProposal, toolArguments } from '@/world/tools';
 import tools from '@/world/tools.json';
@@ -42,6 +42,8 @@ import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
 import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, Lab, RoomDay } from '@/world/facts';
 
 const read = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
+const campusTimes = ['2026-11-16T15:59:59Z', '2026-11-16T16:00:00Z', '2026-12-31T16:00:00Z', '2026-11-17T00:00:00Z', '2026-03-08T10:30:00Z']
+    .map(instant => ({ instant, now: momentNow(new Date(instant)) }));
 const release = read<{ version: string; teaching: string; exams?: string; labs: string }>('src/data/campus-release.json');
 const base = `public/data/${release.version}`;
 const term = read<TeachingTerm>(`${base}/teaching/${release.teaching}/term.json`);
@@ -246,6 +248,9 @@ const streams = [
     [frame({ delta: { content: '半句' } })],
     [frame({ delta: { content: '写到一半' }, finish_reason: 'length' })],
     [frame({ delta: { tool_calls: [{ index: 0, id: 'c', function: { name: 'delete_user', arguments: '{}' } }] }, finish_reason: 'tool_calls' })],
+    [frame({ delta: { content: '我来查询。<｜DS' } }), frame({ delta: { content: 'ML｜ calls><｜DSML｜ invoke name="read">' }, finish_reason: 'stop' })],
+    [frame({ delta: { content: '<|DS' } }), frame({ delta: { content: 'ML| calls>' }, finish_reason: 'stop' })],
+    [frame({ delta: { content: '$x <' } }), frame({ delta: { content: ' 5$。' }, finish_reason: 'stop' })],
 ].map(lines => { const completion = new Completion(); return { lines, pieces: lines.map(line => completion.take(line)), result: completion.result() }; });
 const askAt = Date.parse('2026-11-13T16:30:00Z');
 // Who is asking and when: signed in with a class and a memory, signed out without a class, memory turned off.
@@ -276,7 +281,7 @@ const thread = { steps: threadSteps, frames: threadReplay.frames, chain: threadP
 const finding = { queries: ['教三', '教三楼', '三食堂', '三食堂门口', '图书馆', '菜鸟驿站', '地铁站', '教3-301', 'luckin', '东门', '麦当劳', '不存在的地方'].map(query => ({ query, found: findPlaces(placeRows, query).map(place => place.id) })),
     around: [['金鹰湖滨天地', '餐饮'], ['教三', '打印'], ['东门', '快递'], ['三食堂', '咖啡茶饮'], ['图书馆', '交通']].map(([near, what]) => ({ near, what, found: placesAround(placeRows, placeById, placeMeant(placeRows, placeById, near!), what!).map(({ place, metres }) => [place.id, metres]) })),
     meant: ['仙林/教3', '教三', '三食堂门口', '咖啡', '不存在的地方'].map(said => { try { return { said, id: placeMeant(placeRows, placeById, said).id }; } catch (failure) { return { said, error: (failure as Error).message }; } }) };
-// The steps an answer took, as said under the question: the same call twice is one step, a failure says why.
+// The calls an answer made, including separate retries and why any attempt failed.
 const stepCalls = [
     { id: 's1', name: 'search', arguments: JSON.stringify({ query: '补考报名', in: '通知' }) }, { id: 's2', name: 'read', arguments: JSON.stringify({ id: '217f18e4a94128cf' }) },
     { id: 's3', name: 'find_place', arguments: JSON.stringify({ query: '教三' }) }, { id: 's4', name: 'route', arguments: JSON.stringify({ from: '教三', to: '图书馆' }) },
@@ -322,5 +327,5 @@ const glance = {
 const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
     .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

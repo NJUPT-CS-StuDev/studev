@@ -67,8 +67,7 @@ public sealed class Repository
     /** One file of the release, from disk if it was fetched before. */
     public Task<byte[]> Bytes(string path)
     {
-        if (path.Length == 0 || path.StartsWith('/') || path.Split('/').Any(part => part is "" or "." or ".."))
-            throw new ArgumentException($"bad release path {path}");
+        _ = LocalPath(path);
         lock (loading)
         {
             if (!loading.TryGetValue(path, out var task) || task.IsFaulted || task.IsCanceled) loading[path] = task = Fetch(path);
@@ -76,9 +75,24 @@ public sealed class Repository
         }
     }
 
+    private string LocalPath(string path)
+    {
+        if (path.Length == 0 || Path.IsPathRooted(path) || path.Contains('\\') || path.Split('/').Any(part => part is "" or "." or ".."))
+            throw new ArgumentException($"bad release path {path}");
+        return Path.Combine(folder, path.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    /** Native readers of archives use the same downloaded file as other release reads. */
+    public async Task<string> LocalFile(string path)
+    {
+        var file = LocalPath(path);
+        if (!File.Exists(file)) await Bytes(path);
+        return file;
+    }
+
     private async Task<byte[]> Fetch(string path)
     {
-        var file = Path.Combine(folder, path.Replace('/', Path.DirectorySeparatorChar));
+        var file = LocalPath(path);
         if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
         var url = $"{Site}{Release.Base}/" + string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
         var bytes = await Http.GetByteArrayAsync(url);

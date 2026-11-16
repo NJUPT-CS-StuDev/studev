@@ -16,6 +16,7 @@ import { SPACE_FILES } from './space-contract.ts';
 import type { Exam, Room, TeachingClass, TeachingMeeting } from '../../src/campus/world/facts.ts';
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
+import { textKey } from '../../src/campus/world/texts.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -287,14 +288,14 @@ async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<{
         // The note's own # title is the result's title already; the snippet starts after it.
         docs.push(entity('topics', topic.id, url, topic.title, course, [text(blocks[0]?.type === 'heading' ? blocks.slice(1) : blocks, false).slice(0, 1200)]));
         const said = (ids: string[]) => ids.map(id => titles.get(id) ?? id).join('、') || '无';
-        const references = topic.references.slice(0, 12).map(ref => `- ${ref.heading} · ${materialTitles.get(ref.material) ?? ref.material}（id sections/${ref.material}#${ref.anchor}）`);
-        readable.set(`topics/${topic.id}`, { title: topic.title, url, source: `知识点 · ${course}`,
+        const references = topic.references.slice(0, 12).map(ref => `- ${ref.heading} · ${materialTitles.get(ref.material) ?? ref.material}（id ${textKey(`sections/${ref.material}#${ref.anchor}`)}；原文 /knowledge/?material=${encodeURIComponent(ref.material)}#${encodeURIComponent(ref.anchor)}）`);
+        readable.set(`topics/${topic.id}`, { title: topic.title, path: topic.path, url, source: `知识点 · ${course}`,
             text: [text(blocks), `先要懂：${said(topic.requires)}`, `接着学：${said(topic.leads_to)}`, ...(references.length ? ['关联的资料片段（用 read 阅读）：', ...references] : [])].join('\n\n') });
     }
     for (const material of index.materials) {
         const body = await readFile(join(dir, material.path), 'utf8');
         const blocks = readDocument(body);
-        readable.set(`sections/${material.path}`, { title: material.title, url: `/knowledge/?material=${encodeURIComponent(material.path)}`, source: `${material.kind} · ${names.get(material.course) ?? material.course}`, text: text(blocks) });
+        readable.set(`sections/${material.path}`, { title: material.title, path: material.path, url: `/knowledge/?material=${encodeURIComponent(material.path)}`, source: `${material.kind} · ${names.get(material.course) ?? material.course}`, text: text(blocks) });
         blocks.forEach((block, at) => {
             if (block.type !== 'heading') return;
             const heading = inlines(block.inlines, false), id = `${material.path}#${block.anchor}`;
@@ -302,7 +303,7 @@ async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<{
             const content = blocks.slice(at + 1, end < 0 ? undefined : end);
             const url = `/knowledge/?material=${encodeURIComponent(material.path)}#${encodeURIComponent(block.anchor)}`;
             if (block.level === 3) docs.push(entity('sections', id, url, `${heading} · ${material.title}`, material.kind, [text(content, false).slice(0, 600)]));
-            readable.set(`sections/${id}`, { title: `${heading} · ${material.title}`, url, source: `${material.kind} · ${names.get(material.course) ?? material.course}`, text: text(content) });
+            readable.set(`sections/${id}`, { title: `${heading} · ${material.title}`, path: id, url, source: `${material.kind} · ${names.get(material.course) ?? material.course}`, text: text(content) });
         });
     }
     return { docs, readable };
@@ -429,8 +430,8 @@ async function* searchDocuments(dir: string): AsyncGenerator<SearchDocument> {
 /** Each article's own text, for the AI to read once search has found it: texts/<first two hex digits of its id>.json. */
 /** Where a document's text is kept: an article by its own id, anything else (a topic, a question) by the first 16
  * hex digits of the SHA-256 of its search id; every client's read tool computes the same. */
-export const textKey = (id: string) => /^[0-9a-f]{16}$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 16);
-interface Readable { title: string; url: string; source: string; text: string }
+export { textKey };
+interface Readable { title: string; path?: string; url: string; source: string; text: string }
 async function writeTexts(docs: SearchDocument[], readable: Map<string, Readable>, to: string) {
     const shards = new Map<string, Record<string, unknown>>();
     const keep = (id: string, value: unknown) => {

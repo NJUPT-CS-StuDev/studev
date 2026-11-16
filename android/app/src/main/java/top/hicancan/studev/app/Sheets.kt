@@ -28,7 +28,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import top.hicancan.studev.account.PLATFORM_ORIGIN
-import top.hicancan.studev.account.roleName
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.me.PersonalSettings
@@ -161,8 +160,10 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     }
     val exam = event.exam
     val lab = event.lab
+    val currentCourseName = if (isMe && event.meeting != null && !top.hicancan.studev.timetable.Courses.isCustom(event.meeting.teaching_class.id))
+        settings.timetableEdits(line.term.term).names[top.hicancan.studev.timetable.TimetablePresentation.identity(event.meeting)] ?: Names.course(event.meeting.course.name) else event.name
     val kinds = mapOf("class" to "课", "lab" to "实验", "exam" to "考试")
-    PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else event.name, onClose, strip, head) {
+    PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else currentCourseName, onClose, strip, head) {
         val placed = Names.placed(event.room)
         val roomName = event.room?.let(Names::room)
         val facts = if (exam != null) Exams.courseOf(line.courseMeetings, exam.course) else if (lab != null) Exams.courseOf(line.courseMeetings, lab.course) else event.meeting?.course
@@ -219,14 +220,20 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         if (isMe && meeting != null && !top.hicancan.studev.timetable.Courses.isCustom(meeting.teaching_class.id)) {
             var naming by remember(event.id) { mutableStateOf<String?>(null) }
             val typed = naming
-            if (typed == null) KeyRow("名称", "改名", "比如把板块课改成具体上的课", chevron = true, onClick = { naming = event.name })
-            else Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (typed == null) KeyRow("名称", currentCourseName, trailing = { TextAction("编辑名称", { naming = currentCourseName }) })
+            else Column {
                 val id = top.hicancan.studev.timetable.TimetablePresentation.identity(meeting)
                 val focus = remember { androidx.compose.ui.focus.FocusRequester() }
                 LaunchedEffect(Unit) { focus.requestFocus() }
-                top.hicancan.studev.timetable.Field(typed, "这门课叫什么", Modifier.weight(1f).focusRequester(focus), onDone = { if (typed.isNotBlank()) { model.renameCourse(id, typed); onClose() } }) { naming = it.take(60) }
-                Chip("保存", { if (typed.isNotBlank()) { model.renameCourse(id, typed); onClose() } })
-                Chip("原名", { model.renameCourse(id, ""); onClose() })
+                fun save() { if (typed.isNotBlank() && typed.trim() != currentCourseName) { model.renameCourse(id, typed.trim()); naming = null } }
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    top.hicancan.studev.timetable.Field(typed, "课程名称", Modifier.weight(1f).focusRequester(focus), onDone = ::save) { naming = it.take(60) }
+                    TextAction("保存名称", ::save, enabled = typed.isNotBlank() && typed.trim() != currentCourseName)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    TextAction("取消", { naming = null }, muted = true)
+                    if (id in settings.timetableEdits(line.term.term).names) TextAction("恢复原名", { model.renameCourse(id, ""); naming = null }, muted = true)
+                }
             }
         }
         if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
@@ -244,10 +251,10 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
 
 /** Which kind shows in front when things overlap. Moving one up a step swaps it with the one before. */
 @Composable fun LayerSheet(settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {
-    PlainSheet("叠放顺序", onClose) {
-        Plain("同一时间有几件事时，靠前的显示在前面，后面的露出一条边，点开任何一件都能看到同时段的其他安排。这只改变显示，不会让哪件事消失。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+    PlainSheet("时间冲突时的显示顺序", onClose) {
+        Plain("同时有多项安排时，优先显示排在前面的类型。点击安排可查看同时段的其他事项。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
         settings.layers.forEachIndexed { at, kind ->
-            KeyRow("第 ${at + 1} 层", KIND_NAMES.getValue(kind), trailing = if (at > 0) ({ Chip("上移", { model.settings.update { current ->
+            KeyRow("${at + 1}", KIND_NAMES.getValue(kind), trailing = if (at > 0) ({ Chip("上移", { model.settings.update { current ->
                 val next = current.layers.toMutableList(); next[at] = next[at - 1].also { next[at - 1] = next[at] }; current.copy(layers = next)
             } }) }) else null)
         }
@@ -272,7 +279,6 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             top.hicancan.studev.timetable.Field(extraClass, "添加其他班实验，如 B240402", Modifier.weight(1f)) { extraClass = it.uppercase() }
             Chip("添加", { val name = extraClass.trim(); if (Regex("^[A-Z]\\d{6}(\\([A-Z]{2}\\))?$").matches(name)) { update { it.copy(classes = (it.classes + name).distinct()) }; extraClass = "" } else model.tell("请填写完整班级号") })
         }
-        Plain("实验表来自学院实验中心，不在教务系统里。每份表由你决定要不要放进自己的课表；放进来之后，还可以单独去掉某门实验或某一次。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
         sheets.forEach { lab ->
             val name = catalog.labSheet(lab)
             val on = name !in choices.off
@@ -284,21 +290,24 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
         val dropped = state.labs.filter { catalog.labCourseKey(it) in choices.drop }.distinctBy(catalog::labCourseKey)
         if (dropped.isNotEmpty()) Plain("去掉的实验", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
         dropped.forEach { lab -> val key = catalog.labCourseKey(lab)
-            KeyRow(null, Names.course(lab.course.name), "整门实验", trailing = { Chip("恢复", { update { it.copy(drop = it.drop - key) } }) }) }
+            KeyRow(null, Names.course(lab.course.name), "整门实验", trailing = { TextAction("恢复", { update { it.copy(drop = it.drop - key) } }) }) }
         val skipped = state.labs.filter { it.id in choices.skip }
-        if (skipped.isNotEmpty()) Plain("不上的几次", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-        skipped.forEach { lab -> KeyRow(null, Names.course(lab.course.name), "${dateLabel(java.time.LocalDate.parse(lab.date))} ${lab.start} · ${lab.project}", trailing = { Chip("恢复", { update { it.copy(skip = it.skip - lab.id) } }) }) }
+        if (skipped.isNotEmpty()) Plain("已隐藏的实验安排", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+        skipped.forEach { lab -> KeyRow(null, Names.course(lab.course.name), "${dateLabel(java.time.LocalDate.parse(lab.date))} ${lab.start} · ${lab.project}", trailing = { TextAction("恢复", { update { it.copy(skip = it.skip - lab.id) } }) }) }
     }
 }
 
 @Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onClose: () -> Unit) {
+    var section by remember { mutableStateOf("home") }
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
     if (layering) { LayerSheet(settings, model) { layering = false }; return }
     var coursesOpen by remember { mutableStateOf(false) }
+    var calendarOpen by remember { mutableStateOf(false) }
+    if (calendarOpen) { top.hicancan.studev.timetable.CalendarSheet(state, settings, model) { calendarOpen = false }; return }
     if (labsOpen) { LabSheet(state, settings, model, onForm = { onClose(); onForm(it) }) { labsOpen = false }; return }
     if (coursesOpen && state.term != null) {
-        top.hicancan.studev.timetable.CustomCourseSheet(settings.timetableEdits(state.term.term), state.term.weeks.size, state.periods.size, model) { coursesOpen = false }
+        top.hicancan.studev.timetable.ManagedCoursesSheet(state, settings, model, onAdd = { onClose(); route.scope = "course"; route.query = ""; route.searchFocus = true; route.tab = "search" }) { coursesOpen = false }
         return
     }
     val context = LocalContext.current
@@ -307,53 +316,87 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     val edits = term?.let { settings.timetableEdits(it.term) }
     val grade = if (term != null) CampusLine.grade(info?.grade, term) else null
     val runOn = settings.runShown ?: (grade != null && grade <= 2)
-    PlainSheet("我", onClose) {
+    val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
+    var background by remember { mutableStateOf(top.hicancan.studev.device.BackgroundSettings.status(context)) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { background = top.hicancan.studev.device.BackgroundSettings.status(context) }
+    val title = when (section) { "timetable" -> "课表设置"; "widgets" -> "桌面小组件"; "appearance" -> "外观"; "permissions" -> "提醒与权限"; "about" -> "帮助与关于"; else -> "我" }
+    key(section) {
+    PlainSheet(title, { if (section == "home") onClose() else section = "home" }, top = if (section == "home") null else ({ TextAction("返回", { section = "home" }) })) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
+            if (section == "home") {
+                KeyRow(null, account?.nickname ?: "未登录", if (account == null) "登录后同步任务和课表设置" else "管理账号 · 任务和课表设置自动同步", chevron = true, onClick = { onClose(); onAccount() })
+                Spacer(Modifier.height(12.dp))
+                KeyRow(null, "课表设置", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "选择班级、调整课程与实验" }, chevron = true, onClick = { section = "timetable" })
+                KeyRow(null, "外观", "跟随系统、浅色或深色", chevron = true, onClick = { section = "appearance" })
+                KeyRow(null, "桌面小组件", "把课表和任务放到桌面", chevron = true, onClick = { section = "widgets" })
+                KeyRow(null, "提醒与权限", "课前提醒、通知和后台导航", chevron = true, onClick = { section = "permissions" })
+                KeyRow(null, "帮助与关于", if (state.appBehind) "有新版本 ${state.app!!.versionName}" else "反馈、资料提交和应用更新", chevron = true, onClick = { section = "about" })
+            }
+            if (section == "timetable") {
             KeyRow("班级", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "还没有选" }, chevron = true, onClick = onPickClass)
             if (edits != null) {
-                KeyRow("改动", listOfNotNull("加了 ${edits.added.size} 门", "隐藏了 ${edits.hidden.size} 门", edits.names.size.takeIf { it > 0 }?.let { "改名 $it 门" }).joinToString("，"),
-                    trailing = if (edits.added.size + edits.hidden.size + edits.names.size > 0) ({ Chip("还原", { model.resetTimetableEdits() }) }) else null)
-                KeyRow("自己的课", if (edits.custom.isEmpty()) "没有" else "${edits.custom.size} 门", "任选课、实验、整周实习，教务课表里没有的", chevron = true, onClick = { coursesOpen = true })
+                KeyRow(null, "我的课程", "查看课程详情，添加、隐藏或修改个人安排", chevron = true, onClick = { coursesOpen = true })
             }
+            if (settings.klass != null) {
+                val on = state.labs.any { top.hicancan.studev.timetable.CourseCatalog.labSheet(it) !in settings.labs.off }
+                KeyRow(null, "实验安排", if (on) "已显示在课表" else "选择要显示的实验", chevron = true, onClick = { labsOpen = true })
+            }
+            KeyRow(null, "时间冲突时的显示顺序", settings.layers.joinToString(" › ") { KIND_NAMES.getValue(it) }, chevron = true, onClick = { layering = true })
+            state.run?.let { rule ->
+                Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+                KeyRow(null, "显示早锻炼", if (grade != null && grade <= 2) "本学期需完成 ${rule.required} 次" else "需要补跑时开启", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })
+            }
+            KeyRow(null, "写入手机日历", "选择同步到系统日历的课程、考试和任务", chevron = true, onClick = { calendarOpen = true })
+            if (edits != null && edits.added.size + edits.hidden.size + edits.names.size > 0) {
+                KeyRow(null, "恢复班级课程", "撤销选课、隐藏和名称调整，保留自定义课程", onClick = { model.resetTimetableEdits() })
+            }
+            }
+            if (section == "appearance") {
             Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Plain("外观", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
-                Choice(listOf("system" to "自动", "light" to "浅色", "dark" to "深色"), settings.theme) { next ->
+                Choice(listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色"), settings.theme) { next ->
                     model.settings.update { it.copy(theme = next) }
                     if (Build.VERSION.SDK_INT >= 31) context.getSystemService(UiModeManager::class.java).setApplicationNightMode(when (next) { "dark" -> UiModeManager.MODE_NIGHT_YES; "light" -> UiModeManager.MODE_NIGHT_NO; else -> UiModeManager.MODE_NIGHT_AUTO })
                     else (context as? android.app.Activity)?.recreate()
                 }
             }
-            val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
-            if (settings.klass != null) {
-                val on = state.labs.any { top.hicancan.studev.timetable.CourseCatalog.labSheet(it) !in settings.labs.off }
-                KeyRow("实验", if (on) "已放进课表" else "没有放进课表", listOfNotNull(settings.labs.drop.size.takeIf { it > 0 }?.let { "去掉 $it 门" }, settings.labs.skip.size.takeIf { it > 0 }?.let { "不上 $it 次" }).joinToString("，").ifEmpty { "学院实验中心的上机安排" }, chevron = true, onClick = { labsOpen = true })
             }
-            KeyRow("叠放", settings.layers.joinToString(" › ") { KIND_NAMES.getValue(it) }, "同一时间有几件事时谁在前面", chevron = true, onClick = { layering = true })
-            KeyRow("反馈", "哪里不顺手、哪里不对", "写一句就行，我们会看每一条", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
-            KeyRow("补充数据", "实验课表、讲座、校车、营业时间", "教务系统里没有的，审核后放进课表和地图", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
-            KeyRow("账号", account?.let { "${it.nickname} · ${it.roleName}" } ?: "未登录", chevron = true, onClick = { onClose(); onAccount() })
-            KeyRow("同步", if (account != null) "任务在你登录的手机和电脑间自动同步" else "登录后，任务在手机和电脑间自动同步", "课表设置仍只在这台设备上")
-            state.run?.let { rule ->
-                Plain("早锻炼", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-                KeyRow(null, "显示在课表上", if (grade != null && grade <= 2) "大${"一二"[grade - 1]}必做，本学期 ${rule.required} 次" else "大三大四需要补跑时打开", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })
+            if (section == "permissions") {
+            KeyRow(null, "课前提醒", "课程、实验和考试开始前提醒", trailing = { Toggle(settings.reminders) { on ->
+                model.setRun { it.copy(reminders = on) }
+                if (on && !background.notificationsEnabled) top.hicancan.studev.device.BackgroundSettings.openNotifications(context)
+            } })
+            if (settings.reminders) {
+                Plain("提前时间", 13.sp, Ink.muted, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
+                Choice(listOf("5" to "5 分钟", "10" to "10 分钟", "15" to "15 分钟", "30" to "30 分钟"), settings.leadMinutes.toString()) { value -> model.setRun { it.copy(leadMinutes = value.toInt()) } }
             }
-            Plain("桌面小组件", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Plain("日历显示", 14.sp, Ink.muted)
-                Box(Modifier.horizontalScroll(rememberScrollState())) {
-                    Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周", "term" to "学期"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
-                }
-            }
-            KeyRow(null, "添加日历", "课程、实验和考试；也可以长按桌面空白处，在窗口小工具里找 StuDev", chevron = true, onClick = {
-                if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev")
-            })
-            KeyRow(null, "添加清单", "之前没做完的、这一周要做的和考试，在桌面上直接勾掉", chevron = true, onClick = {
-                if (!top.hicancan.studev.widget.CampusWidget.pin(context, "list")) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev 清单")
-            })
-            val background = remember(settings) { top.hicancan.studev.device.BackgroundSettings.status(context) }
-            KeyRow(null, "后台导航", if (background.batteryExempt) "已允许，息屏也能继续导航；还可以打开自启动" else "允许后，息屏也能继续导航", chevron = true, onClick = {
+            KeyRow(null, "通知权限", if (background.notificationsEnabled) "已允许" else "未允许，提醒无法显示", chevron = true, onClick = { top.hicancan.studev.device.BackgroundSettings.openNotifications(context) })
+            KeyRow(null, "后台导航", if (background.batteryExempt) "已允许在息屏后继续导航" else "允许在息屏后继续导航", chevron = true, onClick = {
                 if (background.batteryExempt) top.hicancan.studev.device.BackgroundSettings.openOemStartup(context) else top.hicancan.studev.device.BackgroundSettings.requestBatteryExemption(context)
             })
+            }
+            if (section == "widgets") {
+            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Plain("课表显示范围", 14.sp, Ink.muted)
+                val views = listOf("auto" to "自适应", "next" to "下一项安排", "day" to "当天", "week" to "本周", "term" to "本学期")
+                var choosing by remember { mutableStateOf(false) }
+                Box {
+                    Chip("${views.find { it.first == settings.widgetView }?.second ?: views.first().second} ▾", { choosing = true }, Modifier.fillMaxWidth().semantics { contentDescription = "课表显示范围" })
+                    androidx.compose.material3.DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }, containerColor = Ink.paper) {
+                        views.forEach { (value, label) -> androidx.compose.material3.DropdownMenuItem(text = { Plain(label, 14.sp) }, onClick = { model.settings.update { it.copy(widgetView = value) }; choosing = false }) }
+                    }
+                }
+            }
+            KeyRow(null, "添加课表小组件", "查看课程、实验和考试", chevron = true, onClick = {
+                if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev")
+            })
+            KeyRow(null, "添加任务小组件", "查看待办和考试，勾选已完成的任务", chevron = true, onClick = {
+                if (!top.hicancan.studev.widget.CampusWidget.pin(context, "list")) model.tell("长按桌面空白处，打开窗口小工具，找到 StuDev 任务")
+            })
+            }
+            if (section == "about") {
+            KeyRow(null, "意见反馈", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
+            KeyRow(null, "提供校园资料", "提交实验课表、讲座、校车或营业时间", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
             KeyRow(null, "检查更新", (if (state.appBehind) "有新版本 ${state.app!!.versionName} · " else "") + "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 数据 ${state.repository?.release?.data_version.orEmpty()}", chevron = true, onClick = { model.refresh() })
             KeyRow(null, "分享 StuDev", PLATFORM_ORIGIN.removePrefix("https://"), chevron = true, onClick = {
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$PLATFORM_ORIGIN/"), "分享 StuDev"))
@@ -365,8 +408,10 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             Box(Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://beian.miit.gov.cn/"))) }.padding(top = 16.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
                 Plain("App 备案号：${top.hicancan.studev.BuildConfig.APP_FILING}", 12.sp, Ink.faint)
             }
+            }
             Spacer(Modifier.height(8.dp))
         }
+    }
     }
 }
 

@@ -27,12 +27,8 @@ export function createRepository(store, { now = Date.now, secret } = {}) {
     return result.blobs.map((b) => b.key.slice(ROOT.length)).sort();
   }
   async function latest(prefix) {
-    // New revisions maintain a materialized current snapshot. Reading that
-    // snapshot avoids a strong list followed by a second strong read on the
-    // hot path. Older records transparently fall back to their immutable
-    // revision list until they are next written.
-    const current = await store.get(validKey(`${prefix}/current.json`), { type: 'json', consistency: 'strong' });
-    if (current && typeof current === 'object' && !Array.isArray(current)) return current;
+    // Only immutable, conditionally reserved revisions decide the latest
+    // value. A delayed writer cannot publish an older mutable snapshot.
     const keys = (await list(`${prefix}/`)).filter((key) => /^\d{8}\.json$/.test(key.slice(prefix.length + 1)));
     return keys.length ? get(keys.at(-1)) : null;
   }
@@ -43,7 +39,6 @@ export function createRepository(store, { now = Date.now, secret } = {}) {
     const revision = expectedRevision + 1;
     const next = { ...value, revision };
     await putNew(`${prefix}/${String(revision).padStart(8, '0')}.json`, next);
-    await put(`${prefix}/current.json`, next);
     return next;
   }
   async function throttle(scope, client, limit, windowSeconds = 60) {

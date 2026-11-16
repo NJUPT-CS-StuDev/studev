@@ -5,6 +5,51 @@ param(
     [string[]]$GradleArgs = @()
 )
 $ErrorActionPreference = 'Stop'
+
+function Wait-PublishedCampus([string]$Origin, [string]$Version, [string]$Base) {
+    $deadline = [DateTime]::UtcNow.AddMinutes(15)
+    $originUrl = $Origin.TrimEnd('/')
+    $http = [System.Net.Http.HttpClient]::new()
+    $http.Timeout = [TimeSpan]::FromSeconds(15)
+    $http.DefaultRequestHeaders.CacheControl = [System.Net.Http.Headers.CacheControlHeaderValue]::Parse('no-cache')
+    function Read-Status([string]$Url) {
+        $remaining = ($deadline - [DateTime]::UtcNow).TotalSeconds
+        if ($remaining -le 0) { return @{ Status = 'timeout'; Content = '' } }
+        $cancellation = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds([Math]::Min(15, $remaining)))
+        $response = $null
+        try {
+            # ResponseContentRead completes after the whole body, so the same
+            # cancellation bounds slow bodies as well as connection setup.
+            $response = $http.GetAsync($Url, $cancellation.Token).GetAwaiter().GetResult()
+            return @{ Status = [int]$response.StatusCode; Content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() }
+        } catch {
+            return @{ Status = 'unreachable'; Content = '' }
+        } finally {
+            if ($response) { $response.Dispose() }
+            $cancellation.Dispose()
+        }
+    }
+    try {
+        do {
+            $manifest = Read-Status "$originUrl/pwa-release.json"
+            $publishedVersion = '-'
+            if ($manifest.Status -eq 200) {
+                try { $publishedVersion = [string]($manifest.Content | ConvertFrom-Json).version } catch { $publishedVersion = 'invalid' }
+            }
+            $roomsStatus = $knowledgeStatus = 'waiting'
+            if ($publishedVersion -ceq $Version) {
+                $roomsStatus = (Read-Status "$originUrl$($Base.TrimEnd('/'))/rooms/index.json").Status
+                $knowledgeStatus = (Read-Status "$originUrl$($Base.TrimEnd('/'))/knowledge/knowledge.json").Status
+            }
+            Write-Output "site version=$publishedVersion manifest=$($manifest.Status) rooms=$roomsStatus knowledge=$knowledgeStatus"
+            if ($publishedVersion -ceq $Version -and $roomsStatus -eq 200 -and $knowledgeStatus -eq 200) { return }
+            $remaining = ($deadline - [DateTime]::UtcNow).TotalSeconds
+            if ($remaining -gt 0) { Start-Sleep -Seconds ([Math]::Min(15, $remaining)) }
+        } while ([DateTime]::UtcNow -lt $deadline)
+        throw "The site did not serve $Version and its rooms/knowledge data within 15 minutes; the Windows update feed was not published."
+    } finally { $http.Dispose() }
+}
+
 $env:JAVA_HOME = 'D:\Dev\java\jdk-21.0.13+9'
 $env:ANDROID_HOME = 'D:\Dev\Android\Sdk'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -57,6 +102,7 @@ Copy-Item $apk $fullApk
 # This is the package both native clients were built against. Deployment extracts it
 # and renders the site; it never recompiles another bundle under the same name.
 $campusData = Join-Path $tempRoot 'campus-data.tar.gz'
+$campusRelease = Get-Content (Join-Path $repo 'src/data/campus-release.json') -Raw | ConvertFrom-Json
 & tar -czf $campusData -C $repo public/data public/map src/data/campus-release.json
 if ($LASTEXITCODE -ne 0) { throw 'Campus data packaging failed' }
 $env:OSCA_DOWNLOAD_ENDPOINT = Get-Secret local.osca_download.endpoint
@@ -93,7 +139,7 @@ if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEX
 if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
 $portable = Join-Path $velopack 'top.hicancan.studev-win-Portable.zip'
 if (-not (Test-Path -LiteralPath $portable)) { throw "Windows portable zip is missing: $portable" }
-# Packages first, the feed last: an installed copy never reads a feed naming a package not yet there.
+# Upload packages now; the feed waits until the matching site and campus data are public.
 $env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
 $env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
@@ -104,9 +150,6 @@ $made = Get-ChildItem $velopack -File -Filter "*-$versionName-*.nupkg"
 foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
 & node (Join-Path $repo 'scripts/release/put.mjs') $fullPortable "windows/studev-$versionName-windows.zip"
 if ($LASTEXITCODE -ne 0) { throw 'Windows portable upload failed' }
-& node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
-if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
-
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
 $assetPaths = @($fullApk, $fullPortable, $campusData)
 $tag = "v$versionName"
@@ -127,6 +170,14 @@ if ($LASTEXITCODE -ne 0) { throw "GitHub release asset upload failed" }
 # Publish only once the asset exists; the published event deploys the website.
 & gh release edit $tag --repo $repoName --draft=false --latest
 if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
+try {
+    Wait-PublishedCampus $product.origin $campusRelease.version $campusRelease.base
+    & node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
+    if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
+} catch {
+    Write-Warning "$tag is already published. Keep the release and resume only the site check and Windows feed upload; do not publish the tag again. Artifacts retained at $tempRoot"
+    throw
+}
 $releaseUrl = (& gh release view $tag --repo $repoName --json url --jq .url).Trim()
 Write-Output "release APK: $apk"
 Write-Output "release size: $((Get-Item $apk).Length) bytes"

@@ -26,9 +26,9 @@ public static class Tiles
                 : new(Paint.Brush("paper"), Paint.Mix("task.edge", dark => Paint.Blend(Paint.Of("brand", dark), Paint.Of("line", dark), .45)), Paint.Brush("ink"), Paint.Brush("brand"));
         if (e.Kind == "run") return new(Paint.Brush("paper"), Paint.Brush("line"), Paint.Brush("muted"));
         Look look = tone is { } t
-            ? past ? new(Paint.ToneFaded(t, "bg", .65), Paint.ToneFaded(t, "border", .45), Paint.ToneFaded(t, "fg", .58))
+            ? past ? new(Paint.ToneFaded(t, "bg", .75), Paint.ToneFaded(t, "border", .65), Paint.Tone(t, "fg"))
                    : new(Paint.Tone(t, "bg"), Paint.Tone(t, "border"), Paint.Tone(t, "fg"))
-            : past ? new(Paint.Faded("surfaceSunken", .65), Paint.Faded("line", .45), Paint.Faded("ink", .58)) : new(Paint.Brush("surfaceSunken"), Paint.Brush("line"), Paint.Brush("ink"));
+            : past ? new(Paint.Faded("surfaceSunken", .75), Paint.Faded("line", .65), Paint.Brush("ink")) : new(Paint.Brush("surfaceSunken"), Paint.Brush("line"), Paint.Brush("ink"));
         return e.Kind == "lab" ? look with { Stripe = look.Edge } : look;
     }
 
@@ -53,7 +53,7 @@ public static class Tiles
         words.Children.Add(title);
         if (note.Length > 0)
         {
-            var small = new TextBlock { Text = note, FontSize = noteSize, Foreground = look.Words, Opacity = .82, FontWeight = FontWeights.Normal, Margin = new Thickness(0, 2, 0, 0), TextAlignment = left ? TextAlignment.Left : TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
+            var small = new TextBlock { Text = note, FontSize = noteSize, Foreground = look.Words, FontWeight = FontWeights.Normal, Margin = new Thickness(0, 2, 0, 0), TextAlignment = left ? TextAlignment.Left : TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
             Typography.SetNumeralAlignment(small, FontNumeralAlignment.Tabular);
             words.Children.Add(small);
         }

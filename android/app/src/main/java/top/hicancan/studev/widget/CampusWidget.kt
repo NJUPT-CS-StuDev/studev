@@ -375,7 +375,7 @@ private fun examTone(dark: Boolean) = if (dark) Tone(Tokens.Color.Dark.exam, Tok
     var room = ((size.height.value - 44f) / 30f).toInt().coerceAtLeast(1)
     Column(GlanceModifier.fillMaxSize().then(shape).background(color(Tokens.Color.Light.paper, Tokens.Color.Dark.paper)).appWidgetBackground().padding(horizontal = 14.dp, vertical = 10.dp)) {
         Row(GlanceModifier.fillMaxWidth().padding(bottom = 4.dp).clickable(open(context, "/?scale=list")), verticalAlignment = Alignment.CenterVertically) {
-            Text("清单", style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
+            Text("任务", style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
             Text("＋", style = TextStyle(color = muted, fontSize = 18.sp))
         }
         if (groups.isEmpty()) { Text(line["hint"]?.jsonPrimitive?.content?.takeIf { line["list"] == null } ?: "这一周没有要做的事", style = TextStyle(color = muted, fontSize = 13.sp)); return@Column }

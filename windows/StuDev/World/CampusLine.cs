@@ -66,8 +66,7 @@ public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, 
             var sourceName = e.Meeting?.Course.Name ?? e.Lab?.Course.Name ?? e.Exam?.Course.Name;
             var linked = sourceName is null ? null : CourseMeetings.FirstOrDefault(m => CourseTones.Same(m.Course.Code, m.Course.Name, code, sourceName));
             var identity = sourceName is null ? null : CourseTones.Identity(linked?.Course.Code ?? code, linked?.Course.Name ?? sourceName);
-            var name = identity is null ? null : CourseNames?.GetValueOrDefault(identity);
-            if (name is null && e.Meeting?.TeachingClass.Id.StartsWith("custom:") == true) name = e.Meeting.Course.Name;
+            var name = e.Meeting?.TeachingClass.Id.StartsWith("custom:") == true ? e.Meeting.Course.Name : identity is null ? null : CourseNames?.GetValueOrDefault(identity);
             return e with { Name = name ?? e.Name, Short = name ?? e.Short, Avoid = choice.Avoid!, Layer = choice.Layer ?? 0 };
         }).OrderBy(e => e.Start).ThenBy(e => e, FrontFirst(Order)).ToList();
     }

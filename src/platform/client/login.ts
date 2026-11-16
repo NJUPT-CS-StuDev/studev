@@ -68,7 +68,7 @@ login.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<
         }
       } catch {}
       location.assign(data.enrollmentRequired || data.passwordChangeRequired || data.profileRequired ? '/account/?setup=1' : safeNext(new URLSearchParams(location.search).get('next')));
-    });
+    }, '正在登录…');
 }
 catch (e) {
     if (revision !== authRevision) return;

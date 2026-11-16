@@ -51,7 +51,7 @@ export const ROUNDS = 8;
 
 /** The request a provider is sent, OpenAI's chat completions as every provider speaks it; `last`, it may call no more tools. */
 export const completionRequest = (model, messages, situation, now = Date.now(), last = false) =>
-    ({ model, stream: true, max_tokens: 4096, temperature: 0.2, tools: toolsFor(situation), ...(last ? { tool_choice: 'none' } : {}), messages: [{ role: 'system', content: instructions(situation, now) }, ...messages] });
+    ({ model, stream: true, max_tokens: 4096, temperature: 0.2, ...(!last ? { tools: toolsFor(situation) } : {}), messages: [{ role: 'system', content: instructions(situation, now) + (last ? `\n${assistant.finish}` : '') }, ...messages] });
 
 /** Why what a device says about its situation cannot be taken, or null. The platform fills in name and number itself. */
 export function situationError(value) {
@@ -70,6 +70,7 @@ export function situationError(value) {
  */
 export class Completion {
     content = ''; finish = null; calls = [];
+    pending = ''; protocolError = false;
     /** One line of the stream; the piece of the answer it adds, or ''. */
     take(line) {
         if (!line.startsWith('data:')) return '';
@@ -85,12 +86,31 @@ export class Completion {
             if (part.function?.arguments) call.function.arguments += part.function.arguments;
         }
         if (choice.finish_reason) this.finish = choice.finish_reason;
-        const piece = typeof delta.content === 'string' ? delta.content : '';
+        if (this.protocolError) return '';
+        this.pending += typeof delta.content === 'string' ? delta.content : '';
+        // Provider-native tool syntax is not an answer or a validated function call. Hold a split prefix until
+        // it is known, then reject the malformed turn rather than showing or silently discarding a fake lookup.
+        const markers = ['<｜DSML｜', '<|DSML|'];
+        const found = markers.map(marker => this.pending.indexOf(marker)).filter(at => at >= 0);
+        if (found.length) {
+            const piece = this.pending.slice(0, Math.min(...found));
+            this.content += piece; this.pending = ''; this.protocolError = true;
+            return piece;
+        }
+        let held = 0;
+        for (let size = 1; size <= this.pending.length && size < 8; size++) if (markers.some(marker => marker.startsWith(this.pending.slice(-size)))) held = size;
+        if (this.finish) {
+            if (held > 1) { this.protocolError = true; this.pending = ''; return ''; }
+            held = 0;
+        }
+        const piece = this.pending.slice(0, this.pending.length - held);
+        this.pending = this.pending.slice(this.pending.length - held);
         this.content += piece;
         return piece;
     }
     /** The turn, once the stream has ended: `{ message }`, or `{ error }` when it stopped short or called what it may not. */
     result() {
+        if (this.protocolError) return { error: '模型未能正确发起查询，请重试。' };
         const made = this.calls.filter(Boolean);
         // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
         const whole = ['stop', 'tool_calls'].includes(this.finish) || (this.finish === 'length' && !made.length && this.content);

@@ -6,13 +6,13 @@ import { startSync } from './sync';
  * The visitor's settings, read after mount (the server render knows none) and
  * kept current when they change here, in another tab, or on another device.
  */
-export function usePreferences(): { prefs: Preferences; ready: boolean } {
+export function usePreferences(synchronize = true): { prefs: Preferences; ready: boolean } {
     const [state, setState] = useState<{ prefs: Preferences; ready: boolean }>({ prefs: {}, ready: false });
     useEffect(() => {
-        startSync();
+        if (synchronize) startSync();
         const sync = () => setState({ prefs: readPreferences(), ready: true });
         sync();
         return subscribePreferences(sync);
-    }, []);
+    }, [synchronize]);
     return state;
 }

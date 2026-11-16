@@ -46,7 +46,7 @@ export function renderWebTokens(tokens) {
   }
   const declarations = values => Object.entries(values).map(([name, value]) => `  --${kebab(name)}: ${value};`).join('\n');
   const dimensions = {};
-  for (const section of ['radius', 'space', 'motion', 'elevation']) {
+  for (const section of ['radius', 'size', 'space', 'motion', 'elevation']) {
     for (const [name, value] of Object.entries(tokens[section])) dimensions[`${section}-${name}`] = `${value}${section === 'motion' ? 'ms' : section === 'elevation' ? '' : 'px'}`;
   }
   for (const [name, values] of Object.entries(tokens.type)) {

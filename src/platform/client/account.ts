@@ -23,6 +23,10 @@ function switchTab(name: string) {
   document.querySelectorAll<HTMLButtonElement>('[data-account-tab]').forEach((b) => {
     b.setAttribute('aria-selected', String(b.dataset.accountTab === name));
   });
+  const url = new URL(location.href);
+  if (name === 'profile') url.searchParams.delete('tab'); else url.searchParams.set('tab', name);
+  history.replaceState(history.state, '', url);
+  document.dispatchEvent(new CustomEvent('studev:account-tab', { detail: name }));
 }
 
 async function confirmAction(title: string, description: string, password = false): Promise<string | null> {
@@ -607,6 +611,7 @@ async function refreshAudit() {
 
 document.querySelectorAll<HTMLButtonElement>('[data-account-tab]').forEach((b) =>
   b.addEventListener('click', () => {
+    if (!current) return;
     const tab = b.dataset.accountTab || 'profile';
     switchTab(tab);
     if (tab === 'members') void guard(refreshMembers);
@@ -777,7 +782,9 @@ window.addEventListener('pagehide', () => {
   q('[data-recovery-codes]').replaceChildren();
 });
 
-void (async () => {
+async function loadAccount() {
+  q('[data-account-retry]').hidden = true;
+  message(status, '正在读取账号…');
   try {
     current = await session(false);
     if (!current) {
@@ -791,15 +798,23 @@ void (async () => {
     document.querySelectorAll<HTMLElement>('[data-staff-only]').forEach(n => n.hidden = current!.user.role === 'user');
     document.dispatchEvent(new CustomEvent('studev:account', { detail: { nickname: nicknameOf(current.user), role: current.user.role } }));
     render();
+    message(status);
     initPasswordToggles();
     const tabParam = new URLSearchParams(location.search).get('tab');
     const setupBlocked = !!current.passwordChangeRequired || !!current.enrollmentRequired || !!current.mfaRequired || !!current.profileRequired || !current.user.profileComplete;
-    switchTab(setupBlocked || !tabParam ? 'profile' : (tabParam === 'members' && current.user.role !== 'user') || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile');
+    const initialTab = current.profileRequired || !current.user.profileComplete ? 'profile'
+      : setupBlocked ? 'security'
+      : tabParam === 'security' || tabParam === 'devices' || (tabParam === 'members' && current.user.role !== 'user') || (tabParam === 'audit' && current.user.role === 'owner') ? tabParam : 'profile';
+    switchTab(initialTab);
+    q<HTMLButtonElement>('[data-account-tab=devices]').hidden = setupBlocked;
     if (!setupBlocked) {
-      if (current.user.role !== 'user') void refreshMembers().catch(() => {});
+      if (initialTab === 'members') void guard(refreshMembers);
       if (tabParam === 'audit' && current.user.role === 'owner') void guard(refreshAudit);
     }
   } catch (e) {
     message(status, errorText(e), 'error');
+    q('[data-account-retry]').hidden = false;
   }
-})();
+}
+q('[data-account-retry]').addEventListener('click', () => { void loadAccount(); });
+void loadAccount();

@@ -67,7 +67,7 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
 }
 
 @Composable internal fun Field(value: String, hint: String, modifier: Modifier = Modifier, big: Boolean = false, single: Boolean = true, onDone: () -> Unit = {}, onChange: (String) -> Unit) {
-    BasicTextField(value, onChange, modifier.fillMaxWidth().border(1.dp, Ink.line, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 10.dp),
+    BasicTextField(value, onChange, modifier.fillMaxWidth().border(1.dp, Ink.line, RoundedCornerShape(Tokens.Radius.control.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
         singleLine = single, textStyle = TextStyle(fontSize = if (big) 17.sp else 14.5.sp, fontWeight = if (big) FontWeight.SemiBold else FontWeight.Normal, color = Ink.text),
         keyboardOptions = KeyboardOptions(imeAction = if (single) ImeAction.Done else ImeAction.Default), keyboardActions = KeyboardActions(onDone = { onDone() }),
         cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.text), decorationBox = { inner -> if (value.isEmpty()) Plain(hint, if (big) 17.sp else 14.5.sp, Ink.faint); inner() })
@@ -78,7 +78,7 @@ private val PRIORITY_COLORS = listOf(Color.Unspecified, Color(0xFF4F8CFF), Color
     FlowRow(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { (value, name) ->
             val active = on(value)
-            Box(Modifier.height(32.dp).clip(RoundedCornerShape(8.dp)).background(if (active) Ink.brand else Ink.paper).border(1.dp, if (active) Ink.brand else Ink.line, RoundedCornerShape(8.dp))
+            Box(Modifier.height(32.dp).clip(RoundedCornerShape(Tokens.Radius.pill.dp)).background(if (active) Ink.brand else Ink.paper).border(1.dp, if (active) Ink.brand else Ink.line, RoundedCornerShape(Tokens.Radius.pill.dp))
                 .clickable { onTap(value) }.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
                 Plain(name, 13.sp, if (active) androidx.compose.material3.MaterialTheme.colorScheme.onPrimary else Ink.text)
             }

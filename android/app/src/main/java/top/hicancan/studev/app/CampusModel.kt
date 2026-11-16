@@ -189,6 +189,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { state.value.repository?.let { loadLabs(it, settings.state.value.klass) }; syncPhone() }
     }
     fun addTeachingClass(id: String) = applyTimetableChange { it.copy(added = (it.added + id).distinct()) }
+    fun restoreCourse(id: String) = applyTimetableChange { it.copy(hidden = it.hidden - id) }
     fun removeCourse(id: String) = applyTimetableChange { edits ->
         when {
             Courses.isCustom(id) -> edits.copy(custom = edits.custom.filter { "custom:${it.id}" != id })

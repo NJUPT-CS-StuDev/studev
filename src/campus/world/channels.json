@@ -5,6 +5,6 @@
  {"id":"place","label":"地点","sources":["places"]},
  {"id":"knowledge","label":"知识","sources":["topics","sections"]},
  {"id":"notice","label":"通知","excluded":["courses","teachers","classes","teaching-classes","exams","rooms","places","topics","sections","njupt-general-free-exams","njupt-survival-guide"],"dated":true},
- {"id":"material","label":"考试资料","sources":["njupt-general-free-exams"]},
+ {"id":"material","label":"考试资料","sources":["sections","njupt-general-free-exams"]},
  {"id":"community","label":"社区","sources":["njupt-survival-guide"]}
 ]

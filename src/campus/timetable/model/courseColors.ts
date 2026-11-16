@@ -15,9 +15,9 @@ const TONE_ORDER = [0, 7, 3, 9, 5, 1, 10, 6, 2, 8, 4, 11];
 const apart = (left: number, right: number) => { const steps = Math.abs(TONE_POSITION[left]! - TONE_POSITION[right]!); return Math.min(steps, COURSE_TONE_COUNT - steps); };
 /**
  * One timetable's colours. Courses that meet on the same day are neighbours: they appear side by side.
- * The busiest courses choose first, each taking a tone no neighbour has and, where it can, at least one
- * tone away from each neighbour's; then the least used, so a tone is shared only by courses that never
- * meet on the same day and so never show together. Adding or hiding a course can move others along.
+ * The busiest courses choose first, each taking a tone no neighbour has. Use all twelve tones before
+ * repeating one across the week, then prefer separation from neighbours and the least-used tone.
+ * Adding or hiding a course can move others along.
  */
 export const courseTones = (meetings: (CourseIdentityInput & { weekday: number })[]): Map<string, number> => {
     const days = new Map<string, Set<number>>();
@@ -28,8 +28,8 @@ export const courseTones = (meetings: (CourseIdentityInput & { weekday: number }
     const used = new Array<number>(COURSE_TONE_COUNT).fill(0);
     for (const id of [...ids].sort((left, right) => neighbours.get(right)!.length - neighbours.get(left)!.length || (left < right ? -1 : left > right ? 1 : 0))) {
         const near = neighbours.get(id)!.flatMap(other => tones.has(other) ? [tones.get(other)!] : []);
-        // Unlike its neighbours, then at least one tone away from each, then the least used, then the usual order.
-        const score = (tone: number) => [near.includes(tone) ? 0 : 1, Math.min(2, ...near.map(other => apart(tone, other))), -used[tone]!, -TONE_ORDER.indexOf(tone)];
+        // Avoid a same-day collision, use an unused tone, then separate nearby colours.
+        const score = (tone: number) => [near.includes(tone) ? 0 : 1, used[tone] === 0 ? 1 : 0, Math.min(2, ...near.map(other => apart(tone, other))), -used[tone]!, -TONE_ORDER.indexOf(tone)];
         const better = (left: number[], right: number[]) => { for (let at = 0; at < left.length; at++) if (left[at] !== right[at]) return left[at]! > right[at]!; return false; };
         let best = TONE_ORDER[0]!;
         for (const tone of TONE_ORDER) if (better(score(tone), score(best))) best = tone;

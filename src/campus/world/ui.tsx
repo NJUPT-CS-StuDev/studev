@@ -15,8 +15,81 @@ export const Note = () => <svg viewBox="0 0 16 16"><path d="M3.5 4.5h9M3.5 8h9M3
 export const Bell = () => <svg viewBox="0 0 16 16"><path d="M4.5 11V7.5a3.5 3.5 0 0 1 7 0V11l1 1.5h-9Z" /><path d="M6.8 14h2.4" /></svg>;
 export const Steps = () => <svg viewBox="0 0 16 16"><path d="m3 4.5 1.2 1.2L6.5 3.5M3 10.5l1.2 1.2 2.3-2.2M9 5h4M9 11h4" /></svg>;
 export const Bars = () => <svg viewBox="0 0 20 20"><path d="M3.5 6h13M3.5 10h13M3.5 14h8" /></svg>;
+export function TextAction({ children, onClick, refresh = false, disabled = false, muted = false }: { children: ReactNode; onClick: () => void; refresh?: boolean; disabled?: boolean; muted?: boolean }) {
+    return <button type="button" className={`text-action${muted ? ' subtle' : ''}`} onClick={onClick} disabled={disabled}>{refresh && <Again />}{children}</button>;
+}
 export const Dots = () => <svg viewBox="0 0 20 20"><path d="M5 10h.01M10 10h.01M15 10h.01" strokeWidth="2.6" /></svg>;
 export const Magnifier = () => <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5" /><path d="m13.2 13.2 3.3 3.3" /></svg>;
+
+/** The first row of a campus entry shares one account-aligned baseline on narrow screens. */
+export function CampusHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
+    return <div className={`campus-header ${className}`}>{children}</div>;
+}
+
+interface SheetOwner { close: () => void; leaving: boolean }
+const sheetOwners: SheetOwner[] = [];
+let sheetEntry: number | null = null;
+let sheetSequence = 0;
+let sheetCleanup = 0;
+let pendingSheetNavigation: { kind: 'dismiss' | 'release'; owner: SheetOwner } | null = null;
+let sheetListening = false;
+let sheetOpener: HTMLElement | null = null;
+
+/** Replacing one panel with another keeps one overlay entry; only leaving the last owner traverses back. */
+function ensureSheetEntry() {
+    if (!sheetOwners.length || sheetOwners.at(-1)?.leaving || pendingSheetNavigation || (sheetEntry !== null && history.state?.sheet === sheetEntry)) return;
+    const { sheet: _, ...state } = history.state ?? {};
+    if (history.state?.sheet !== undefined) history.replaceState(state, '', location.href);
+    sheetEntry = ++sheetSequence;
+    history.pushState({ ...state, sheet: sheetEntry }, '', location.href);
+}
+
+function consumeSheetEntry() {
+    if (sheetEntry === null || history.state?.sheet !== sheetEntry || pendingSheetNavigation) return false;
+    sheetEntry = null;
+    for (const owner of sheetOwners) owner.leaving = true;
+    return true;
+}
+
+/** A real page reached from a panel takes that panel's slot, retaining the page behind it as Back's destination. */
+export function replaceSheetRoute(url: string) {
+    if (!consumeSheetEntry()) return false;
+    history.replaceState(null, '', url);
+    return true;
+}
+
+function finishSheetListeners() {
+    if (sheetOwners.length || pendingSheetNavigation || sheetEntry !== null) return;
+    removeEventListener('popstate', sheetPopped);
+    removeEventListener('keydown', sheetKey);
+    sheetListening = false;
+    if (sheetOpener?.isConnected) sheetOpener.focus();
+    sheetOpener = null;
+}
+
+function sheetPopped(event: PopStateEvent) {
+    const pending = pendingSheetNavigation;
+    if (!pending && (sheetEntry === null || event.state?.sheet === sheetEntry)) return;
+    pendingSheetNavigation = null;
+    sheetEntry = null;
+    if (pending) {
+        // A traversal already sent by an old owner cannot close a newly mounted panel.
+        if (pending.kind === 'dismiss' && sheetOwners.includes(pending.owner)) pending.owner.close();
+        else ensureSheetEntry();
+    } else sheetOwners.at(-1)?.close();
+    finishSheetListeners();
+}
+
+function sheetKey(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || !sheetOwners.length) return;
+    event.preventDefault();
+    if (pendingSheetNavigation) return;
+    const owner = sheetOwners.at(-1)!;
+    if (sheetEntry !== null && history.state?.sheet === sheetEntry) {
+        pendingSheetNavigation = { kind: 'dismiss', owner };
+        history.back();
+    } else owner.close();
+}
 
 /** A sheet from the bottom on phones, a centred card on wide screens. Back closes it. */
 /** A sheet over the page. `top` sits above the title; `className` and `style` dress the sheet, as a tile's colour does. */
@@ -24,25 +97,46 @@ export function Sheet({ title, top, className, style, onClose, children }: { tit
     const closing = useRef(onClose);
     closing.current = onClose;
     const panel = useRef<HTMLElement>(null);
+    const owner = useRef<SheetOwner | null>(null);
     useEffect(() => {
-        const opener = document.activeElement as HTMLElement | null;
-        history.pushState({ ...history.state, sheet: true }, '', location.href);
-        const pop = () => closing.current();
-        const key = (event: KeyboardEvent) => { if (event.key === 'Escape') history.back(); };
-        addEventListener('popstate', pop);
-        addEventListener('keydown', key);
+        sheetCleanup++;
+        sheetOpener ??= document.activeElement as HTMLElement | null;
+        const current: SheetOwner = { close: () => closing.current(), leaving: false };
+        owner.current = current;
+        sheetOwners.push(current);
+        if (!sheetListening) {
+            addEventListener('popstate', sheetPopped);
+            addEventListener('keydown', sheetKey);
+            sheetListening = true;
+        }
+        ensureSheetEntry();
         panel.current?.focus();
         return () => {
-            removeEventListener('popstate', pop);
-            removeEventListener('keydown', key);
-            if (history.state?.sheet) history.back();
-            opener?.focus?.();
+            sheetOwners.splice(sheetOwners.indexOf(current), 1);
+            owner.current = null;
+            const cleanup = ++sheetCleanup;
+            // React cleans up the outgoing panel before mounting its replacement in the same commit.
+            queueMicrotask(() => {
+                if (cleanup !== sheetCleanup) return;
+                if (sheetOwners.length) ensureSheetEntry();
+                else if (sheetEntry !== null && history.state?.sheet === sheetEntry && !pendingSheetNavigation) {
+                    pendingSheetNavigation = { kind: 'release', owner: current };
+                    history.back();
+                } else if (!pendingSheetNavigation) sheetEntry = null;
+                finishSheetListeners();
+            });
         };
     }, []);
+    // A Back or Escape may move from a detail to its list without unmounting this Sheet.
+    useEffect(() => { if (owner.current === sheetOwners.at(-1)) ensureSheetEntry(); });
     return (
         <div className="sd sheet-wrap" role="dialog" aria-modal="true">
             <button className="scrim" aria-label="关闭" onClick={onClose} />
-            <section className={`sheet ${className ?? ''}`} style={style} ref={panel} tabIndex={-1}>
+            <section className={`sheet ${className ?? ''}`} style={style} ref={panel} tabIndex={-1} onClick={event => {
+                const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
+                if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !link || link.download || (link.target && link.target !== '_self') || !/^https?:$/.test(new URL(link.href).protocol)) return;
+                if (consumeSheetEntry()) { event.preventDefault(); location.replace(link.href); }
+            }}>
                 {top}
                 <div className="card-h"><h2>{title}</h2><button className="x" aria-label="关闭" onClick={onClose}><Cross /></button></div>
                 {children}

@@ -287,7 +287,8 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
       if (formRoute) {
         const form = await getForm(formRoute[1]);
         // Anyone may read a public form; only someone signed in may answer one.
-        const session = await identity.authenticate(request, { required: form.access === 'members' || method === 'POST', csrf: method === 'POST' });
+        const publicRead = method === 'GET' && !formRoute[2] && form.access === 'public' && form.status === 'published';
+        const session = publicRead ? null : await identity.authenticate(request, { required: form.access === 'members' || method === 'POST', csrf: method === 'POST' });
         if (method === 'GET' && !formRoute[2]) {
           if (form.status !== 'published') await identity.authenticate(request, { staff: true });
           return response({ form: publicForm(form), canSubmit: canSubmit(form), ...(!canSubmit(form) ? { reason: form.status !== 'published' ? '本表尚未发布或已经停止收集。' : '已超过截止时间。' } : {}) });

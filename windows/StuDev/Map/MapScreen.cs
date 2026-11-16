@@ -124,8 +124,10 @@ public sealed partial class MapScreen : Screen
             reader = new World.Rooms(campus.Periods);
             router = new Kernels.Wayfind.Router(space.Network);
             await surface.Ready;
-            var style = JsonNode.Parse(System.Text.Encoding.UTF8.GetString(await repo.Bytes("space/仙林/style.json"))
-                .Replace("{data}", $"{Repository.Site}{repo.Release.Base}/space/{Uri.EscapeDataString(Product.Campus)}").Replace("{assets}", $"{Repository.Site}/map"))!.AsObject();
+            var style = JsonNode.Parse(System.Text.Encoding.UTF8.GetString(await repo.Bytes($"space/{Product.Campus}/style.json"))
+                .Replace("{assets}", $"{Repository.Site}/map"))!.AsObject();
+            var basemap = await repo.LocalFile($"space/{Product.Campus}/basemap.pmtiles");
+            style["sources"]!["basemap"]!["url"] = $"pmtiles://{new Uri(basemap).AbsoluteUri}";
             // Labels from Microsoft YaHei, which every Chinese Windows has, as the web draws Chinese from the system's font:
             // every character, so a label is one typeface and no range is left to the glyph files, whose Latin range
             // MapLibre Native fails to load beside a local face.

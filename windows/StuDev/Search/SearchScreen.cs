@@ -40,16 +40,11 @@ public sealed partial class SearchScreen : Screen
 
     public SearchScreen()
     {
-        box = Kit.Field("", "搜课程、老师、班级、地点、通知、资料", "搜索");
-        box.FontSize = 15.5; box.MinHeight = 44;
+        box = Kit.Field("", "搜索课程、老师、地点、通知、资料", "搜索");
+        box.FontSize = 15;
         box.TextChanged += (_, _) => { page = 1; Run(); };
         var column = new StackPanel();
-        var field = new Grid();
-        field.Children.Add(box);
-        var glass = Kit.Icon(Icons.Magnifier, 17, "muted", 20); glass.HorizontalAlignment = HorizontalAlignment.Left; glass.Margin = new Thickness(12, 0, 0, 0);
-        box.Padding = new Thickness(38, 10, 8, 10);
-        field.Children.Add(glass);
-        column.Children.Add(field);
+        column.Children.Add(Kit.SearchField(box));
         column.Children.Add(chips);
         column.Children.Add(body);
         Children.Add(Pages.Frame(column, 680));
@@ -79,7 +74,7 @@ public sealed partial class SearchScreen : Screen
         if (channel.Sources is { } sources) filters["sourceIds"] = new JsonArray([.. sources.Select(s => (JsonNode)s)]);
         if (channel.Excluded is { } excluded)
             filters["excludedSourceIds"] = new JsonArray([.. (channel.Id == "all" && System.Text.RegularExpressions.Regex.IsMatch(query, @"\S\s+\S") ? excluded.Where(id => id != "teaching-classes") : excluded).Select(s => (JsonNode)s)]);
-        string Ago(int days) => DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
+        string Ago(int days) => Clock.Text(CampusDay.Today().AddDays(-days));
         if (since.Length > 0) { filters["publishedFrom"] = Ago(int.Parse(since)); filters["publishedTo"] = Ago(0); filters["includeUndated"] = false; }
         else if (query.Length == 0) { filters["publishedTo"] = Ago(0); filters["includeUndated"] = true; }
         return filters;
@@ -305,7 +300,7 @@ public sealed partial class SearchScreen : Screen
             if (roomFailure is not null)
             {
                 body.Children.Add(Pages.Empty(roomFailure));
-                body.Children.Add(Kit.Button("重试", () => { roomFailure = null; LoadRooms(at.Date); }));
+                body.Children.Add(Kit.TextAction("重试", () => { roomFailure = null; LoadRooms(at.Date); }, Icons.Again));
             }
             else LoadRooms(at.Date);
             return;

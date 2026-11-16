@@ -27,6 +27,8 @@ public sealed partial class Shell : Window
     private readonly Grid layer = new() { Visibility = Visibility.Collapsed };
     private readonly Dictionary<string, Screen> screens = new();
     private readonly Border face = new();
+    private readonly TextBlock faceName = new() { FontSize = 12, MaxWidth = 80, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Tap me = new();
     private readonly ColumnDefinition inset = new() { Width = new GridLength(140) };
     private string shown = "";
     private Action? closing;
@@ -49,7 +51,7 @@ public sealed partial class Shell : Window
         bar.Children.Add(mark);
         Grid.SetColumn(nav, 1); bar.Children.Add(nav);
         var drag = new Grid { Background = Paint.Clear }; Grid.SetColumn(drag, 2); bar.Children.Add(drag);
-        var me = new Tap { Content = face, Width = 32, Height = 32, CornerRadius = new CornerRadius(16), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        me.Content = Kit.Line(6, face, faceName); me.Height = Paint.Number("size", "search"); me.Padding = new Thickness(2, 0, 10, 0); me.CornerRadius = Kit.Capsule(me.Height); me.VerticalAlignment = VerticalAlignment.Center; me.Margin = new Thickness(0, 0, 8, 0);
         AutomationProperties.SetName(me, "我"); AutomationProperties.SetAutomationId(me, "me");
         me.Click += (_, _) => Open("me");
         Grid.SetColumn(me, 3); bar.Children.Add(me);
@@ -100,6 +102,9 @@ public sealed partial class Shell : Window
     /** One's face in the bar: the QQ picture, the nickname's first character, or the outline of nobody. */
     public void Face(string? letter)
     {
+        me.Ground(Paint.Brush("surfaceSunken"), Paint.Brush("surface"));
+        faceName.Text = Me.Account.Shared.User?.Nickname ?? "未登录"; faceName.Foreground = Paint.Brush("muted");
+        AutomationProperties.SetName(me, $"我 · {faceName.Text}");
         face.Width = 32; face.Height = 32; face.CornerRadius = new CornerRadius(16); face.Background = Paint.Brush("surfaceSunken");
         face.Child = letter is null ? Kit.Icon(Icons.Person, 18, "muted", 24, 1.8) : new TextBlock { Text = letter, FontSize = 12.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Paint.Brush("muted"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         if (face.Child is FrameworkElement child) { child.HorizontalAlignment = HorizontalAlignment.Center; child.VerticalAlignment = VerticalAlignment.Center; }
@@ -159,6 +164,7 @@ public sealed partial class Shell : Window
     private void Turned()
     {
         Paint.Turn(root.ActualTheme == ElementTheme.Dark);
+        Face(Me.Account.Shared.User?.Letter);
         var bar = AppWindow.TitleBar;
         bar.ButtonBackgroundColor = Paint.Clear.Color; bar.ButtonInactiveBackgroundColor = Paint.Clear.Color;
         bar.ButtonForegroundColor = Paint.Of("ink", Paint.Dark); bar.ButtonInactiveForegroundColor = Paint.Of("faint", Paint.Dark);

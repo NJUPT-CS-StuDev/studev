@@ -242,7 +242,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             }
             val mark = marks()
             val nightScene = (scene?.night ?: 0f) > .55f
-            SystemBarIcons(light = nightScene, restoreLight = dark)
+            if (route.tab == "map") SystemBarIcons(light = nightScene, restoreLight = dark)
             placed.forEach { item -> key(item.key) { MapLabel(item, nightScene, mark.free) } }
         }
         if (navigation.open) {

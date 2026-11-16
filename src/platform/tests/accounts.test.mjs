@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlatformHandler } from '../server/app.mjs';
 import { createRepository } from '../server/store.mjs';
-import { buildRosterSnapshot } from '../server/roster.mjs';
+import { buildRosterSnapshot, ROSTER_SEED_2026_2027 } from '../server/roster.mjs';
 import { memoryBlob, memoryGateway, requestClient, testEnvironment } from './fixtures.mjs';
 
 const config = await testEnvironment();
@@ -120,6 +120,22 @@ test('public roster derives exclusively from admin/owner roles; forged roster fi
   assert.equal(selfEdit.status, 200);
   assert.equal(selfEdit.body.user.role, 'user');
   assert.equal(selfEdit.body.user.nickname, ordinary.realName);
+});
+
+test('a first public roster read initializes its owner before seeding staff, while later reads only load the snapshot', async () => {
+  const first = ROSTER_SEED_2026_2027[0];
+  const env = { ...config.env, PLATFORM_OWNER_QQ: first.qq, PLATFORM_OWNER_STUDENT_ID: first.studentId, PLATFORM_OWNER_REAL_NAME: first.realName };
+  const store = memoryBlob();
+  const handle = createPlatformHandler({ getStore: () => store, getGateway: memoryGateway });
+  const client = requestClient(handle, env);
+  assert.equal((await client.call('/public/roster')).status, 200);
+  const login = await client.call('/auth/login', { method: 'POST', body: { studentId: first.studentId, password: config.password } });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.user.role, 'owner', 'public roster seeding cannot claim the configured owner as a pending administrator');
+  const read = store.get, keys = [];
+  store.get = async (key, ...args) => { keys.push(key); return read(key, ...args); };
+  assert.equal((await client.call('/public/roster')).status, 200);
+  assert.deepEqual(keys, ['platform-v1/roster/2026-2027.json']);
 });
 
 test('registration and login errors match for web/app; registering cannot claim a pre-recorded administrator', async () => {

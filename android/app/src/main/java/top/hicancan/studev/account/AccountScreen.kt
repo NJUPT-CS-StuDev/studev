@@ -31,8 +31,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 import top.hicancan.studev.app.Tokens
+import top.hicancan.studev.app.KeyRow
+import top.hicancan.studev.app.TextAction
+import top.hicancan.studev.app.Choice
+import top.hicancan.studev.world.CampusDay
 
 /** The avatar Tencent shows for this QQ number, for checking it really is yours before registering. */
 @Composable private fun QqPreview(qq: String) {
@@ -54,7 +59,7 @@ import top.hicancan.studev.app.Tokens
         }
         Column {
             Text("联系邮箱：$qq@qq.com", style = MaterialTheme.typography.bodyMedium)
-            Text("已匹配该 QQ 号的腾讯官方头像，请核对是否为本人", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("请核对邮箱，用于通知和找回密码。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -89,47 +94,75 @@ import top.hicancan.studev.app.Tokens
     var secret by remember { mutableStateOf("") }
     var recovery by remember { mutableStateOf<List<String>>(emptyList()) }
     var devices by remember { mutableStateOf<List<AccountDevice>>(emptyList()) }
+    var devicesFor by remember { mutableStateOf<String?>(null) }
+    var devicesLoading by remember { mutableStateOf(false) }
+    var devicesError by remember { mutableStateOf<String?>(null) }
+    var verifying by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmOut by remember { mutableStateOf(false) }
     var revoke by remember { mutableStateOf<AccountDevice?>(null) }
+    fun showUser(fresh: AccountUser) {
+        user = fresh
+        student = fresh.studentId; realName = fresh.realName; nickname = fresh.displayNickname; signature = fresh.signature
+    }
+    fun showState(fresh: AccountState) {
+        state = fresh; showUser(fresh.user)
+    }
     suspend fun reload() {
-        val fresh = client.state(); state = fresh; user = fresh.user
-        student = fresh.user.studentId; realName = fresh.user.realName; nickname = fresh.user.displayNickname; signature = fresh.user.signature
+        showState(client.state())
     }
     fun run(action: suspend () -> Unit) {
+        if (busy) return
+        busy = true; error = null; notice = null
         scope.launch {
-            busy = true; error = null; notice = null
             try { action() }
+            catch (failure: CancellationException) { throw failure }
             catch (failure: Exception) {
                 error = if (failure is PlatformFailure) failure.message else "连接未完成，请检查网络后重试。"
                 if (failure is PlatformFailure && failure.status == 401 && failure.code in listOf("TOKEN_INVALID", "AUTH_REQUIRED", "REFRESH_REPLAYED")) {
-                    client.forget(); user = null; state = null; devices = emptyList()
+                    client.forget(); user = null; state = null; devices = emptyList(); devicesFor = null
                 }
             } finally { busy = false }
         }
     }
-    LaunchedEffect(client) {
-        try { user = client.current(); if (user != null) reload() }
-        catch (failure: Exception) { error = if (failure is PlatformFailure) failure.message else "账号信息暂时无法读取，请重试。"; if (failure is PlatformFailure && failure.status == 401) { client.forget(); user = null } }
-        loaded = true
+    suspend fun loadDevices() {
+        if (devicesLoading) return
+        val owner = user?.id ?: return
+        devicesLoading = true; devicesError = null
+        try {
+            val found = client.devices()
+            if (user?.id == owner) { devices = found; devicesFor = owner }
+        } catch (failure: CancellationException) { throw failure }
+        catch (failure: Exception) {
+            devicesError = if (failure is PlatformFailure) failure.message else "设备列表暂时无法读取，请重试。"
+        } finally { devicesLoading = false }
     }
-    LaunchedEffect(section, user?.id) { if (section == "devices" && user != null) run { devices = client.devices() } }
+    LaunchedEffect(client) {
+        try {
+            val saved = client.current()
+            if (saved != null) {
+                showUser(saved); loaded = true; verifying = true
+                reload()
+            }
+        }
+        catch (failure: CancellationException) { throw failure }
+        catch (failure: Exception) { error = if (failure is PlatformFailure) failure.message else "账号信息暂时无法读取，请重试。"; if (failure is PlatformFailure && failure.status == 401) { client.forget(); user = null } }
+        finally { loaded = true; verifying = false }
+    }
+    LaunchedEffect(section, user?.id) { if (section == "devices" && user != null && devicesFor != user?.id) loadDevices() }
     Scaffold(topBar = { TopAppBar(title = { Text("账号") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(Tokens.Space.xl.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
-            if (!loaded) { CircularProgressIndicator(); return@Column }
-            Icon(Icons.Outlined.Lock, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+            if (!loaded) { Text("正在读取账号…", color = MaterialTheme.colorScheme.onSurfaceVariant); return@Column }
             Text(if (user == null) if (register) "注册 StuDev" else "登录 StuDev" else user!!.nickname, style = MaterialTheme.typography.headlineMedium)
             Text(if (user == null) "每位同学都可以注册，网页与 App 共用一个账号。" else "学号 ${user!!.studentId}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error) }
             notice?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.primary) }
+            if (verifying) Text("正在验证登录状态…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (user != null && state == null && !verifying) TextAction("重试", { run { reload() } }, refresh = true)
             if (user == null) {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    listOf(false to "登录", true to "注册").forEachIndexed { i, (value, label) ->
-                        SegmentedButton(selected = register == value, onClick = { register = value; password = ""; confirm = ""; totp = ""; error = null; notice = null }, enabled = !busy, shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
-                    }
-                }
+                Choice(listOf("login" to "登录", "register" to "注册"), if (register) "register" else "login") { value -> if (!busy) { register = value == "register"; password = ""; confirm = ""; totp = ""; error = null; notice = null } }
                 OutlinedTextField(student, { student = it.take(20); totp = "" }, Modifier.fillMaxWidth(), label = { Text("学号") }, singleLine = true, enabled = !busy)
                 if (register) {
                     OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, singleLine = true, enabled = !busy)
@@ -159,11 +192,13 @@ import top.hicancan.studev.app.Tokens
                         client.register(student, realName, nickname, qq, password)
                         register = false; password = ""; confirm = ""; totp = ""; notice = "注册成功，请使用学号和密码登录。"
                     } else {
-                        user = client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}")
-                        password = ""; totp = ""; reload(); onSignedIn()
+                        showState(client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}"))
+                        section = "profile"; devices = emptyList(); devicesFor = null
+                        password = ""; totp = ""; onSignedIn()
                     }
                 } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && nickname.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
-                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (register) "创建账号" else "登录")
+                    if (busy) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+                    Text(if (busy) if (register) "正在注册…" else "正在登录…" else if (register) "创建账号" else "登录")
                 }
                 if (!register) TextButton(onClick = { run {
                     val id = student.trim().uppercase()
@@ -172,18 +207,14 @@ import top.hicancan.studev.app.Tokens
                     notice = "如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，请在 30 分钟内打开。没收到的话看看垃圾箱。"
                 } }, enabled = !busy, contentPadding = PaddingValues(0.dp)) { Text("忘记密码？发送重设链接到 QQ 邮箱") }
             } else {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    listOf("profile" to "资料", "security" to "安全", "devices" to "设备").forEachIndexed { i, (value, label) ->
-                        SegmentedButton(selected = section == value, onClick = { section = value; password = ""; newPassword = ""; confirm = ""; totp = ""; secret = ""; recovery = emptyList() }, enabled = !busy, shape = SegmentedButtonDefaults.itemShape(i, 3)) { Text(label) }
-                    }
-                }
-                if (state?.passwordChangeRequired == true || state?.enrollmentRequired == true) Text("请先在「安全」中${if (state?.passwordChangeRequired == true) "修改临时密码" else "绑定认证器"}，完成账号设置。", color = MaterialTheme.colorScheme.primary)
+                Choice(listOf("profile" to "我的账号", "security" to "账号安全", "devices" to "登录设备"), section) { value -> if (!busy) { section = value; password = ""; newPassword = ""; confirm = ""; totp = ""; secret = ""; recovery = emptyList() } }
+                if (state?.passwordChangeRequired == true || state?.enrollmentRequired == true) Text("请先在「账号安全」中${if (state?.passwordChangeRequired == true) "修改临时密码" else "绑定认证器"}，完成账号设置。", color = MaterialTheme.colorScheme.primary)
                 when (section) {
                     "profile" -> {
                         // The same profile as the web: what the account is, read only; then the two things one may change.
                         val me = user!!
                         val incomplete = state?.profileRequired == true || !me.profileComplete
-                        val blocked = state?.passwordChangeRequired == true || state?.enrollmentRequired == true || state?.mfaRequired == true
+                        val blocked = state == null || state?.passwordChangeRequired == true || state?.enrollmentRequired == true || state?.mfaRequired == true
                         if (incomplete) {
                             Text("请完善学号与姓名。", color = MaterialTheme.colorScheme.primary)
                             OutlinedTextField(student, { student = it.take(20) }, Modifier.fillMaxWidth(), label = { Text("学号") }, readOnly = me.studentId.isNotBlank(), singleLine = true, enabled = !busy)
@@ -192,33 +223,31 @@ import top.hicancan.studev.app.Tokens
                         Text("个人资料", style = MaterialTheme.typography.titleSmall)
                         listOf(
                             "学号" to me.studentId.ifBlank { "待补充" }, "姓名" to me.realName.ifBlank { "待补充" }, "昵称" to me.displayNickname.ifBlank { "未设置" },
-                            "所属部门" to me.department.ifBlank { "暂未分配" }, "职务分工" to me.title.ifBlank { if (me.department.isNotBlank()) "部门成员" else "—" },
-                            "QQ 号" to me.qq, "联系邮箱" to me.email.ifBlank { "${me.qq}@qq.com" }, "群内角色" to me.roleName, "账号状态" to me.statusName,
-                        ).forEach { (key, value) ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                Text(key, Modifier.width(88.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                                Text(value, style = MaterialTheme.typography.bodyMedium)
-                            }
+                            "QQ 号" to me.qq, "联系邮箱" to me.email.ifBlank { "${me.qq}@qq.com" },
+                        ).forEach { (key, value) -> KeyRow(key, value) }
+                        if (me.role != "user") {
+                            if (me.department.isNotBlank()) KeyRow("部门", me.department)
+                            if (me.title.isNotBlank()) KeyRow("职责", me.title)
                         }
                         HorizontalDivider()
-                        OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("显示昵称（选填）") }, placeholder = { Text("显示在真实姓名之后（如 hicancan）；留空则仅显示真实姓名") }, singleLine = true, enabled = !busy)
-                        OutlinedTextField(signature, { signature = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("个人签名") }, placeholder = { Text("显示在历届档案与个人名片上的一句话（选填）") }, singleLine = true, enabled = !busy)
-                        Text("保存后将实时更新公开历届档案与组织成员名录。", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("显示昵称（选填）") }, placeholder = { Text("显示在真实姓名之后（如 hicancan）；留空则仅显示真实姓名") }, singleLine = true, enabled = !busy && !verifying && state != null)
+                        OutlinedTextField(signature, { signature = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("个人签名") }, placeholder = { Text("显示在历届档案与个人名片上的一句话（选填）") }, singleLine = true, enabled = !busy && !verifying && state != null)
+                        if (me.role != "user") Text("昵称与签名将显示在组织成员名录。", style = MaterialTheme.typography.bodySmall)
                         Button(onClick = { run {
                             client.request("/auth/profile", buildJsonObject { put("revision", me.revision); put("studentId", student); put("realName", realName); put("nickname", nickname); put("signature", signature) }, authenticated = true)
                             reload(); notice = "资料已保存。"
-                        } }, enabled = !busy && !blocked) { Text(if (incomplete) "确认并绑定身份" else "保存个人资料") }
+                        } }, modifier = Modifier.align(Alignment.End), enabled = !busy && !blocked) { Text(if (incomplete) "确认并绑定身份" else "保存个人资料") }
                     }
                     "devices" -> {
-                        Text("网页与 Android 的登录设备都在这里。退出设备会同时撤销访问与刷新凭据。", style = MaterialTheme.typography.bodySmall)
-                        OutlinedButton(onClick = { run { devices = client.devices() } }, enabled = !busy) { Text("刷新设备列表") }
-                        for (device in devices) OutlinedCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(device.deviceName, style = MaterialTheme.typography.titleMedium)
-                                Text((if (device.kind == "cookie") "网页" else "Android") + if (device.current) " · 当前设备" else "", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("登录于 ${device.createdAt.take(16).replace('T', ' ')} UTC", style = MaterialTheme.typography.bodySmall)
-                                TextButton(onClick = { revoke = device }, enabled = !busy) { Text("退出此设备") }
-                            }
+                        Text("查看已登录的浏览器和应用，退出后需要重新登录。", style = MaterialTheme.typography.bodySmall)
+                        TextAction(if (devicesLoading) "正在读取设备…" else "刷新", { scope.launch { loadDevices() } }, enabled = !devicesLoading, refresh = !devicesLoading)
+                        devicesError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        if (!devicesLoading && devicesError == null && devicesFor != null && devices.isEmpty()) Text("没有其他登录设备。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        for (device in devices) {
+                            val created = runCatching { java.time.Instant.parse(device.createdAt).atZone(CampusDay.zone).format(java.time.format.DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm")) }.getOrDefault(device.createdAt)
+                            KeyRow(null, device.deviceName + if (device.current) " · 当前设备" else "", "${if (device.kind == "cookie") "浏览器" else "应用"} · 登录于 $created", trailing = {
+                                TextAction("退出", { revoke = device }, enabled = !busy, muted = true)
+                            })
                         }
                     }
                     else -> {
@@ -277,7 +306,7 @@ import top.hicancan.studev.app.Tokens
         confirmButton = { TextButton(enabled = !busy, onClick = { run {
             val target = revoke
             if (target == null) client.signOut() else client.revokeDevice(target.id)
-            if (target == null || target.current) { client.forget(); user = null; state = null; devices = emptyList() } else devices = client.devices()
+            if (target == null || target.current) { client.forget(); user = null; state = null; devices = emptyList(); devicesFor = null } else devices = devices.filter { it.id != target.id }
             confirmOut = false; revoke = null
         } }) { Text(if (busy) "正在退出…" else "确认退出") } }, dismissButton = { TextButton(enabled = !busy, onClick = { confirmOut = false; revoke = null }) { Text("取消") } })
 }

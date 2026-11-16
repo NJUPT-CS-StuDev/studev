@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import top.hicancan.studev.BuildConfig
+import top.hicancan.studev.app.TextAction
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
@@ -83,12 +84,17 @@ private fun JsonObject.str(key: String) = this[key]?.jsonPrimitive?.contentOrNul
     var files by remember { mutableStateOf<List<Picked>>(emptyList()) }
     var pendingId by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(true) }
+    var identityReady by remember { mutableStateOf(false) }
+    var identityError by remember { mutableStateOf<String?>(null) }
+    var identityRevision by remember { mutableIntStateOf(0) }
+    var loadRevision by remember { mutableIntStateOf(0) }
     var signingIn by remember { mutableStateOf(false) }
     var done by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     val fields = form?.get("fields")?.jsonArray?.map { it.jsonObject }.orEmpty()
-    fun attempt(action: suspend () -> Unit) { if (busy) return; scope.launch { busy = true; error = ""; try { action() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalArgumentException || e is IllegalStateException) e.message.orEmpty() else "网络暂不可用，请重试。" } finally { busy = false } } }
+    fun attempt(action: suspend () -> Unit) { if (busy) return; busy = true; error = ""; scope.launch { try { action() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalArgumentException || e is IllegalStateException) e.message.orEmpty() else "网络暂不可用，请重试。" } finally { busy = false } } }
     suspend fun complete() {
         val id = pendingId ?: return
         val receipt = client.uploadReceipt(id) ?: error("这条上传的凭证不在当前设备中，请重新提交。")
@@ -114,13 +120,22 @@ private fun JsonObject.str(key: String) = this[key]?.jsonPrimitive?.contentOrNul
         note = ""
         complete()
     }
-    LaunchedEffect(request.id) {
-        user = client.current()
-        attempt {
-            val definition = client.request("/forms/${request.id}", authenticated = user != null).getValue("form").jsonObject
+    LaunchedEffect(client, identityRevision) {
+        identityReady = false; identityError = null
+        try { user = client.current(); identityReady = true }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { identityError = "登录状态暂时无法读取，请重试。" }
+    }
+    LaunchedEffect(request.id, loadRevision) {
+        loading = true; error = ""
+        try {
+            // Campus forms are public to read. Displaying their fields is independent of local account storage.
+            val definition = client.request("/forms/${request.id}").getValue("form").jsonObject
             require(definition.getValue("fields").jsonArray.all { it.jsonObject.text in listOf("text", "textarea", "select", "file") }) { "这张表有手机上还填不了的题，请在网页填写。" }
             form = definition
-        }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalArgumentException || e is IllegalStateException) e.message.orEmpty() else "表单暂时无法加载，请重试。" }
+        finally { loading = false }
     }
     // Which file field a photo or a pick is for, while the camera or the picker is open.
     var picking by remember { mutableStateOf<String?>(null) }
@@ -158,6 +173,12 @@ private fun JsonObject.str(key: String) = this[key]?.jsonPrimitive?.contentOrNul
             }
             form?.str("description")?.takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
+            if (form == null) {
+                if (loading) Text("正在加载表单…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else TextAction("重试", { loadRevision++ }, refresh = true)
+                return@Column
+            }
+            identityError?.let { Text(it, color = MaterialTheme.colorScheme.error); TextAction("重新读取登录状态", { identityRevision++ }, refresh = true) }
             val locked = busy || pendingId != null
             for (field in fields) {
                 val id = field.getValue("id").jsonPrimitive.content
@@ -194,7 +215,7 @@ private fun JsonObject.str(key: String) = this[key]?.jsonPrimitive?.contentOrNul
             }
             if (note.isNotEmpty()) Text(note, color = MaterialTheme.colorScheme.primary)
             if (form != null && user == null) Text("可以先填，提交时登录；没有账号可以当场注册，填好的不会丢。", style = MaterialTheme.typography.bodySmall)
-            if (pendingId == null) Button(onClick = { attempt { send() } }, enabled = !busy && form != null, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "正在提交……" else "提交") }
+            if (pendingId == null) Button(onClick = { attempt { send() } }, enabled = !busy && identityReady, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "正在提交…" else if (!identityReady && identityError == null) "正在读取登录状态…" else "提交") }
             else {
                 Text("附件没有确认完成。可以重试；重新填写会占用一次新的提交。", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { attempt { complete() } }, enabled = !busy) { Text("重试确认") }

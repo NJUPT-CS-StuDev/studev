@@ -74,6 +74,23 @@ class CourseCatalogTest {
         assertEquals(false, addedCourse.hidden)
     }
 
+    @Test fun managesPublicTeachingGroupsAndCustomCoursesWithoutMergingTheirNames() {
+        val first = meeting("a", "group-a", "通信原理", code = "SAME")
+        val second = meeting("b", "group-b", "通信原理", code = "SAME", teacher = "李四")
+        val added = meeting("c", "group-c", "通信原理", code = "SAME", classes = listOf("B240101"))
+        val custom = CustomCourse("personal", "通信原理", listOf(2, 4), listOf(3, 4), listOf(1, 3, 5), "工程中心", "王老师")
+        val edits = TimetableEdits(hidden = listOf("group-b"), added = listOf("group-a", "group-c"), custom = listOf(custom))
+        val courses = CourseCatalog.managedCourses(listOf(first, second), CourseCatalog.groupCatalog(listOf(first, second, added)), edits)
+        assertEquals(listOf("group-a", "group-b", "group-c", "custom:personal"), courses.map { it.id })
+        assertEquals(listOf(false, true, false, false), courses.map { it.hidden })
+        val personal = courses.last()
+        assertEquals("custom", personal.source)
+        assertEquals(listOf(2, 4), personal.meetings.map { it.weekday })
+        assertEquals(listOf(1, 3, 5), personal.meetings.first().weeks)
+        assertEquals("王老师", personal.meetings.first().teachers.single().name)
+        assertEquals("工程中心", personal.meetings.first().room)
+    }
+
     @Test
     fun formatsWeekRangesAndKeepsSkippedWeeksInPlace() {
         assertEquals("第1–15周（单周）", CourseCatalog.formatWeekNumbers(listOf(1, 3, 5, 7, 9, 11, 13, 15)))

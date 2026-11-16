@@ -25,6 +25,11 @@ public static class Events
 
     private static FrameworkElement Make(Campus campus, CampusLine line, LineEvent e, Moment now, bool mine)
     {
+        if (mine && e.Meeting is { } ownMeeting && !ownMeeting.TeachingClass.Id.StartsWith("custom:"))
+        {
+            var label = Choices.Edits(campus.Preferences, line.Term.Term).Names?.GetValueOrDefault(CourseTones.Identity(ownMeeting.Course.Code, ownMeeting.Course.Name)) ?? Names.Course(ownMeeting.Course.Name);
+            e = e with { Name = label, Short = label };
+        }
         var tones = CourseTones.Of(line);
         var tone = CourseTones.ToneOf(e, tones, line.CourseMeetings);
         var look = Tiles.LookOf(e, tone, false);
@@ -45,7 +50,7 @@ public static class Events
                 var otherLook = Tiles.LookOf(other, CourseTones.ToneOf(other, tones, line.CourseMeetings), false);
                 var on = other.Id == e.Id;
                 var words = Kit.Column(0, new TextBlock { Text = other.Short, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = otherLook.Words, MaxWidth = 120, TextTrimming = TextTrimming.CharacterEllipsis },
-                    new TextBlock { Text = $"{Kinds[other.Kind]} · {Clock.Hm(other.Start)}", FontSize = 11, Foreground = otherLook.Words, Opacity = .82 });
+                    new TextBlock { Text = $"{Kinds[other.Kind]} · {Clock.Hm(other.Start)}", FontSize = 11, Foreground = otherLook.Words });
                 var chip = new Tap(otherLook.Ground) { Content = words, Padding = new Thickness(10, 6, 10, 6), CornerRadius = new CornerRadius(8), BorderBrush = on ? Paint.Brush("ink") : otherLook.Edge, BorderThickness = new Thickness(on ? 1.5 : 1), Opacity = on ? 1 : .8 };
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, other.Short);
                 var chosen = other; chip.Click += (_, _) => { if (!on) Again(chosen); };
@@ -247,15 +252,22 @@ public static class Events
         {
             var identity = CourseTones.Identity(meeting.Course.Code, meeting.Course.Name);
             var naming = new Grid { ColumnSpacing = 8, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
-            naming.ColumnDefinitions.Add(new ColumnDefinition()); naming.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); naming.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var box = Kit.Field(e.Name, "这门课的名字", "课程名称");
-            void Save() { if (box.Text.Trim() is { Length: > 0 } name) { Choices.Rename(campus.Preferences, term, identity, name); Close(); } }
+            naming.ColumnDefinitions.Add(new ColumnDefinition()); naming.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var box = Kit.Field(e.Name, "课程名称", "课程名称"); box.MaxLength = 60;
+            void Save() { if (box.Text.Trim() is { Length: > 0 } name && name != e.Name) { Choices.Rename(campus.Preferences, term, identity, name); Again(e); } }
             box.KeyDown += (_, k) => { if (k.Key == Windows.System.VirtualKey.Enter) Save(); };
-            var save = Kit.Button("保存", Save); Grid.SetColumn(save, 1);
-            var original = Kit.Button("原名", () => { Choices.Rename(campus.Preferences, term, identity, null); Close(); }); Grid.SetColumn(original, 2);
-            naming.Children.Add(box); naming.Children.Add(save); naming.Children.Add(original);
-            Row("名称", Value("改名", "比如把板块课改成具体上的课"), () => { naming.Visibility = Visibility.Visible; box.Focus(FocusState.Programmatic); box.SelectAll(); });
-            body.Children.Add(naming);
+            var save = Kit.TextAction("保存名称", Save); Grid.SetColumn(save, 1);
+            void Ready() { save.IsEnabled = box.Text.Trim().Length > 0 && box.Text.Trim() != e.Name; save.Opacity = save.IsEnabled ? 1 : .45; }
+            box.TextChanged += (_, _) => Ready(); Ready();
+            naming.Children.Add(box); naming.Children.Add(save);
+            var secondary = Kit.Line(14, Kit.TextAction("取消", () => Again(e), colour: "muted")); secondary.Visibility = Visibility.Collapsed;
+            if (Choices.Edits(campus.Preferences, term).Names?.ContainsKey(identity) == true) secondary.Children.Add(Kit.TextAction("恢复原名", () => { Choices.Rename(campus.Preferences, term, identity, null); Again(e); }, colour: "muted"));
+            var nameRow = new Grid { ColumnSpacing = 12 };
+            nameRow.ColumnDefinitions.Add(new ColumnDefinition()); nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            nameRow.Children.Add(Value(e.Name));
+            var editName = Kit.TextAction("编辑名称", () => { naming.Visibility = Visibility.Visible; secondary.Visibility = Visibility.Visible; box.Focus(FocusState.Programmatic); box.SelectAll(); }); Grid.SetColumn(editName, 1); nameRow.Children.Add(editName);
+            Row("名称", nameRow);
+            body.Children.Add(naming); body.Children.Add(secondary);
         }
         if (meeting is not null)
             Danger(meeting.TeachingClass.Id.StartsWith("custom:") ? "删除这门课" : "从我的课表移除", () => { Choices.Hide(campus.Preferences, term, meeting.TeachingClass.Id); Close(); });

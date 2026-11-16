@@ -82,7 +82,8 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
                 var page = await search.Page(Text("query"), 6, "relevance", filters, 0, _ => { }, CancellationToken.None);
                 return new JsonArray([.. page.Results.Select(r =>
                 {
-                    var o = new JsonObject { ["id"] = r["id"]!.DeepClone(), ["title"] = r["title"]!.DeepClone() };
+                    var id = (string)r["id"]!;
+                    var o = new JsonObject { ["id"] = System.Text.RegularExpressions.Regex.IsMatch(id, "^(topics|sections)/") ? Answers.TextKey(id) : id, ["title"] = r["title"]!.DeepClone() };
                     if (r["sourceName"] is { } source) o["source"] = source.DeepClone();
                     if (r["publishedAt"]?.GetValue<string>() is { } date) o["date"] = date[..10];
                     if (r.ContainsKey("snippet")) o["snippet"] = r["snippet"]?.DeepClone();
@@ -96,14 +97,14 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
             case "read":
             {
                 var id = Text("id");
-                if (System.Text.RegularExpressions.Regex.IsMatch(id, "^(courses|teachers|classes|rooms|places|buildings)/")) throw new ArgumentException("这条不是文章：上课安排用 schedule，地点用 find_place。");
-                var key = Answers.TextKey(id);
-                var doc = JsonNode.Parse(await Repo.Bytes($"texts/{key[..2]}.json"))![key] ?? throw new ArgumentException("找不到这篇资料。");
+                if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[0-9a-f]{16}$")) throw new UnknownReference();
+                var doc = JsonNode.Parse(await Repo.Bytes($"texts/{id[..2]}.json"))![id] ?? throw new UnknownReference();
                 var text = (string)doc["text"]!;
                 var offset = (int?)args["offset"] ?? 0;
                 if (offset < 0 || offset > text.Length) throw new ArgumentException("正文位置超出范围。");
                 var end = (int)Math.Min((long)offset + ReadLimit, text.Length);
-                var said = new JsonObject { ["title"] = doc["title"]!.DeepClone(), ["source"] = doc["source"]!.DeepClone() };
+                var said = new JsonObject { ["id"] = id, ["title"] = doc["title"]!.DeepClone(), ["source"] = doc["source"]!.DeepClone() };
+                if (doc["path"] is { } path) said["path"] = path.DeepClone();
                 if (doc["published"]?.GetValue<string>() is { } published) said["date"] = published[..10];
                 said["url"] = doc["url"]!.DeepClone();
                 said["text"] = text.Length > 0 ? text[offset..end] : "这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。";

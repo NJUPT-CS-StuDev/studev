@@ -10,7 +10,8 @@ public readonly record struct Moment(DateOnly Date, int Min)
 public static class CampusDay
 {
     public static readonly TimeZoneInfo Zone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
-    public static DateTime Now() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Zone);
+    public static DateTime At(DateTimeOffset instant) => TimeZoneInfo.ConvertTime(instant, Zone).DateTime;
+    public static DateTime Now() => At(DateTimeOffset.UtcNow);
     public static DateOnly Today() => DateOnly.FromDateTime(Now());
 }
 

@@ -116,7 +116,7 @@ public static class DayView
         if (line.Next(now) is not { } e) return null;
         var today = e.Date == now.Date;
         var during = today && e.Start <= now.Min;
-        var caption = during ? $"正在上，到 {Clock.Hm(e.End)}" : today ? $"下一节 · 还有 {Clock.Duration(e.Start - now.Min)}" : $"下一节 · {(e.Date.DayNumber - now.Date.DayNumber == 1 ? "明天" : Clock.DateLabel(e.Date))}";
+        var caption = during ? $"进行中，至 {Clock.Hm(e.End)}" : today ? $"下一项 · 还有 {Clock.Duration(e.Start - now.Min)}" : $"下一项 · {(e.Date.DayNumber - now.Date.DayNumber == 1 ? "明天" : Clock.DateLabel(e.Date))}";
         var words = Kit.Column(2, Kit.Text(caption, Role.Caption, "muted"), Kit.Text($"{Clock.Hm(e.Start)} {e.Name}", Role.Heading), Kit.Text(e.Room is not null ? Names.Room(e.Room) : "课表没写地点", Role.Label, "muted"));
         ((TextBlock)words.Children[0]).FontSize = 12.5;
         var upcoming = line.Exams.Where(x => string.CompareOrdinal(x.Date, Clock.Text(now.Date)) >= 0).OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList();

@@ -305,7 +305,7 @@ public abstract partial class DeskWidget : Window
         };
         var veil = new Grid { Background = Paint.Faded("ink", .12) };
         veil.Children.Add(card);
-        veil.Tapped += (_, e) => { if (e.OriginalSource == veil) Hide(); };
+        veil.Tapped += (_, e) => { if (ReferenceEquals(e.OriginalSource, veil)) Hide(); };
         veil.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape) { Hide(); e.Handled = true; } };
         Grid.SetRow(veil, 1); Grid.SetRowSpan(veil, 2);
         root.Children.Add(veil);

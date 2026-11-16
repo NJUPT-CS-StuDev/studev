@@ -32,6 +32,7 @@ class Route {
     var knowledgeTopic by mutableStateOf<String?>(null)
     var knowledgeMaterial by mutableStateOf<String?>(null)
     var knowledgeAnchor by mutableStateOf<String?>(null)
+    var knowledgeFilters by mutableStateOf<Map<String, String>>(emptyMap())
     /** Opens a site link, relative or absolute. Anything this app has no screen for returns false. */
     fun open(link: String, origin: String): Boolean {
         val uri = Uri.parse(absolute(link, origin))
@@ -59,6 +60,7 @@ class Route {
                 knowledgeTopic = param("topic")
                 knowledgeMaterial = param("material")
                 knowledgeAnchor = uri.fragment?.takeIf { it.isNotEmpty() }
+                knowledgeFilters = listOf("cohort", "major", "grade", "category", "nature", "view", "focus", "q").mapNotNull { key -> param(key)?.let { key to it } }.toMap()
                 tab = "knowledge"
             }
             "/search" -> { query = param("q").orEmpty(); scope = param("scope") ?: "all"; within = param("within"); tab = "search" }

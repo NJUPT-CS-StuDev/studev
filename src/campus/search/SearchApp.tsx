@@ -10,7 +10,7 @@ import { makeRoomReader } from '@/world/rooms';
 import { hm, momentNow, WEEKDAYS } from '@/world/time';
 import { reloadIfGone } from '@/world/stale';
 import { useUrl } from '@/world/useUrl';
-import { Back, Chevron, Magnifier, Sheet, WeekGlyph } from '@/world/ui';
+import { Back, Chevron, Magnifier, Sheet, WeekGlyph, CampusHeader } from '@/world/ui';
 import { campusConfig } from '../../../campus.config';
 import { RoomsBrowse } from './RoomsBrowse';
 import '../campus.css';
@@ -167,9 +167,9 @@ export default function SearchApp() {
     else if (/^(考试|考表|放假|校历)/.test(query)) intent = <a className="intent" href="/?scale=term"><span>看整个学期<small>课、考试和假期在同一张表上</small></span><Chevron /></a>;
     const trimmed = query.trim();
     return (
-        <div className="sd page search">
+        <div className="sd page campus-entry search">
             <div className="wrap narrow">
-                <div className="sfield"><Magnifier /><input ref={input} value={text} placeholder="搜课程、老师、班级、地点、通知、资料" aria-label="搜索" autoComplete="off" enterKeyHint="search" onChange={event => type(event.target.value)} /></div>
+                <CampusHeader><div className="sfield"><Magnifier /><input ref={input} value={text} placeholder="搜课程、老师、班级、地点、通知、资料" aria-label="搜索" autoComplete="off" enterKeyHint="search" onChange={event => type(event.target.value)} /></div></CampusHeader>
                 {within && <button className="ib within" onClick={() => go({ within: null })}>在 {roomLabel(within)} 里 ×</button>}
                 <div className="chips" role="tablist">
                     {CHANNELS.map(item => <button key={item.id} role="tab" aria-selected={item.id === channel.id} className={`chip ${item.id === channel.id ? 'on' : ''}`} onClick={() => go({ scope: item.id === 'all' ? null : item.id, source: null, type: null, since: hasTime(item) ? since || null : null })}>{item.label}</button>)}

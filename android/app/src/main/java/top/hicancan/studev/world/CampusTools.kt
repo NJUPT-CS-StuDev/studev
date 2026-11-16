@@ -55,7 +55,8 @@ class CampusTools(private val context: android.content.Context, private val repo
             val engine = search ?: NativeSearch({ path -> repo.bytes("search/$path") }, { pack, mirror, offset, length -> repo.block("search/$pack", mirror, offset, length) }).also { search = it }
             val filters = buildJsonObject { if (channel.sources.isNotEmpty()) put("sourceIds", JsonArray(channel.sources.map(::JsonPrimitive))); if (channel.excluded.isNotEmpty()) put("excludedSourceIds", JsonArray(channel.excluded.map(::JsonPrimitive))) }
             return JsonArray(engine.page(args.getValue("query").jsonPrimitive.content, 6, filters = filters).results.map { result -> buildJsonObject {
-                put("id", result.getValue("id")); put("title", result.getValue("title")); result["sourceName"]?.let { put("source", it) }
+                val id = result.getValue("id").jsonPrimitive.content
+                put("id", if (Regex("^(topics|sections)/").containsMatchIn(id)) Answers.textKey(id) else id); put("title", result.getValue("title")); result["sourceName"]?.let { put("source", it) }
                 result["publishedAt"]?.jsonPrimitive?.contentOrNull?.let { put("date", it.take(10)) }
                 result["snippet"]?.let { put("snippet", it) }; put("url", result.getValue("url"))
             } })
@@ -75,15 +76,14 @@ class CampusTools(private val context: android.content.Context, private val repo
         if (name == "read") {
             val repo = repository() ?: error("校园数据还没准备好。")
             val id = args.getValue("id").jsonPrimitive.content
-            require(!Regex("^(courses|teachers|classes|rooms|places|buildings)/.*").matches(id)) { "这条不是文章：上课安排用 schedule，地点用 find_place。" }
-            val key = Answers.textKey(id)
-            val doc = Json.parseToJsonElement(repo.bytes("texts/${key.take(2)}.json").decodeToString()).jsonObject[key]?.jsonObject ?: error("找不到这篇资料。")
+            if (!Regex("[0-9a-f]{16}").matches(id)) throw UnknownReference()
+            val doc = Json.parseToJsonElement(repo.bytes("texts/${id.take(2)}.json").decodeToString()).jsonObject[id]?.jsonObject ?: throw UnknownReference()
             val text = doc.getValue("text").jsonPrimitive.content
             val offset = args["offset"]?.jsonPrimitive?.int ?: 0
             require(offset in 0..text.length) { "正文位置超出范围。" }
             val end = minOf(offset.toLong() + READ, text.length.toLong()).toInt()
             return buildJsonObject {
-                put("title", doc.getValue("title")); put("source", doc.getValue("source"))
+                put("id", id); put("title", doc.getValue("title")); doc["path"]?.let { put("path", it) }; put("source", doc.getValue("source"))
                 doc["published"]?.jsonPrimitive?.contentOrNull?.let { put("date", it.take(10)) }
                 put("url", doc.getValue("url")); put("text", text.substring(offset, end).ifEmpty { if (text.isEmpty()) "这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。" else "" })
                 if (text.length > end) put("next", end)

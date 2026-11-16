@@ -8,7 +8,7 @@ import top.hicancan.studev.world.hm
 
 /**
  * What the AI looked up, as src/campus/ai/steps.ts says it: one line for the whole (搜索资料 ×2 · 读原文 · 规划路线), and
- * each step with what it asked and what came back. The same call made twice is one step.
+ * each call with what it asked and what came back, including failed attempts and retries.
  */
 object Steps {
     data class Step(val name: String, val label: String, val detail: String, val failed: Boolean, val pending: Boolean)
@@ -30,7 +30,7 @@ object Steps {
             "course" -> (text(field(result, "course")).let { if (it.isNotEmpty()) "《$it》" else quoted("course") }) + if (done) { (field(result, "chapters") as? JsonArray)?.let { " · ${it.size} 章" } ?: " · 没找到" } else ""
             "schedule" -> quoted("of") + if (done) { (field(result, "count") as? JsonPrimitive)?.intOrNull?.takeIf { it > 0 }?.let { " · $it 次课" } ?: " · 没有" } else ""
             "curriculum" -> (text(field(result, "major")).ifEmpty { text(args["major"]) }) + (if (text(args["grade"]).isNotEmpty()) " ${text(args["grade"])} 级" else "") + if (done) { (field(result, "terms") as? JsonArray)?.let { " · ${it.size} 个学期" } ?: " · 没找到" } else ""
-            "read" -> text(field(result, "title")).let { if (done && it.isNotEmpty()) "《$it》" else "" }
+            "read" -> text(field(result, "title")).let { if (done && it.isNotEmpty()) "《$it》" else quoted("id") }
             "find_place" -> { val first = (result as? JsonArray)?.firstOrNull()?.let { text(field(it, "name")) }.orEmpty(); quoted("query") + if (done) { if (first.isNotEmpty()) " → $first" else " · 没找到" } else "" }
             "nearby" -> "${text(field(result, "near")).ifEmpty { text(args["near"]) }}附近的${text(args["what"])}" + ((field(result, "places") as? JsonArray)?.let { if (done) " · ${it.size} 处" else "" } ?: "")
             "route" -> "${text(field(result, "from")).ifEmpty { text(args["from"]) }} → ${text(field(result, "to")).ifEmpty { text(args["to"]) }}" + ((field(result, "distance_m") as? JsonPrimitive)?.doubleOrNull?.let { " · ${it.roundToLong()} 米" } ?: "")
@@ -45,25 +45,23 @@ object Steps {
         }
     }
 
-    /** The steps of one answer, in the order they were taken, the same call made again taken once. */
+    /** Every call in order; a retry never overwrites an earlier attempt. */
     fun of(calls: List<Call>, results: Map<String, JsonElement>): List<Step> {
-        val steps = LinkedHashMap<String, Step>()
+        val steps = mutableListOf<Step>()
         for (call in calls) {
             val args = runCatching { Json.parseToJsonElement(call.arguments).jsonObject }.getOrDefault(JsonObject(emptyMap()))
             val done = call.id in results; val result = results[call.id]
             val error = text(field(result, "error"))
-            val key = "${call.name} ${canonical(args)}"
-            steps[key] = Step(call.name, LABELS[call.name] ?: call.name, if (error.isNotEmpty()) "${detail(call.name, args, null, false)}：$error".removePrefix("：") else detail(call.name, args, result, done), error.isNotEmpty(), !done)
+            steps += Step(call.name, LABELS[call.name] ?: call.name, if (error.isNotEmpty()) "${detail(call.name, args, null, false)}：$error".removePrefix("：") else detail(call.name, args, result, done), error.isNotEmpty(), !done)
         }
-        return steps.values.toList()
+        return steps
     }
-
-    /** The arguments as one text, so that the same call is known again whatever its spacing. */
-    private fun canonical(args: JsonObject) = args.toString()
 
     /** The steps in one line: what was done, each kind once, with how many times. */
     fun line(steps: List<Step>): String {
-        val counts = LinkedHashMap<String, Int>(); steps.forEach { counts[it.label] = (counts[it.label] ?: 0) + 1 }
-        return (if (steps.any { it.pending }) "正在" else "已") + counts.entries.joinToString(" · ") { (label, n) -> if (n > 1) "$label ×$n" else label }
+        return steps.groupBy { it.label }.entries.joinToString(" · ") { (label, group) ->
+            val failed = group.count { it.failed }; val pending = group.count { it.pending }
+            label + (if (group.size > 1) " ×${group.size}" else "") + (if (failed > 0) "（失败 $failed）" else "") + (if (pending > 0) "（进行中 $pending）" else "")
+        }
     }
 }

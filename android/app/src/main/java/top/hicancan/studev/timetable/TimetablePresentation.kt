@@ -21,8 +21,8 @@ object TimetablePresentation {
     /** Which tone to prefer when all else is equal: the first three 120° apart, the first six 60° apart. */
     private val toneOrder = listOf(0, 7, 3, 9, 5, 1, 10, 6, 2, 8, 4, 11)
     private fun apart(left: Int, right: Int) = kotlin.math.abs(tonePosition[left] - tonePosition[right]).let { minOf(it, tonePosition.size - it) }
-    /** One timetable's colours: courses meeting on the same day get different tones, at least one tone apart
-     *  where they can; a tone is shared only by courses that never meet on the same day. */
+    /** One timetable's colours: avoid same-day collisions, use all twelve colours before repeating across the
+     *  week, then prefer separation between neighbours. */
     fun tones(meetings: List<TeachingMeeting>): Map<String, Int> = allot(meetings.map { identity(it) to it.weekday })
     /** One timeline's colours: a lab takes its course's tone, and a course that only has labs gets one too. */
     fun tones(line: top.hicancan.studev.world.CampusLine): Map<String, Int> = allot(line.meetings.map { identity(it) to it.weekday } + line.labs.map { linked(it, line.courseMeetings) to it.weekday })
@@ -47,7 +47,7 @@ object TimetablePresentation {
         val used = IntArray(tonePosition.size)
         for (id in ids.sortedWith(compareByDescending<String> { neighbours.getValue(it).size }.thenBy { it })) {
             val near = neighbours.getValue(id).mapNotNull { tones[it] }
-            fun score(tone: Int) = listOf(if (tone in near) 0 else 1, (near.map { apart(tone, it) } + 2).min(), -used[tone], -toneOrder.indexOf(tone))
+            fun score(tone: Int) = listOf(if (tone in near) 0 else 1, if (used[tone] == 0) 1 else 0, (near.map { apart(tone, it) } + 2).min(), -used[tone], -toneOrder.indexOf(tone))
             var best = toneOrder.first()
             for (tone in toneOrder) {
                 val (left, right) = score(tone) to score(best)

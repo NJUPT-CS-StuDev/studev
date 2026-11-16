@@ -48,10 +48,20 @@ class AccountClientTest {
             assertEquals("123456", body.getValue("totp").jsonPrimitive.content)
             reply()
         }, now = { 1000 })
-        assertEquals("测试成员", client.signIn("TEST123456", "secret-password", "123456", "测试手机").nickname)
+        assertEquals("测试成员", client.signIn("TEST123456", "secret-password", "123456", "测试手机").user.nickname)
         val persisted = accountJson.encodeToString(storage.value)
         assertFalse(persisted.contains("secret-password")); assertFalse(persisted.contains("\"totp\""))
         assertEquals(601000, storage.value.session!!.expiresAt)
+    }
+    @Test fun signInReturnsVerifiedSetupStateWithoutAnotherSessionRequest() = runBlocking {
+        var calls = 0
+        val client = AccountClient(Storage(), PlatformTransport { path, _, _ ->
+            calls++; assertEquals("/auth/login", path)
+            PlatformReply(200, JsonObject(reply().body + mapOf("passwordChangeRequired" to JsonPrimitive(true), "enrollmentRequired" to JsonPrimitive(true))))
+        })
+        val signedIn = client.signIn("TEST123456", "password", "", "device")
+        assertTrue(signedIn.passwordChangeRequired); assertTrue(signedIn.enrollmentRequired)
+        assertEquals(1, calls)
     }
     @Test fun concurrentExpiredRequestsRotateOnlyOnceAndUseNewAccess() = runBlocking {
         val storage = Storage()

@@ -1,5 +1,3 @@
-// 我: the class one is in, what one changed of the timetable, how it looks, how things stack, and the ways to say
-// something back. MeApp.tsx, as a page of the window rather than a sheet.
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StuDev.Data;
@@ -8,10 +6,12 @@ using StuDev.World;
 
 namespace StuDev.Me;
 
+/** Personal settings grouped by the student's task; course management belongs to timetable settings. */
 public sealed partial class MeScreen : Screen
 {
-    private static readonly Dictionary<string, string> KindNames = new() { ["exam"] = "考试", ["task"] = "任务", ["lab"] = "实验", ["class"] = "课", ["run"] = "早锻炼" };
+    private static readonly Dictionary<string, string> KindNames = new() { ["exam"] = "考试", ["task"] = "任务", ["lab"] = "实验", ["class"] = "课程", ["run"] = "早锻炼" };
     private readonly Campus campus = Campus.Shared;
+    private string section = "home";
 
     public MeScreen()
     {
@@ -22,111 +22,103 @@ public sealed partial class MeScreen : Screen
         Device.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Draw();
     }
-    public override void Shown(object? argument) => Draw();
-
+    public override void Shown(object? argument) { section = "home"; Draw(); }
+    private void Go(string next) { section = next; Draw(); }
     private static string Form(string kind, string? where = null) =>
-        $"{Repository.Site}/fill/?id={StuDev.Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
+        $"{Repository.Site}/fill/?id={Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
     private static async void Browse(string url) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
-
     private static UIElement Value(string text, string? small = null, string colour = "ink")
     {
         var v = Kit.Column(2, Kit.Text(text, Role.Label, colour, wrap: true));
-        ((TextBlock)v.Children[0]).FontSize = 14;
         if (small is not null) v.Children.Add(Kit.Text(small, Role.Caption, "muted", wrap: true));
         return v;
     }
-
+    private static ComboBox ChoiceField(string label, IEnumerable<(string Key, string Text)> choices, string selected, Action<string> choose)
+    {
+        var box = new ComboBox { MinWidth = 170, HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var (key, text) in choices) { var item = new ComboBoxItem { Content = text, Tag = key }; box.Items.Add(item); if (key == selected) box.SelectedItem = item; }
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, label);
+        box.SelectionChanged += (_, _) => { if (box.SelectedItem is ComboBoxItem { Tag: string value }) choose(value); };
+        return box;
+    }
+    private static UIElement Switched(string text, string? small, bool on, Action<bool> turn)
+    {
+        var row = new Grid { ColumnSpacing = 16 };
+        row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(Value(text, small));
+        var toggle = Kit.Switch(on, turn, text); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
+        return row;
+    }
     private void Draw()
     {
         Children.Clear();
         var page = new StackPanel();
-        page.Children.Add(Pages.Header("我", campus.Preferences.Class is { } k ? $"{k}{(campus.Classes.FirstOrDefault(c => c.Id == k)?.Major is { } m ? $" · {m}" : "")}" : "还没选班级"));
+        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", _ => "我" };
+        page.Children.Add(Pages.Header(title, "", section == "home" ? [] : [Kit.TextAction("返回", () => Go(section is "courses" or "labs" ? "timetable" : "home"), Icons.Back)]));
         void Row(string key, UIElement value, Action? open = null) => page.Children.Add(Kit.Row(key, value, open));
-        var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);
-        Row("班级", Value(campus.Preferences.Class is { } klass ? $"{klass}{(info?.Major is { } major ? $" · {major}" : "")}" : "选择班级"), PickClass);
-        if (campus.Term is { } term)
-        {
-            var edits = Choices.Edits(campus.Preferences, term.Term);
-            var changed = edits.Hidden.Count + edits.Added.Count + (edits.Names?.Count ?? 0);
-            var said = string.Join("，", new[] { $"加了 {edits.Added.Count} 门", $"隐藏了 {edits.Hidden.Count} 门", edits.Names is { Count: > 0 } n ? $"改名 {n.Count} 门" : null }.Where(s => s is not null));
-            var value = new Grid(); value.ColumnDefinitions.Add(new ColumnDefinition()); value.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            value.Children.Add(Value(said));
-            if (changed > 0) { var undo = Kit.Button("还原", () => Choices.Edit(campus.Preferences, term.Term, e => new([], [], null, e.Custom))); Grid.SetColumn(undo, 1); value.Children.Add(undo); }
-            Row("改动", value);
-        }
-        var look = Kit.Choice([("0", "跟随系统"), ("1", "浅色"), ("2", "深色")], Appearance.Current.ToString(), value => { Appearance.Set(int.Parse(value)); Draw(); });
-        Row("外观", look);
-        var order = campus.Line?.Order ?? CampusLine.LayerOrder;
-        Row("叠放", Value(string.Join(" › ", order.Select(o => KindNames[o])), "同一时间有几件事时谁在前面"), () => Layering(order));
         var user = Account.Shared.User;
-        if (user is null) Row("账号", Value("未登录", "登录后用免费额度问 AI，任务在手机和电脑间同步"), () => SignIn.Show());
-        else
+        var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);
+        if (section == "home")
         {
-            var account = new Grid(); account.ColumnDefinitions.Add(new ColumnDefinition()); account.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            account.Children.Add(Value($"{(user.RealName.Length > 0 ? user.RealName : user.Nickname)} · {user.RoleName}", "任务在你登录的手机和电脑间自动同步；课表设置也一起同步"));
-            var leave = Kit.Button("退出登录", async () => { try { await Account.Shared.SignOut(); } catch (Exception e) when (e is PlatformFailure or HttpRequestException or TaskCanceledException) { Account.Shared.Forget(); } });
-            leave.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(leave, 1); account.Children.Add(leave);
-            Row("账号", account);
-            Row("账号管理", Value("资料、密码、两步验证、登录设备、注销账号", "在网站上管理，和手机、网页是同一个账号"), () => Browse($"{Repository.Site}/account/"));
+            Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(); else Go("account"); });
+            Row("", Value("课表设置", campus.Preferences.Class is { } klass ? $"{klass} · {info?.Major}" : "选择班级、调整课程与实验"), () => Go("timetable"));
+            Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
+            Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);
+            Row("", Value("提醒与后台运行", "课前提醒、托盘和开机启动"), () => Go("device"));
+            Row("", Value("帮助与关于", Updates.Ready is { } ready ? $"新版本 {ready} 已准备好" : "反馈、资料提交和应用更新"), () => Go("about"));
         }
-        Row("反馈", Value("哪里不顺手、哪里不对", "写一句就行，我们会看每一条"), () => Browse(Form("feedback", "Windows · 我")));
-        Row("补充数据", Value("实验课表、讲座、校车、营业时间", "教务系统里没有的，审核后放进课表和地图"), () => Browse(Form("data")));
-        if (campus.Line?.Run is { } run && campus.Term is { } t2)
+        if (section == "account")
         {
-            page.Children.Add(Pages.Section("早锻炼"));
-            var settings = campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([]);
-            var grade = int.TryParse(info?.Grade, out var year) ? t2.Year - year + 1 : 0;
-            var on = settings.On ?? (grade is 1 or 2);
-            var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(Value("显示在课表上", grade is 1 or 2 ? $"大{"一二"[grade - 1]}必做，本学期 {run.Required} 次" : "大三大四需要补跑时打开"));
-            var toggle = Kit.Switch(on, next => campus.Preferences.Set("run", settings with { On = next }, Data.StorageJson.Default.RunSettings), "早锻炼显示在课表上"); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
-            Row("", row);
+            Row("昵称", Value(user?.Nickname ?? "未登录"));
+            Row("同步", Value("任务和课表设置在已登录的设备间同步", "桌面小组件位置、提醒和后台运行设置保留在这台电脑"));
+            Row("", Value("管理账号", "个人资料、密码、登录设备与账号注销"), () => Browse($"{Repository.Site}/account/"));
+            Row("", Value("退出登录"), async () => { try { await Account.Shared.SignOut(); } catch (Exception e) when (e is PlatformFailure or HttpRequestException or TaskCanceledException) { Account.Shared.Forget(); } Go("home"); });
         }
-        // This computer: staying in the tray, the widgets on the desktop, starting at sign-in, reminders.
-        page.Children.Add(Pages.Section("这台电脑"));
-        var device = Device.Settings;
-        UIElement Switched(string text, string small, bool on, Action<bool> turn)
+        if (section == "timetable")
         {
-            var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(Value(text, small));
-            var toggle = Kit.Switch(on, turn, text); toggle.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(toggle, 1); row.Children.Add(toggle);
-            return row;
+            Row("班级", Value(campus.Preferences.Class ?? "选择班级", info?.Major), PickClass);
+            Row("", Value("我的课程", "查看详情，添加、隐藏或修改个人安排"), () => Go("courses"));
+            Row("", Value("实验安排", "实验与理论课分别选择"), () => Go("labs"));
+            var order = campus.Line?.Order ?? CampusLine.LayerOrder;
+            Row("", Value("时间冲突时的显示顺序", string.Join(" › ", order.Select(o => KindNames[o]))), () => Layering(order));
+            if (campus.Run is { } run && campus.Term is { } term)
+            {
+                var settings = campus.Preferences.Get("run", StorageJson.Default.RunSettings) ?? new([]);
+                var grade = int.TryParse(info?.Grade, out var year) ? term.Year - year + 1 : 0;
+                Row("", Switched("显示早锻炼", $"本学期需完成 {run.Required} 次", settings.On ?? (grade is 1 or 2), on => campus.Preferences.Set("run", settings with { On = on }, StorageJson.Default.RunSettings)));
+            }
+            if (campus.Term is { } current)
+            {
+                var edits = Choices.Edits(campus.Preferences, current.Term);
+                if (edits.Added.Count + edits.Hidden.Count + (edits.Names?.Count ?? 0) > 0)
+                    Row("", Value("恢复班级课程", "撤销选课、隐藏和名称调整，保留自定义课程"), () => Choices.Edit(campus.Preferences, current.Term, e => new([], [], null, e.Custom)));
+            }
         }
-        Row("托盘", Switched("关掉窗口后留在托盘", "桌面小组件和提醒照常工作，在托盘图标的菜单里退出", device.Tray, on => Device.Set(Device.Settings with { Tray = on })));
-        var placed = Device.Widgets.Count;
-        Row("小组件", Value(placed == 0 ? "把清单或日历放在桌面上" : $"桌面上有 {placed} 个{(device.WidgetsHidden ? "，暂时隐藏" : "")}", "贴在桌面，按 Win+D 也在"), WidgetSheet.Open);
-        Row("开机启动", Switched("登录 Windows 时启动", "只在托盘和桌面小组件里，不弹出窗口", Device.StartsAtSignIn, on => Device.StartsAtSignIn = on));
-        Row("课前提醒", Switched("上课、实验和考试前提醒", "任务的提醒总是按你设的时间发", device.Reminders, on => Device.Set(Device.Settings with { Reminders = on })));
-        if (device.Reminders)
+        if (section == "courses") CoursesPage(page);
+        if (section == "labs") LabsPage(page);
+        if (section == "appearance") Row("主题", ChoiceField("主题", [("0", "跟随系统"), ("1", "浅色"), ("2", "深色")], Appearance.Current.ToString(), value => Appearance.Set(int.Parse(value))));
+        if (section == "device")
         {
-            var lead = Kit.Choice([("5", "5 分钟"), ("10", "10 分钟"), ("15", "15 分钟"), ("30", "30 分钟")], device.Lead.ToString(), value => Device.Set(Device.Settings with { Lead = int.Parse(value) }));
-            Row("提前", lead);
+            var device = Device.Settings;
+            Row("", Switched("课前提醒", "课程、实验和考试开始前提醒", device.Reminders, on => Device.Set(Device.Settings with { Reminders = on })));
+            if (device.Reminders) Row("提前时间", ChoiceField("提前时间", [("5", "5 分钟"), ("10", "10 分钟"), ("15", "15 分钟"), ("30", "30 分钟")], device.Lead.ToString(), value => Device.Set(Device.Settings with { Lead = int.Parse(value) })));
+            Row("", Switched("关闭窗口后留在托盘", "桌面小组件和提醒继续工作；可从托盘菜单退出", device.Tray, on => Device.Set(Device.Settings with { Tray = on })));
+            Row("", Switched("开机启动", "登录 Windows 时启动，保留在托盘", Device.StartsAtSignIn, on => Device.StartsAtSignIn = on));
         }
-        page.Children.Add(Pages.Section("关于"));
-        Row("社团", Value("学生发展中心", "南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
-        Row("下载 App", Value("安卓：提醒和桌面小组件"), () => Browse($"{Repository.Site}/download/"));
-        if (Updates.Ready is { } next)
+        if (section == "about")
         {
-            var update = new Grid(); update.ColumnDefinitions.Add(new ColumnDefinition()); update.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            update.Children.Add(Value($"新版本 {next} 已准备好", "下次打开时自动更新"));
-            var restart = Kit.Action("立即重启", Updates.RestartNow, go: true); restart.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(restart, 1); update.Children.Add(restart);
-            Row("更新", update);
+            Row("", Value("意见反馈"), () => Browse(Form("feedback", "Windows · 我")));
+            Row("", Value("提供校园资料", "提交实验课表、讲座、校车或营业时间"), () => Browse(Form("data")));
+            Row("", Value("学生发展中心", "南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
+            Row("", Value("下载 StuDev", "网页、Android 和 Windows"), () => Browse($"{Repository.Site}/download/"));
+            if (Updates.Ready is { } next) Row("", Value($"新版本 {next} 已准备好", "点击立即重启更新"), Updates.RestartNow);
+            else Row("", Value("检查更新", $"StuDev {Updates.Version}"), async () => { await Updates.Check(); await campus.Refresh(); });
+            Row("", Value("用户协议"), () => Browse($"{Repository.Site}/terms/"));
+            Row("", Value("隐私政策"), () => Browse($"{Repository.Site}/privacy/"));
+            page.Children.Add(Kit.Text($"StuDev {Updates.Version} · 数据 {campus.Repository?.Release.DataVersion ?? "—"}", Role.Caption, "muted"));
         }
-        var fine = Kit.Text($"StuDev {Updates.Version} · 数据版本 {campus.Repository?.Release.DataVersion ?? "—"} · 地图 {campus.Repository?.Release.MapVersion ?? "—"}", Role.Caption, "faint"); fine.Margin = new Thickness(0, 16, 0, 0);
-        page.Children.Add(fine);
-        var links = Kit.Line(14, Link("用户协议", $"{Repository.Site}/terms/"), Link("隐私政策", $"{Repository.Site}/privacy/"), Link("关于", $"{Repository.Site}/about/"));
-        links.Margin = new Thickness(0, 6, 0, 0);
-        page.Children.Add(links);
         Children.Add(Pages.Frame(page, 680));
     }
-
-    private static FrameworkElement Link(string text, string url)
-    {
-        var tap = new Tap { Content = Kit.Text(text, Role.Caption, "muted") };
-        tap.Click += (_, _) => Browse(url);
-        return tap;
-    }
-
     private void PickClass()
     {
         var column = new StackPanel { Padding = new Thickness(20, 18, 16, 20), Spacing = 12 };
@@ -134,36 +126,24 @@ public sealed partial class MeScreen : Screen
         column.Children.Add(ClassPicker.Make(campus.Classes, c => { campus.Preferences.SetClass(c.Id); App.Window?.Close(); }, false));
         App.Window?.Sheet(column, 480);
     }
-
     private void Layering(IReadOnlyList<string> order)
     {
         var column = new StackPanel { Padding = new Thickness(20, 18, 20, 20), Spacing = 4 };
-        column.Children.Add(Pages.SheetHead(Pages.SheetTitle("叠放顺序"), () => App.Window?.Close()));
-        var lead = Kit.Text("同一时间有几件事时，靠前的显示在前面，后面的露出一条边，点开任何一件都能看到同时段的其他安排。这只改变显示，不会让哪件事消失。", Role.Label, "muted", wrap: true);
-        lead.Margin = new Thickness(0, 6, 0, 10); column.Children.Add(lead);
+        column.Children.Add(Pages.SheetHead(Pages.SheetTitle("时间冲突时的显示顺序"), () => App.Window?.Close()));
+        column.Children.Add(Kit.Text("同时有多项安排时，优先显示排在前面的类型。点击安排可查看同时段的其他事项。", Role.Label, "muted", wrap: true));
         for (var at = 0; at < order.Count; at++)
         {
-            var kind = order[at];
             var value = new Grid(); value.ColumnDefinitions.Add(new ColumnDefinition()); value.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            value.Children.Add(Value(KindNames[kind]));
+            value.Children.Add(Value(KindNames[order[at]]));
             if (at > 0)
             {
                 var index = at;
-                var up = Kit.Button("上移", () =>
-                {
-                    var next = order.ToList(); (next[index - 1], next[index]) = (next[index], next[index - 1]);
-                    campus.Preferences.Set("layers", next, Data.StorageJson.Default.ListString);
-                    Layering(next);
-                });
+                var up = Kit.Button("上移", () => { var next = order.ToList(); (next[index - 1], next[index]) = (next[index], next[index - 1]); campus.Preferences.Set("layers", next, StorageJson.Default.ListString); Layering(next); });
                 Grid.SetColumn(up, 1); value.Children.Add(up);
             }
-            column.Children.Add(Kit.Row($"第 {at + 1} 层", value));
+            column.Children.Add(Kit.Row($"{at + 1}", value));
         }
-        if (campus.Preferences.Get("layers", Data.StorageJson.Default.ListString) is not null)
-        {
-            var reset = Kit.Action("恢复默认", () => { campus.Preferences.Change("layers", null); Layering(CampusLine.LayerOrder); }); reset.HorizontalAlignment = HorizontalAlignment.Stretch; reset.Margin = new Thickness(0, 12, 0, 0);
-            column.Children.Add(reset);
-        }
-        App.Window?.Sheet(column, 460);
+        column.Children.Add(Kit.TextAction("恢复默认", () => { campus.Preferences.Change("layers", null); Layering(CampusLine.LayerOrder); }));
+        App.Window?.Sheet(column, 520);
     }
 }

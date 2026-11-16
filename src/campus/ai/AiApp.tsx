@@ -16,8 +16,9 @@ import { ROUNDS, type Situation } from '@/world/assistant.mjs';
 import { useTimeline } from '@/timetable/useTimeline';
 import { PRODUCT_CONFIG } from '@/world/product';
 import { CampusTools } from '@/world/campusTools';
+import { UnknownReference } from '@/world/answers';
 import { roomLabel } from '@/world/names';
-import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up } from '@/world/ui';
+import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up, TextAction, CampusHeader } from '@/world/ui';
 import { definitions, readExams, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, askOwn, type Message } from './stream';
 import { addressError, endpoint, fetchModels, OWNER_AVATAR, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
@@ -56,6 +57,7 @@ function readKept(): Kept {
     return { chats: [], current: null };
 }
 const parse = (text: string | null) => { try { return JSON.parse(text ?? 'null') as unknown; } catch { return null; } };
+const showArguments = (text: string) => { try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; } };
 /** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
 function recent(history: Message[]) {
     let out = history;
@@ -249,7 +251,7 @@ export default function AiApp() {
                 if (!answer.tool_calls?.length) return;
                 for (const call of answer.tool_calls) {
                     let value: unknown;
-                    try { value = await execute(call.function.name, JSON.parse(call.function.arguments), call.id); } catch (failure) { value = { error: failure instanceof Error ? failure.message : '工具执行失败。' }; }
+                    try { value = await execute(call.function.name, JSON.parse(call.function.arguments), call.id); } catch (failure) { value = { error: failure instanceof Error ? failure.message : '工具执行失败。', ...(failure instanceof UnknownReference ? { code: failure.code } : {}) }; }
                     const result: Message = { role: 'tool', tool_call_id: call.id, content: JSON.stringify(value) };
                     history = [...history, result]; grow(result);
                 }
@@ -295,7 +297,7 @@ export default function AiApp() {
     const blank = !shown.length;
     const composer = <Composer value={draft} onChange={setDraft} onSend={() => void send(draft)} onStop={() => stop.current?.abort()} busy={busy} />;
     const current = kept.chats.find(item => item.id === kept.current);
-    return <div className={`sd ai ${blank ? 'blank' : ''} ${side ? 'side-open' : ''}`}>
+    return <div className={`sd ai campus-entry ${blank ? 'blank' : ''} ${side ? 'side-open' : ''}`}>
         <aside className="ai-side" aria-label="对话">
             <button className="ai-side-new" disabled={busy} onClick={() => open(null)}><Compose />新对话</button>
             <nav className="ai-side-list">{chatGroups(kept.chats, Date.now()).map(group => <section key={group.name}>
@@ -320,7 +322,7 @@ export default function AiApp() {
         {minding && <MemorySettings memory={memory} onClose={() => setMinding(false)} onSave={next => { memoryNow.current = next; setMemory(next); setMinding(false); }} />}
         {setting && <OwnSettings own={choice.own} onClose={() => setSetting(false)} onSave={next => { setChoice({ use: next.key ? 'own' : 'free', own: next }); setSetting(false); }} />}
         <div className="ai-main">
-        <div className="ai-bar">
+        <CampusHeader className="ai-bar">
             <button className="ai-icon ai-menu-btn" aria-label="对话列表" onClick={() => setSide(true)}><Bars /></button>
             <div className="ai-model">
                 <button className={`ai-model-b ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>
@@ -336,14 +338,14 @@ export default function AiApp() {
             </div>
             <span className="ai-title">{blank ? '' : titleOf(current ?? { title: '', thread: chat.thread })}</span>
             {!blank && <button className="ai-icon ai-bar-new" aria-label="新对话" title="新对话" disabled={busy} onClick={() => open(null)}><Compose /></button>}
-        </div>
+        </CampusHeader>
         <div className="ai-scroll" ref={scroller}><div className="ai-col">
         {blank && <div className="ai-hello">
             <h1>有什么可以帮你？</h1>
             {composer}
             {!waiting && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} onClick={() => void send(example)}>{example}</button>)}</div>}
             {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
-            <p className="fine">可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。起草的任务你点一下才加进清单；对话和记忆存在这台设备上。</p>
+            <p className="fine">可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。</p>
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
         <div className="ai-turns" aria-live="polite">{turns.map(turn => {
@@ -367,7 +369,7 @@ export default function AiApp() {
                         <div className="ai-tools ai-tools-q"><CopyButton text={question} /><button className="ai-icon" aria-label="改问题" title="改问题" disabled={busy} onClick={() => setEditing(turn.question.id)}><Pencil /></button>
                             <Branches thread={chat.thread} id={turn.question.id} onChoose={pick} disabled={busy} /></div></div>}
                 {steps.length > 0 && <details className="ai-steps"><summary className={doing ? 'doing' : ''}>{stepsLine(steps)}</summary>
-                    <ol>{steps.map((step, i) => <li key={i} className={step.failed ? 'failed' : step.pending ? 'doing' : ''}><b>{step.label}</b>{step.detail && <span>{step.detail}</span>}</li>)}</ol>
+                    <ol>{steps.map((step, i) => <li key={calls[i]!.id} className={step.failed ? 'failed' : step.pending ? 'doing' : ''}><details><summary><b>{step.label}</b>{step.detail && <span>{step.detail}</span>}</summary><p>调用参数</p><pre>{showArguments(calls[i]!.function.arguments)}</pre><p>调用结果</p><pre>{step.pending ? '正在等待结果…' : JSON.stringify(results.get(calls[i]!.id), null, 2)}</pre></details></li>)}</ol>
                 </details>}
                 {answer && drawn && <div className="ai-a"><DocText text={answer} /></div>}
                 {turn.last && live && <div className="ai-a"><Doc blocks={live.blocks} live /></div>}
@@ -381,7 +383,7 @@ export default function AiApp() {
                 </div>}
             </section>;
         })}</div>
-        {error && <p role="alert" className="ai-error">{error}{turns.length > 0 && <button className="ai-pill" onClick={() => again(turns.at(-1)!.question.id)}>重试</button>}</p>}
+        {error && <p role="alert" className="ai-error">{error}{turns.length > 0 && <TextAction refresh onClick={() => again(turns.at(-1)!.question.id)}>重试</TextAction>}</p>}
         {waiting && <p role="status" className="fine">在新打开的页面登录或注册，回到这里会自动发出：“{waiting}”</p>}
         <div ref={end} className="ai-end" />
         </div></div>
@@ -412,7 +414,7 @@ function MemorySettings({ memory, onClose, onSave }: { memory: Memory; onClose: 
                     <div className="ai-mind-foot"><span>{count ? `记着 ${count} 件事` : '聊天时说“记住……”，AI 也会写进来'}</span>{value.text.length > MEMORY_LIMIT * 0.8 && <span>{value.text.length} / {MEMORY_LIMIT}</span>}</div>
                 </div>
                 : <div className="ai-mind-off">记忆已关闭，AI 看不到这些内容，也不再记新的。{count > 0 && `记着的 ${count} 件事还在，打开就接着用。`}</div>}
-            <p className="ai-mind-note">只存在这台设备上，提问时随问题一起发给模型。</p>
+            <p className="ai-mind-note">未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。</p>
             <div className="ai-modal-btns">
                 {value.on && value.text && <button type="button" className="ai-link danger" onClick={() => setValue(current => ({ ...current, text: '' }))}>全部清空</button>}
                 <span />
@@ -475,7 +477,7 @@ function Drafts({ drafts, today, onAdd, onDrop }: { drafts: Proposal[]; today: s
     useEffect(() => setPicked(current => [...new Set([...current, ...open.filter(item => !current.includes(item.key)).map(item => item.key)])]), [drafts.length]);
     const chosen = open.filter(item => picked.includes(item.key));
     return <div className="ai-drafts">
-        <h3>{open.length ? `起草了 ${drafts.length} 个任务` : `已加到清单 · ${drafts.length} 个任务`}</h3>
+        <h3>{open.length ? `起草了 ${drafts.length} 个任务` : `任务已添加 · ${drafts.length} 个任务`}</h3>
         {drafts.map(item => <label key={item.key} className={`ai-draft ${item.saved ? 'saved' : ''}`}>
             {item.saved ? <span className="tcheck on" /> : <input type="checkbox" checked={picked.includes(item.key)} onChange={event => setPicked(current => event.target.checked ? [...current, item.key] : current.filter(key => key !== item.key))} />}
             <span className="ai-draft-main"><b>{item.id ? '改成 · ' : ''}{item.task.title}</b>
@@ -483,6 +485,6 @@ function Drafts({ drafts, today, onAdd, onDrop }: { drafts: Proposal[]; today: s
                     item.task.due ? `${dayWord(item.task.due.date, today)}${item.task.due.time !== undefined ? ` ${hm(item.task.due.time)}` : ''} 截止` : ''].filter(Boolean).join(' · ')}</small></span>
             {!item.saved && <button type="button" className="tskip" aria-label="不要这个" onClick={() => onDrop(item.key)}>×</button>}
         </label>)}
-        {open.length > 0 && <div className="btns"><button className="btn go" disabled={!chosen.length} onClick={() => onAdd(chosen.map(item => item.key))}>{chosen.length === open.length ? '全部加到清单' : `加 ${chosen.length} 个到清单`}</button></div>}
+        {open.length > 0 && <div className="btns"><button className="btn go" disabled={!chosen.length} onClick={() => onAdd(chosen.map(item => item.key))}>{chosen.length === open.length ? '添加全部任务' : `添加 ${chosen.length} 个任务`}</button></div>}
     </div>;
 }

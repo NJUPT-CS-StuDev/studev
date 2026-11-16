@@ -13,6 +13,34 @@ export interface CustomCourse {
     room?: string; teacher?: string;
 }
 
+/** A teaching class is one selectable course. Same-named classes taught separately stay separate. */
+export interface ManagedCourse {
+    id: string;
+    meetings: TeachingMeeting[];
+    source: 'class' | 'added' | 'custom';
+    hidden: boolean;
+    custom?: CustomCourse;
+}
+
+export function managedCourses(own: TeachingMeeting[], all: TeachingMeeting[], edits: { hidden: string[]; added: string[]; custom?: CustomCourse[] }): ManagedCourse[] {
+    const groups = new Map<string, ManagedCourse>();
+    for (const meeting of own) {
+        const id = meeting.teaching_class.id;
+        const group = groups.get(id) ?? { id, meetings: [], source: 'class' as const, hidden: edits.hidden.includes(id) };
+        if (!group.meetings.some(item => item.id === meeting.id)) group.meetings.push(meeting);
+        groups.set(id, group);
+    }
+    for (const meeting of all) {
+        const id = meeting.teaching_class.id;
+        if (!edits.added.includes(id)) continue;
+        const group = groups.get(id) ?? { id, meetings: [], source: 'added' as const, hidden: false };
+        if (!group.meetings.some(item => item.id === meeting.id)) group.meetings.push(meeting);
+        groups.set(id, group);
+    }
+    for (const custom of edits.custom ?? []) groups.set(`custom:${custom.id}`, { id: `custom:${custom.id}`, meetings: customMeetings(custom), source: 'custom', hidden: false, custom });
+    return [...groups.values()].map(group => ({ ...group, meetings: group.meetings.sort((a, b) => a.weekday - b.weekday || a.periods[0] - b.periods[0] || a.weeks[0]! - b.weeks[0]!) }));
+}
+
 /** A course of one's own as the meetings a timetable draws, one for each of its days. */
 export const customMeetings = (course: CustomCourse): TeachingMeeting[] => course.days.map(day => ({
     id: `custom:${course.id}:${day}`,
@@ -24,7 +52,7 @@ export const customMeetings = (course: CustomCourse): TeachingMeeting[] => cours
 
 /** An authored display name never rewrites the public course fact or passes through name shortening. */
 export const personalCourseName = (item: { course: { code: string | null; name: string }; teaching_class?: { id: string } }, meetings: TeachingMeeting[], names: Record<string, string> | undefined) =>
-    names?.[courseIdentity(linkedCourse(item, meetings))] ?? (item.teaching_class?.id.startsWith('custom:') ? item.course.name : undefined);
+    item.teaching_class?.id.startsWith('custom:') ? item.course.name : names?.[courseIdentity(linkedCourse(item, meetings))];
 
 /** "1-16", "1-8,10,12-14", "单1-15", "双 2-16": the weeks written; null when the text is not weeks. */
 export function parseWeeks(text: string, last: number): number[] | null {

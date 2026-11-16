@@ -8,9 +8,23 @@ public sealed record TimetableEdits(List<string> Hidden, List<string> Added, Dic
 public sealed record LabChoices(List<string>? Off = null, List<string>? Drop = null, List<string>? Skip = null, List<string>? Classes = null);
 public sealed record EventChoice(string? Avoid = null, long? Layer = null);
 public sealed record RunSettings(List<string> Days, int Adjust = 0, bool? On = null);
+public sealed record ManagedCourse(List<TeachingMeeting> Meetings, string Source, bool Hidden)
+{
+    public string Id => Meetings[0].TeachingClass.Id;
+}
 
 public static class Choices
 {
+    /** A course manager shows the same public teaching groups, including hidden ones, alongside one's own courses. */
+    public static List<ManagedCourse> ManagedCourses(List<TeachingMeeting> own, List<TeachingMeeting> chosen, TimetableEdits edits)
+    {
+        var ownIds = own.Select(m => m.Id).ToHashSet();
+        List<ManagedCourse> Group(IEnumerable<TeachingMeeting> meetings, string source) => meetings.GroupBy(m => m.TeachingClass.Id)
+            .Select(g => new ManagedCourse(g.OrderBy(m => m.Weekday).ThenBy(m => m.Periods[0]).ToList(), source, source == "class" && edits.Hidden.Contains(g.Key))).ToList();
+        return [.. Group(own, "class"), .. Group(chosen.Where(m => edits.Added.Contains(m.TeachingClass.Id) && !ownIds.Contains(m.Id)), "added"), .. Group((edits.Custom ?? []).SelectMany(CustomMeetings), "custom")];
+    }
+    public static void Restore(Preferences prefs, string term, string id) => Edit(prefs, term, e => e with { Hidden = e.Hidden.Where(h => h != id).ToList() });
+    public static void SaveCustom(Preferences prefs, string term, CustomCourse course) => Edit(prefs, term, e => e with { Custom = [.. (e.Custom ?? []).Where(c => c.Id != course.Id), course] });
     /** Changes one term's edits of the timetable: what is hidden, added, renamed, one's own courses. */
     public static void Edit(Preferences prefs, string term, Func<TimetableEdits, TimetableEdits> change)
     {
