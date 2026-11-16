@@ -37,8 +37,9 @@ object Ink {
 fun Modifier.topHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1f) }
 fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), 1f) }
 
-/** A plain row under a hairline, the one list item used everywhere. */
-@Composable fun KeyRow(key: String?, value: String, note: String? = null, color: Color = Ink.text, chevron: Boolean = false, onClick: (() -> Unit)? = null, trailing: @Composable (() -> Unit)? = null) {
+/** A plain row under a hairline, the one list item used everywhere. A trailing lambda is what a tap does; a control
+ * at its end is passed by name (trailing = …). */
+@Composable fun KeyRow(key: String?, value: String, note: String? = null, color: Color = Ink.text, chevron: Boolean = false, trailing: @Composable (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
     val base = Modifier.fillMaxWidth().topHairline(Ink.line)
     Row((if (onClick != null) base.clickable(onClick = onClick) else base).padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (key != null) Plain(key, 12.5.sp, Ink.faint, modifier = Modifier.width(40.dp))

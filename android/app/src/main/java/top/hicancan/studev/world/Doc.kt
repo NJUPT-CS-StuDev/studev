@@ -42,7 +42,8 @@ import top.hicancan.studev.app.marks
 /**
  * A document as docstream reads it, drawn as Compose: the same reading of Markdown as the web's (src/campus/world/doc.tsx);
  * the kernel is Rust (hicancan/docstream). Each top-level block is keyed, so streaming text redraws only the
- * block being written. A link inside the site is opened by `onLink`; one outside it in the browser.
+ * block being written. A link without a scheme (a site path, or a knowledge path like topics/…) is opened by `onLink`;
+ * one with a scheme in the browser.
  */
 object Docs {
     /** A whole text, read at once into keyed blocks. */
@@ -124,7 +125,7 @@ private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): 
                     }
                     "link" -> {
                         val href = inline.str("href")
-                        withLink(LinkAnnotation.Clickable(href, TextLinkStyles(SpanStyle(color = brand, textDecoration = TextDecoration.Underline))) { if (href.startsWith("/")) onLink(href) else runCatching { uri.openUri(href) } }) { walk(inline.list("children")) }
+                        withLink(LinkAnnotation.Clickable(href, TextLinkStyles(SpanStyle(color = brand, textDecoration = TextDecoration.Underline))) { if (Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").containsMatchIn(href)) runCatching { uri.openUri(href) } else onLink(href) }) { walk(inline.list("children")) }
                     }
                     "image" -> append("［图片：${inline.str("alt")}］")
                     "break" -> append("\n")

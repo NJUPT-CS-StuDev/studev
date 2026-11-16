@@ -42,7 +42,20 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             loading = viewModelScope.launch { loadClass(settings.state.value.klass) }
         }
     }
-    fun resume() { sync.resume() }
+    /** Coming back to the app also looks for newer campus data (at most every ten minutes): the site serves only its
+     * current release, so a release kept open for hours would otherwise ask for files no longer there. */
+    fun resume() {
+        sync.resume()
+        val now = System.currentTimeMillis()
+        if (now - checked < 10 * 60_000 || loading?.isActive == true) return
+        checked = now
+        viewModelScope.launch {
+            try { AcademicRepository.discover(getApplication(), settings.state.value.klass)?.let { take(it) } }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Offline or unreadable: the data at hand stays in use. */ }
+        }
+    }
+    private var checked = System.currentTimeMillis()
     private val _state = MutableStateFlow(AcademicState())
     val state = _state.asStateFlow()
     private val _notice = MutableStateFlow<String?>(null)

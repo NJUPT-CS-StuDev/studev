@@ -494,7 +494,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         Column {
             topics.forEach { t ->
                 val mats = t.tested_by.map { it.material }.distinct().size
-                KeyRow(null, t.title, "${t.tested_by.size} 道题 · $mats 份资料", color = ct.fg, chevron = true) { onOpen(t.id, null) }
+                KeyRow(null, t.title, "${t.tested_by.size} 道题 · $mats 份资料", color = ct.fg, chevron = true, onClick = { onOpen(t.id, null) })
             }
         }
     }
@@ -503,7 +503,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         Plain("资料", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
         Column {
             mats.forEach { m ->
-                KeyRow(m.kind, m.title, if (m.questions > 0) "${m.questions} 题" else m.term, chevron = true) { onOpen(null, m.path) }
+                KeyRow(m.kind, m.title, if (m.questions > 0) "${m.questions} 题" else m.term, chevron = true, onClick = { onOpen(null, m.path) })
             }
         }
     }
@@ -577,11 +577,11 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         DocText(miniDoc)
         if (topic.requires.isNotEmpty()) {
             Plain("先要懂", 13.sp, Ink.muted)
-            topic.requires.forEach { id -> KeyRow(null, titleOf(id), color = ct.fg, chevron = true) { onOpen(id, null, null) } }
+            topic.requires.forEach { id -> KeyRow(null, titleOf(id), color = ct.fg, chevron = true, onClick = { onOpen(id, null, null) }) }
         }
         if (topic.leads_to.isNotEmpty()) {
             Plain("用到它的", 13.sp, Ink.muted)
-            topic.leads_to.forEach { id -> KeyRow(null, titleOf(id), color = ct.fg, chevron = true) { onOpen(id, null, null) } }
+            topic.leads_to.forEach { id -> KeyRow(null, titleOf(id), color = ct.fg, chevron = true, onClick = { onOpen(id, null, null) }) }
         }
     }
 }
