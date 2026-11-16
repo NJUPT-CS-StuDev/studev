@@ -55,7 +55,7 @@ public static class Answers
         foreach (var material in index.Materials.Where(m => m.Course == course.Id))
         {
             if (materials[material.Kind] is not JsonArray list) { list = []; materials[material.Kind] = list; }
-            if (list.Count < 12) list.Add(new JsonObject { ["title"] = material.Title, ["id"] = $"sections/{material.Path}" });
+            if (list.Count < 12) list.Add((JsonNode)new JsonObject { ["title"] = material.Title, ["id"] = $"sections/{material.Path}" });
         }
         var said = new JsonObject
         {
