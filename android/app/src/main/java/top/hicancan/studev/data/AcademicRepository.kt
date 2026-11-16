@@ -25,6 +25,16 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     val release = release
     private val bundled: DataRelease by lazy { Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() }) }
     private val root = File(context.filesDir, "campus/${release.version}")
+    /** A knowledge picture, named by its full address on one of the hosts the knowledge release lists; kept on disk. */
+    suspend fun media(address: String, hosts: List<String>): ByteArray? = withContext(Dispatchers.IO) {
+        if (hosts.none { address.startsWith("$it/") }) return@withContext null
+        val name = java.security.MessageDigest.getInstance("SHA-256").digest(address.toByteArray()).joinToString("") { "%02x".format(it) }
+        val file = File(context.cacheDir, "knowledge-media/$name")
+        if (file.isFile) return@withContext file.readBytes()
+        val bytes = try { fetchBytes(address) } catch (e: IOException) { return@withContext null }
+        file.parentFile?.mkdirs(); file.writeBytes(bytes)
+        bytes
+    }
     suspend fun bytes(path: String): ByteArray = withContext(Dispatchers.IO) {
         require(path.isNotBlank() && !path.startsWith('/') && path.none { it in "\\:%?#" } && path.split('/').none { it == ".." || it == "." || it.isEmpty() })
         val file = File(root, path)

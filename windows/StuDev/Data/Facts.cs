@@ -41,7 +41,7 @@ public sealed record KnowledgeCourse(string Id, string Name, List<string> Codes,
 public sealed record QuestionRef(string Material, string Heading, string Anchor);
 public sealed record KnowledgeTopic(string Id, string Title, List<string> Requires, string Path, List<string> TaughtBy, List<QuestionRef> TestedBy, List<string> LeadsTo);
 public sealed record KnowledgeMaterial(string Path, string Title, string Kind, string Course, string? Term, string Source, int Questions);
-public sealed record KnowledgeIndex(List<KnowledgeCourse> Courses, List<KnowledgeTopic> Topics, List<KnowledgeMaterial> Materials);
+public sealed record KnowledgeIndex(List<KnowledgeCourse> Courses, List<KnowledgeTopic> Topics, List<KnowledgeMaterial> Materials, List<string>? Media = null);
 
 public sealed record CurriculumCourse(
     string Code, string Name, double Credits, string Hours, string ExamMode,

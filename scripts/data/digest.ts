@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { compileBundle } from 'wasm-search/compile';
 import { mirrorSearch } from './mirror-search.mjs';
-import { isKnowledgeMedia, mirrorKnowledge } from './mirror-knowledge.mjs';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
@@ -253,6 +252,7 @@ interface KnowledgeIndex {
     courses: { id: string; name: string; codes: string[]; former: string[]; chapters: { title: string; topics: string[] }[]; path: string }[];
     topics: { id: string; title: string; requires: string[]; path: string; taught_by: string[]; tested_by: { material: string; heading: string; anchor: string }[]; leads_to: string[] }[];
     materials: { path: string; title: string; kind: string; course: string; term: string | null; source: string; questions: number }[];
+    media: string[];
 }
 
 /** Topics and questions as documents, so a search finds a piece of knowledge and opens it where it is. */
@@ -648,11 +648,9 @@ async function main() {
         const gone = course.codes.filter(code => !taught.has(`information/course-plan/${code}`));
         if (gone.length) throw new Error(`knowledge course ${course.name} names codes not taught this term: ${gone.join(', ')}`);
     }
-    const knowledgeMirror = await mirrorKnowledge(knowledge.dir, knowledge.version);
-    await cp(knowledge.dir, join(out, 'knowledge'), {
-        recursive: true,
-        filter: source => !knowledgeMirror.offloaded || !isKnowledgeMedia(source),
-    });
+    // The knowledge release is text; its pictures are named by full address on the knowledge's own static hosts.
+    if (!knowledgeIndex.media?.length) throw new Error('the knowledge release names no media hosts');
+    await cp(knowledge.dir, join(out, 'knowledge'), { recursive: true });
     docs.push(...await knowledgeDocuments(knowledge.dir, knowledgeIndex));
     await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
     await writeTexts(docs, join(out, 'texts'));

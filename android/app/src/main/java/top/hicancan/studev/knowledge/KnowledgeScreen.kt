@@ -44,7 +44,7 @@ import kotlin.math.abs
 @Serializable data class QuestionRef(val material: String, val heading: String, val anchor: String)
 @Serializable data class KnowledgeTopic(val id: String, val title: String, val requires: List<String> = emptyList(), val path: String, val taught_by: List<String> = emptyList(), val tested_by: List<QuestionRef> = emptyList(), val leads_to: List<String> = emptyList())
 @Serializable data class KnowledgeMaterial(val path: String, val title: String, val kind: String, val course: String, val term: String? = null, val source: String = "", val questions: Int = 0)
-@Serializable data class KnowledgeIndex(val courses: List<KnowledgeCourse>, val topics: List<KnowledgeTopic>, val materials: List<KnowledgeMaterial>)
+@Serializable data class KnowledgeIndex(val courses: List<KnowledgeCourse>, val topics: List<KnowledgeTopic>, val materials: List<KnowledgeMaterial>, val media: List<String> = emptyList())
 
 @Serializable data class CurriculumCourse(
     val code: String,
@@ -221,10 +221,8 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
 
     var showOutline by remember { mutableStateOf(false) }
     val courseTone = tone(toneIndex(course.id))
-    val imageBytes: suspend (String) -> ByteArray? = { raw ->
-        val clean = raw.removePrefix("../").removePrefix("./")
-        repo?.bytes("knowledge/$clean")
-    }
+    // Pictures are named by full address on the knowledge's own static hosts.
+    val imageBytes: suspend (String) -> ByteArray? = { address -> repo?.media(address, index.media) }
     val onDocLink: (String) -> Unit = { href ->
         when (val to = knowledgePlace(href)) {
             is KnowledgePlace.Topic -> route.knowledge(course = course.id, topic = to.id)

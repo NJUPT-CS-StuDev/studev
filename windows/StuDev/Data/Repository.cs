@@ -43,6 +43,24 @@ public sealed class Repository
             throw new InvalidDataException($"unexpected release {release.Version}");
     }
 
+    private static readonly string MediaRoot = Storage.CacheFor("knowledge-media");
+
+    /** A knowledge picture, named by its full address on one of the hosts the knowledge release lists; kept on disk. */
+    public static async Task<byte[]?> Media(string address, IReadOnlyList<string>? hosts)
+    {
+        if (hosts is null || !hosts.Any(host => address.StartsWith(host + "/", StringComparison.Ordinal))) return null;
+        var file = Path.Combine(MediaRoot, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(address))));
+        if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
+        try
+        {
+            var bytes = await Http.GetByteArrayAsync(address);
+            Directory.CreateDirectory(MediaRoot);
+            await File.WriteAllBytesAsync(file, bytes);
+            return bytes;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException) { return null; }
+    }
+
     /** One file of the release, from disk if it was fetched before. */
     public Task<byte[]> Bytes(string path)
     {

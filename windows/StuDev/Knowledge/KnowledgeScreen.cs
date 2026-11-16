@@ -453,13 +453,8 @@ public sealed partial class KnowledgeScreen : Screen
             else if (decoded.StartsWith("courses/") && decoded.EndsWith(".md")) Open(course: decoded["courses/".Length..^3]);
             else if (decoded.StartsWith("materials/") && decoded.EndsWith(".md")) Open(course: course.Id, material: decoded, anchor: anchor);
         };
-        Func<string, Task<byte[]?>> imgLoader = async src =>
-        {
-            var clean = src.TrimStart('.').TrimStart('/');
-            if (src.StartsWith("../")) clean = src[3..];
-            else if (src.StartsWith("./")) clean = src[2..];
-            try { return await repo.Bytes($"knowledge/{clean}"); } catch { return null; }
-        };
+        // Pictures are named by full address on the knowledge's own static hosts.
+        Func<string, Task<byte[]?>> imgLoader = src => Repository.Media(src, idx.Media);
 
         var blocks = Doc.Read(md);
         if (topic is not null)
