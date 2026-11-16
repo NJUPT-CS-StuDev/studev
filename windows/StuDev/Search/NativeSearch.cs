@@ -15,7 +15,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     private JsonObject? manifest;
     private SearchEngine? engine;
     private long loaded;
-    private bool closed;
+    private volatile bool closed;
 
     private Task<byte[]> Ref(JsonNode value)
     {
@@ -29,7 +29,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     private async Task<SearchEngine> Ready()
     {
         if (engine is not null && loaded < Budget) return engine;
-        engine?.Dispose();
+        Close();
         manifest ??= JsonNode.Parse(await repository.Bytes("search/manifest.json"))!.AsObject();
         var index = manifest["index"]!;
         loaded = 0;
@@ -73,15 +73,21 @@ public sealed class NativeSearch(Repository repository) : IDisposable
             cancel.ThrowIfCancellationRequested();
             return Read(search.HydrateSearch());
         }
-        finally { gate.Release(); }
+        finally { gate.Release(); if (closed) Dispose(); }
     }
 
     public async Task<JsonObject> Options()
     {
         await gate.WaitAsync();
-        try { return JsonNode.Parse((await Ready()).FilterOptions())!.AsObject(); }
-        finally { gate.Release(); }
+        try { ObjectDisposedException.ThrowIf(closed, this); return JsonNode.Parse((await Ready()).FilterOptions())!.AsObject(); }
+        finally { gate.Release(); if (closed) Dispose(); }
     }
 
-    public void Dispose() { closed = true; engine?.Dispose(); engine = null; }
+    private void Close() { engine?.Dispose(); engine = null; }
+    public void Dispose()
+    {
+        closed = true;
+        if (!gate.Wait(0)) return;
+        try { Close(); } finally { gate.Release(); }
+    }
 }

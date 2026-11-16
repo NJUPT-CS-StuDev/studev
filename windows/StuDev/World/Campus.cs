@@ -83,6 +83,7 @@ public sealed class Campus
         }
         catch (Exception error) when (error is HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException)
         { UpdateError = "暂时无法检查更新，继续使用已保存的校园数据。"; }
+        catch (NotSupportedException error) { UpdateError = error.Message; _ = Updates.Check(); }
         finally { updating = null; Changed?.Invoke(); }
     }
 
@@ -134,6 +135,7 @@ public sealed class Campus
             ClassMeetings = classMeetings; ClassLabs = classLabs; Line = nextLine;
             Error = null;
         }
+        catch (NotSupportedException error) { Error = error.Message; loading = null; _ = Updates.Check(); }
         catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound && source is null && Repository is null && !rediscovered)
         {
             // The release kept on disk was retired from the site before its files were all fetched: start from the latest.

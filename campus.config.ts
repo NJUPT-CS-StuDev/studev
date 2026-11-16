@@ -32,7 +32,7 @@ export const campusConfig = {
         ],
         /** Every searchable thing is one document in one bundle; a channel is a set of its sources. */
         entities: {
-            courses: '课程', teachers: '老师', classes: '班级', 'teaching-classes': '教学班', exams: '考试安排', rooms: '教室', places: '地点', topics: '知识点', questions: '题目',
+            courses: '课程', teachers: '老师', classes: '班级', 'teaching-classes': '教学班', exams: '考试安排', rooms: '教室', places: '地点', topics: '知识点', sections: '资料章节',
         },
         /** Where one looks: the search page's channels and the AI's search scopes, read by Android from the same file. */
         channels,

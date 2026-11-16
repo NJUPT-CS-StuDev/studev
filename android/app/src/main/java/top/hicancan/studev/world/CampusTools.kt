@@ -79,11 +79,14 @@ class CampusTools(private val context: android.content.Context, private val repo
             val key = Answers.textKey(id)
             val doc = Json.parseToJsonElement(repo.bytes("texts/${key.take(2)}.json").decodeToString()).jsonObject[key]?.jsonObject ?: error("找不到这篇资料。")
             val text = doc.getValue("text").jsonPrimitive.content
+            val offset = args["offset"]?.jsonPrimitive?.int ?: 0
+            require(offset in 0..text.length) { "正文位置超出范围。" }
+            val end = minOf(offset.toLong() + READ, text.length.toLong()).toInt()
             return buildJsonObject {
                 put("title", doc.getValue("title")); put("source", doc.getValue("source"))
                 doc["published"]?.jsonPrimitive?.contentOrNull?.let { put("date", it.take(10)) }
-                put("url", doc.getValue("url")); put("text", text.take(READ).ifEmpty { "这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。" })
-                if (text.length > READ) put("cut", true)
+                put("url", doc.getValue("url")); put("text", text.substring(offset, end).ifEmpty { if (text.isEmpty()) "这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。" else "" })
+                if (text.length > end) put("next", end)
                 put("files", JsonArray(doc.getValue("files").jsonArray.take(10)))
             }
         }

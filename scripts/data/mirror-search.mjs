@@ -25,8 +25,14 @@ export async function mirrorSearch(directory, version, env = process.env) {
     const keys = manifest.packs.map(pack => `search/${version}/${pack}`);
     for (const [index, key] of keys.entries()) {
         const body = await readFile(join(directory, manifest.packs[index]));
-        const head = await signedFetch(store, 'HEAD', key);
-        if (head.ok && Number(head.headers.get('content-length')) === body.length) continue;
+        const existing = await signedFetch(store, 'GET', key);
+        if (existing.ok) {
+            if (!body.equals(Buffer.from(await existing.arrayBuffer()))) {
+                throw new Error(`published search pack differs: ${key}; publish a new product or upstream release`);
+            }
+            continue;
+        }
+        if (existing.status !== 404) throw new Error(`reading search mirror failed (${existing.status}): ${key}`);
         const put = await signedFetch(store, 'PUT', key, { body, headers: { 'content-type': 'application/octet-stream' } });
         if (!put.ok) throw new Error(`search mirror upload failed (${put.status}): ${key}`);
     }

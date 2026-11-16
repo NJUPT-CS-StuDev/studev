@@ -38,16 +38,15 @@ public sealed record RoomDay(string Date, int Week, int Weekday, Dictionary<stri
 
 public sealed record KnowledgeChapter(string Title, List<string> Topics);
 public sealed record KnowledgeCourse(string Id, string Name, List<string> Codes, List<string> Former, List<KnowledgeChapter> Chapters, string Path);
-public sealed record QuestionRef(string Material, string Heading, string Anchor);
-public sealed record KnowledgeTopic(string Id, string Title, List<string> Requires, string Path, List<string> TaughtBy, List<QuestionRef> TestedBy, List<string> LeadsTo);
-public sealed record KnowledgeMaterial(string Path, string Title, string Kind, string Course, string? Term, string Source, int Questions);
+public sealed record MaterialRef(string Material, string Heading, string Anchor);
+public sealed record KnowledgeTopic(string Id, string Title, List<string> Requires, string Path, List<string> TaughtBy, List<MaterialRef> References, List<string> LeadsTo);
+public sealed record KnowledgeMaterial(string Path, string Title, string Kind, string Course, string? Term, string Source, int Sections);
 public sealed record KnowledgeIndex(List<KnowledgeCourse> Courses, List<KnowledgeTopic> Topics, List<KnowledgeMaterial> Materials, List<string>? Media = null);
 
 public sealed record CurriculumCourse(
-    string Code, string Name, double Credits, string Hours, string ExamMode,
-    string Category, string Nature, List<string> Categories, List<string> Natures,
-    List<string> Colleges, List<string> Majors, List<int> Terms, List<string> Grades,
-    List<string> Requires, List<string> Former);
+    string Code, string Name, List<CurriculumEntry> Plans, List<string> Requires, List<string> Former);
+public sealed record CurriculumEntry(string College, string Major, string Grade, int? Term, double? Credits,
+    string Hours, string ExamMode, string Category, string Nature);
 
 public static class Facts
 {

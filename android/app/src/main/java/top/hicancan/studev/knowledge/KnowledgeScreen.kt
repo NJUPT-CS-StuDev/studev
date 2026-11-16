@@ -10,8 +10,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,43 +27,45 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import top.hicancan.studev.app.*
 import top.hicancan.studev.timetable.SearchField
 import top.hicancan.studev.world.Doc
+import top.hicancan.studev.world.DocAnchor
+import top.hicancan.studev.world.DocAnchors
 import top.hicancan.studev.world.DocText
 import top.hicancan.studev.world.Docs
 import java.net.URLDecoder
+import java.io.IOException
 import kotlin.math.abs
 
 @Serializable data class KnowledgeChapter(val title: String, val topics: List<String>)
 @Serializable data class KnowledgeCourse(val id: String, val name: String, val codes: List<String> = emptyList(), val former: List<String> = emptyList(), val chapters: List<KnowledgeChapter> = emptyList(), val path: String)
-@Serializable data class QuestionRef(val material: String, val heading: String, val anchor: String)
-@Serializable data class KnowledgeTopic(val id: String, val title: String, val requires: List<String> = emptyList(), val path: String, val taught_by: List<String> = emptyList(), val tested_by: List<QuestionRef> = emptyList(), val leads_to: List<String> = emptyList())
-@Serializable data class KnowledgeMaterial(val path: String, val title: String, val kind: String, val course: String, val term: String? = null, val source: String = "", val questions: Int = 0)
+@Serializable data class MaterialRef(val material: String, val heading: String, val anchor: String)
+@Serializable data class KnowledgeTopic(val id: String, val title: String, val requires: List<String> = emptyList(), val path: String, val taught_by: List<String> = emptyList(), val references: List<MaterialRef> = emptyList(), val leads_to: List<String> = emptyList())
+@Serializable data class KnowledgeMaterial(val path: String, val title: String, val kind: String, val course: String, val term: String? = null, val source: String = "", val sections: Int = 0)
 @Serializable data class KnowledgeIndex(val courses: List<KnowledgeCourse>, val topics: List<KnowledgeTopic>, val materials: List<KnowledgeMaterial>, val media: List<String> = emptyList())
 
 @Serializable data class CurriculumCourse(
     val code: String,
     val name: String,
-    val credits: Double = 0.0,
-    val hours: String = "",
-    val exam_mode: String = "",
-    val category: String = "",
-    val nature: String = "",
-    val categories: List<String> = emptyList(),
-    val natures: List<String> = emptyList(),
-    val colleges: List<String> = emptyList(),
-    val majors: List<String> = emptyList(),
-    val terms: List<Int> = emptyList(),
-    val grades: List<String> = emptyList(),
+    val plans: List<CurriculumEntry>,
     val requires: List<String> = emptyList(),
     val former: List<String> = emptyList(),
+)
+@Serializable data class CurriculumEntry(
+    val college: String, val major: String, val grade: String,
+    val term: Int?, val credits: Double?, val hours: String,
+    val exam_mode: String, val category: String, val nature: String,
 )
 
 private sealed interface KnowledgePlace {
@@ -99,8 +99,8 @@ private fun safeMermaidLabel(text: String): String {
 
 private sealed interface MatPart {
     class Text(val blocks: MutableList<JsonObject>) : MatPart
-    class Group(val title: String, var questions: Int = 0) : MatPart
-    class Question(
+    class Group(val title: String, val anchor: String, var sections: Int = 0) : MatPart
+    class Section(
         val title: String,
         val anchor: String,
         val asks: MutableList<JsonObject> = mutableListOf(),
@@ -110,6 +110,11 @@ private sealed interface MatPart {
 }
 
 private val ANSWER_LABELS = listOf("参考解答", "答案", "订正", "补充", "原文")
+private fun containsAnchor(value: JsonElement, anchor: String): Boolean = when (value) {
+    is JsonArray -> value.any { containsAnchor(it, anchor) }
+    is JsonObject -> value["anchor"]?.jsonPrimitive?.contentOrNull == anchor || value.values.any { containsAnchor(it, anchor) }
+    else -> false
+}
 private fun plainInlines(inlines: JsonArray?): String = inlines.orEmpty().joinToString("") { el ->
     val obj = el as? JsonObject ?: return@joinToString ""
     when (obj["type"]?.jsonPrimitive?.content) {
@@ -132,7 +137,7 @@ private fun linkInlines(inlines: JsonArray?, out: MutableList<Pair<String, Strin
 
 private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     val parts = mutableListOf<MatPart>()
-    var question: MatPart.Question? = null
+    var question: MatPart.Section? = null
     var group: MatPart.Group? = null
     for (keyed in blocks) {
         val block = keyed["block"] as? JsonObject ?: continue
@@ -141,16 +146,16 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
             val level = block["level"]?.jsonPrimitive?.int ?: 1
             if (level <= 2) {
                 question = null
-                if (level == 1) continue
-                group = MatPart.Group(plainInlines(block["inlines"] as? JsonArray))
+                if (level == 1) { parts += MatPart.Text(mutableListOf(keyed)); continue }
+                group = MatPart.Group(plainInlines(block["inlines"] as? JsonArray), block.getValue("anchor").jsonPrimitive.content)
                 parts += group
                 continue
             }
             if (level == 3) {
                 val title = plainInlines(block["inlines"] as? JsonArray)
-                question = MatPart.Question(title, title.trim().replace(Regex("\\s+"), "-"))
+                question = MatPart.Section(title, block.getValue("anchor").jsonPrimitive.content)
                 parts += question
-                group?.let { it.questions++ }
+                group?.let { it.sections++ }
                 continue
             }
         }
@@ -185,20 +190,22 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     LaunchedEffect(repo) {
         if (repo == null) return@LaunchedEffect
         failed = false
-        coroutineScope {
-            val k = async { runCatching { repo.read<KnowledgeIndex>("knowledge/knowledge.json") }.getOrNull() }
-            val c = async { runCatching { repo.read<List<CurriculumCourse>>("curriculum/courses.json") }.getOrNull() }
-            val cList = c.await()
-            val kIdx = k.await()
-            if (cList != null) curriculum = cList
-            if (kIdx != null) knowledge = kIdx else failed = true
-        }
+        try {
+            coroutineScope {
+                val k = async { repo.read<KnowledgeIndex>("knowledge/knowledge.json") }
+                val c = async { repo.read<List<CurriculumCourse>>("curriculum/courses.json") }
+                curriculum = c.await()
+                knowledge = k.await()
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (_: IOException) { failed = true }
+        catch (_: SerializationException) { failed = true }
     }
 
     val index = knowledge
     if (failed) {
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
-            Plain("知识库加载失败，请检查网络后重试", 14.sp, Ink.muted)
+            Plain("知识与培养方案没能加载，请稍后重试", 14.sp, Ink.muted)
         }
         return
     }
@@ -329,6 +336,12 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
     var grade by remember { mutableStateOf("全部") }
     var major by remember { mutableStateOf("全部专业") }
     var majorMenu by remember { mutableStateOf(false) }
+    var cohort by remember { mutableStateOf("") }
+    var cohortMenu by remember { mutableStateOf(false) }
+    val cohorts = curriculum.flatMap { it.plans.map { plan -> plan.grade } }.distinct().sortedDescending()
+    val planYear = cohort.ifEmpty { cohorts.firstOrNull().orEmpty() }
+    fun inPlan(plan: CurriculumEntry) = plan.grade == planYear && (major == "全部专业" || plan.major == major) &&
+        (category == "全部" || plan.category == category) && (nature == "全部" || plan.nature == nature)
 
     val byCode = remember(curriculum) { curriculum.associateBy { it.code } }
     val compiledByCode = remember(index) {
@@ -336,29 +349,29 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
             index.courses.forEach { c -> (c.codes + c.former).forEach { code -> put(code, c) } }
         }
     }
-    val metaMap = remember(index, byCode) {
+    val metaMap = remember(index, byCode, planYear, major, category, nature) {
         index.courses.associate { c ->
-            val matched = (c.codes + c.former).mapNotNull { byCode[it] }.distinctBy { it.code }
+            val matched = (c.codes + c.former).mapNotNull { byCode[it] }.distinctBy { it.code }.flatMap { it.plans }.filter(::inPlan)
             c.id to Triple(
-                matched.flatMap { it.categories.ifEmpty { listOf(it.category) } }.filter { it.isNotBlank() }.distinct(),
-                matched.flatMap { it.natures.ifEmpty { listOf(it.nature) } }.filter { it.isNotBlank() }.distinct(),
-                matched.flatMap { it.majors }.filter { it.isNotBlank() }.distinct(),
+                matched.map { it.category }.filter { it.isNotBlank() }.distinct(),
+                matched.map { it.nature }.filter { it.isNotBlank() }.distinct(),
+                matched.map { it.major }.filter { it.isNotBlank() }.distinct(),
             )
         }
     }
-    val termsMap = remember(index, byCode) {
+    val termsMap = remember(index, byCode, planYear, major, category, nature) {
         index.courses.associate { c ->
-            c.id to (c.codes + c.former).mapNotNull { byCode[it] }.flatMap { it.terms }.filter { it in 1..8 }.distinct().sorted()
+            c.id to (c.codes + c.former).mapNotNull { byCode[it] }.flatMap { it.plans }.filter(::inPlan).mapNotNull { it.term }.filter { it in 1..8 }.distinct().sorted()
         }
     }
-    val creditsMap = remember(index, byCode) {
+    val creditsMap = remember(index, byCode, planYear, major, category, nature) {
         index.courses.associate { c ->
-            c.id to (c.codes + c.former).mapNotNull { byCode[it]?.credits }.firstOrNull { it > 0 }
+            c.id to (c.codes + c.former).mapNotNull { byCode[it] }.flatMap { it.plans }.filter(::inPlan).mapNotNull { it.credits }.filter { it > 0 }.distinct().sorted().takeIf { it.isNotEmpty() }?.joinToString("/")
         }
     }
     val majors = remember(curriculum) {
         val preferred = listOf("计算机科学与技术", "软件工程", "信息安全", "计算机科学与技术(创新班)")
-        val found = curriculum.flatMap { it.majors }.distinct()
+        val found = curriculum.flatMap { it.plans.map { plan -> plan.major } }.distinct()
         listOf("全部专业") + preferred.filter { it in found } + found.filter { it !in preferred }
     }
 
@@ -377,11 +390,10 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
         }
     }
     val groupedByTerm = remember(filtered, termsMap, targetGrade) {
-        filtered.groupBy { c ->
-            val terms = termsMap[c.id].orEmpty()
-            if (targetGrade != null) terms.firstOrNull { (it + 1) / 2 == targetGrade } ?: 99
-            else terms.firstOrNull() ?: 99
-        }.entries.sortedBy { it.key }.map { (term, list) ->
+        filtered.flatMap { c ->
+            val terms = termsMap[c.id].orEmpty().filter { targetGrade == null || (it + 1) / 2 == targetGrade }
+            terms.ifEmpty { listOf(99) }.map { it to c }
+        }.groupBy({ it.first }, { it.second }).entries.sortedBy { it.key }.map { (term, list) ->
             Triple(
                 term,
                 if (term in 1..8) TERM_TITLES[term] else "其他与通识课程",
@@ -393,7 +405,7 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.fillMaxWidth().padding(end = 40.dp)) {
             Plain("知识", 22.sp, weight = FontWeight.SemiBold)
-            Plain("按学期与培养方案组织的知识点与历年考题", 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp))
+            Plain("按学期与培养方案组织的知识点与课程资料", 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp))
         }
         SearchField(query, "筛选课程名称、课程代码或章节…") { query = it }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -403,6 +415,12 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                 DropdownMenu(majorMenu, { majorMenu = false }, containerColor = Ink.paper) {
                     majors.forEach { m -> DropdownMenuItem({ Plain(m, 14.sp) }, { majorMenu = false; major = m }) }
                 }
+            }
+        }
+        Box {
+            Chip("$planYear 级培养方案 ▾", { cohortMenu = true })
+            DropdownMenu(cohortMenu, { cohortMenu = false }, containerColor = Ink.paper) {
+                cohorts.forEach { year -> DropdownMenuItem({ Plain("$year 级培养方案", 14.sp) }, { cohortMenu = false; cohort = year }) }
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -422,19 +440,10 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
         }
 
         if (view == "graph") {
-            val (doc, linked) = remember(curriculum, major, category, nature, q, filtered, compiledByCode) {
-                val scoped = curriculum.filter { item ->
-                    (major == "全部专业" || major in item.majors) &&
-                        (category == "全部" || category in item.categories || item.category == category) &&
-                        (nature == "全部" || nature in item.natures || item.nature == nature)
-                }
+            val (doc, linked) = remember(curriculum, major, category, nature, q, filtered, compiledByCode, planYear) {
+                val scoped = curriculum.filter { item -> item.plans.any(::inPlan) }
                 val scopedCodes = scoped.map { it.code }.toSet()
-                val connected = mutableSetOf<String>()
-                for (item in scoped) {
-                    val reqs = item.requires.filter { it in scopedCodes }
-                    if (reqs.isNotEmpty()) { connected += item.code; connected.addAll(reqs) }
-                }
-                val nodes = scoped.filter { it.code in connected && (q.isEmpty() || q in it.name.lowercase() || q in it.code.lowercase()) }.toMutableList()
+                val nodes = scoped.filter { (q.isEmpty() || q in it.name.lowercase() || q in it.code.lowercase()) }.toMutableList()
                 val nodeCodes = nodes.map { it.code }.toMutableSet()
                 for (n in nodes.toList()) {
                     for (req in n.requires) {
@@ -443,7 +452,7 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                         }
                     }
                 }
-                if (nodes.isNotEmpty()) {
+                run {
                     val idOf = nodes.mapIndexed { i, n -> n.code to "P$i" }.toMap()
                     val md = buildString {
                         appendLine("```mermaid")
@@ -453,15 +462,7 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                         appendLine("```")
                     }
                     val linkedCourses = nodes.mapNotNull { compiledByCode[it.code] }.distinctBy { it.id }
-                    md to linkedCourses
-                } else {
-                    val md = buildString {
-                        appendLine("```mermaid")
-                        appendLine("flowchart LR")
-                        filtered.forEachIndexed { i, c -> appendLine("  C$i[\"${safeMermaidLabel(c.name)}\"]") }
-                        appendLine("```")
-                    }
-                    md to filtered
+                    (if (nodes.isEmpty()) "当前筛选没有培养方案课程。" else md) to linkedCourses
                 }
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -491,7 +492,7 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                             Plain(termSub, 12.sp, Ink.muted)
                         }
                     }
-                    items(groupCourses, key = { it.id }) { course ->
+                    items(groupCourses, key = { "$termKey:${it.id}" }) { course ->
                         val ct = tone(toneIndex(course.id))
                         val topicsCount = course.chapters.flatMap { it.topics }.distinct().size
                         val materialsCount = index.materials.count { it.course == course.id }
@@ -545,13 +546,13 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
 ) {
     DocText(text, onLink = onLink, imageBytes = imageBytes)
     val topics = course.chapters.flatMap { it.topics }.mapNotNull { id -> index.topics.firstOrNull { it.id == id } }
-        .sortedByDescending { it.tested_by.size }.filter { it.tested_by.isNotEmpty() }.take(8)
+        .sortedByDescending { it.references.size }.filter { it.references.isNotEmpty() }.take(8)
     if (topics.isNotEmpty()) {
-        Plain("考得最多的知识点", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+        Plain("资料中的知识点", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
         Column {
             topics.forEach { t ->
-                val mats = t.tested_by.map { it.material }.distinct().size
-                KeyRow(null, t.title, "${t.tested_by.size} 道题 · $mats 份资料", color = ct.fg, chevron = true, onClick = { onOpen(t.id, null) })
+                val mats = t.references.map { it.material }.distinct().size
+                KeyRow(null, t.title, "${t.references.size} 处 · $mats 份资料", color = ct.fg, chevron = true, onClick = { onOpen(t.id, null) })
             }
         }
     }
@@ -560,7 +561,7 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
         Plain("资料", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
         Column {
             mats.forEach { m ->
-                KeyRow(m.kind, m.title, if (m.questions > 0) "${m.questions} 题" else m.term, chevron = true, onClick = { onOpen(null, m.path) })
+                KeyRow(m.kind, m.title, if (m.sections > 0) "${m.sections} 处关联" else m.term, chevron = true, onClick = { onOpen(null, m.path) })
             }
         }
     }
@@ -577,19 +578,19 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
     imageBytes: suspend (String) -> ByteArray?,
     onOpen: (topic: String?, material: String?, anchor: String?) -> Unit,
 ) {
-    val matsCount = topic.tested_by.map { it.material }.distinct().size
+    val matsCount = topic.references.map { it.material }.distinct().size
     Plain(
-        if (topic.tested_by.isNotEmpty()) "考过 ${topic.tested_by.size} 次 · 出现在 $matsCount 份资料里" else "收录的资料里还没有考到它",
+        if (topic.references.isNotEmpty()) "关联 ${topic.references.size} 处 · 出现在 $matsCount 份资料里" else "收录的资料里还没有与它关联的片段",
         13.sp,
         ct.fg,
     )
     DocText(text, onLink = onLink, imageBytes = imageBytes)
 
     // Tested past-exam links directly below explanation
-    Plain("考过的真题链接", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 8.dp))
-    val byMaterial = topic.tested_by.groupBy { it.material }
+    Plain("关联资料", 16.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 8.dp))
+    val byMaterial = topic.references.groupBy { it.material }
     if (byMaterial.isEmpty()) {
-        Plain("收录的资料里还没有直接考到它的真题。", 13.5.sp, Ink.muted)
+        Plain("收录的资料里还没有与它关联的片段。", 13.5.sp, Ink.muted)
     } else {
         byMaterial.forEach { (path, refs) ->
             val mat = index.materials.firstOrNull { it.path == path }
@@ -654,20 +655,15 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
     imageBytes: suspend (String) -> ByteArray?,
 ) {
     val parts = remember(text) { materialParts(Docs.read(text)) }
-    val requesters = remember(parts) { parts.filterIsInstance<MatPart.Question>().associate { it.anchor to BringIntoViewRequester() } }
-    LaunchedEffect(parts, anchor) {
-        if (anchor != null) {
-            withFrameNanos {}
-            requesters[anchor]?.bringIntoView()
-        }
-    }
     var shown by remember(material.path) { mutableStateOf(emptySet<String>()) }
-    val withAnswerCount = remember(parts) { parts.count { it is MatPart.Question && it.answer.isNotEmpty() } }
+    val withAnswerCount = remember(parts) { parts.count { it is MatPart.Section && it.answer.isNotEmpty() } }
+    val owner = parts.filterIsInstance<MatPart.Section>().firstOrNull { part -> anchor != null && part.answer.any { (_, blocks) -> blocks.any { containsAnchor(it, anchor) } } }?.anchor
+    LaunchedEffect(owner) { if (owner != null) shown = shown + owner }
 
-    Plain(material.title, 20.sp, Ink.text, FontWeight.Bold)
+    DocAnchors(anchor.takeIf { owner == null || owner in shown }) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         SmallTag(material.kind, ct.bg, ct.fg)
-        val meta = listOfNotNull(material.term, material.questions.takeIf { it > 0 }?.let { "$it 题" }).joinToString(" · ")
+        val meta = listOfNotNull(material.term, material.sections.takeIf { it > 0 }?.let { "$it 处关联" }).joinToString(" · ")
         if (meta.isNotEmpty()) Plain(meta, 12.5.sp, Ink.muted)
         if (withAnswerCount > 0 && material.kind != "课件") {
             Plain(
@@ -676,7 +672,7 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                 Ink.brand,
                 modifier = Modifier.clickable {
                     shown = if (shown.isNotEmpty()) emptySet()
-                    else parts.filterIsInstance<MatPart.Question>().map { it.anchor }.toSet()
+                    else parts.filterIsInstance<MatPart.Section>().map { it.anchor }.toSet()
                 },
             )
         }
@@ -685,12 +681,11 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
     parts.forEach { part ->
         when (part) {
             is MatPart.Text -> Doc(part.blocks, onLink = onLink, imageBytes = imageBytes)
-            is MatPart.Group -> Plain("${part.title}${if (part.questions > 0) " (${part.questions} 题)" else ""}", 17.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 10.dp))
-            is MatPart.Question -> {
+            is MatPart.Group -> DocAnchor(part.anchor) { Plain("${part.title}${if (part.sections > 0) " (${part.sections} 节)" else ""}", 17.sp, ct.fg, FontWeight.SemiBold, Modifier.padding(top = 10.dp)) }
+            is MatPart.Section -> {
                 val open = part.anchor in shown
                 val here = anchor == part.anchor
-                Surface(
-                    modifier = Modifier.then(requesters[part.anchor]?.let { Modifier.bringIntoViewRequester(it) } ?: Modifier),
+                DocAnchor(part.anchor) { Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Ink.paper,
                     border = BorderStroke(if (here) 1.5.dp else 1.dp, if (here) Ink.brand else ct.border),
@@ -719,8 +714,8 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                             }
                         }
                     }
-                }
+                } }
             }
         }
-    }
+    } }
 }

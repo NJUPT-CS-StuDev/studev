@@ -140,7 +140,8 @@ export default function SearchApp() {
         return () => { current = false; client.cancel(pending.requestId); };
     }, [client, filters, key, live, page, query, sort]);
 
-    const results = answer?.results ?? [];
+    const currentAnswer = answer?.key === key ? answer : null;
+    const results = currentAnswer?.results ?? [];
     useEffect(() => {
         if (rooms || !results.some(result => result.source === 'rooms')) return;
         void Promise.all([loadPeriods(), loadRoomDay(momentNow().date)]).then(([periods, day]) => {
@@ -181,13 +182,13 @@ export default function SearchApp() {
                         {channel.dated && !browsing && <select aria-label="排序" value={sort === 'date_desc' ? 'date' : ''} onChange={event => go({ sort: event.target.value || null })}><option value="">按相关性</option><option value="date">按时间</option></select>}
                     </div>}
                     {trimmed.length === 1 ? <div className="empty">再多输入一个字</div> : <>
-                        {answer && answer.total > 0 && <div className="tally">{browsing ? `${answer.total.toLocaleString('zh-CN')} 条` : `${answer.total >= 1000 ? '超过 1000' : `约 ${answer.total.toLocaleString('zh-CN')}`} 条结果`}{answer.seconds !== null ? `（${answer.seconds.toFixed(2)} 秒）` : ''}{page > 1 ? ` · 第 ${page} 页` : ''}</div>}
+                        {currentAnswer && currentAnswer.total > 0 && <div className="tally">{browsing ? `${currentAnswer.total.toLocaleString('zh-CN')} 条` : `${currentAnswer.total >= 1000 ? '超过 1000' : `约 ${currentAnswer.total.toLocaleString('zh-CN')}`} 条结果`}{currentAnswer.seconds !== null ? `（${currentAnswer.seconds.toFixed(2)} 秒）` : ''}{page > 1 ? ` · 第 ${page} 页` : ''}</div>}
                         {page === 1 && intent}
                         {failed && <div className="empty">搜索暂时出了问题，请稍后重试。</div>}
                         <div className="hits">{results.map(result => <Result key={result.id} result={result} roomState={id => rooms?.(id) ?? null} onCourse={setCourse} />)}</div>
-                        {answer?.key === key && answer.total === 0 && !failed && <div className="empty">{browsing ? '这段时间没有内容' : `没有找到“${trimmed}”${channel.id !== 'all' ? '，换到“全部”试试' : ''}`}</div>}
-                        {answer?.key === key && answer.total > 0 && results.length === 0 && <div className="empty">结果只有 {Math.ceil(answer.total / PAGE_SIZE)} 页</div>}
-                        {answer && <Pages page={page} total={answer.total} onPage={onPage} />}
+                        {currentAnswer?.key === key && currentAnswer.total === 0 && !failed && <div className="empty">{browsing ? '这段时间没有内容' : `没有找到“${trimmed}”${channel.id !== 'all' ? '，换到“全部”试试' : ''}`}</div>}
+                        {currentAnswer?.key === key && currentAnswer.total > 0 && results.length === 0 && <div className="empty">结果只有 {Math.ceil(currentAnswer.total / PAGE_SIZE)} 页</div>}
+                        {currentAnswer && <Pages page={page} total={currentAnswer.total} onPage={onPage} />}
                     </>}
                 </>}
             </div>

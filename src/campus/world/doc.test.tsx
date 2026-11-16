@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { diagram, initialize, Stream } from 'docstream';
+import { diagram, initialize, read, Stream } from 'docstream';
 import { DIAGRAMS } from './assistant.mjs';
 import { Doc, DocText } from './doc';
+import { materialParts } from './knowledge';
 
 const fixture = await readFile(new URL('./doc.md', import.meta.url), 'utf8');
 beforeAll(async () => {
@@ -17,6 +18,20 @@ const KIND_SAMPLES: Record<string, string> = {
 };
 
 describe('documents drawn from the released kernel', () => {
+    it('opens repeated and formatted material headings by the addresses assigned by the shared reader', () => {
+        const source = '# 原文\n\n## 第一组\n\n### A **B** $x_1$\n\n问题一\n\n### A B $x_1$\n\n问题二\n\n## 第一组\n\n### A B $x_1$\n\n问题三';
+        const headings = read(source).filter(block => block.type === 'heading');
+        expect(new Set(headings.map(block => block.anchor)).size).toBe(headings.length);
+        const html = renderToStaticMarkup(<DocText text={source} />);
+        for (const heading of headings) expect(html).toContain(`id="${heading.anchor}"`);
+        const stream = new Stream();
+        try {
+            stream.push(source);
+            const parts = materialParts(stream.finish().blocks);
+            expect(parts.flatMap(part => part.kind === 'section' ? [part.anchor] : [])).toEqual(headings.filter(block => block.level === 3).map(block => block.anchor));
+            expect(parts.flatMap(part => part.kind === 'group' ? [part.anchor] : [])).toEqual(headings.filter(block => block.level === 2).map(block => block.anchor));
+        } finally { stream.free(); }
+    });
     it('draws every kind of diagram the AI is told it may draw', () => {
         for (const kind of DIAGRAMS) expect(diagram(KIND_SAMPLES[kind]!), kind).toMatch(/^<svg/);
     });

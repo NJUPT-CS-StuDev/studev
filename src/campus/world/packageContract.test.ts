@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { packageFacts } from '../../../scripts/data/package-facts';
 import type { Exam, ExamChange, Room, Building, TeachingClass, TeachingMeeting } from './facts';
+import { CampusTools } from './campusTools';
 
 const tempRoot = process.platform === 'win32' ? 'D:/Temp/codex' : '/tmp/codex';
 const read = async <T>(path: string): Promise<T> => JSON.parse(await readFile(path, 'utf8')) as T;
@@ -23,6 +24,28 @@ afterAll(async () => {
 });
 
 describe('the production map and data package contract', () => {
+    it('reads knowledge by its released address, including every page of a complete material', async () => {
+        const index = await read<{ topics: { id: string }[]; materials: { path: string }[] }>(join('public/data', release.version, 'knowledge/knowledge.json'));
+        const fetch = vi.fn(async (url: string) => new Response(await readFile(join('public', decodeURIComponent(url)), 'utf8')));
+        vi.stubGlobal('fetch', fetch);
+        const tools = new CampusTools();
+        try {
+            const topic = await tools.read(`topics/${index.topics[0]!.id}`);
+            expect(topic.text.length).toBeGreaterThan(0);
+            const id = `sections/${index.materials[0]!.path}`;
+            let offset = 0, text = '';
+            do {
+                const page = await tools.read(id, offset);
+                expect(page.text.length).toBeLessThanOrEqual(8000);
+                text += page.text;
+                if (!page.next) break;
+                expect(page.next).toBeGreaterThan(offset);
+                offset = page.next;
+            } while (true);
+            expect(text).toContain('#');
+            await expect(tools.read(id, text.length + 1)).rejects.toThrow('正文位置');
+        } finally { tools.dispose(); vi.unstubAllGlobals(); }
+    });
     it('copies real teaching facts, room days and global exam changes byte for byte', async () => {
         const files = ['term', 'periods', 'classes', 'meetings'].map(name => `teaching/${release.teaching}/${name}.json`);
         const days = await readdir(join(input, 'rooms', release.rooms));

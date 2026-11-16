@@ -283,6 +283,7 @@ foreach (var test in golden["recommend"]!.AsArray())
     Equal("recommend", Places.Recommendations(recommendPlaces, (int)test!["day"]!, (int)test["hour"]! * 60 + (int)test["minute"]!, from).Select(s => new { id = s.Place.Id, state = s.Status.Open.ToString().ToLowerInvariant() }), test["expected"]);
 foreach (var test in golden["hoursCases"]!.AsArray())
     Equal("opening", Hours.At(JsonDocument.Parse(test!["hours"]!.ToJsonString()).RootElement, (int)test["day"]!, (int)test["minute"]!).Open.ToString().ToLowerInvariant(), test["state"]);
+await SearchTest.Check(repositoryRoot.FullName, Equal);
 Console.WriteLine($"Windows parity: {checks} checks, {failures.Count} failures");
 foreach (var failure in failures) Console.WriteLine(failure);
 return failures.Count == 0 ? 0 : 1;

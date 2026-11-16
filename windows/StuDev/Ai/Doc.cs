@@ -33,11 +33,20 @@ public static class Doc
     private static string Str(JsonNode n, string key) => n[key]?.GetValue<string>() ?? "";
     private static List<JsonNode> List(JsonNode n, string key) => n[key]?.AsArray().Select(x => x!).ToList() ?? [];
 
-    public static FrameworkElement Make(List<JsonObject> blocks, bool live = false, Action<string>? link = null, Func<string, Task<byte[]?>>? image = null)
+    public static FrameworkElement Make(List<JsonObject> blocks, bool live = false, Action<string>? link = null, Func<string, Task<byte[]?>>? image = null, string? anchor = null)
     {
         var column = new StackPanel { Spacing = 10 };
         for (var i = 0; i < blocks.Count; i++) column.Children.Add(Block(blocks[i]["block"]!, link, live && i == blocks.Count - 1, image));
+        if (anchor is not null) column.Loaded += (_, _) => FindAnchor(column, anchor)?.StartBringIntoView();
         return column;
+    }
+
+    private static FrameworkElement? FindAnchor(DependencyObject parent, string anchor)
+    {
+        if (parent is FrameworkElement element && element.Tag is string id && id == anchor) return element;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            if (FindAnchor(VisualTreeHelper.GetChild(parent, i), anchor) is { } found) return found;
+        return null;
     }
 
     private static FrameworkElement Block(JsonNode block, Action<string>? link, bool writing, Func<string, Task<byte[]?>>? image = null)
@@ -61,7 +70,12 @@ public static class Doc
                 Flush();
                 return column;
             }
-            case "heading": return Text(List(block, "inlines"), (int)block["level"]! switch { 1 => 20, 2 => 18, _ => 16.5 }, true, link, writing);
+            case "heading":
+            {
+                var heading = Text(List(block, "inlines"), (int)block["level"]! switch { 1 => 20, 2 => 18, _ => 16.5 }, true, link, writing);
+                heading.Tag = (string)block["anchor"]!;
+                return heading;
+            }
             case "quote":
             {
                 var inner = new StackPanel { Spacing = 8 };

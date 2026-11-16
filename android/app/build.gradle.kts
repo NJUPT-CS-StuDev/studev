@@ -86,7 +86,7 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
                 include("space/**")
                 include("entities/**")
                 include("hours.json", "calendar.json", "morning-run.json", "curriculum/**", "knowledge/knowledge.json")
-                include("search/manifest.json", "search/documents-*.bin", "search/lexicon-index.bin")
+                include("search/manifest.json")
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "teaching/${metadata["teaching"]}/meetings.json", "rooms/index.json")
                 include("teaching/${metadata["teaching"]}/classes/B240402.json")

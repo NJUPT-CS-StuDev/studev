@@ -7,24 +7,25 @@ import { plainText, type Inline, type Keyed } from '@/world/doc';
 
 /** A subject's outline; codes are the course plans taught now that teach it, former the codes it had before. */
 export interface KnowledgeCourse { id: string; name: string; codes: string[]; former: string[]; chapters: { title: string; topics: string[] }[]; path: string }
-export interface QuestionRef { material: string; heading: string; anchor: string }
-export interface KnowledgeTopic { id: string; title: string; requires: string[]; path: string; taught_by: string[]; tested_by: QuestionRef[]; leads_to: string[] }
-export interface KnowledgeMaterial { path: string; title: string; kind: string; course: string; term: string | null; source: string; questions: number }
+export interface MaterialRef { material: string; heading: string; anchor: string }
+export interface KnowledgeTopic { id: string; title: string; requires: string[]; path: string; taught_by: string[]; references: MaterialRef[]; leads_to: string[] }
+export interface KnowledgeMaterial { path: string; title: string; kind: string; course: string; term: string | null; source: string; sections: number }
 export interface Knowledge { courses: KnowledgeCourse[]; topics: KnowledgeTopic[]; materials: KnowledgeMaterial[] }
 
-/** A training-plan course from njupt-data curriculum/courses.json, unifying codes, classification and prerequisites. */
+/** A campus course and its entries in each major's training plan. */
 export interface CurriculumCourse {
-    code: string; name: string; credits: number; hours: string; exam_mode: string;
-    category: string; nature: string; categories: string[]; natures: string[];
-    colleges: string[]; majors: string[]; terms: number[]; grades: string[];
-    requires: string[]; former: string[];
+    code: string; name: string; requires: string[]; former: string[]; plans: CurriculumEntry[];
+}
+export interface CurriculumEntry {
+    college: string; major: string; grade: string; term: number | null; credits: number | null;
+    hours: string; exam_mode: string; category: string; nature: string;
 }
 
 const base = `${DATA_RELEASE.base}/knowledge`;
 let index: Promise<Knowledge> | null = null;
 export const loadKnowledge = () => index ??= fetchJson<Knowledge>(`${base}/knowledge.json`).catch(error => { index = null; throw error; });
 let curriculum: Promise<CurriculumCourse[]> | null = null;
-export const loadCurriculum = () => curriculum ??= fetchJson<CurriculumCourse[]>(`${DATA_RELEASE.base}/curriculum/courses.json`).catch(() => []);
+export const loadCurriculum = () => curriculum ??= fetchJson<CurriculumCourse[]>(`${DATA_RELEASE.base}/curriculum/courses.json`).catch(error => { curriculum = null; throw error; });
 const texts = new Map<string, Promise<string>>();
 /** One document's Markdown, by its path from the knowledge's root. */
 export function loadKnowledgeText(path: string) {
@@ -53,9 +54,9 @@ export function knowledgePlace(href: string): KnowledgePlace | null {
     return null;
 }
 
-/** How often a topic was tested, across how many documents: the statistic that grows out of linked questions. */
-export function tested(topic: KnowledgeTopic) {
-    return { questions: topic.tested_by.length, materials: new Set(topic.tested_by.map(ref => ref.material)).size };
+/** Material passages that name this topic; a reference alone makes no claim about an exam. */
+export function referenced(topic: KnowledgeTopic) {
+    return { references: topic.references.length, materials: new Set(topic.references.map(ref => ref.material)).size };
 }
 
 
@@ -67,10 +68,20 @@ export function tested(topic: KnowledgeTopic) {
  */
 export type MaterialPart =
     | { kind: 'text'; blocks: Keyed[] }
-    | { kind: 'group'; title: string; questions: number }
-    | { kind: 'question'; title: string; anchor: string; asks: Keyed[]; answer: { label: AnswerLabel; blocks: Keyed[] }[]; topics: { title: string; href: string }[] };
+    | { kind: 'group'; title: string; anchor: string; sections: number }
+    | { kind: 'section'; title: string; anchor: string; asks: Keyed[]; answer: { label: AnswerLabel; blocks: Keyed[] }[]; topics: { title: string; href: string }[] };
 export type AnswerLabel = '答案' | '参考解答' | '订正' | '补充' | '原文';
 const LABELS: AnswerLabel[] = ['参考解答', '答案', '订正', '补充', '原文'];
+
+/** Whether these parsed blocks contain the document address being opened. */
+export function containsAnchor(blocks: Keyed[], anchor: string): boolean {
+    const contains = (value: unknown): boolean => {
+        if (!value || typeof value !== 'object') return false;
+        if ('anchor' in value && value.anchor === anchor) return true;
+        return Object.values(value).some(child => Array.isArray(child) ? child.some(contains) : contains(child));
+    };
+    return blocks.some(contains);
+}
 
 function linksOf(inlines: Inline[], out: { title: string; href: string }[] = []) {
     for (const inline of inlines) {
@@ -82,35 +93,35 @@ function linksOf(inlines: Inline[], out: { title: string; href: string }[] = [])
 
 export function materialParts(blocks: Keyed[]): MaterialPart[] {
     const parts: MaterialPart[] = [];
-    let question: Extract<MaterialPart, { kind: 'question' }> | null = null;
+    let section: Extract<MaterialPart, { kind: 'section' }> | null = null;
     let group: Extract<MaterialPart, { kind: 'group' }> | null = null;
     for (const keyed of blocks) {
         const block = keyed.block;
         if (block.type === 'heading' && block.level <= 2) {
-            question = null;
-            if (block.level === 1) continue;
-            group = { kind: 'group', title: plainText(block.inlines), questions: 0 };
+            section = null;
+            if (block.level === 1) { parts.push({ kind: 'text', blocks: [keyed] }); continue; }
+            group = { kind: 'group', title: plainText(block.inlines), anchor: block.anchor, sections: 0 };
             parts.push(group);
             continue;
         }
         if (block.type === 'heading' && block.level === 3) {
             const title = plainText(block.inlines);
-            question = { kind: 'question', title, anchor: title.trim().replace(/\s+/g, '-'), asks: [], answer: [], topics: [] };
-            parts.push(question);
-            if (group) group.questions++;
+            section = { kind: 'section', title, anchor: block.anchor, asks: [], answer: [], topics: [] };
+            parts.push(section);
+            if (group) group.sections++;
             continue;
         }
-        if (!question) {
+        if (!section) {
             const last = parts[parts.length - 1];
             if (last?.kind === 'text') last.blocks.push(keyed); else parts.push({ kind: 'text', blocks: [keyed] });
             continue;
         }
         const text = block.type === 'paragraph' ? plainText(block.inlines).trim() : '';
-        if (text.startsWith('知识点：') && block.type === 'paragraph') { question.topics.push(...linksOf(block.inlines)); continue; }
+        if (text.startsWith('知识点：') && block.type === 'paragraph') { section.topics.push(...linksOf(block.inlines)); continue; }
         const label = LABELS.find(name => text.startsWith(`${name}：`) || text.startsWith(`${name}（`) || text === name);
-        if (label) { question.answer.push({ label, blocks: [keyed] }); continue; }
-        if (question.answer.length) question.answer[question.answer.length - 1]!.blocks.push(keyed);
-        else question.asks.push(keyed);
+        if (label) { section.answer.push({ label, blocks: [keyed] }); continue; }
+        if (section.answer.length) section.answer[section.answer.length - 1]!.blocks.push(keyed);
+        else section.asks.push(keyed);
     }
     return parts;
 }

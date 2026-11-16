@@ -9,7 +9,7 @@
   "scripts": {
     "build:logo": "node scripts/build-logo.mjs",
     "dev": "astro dev",
-    "build": "npm run digest && node scripts/server/build.mjs && astro build",
+    "build": "node scripts/server/build.mjs && astro build",
     "test:platform": "node --test src/platform/tests/*.test.mjs",
     "check": "astro check",
     "test:site": "node --test src/site/tests/*.test.mjs",
@@ -32,7 +32,7 @@
     "@hackmd/js-sequence-diagrams": "^0.0.1-alpha.3",
     "@noble/hashes": "^2.4.0",
     "astro": "^7.4.4",
-    "docstream": "https://github.com/hicancan/docstream/releases/download/v0.5.0/docstream-0.5.0.tgz",
+    "docstream": "https://github.com/hicancan/docstream/releases/download/v0.5.1/docstream-0.5.1.tgz",
     "flowchart.js": "^1.18.1",
     "lucide-react": "^1.66.0",
     "maplibre-gl": "^6.16.0",
@@ -45,7 +45,7 @@
     "rehype-mathjax": "^7.1.0",
     "remark-gfm": "^4.0.1",
     "remark-math-extended": "^6.1.1",
-    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v5.0.1/wasm-search-5.0.1.tgz",
+    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v5.0.2/wasm-search-5.0.2.tgz",
     "wayfind": "https://github.com/hicancan/wayfind/releases/download/v0.3.1/wayfind-0.3.1.tgz"
   },
   "overrides": {

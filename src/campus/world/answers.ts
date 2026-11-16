@@ -39,7 +39,7 @@ export function courseSaid(index: Knowledge, shared: readonly CourseMaterials[],
     const materials: Record<string, { title: string; id: string }[]> = {};
     for (const material of index.materials.filter(item => item.course === course.id)) {
         const list = materials[material.kind] ??= [];
-        if (list.length < 12) list.push({ title: material.title, id: `questions/${material.path}` });
+        if (list.length < 12) list.push({ title: material.title, id: `sections/${material.path}` });
     }
     const sharedLinks = materialsSaid(shared, course.name);
     return {
@@ -72,19 +72,22 @@ export function scheduleSaid(meetings: readonly TeachingMeeting[], asked: string
 
 /** A major's training plan: its courses term by term, with credits, whether required, and what each builds on. */
 export function curriculumSaid(courses: readonly CurriculumCourse[], major: string, grade?: string) {
-    const all = [...new Set(courses.flatMap(course => course.majors))];
+    const all = [...new Set(courses.flatMap(course => course.plans.map(plan => plan.major)))];
     const meant = all.filter(name => name === major.trim()).length ? [major.trim()] : all.filter(name => name.includes(major.trim()));
     const only = meant.length === 1 ? meant[0] : undefined;
     if (only === undefined) return { found: false, majors: (meant.length ? meant : all).slice(0, 20) };
-    const chosen = courses.filter(course => course.majors.includes(only) && (!grade || course.grades.includes(grade)));
-    const terms = [...new Set(chosen.flatMap(course => course.terms))].sort((a, b) => a - b);
+    const grades = [...new Set(courses.flatMap(course => course.plans.filter(plan => plan.major === only).map(plan => plan.grade)))].sort();
+    const selected = grade ?? (grades.length === 1 ? grades[0] : undefined);
+    if (!selected || !grades.includes(selected)) return { found: false, major: only, grades };
+    const chosen = courses.flatMap(course => course.plans.filter(plan => plan.major === only && plan.grade === selected).map(plan => ({ ...course, ...plan })));
+    const terms = [...new Set(chosen.map(course => course.term))].sort((a, b) => (a ?? 99) - (b ?? 99));
     const names = new Map(courses.map(course => [course.code, course.name]));
     return {
-        found: true, major: only, ...(grade ? { grade } : {}),
+        found: true, major: only, grade: selected,
         terms: terms.map(term => {
-            const list = chosen.filter(course => course.terms.includes(term));
+            const list = chosen.filter(course => course.term === term);
             return {
-                term, credits: list.reduce((sum, course) => sum + course.credits, 0),
+                term, credits: list.every(course => course.credits !== null) ? list.reduce((sum, course) => sum + course.credits!, 0) : null,
                 courses: list.map(course => ({ name: course.name, code: course.code, credits: course.credits, nature: course.nature, category: course.category,
                     ...(course.requires.length ? { requires: course.requires.map(code => names.get(code) ?? code) } : {}) })),
             };

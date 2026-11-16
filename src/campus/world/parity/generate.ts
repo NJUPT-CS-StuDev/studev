@@ -301,7 +301,7 @@ const planCourses = JSON.parse(readFileSync(`public/data/${release.version}/curr
 const someMeeting = allMeetings.find(meeting => meeting.room && meeting.teachers.length && meeting.classes.length)!;
 const answers = {
     weeks: [[1, 2, 3, 5, 7, 8], [1], [], [2, 4, 6], [9, 10, 11, 12, 13, 14, 15, 16]].map(weeks => ({ weeks, text: weeksText(weeks) })),
-    keys: ['217f18e4a94128cf', 'topics/数据结构/栈', 'questions/materials/cs-free/B0301152S/x.md#选择 1'].map(id => ({ id, key: /^[0-9a-f]{16}$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 16) })),
+    keys: ['217f18e4a94128cf', 'topics/数据结构/栈', 'sections/materials/cs-free/B0301152S/x.md#选择 1'].map(id => ({ id, key: /^[0-9a-f]{16}$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 16) })),
     course: ['计算机通信与网络', 'JS160201S', '离散', '不存在的课'].map(course => ({ course, said: courseSaid(knowledgeIndex, allMaterials, course) })),
     schedule: [someMeeting.course.name, someMeeting.course.code ?? '', someMeeting.teachers[0]!.name, someMeeting.classes[0]!, (someMeeting.room ?? '').replace(/^[^/:]*[/:]/, ''), '没有这个人'].map(of => ({ of, said: scheduleSaid(allMeetings, of) })),
     curriculum: [['计算机科学与技术'], ['软件工程', '2024'], ['计算机'], ['不存在的专业']].map(([major, grade]) => ({ major, grade: grade ?? null, said: curriculumSaid(planCourses, major!, grade) })),

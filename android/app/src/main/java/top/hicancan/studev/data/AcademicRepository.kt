@@ -63,22 +63,25 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     } }
     /** One byte range of an immutable file, kept on disk so a query works offline next time. */
     suspend fun block(path: String, mirror: String?, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
+        require(offset >= 0 && length > 0 && offset <= Long.MAX_VALUE - length)
         val file = File(root, "$path.$offset")
-        if (file.isFile) return@withContext file.readBytes()
+        val lock = locks[(file.absolutePath.hashCode() and Int.MAX_VALUE) % locks.size]
+        lock.withLock {
+        coroutineContext.ensureActive()
+        if (file.isFile) return@withLock file.readBytes().also { if (it.size != length) throw DataCorruptionException("离线搜索数据不完整") }
         val address = "${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }
         val activeMirror = mirror?.takeIf { m -> URI(m).host?.let { it !in deadMirrors } ?: true }
         val bytes = try {
             activeMirror?.let { m ->
-                runCatching { download(m, offset, length, connectTimeoutMs = 3_500) }
-                    .onFailure { URI(m).host?.let(deadMirrors::add) }
-                    .getOrNull()
+                try { download(m, offset, length, connectTimeoutMs = 3_500) }
+                catch (_: IOException) { URI(m).host?.let(deadMirrors::add); null }
             } ?: download(address, offset, length)
         } catch (e: IOException) { throw DataUnavailableException(e) }
         file.parentFile!!.mkdirs()
         val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
-        try { pending.writeBytes(bytes); pending.renameTo(file) } finally { pending.delete() }
+        try { pending.writeBytes(bytes); check(pending.renameTo(file)) { "无法保存离线数据" } } finally { pending.delete() }
         bytes
-    }
+    } }
     suspend inline fun <reified T> read(path: String): T = Json.decodeFromString(bytes(path).decodeToString())
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
@@ -181,6 +184,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     companion object {
         private val locks = Array(64) { Mutex() }
         private val deadMirrors = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        private fun activeRelease(context: Context) = File(context.filesDir, "campus/release-${BuildConfig.VERSION_CODE}.json")
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         fun download(address: String, offset: Long? = null, length: Int = 0, connectTimeoutMs: Int = 8_000): ByteArray {
             val url = URI(address).toURL()
@@ -193,11 +197,20 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
                 if (connection.responseCode == 404) throw FileNotFoundException(address)
                 if (connection.responseCode !in 200..299) throw IOException("数据请求失败：${connection.responseCode}")
                 val body = connection.inputStream.use { it.readBytes() }
-                return if (offset == null || connection.responseCode == 206) body else body.copyOfRange(offset.toInt(), offset.toInt() + length)
+                if (offset == null) return body
+                if (connection.responseCode == 206) {
+                    val expected = "bytes $offset-${offset + length - 1}/"
+                    if (body.size != length || connection.getHeaderField("Content-Range")?.startsWith(expected) != true) {
+                        throw DataCorruptionException("服务器返回的搜索数据范围不完整")
+                    }
+                    return body
+                }
+                if (offset > body.size.toLong() || length > body.size.toLong() - offset) throw DataCorruptionException("服务器返回的搜索数据不完整")
+                return body.copyOfRange(offset.toInt(), offset.toInt() + length)
             } finally { connection.disconnect() }
         }
         suspend fun open(context: Context): AcademicRepository = withContext(Dispatchers.IO) {
-            val saved = File(context.filesDir, "campus/release.json")
+            val saved = activeRelease(context)
             val release = runCatching { Json.decodeFromString<DataRelease>(saved.readText()).takeIf(::validRelease) }.getOrNull() ?: run {
                 Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() })
             }
@@ -215,6 +228,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             val text = try { download("${BuildConfig.DATA_HOST}/pwa-release.json").decodeToString() } catch (e: CancellationException) { throw e } catch (_: IOException) { return@withContext null }
             // A manifest this app cannot read says nothing it can act on: the data it has stays in use.
             val app = try { appInManifest(text) } catch (_: kotlinx.serialization.SerializationException) { return@withContext null } catch (_: IllegalArgumentException) { return@withContext null }
+            if (app.versionCode != BuildConfig.VERSION_CODE || app.versionName != BuildConfig.VERSION_NAME) return@withContext Discovery(app, null, unreadable = true)
             try {
                 val release = releaseFromManifest(text) ?: return@withContext Discovery(app, null, unreadable = true)
                 Discovery(app, activate(context, release, klass), unreadable = false)
@@ -223,7 +237,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             catch (_: IllegalArgumentException) { Discovery(app, null, unreadable = true) }
             catch (_: IOException) { Discovery(app, null, unreadable = false) }
         }
-        private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && release.base == "/data/${release.version}"
+        private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && release.base == "/data/${release.version}" && release.version.endsWith("__app${BuildConfig.VERSION_NAME}")
         private suspend fun activate(context: Context, release: DataRelease, klass: String?): AcademicRepository {
             require(validRelease(release))
             val repository = AcademicRepository(context.applicationContext, release)
@@ -239,7 +253,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
                 repository.exams(klass)
                 repository.labs(klass)
             }
-            val index = File(context.filesDir, "campus/release.json")
+            val index = activeRelease(context)
             index.parentFile!!.mkdirs()
             val pending = File(index.parentFile, "release.${java.util.UUID.randomUUID()}.pending")
             try {
@@ -261,3 +275,5 @@ class DataUnavailableException(cause: Exception) : IOException(
 ) {
     init { initCause(cause) }
 }
+
+class DataCorruptionException(message: String) : IllegalStateException(message)

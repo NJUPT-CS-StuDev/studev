@@ -41,13 +41,15 @@ export class CampusTools {
     }
     /** One result's own text, as far as it is kept: an article, a knowledge topic or a question. Courses, teachers,
      * classes, rooms and places are not texts; their own tools answer for them. */
-    async read(id: string) {
+    async read(id: string, offset = 0) {
         if (/^(courses|teachers|classes|rooms|places|buildings)\//.test(id)) throw new Error('这条不是文章：上课安排用 schedule，地点用 find_place。');
         const key = await textKey(id);
-        const shard = await fetchJson<Record<string, { title: string; url: string; source: string; published: string | null; text: string; files: { name: string; url: string }[] }>>(`${APP_CONFIG.DATA_URLS.TEXTS}/${id.slice(0, 2)}.json`);
+        const shard = await fetchJson<Record<string, { title: string; url: string; source: string; published: string | null; text: string; files: { name: string; url: string }[] }>>(`${APP_CONFIG.DATA_URLS.TEXTS}/${key.slice(0, 2)}.json`);
         const doc = shard[key];
         if (!doc) throw new Error('找不到这篇资料。');
-        return { title: doc.title, source: doc.source, ...(doc.published ? { date: doc.published.slice(0, 10) } : {}), url: doc.url, text: doc.text.slice(0, READ) || '这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。', ...(doc.text.length > READ ? { cut: true } : {}), files: doc.files.slice(0, 10) };
+        if (offset < 0 || offset > doc.text.length) throw new Error('正文位置超出范围。');
+        const end = offset + READ;
+        return { title: doc.title, source: doc.source, ...(doc.published ? { date: doc.published.slice(0, 10) } : {}), url: doc.url, text: doc.text.slice(offset, end) || (doc.text.length ? '' : '这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。'), ...(doc.text.length > end ? { next: end } : {}), files: doc.files.slice(0, 10) };
     }
     /** The places a name may mean, each said with what it is, where, and whether it is open now. */
     /** What a place is called when said alone: a room with its building (教3-302), anything else by its name. */

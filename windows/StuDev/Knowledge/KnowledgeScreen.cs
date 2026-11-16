@@ -17,8 +17,11 @@ public sealed partial class KnowledgeScreen : Screen
 {
     private readonly Campus campus = Campus.Shared;
     private readonly Grid host = new();
+    private Repository? repository;
     private KnowledgeIndex? knowledge;
     private List<CurriculumCourse> curriculum = [];
+    private int loadGeneration;
+    private int renderGeneration;
     private bool loading;
     private bool failed;
 
@@ -33,24 +36,25 @@ public sealed partial class KnowledgeScreen : Screen
     private string natureFilter = "全部";
     private string gradeFilter = "全部";
     private string majorFilter = "全部专业";
+    private string cohortFilter = "";
 
     public KnowledgeScreen()
     {
         Children.Add(host);
         Paint.Turned += Render;
-        campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (knowledge is null && campus.Repository is not null && !loading) _ = Load(); });
+        campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (!ReferenceEquals(repository, campus.Repository)) _ = Load(); });
         _ = Load();
     }
 
     public override void Shown(object? argument)
     {
+        if (!ReferenceEquals(repository, campus.Repository) || knowledge is null && !loading) _ = Load();
         if (argument is string url && url.StartsWith("/knowledge/", StringComparison.Ordinal))
         {
             OpenUrl(url);
             return;
         }
-        if (knowledge is null && !loading) _ = Load();
-        else Render();
+        Render();
     }
 
     private void OpenUrl(string url)
@@ -85,24 +89,40 @@ public sealed partial class KnowledgeScreen : Screen
 
     private async Task Load()
     {
-        if (loading) return;
+        var repo = campus.Repository;
+        if (loading && ReferenceEquals(repository, repo)) return;
+        repository = repo;
+        var generation = ++loadGeneration;
+        knowledge = null; curriculum = [];
         loading = true; failed = false; Render();
         try
         {
-            await campus.Load();
-            var repo = campus.Repository;
+            if (repo is null)
+            {
+                await campus.Load();
+                if (generation != loadGeneration) return;
+                repository = repo = campus.Repository;
+            }
             if (repo is null) { failed = true; return; }
             var kBytes = await repo.Bytes("knowledge/knowledge.json");
-            knowledge = JsonSerializer.Deserialize(kBytes, FactsJson.Default.KnowledgeIndex);
-            try
-            {
-                var cBytes = await repo.Bytes("curriculum/courses.json");
-                curriculum = JsonSerializer.Deserialize(cBytes, FactsJson.Default.ListCurriculumCourse) ?? [];
-            }
-            catch { curriculum = []; }
+            var nextKnowledge = JsonSerializer.Deserialize(kBytes, FactsJson.Default.KnowledgeIndex) ?? throw new JsonException("Empty knowledge index");
+            var cBytes = await repo.Bytes("curriculum/courses.json");
+            var nextCurriculum = JsonSerializer.Deserialize(cBytes, FactsJson.Default.ListCurriculumCourse) ?? throw new JsonException("Empty curriculum");
+            if (generation != loadGeneration || !ReferenceEquals(repo, campus.Repository)) return;
+            knowledge = nextKnowledge; curriculum = nextCurriculum;
         }
-        catch { failed = true; }
-        finally { loading = false; Render(); }
+        catch (Exception error) when (error is HttpRequestException or IOException or JsonException or OperationCanceledException)
+        {
+            if (generation == loadGeneration && ReferenceEquals(repo, campus.Repository)) failed = true;
+        }
+        finally
+        {
+            if (generation == loadGeneration)
+            {
+                loading = false;
+                if (ReferenceEquals(repo, campus.Repository)) Render();
+            }
+        }
     }
 
     private static int ToneOf(string id)
@@ -120,6 +140,7 @@ public sealed partial class KnowledgeScreen : Screen
 
     private void Render()
     {
+        renderGeneration++;
         host.Children.Clear();
         if (failed)
         {
@@ -143,26 +164,30 @@ public sealed partial class KnowledgeScreen : Screen
 
     private void RenderHome(KnowledgeIndex idx)
     {
-        var byCode = curriculum.GroupBy(c => c.Code).ToDictionary(g => g.Key, g => g.First());
+        var byCode = curriculum.ToDictionary(c => c.Code);
+        var cohorts = curriculum.SelectMany(c => c.Plans.Select(p => p.Grade)).Distinct().OrderDescending().ToList();
+        var planYear = cohortFilter.Length > 0 ? cohortFilter : cohorts.FirstOrDefault() ?? "";
+        bool InPlan(CurriculumEntry p) => p.Grade == planYear && (majorFilter == "全部专业" || p.Major == majorFilter)
+            && (categoryFilter == "全部" || p.Category == categoryFilter) && (natureFilter == "全部" || p.Nature == natureFilter);
         var compiledByCode = new Dictionary<string, KnowledgeCourse>();
         foreach (var c in idx.Courses) foreach (var code in c.Codes.Concat(c.Former)) compiledByCode.TryAdd(code, c);
 
-        var metaMap = new Dictionary<string, (List<string> Cats, List<string> Nats, List<string> Majs, double? Cred, List<int> Terms)>();
+        var metaMap = new Dictionary<string, (List<string> Cats, List<string> Nats, List<string> Majs, string? Cred, List<int> Terms)>();
         foreach (var c in idx.Courses)
         {
-            var matched = c.Codes.Concat(c.Former).Select(code => byCode.GetValueOrDefault(code)).Where(m => m is not null).Cast<CurriculumCourse>().DistinctBy(m => m.Code).ToList();
+            var matched = c.Codes.Concat(c.Former).Select(code => byCode.GetValueOrDefault(code)).Where(m => m is not null).Cast<CurriculumCourse>().DistinctBy(m => m.Code).SelectMany(m => m.Plans).Where(InPlan).ToList();
             metaMap[c.Id] = (
-                matched.SelectMany(m => m.Categories.Count > 0 ? m.Categories : [m.Category]).Where(s => s.Length > 0).Distinct().ToList(),
-                matched.SelectMany(m => m.Natures.Count > 0 ? m.Natures : [m.Nature]).Where(s => s.Length > 0).Distinct().ToList(),
-                matched.SelectMany(m => m.Majors).Where(s => s.Length > 0).Distinct().ToList(),
-                matched.Select(m => m.Credits).FirstOrDefault(x => x > 0) is > 0 and var cr ? cr : null,
-                matched.SelectMany(m => m.Terms).Where(t => t is >= 1 and <= 8).Distinct().OrderBy(t => t).ToList()
+                matched.Select(m => m.Category).Where(s => s.Length > 0).Distinct().ToList(),
+                matched.Select(m => m.Nature).Where(s => s.Length > 0).Distinct().ToList(),
+                matched.Select(m => m.Major).Where(s => s.Length > 0).Distinct().ToList(),
+                matched.Where(m => m.Credits > 0).Select(m => m.Credits!.Value).Distinct().Order().ToList() is { Count: > 0 } credits ? string.Join("/", credits) : null,
+                matched.Where(m => m.Term.HasValue).Select(m => m.Term!.Value).Where(t => t is >= 1 and <= 8).Distinct().OrderBy(t => t).ToList()
             );
         }
 
         var preferredMajors = new[] { "计算机科学与技术", "软件工程", "信息安全", "计算机科学与技术(创新班)" };
         var allMajors = new List<string> { "全部专业" };
-        var foundMajors = curriculum.SelectMany(c => c.Majors).Distinct().ToList();
+        var foundMajors = curriculum.SelectMany(c => c.Plans.Select(p => p.Major)).Distinct().ToList();
         allMajors.AddRange(preferredMajors.Where(foundMajors.Contains));
         allMajors.AddRange(foundMajors.Where(m => !preferredMajors.Contains(m)));
 
@@ -182,7 +207,7 @@ public sealed partial class KnowledgeScreen : Screen
         }).ToList();
 
         var rootCol = new StackPanel { Spacing = 14 };
-        rootCol.Children.Add(Pages.Header("知识", "按培养方案与学期组织的知识体系，每门课连着先修依赖、课件与历年考题。"));
+        rootCol.Children.Add(Pages.Header("知识", "按培养方案与学期组织的知识体系，每门课连着先修依赖、课程资料。"));
 
         var topRow = new Grid { ColumnSpacing = 12 };
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 380 });
@@ -196,6 +221,9 @@ public sealed partial class KnowledgeScreen : Screen
         rootCol.Children.Add(topRow);
 
         var filterWrap = new WrapRow { Gap = 8 };
+        var cohortBox = new ComboBox { ItemsSource = cohorts, SelectedItem = planYear, Header = "培养方案入学年份" };
+        cohortBox.SelectionChanged += (_, _) => { if (cohortBox.SelectedItem is string year && year != planYear) { cohortFilter = year; Render(); } };
+        filterWrap.Children.Add(cohortBox);
         foreach (var (gVal, gLabel) in new[] { ("全部", "全部年级"), ("大一", "大一"), ("大二", "大二"), ("大三", "大三"), ("大四", "大四") })
             filterWrap.Children.Add(Kit.Pick(gLabel, gradeFilter == gVal, () => { gradeFilter = gVal; Render(); }, 30));
         foreach (var cat in new[] { "全部", "专业基础课", "专业课", "通识教育课" })
@@ -209,18 +237,9 @@ public sealed partial class KnowledgeScreen : Screen
 
         if (homeView == "graph")
         {
-            var scoped = curriculum.Where(item =>
-                (majorFilter == "全部专业" || item.Majors.Contains(majorFilter)) &&
-                (categoryFilter == "全部" || item.Categories.Contains(categoryFilter) || item.Category == categoryFilter) &&
-                (natureFilter == "全部" || item.Natures.Contains(natureFilter) || item.Nature == natureFilter)).ToList();
+            var scoped = curriculum.Where(item => item.Plans.Any(InPlan)).ToList();
             var scopedCodes = scoped.Select(i => i.Code).ToHashSet();
-            var connected = new HashSet<string>();
-            foreach (var item in scoped)
-            {
-                var reqs = item.Requires.Where(scopedCodes.Contains).ToList();
-                if (reqs.Count > 0) { connected.Add(item.Code); foreach (var r in reqs) connected.Add(r); }
-            }
-            var nodes = scoped.Where(item => connected.Contains(item.Code) && (q.Length == 0 || item.Name.ToLowerInvariant().Contains(q) || item.Code.ToLowerInvariant().Contains(q))).ToList();
+            var nodes = scoped.Where(item => (q.Length == 0 || item.Name.ToLowerInvariant().Contains(q) || item.Code.ToLowerInvariant().Contains(q))).ToList();
             var nodeSet = nodes.Select(n => n.Code).ToHashSet();
             foreach (var n in nodes.ToList())
                 foreach (var r in n.Requires)
@@ -230,23 +249,17 @@ public sealed partial class KnowledgeScreen : Screen
             md.AppendLine("```mermaid");
             md.AppendLine("flowchart LR");
             List<KnowledgeCourse> linkedCourses;
-            if (nodes.Count > 0)
             {
                 var idOf = nodes.Select((n, i) => (n.Code, Id: $"P{i}")).ToDictionary(x => x.Code, x => x.Id);
                 foreach (var n in nodes) md.AppendLine($"  {idOf[n.Code]}[\"{SafeMermaidLabel(n.Name)}\"]");
                 foreach (var n in nodes) foreach (var req in n.Requires) if (idOf.TryGetValue(req, out var fromId)) md.AppendLine($"  {fromId} --> {idOf[n.Code]}");
                 linkedCourses = nodes.Select(n => compiledByCode.GetValueOrDefault(n.Code)).Where(c => c is not null).Cast<KnowledgeCourse>().DistinctBy(c => c.Id).ToList();
             }
-            else
-            {
-                for (var i = 0; i < filtered.Count; i++) md.AppendLine($"  C{i}[\"{SafeMermaidLabel(filtered[i].Name)}\"]");
-                linkedCourses = filtered;
-            }
             md.AppendLine("```");
 
             var card = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(18) };
             var graphStack = new StackPanel { Spacing = 14 };
-            graphStack.Children.Add(Doc.Make(Doc.Read(md.ToString())));
+            graphStack.Children.Add(Doc.Make(Doc.Read(nodes.Count > 0 ? md.ToString() : "当前筛选没有培养方案课程。")));
             if (linkedCourses.Count > 0)
             {
                 graphStack.Children.Add(Kit.Hairline());
@@ -272,11 +285,10 @@ public sealed partial class KnowledgeScreen : Screen
         else
         {
             var termTitles = new[] { "", "大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下" };
-            var grouped = filtered.GroupBy(c =>
-            {
-                var terms = metaMap[c.Id].Terms;
-                return gradeNum > 0 ? (terms.FirstOrDefault(t => (t + 1) / 2 == gradeNum) is > 0 and var gt ? gt : 99) : (terms.FirstOrDefault() is > 0 and var ft ? ft : 99);
-            }).OrderBy(g => g.Key).ToList();
+            var grouped = filtered.SelectMany(c => {
+                var terms = metaMap[c.Id].Terms.Where(t => gradeNum == 0 || (t + 1) / 2 == gradeNum).ToList();
+                return (terms.Count > 0 ? terms : [99]).Select(term => (Term: term, Course: c));
+            }).GroupBy(item => item.Term, item => item.Course).OrderBy(g => g.Key).ToList();
 
             if (grouped.Count == 0) rootCol.Children.Add(Pages.Empty("没有符合当前筛选条件的课程"));
             foreach (var group in grouped)
@@ -435,16 +447,16 @@ public sealed partial class KnowledgeScreen : Screen
         }
         else if (material is not null)
         {
-            var rHead = Kit.Text("这份资料考到的知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
+            var rHead = Kit.Text("这份资料关联的知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
             rightStack.Children.Add(rHead);
-            var counts = idx.Topics.Select(tp => (Topic: tp, N: tp.TestedBy.Count(r => r.Material == material.Path))).Where(x => x.N > 0).OrderByDescending(x => x.N).ToList();
-            foreach (var (tp, n) in counts) rightStack.Children.Add(RelLink($"{tp.Title} · {n} 题", () => Open(course: course.Id, topic: tp.Id)));
+            var counts = idx.Topics.Select(tp => (Topic: tp, N: tp.References.Count(r => r.Material == material.Path))).Where(x => x.N > 0).OrderByDescending(x => x.N).ToList();
+            foreach (var (tp, n) in counts) rightStack.Children.Add(RelLink($"{tp.Title} · {n} 处", () => Open(course: course.Id, topic: tp.Id)));
         }
         else
         {
             var rHead = Kit.Text("资料", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
             rightStack.Children.Add(rHead);
-            foreach (var m in courseMats) rightStack.Children.Add(RelLink($"{m.Title} ({(m.Questions > 0 ? $"{m.Questions} 题" : m.Kind)})", () => Open(course: course.Id, material: m.Path)));
+            foreach (var m in courseMats) rightStack.Children.Add(RelLink($"{m.Title} ({(m.Sections > 0 ? $"{m.Sections} 处关联" : m.Kind)})", () => Open(course: course.Id, material: m.Path)));
         }
         var rightScroll = new ScrollViewer { Content = rightStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetColumn(rightScroll, 2);
@@ -463,11 +475,19 @@ public sealed partial class KnowledgeScreen : Screen
     private async Task LoadDocument(StackPanel container, KnowledgeIndex idx, KnowledgeCourse course, KnowledgeTopic? topic, KnowledgeMaterial? material, string relPath, int toneIdx)
     {
         container.Children.Add(Kit.Text("正在打开…", Role.Body, "muted"));
-        var repo = campus.Repository;
-        if (repo is null) return;
+        var repo = repository;
+        var generation = renderGeneration;
+        var documentAnchor = activeAnchor;
+        bool Current() => generation == renderGeneration && ReferenceEquals(repo, campus.Repository) && ReferenceEquals(idx, knowledge);
+        if (repo is null || !Current()) return;
         string md;
         try { md = Encoding.UTF8.GetString(await repo.Bytes($"knowledge/{relPath}")); }
-        catch { container.Children.Clear(); container.Children.Add(Kit.Text("这篇内容没能加载，请稍后重试。", Role.Body, "muted")); return; }
+        catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
+        {
+            if (Current()) { container.Children.Clear(); container.Children.Add(Kit.Text("这篇内容没能加载，请稍后重试。", Role.Body, "muted")); }
+            return;
+        }
+        if (!Current()) return;
 
         container.Children.Clear();
         Action<string> onLink = href =>
@@ -485,20 +505,20 @@ public sealed partial class KnowledgeScreen : Screen
         var blocks = Doc.Read(md);
         if (topic is not null)
         {
-            var matCount = topic.TestedBy.Select(r => r.Material).Distinct().Count();
-            var info = Kit.Text(topic.TestedBy.Count > 0 ? $"考过 {topic.TestedBy.Count} 次 · 出现在 {matCount} 份资料里" : "收录的资料里还没有考到它", Role.Label);
+            var matCount = topic.References.Select(r => r.Material).Distinct().Count();
+            var info = Kit.Text(topic.References.Count > 0 ? $"关联 {topic.References.Count} 处 · 出现在 {matCount} 份资料里" : "收录的资料里还没有与它关联的片段", Role.Label);
             info.Foreground = Paint.Tone(toneIdx, "fg");
             container.Children.Add(info);
             container.Children.Add(Doc.Make(blocks, link: onLink, image: imgLoader));
 
             // Below middle explanation: tested past-exam question links
             container.Children.Add(Kit.Hairline());
-            var qHead = Kit.Text("考过的真题链接", Role.Heading); qHead.Foreground = Paint.Tone(toneIdx, "fg");
+            var qHead = Kit.Text("关联资料", Role.Heading); qHead.Foreground = Paint.Tone(toneIdx, "fg");
             container.Children.Add(qHead);
-            var byMat = topic.TestedBy.GroupBy(r => r.Material).ToList();
+            var byMat = topic.References.GroupBy(r => r.Material).ToList();
             if (byMat.Count == 0)
             {
-                container.Children.Add(Kit.Text("收录的资料里还没有直接考到它的真题。", Role.Label, "muted"));
+                container.Children.Add(Kit.Text("收录的资料里还没有与它关联的片段。", Role.Label, "muted"));
             }
             else
             {
@@ -524,21 +544,20 @@ public sealed partial class KnowledgeScreen : Screen
         }
         else if (material is not null)
         {
-            container.Children.Add(Kit.Text(material.Title, Role.Title, wrap: true));
-            container.Children.Add(Kit.Text(string.Join(" · ", new[] { material.Kind, material.Term, material.Questions > 0 ? $"{material.Questions} 题" : null }.Where(s => !string.IsNullOrEmpty(s))), Role.Label, "muted"));
-            container.Children.Add(Doc.Make(blocks, link: onLink, image: imgLoader));
+            container.Children.Add(Kit.Text(string.Join(" · ", new[] { material.Kind, material.Term, material.Sections > 0 ? $"{material.Sections} 处关联" : null }.Where(s => !string.IsNullOrEmpty(s))), Role.Label, "muted"));
+            container.Children.Add(Doc.Make(blocks, link: onLink, image: imgLoader, anchor: documentAnchor));
         }
         else
         {
             container.Children.Add(Doc.Make(blocks, link: onLink, image: imgLoader));
-            var most = course.Chapters.SelectMany(ch => ch.Topics).Select(id => idx.Topics.FirstOrDefault(x => x.Id == id)).Where(x => x is not null && x.TestedBy.Count > 0).Cast<KnowledgeTopic>().OrderByDescending(x => x.TestedBy.Count).Take(6).ToList();
+            var most = course.Chapters.SelectMany(ch => ch.Topics).Select(id => idx.Topics.FirstOrDefault(x => x.Id == id)).Where(x => x is not null && x.References.Count > 0).Cast<KnowledgeTopic>().OrderByDescending(x => x.References.Count).Take(6).ToList();
             if (most.Count > 0)
             {
                 container.Children.Add(Kit.Hairline());
-                container.Children.Add(Kit.Text("考得最多的知识点", Role.Heading));
+                container.Children.Add(Kit.Text("资料中的知识点", Role.Heading));
                 foreach (var mt in most)
                 {
-                    var btn = RelLink($"{mt.Title}（{mt.TestedBy.Count} 道题 · {mt.TestedBy.Select(r => r.Material).Distinct().Count()} 份资料）", () => Open(course: course.Id, topic: mt.Id));
+                    var btn = RelLink($"{mt.Title}（{mt.References.Count} 处 · {mt.References.Select(r => r.Material).Distinct().Count()} 份资料）", () => Open(course: course.Id, topic: mt.Id));
                     container.Children.Add(btn);
                 }
             }

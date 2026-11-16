@@ -49,11 +49,16 @@ if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificat
 & node (Join-Path $repo 'scripts/smoke/android.mjs') $apk
 if ($LASTEXITCODE -ne 0) { throw 'Android smoke test failed' }
 
-$tempBase = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd([char[]]'\/')
-$tempRoot = Join-Path $tempBase ("studev-apk-release-" + [guid]::NewGuid().ToString('N'))
+$tempBase = 'D:\Temp\codex\studev-release'
+$tempRoot = Join-Path $tempBase ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
+# This is the package both native clients were built against. Deployment extracts it
+# and renders the site; it never recompiles another bundle under the same name.
+$campusData = Join-Path $tempRoot 'campus-data.tar.gz'
+& tar -czf $campusData -C $repo public/data public/map src/data/campus-release.json
+if ($LASTEXITCODE -ne 0) { throw 'Campus data packaging failed' }
 $env:OSCA_DOWNLOAD_ENDPOINT = Get-Secret local.osca_download.endpoint
 $env:OSCA_DOWNLOAD_BUCKET = Get-Secret local.osca_download.bucket
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.osca_download.access_key
@@ -101,7 +106,7 @@ $fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
 Copy-Item $portable $fullPortable
 
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$assetPaths = @($fullApk, $fullPortable)
+$assetPaths = @($fullApk, $fullPortable, $campusData)
 $tag = "v$versionName"
 $repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()

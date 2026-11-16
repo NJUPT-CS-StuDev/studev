@@ -36,7 +36,7 @@ internal class NativeSearch(
     /** Blocks accumulate between queries; past the budget, start from the index again. */
     private suspend fun ready(): SearchEngine {
         engine?.takeIf { loaded < BUDGET_BYTES }?.let { return it }
-        engine?.close()
+        closeEngine()
         val m = manifest ?: Json.parseToJsonElement(file("manifest.json").decodeToString()).jsonObject.also { manifest = it }
         val index = m.getValue("index").jsonObject
         loaded = 0
@@ -56,33 +56,40 @@ internal class NativeSearch(
     }
 
     suspend fun page(query: String, limit: Int, sort: String = "relevance", filters: JsonObject = buildJsonObject {}, offset: Int = 0,
-                     onRanked: suspend (Page) -> Unit = {}): Page = withContext(Dispatchers.IO) { mutex.withLock {
-        coroutineContext.ensureActive()
-        check(!closed) { "Search is closed" }
-        if (query.trim().length == 1) return@withLock Page(emptyList(), 0, buildJsonObject {})
-        val search = ready()
-        val request = buildJsonObject {
-            put("query", query.trim()); put("offset", offset); put("limit", limit); put("sort", sort); put("filters", filters)
-        }
-        val options = Json.parseToJsonElement(search.filterOptions()).jsonObject
-        fun page(response: String): Page {
-            val value = Json.parseToJsonElement(response).jsonObject
-            return Page(value.getValue("results").jsonArray.map { it.jsonObject }, value.getValue("totalCandidates").jsonPrimitive.int, options)
-        }
-        load(search.beginSearch(request.toString()), search::loadLexiconBlock)
-        load(search.requiredPostingChunks(), search::loadPostingsChunk)
-        load(search.planSearch(), search::loadDocumentBlock)
-        coroutineContext.ensureActive()
-        onRanked(page(search.rankedResults()))
-        search.clearContent()
-        val before = loaded
-        load(search.requiredContentChunks(), search::loadContentChunk)
-        loaded = before
-        coroutineContext.ensureActive()
-        page(search.hydrateSearch())
-    } }
+                     onRanked: suspend (Page) -> Unit = {}): Page = withContext(Dispatchers.IO) {
+        try { mutex.withLock {
+            coroutineContext.ensureActive()
+            check(!closed) { "Search is closed" }
+            if (query.trim().length == 1) return@withLock Page(emptyList(), 0, buildJsonObject {})
+            val search = ready()
+            val request = buildJsonObject {
+                put("query", query.trim()); put("offset", offset); put("limit", limit); put("sort", sort); put("filters", filters)
+            }
+            val options = Json.parseToJsonElement(search.filterOptions()).jsonObject
+            fun page(response: String): Page {
+                val value = Json.parseToJsonElement(response).jsonObject
+                return Page(value.getValue("results").jsonArray.map { it.jsonObject }, value.getValue("totalCandidates").jsonPrimitive.int, options)
+            }
+            load(search.beginSearch(request.toString()), search::loadLexiconBlock)
+            load(search.requiredPostingChunks(), search::loadPostingsChunk)
+            load(search.planSearch(), search::loadDocumentBlock)
+            coroutineContext.ensureActive()
+            onRanked(page(search.rankedResults()))
+            search.clearContent()
+            val before = loaded
+            load(search.requiredContentChunks(), search::loadContentChunk)
+            loaded = before
+            coroutineContext.ensureActive()
+            page(search.hydrateSearch())
+        } } finally { if (closed) close() }
+    }
 
-    override fun close() { closed = true; engine?.close(); engine = null }
+    private fun closeEngine() { engine?.close(); engine = null }
+    override fun close() {
+        closed = true
+        if (!mutex.tryLock()) return
+        try { closeEngine() } finally { mutex.unlock() }
+    }
 
     private companion object { const val BUDGET_BYTES = 64L * 1024 * 1024 }
 }

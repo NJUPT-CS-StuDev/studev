@@ -181,7 +181,7 @@ export default function AiApp() {
     const execute = useMemo(() => async (name: string, raw: unknown, call = ''): Promise<unknown> => {
         const args = toolArguments(name, raw), line = latest.current;
         if (name === 'search') return services.query(String(args.query), args.in === undefined ? undefined : String(args.in));
-        if (name === 'read') return services.read(String(args.id));
+        if (name === 'read') return services.read(String(args.id), args.offset as number | undefined);
         if (name === 'course') return services.course(String(args.course));
         if (name === 'schedule') return services.schedule(String(args.of));
         if (name === 'curriculum') return services.curriculum(String(args.major), args.grade === undefined ? undefined : String(args.grade));

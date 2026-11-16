@@ -46,7 +46,7 @@ object Answers {
         val materials = linkedMapOf<String, MutableList<JsonObject>>()
         index.materials.filter { it.course == course.id }.forEach { material ->
             val list = materials.getOrPut(material.kind) { mutableListOf() }
-            if (list.size < 12) list += buildJsonObject { put("title", material.title); put("id", "questions/${material.path}") }
+            if (list.size < 12) list += buildJsonObject { put("title", material.title); put("id", "sections/${material.path}") }
         }
         val sharedLinks = Materials.said(shared, course.name)
         return buildJsonObject {
@@ -79,20 +79,24 @@ object Answers {
     }
 
     fun curriculum(courses: List<CurriculumCourse>, major: String, grade: String?): JsonObject {
-        val all = courses.flatMap { it.majors }.distinct(); val asked = major.trim()
+        val all = courses.flatMap { it.plans.map { plan -> plan.major } }.distinct(); val asked = major.trim()
         val meant = if (all.any { it == asked }) listOf(asked) else all.filter { it.contains(asked) }
         val only = meant.singleOrNull() ?: return buildJsonObject { put("found", false); put("majors", JsonArray((meant.ifEmpty { all }).take(20).map(::JsonPrimitive))) }
-        val chosen = courses.filter { only in it.majors && (grade == null || grade in it.grades) }
-        val terms = chosen.flatMap { it.terms }.distinct().sorted()
+        val grades = courses.flatMap { it.plans.filter { plan -> plan.major == only }.map { plan -> plan.grade } }.distinct().sorted()
+        val selected = grade ?: grades.singleOrNull()
+        if (selected == null || selected !in grades) return buildJsonObject { put("found", false); put("major", only); put("grades", JsonArray(grades.map(::JsonPrimitive))) }
+        val chosen = courses.flatMap { course -> course.plans.filter { it.major == only && it.grade == selected }.map { course to it } }
+        val terms = chosen.map { it.second.term }.distinct().sortedBy { it ?: 99 }
         val names = courses.associate { it.code to it.name }
         return buildJsonObject {
-            put("found", true); put("major", only); grade?.let { put("grade", it) }
+            put("found", true); put("major", only); put("grade", selected)
             put("terms", JsonArray(terms.map { term ->
-                val list = chosen.filter { term in it.terms }
+                val list = chosen.filter { it.second.term == term }
                 buildJsonObject {
-                    put("term", term); put("credits", number(list.sumOf { it.credits }))
-                    put("courses", JsonArray(list.map { course -> buildJsonObject {
-                        put("name", course.name); put("code", course.code); put("credits", number(course.credits)); put("nature", course.nature); put("category", course.category)
+                    put("term", term?.let(::JsonPrimitive) ?: JsonNull)
+                    put("credits", if (list.all { it.second.credits != null }) number(list.sumOf { it.second.credits!! }) else JsonNull)
+                    put("courses", JsonArray(list.map { (course, plan) -> buildJsonObject {
+                        put("name", course.name); put("code", course.code); put("credits", plan.credits?.let(::number) ?: JsonNull); put("nature", plan.nature); put("category", plan.category)
                         if (course.requires.isNotEmpty()) put("requires", JsonArray(course.requires.map { JsonPrimitive(names[it] ?: it) }))
                     } }))
                 }

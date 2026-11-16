@@ -31,12 +31,7 @@ internal fun appInManifest(text: String): AppRelease = kotlinx.serialization.jso
     val aliases: List<String>,
     val source: String? = null,
     val teaching_class_ids: List<String> = emptyList(),
-    val category: String? = null,
-    val nature: String? = null,
-    val credits: Double? = null,
-    val terms: List<Int> = emptyList(),
-    val majors: List<String> = emptyList(),
-    val colleges: List<String> = emptyList(),
+    val plans: List<JsonObject> = emptyList(),
     val requires: List<String> = emptyList(),
     val former: List<String> = emptyList(),
 )

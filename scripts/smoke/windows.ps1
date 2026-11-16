@@ -3,6 +3,12 @@
 # step the app must still be running and must not have written a crash log. Usage: pwsh windows.ps1 -Exe <StuDev.exe>
 param([Parameter(Mandatory)] [string]$Exe)
 $ErrorActionPreference = 'Stop'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$release = Get-Content -LiteralPath (Join-Path $repo 'src/data/campus-release.json') -Raw | ConvertFrom-Json
+$knowledge = Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/knowledge/knowledge.json") -Raw | ConvertFrom-Json
+$course = $knowledge.courses | Where-Object name -EQ '数据结构' | Select-Object -First 1
+$topic = $knowledge.topics | Where-Object { $_.taught_by -contains $course.id -and $_.references.Count -gt 0 } | Select-Object -First 1
+$reference = $topic.references | Select-Object -First 1
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -TypeDefinition @"
 using System; using System.Collections.Generic; using System.Runtime.InteropServices; using System.Text;
@@ -21,7 +27,8 @@ public static class Owned {
 "@
 $A = [System.Windows.Automation.AutomationElement]
 $Tree = [System.Windows.Automation.TreeScope]
-$home_ = Join-Path ([IO.Path]::GetTempPath()) ("studev-smoke-" + [guid]::NewGuid().ToString('N'))
+$tempBase = 'D:\Temp\codex\studev-windows-smoke'
+$home_ = Join-Path $tempBase ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $home_ | Out-Null
 $start = [Diagnostics.ProcessStartInfo]::new($Exe)
 $start.Environment['STUDEV_DATA_DIR'] = $home_
@@ -60,6 +67,25 @@ function Fill($root, [scriptblock]$match, [string]$text, [string]$step) {
     Start-Sleep -Milliseconds 1200
     Alive $step
 }
+function PressText($root, [string]$text, [string]$step) {
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    for ($i = 0; $i -lt 40; $i++) {
+        foreach ($e in $root.FindAll($Tree::Descendants, (Is $A::NameProperty $text))) {
+            $parent = $e
+            for ($depth = 0; $parent -and $depth -lt 4; $depth++) {
+                if ($parent.Current.IsInvokePatternAvailable) {
+                    $parent.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+                    Start-Sleep -Milliseconds 900
+                    Alive $step
+                    return
+                }
+                $parent = $walker.GetParent($parent)
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "No control for ${text}: $step"
+}
 
 
 try {
@@ -78,6 +104,13 @@ try {
     Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '条结果' } 'search results (the search kernel)' 30 | Out-Null
     Alive 'search results'
     Press $window '知识' 'the knowledge board'
+    Fill $window { param($e) $e.Current.Name -eq '筛选课程' } $course.codes[0] 'find the course in the released knowledge'
+    PressText $window $course.name 'open the course outline'
+    PressText $window $topic.title 'open a topic from the outline'
+    Find $window (Is $A::NameProperty '关联资料') $null 'the topic references' 30 | Out-Null
+    PressText $window $reference.heading 'open the referenced material passage'
+    Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -eq $reference.heading } 'the referenced passage in the document' 30 | Out-Null
+    Alive 'read a linked knowledge passage'
     Press $window 'AI' 'the AI board'
     Press $window '我' 'the me board'
     Press $window { param($e) $e.Current.Name -like '小组件*' } 'the widgets sheet'
@@ -95,5 +128,7 @@ try {
     Write-Output 'Windows smoke passed'
 } finally {
     if (-not $app.HasExited) { $app.Kill(); $app.WaitForExit(5000) | Out-Null }
-    Remove-Item -LiteralPath $home_ -Recurse -Force -ErrorAction SilentlyContinue
+    $resolvedHome = (Resolve-Path -LiteralPath $home_).Path
+    if (-not $resolvedHome.StartsWith($tempBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unexpected smoke directory: $resolvedHome" }
+    Remove-Item -LiteralPath $resolvedHome -Recurse -Force
 }

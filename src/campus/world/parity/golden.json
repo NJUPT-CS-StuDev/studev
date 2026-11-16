@@ -2618,8 +2618,8 @@
     "key": "74a774d6034a9346"
    },
    {
-    "id": "questions/materials/cs-free/B0301152S/x.md#选择 1",
-    "key": "7f0a070397ec1e46"
+    "id": "sections/materials/cs-free/B0301152S/x.md#选择 1",
+    "key": "4e2b01629995c73e"
    }
   ],
   "course": [
@@ -2822,119 +2822,119 @@
       "复习要点": [
        {
         "title": "2016—2017 学年第一学期《计算机通信与网络》复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2016—2017-学年第一学期计算机通信与网络复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2016—2017-学年第一学期计算机通信与网络复习提纲.md"
        },
        {
         "title": "2017-2018 学年第二学期《计算机通信与网络》附录（协议格式与端口号汇总）",
-        "id": "questions/materials/cs-free/B0301152S/2017-2018-学年第二学期计算机通信与网络附录协议格式与端口号汇总.md"
+        "id": "sections/materials/cs-free/B0301152S/2017-2018-学年第二学期计算机通信与网络附录协议格式与端口号汇总.md"
        },
        {
         "title": "2017-2018学年第一学期《计算机通信与网络》期末复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2017-2018学年第一学期计算机通信与网络期末复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2017-2018学年第一学期计算机通信与网络期末复习提纲.md"
        },
        {
         "title": "2017-2018学年第二学期《计算机通信与网络》期末复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2017-2018学年第二学期计算机通信与网络期末复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2017-2018学年第二学期计算机通信与网络期末复习提纲.md"
        },
        {
         "title": "2018—2019 学年第二学期《计算机通信与网络》复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2018—2019-学年第二学期计算机通信与网络复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2018—2019-学年第二学期计算机通信与网络复习提纲.md"
        },
        {
         "title": "2020—2021 学年第二学期《计算机通信与网络》期末复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2020—2021-学年第二学期计算机通信与网络期末复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2020—2021-学年第二学期计算机通信与网络期末复习提纲.md"
        },
        {
         "title": "2021—2022学年第一学期《计算机通信与网络》复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2021—2022学年第一学期计算机通信与网络复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2021—2022学年第一学期计算机通信与网络复习提纲.md"
        },
        {
         "title": "《计算机通信与网络》期末复习大纲（2014年12月）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习大纲2014年12月.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习大纲2014年12月.md"
        },
        {
         "title": "《计算机通信与网络》期末复习提纲（2021-2022学年第二学期）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习提纲2021-2022学年第二学期.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习提纲2021-2022学年第二学期.md"
        },
        {
         "title": "《计算机通信与网络》期末复习要点（2017—2018学年第二学期）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习要点2017—2018学年第二学期.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习要点2017—2018学年第二学期.md"
        },
        {
         "title": "《计算机通信与网络》期末复习说明",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习说明.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习说明.md"
        }
       ],
       "期末试卷": [
        {
         "title": "2020-2021学年第二学期《计算机通信与网络》期末试卷附录",
-        "id": "questions/materials/cs-free/B0301152S/2020-2021学年第二学期计算机通信与网络期末试卷附录.md"
+        "id": "sections/materials/cs-free/B0301152S/2020-2021学年第二学期计算机通信与网络期末试卷附录.md"
        },
        {
         "title": "2021—2022 学年第二学期《计算机通信与网络》期末试卷（A卷）答题纸",
-        "id": "questions/materials/cs-free/B0301152S/2021—2022-学年第二学期计算机通信与网络期末试卷A卷答题纸.md"
+        "id": "sections/materials/cs-free/B0301152S/2021—2022-学年第二学期计算机通信与网络期末试卷A卷答题纸.md"
        },
        {
         "title": "2021—2022学年第二学期《计算机通信与网络》期末试卷（A卷）",
-        "id": "questions/materials/cs-free/B0301152S/2021—2022学年第二学期计算机通信与网络期末试卷A卷.md"
+        "id": "sections/materials/cs-free/B0301152S/2021—2022学年第二学期计算机通信与网络期末试卷A卷.md"
        }
       ],
       "习题": [
        {
         "title": "《计算机通信与网络》四次测试题及解析（2020.12）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络四次测试题及解析2020.12.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络四次测试题及解析2020.12.md"
        },
        {
         "title": "《计算机通信与网络》补充作业",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络补充作业.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络补充作业.md"
        },
        {
         "title": "《计算机通信与网络》补充作业参考答案（修正版）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络补充作业参考答案修正版.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络补充作业参考答案修正版.md"
        },
        {
         "title": "《计算机通信与网络》课后作业习题清单",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络课后作业习题清单.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络课后作业习题清单.md"
        }
       ],
       "课件": [
        {
         "title": "《计算机通信与网络》第1章 概论（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第1章-概论课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第1章-概论课件.md"
        },
        {
         "title": "《计算机通信与网络》第2章 数据通信技术基础（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第2章-数据通信技术基础课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第2章-数据通信技术基础课件.md"
        },
        {
         "title": "《计算机通信与网络》第3章 数据链路层（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第3章-数据链路层课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第3章-数据链路层课件.md"
        },
        {
         "title": "《计算机通信与网络》第4章 局域网与广域网（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第4章-局域网与广域网课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第4章-局域网与广域网课件.md"
        },
        {
         "title": "《计算机通信与网络》第5章 网络层与网络互连（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第5章-网络层与网络互连课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第5章-网络层与网络互连课件.md"
        },
        {
         "title": "《计算机通信与网络》第6章 传输层（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第6章-传输层课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第6章-传输层课件.md"
        },
        {
         "title": "《计算机通信与网络》第7章 应用层（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第7章-应用层课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第7章-应用层课件.md"
        },
        {
         "title": "《计算机通信与网络》第8章 网络管理和网络安全（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第8章-网络管理和网络安全课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第8章-网络管理和网络安全课件.md"
        }
       ],
       "答案": [
        {
         "title": "《计算机通信与网络》补充作业1、2答案",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络补充作业1、2答案.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络补充作业1、2答案.md"
        }
       ]
      }
@@ -3139,119 +3139,119 @@
       "复习要点": [
        {
         "title": "2016—2017 学年第一学期《计算机通信与网络》复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2016—2017-学年第一学期计算机通信与网络复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2016—2017-学年第一学期计算机通信与网络复习提纲.md"
        },
        {
         "title": "2017-2018 学年第二学期《计算机通信与网络》附录（协议格式与端口号汇总）",
-        "id": "questions/materials/cs-free/B0301152S/2017-2018-学年第二学期计算机通信与网络附录协议格式与端口号汇总.md"
+        "id": "sections/materials/cs-free/B0301152S/2017-2018-学年第二学期计算机通信与网络附录协议格式与端口号汇总.md"
        },
        {
         "title": "2017-2018学年第一学期《计算机通信与网络》期末复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2017-2018学年第一学期计算机通信与网络期末复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2017-2018学年第一学期计算机通信与网络期末复习提纲.md"
        },
        {
         "title": "2017-2018学年第二学期《计算机通信与网络》期末复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2017-2018学年第二学期计算机通信与网络期末复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2017-2018学年第二学期计算机通信与网络期末复习提纲.md"
        },
        {
         "title": "2018—2019 学年第二学期《计算机通信与网络》复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2018—2019-学年第二学期计算机通信与网络复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2018—2019-学年第二学期计算机通信与网络复习提纲.md"
        },
        {
         "title": "2020—2021 学年第二学期《计算机通信与网络》期末复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2020—2021-学年第二学期计算机通信与网络期末复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2020—2021-学年第二学期计算机通信与网络期末复习提纲.md"
        },
        {
         "title": "2021—2022学年第一学期《计算机通信与网络》复习提纲",
-        "id": "questions/materials/cs-free/B0301152S/2021—2022学年第一学期计算机通信与网络复习提纲.md"
+        "id": "sections/materials/cs-free/B0301152S/2021—2022学年第一学期计算机通信与网络复习提纲.md"
        },
        {
         "title": "《计算机通信与网络》期末复习大纲（2014年12月）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习大纲2014年12月.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习大纲2014年12月.md"
        },
        {
         "title": "《计算机通信与网络》期末复习提纲（2021-2022学年第二学期）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习提纲2021-2022学年第二学期.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习提纲2021-2022学年第二学期.md"
        },
        {
         "title": "《计算机通信与网络》期末复习要点（2017—2018学年第二学期）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习要点2017—2018学年第二学期.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习要点2017—2018学年第二学期.md"
        },
        {
         "title": "《计算机通信与网络》期末复习说明",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络期末复习说明.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络期末复习说明.md"
        }
       ],
       "期末试卷": [
        {
         "title": "2020-2021学年第二学期《计算机通信与网络》期末试卷附录",
-        "id": "questions/materials/cs-free/B0301152S/2020-2021学年第二学期计算机通信与网络期末试卷附录.md"
+        "id": "sections/materials/cs-free/B0301152S/2020-2021学年第二学期计算机通信与网络期末试卷附录.md"
        },
        {
         "title": "2021—2022 学年第二学期《计算机通信与网络》期末试卷（A卷）答题纸",
-        "id": "questions/materials/cs-free/B0301152S/2021—2022-学年第二学期计算机通信与网络期末试卷A卷答题纸.md"
+        "id": "sections/materials/cs-free/B0301152S/2021—2022-学年第二学期计算机通信与网络期末试卷A卷答题纸.md"
        },
        {
         "title": "2021—2022学年第二学期《计算机通信与网络》期末试卷（A卷）",
-        "id": "questions/materials/cs-free/B0301152S/2021—2022学年第二学期计算机通信与网络期末试卷A卷.md"
+        "id": "sections/materials/cs-free/B0301152S/2021—2022学年第二学期计算机通信与网络期末试卷A卷.md"
        }
       ],
       "习题": [
        {
         "title": "《计算机通信与网络》四次测试题及解析（2020.12）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络四次测试题及解析2020.12.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络四次测试题及解析2020.12.md"
        },
        {
         "title": "《计算机通信与网络》补充作业",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络补充作业.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络补充作业.md"
        },
        {
         "title": "《计算机通信与网络》补充作业参考答案（修正版）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络补充作业参考答案修正版.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络补充作业参考答案修正版.md"
        },
        {
         "title": "《计算机通信与网络》课后作业习题清单",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络课后作业习题清单.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络课后作业习题清单.md"
        }
       ],
       "课件": [
        {
         "title": "《计算机通信与网络》第1章 概论（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第1章-概论课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第1章-概论课件.md"
        },
        {
         "title": "《计算机通信与网络》第2章 数据通信技术基础（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第2章-数据通信技术基础课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第2章-数据通信技术基础课件.md"
        },
        {
         "title": "《计算机通信与网络》第3章 数据链路层（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第3章-数据链路层课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第3章-数据链路层课件.md"
        },
        {
         "title": "《计算机通信与网络》第4章 局域网与广域网（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第4章-局域网与广域网课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第4章-局域网与广域网课件.md"
        },
        {
         "title": "《计算机通信与网络》第5章 网络层与网络互连（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第5章-网络层与网络互连课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第5章-网络层与网络互连课件.md"
        },
        {
         "title": "《计算机通信与网络》第6章 传输层（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第6章-传输层课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第6章-传输层课件.md"
        },
        {
         "title": "《计算机通信与网络》第7章 应用层（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第7章-应用层课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第7章-应用层课件.md"
        },
        {
         "title": "《计算机通信与网络》第8章 网络管理和网络安全（课件）",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络第8章-网络管理和网络安全课件.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络第8章-网络管理和网络安全课件.md"
        }
       ],
       "答案": [
        {
         "title": "《计算机通信与网络》补充作业1、2答案",
-        "id": "questions/materials/cs-free/B0301152S/计算机通信与网络补充作业1、2答案.md"
+        "id": "sections/materials/cs-free/B0301152S/计算机通信与网络补充作业1、2答案.md"
        }
       ]
      }
@@ -3470,63 +3470,63 @@
       "期末试卷": [
        {
         "title": "2015—2016学年第一学期《离散数学》期末试卷（B卷）",
-        "id": "questions/materials/batch-2/离散数学/2015—2016学年第一学期离散数学期末试卷B卷.md"
+        "id": "sections/materials/batch-2/离散数学/2015—2016学年第一学期离散数学期末试卷B卷.md"
        }
       ],
       "实验": [
        {
         "title": "2017—2018 学年第一学期《离散数学》实验二：集合上二元关系性质判定的实现（实验报告）",
-        "id": "questions/materials/batch-2/离散数学/2017—2018-学年第一学期离散数学实验二：集合上二元关系性质判定的实现实验报告.md"
+        "id": "sections/materials/batch-2/离散数学/2017—2018-学年第一学期离散数学实验二：集合上二元关系性质判定的实现实验报告.md"
        },
        {
         "title": "《离散数学》实验三：偏序关系中盖住关系的求取及格论中有补格的判定（实验报告）",
-        "id": "questions/materials/batch-2/离散数学/离散数学实验三：偏序关系中盖住关系的求取及格论中有补格的判定实验报告.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学实验三：偏序关系中盖住关系的求取及格论中有补格的判定实验报告.md"
        }
       ],
       "答案": [
        {
         "title": "《离散数学》习题解答（详细）",
-        "id": "questions/materials/batch-2/离散数学/离散数学习题解答详细.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学习题解答详细.md"
        }
       ],
       "复习要点": [
        {
         "title": "《离散数学》期末复习提纲",
-        "id": "questions/materials/batch-2/离散数学/离散数学期末复习提纲.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学期末复习提纲.md"
        },
        {
         "title": "《离散数学》考试复习指南（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学考试复习指南课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学考试复习指南课件.md"
        }
       ],
       "课件": [
        {
         "title": "《离散数学》第1章（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第1章课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第1章课件.md"
        },
        {
         "title": "《离散数学》第2章 谓词逻辑（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第2章-谓词逻辑课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第2章-谓词逻辑课件.md"
        },
        {
         "title": "《离散数学》第3章 集合与关系（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第3章-集合与关系课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第3章-集合与关系课件.md"
        },
        {
         "title": "《离散数学》第5章 代数结构（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第5章-代数结构课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第5章-代数结构课件.md"
        },
        {
         "title": "《离散数学》第6章 格与布尔代数（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第6章-格与布尔代数课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第6章-格与布尔代数课件.md"
        },
        {
         "title": "《离散数学》第7章 图论（课件）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第7章-图论课件.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第7章-图论课件.md"
        },
        {
         "title": "《离散数学》第一章 命题逻辑（各章典型习题）",
-        "id": "questions/materials/batch-2/离散数学/离散数学第一章-命题逻辑各章典型习题.md"
+        "id": "sections/materials/batch-2/离散数学/离散数学第一章-命题逻辑各章典型习题.md"
        }
       ]
      },
@@ -4103,1308 +4103,13 @@
     "major": "计算机科学与技术",
     "grade": null,
     "said": {
-     "found": true,
+     "found": false,
      "major": "计算机科学与技术",
-     "terms": [
-      {
-       "term": 1,
-       "credits": 42,
-       "courses": [
-        {
-         "name": "红色校史专题课",
-         "code": "JG0001T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学生心理健康",
-         "code": "JK1003T0C",
-         "credits": 1.5,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "高级语言程序设计",
-         "code": "JS100101S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "计算机科学与技术专业导论",
-         "code": "JS140100C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "专业基础课"
-        },
-        {
-         "name": "高等数学A（Ⅰ）上",
-         "code": "LX1001F6S",
-         "credits": 6,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "线性代数与解析几何",
-         "code": "LX1021F6S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "思想道德与法治",
-         "code": "MY1003T0S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "中国近现代史纲要",
-         "code": "MY1004T0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "形势与政策I",
-         "code": "MY1005T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "“思想道德与法治”实践",
-         "code": "MY1009T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "党史",
-         "code": "MY1015T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "新中国史",
-         "code": "MY1016T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "改革开放史",
-         "code": "MY1017T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "社会主义发展史",
-         "code": "MY1018T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "军训",
-         "code": "RW1002T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "中国文化概论",
-         "code": "SR1001T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "体育Ⅰ",
-         "code": "TY0001T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语Ⅰ",
-         "code": "WY1001T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语Ⅱ",
-         "code": "WY1002T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语III",
-         "code": "WY1003T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语I",
-         "code": "WY1011T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语II",
-         "code": "WY1012T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        }
-       ]
-      },
-      {
-       "term": 2,
-       "credits": 58.5,
-       "courses": [
-        {
-         "name": "计算机应用基础能力考核",
-         "code": "GC0002K0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "电装实习",
-         "code": "GC1001F6C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "至信大讲堂",
-         "code": "JG1002T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学生心理健康实践",
-         "code": "JG1003T0C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "面向对象程序设计及C++",
-         "code": "JS100201S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "离散数学",
-         "code": "JS140101S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "线性代数与解析几何"
-         ]
-        },
-        {
-         "name": "计算机系统基础（混合式）",
-         "code": "JS141001S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "数字电路与逻辑设计B"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "计算机问题求解：使用C++语言",
-         "code": "JS151201S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "程序设计（上机）",
-         "code": "JS1947X0C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "高等数学A（Ⅰ）下",
-         "code": "LX1002F6S",
-         "credits": 6,
-         "nature": "必修",
-         "category": "通识教育课",
-         "requires": [
-          "高等数学A（Ⅰ）上"
-         ]
-        },
-        {
-         "name": "数学实验B",
-         "code": "LX1034F6C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "大学物理(上)",
-         "code": "LX1041F6S",
-         "credits": 4,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "物理实验 （上）",
-         "code": "LX1047F6S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "思想道德与法治",
-         "code": "MY1003T0S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "中国近现代史纲要",
-         "code": "MY1004T0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "形势与政策II",
-         "code": "MY1006T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "“思想道德与法治”实践",
-         "code": "MY1009T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "党史",
-         "code": "MY1015T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "新中国史",
-         "code": "MY1016T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "改革开放史",
-         "code": "MY1017T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "社会主义发展史",
-         "code": "MY1018T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "军事理论",
-         "code": "RW1001T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "国家安全教育和军事理论",
-         "code": "RW1003T0C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "应用文写作",
-         "code": "SR1003T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "写作与沟通",
-         "code": "SR1004T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "劳动教育",
-         "code": "TW0001T0C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "劳动教育",
-         "code": "TW0001T1C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "体育 II",
-         "code": "TY0002T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语Ⅱ",
-         "code": "WY1002T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语III",
-         "code": "WY1003T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语IV",
-         "code": "WY1004T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语II",
-         "code": "WY1012T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语III",
-         "code": "WY1013T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "职业生涯发展与规划",
-         "code": "ZJ1002T0C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "通识教育课"
-        }
-       ]
-      },
-      {
-       "term": 3,
-       "credits": 52,
-       "courses": [
-        {
-         "name": "电路分析基础C",
-         "code": "DG1005X7S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高等数学A（Ⅰ）下",
-          "大学物理(上)"
-         ]
-        },
-        {
-         "name": "数字电路与逻辑设计B",
-         "code": "DG1011X0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "电路分析基础C",
-          "离散数学"
-         ]
-        },
-        {
-         "name": "电装实习",
-         "code": "GC1001F6C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "金工实习",
-         "code": "GC1003X0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "创新与创业管理B",
-         "code": "GL1001T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创新与创业管理B（在线）",
-         "code": "GL1002T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "现代管理科学基础",
-         "code": "GL1003T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创业与投融资",
-         "code": "JJ1203JSC",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "离散数学",
-         "code": "JS140101S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "线性代数与解析几何"
-         ]
-        },
-        {
-         "name": "数据结构（混合式）",
-         "code": "JS140201S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "离散数学"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "Python程序设计（混合式）",
-         "code": "JS170101S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "程序设计（上机）",
-         "code": "JS1947X0C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "线性代数与解析几何",
-         "code": "LX1021F6S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "数学实验B",
-         "code": "LX1034F6C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "大学物理（下）",
-         "code": "LX1042F6S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课",
-         "requires": [
-          "大学物理(上)",
-          "高等数学A（Ⅰ）上"
-         ]
-        },
-        {
-         "name": "物理实验 （下）",
-         "code": "LX1048F4S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课",
-         "requires": [
-          "物理实验 （上）"
-         ]
-        },
-        {
-         "name": "马克思主义基本原理",
-         "code": "MY1001T0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "形势与政策III",
-         "code": "MY1007T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "中国文化概论",
-         "code": "SR1001T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "应用文写作",
-         "code": "SR1003T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "写作与沟通",
-         "code": "SR1004T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "体育 III",
-         "code": "TY0003T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语III",
-         "code": "WY1003T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语IV",
-         "code": "WY1004T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语III",
-         "code": "WY1013T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语IV",
-         "code": "WY1014T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        }
-       ]
-      },
-      {
-       "term": 4,
-       "credits": 45,
-       "courses": [
-        {
-         "name": "数字电路与逻辑设计B",
-         "code": "DG1011X0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "电路分析基础C",
-          "离散数学"
-         ]
-        },
-        {
-         "name": "创新与创业管理B",
-         "code": "GL1001T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创新与创业管理B（在线）",
-         "code": "GL1002T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "现代管理科学基础",
-         "code": "GL1003T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "编译原理",
-         "code": "JS111401S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "算法分析与设计",
-         "code": "JS113400S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学"
-         ]
-        },
-        {
-         "name": "操作系统基础（混合式）",
-         "code": "JS140301S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "计算机系统基础Ⅰ（混合式）",
-         "code": "JS140401S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "数字电路与逻辑设计B"
-         ]
-        },
-        {
-         "name": "计算机系统基础（混合式）",
-         "code": "JS141001S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "数字电路与逻辑设计B"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "Python程序设计（混合式）",
-         "code": "JS170101S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "人工智能导论及其Python应用实践",
-         "code": "JS170201S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课",
-         "requires": [
-          "Python程序设计（混合式）",
-          "线性代数与解析几何",
-          "概率论与数理统计"
-         ]
-        },
-        {
-         "name": "认识实习",
-         "code": "JS192101C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "概率论与数理统计",
-         "code": "LX1032F4S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课",
-         "requires": [
-          "高等数学A（Ⅰ）上",
-          "高等数学A（Ⅰ）下",
-          "线性代数与解析几何"
-         ]
-        },
-        {
-         "name": "数学建模",
-         "code": "LX1117JSC",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "高等数学A（Ⅰ）下",
-          "线性代数与解析几何",
-          "概率论与数理统计"
-         ]
-        },
-        {
-         "name": "形势与政策IV",
-         "code": "MY1008T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "中国文化概论",
-         "code": "SR1001T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "电工电子基础实验B",
-         "code": "SY1002F6S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "电路分析基础C",
-          "数字电路与逻辑设计B"
-         ]
-        },
-        {
-         "name": "体育 IV",
-         "code": "TY0004T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语IV",
-         "code": "WY1004T0S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "大学英语IV",
-         "code": "WY1014T0S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        }
-       ]
-      },
-      {
-       "term": 5,
-       "credits": 41.5,
-       "courses": [
-        {
-         "name": "云计算",
-         "code": "JS102K03C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课"
-        },
-        {
-         "name": "编译原理",
-         "code": "JS111401S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "Web技术（双语）",
-         "code": "JS112300S",
-         "credits": 2.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "Java软件开发（混合式）",
-          "计算机通信与网络（混合式）"
-         ]
-        },
-        {
-         "name": "计算机图形学（全英文）",
-         "code": "JS113102C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "线性代数与解析几何",
-          "数据结构（混合式）"
-         ]
-        },
-        {
-         "name": "Linux编程",
-         "code": "JS113701S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "操作系统基础（混合式）"
-         ]
-        },
-        {
-         "name": "信息安全技术",
-         "code": "JS114201S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课",
-         "requires": [
-          "计算机通信与网络（混合式）"
-         ]
-        },
-        {
-         "name": "单片机原理及系统设计",
-         "code": "JS115301C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "数字电路与逻辑设计B",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "嵌入式手机终端开发技术",
-         "code": "JS116K01C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课"
-        },
-        {
-         "name": "操作系统基础（混合式）",
-         "code": "JS140301S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "计算机系统基础Ⅱ（混合式）",
-         "code": "JS140501S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "计算机组成原理（混合式）",
-         "code": "JS140801S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数字电路与逻辑设计B",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "计算机通信与网络（混合式）",
-         "code": "JS160201S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "操作系统基础（混合式）"
-         ]
-        },
-        {
-         "name": "算法与数据结构设计",
-         "code": "JS194901C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "毛泽东思想和中国特色社会主义理论体系概论",
-         "code": "MY1002T0S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "“毛泽东思想和中国特色社会主义理论体系概论”实践",
-         "code": "MY1010T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "形势与政策实践Ⅰ",
-         "code": "MY1011T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "习近平新时代中国特色社会主义思想概论",
-         "code": "MY1021T0S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "习近平新时代中国特色社会主义思想概论”实践",
-         "code": "MY1022T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "就业指导",
-         "code": "ZJ1001T0C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "通识教育课"
-        }
-       ]
-      },
-      {
-       "term": 6,
-       "credits": 41,
-       "courses": [
-        {
-         "name": "创新与创业管理B",
-         "code": "GL1001T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创新与创业管理B（在线）",
-         "code": "GL1002T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "公司人力资源管理",
-         "code": "GL1902T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课"
-        },
-        {
-         "name": "创业与投融资",
-         "code": "JJ1203JSC",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "计算机视觉基础",
-         "code": "JS101801S",
-         "credits": 3,
-         "nature": "限选",
-         "category": "专业课",
-         "requires": [
-          "机器学习基础（双语）",
-          "线性代数与解析几何"
-         ]
-        },
-        {
-         "name": "移动应用开发技术",
-         "code": "JS102K02C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课"
-        },
-        {
-         "name": "职业开发训练",
-         "code": "JS102K04C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课"
-        },
-        {
-         "name": "软件工程（双语）",
-         "code": "JS111001S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业课",
-         "requires": [
-          "数据结构（混合式）",
-          "数据库系统"
-         ]
-        },
-        {
-         "name": "数据库系统",
-         "code": "JS111104S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学"
-         ]
-        },
-        {
-         "name": "编译原理",
-         "code": "JS111401S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "TCP/IP网络设计与实现（双语）",
-         "code": "JS111602C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "计算机通信与网络（混合式）"
-         ]
-        },
-        {
-         "name": "人工智能导论",
-         "code": "JS114101C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课",
-         "requires": [
-          "数据结构（混合式）",
-          "概率论与数理统计"
-         ]
-        },
-        {
-         "name": "嵌入式系统与开发",
-         "code": "JS121601C",
-         "credits": 3,
-         "nature": "限选",
-         "category": "专业课",
-         "requires": [
-          "操作系统基础（混合式）",
-          "单片机原理及系统设计"
-         ]
-        },
-        {
-         "name": "物联网技术",
-         "code": "JS130101C",
-         "credits": 1.5,
-         "nature": "限选",
-         "category": "专业课"
-        },
-        {
-         "name": "操作系统设计与实现",
-         "code": "JS140601S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业课",
-         "requires": [
-          "操作系统基础（混合式）",
-          "计算机系统基础Ⅱ（混合式）"
-         ]
-        },
-        {
-         "name": "Python程序设计（混合式）",
-         "code": "JS170101S",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
-        },
-        {
-         "name": "模式识别与机器学习",
-         "code": "JS170401C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业基础课",
-         "requires": [
-          "线性代数与解析几何",
-          "概率论与数理统计",
-          "Python程序设计（混合式）"
-         ]
-        },
-        {
-         "name": "专业课程设计I",
-         "code": "JS194101C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "形势与政策实践II",
-         "code": "MY1012T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "集中实践环节"
-        }
-       ]
-      },
-      {
-       "term": 7,
-       "credits": 4.5,
-       "courses": [
-        {
-         "name": "工程管理与经济决策",
-         "code": "DG1001T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "计算机专业英文写作（全英文）",
-         "code": "JS103202C",
-         "credits": 0.5,
-         "nature": "必修",
-         "category": "专业基础课"
-        },
-        {
-         "name": "专业课程设计Ⅱ",
-         "code": "JS194201C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "形势与政策实践III",
-         "code": "MY1013T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "工程与社会",
-         "code": "SR1002T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        }
-       ]
-      },
-      {
-       "term": 8,
-       "credits": 23.5,
-       "courses": [
-        {
-         "name": "生产实习",
-         "code": "JS193102C",
-         "credits": 1.5,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "毕业设计（论文）",
-         "code": "JS196101S",
-         "credits": 14,
-         "nature": "必修",
-         "category": "集中实践环节"
-        },
-        {
-         "name": "自主学习",
-         "code": "JW1001T0C",
-         "credits": 8,
-         "nature": "必修",
-         "category": ""
-        },
-        {
-         "name": "形势与政策实践IV",
-         "code": "MY1014T0C",
-         "credits": 0,
-         "nature": "必修",
-         "category": "集中实践环节"
-        }
-       ]
-      }
+     "grades": [
+      "2023",
+      "2024",
+      "2025",
+      "2026"
      ]
     }
    },
@@ -5418,7 +4123,7 @@
      "terms": [
       {
        "term": 1,
-       "credits": 38,
+       "credits": 31,
        "courses": [
         {
          "name": "红色校史专题课",
@@ -5456,20 +4161,6 @@
          "category": "通识教育课"
         },
         {
-         "name": "线性代数与解析几何",
-         "code": "LX1021F6S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "思想道德与法治",
-         "code": "MY1003T0S",
-         "credits": 2,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
          "name": "中国近现代史纲要",
          "code": "MY1004T0S",
          "credits": 3,
@@ -5482,13 +4173,6 @@
          "credits": 0,
          "nature": "必修",
          "category": "通识教育课"
-        },
-        {
-         "name": "“思想道德与法治”实践",
-         "code": "MY1009T0C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
         },
         {
          "name": "党史",
@@ -5526,13 +4210,6 @@
          "category": "集中实践环节"
         },
         {
-         "name": "中国文化概论",
-         "code": "SR1001T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
          "name": "体育Ⅰ",
          "code": "TY0001T0C",
          "credits": 1,
@@ -5564,7 +4241,7 @@
       },
       {
        "term": 2,
-       "credits": 46,
+       "credits": 32.5,
        "courses": [
         {
          "name": "计算机应用基础能力考核",
@@ -5572,13 +4249,6 @@
          "credits": 0,
          "nature": "必修",
          "category": "通识教育课"
-        },
-        {
-         "name": "电装实习",
-         "code": "GC1001F6C",
-         "credits": 1,
-         "nature": "必修",
-         "category": "集中实践环节"
         },
         {
          "name": "至信大讲堂",
@@ -5593,27 +4263,6 @@
          "credits": 0.5,
          "nature": "必修",
          "category": "集中实践环节"
-        },
-        {
-         "name": "离散数学",
-         "code": "JS140101S",
-         "credits": 3.5,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计",
-          "线性代数与解析几何"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
-         ]
         },
         {
          "name": "计算机问题求解：使用C++语言",
@@ -5664,13 +4313,6 @@
          "category": "通识教育课"
         },
         {
-         "name": "中国近现代史纲要",
-         "code": "MY1004T0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
          "name": "形势与政策II",
          "code": "MY1006T0C",
          "credits": 0,
@@ -5683,34 +4325,6 @@
          "credits": 1,
          "nature": "必修",
          "category": "集中实践环节"
-        },
-        {
-         "name": "党史",
-         "code": "MY1015T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "新中国史",
-         "code": "MY1016T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "改革开放史",
-         "code": "MY1017T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "社会主义发展史",
-         "code": "MY1018T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
         },
         {
          "name": "国家安全教育和军事理论",
@@ -5772,7 +4386,7 @@
       },
       {
        "term": 3,
-       "credits": 42,
+       "credits": 30,
        "courses": [
         {
          "name": "数字电路与逻辑设计B",
@@ -5791,34 +4405,6 @@
          "credits": 1,
          "nature": "必修",
          "category": "集中实践环节"
-        },
-        {
-         "name": "创新与创业管理B",
-         "code": "GL1001T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创新与创业管理B（在线）",
-         "code": "GL1002T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "现代管理科学基础",
-         "code": "GL1003T0C",
-         "credits": 1,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创业与投融资",
-         "code": "JJ1203JSC",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
         },
         {
          "name": "离散数学",
@@ -5860,18 +4446,6 @@
          "category": "通识教育课"
         },
         {
-         "name": "概率论与数理统计",
-         "code": "LX1032F6S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "通识教育课",
-         "requires": [
-          "高等数学A（Ⅰ）上",
-          "高等数学A（Ⅰ）下",
-          "线性代数与解析几何"
-         ]
-        },
-        {
          "name": "大学物理（下）",
          "code": "LX1042F6S",
          "credits": 3,
@@ -5907,20 +4481,6 @@
          "category": "通识教育课"
         },
         {
-         "name": "中国文化概论",
-         "code": "SR1001T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
-         "name": "写作与沟通",
-         "code": "SR1004T0S",
-         "credits": 1,
-         "nature": "必修",
-         "category": "通识教育课"
-        },
-        {
          "name": "体育 III",
          "code": "TY0003T0C",
          "credits": 1,
@@ -5945,58 +4505,14 @@
       },
       {
        "term": 4,
-       "credits": 39.5,
+       "credits": 25.5,
        "courses": [
-        {
-         "name": "数字电路与逻辑设计B",
-         "code": "DG1011X0S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "电路分析基础C",
-          "离散数学"
-         ]
-        },
-        {
-         "name": "创新与创业管理B",
-         "code": "GL1001T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
-        {
-         "name": "创新与创业管理B（在线）",
-         "code": "GL1002T0C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "通识教育课"
-        },
         {
          "name": "现代管理科学基础",
          "code": "GL1003T0C",
          "credits": 1,
          "nature": "限选",
          "category": "通识教育课"
-        },
-        {
-         "name": "编译原理",
-         "code": "JS111401S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "Windows应用开发（双语）",
-         "code": "JS123601C",
-         "credits": 2,
-         "nature": "限选",
-         "category": "专业课"
         },
         {
          "name": "操作系统基础（混合式）",
@@ -6018,16 +4534,6 @@
          "requires": [
           "高级语言程序设计",
           "数字电路与逻辑设计B"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
          ]
         },
         {
@@ -6088,7 +4594,7 @@
          "code": "LX1117JSC",
          "credits": 2,
          "nature": "限选",
-         "category": "专业基础课",
+         "category": "专业课",
          "requires": [
           "高等数学A（Ⅰ）下",
           "线性代数与解析几何",
@@ -6106,7 +4612,7 @@
          "name": "中国文化概论",
          "code": "SR1001T0S",
          "credits": 1,
-         "nature": "必修",
+         "nature": "限选",
          "category": "通识教育课"
         },
         {
@@ -6127,13 +4633,13 @@
       },
       {
        "term": 5,
-       "credits": 36.5,
+       "credits": 31.5,
        "courses": [
         {
          "name": "编译原理",
          "code": "JS111401S",
          "credits": 3,
-         "nature": "必修",
+         "nature": "限选",
          "category": "专业基础课",
          "requires": [
           "数据结构（混合式）",
@@ -6180,17 +4686,6 @@
          "category": "专业课"
         },
         {
-         "name": "操作系统基础（混合式）",
-         "code": "JS140301S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
          "name": "计算机组成原理（混合式）",
          "code": "JS140801S",
          "credits": 3.5,
@@ -6199,16 +4694,6 @@
          "requires": [
           "数字电路与逻辑设计B",
           "计算机系统基础Ⅰ（混合式）"
-         ]
-        },
-        {
-         "name": "Java软件开发（混合式）",
-         "code": "JS150301C",
-         "credits": 2,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "高级语言程序设计"
          ]
         },
         {
@@ -6297,7 +4782,7 @@
       },
       {
        "term": 6,
-       "credits": 36.5,
+       "credits": 33.5,
        "courses": [
         {
          "name": "创新与创业管理B",
@@ -6329,18 +4814,6 @@
          "requires": [
           "机器学习基础（双语）",
           "线性代数与解析几何"
-         ]
-        },
-        {
-         "name": "编译原理",
-         "code": "JS111401S",
-         "credits": 3,
-         "nature": "必修",
-         "category": "专业基础课",
-         "requires": [
-          "数据结构（混合式）",
-          "离散数学",
-          "计算机系统基础Ⅰ（混合式）"
          ]
         },
         {
@@ -6409,7 +4882,7 @@
          "code": "JS151001S",
          "credits": 2,
          "nature": "必修",
-         "category": "专业基础课",
+         "category": "专业课",
          "requires": [
           "软件工程原理与实践"
          ]
@@ -6544,10 +5017,10 @@
     "said": {
      "found": false,
      "majors": [
-      "信息安全",
       "计算机科学与技术",
-      "计算机科学与技术(创新班)",
-      "软件工程"
+      "信息安全",
+      "软件工程",
+      "计算机科学与技术(创新班)"
      ]
     }
    }
@@ -51042,7 +49515,7 @@
      "type": "function",
      "function": {
       "name": "search",
-      "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点/真题。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
+      "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点和资料。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
       "parameters": {
        "type": "object",
        "properties": {
@@ -51061,7 +49534,7 @@
           "考试资料",
           "社区"
          ],
-         "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与历年真题；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
+         "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与关联资料；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
         }
        },
        "required": [
@@ -51075,13 +49548,19 @@
      "type": "function",
      "function": {
       "name": "read",
-      "description": "读 search 找到的一条的原文：文章（通知、政策等，带原文链接和附件）、知识点（讲解、先要懂和接着学的知识点、考过它的题）、题目（题目和解答）。太长时只给前面一段。课程上课时间用 schedule，地点用 find_place。",
+      "description": "读 search 或 course 给出的原文 id：文章、知识点、资料章节或整份资料。长文返回 next；继续阅读时把 next 作为 offset，直到没有 next。课程上课时间用 schedule，地点用 find_place。",
       "parameters": {
        "type": "object",
        "properties": {
         "id": {
          "type": "string",
          "description": "search 结果里的 id"
+        },
+        "offset": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 2147483647,
+         "description": "继续阅读的位置，使用上次返回的 next；首次省略。"
         }
        },
        "required": [
@@ -51503,7 +49982,7 @@
        "type": "function",
        "function": {
         "name": "search",
-        "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点/真题。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
+        "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点和资料。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
         "parameters": {
          "type": "object",
          "properties": {
@@ -51522,7 +50001,7 @@
             "考试资料",
             "社区"
            ],
-           "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与历年真题；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
+           "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与关联资料；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
           }
          },
          "required": [
@@ -51536,13 +50015,19 @@
        "type": "function",
        "function": {
         "name": "read",
-        "description": "读 search 找到的一条的原文：文章（通知、政策等，带原文链接和附件）、知识点（讲解、先要懂和接着学的知识点、考过它的题）、题目（题目和解答）。太长时只给前面一段。课程上课时间用 schedule，地点用 find_place。",
+        "description": "读 search 或 course 给出的原文 id：文章、知识点、资料章节或整份资料。长文返回 next；继续阅读时把 next 作为 offset，直到没有 next。课程上课时间用 schedule，地点用 find_place。",
         "parameters": {
          "type": "object",
          "properties": {
           "id": {
            "type": "string",
            "description": "search 结果里的 id"
+          },
+          "offset": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 2147483647,
+           "description": "继续阅读的位置，使用上次返回的 next；首次省略。"
           }
          },
          "required": [
@@ -51963,7 +50448,7 @@
        "type": "function",
        "function": {
         "name": "search",
-        "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点/真题。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
+        "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点和资料。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
         "parameters": {
          "type": "object",
          "properties": {
@@ -51982,7 +50467,7 @@
             "考试资料",
             "社区"
            ],
-           "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与历年真题；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
+           "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与关联资料；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
           }
          },
          "required": [
@@ -51996,13 +50481,19 @@
        "type": "function",
        "function": {
         "name": "read",
-        "description": "读 search 找到的一条的原文：文章（通知、政策等，带原文链接和附件）、知识点（讲解、先要懂和接着学的知识点、考过它的题）、题目（题目和解答）。太长时只给前面一段。课程上课时间用 schedule，地点用 find_place。",
+        "description": "读 search 或 course 给出的原文 id：文章、知识点、资料章节或整份资料。长文返回 next；继续阅读时把 next 作为 offset，直到没有 next。课程上课时间用 schedule，地点用 find_place。",
         "parameters": {
          "type": "object",
          "properties": {
           "id": {
            "type": "string",
            "description": "search 结果里的 id"
+          },
+          "offset": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 2147483647,
+           "description": "继续阅读的位置，使用上次返回的 next；首次省略。"
           }
          },
          "required": [
@@ -52423,7 +50914,7 @@
        "type": "function",
        "function": {
         "name": "search",
-        "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点/真题。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
+        "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点和资料。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
         "parameters": {
          "type": "object",
          "properties": {
@@ -52442,7 +50933,7 @@
             "考试资料",
             "社区"
            ],
-           "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与历年真题；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
+           "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与关联资料；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
           }
          },
          "required": [
@@ -52456,13 +50947,19 @@
        "type": "function",
        "function": {
         "name": "read",
-        "description": "读 search 找到的一条的原文：文章（通知、政策等，带原文链接和附件）、知识点（讲解、先要懂和接着学的知识点、考过它的题）、题目（题目和解答）。太长时只给前面一段。课程上课时间用 schedule，地点用 find_place。",
+        "description": "读 search 或 course 给出的原文 id：文章、知识点、资料章节或整份资料。长文返回 next；继续阅读时把 next 作为 offset，直到没有 next。课程上课时间用 schedule，地点用 find_place。",
         "parameters": {
          "type": "object",
          "properties": {
           "id": {
            "type": "string",
            "description": "search 结果里的 id"
+          },
+          "offset": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 2147483647,
+           "description": "继续阅读的位置，使用上次返回的 next；首次省略。"
           }
          },
          "required": [
@@ -52889,7 +51386,7 @@
     "type": "function",
     "function": {
      "name": "search",
-     "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点/真题。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
+     "description": "搜索校园资料：通知、政策、办事流程、下载、考试信息、新闻，也能搜课程、老师、班级、教室、地点和课程知识点和资料。返回标题、来源、日期、摘要和 id；要具体内容时用 read 读原文。",
      "parameters": {
       "type": "object",
       "properties": {
@@ -52908,7 +51405,7 @@
          "考试资料",
          "社区"
         ],
-        "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与历年真题；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
+        "description": "在哪找：通知含政策、办事、下载和新闻；教务是课程、老师、班级和考试安排；知识是课程知识点讲解与关联资料；考试资料是往年试题；社区是学长学姐写的经验。默认全部。"
        }
       },
       "required": [
@@ -52922,13 +51419,19 @@
     "type": "function",
     "function": {
      "name": "read",
-     "description": "读 search 找到的一条的原文：文章（通知、政策等，带原文链接和附件）、知识点（讲解、先要懂和接着学的知识点、考过它的题）、题目（题目和解答）。太长时只给前面一段。课程上课时间用 schedule，地点用 find_place。",
+     "description": "读 search 或 course 给出的原文 id：文章、知识点、资料章节或整份资料。长文返回 next；继续阅读时把 next 作为 offset，直到没有 next。课程上课时间用 schedule，地点用 find_place。",
      "parameters": {
       "type": "object",
       "properties": {
        "id": {
         "type": "string",
         "description": "search 结果里的 id"
+       },
+       "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 2147483647,
+        "description": "继续阅读的位置，使用上次返回的 next；首次省略。"
        }
       },
       "required": [
@@ -90482,7 +88985,7 @@
   }
  ],
  "source": {
-  "release": "map-v0.9.1__20261116-0347__k20261116-0617__p10",
+  "release": "map-v0.9.1__20261116-1051__k20261116-1226__app3.3.0",
   "teaching": "2026-2027-1"
  },
  "term": {

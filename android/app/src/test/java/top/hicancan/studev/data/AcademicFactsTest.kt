@@ -33,6 +33,8 @@ class AcademicFactsTest {
         }
         assertEquals(release, AcademicRepository.releaseFromManifest(JsonObject(manifest).toString()))
         assertNull(AcademicRepository.releaseFromManifest("{}"))
+        val differentApp = release.copy(version = release.version + "__app0.0.0", base = release.base + "__app0.0.0")
+        assertNull(AcademicRepository.releaseFromManifest(Json.encodeToString(differentApp)))
         manifest["base"] = JsonPrimitive("https://other.invalid/data")
         assertNull(AcademicRepository.releaseFromManifest(JsonObject(manifest).toString()))
     }
@@ -43,7 +45,8 @@ class AcademicFactsTest {
             .map { Json.decodeFromJsonElement<CoursePlan>(it) }
         assertTrue(plans.isNotEmpty())
         assertTrue(plans.filter { it.source?.startsWith("teaching/") == true }.all { it.teaching_class_ids.isNotEmpty() })
-        assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() || it.colleges.isNotEmpty() })
+        assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() || it.plans.isNotEmpty() })
+        assertTrue(plans.any { plan -> plan.plans.any { it["college"]?.jsonPrimitive?.content == "计算机学院" && it["grade"]?.jsonPrimitive?.content == "2025" } })
     }
     @Test fun theReleaseManifestNamesTheCurrentApp() {
         val app = appInManifest("""{"version":"v","base":"/data/v","android":{"versionName":"2.3.5","versionCode":29},"core":[]}""")

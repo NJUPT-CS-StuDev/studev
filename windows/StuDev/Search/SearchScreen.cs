@@ -18,7 +18,7 @@ public sealed partial class SearchScreen : Screen
 {
     private const int PageSize = 10;
     private static readonly List<Channel> Channels = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), StorageJson.Default.ListChannel)!;
-    private static readonly HashSet<string> Entities = ["courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "questions"];
+    private static readonly HashSet<string> Entities = ["courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "sections"];
     private static readonly (string Value, string Label)[] Since = [("", "全部时间"), ("3", "近三天"), ("7", "近一周"), ("30", "近一月"), ("365", "近一年")];
     private static readonly string[] Campuses = ["仙林", "三牌楼", "锁金"];
     private readonly Campus campus = Campus.Shared;
@@ -26,12 +26,13 @@ public sealed partial class SearchScreen : Screen
     private readonly StackPanel body = new();
     private readonly StackPanel chips = new();
     private NativeSearch? search;
+    private Repository? searchRepository;
     private Channel channel = Channels[0];
     private string since = "";
     private int page = 1;
     private CancellationTokenSource? running;
     private (List<JsonObject> Results, int Total, double Seconds)? answer;
-    private bool failed;
+    private string? failure;
     private Moment? roomsAt;
     private string roomsCampus = Campuses[0];
     private string? roomsBuilding;
@@ -54,7 +55,7 @@ public sealed partial class SearchScreen : Screen
         Children.Add(Pages.Frame(column, 680));
         box.Loaded += (_, _) => box.Focus(FocusState.Programmatic);
         Paint.Turned += Draw;
-        campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (search is null && campus.Repository is not null) Draw(); });
+        campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (!ReferenceEquals(searchRepository, campus.Repository)) Run(); });
         _ = campus.Load();
         Draw();
     }
@@ -65,7 +66,7 @@ public sealed partial class SearchScreen : Screen
         else if (argument is ValueTuple<string, string> { Item1: "query" } query) { box.Text = query.Item2; }
         else if (argument is ValueTuple<string, string> { Item1: "channel" } scope && Channels.FirstOrDefault(c => c.Id == scope.Item2) is { } chosen) { channel = chosen; page = 1; Run(); Draw(); }
         // Opened with nothing typed, it shows what is newest, as the web and Android do.
-        else if (answer is null && !failed) Run();
+        else if (answer is null && failure is null) Run();
         DispatcherQueue.TryEnqueue(() => box.Focus(FocusState.Programmatic));
     }
 
@@ -87,12 +88,20 @@ public sealed partial class SearchScreen : Screen
     private async void Run()
     {
         running?.Cancel();
+        if (!ReferenceEquals(searchRepository, campus.Repository))
+        {
+            search?.Dispose(); search = null;
+            searchRepository = campus.Repository;
+            roomIndex = null; reader = null; roomDays.Clear(); roomFailure = null;
+        }
         var query = box.Text.Trim();
         if (query.Length == 1 || Live || campus.Repository is null) { answer = null; Draw(); return; }
         search ??= new NativeSearch(campus.Repository);
         var cancel = (running = new CancellationTokenSource()).Token;
         var started = System.Diagnostics.Stopwatch.StartNew();
-        failed = false;
+        failure = null;
+        answer = null;
+        Draw();
         try
         {
             await Task.Delay(120, cancel);
@@ -103,7 +112,18 @@ public sealed partial class SearchScreen : Screen
             answer = (done.Results, done.Total, answer?.Seconds ?? started.Elapsed.TotalSeconds);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested) { return; }
-        catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException or System.Text.Json.JsonException) { failed = true; }
+        catch (Exception error) when (error is InvalidDataException or System.Text.Json.JsonException or Kernels.Search.SearchException)
+        {
+            if (cancel.IsCancellationRequested) return;
+            answer = null;
+            failure = "搜索数据有误，暂时无法显示结果";
+        }
+        catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
+        {
+            if (cancel.IsCancellationRequested) return;
+            answer = null;
+            failure = "搜索需要联网，请稍后重试";
+        }
         Draw();
     }
 
@@ -131,9 +151,9 @@ public sealed partial class SearchScreen : Screen
         }
         if (page == 1 && System.Text.RegularExpressions.Regex.IsMatch(query, "空教室|自习"))
             body.Children.Add(Kit.Row("", Kit.Column(1, Kit.Text("看此刻的空教室", Role.Body, bold: true), Kit.Text("按楼和楼层，还能待多久", Role.Caption, "muted")), () => { channel = Channels.First(c => c.Id == "room"); box.Text = ""; }));
-        if (failed) body.Children.Add(Pages.Empty("搜索暂时出了问题，请稍后重试。"));
+        if (failure is not null) body.Children.Add(Pages.Empty(failure));
         foreach (var result in answer?.Results ?? []) body.Children.Add(Result(result));
-        if (answer is { Total: 0 } && !failed) body.Children.Add(Pages.Empty(query.Length == 0 ? "这段时间没有内容" : $"没有找到“{query}”{(channel.Id != "all" ? "，换到“全部”试试" : "")}"));
+        if (answer is { Total: 0 } && failure is null) body.Children.Add(Pages.Empty(query.Length == 0 ? "这段时间没有内容" : $"没有找到“{query}”{(channel.Id != "all" ? "，换到“全部”试试" : "")}"));
         if (answer is { Total: > PageSize } paged)
         {
             var last = (paged.Total + PageSize - 1) / PageSize;
@@ -253,17 +273,24 @@ public sealed partial class SearchScreen : Screen
     }
 
     private bool loadingRooms;
+    private string? roomFailure;
     private async void LoadRooms(DateOnly date)
     {
-        if (loadingRooms || campus.Repository is not { } repo || campus.Term is not { } term) return;
+        if (loadingRooms || roomFailure is not null || campus.Repository is not { } repo) return;
         loadingRooms = true;
         try
         {
-            roomIndex ??= await repo.Rooms();
-            reader ??= new Rooms(campus.Periods);
-            if (!roomDays.ContainsKey(Clock.Text(date))) roomDays[Clock.Text(date)] = await repo.RoomDay(roomIndex.Term, Clock.Text(date));
+            var index = roomIndex ?? await repo.Rooms();
+            var day = roomDays.GetValueOrDefault(Clock.Text(date));
+            if (!roomDays.ContainsKey(Clock.Text(date))) day = await repo.RoomDay(index.Term, Clock.Text(date));
+            if (ReferenceEquals(repo, campus.Repository))
+            {
+                roomIndex = index; reader ??= new Rooms(campus.Periods);
+                roomDays[Clock.Text(date)] = day;
+            }
         }
-        catch (Exception error) when (error is HttpRequestException or IOException or System.Text.Json.JsonException) { failed = true; }
+        catch (Exception error) when (error is HttpRequestException or IOException or System.Text.Json.JsonException)
+        { if (ReferenceEquals(repo, campus.Repository)) roomFailure = "教室数据暂时无法读取，请联网后重试"; }
         finally { loadingRooms = false; }
         Draw();
     }
@@ -273,7 +300,16 @@ public sealed partial class SearchScreen : Screen
     {
         var now = Moment.Now();
         var at = roomsAt ?? now;
-        if (reader is null || roomIndex is null || !roomDays.TryGetValue(Clock.Text(at.Date), out var day)) { LoadRooms(at.Date); return; }
+        if (reader is null || roomIndex is null || !roomDays.TryGetValue(Clock.Text(at.Date), out var day))
+        {
+            if (roomFailure is not null)
+            {
+                body.Children.Add(Pages.Empty(roomFailure));
+                body.Children.Add(Kit.Button("重试", () => { roomFailure = null; LoadRooms(at.Date); }));
+            }
+            else LoadRooms(at.Date);
+            return;
+        }
         var when = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 16, 0, 0) };
         when.Children.Add(Kit.Button("前一天", () => { roomsAt = new Moment(at.Date.AddDays(-1), at.Min); Draw(); }, Icons.Back, iconOnly: true));
         var time = Kit.Text(Clock.Hm(at.Min), Role.Title); time.VerticalAlignment = VerticalAlignment.Center; when.Children.Add(time);

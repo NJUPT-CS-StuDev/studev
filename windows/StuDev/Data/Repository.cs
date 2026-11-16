@@ -11,6 +11,7 @@ public sealed class Repository
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> UnreachableMirrors = new();
     private static readonly string Root = Storage.CacheFor("campus");
+    private static string ActiveRelease => Path.Combine(Root, $"release-{Product.Version}.json");
     public DataRelease Release { get; }
     private readonly string folder;
     private readonly Dictionary<string, Task<byte[]>> loading = new();
@@ -20,7 +21,7 @@ public sealed class Repository
     /** Discovery does not activate a release: the files needed by the selected timetable must be readable first. */
     public static Task<Repository> Open()
     {
-        var kept = Path.Combine(Root, "release.json");
+        var kept = ActiveRelease;
         if (File.Exists(kept))
         {
             var release = JsonSerializer.Deserialize(File.ReadAllText(kept), FactsJson.Default.DataRelease) ?? throw new InvalidDataException("release manifest");
@@ -35,12 +36,14 @@ public sealed class Repository
         Valid(release); return new Repository(release);
     }
 
-    public void Activate() => Storage.Write(Path.Combine(Root, "release.json"), JsonSerializer.Serialize(Release, FactsJson.Default.DataRelease));
+    public void Activate() => Storage.Write(ActiveRelease, JsonSerializer.Serialize(Release, FactsJson.Default.DataRelease));
 
     private static void Valid(DataRelease release)
     {
         if (release.Version is null || !System.Text.RegularExpressions.Regex.IsMatch(release.Version, "^[A-Za-z0-9._-]+$") || release.Base != $"/data/{release.Version}")
             throw new InvalidDataException($"unexpected release {release.Version}");
+        if (!release.Version.EndsWith($"__app{Product.Version}", StringComparison.Ordinal))
+            throw new NotSupportedException("校园数据已经更新，请更新 StuDev 后再试。");
     }
 
     private static readonly string MediaRoot = Storage.CacheFor("knowledge-media");
@@ -79,6 +82,7 @@ public sealed class Repository
         if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
         var url = $"{Site}{Release.Base}/" + string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
         var bytes = await Http.GetByteArrayAsync(url);
+        if (path.EndsWith(".json", StringComparison.Ordinal)) using (JsonDocument.Parse(bytes)) { }
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         var pending = file + "." + Guid.NewGuid().ToString("N") + ".pending";
         try { await File.WriteAllBytesAsync(pending, bytes); File.Move(pending, file, true); }
@@ -90,8 +94,14 @@ public sealed class Repository
     public async Task<byte[]> Block(string path, string? mirror, long offset, int length)
     {
         if (path.Split('/').Any(part => part is "" or "." or "..")) throw new ArgumentException($"bad release path {path}");
+        if (offset < 0 || length <= 0 || offset > long.MaxValue - length) throw new ArgumentOutOfRangeException(nameof(offset));
         var file = Path.Combine(folder, path.Replace('/', Path.DirectorySeparatorChar) + "." + offset);
-        if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
+        if (File.Exists(file))
+        {
+            var kept = await File.ReadAllBytesAsync(file);
+            if (kept.Length != length) throw new InvalidDataException("离线搜索数据不完整");
+            return kept;
+        }
         async Task<byte[]> Range(string url, CancellationToken cancel = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -99,8 +109,16 @@ public sealed class Repository
             using var response = await Http.SendAsync(request, cancel);
             response.EnsureSuccessStatusCode();
             var bytes = await response.Content.ReadAsByteArrayAsync(cancel);
-            if (response.StatusCode != System.Net.HttpStatusCode.PartialContent || bytes.Length != length) throw new HttpRequestException($"range of {url} not served");
-            return bytes;
+            if (response.StatusCode == System.Net.HttpStatusCode.PartialContent)
+            {
+                var range = response.Content.Headers.ContentRange;
+                if (bytes.Length != length || range?.Unit != "bytes" || range.From != offset || range.To != offset + length - 1)
+                    throw new InvalidDataException("服务器返回的搜索数据范围不完整");
+                return bytes;
+            }
+            // HTTP permits a server to ignore Range and return the whole file.
+            if (offset > bytes.Length || length > bytes.Length - offset) throw new InvalidDataException("服务器返回的搜索数据不完整");
+            return bytes.AsSpan((int)offset, length).ToArray();
         }
         byte[] got;
         var own = $"{Site}{Release.Base}/" + string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
@@ -108,7 +126,7 @@ public sealed class Repository
         {
             using var mirrorTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(4));
             try { got = await Range(mirror, mirrorTimeout.Token); }
-            catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
+            catch (Exception error) when (error is not InvalidDataException && (error is HttpRequestException or IOException or OperationCanceledException))
             {
                 UnreachableMirrors.TryAdd(mirrorUri.Host, 0);
                 got = await Range(own);

@@ -13,6 +13,8 @@
     <Compile Include="../StuDev/Ai/Assistant.cs;../StuDev/Ai/Steps.cs;../StuDev/Ai/Thread.cs;../StuDev/Ai/Answers.cs" Link="Ai/%(Filename)%(Extension)" />
     <Compile Include="../kernels/bindings/wayfind_native.cs" Link="Kernels/wayfind_native.cs" />
     <None Include="../kernels/wayfind_native.dll" Link="wayfind_native.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../StuDev/Search/NativeSearch.cs;../kernels/bindings/wasm_search_native.cs" Link="Search/%(Filename)%(Extension)" />
+    <None Include="../kernels/wasm_search_native.dll" Link="wasm_search_native.dll" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../StuDev/World/*.cs" Exclude="../StuDev/World/Campus.cs" Link="World/%(Filename)%(Extension)" />
     <Compile Include="../StuDev/App/Product.cs" Link="App/Product.cs" />
     <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />

@@ -87,7 +87,7 @@ import top.hicancan.studev.world.Moment
             when (route.tab) {
                 "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
                 "knowledge" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.knowledge.KnowledgeScreen(route, state) }
-                "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, campus, model) }
+                "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, model) }
                 "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model, route) }
             }
             if (route.tab != "map") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp, end = 14.dp).size(32.dp).testTag("me"), shape = CircleShape, color = Ink.sunken) {

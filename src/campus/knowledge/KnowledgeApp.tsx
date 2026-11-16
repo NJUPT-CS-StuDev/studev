@@ -3,7 +3,7 @@
 // document where it is and leads back. Everything shown is a link someone can send (?course, ?topic, ?material#题).
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Doc, docReady, DocPlaceProvider, DocStream, DocText, type DocPlace } from '@/world/doc';
-import { knowledgeFile, knowledgePlace, loadCurriculum, loadKnowledge, loadKnowledgeText, materialParts, tested, toneOf, KIND_TONE, type CurriculumCourse, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
+import { containsAnchor, knowledgeFile, knowledgePlace, loadCurriculum, loadKnowledge, loadKnowledgeText, materialParts, referenced, toneOf, KIND_TONE, type CurriculumCourse, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
 import { reloadIfGone } from '@/world/stale';
 import { useUrl, useWide } from '@/world/useUrl';
 import { Back, Bars, Chevron, Sheet } from '@/world/ui';
@@ -25,9 +25,16 @@ export default function KnowledgeApp() {
     const [failed, setFailed] = useState('');
     const [ready, setReady] = useState(false);
     const [outline, setOutline] = useState(false);
+    const [anchor, setAnchor] = useState(() => decodeURIComponent(location.hash.slice(1)) || null);
     useEffect(() => {
-        loadKnowledge().then(setKnowledge).catch(() => { reloadIfGone(); setFailed('知识还没能加载，请检查网络后重试。'); });
-        void loadCurriculum().then(setCurriculum);
+        const sync = () => setAnchor(decodeURIComponent(location.hash.slice(1)) || null);
+        addEventListener('popstate', sync);
+        addEventListener('hashchange', sync);
+        return () => { removeEventListener('popstate', sync); removeEventListener('hashchange', sync); };
+    }, []);
+    useEffect(() => {
+        Promise.all([loadKnowledge(), loadCurriculum()]).then(([index, plans]) => { setCurriculum(plans); setKnowledge(index); })
+            .catch(() => { reloadIfGone(); setFailed('知识与培养方案还没能加载，请稍后重试。'); });
         void docReady().then(() => setReady(true));
     }, []);
 
@@ -41,9 +48,9 @@ export default function KnowledgeApp() {
     const open = (to: Open) => {
         set({ course: to.course ?? null, topic: to.topic ?? null, material: to.material ?? null }, { push: true });
         history.replaceState(null, '', `${location.pathname}${location.search}${to.anchor ? `#${encodeURIComponent(to.anchor)}` : ''}`);
+        setAnchor(to.anchor || null);
         setOutline(false);
-        if (to.anchor) requestAnimationFrame(() => document.getElementById(to.anchor!)?.scrollIntoView({ block: 'start' }));
-        else scrollTo({ top: 0 });
+        if (!to.anchor) scrollTo({ top: 0 });
     };
     const place: DocPlace = useMemo(() => ({
         image: knowledgeFile,
@@ -73,16 +80,16 @@ export default function KnowledgeApp() {
                     </div>
                     {topic ? <>
                         <TopicView topic={topic} />
-                        <TopicQuestions topic={topic} knowledge={knowledge} course={course} onOpen={open} />
+                        <TopicReferences topic={topic} knowledge={knowledge} course={course} onOpen={open} />
                     </>
-                        : material ? <MaterialView material={material} anchor={decodeURIComponent(location.hash.slice(1)) || null} onTopic={href => place.open(href)?.()} />
+                        : material ? <MaterialView material={material} anchor={anchor} onTopic={href => place.open(href)?.()} />
                             : <CourseView course={course} knowledge={knowledge} onOpen={open} />}
                     {!wide && topic ? <Relations topic={topic} knowledge={knowledge} course={course} onOpen={open} /> : null}
-                    {!wide && material ? <Tested material={material} knowledge={knowledge} onOpen={open} course={course} /> : null}
+                    {!wide && material ? <MaterialTopics material={material} knowledge={knowledge} onOpen={open} course={course} /> : null}
                 </main>
                 {wide ? <aside className="kn-side">
                     {topic ? <Relations topic={topic} knowledge={knowledge} course={course} onOpen={open} />
-                        : material ? <Tested material={material} knowledge={knowledge} onOpen={open} course={course} />
+                        : material ? <MaterialTopics material={material} knowledge={knowledge} onOpen={open} course={course} />
                             : <Materials course={course} knowledge={knowledge} onOpen={open} />}
                 </aside> : null}
             </div>
@@ -105,6 +112,11 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     const [nature, setNature] = useState('全部');
     const [grade, setGrade] = useState('全部');
     const [major, setMajor] = useState('全部专业');
+    const [cohort, setCohort] = useState('');
+    const cohorts = [...new Set(curriculum.flatMap(course => course.plans.map(plan => plan.grade)))].sort().reverse();
+    const planYear = cohort || cohorts[0] || '';
+    const inPlan = (plan: CurriculumCourse['plans'][number]) => plan.grade === planYear && (major === '全部专业' || plan.major === major)
+        && (category === '全部' || plan.category === category) && (nature === '全部' || plan.nature === nature);
 
     const byCode = useMemo(() => {
         const map = new Map<string, CurriculumCourse>();
@@ -123,16 +135,16 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     const courseMeta = useMemo(() => {
         const meta = new Map<string, { categories: string[]; natures: string[]; majors: string[]; credits: number[]; terms: number[] }>();
         for (const c of knowledge.courses) {
-            const matched = [...new Set([...c.codes, ...c.former].map(code => byCode.get(code)).filter((x): x is CurriculumCourse => Boolean(x)))];
-            const categories = [...new Set(matched.flatMap(m => m.categories.length ? m.categories : [m.category]).filter(Boolean))];
-            const natures = [...new Set(matched.flatMap(m => m.natures.length ? m.natures : [m.nature]).filter(Boolean))];
-            const majors = [...new Set(matched.flatMap(m => m.majors).filter(Boolean))];
-            const credits = [...new Set(matched.map(m => m.credits).filter(n => n > 0))].sort((a, b) => a - b);
-            const terms = [...new Set(matched.flatMap(m => m.terms))].sort((a, b) => a - b);
+            const matched = [...new Set([...c.codes, ...c.former].map(code => byCode.get(code)).filter((x): x is CurriculumCourse => Boolean(x)))].flatMap(course => course.plans).filter(inPlan);
+            const categories = [...new Set(matched.map(m => m.category).filter(Boolean))];
+            const natures = [...new Set(matched.map(m => m.nature).filter(Boolean))];
+            const majors = [...new Set(matched.map(m => m.major).filter(Boolean))];
+            const credits = [...new Set(matched.map(m => m.credits).filter((n): n is number => n !== null && n > 0))].sort((a, b) => a - b);
+            const terms = [...new Set(matched.map(m => m.term).filter((term): term is number => term !== null))].sort((a, b) => a - b);
             meta.set(c.id, { categories, natures, majors, credits, terms });
         }
         return meta;
-    }, [knowledge.courses, byCode]);
+    }, [knowledge.courses, byCode, planYear, major, category, nature]);
 
     const categories = useMemo(() => {
         const all = new Set(['专业基础课', '专业课', '通识教育课']);
@@ -143,7 +155,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     const majors = useMemo(() => {
         const preferred = ['计算机科学与技术', '软件工程', '信息安全', '计算机科学与技术(创新班)'];
         const found = new Set<string>();
-        for (const item of curriculum) for (const m of item.majors) found.add(m);
+        for (const item of curriculum) for (const plan of item.plans) found.add(plan.major);
         return ['全部专业', ...preferred.filter(m => found.has(m)), ...[...found].filter(m => !preferred.includes(m))];
     }, [curriculum]);
 
@@ -167,12 +179,12 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
         const groups = new Map<number, KnowledgeCourse[]>();
         for (const course of courses) {
             const terms = courseMeta.get(course.id)?.terms ?? [];
-            const primary = targetGrade !== null
-                ? (terms.find(t => Math.ceil(t / 2) === targetGrade) ?? 99)
-                : (terms.find(t => t >= 1 && t <= 8) ?? 99);
-            const list = groups.get(primary) ?? [];
-            list.push(course);
-            groups.set(primary, list);
+            const matching = terms.filter(term => term >= 1 && term <= 8 && (targetGrade === null || Math.ceil(term / 2) === targetGrade));
+            for (const term of matching.length ? matching : [99]) {
+                const bucket = groups.get(term) ?? [];
+                bucket.push(course);
+                groups.set(term, bucket);
+            }
         }
         return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([term, list]) => ({
             term,
@@ -184,22 +196,9 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
 
     const graphNodes = useMemo(() => {
         if (view !== 'graph') return { doc: '', linked: [] as KnowledgeCourse[] };
-        const scoped = curriculum.filter(item => {
-            if (major !== '全部专业' && !item.majors.includes(major)) return false;
-            if (category !== '全部' && !(item.categories.includes(category) || item.category === category)) return false;
-            if (nature !== '全部' && !(item.natures.includes(nature) || item.nature === nature)) return false;
-            return true;
-        });
+        const scoped = curriculum.filter(item => item.plans.some(inPlan));
         const scopedCodes = new Set(scoped.map(item => item.code));
-        const connected = new Set<string>();
-        for (const item of scoped) {
-            const validReqs = item.requires.filter(req => scopedCodes.has(req));
-            if (validReqs.length) {
-                connected.add(item.code);
-                for (const req of validReqs) connected.add(req);
-            }
-        }
-        const nodes = scoped.filter(item => connected.has(item.code) && (!q || item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q) || item.requires.some(r => r.toLowerCase().includes(q))));
+        const nodes = scoped.filter(item => (!q || item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q) || item.requires.some(r => r.toLowerCase().includes(q))));
         const nodeSet = new Set(nodes.map(n => n.code));
         // Add direct prerequisite targets even if filtered by query so edges never dangle
         for (const item of [...nodes]) {
@@ -211,7 +210,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
             }
         }
 
-        if (nodes.length) {
+        {
             const idOf = new Map(nodes.map((n, i) => [n.code, `P${i}`]));
             const lines = ['```mermaid', 'flowchart LR'];
             for (const n of nodes) {
@@ -233,19 +232,13 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
                     linked.push(kc);
                 }
             }
-            return { doc: lines.join('\n'), linked };
+            return { doc: nodes.length ? lines.join('\n') : '当前筛选没有培养方案课程。', linked };
         }
 
-        // Fallback when curriculum has no matching prerequisite edges: show compiled knowledge courses
-        const byId = new Map(knowledge.courses.map((c, i) => [c.id, `C${i}`]));
-        const lines = ['```mermaid', 'flowchart LR'];
-        for (const c of courses) lines.push(`  ${byId.get(c.id)}["${safeMermaidLabel(c.name)}"]`);
-        lines.push('```');
-        return { doc: lines.join('\n'), linked: courses };
-    }, [view, curriculum, byCode, compiledByCode, knowledge.courses, courses, major, category, nature, q]);
+    }, [view, curriculum, byCode, compiledByCode, knowledge.courses, courses, major, category, nature, q, planYear]);
 
     return <div className="sd page knowledge"><div className="wrap">
-        <div className="ph"><div><h1>知识</h1><p>按培养方案与学期组织的知识体系，每门课连着它的先修依赖、课件与历年考题。</p></div></div>
+        <div className="ph"><div><h1>知识</h1><p>按培养方案与学期组织的知识体系，每门课连着它的先修依赖、课程资料。</p></div></div>
         <div className="kn-tools">
             <input className="kn-search" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="筛选课程名称、课程代码或章节…" aria-label="筛选课程" />
             <div className="kn-tabs" role="tablist" aria-label="视图切换">
@@ -254,6 +247,9 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
             </div>
         </div>
         <div className="kn-filters">
+            <select className="kn-select" value={planYear} onChange={e => setCohort(e.target.value)} aria-label="培养方案入学年份">
+                {cohorts.map(year => <option key={year} value={year}>{year} 级培养方案</option>)}
+            </select>
             <div className="kn-chips" role="group" aria-label="年级">
                 {GRADE_OPTIONS.map(([label]) => <button key={label} className={grade === label ? 'on' : ''} onClick={() => setGrade(label)}>{label === '全部' ? '全部年级' : label}</button>)}
             </div>
@@ -288,7 +284,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
                                 primaryCodeLabel(course.codes),
                                 meta?.categories[0],
                                 meta?.natures.join('/'),
-                                meta?.credits.length ? `${meta.credits[0]} 学分` : null,
+                                meta?.credits.length ? `${meta.credits.join("/")} 学分` : null,
                             ].filter(Boolean);
                             return <button key={course.id} className="kn-course" style={tone(course.id)} onClick={() => onOpen(course.id)}>
                                 <b>{course.name}</b>
@@ -316,29 +312,34 @@ function Outline({ course, knowledge, topic, material, onOpen }: { course: Knowl
 }
 
 function useText(path: string) {
-    const [text, setText] = useState<string | null>(null);
-    useEffect(() => { setText(null); void loadKnowledgeText(path).then(setText).catch(() => setText('这篇内容没能加载，请稍后重试。')); }, [path]);
-    return text;
+    const [loaded, setLoaded] = useState<{ path: string; text: string } | null>(null);
+    useEffect(() => {
+        let current = true;
+        setLoaded(null);
+        void loadKnowledgeText(path).then(text => { if (current) setLoaded({ path, text }); }).catch(() => { if (current) setLoaded({ path, text: '这篇内容没能加载，请稍后重试。' }); });
+        return () => { current = false; };
+    }, [path]);
+    return loaded?.path === path ? loaded.text : null;
 }
 
 function CourseView({ course, knowledge, onOpen }: { course: KnowledgeCourse; knowledge: Knowledge; onOpen: (to: Open) => void }) {
     const text = useText(course.path);
     const topics = course.chapters.flatMap(chapter => chapter.topics).map(id => knowledge.topics.find(item => item.id === id)!).filter(Boolean);
-    const most = [...topics].sort((a, b) => b.tested_by.length - a.tested_by.length).filter(item => item.tested_by.length).slice(0, 6);
+    const most = [...topics].sort((a, b) => b.references.length - a.references.length).filter(item => item.references.length).slice(0, 6);
     return <article className="kn-doc">
         {text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
-        {most.length ? <section className="kn-most"><h2>考得最多的知识点</h2>{most.map(item => {
-            const count = tested(item);
-            return <button key={item.id} onClick={() => onOpen({ topic: item.id, course: course.id })}><b>{item.title}</b><small>{count.questions} 道题 · {count.materials} 份资料</small></button>;
+        {most.length ? <section className="kn-most"><h2>资料中的知识点</h2>{most.map(item => {
+            const count = referenced(item);
+            return <button key={item.id} onClick={() => onOpen({ topic: item.id, course: course.id })}><b>{item.title}</b><small>{count.references} 处 · {count.materials} 份资料</small></button>;
         })}</section> : null}
     </article>;
 }
 
 function TopicView({ topic }: { topic: KnowledgeTopic }) {
     const text = useText(topic.path);
-    const count = tested(topic);
+    const count = referenced(topic);
     return <article className="kn-doc">
-        {count.questions ? <p className="kn-count">考过 {count.questions} 次 · 出现在 {count.materials} 份资料里</p> : <p className="kn-count">收录的资料里还没有考到它</p>}
+        {count.references ? <p className="kn-count">关联 {count.references} 处 · 出现在 {count.materials} 份资料里</p> : <p className="kn-count">收录的资料里还没有与它关联的片段</p>}
         {text === null ? <p className="muted">正在打开…</p> : <DocText text={text} />}
     </article>;
 }
@@ -352,15 +353,18 @@ function MaterialView({ material, anchor, onTopic }: { material: KnowledgeMateri
     }, [text]);
     const [shown, setShown] = useState<Set<string>>(new Set());
     useEffect(() => { setShown(new Set()); }, [material.path]);
-    useEffect(() => { if (parts && anchor) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' })); }, [parts, anchor]);
-    const all = parts?.filter(part => part.kind === 'question' && part.answer.length).length ?? 0;
+    const owner = parts?.find(part => part.kind === 'section' && anchor && part.answer.some(piece => containsAnchor(piece.blocks, anchor)));
+    const ownerAnchor = owner?.kind === 'section' ? owner.anchor : null;
+    const visible = !ownerAnchor || shown.has(ownerAnchor);
+    useEffect(() => { if (ownerAnchor) setShown(current => new Set([...current, ownerAnchor])); }, [ownerAnchor]);
+    useEffect(() => { if (parts && anchor && visible) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' })); }, [parts, anchor, visible]);
+    const all = parts?.filter(part => part.kind === 'section' && part.answer.length).length ?? 0;
     return <article className="kn-doc">
-        <h1 className="kn-title">{material.title}</h1>
-        <p className="kn-count"><span className="kn-kind" style={{ '--kind': `var(--${KIND_TONE[material.kind] ?? 'muted'})` } as CSSProperties}>{material.kind}</span>{[material.term].filter(Boolean).map(term => ` · ${term}`)}{material.questions ? ` · ${material.questions} 题` : ''}{/^https?:\/\//.test(material.source) ? <> · <a href={material.source} target="_blank" rel="noreferrer">原件</a></> : null}
-            {all && material.kind !== '课件' ? <button className="kn-toggle" onClick={() => setShown(shown.size ? new Set() : new Set(parts!.flatMap(part => part.kind === 'question' ? [part.anchor] : [])))}>{shown.size ? '收起全部解答' : '展开全部解答'}</button> : null}</p>
+        <p className="kn-count"><span className="kn-kind" style={{ '--kind': `var(--${KIND_TONE[material.kind] ?? 'muted'})` } as CSSProperties}>{material.kind}</span>{[material.term].filter(Boolean).map(term => ` · ${term}`)}{material.sections ? ` · ${material.sections} 处关联` : ''}{/^https?:\/\//.test(material.source) ? <> · <a href={material.source} target="_blank" rel="noreferrer">原件</a></> : null}
+            {all && material.kind !== '课件' ? <button className="kn-toggle" onClick={() => setShown(shown.size ? new Set() : new Set(parts!.flatMap(part => part.kind === 'section' ? [part.anchor] : [])))}>{shown.size ? '收起全部解答' : '展开全部解答'}</button> : null}</p>
         {parts === null ? <p className="muted">正在打开…</p> : parts.map((part, at) => {
             if (part.kind === 'text') return <Doc key={at} blocks={part.blocks} />;
-            if (part.kind === 'group') return <h2 key={at} className="kn-group">{part.title}{part.questions ? <small>{part.questions} 题</small> : null}</h2>;
+            if (part.kind === 'group') return <h2 key={at} id={part.anchor} className="kn-group">{part.title}{part.sections ? <small>{part.sections} 节</small> : null}</h2>;
             const open = shown.has(part.anchor);
             return <section key={at} id={part.anchor} className={`kn-q ${material.kind === '课件' ? 'slide' : ''} ${anchor === part.anchor ? 'here' : ''}`}>
                 <header>
@@ -404,12 +408,12 @@ function Relations({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic
     </div>;
 }
 
-/** Below a topic's core explanation: every past-exam / exercise question that tested it, grouped by material. */
-function TopicQuestions({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
-    const byMaterial = new Map<string, typeof topic.tested_by>();
-    for (const ref of topic.tested_by) byMaterial.set(ref.material, [...(byMaterial.get(ref.material) ?? []), ref]);
+/** Below a topic's core explanation: every material passage that names it, grouped by material. */
+function TopicReferences({ topic, knowledge, course, onOpen }: { topic: KnowledgeTopic; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
+    const byMaterial = new Map<string, typeof topic.references>();
+    for (const ref of topic.references) byMaterial.set(ref.material, [...(byMaterial.get(ref.material) ?? []), ref]);
     return <section className="kn-most kn-tested">
-        <h2>考过的真题链接</h2>
+        <h2>关联资料</h2>
         {byMaterial.size ? [...byMaterial].map(([path, refs]) => {
             const material = knowledge.materials.find(item => item.path === path);
             return <div key={path} className="kn-refs">
@@ -418,18 +422,18 @@ function TopicQuestions({ topic, knowledge, course, onOpen }: { topic: Knowledge
                     {refs.map((ref, i) => <button key={`${ref.anchor}-${i}`} onClick={() => onOpen({ material: path, anchor: ref.anchor, course: course.id })}>{ref.heading}</button>)}
                 </div>
             </div>;
-        }) : <p className="muted">收录的资料里还没有直接考到它的真题。</p>}
+        }) : <p className="muted">收录的资料里还没有与它关联的片段。</p>}
     </section>;
 }
 
-/** Beside a document: the topics its questions test, most tested first. */
-function Tested({ material, knowledge, course, onOpen }: { material: KnowledgeMaterial; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
-    const counts = knowledge.topics.map(topic => ({ topic, n: topic.tested_by.filter(ref => ref.material === material.path).length })).filter(row => row.n).sort((a, b) => b.n - a.n);
-    return <div className="kn-rel"><section><h3>这份资料考到的知识点</h3>{counts.map(({ topic, n }) =>
-        <button key={topic.id} onClick={() => onOpen({ topic: topic.id, course: course.id })}>{topic.title}<small>{n} 题</small></button>)}</section></div>;
+/** Beside a document: the topics its passages name, most linked first. */
+function MaterialTopics({ material, knowledge, course, onOpen }: { material: KnowledgeMaterial; knowledge: Knowledge; course: KnowledgeCourse; onOpen: (to: Open) => void }) {
+    const counts = knowledge.topics.map(topic => ({ topic, n: topic.references.filter(ref => ref.material === material.path).length })).filter(row => row.n).sort((a, b) => b.n - a.n);
+    return <div className="kn-rel"><section><h3>这份资料关联的知识点</h3>{counts.map(({ topic, n }) =>
+        <button key={topic.id} onClick={() => onOpen({ topic: topic.id, course: course.id })}>{topic.title}<small>{n} 处</small></button>)}</section></div>;
 }
 
 function Materials({ course, knowledge, onOpen }: { course: KnowledgeCourse; knowledge: Knowledge; onOpen: (to: Open) => void }) {
     return <div className="kn-rel"><section><h3>资料</h3>{knowledge.materials.filter(item => item.course === course.id).map(item =>
-        <button key={item.path} onClick={() => onOpen({ material: item.path, course: course.id })}>{item.title}<small>{item.questions ? `${item.questions} 题` : item.kind}</small></button>)}</section></div>;
+        <button key={item.path} onClick={() => onOpen({ material: item.path, course: course.id })}>{item.title}<small>{item.sections ? `${item.sections} 处关联` : item.kind}</small></button>)}</section></div>;
 }

@@ -100,11 +100,14 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
                 var key = Answers.TextKey(id);
                 var doc = JsonNode.Parse(await Repo.Bytes($"texts/{key[..2]}.json"))![key] ?? throw new ArgumentException("找不到这篇资料。");
                 var text = (string)doc["text"]!;
+                var offset = (int?)args["offset"] ?? 0;
+                if (offset < 0 || offset > text.Length) throw new ArgumentException("正文位置超出范围。");
+                var end = (int)Math.Min((long)offset + ReadLimit, text.Length);
                 var said = new JsonObject { ["title"] = doc["title"]!.DeepClone(), ["source"] = doc["source"]!.DeepClone() };
                 if (doc["published"]?.GetValue<string>() is { } published) said["date"] = published[..10];
                 said["url"] = doc["url"]!.DeepClone();
-                said["text"] = text.Length > 0 ? text[..Math.Min(ReadLimit, text.Length)] : "这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。";
-                if (text.Length > ReadLimit) said["cut"] = true;
+                said["text"] = text.Length > 0 ? text[offset..end] : "这篇的正文没有收录，内容在附件里：把原文链接和附件给对方，不用再找。";
+                if (text.Length > end) said["next"] = end;
                 said["files"] = new JsonArray([.. doc["files"]!.AsArray().Take(10).Select(f => f!.DeepClone())]);
                 return said;
             }

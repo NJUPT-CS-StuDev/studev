@@ -66,16 +66,22 @@ jobs:
           done
           makers env pull
           grep -q RESEND_API_KEY .env* || { echo "project environment was not updated"; exit 1; }
-      # digest resolves and verifies the latest map/data release pair.
+      # An application release serves the exact data compiled into its native clients.
+      - name: Read the released campus package
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ github.event.release.tag_name }}" -R "$GITHUB_REPOSITORY" -p 'campus-data.tar.gz' -D "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/campus-data.tar.gz"
       - run: npm run digest
+        if: github.event_name != 'release'
       - run: npm run typecheck
       - run: npm run test:campus
+        if: github.event_name != 'release'
       - run: npm run test:platform
       - run: npm run build
       - run: npm run test:site
-      - name: Stage the verified data release for the EdgeOne builder
-        run: |
-          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('src/data/campus-release.json','utf8')); fs.rmSync('public/data-source',{recursive:true,force:true}); fs.cpSync('.data/'+r.data_version,'public/data-source',{recursive:true}); const idx=JSON.parse(fs.readFileSync('public/data-source/index.json','utf8')); idx.version=r.data_version; fs.writeFileSync('public/data-source/index.json',JSON.stringify(idx));"
       - name: Deploy
         run: |
           set -o pipefail

@@ -45,10 +45,8 @@ export interface DocPlace {
 }
 const Place = createContext<DocPlace | null>(null);
 export const DocPlaceProvider = Place.Provider;
-/** A heading's anchor: its text with spaces as hyphens, as the knowledge's build names its questions. */
-export const headingAnchor = (text: string) => text.trim().replace(/\s+/g, '-');
 /** An inline run as plain text, for recognising what a paragraph is. */
-export const plainText = (inlines: Inline[]): string => inlines.map(inline => 'text' in inline ? inline.text : 'children' in inline ? plainText(inline.children) : '').join('');
+export const plainText = (inlines: Inline[]): string => inlines.map(inline => 'text' in inline ? inline.text : inline.type === 'math' ? inline.tex : inline.type === 'image' ? inline.alt : 'children' in inline ? plainText(inline.children) : inline.type === 'break' ? '\n' : '').join('');
 
 const ALERTS = { note: '说明', tip: '提示', important: '重要', warning: '注意', caution: '小心' } as const;
 
@@ -95,7 +93,7 @@ function CodeView({ language, text }: { language: string; text: string }) {
 function BlockView({ block, writing = false }: { block: Block; writing?: boolean }) {
     switch (block.type) {
         case 'paragraph': return <p><Inlines inlines={block.inlines} /></p>;
-        case 'heading': { const Tag = (`h${Math.min(6, block.level + 1)}`) as 'h2'; return <Tag id={headingAnchor(plainText(block.inlines))}><Inlines inlines={block.inlines} /></Tag>; }
+        case 'heading': { const Tag = (`h${Math.min(6, block.level + 1)}`) as 'h2'; return <Tag id={block.anchor}><Inlines inlines={block.inlines} /></Tag>; }
         case 'quote': return <blockquote>{block.blocks.map((inner, at) => <BlockView key={at} block={inner} />)}</blockquote>;
         case 'alert': return <aside className={`doc-alert ${block.kind}`}><b>{ALERTS[block.kind]}</b>{block.blocks.map((inner, at) => <BlockView key={at} block={inner} />)}</aside>;
         case 'list': {

@@ -34,29 +34,18 @@ import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.app.*
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
-import top.hicancan.studev.data.CampusPackage
+import top.hicancan.search.SearchException
+import top.hicancan.studev.data.DataCorruptionException
 import top.hicancan.studev.data.TeachingMeeting
 import top.hicancan.studev.timetable.SearchField
 import top.hicancan.studev.world.Names
 import top.hicancan.studev.world.WEEKDAYS
+import top.hicancan.studev.world.Channel
 
 private const val PAGE = 10
 private val SINCE = listOf("" to "全部时间", "3" to "近三天", "7" to "近一周", "30" to "近一月", "365" to "近一年")
-private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "questions")
-private val OTHERS = listOf("njupt-general-free-exams", "njupt-survival-guide")
-private class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false)
-/** Same channels as campus.config.ts. */
-private val CHANNELS = listOf(
-    Channel("all", "全部", excluded = listOf("teaching-classes", "exams", "questions")),
-    Channel("room", "教室", listOf("rooms")),
-    Channel("academic", "教务", listOf("courses", "teachers", "classes", "teaching-classes", "exams")),
-    Channel("place", "地点", listOf("places")),
-    Channel("knowledge", "知识", listOf("topics", "questions")),
-    Channel("notice", "通知", excluded = ENTITIES.toList() + OTHERS, dated = true),
-    Channel("material", "考试资料", listOf(OTHERS[0])),
-    Channel("community", "社区", listOf(OTHERS[1])),
-)
-private val LABELS = mapOf("courses" to "课程", "teachers" to "老师", "classes" to "班级", "teaching-classes" to "教学班", "exams" to "考试安排", "rooms" to "教室", "places" to "地点", "topics" to "知识点", "questions" to "真题")
+private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "sections")
+private val LABELS = mapOf("courses" to "课程", "teachers" to "老师", "classes" to "班级", "teaching-classes" to "教学班", "exams" to "考试安排", "rooms" to "教室", "places" to "地点", "topics" to "知识点", "sections" to "资料章节")
 private data class Hit(val raw: JsonObject) {
     fun text(key: String) = raw[key]?.jsonPrimitive?.contentOrNull
     val id get() = text("id").orEmpty()
@@ -85,8 +74,9 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable fun SearchScreen(route: Route, state: AcademicState, campus: CampusPackage?, model: CampusModel) {
+@Composable fun SearchScreen(route: Route, state: AcademicState, model: CampusModel) {
     val context = LocalContext.current
+    val channels = remember(context) { Channel.load(context) }
     val repository = state.repository
     val engine = remember(repository) { repository?.let { repo -> NativeSearch({ path -> repo.bytes("search/$path") }, { pack, mirror, offset, bytes -> repo.block("search/$pack", mirror, offset, bytes) }) } }
     DisposableEffect(engine) { onDispose { engine?.close() } }
@@ -95,9 +85,9 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     var since by remember { mutableStateOf("") }
     var byDate by remember { mutableStateOf(false) }
     var answer by remember { mutableStateOf<Answer?>(null) }
-    var failed by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<Pair<String, String>?>(null) }
     var courseSheet by remember { mutableStateOf<String?>(null) }
-    val channel = CHANNELS.firstOrNull { it.id == route.scope } ?: CHANNELS[0]
+    val channel = channels.firstOrNull { it.id == route.scope } ?: channels[0]
     val query = route.query.trim()
     val list = rememberLazyListState()
     val searchFocus = remember { FocusRequester() }
@@ -111,7 +101,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val live = channel.id == "room" && browsing && route.within == null
     val key = listOf(query, channel.id, source, since, byDate, page, route.within, engine.hashCode()).toString()
     LaunchedEffect(key) {
-        failed = false
+        failure = null
         if (query.length == 1 || live || engine == null) { answer = null; return@LaunchedEffect }
         delay(120)
         val started = System.nanoTime()
@@ -134,17 +124,25 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
             }
             answer = Answer(key, done.results.map(::Hit), done.total, answer?.takeIf { it.key == key }?.seconds ?: ((System.nanoTime() - started) / 1e9))
         } catch (_: java.io.IOException) {
-            // Without a network the index cannot be read; places are always on the phone. Anything else is a fault,
-            // not the network, and is not passed off as one.
-            val rows = if (browsing) emptyList() else campus?.places.orEmpty().filter { place -> place.kind != "floor" && place.kind != "campus" && place.names.any { it.contains(query, ignoreCase = true) } }.take(30)
-            if (rows.isEmpty()) failed = true
-            answer = Answer(key, rows.map { place -> Hit(buildJsonObject {
-                put("id", place.id); put("source", if (place.kind == "room") "rooms" else "places"); put("title", if (place.kind == "room") Names.room(place.id) else place.names.first()); put("url", "/map/?place=${Uri.encode(place.id)}"); put("section", place.category)
-            }) }, rows.size, 0.0)
+            answer = null
+            failure = key to "搜索需要联网，请稍后重试"
+        } catch (error: SearchException) {
+            android.util.Log.e("Search", "Search data could not be read", error)
+            answer = null
+            failure = key to "搜索数据有误，暂时无法显示结果"
+        } catch (error: kotlinx.serialization.SerializationException) {
+            android.util.Log.e("Search", "Search data could not be read", error)
+            answer = null
+            failure = key to "搜索数据有误，暂时无法显示结果"
+        } catch (error: DataCorruptionException) {
+            android.util.Log.e("Search", "Search data could not be read", error)
+            answer = null
+            failure = key to "搜索数据有误，暂时无法显示结果"
         }
     }
     LaunchedEffect(page) { list.scrollToItem(0) }
-    val hits = answer?.takeIf { it.key == key || it.key.startsWith(key.substringBefore(',')) }?.hits ?: answer?.hits.orEmpty()
+    val currentAnswer = answer?.takeIf { it.key == key }
+    val hits = currentAnswer?.hits.orEmpty()
     fun open(link: String) {
         if (!route.open(link, PLATFORM_ORIGIN)) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(top.hicancan.studev.app.absolute(link, PLATFORM_ORIGIN)))) }
     }
@@ -154,7 +152,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
         }
         route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; page = 1 }) } }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 12.dp) { next -> route.scope = next; source = null; if (next != "all" && CHANNELS.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }
+            TextTabs(channels.map { it.id to it.label }, channel.id, gap = 12.dp) { next -> route.scope = next; source = null; if (next != "all" && channels.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }
         }
         if (live) { RoomsBrowse(state, route, Modifier.weight(1f)); return@Column }
         if (channel.dated || channel.id == "all") Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -170,13 +168,13 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
         }
         if (query.length == 1) { Plain("再多输入一个字", 14.sp, Ink.faint, modifier = Modifier.padding(vertical = 32.dp)); return@Column }
         LazyColumn(Modifier.weight(1f), state = list) {
-            answer?.takeIf { it.total > 0 }?.let { current ->
+            currentAnswer?.takeIf { it.total > 0 }?.let { current ->
                 item { Plain((if (browsing) "${current.total} 条" else (if (current.total >= 1000) "超过 1000" else "约 ${current.total}") + " 条结果") + "（${"%.2f".format(current.seconds)} 秒）" + (if (page > 1) " · 第 $page 页" else ""), 12.5.sp, Ink.faint, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)) }
             }
             items(hits, key = { it.id }) { hit -> if (hit.source in ENTITIES) EntityRow(hit) { if (hit.source == "courses") courseSheet = hit.title else open(hit.url) } else DocumentRow(hit, ::open) }
-            answer?.takeIf { it.key == key && it.total == 0 }?.let { item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(if (browsing) "这段时间没有内容" else "没有找到“$query”", 14.sp, Ink.faint) } } }
-            if (failed) item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain("搜索需要联网，请稍后重试", 14.sp, Ink.faint) } }
-            answer?.let { current -> item { Pages(page, current.total) { page = it } } }
+            currentAnswer?.takeIf { it.total == 0 }?.let { item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(if (browsing) "这段时间没有内容" else "没有找到“$query”", 14.sp, Ink.faint) } } }
+            failure?.takeIf { it.first == key }?.let { (_, message) -> item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(message, 14.sp, Ink.faint) } } }
+            currentAnswer?.let { current -> item { Pages(page, current.total) { page = it } } }
         }
     }
     courseSheet?.let { name -> CourseSheet(name, model, route) { courseSheet = null } }

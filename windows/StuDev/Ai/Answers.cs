@@ -55,7 +55,7 @@ public static class Answers
         foreach (var material in index.Materials.Where(m => m.Course == course.Id))
         {
             if (materials[material.Kind] is not JsonArray list) { list = []; materials[material.Kind] = list; }
-            if (list.Count < 12) list.Add(new JsonObject { ["title"] = material.Title, ["id"] = $"questions/{material.Path}" });
+            if (list.Count < 12) list.Add(new JsonObject { ["title"] = material.Title, ["id"] = $"sections/{material.Path}" });
         }
         var said = new JsonObject
         {
@@ -92,29 +92,29 @@ public static class Answers
 
     public static JsonObject Curriculum(List<CurriculumCourse> courses, string major, string? grade)
     {
-        var all = courses.SelectMany(c => c.Majors).Distinct().ToList(); var asked = major.Trim();
+        var all = courses.SelectMany(c => c.Plans.Select(p => p.Major)).Distinct().ToList(); var asked = major.Trim();
         var meant = all.Contains(asked) ? [asked] : all.Where(m => m.Contains(asked)).ToList();
         if (meant.Count != 1) return new JsonObject { ["found"] = false, ["majors"] = Strings((meant.Count > 0 ? meant : all).Take(20)) };
         var only = meant[0];
-        var chosen = courses.Where(c => c.Majors.Contains(only) && (grade is null || c.Grades.Contains(grade))).ToList();
-        var names = new Dictionary<string, string>();
-        foreach (var c in courses) names[c.Code] = c.Name;
-        var said = new JsonObject { ["found"] = true, ["major"] = only };
-        if (grade is not null) said["grade"] = grade;
-        said["terms"] = new JsonArray([.. chosen.SelectMany(c => c.Terms).Distinct().Order().Select(term =>
-        {
-            var list = chosen.Where(c => c.Terms.Contains(term)).ToList();
-            return (JsonNode)new JsonObject
+        var grades = courses.SelectMany(c => c.Plans.Where(p => p.Major == only).Select(p => p.Grade)).Distinct().Order().ToList();
+        var selected = grade ?? (grades.Count == 1 ? grades[0] : null);
+        if (selected is null || !grades.Contains(selected)) return new JsonObject { ["found"] = false, ["major"] = only, ["grades"] = Strings(grades) };
+        var chosen = courses.SelectMany(c => c.Plans.Where(p => p.Major == only && p.Grade == selected).Select(p => (Course: c, Plan: p))).ToList();
+        var names = courses.ToDictionary(c => c.Code, c => c.Name);
+        return new JsonObject {
+            ["found"] = true, ["major"] = only, ["grade"] = selected,
+            ["terms"] = new JsonArray([.. chosen.Select(c => c.Plan.Term).Distinct().OrderBy(t => t ?? 99).Select(term =>
             {
-                ["term"] = term, ["credits"] = Number(list.Aggregate(0.0, (sum, c) => sum + c.Credits)),
-                ["courses"] = new JsonArray([.. list.Select(c =>
-                {
-                    var one = new JsonObject { ["name"] = c.Name, ["code"] = c.Code, ["credits"] = Number(c.Credits), ["nature"] = c.Nature, ["category"] = c.Category };
-                    if (c.Requires.Count > 0) one["requires"] = Strings(c.Requires.Select(r => names.GetValueOrDefault(r, r)));
-                    return (JsonNode)one;
-                })]),
-            };
-        })]);
-        return said;
+                var list = chosen.Where(c => c.Plan.Term == term).ToList();
+                return (JsonNode)new JsonObject {
+                    ["term"] = term, ["credits"] = list.All(c => c.Plan.Credits.HasValue) ? Number(list.Sum(c => c.Plan.Credits!.Value)) : null,
+                    ["courses"] = new JsonArray([.. list.Select(c => {
+                        var one = new JsonObject { ["name"] = c.Course.Name, ["code"] = c.Course.Code, ["credits"] = c.Plan.Credits is {} credits ? Number(credits) : null, ["nature"] = c.Plan.Nature, ["category"] = c.Plan.Category };
+                        if (c.Course.Requires.Count > 0) one["requires"] = Strings(c.Course.Requires.Select(r => names.GetValueOrDefault(r, r)));
+                        return (JsonNode)one;
+                    })])
+                };
+            })])
+        };
     }
 }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -56,6 +58,30 @@ private val ALERTS = mapOf("note" to "说明", "tip" to "提示", "important" to
 private val JsonObject.type get() = getValue("type").jsonPrimitive.content
 private fun JsonObject.list(key: String) = get(key)?.jsonArray.orEmpty().map { it.jsonObject }
 private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull.orEmpty()
+
+private val AnchorTargets = staticCompositionLocalOf<MutableMap<String, BringIntoViewRequester>?> { null }
+
+/** A document view opens the address the shared reader assigned to one of its headings. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable fun DocAnchors(anchor: String?, content: @Composable () -> Unit) {
+    val targets = remember { mutableMapOf<String, BringIntoViewRequester>() }
+    LaunchedEffect(anchor) {
+        if (anchor != null) { withFrameNanos {}; targets[anchor]?.bringIntoView() }
+    }
+    CompositionLocalProvider(AnchorTargets provides targets, content = content)
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable fun DocAnchor(anchor: String, content: @Composable () -> Unit) {
+    val targets = AnchorTargets.current
+    if (targets == null) { content(); return }
+    val requester = remember(anchor) { BringIntoViewRequester() }
+    DisposableEffect(targets, anchor, requester) {
+        targets[anchor] = requester
+        onDispose { if (targets[anchor] === requester) targets.remove(anchor) }
+    }
+    Box(Modifier.bringIntoViewRequester(requester)) { content() }
+}
 
 private sealed interface Run {
     class Text(val inlines: List<JsonObject>) : Run
@@ -171,7 +197,7 @@ private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): 
                 }
             }
         }
-        "heading" -> InlineText(block.list("inlines"), size = when (block.getValue("level").jsonPrimitive.int) { 1 -> 20f; 2 -> 18f; else -> 16.5f }, weight = FontWeight.SemiBold, caret = caret, onLink = onLink)
+        "heading" -> DocAnchor(block.getValue("anchor").jsonPrimitive.content) { InlineText(block.list("inlines"), size = when (block.getValue("level").jsonPrimitive.int) { 1 -> 20f; 2 -> 18f; else -> 16.5f }, weight = FontWeight.SemiBold, caret = caret, onLink = onLink) }
         "quote" -> Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(3.dp).fillMaxHeight().background(Ink.line))
             Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { block.list("blocks").forEach { BlockView(it, onLink, imageBytes = imageBytes) } }
