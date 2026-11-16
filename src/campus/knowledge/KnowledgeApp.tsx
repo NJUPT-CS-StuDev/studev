@@ -1,9 +1,10 @@
 // The knowledge: a course's outline as a tree to stand in, one topic or one source document read in the middle, and
 // beside it what the topic builds on, what builds on it and every question that tested it. A question opens the
 // document where it is and leads back. Everything shown is a link someone can send (?course, ?topic, ?material#题).
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Doc, docReady, DocPlaceProvider, DocStream, DocText, type DocPlace } from '@/world/doc';
-import { containsAnchor, knowledgeFile, knowledgePlace, loadCurriculum, loadKnowledge, loadKnowledgeText, materialParts, referenced, toneOf, KIND_TONE, type CurriculumCourse, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
+import { containsAnchor, knowledgeFile, knowledgePlace, loadKnowledge, loadKnowledgeText, materialParts, referenced, toneOf, KIND_TONE, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
+import type { CatalogCourse, CatalogCurriculum, KnowledgeCatalog } from './catalog';
 import { reloadIfGone } from '@/world/stale';
 import { useUrl, useWide } from '@/world/useUrl';
 import { Back, Bars, Chevron, Sheet } from '@/world/ui';
@@ -17,33 +18,38 @@ const tone = (id: string) => {
 
 type Open = { course?: string; topic?: string; material?: string; anchor?: string | null };
 
-export default function KnowledgeApp() {
+export default function KnowledgeApp({ catalog }: { catalog: KnowledgeCatalog }) {
     const { params, set } = useUrl();
     const wide = useWide();
     const [knowledge, setKnowledge] = useState<Knowledge | null>(null);
-    const [curriculum, setCurriculum] = useState<CurriculumCourse[]>([]);
     const [failed, setFailed] = useState('');
-    const [ready, setReady] = useState(false);
+    const [attempt, setAttempt] = useState(0);
     const [outline, setOutline] = useState(false);
-    const [anchor, setAnchor] = useState(() => decodeURIComponent(location.hash.slice(1)) || null);
+    const [anchor, setAnchor] = useState<string | null>(null);
     useEffect(() => {
         const sync = () => setAnchor(decodeURIComponent(location.hash.slice(1)) || null);
+        sync();
         addEventListener('popstate', sync);
         addEventListener('hashchange', sync);
         return () => { removeEventListener('popstate', sync); removeEventListener('hashchange', sync); };
     }, []);
-    useEffect(() => {
-        Promise.all([loadKnowledge(), loadCurriculum()]).then(([index, plans]) => { setCurriculum(plans); setKnowledge(index); })
-            .catch(() => { reloadIfGone(); setFailed('知识与培养方案还没能加载，请稍后重试。'); });
-        void docReady().then(() => setReady(true));
-    }, []);
-
     const topicId = params.get('topic');
     const materialPath = params.get('material');
+    const courseId = params.get('course');
+    const requested = Boolean(courseId || topicId || materialPath);
+    const document = useDocument(requested);
+    useEffect(() => {
+        if (!requested || knowledge) return;
+        let current = true;
+        setFailed('');
+        void loadKnowledge().then(index => { if (current) setKnowledge(index); })
+            .catch(() => { if (current) { void reloadIfGone(); setFailed('课程资料没能加载，请稍后重试。'); } });
+        return () => { current = false; };
+    }, [requested, knowledge, attempt]);
     const topic = knowledge?.topics.find(item => item.id === topicId) ?? null;
     const material = knowledge?.materials.find(item => item.path === materialPath) ?? null;
     // The course in view: as asked, or the one that teaches the topic, or the one the document belongs to.
-    const course = knowledge?.courses.find(item => item.id === (params.get('course') ?? topic?.taught_by[0] ?? material?.course)) ?? null;
+    const course = knowledge?.courses.find(item => item.id === (courseId ?? topic?.taught_by[0] ?? material?.course)) ?? null;
 
     const open = (to: Open) => {
         set({ course: to.course ?? null, topic: to.topic ?? null, material: to.material ?? null }, { push: true });
@@ -64,9 +70,18 @@ export default function KnowledgeApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }), [course?.id]);
 
-    if (failed) return <div className="sd page"><div className="wrap narrow"><p className="muted">{failed}</p></div></div>;
-    if (!knowledge || !ready) return <div className="sd page"><div className="wrap"><p className="muted">正在打开知识…</p></div></div>;
-    if (!course) return <Home knowledge={knowledge} curriculum={curriculum} onOpen={id => open({ course: id })} />;
+    if (!requested) return <Home catalog={catalog} onOpen={id => open({ course: id })} />;
+    if (!knowledge || !course || document.status !== 'ready') {
+        const name = catalog.courses.find(item => item.id === courseId)?.name ?? '课程资料';
+        const error = failed || (document.status === 'failed' ? '内容没能打开，请稍后重试。' : '')
+            || (knowledge && !course ? '没有找到这个课程或资料。' : '');
+        return <div className="sd page knowledge"><div className="wrap">
+            <div className="kn-bar"><button className="back" onClick={() => open({})}><Back />知识</button></div>
+            <h1>{name}</h1>
+            <p className="muted" role={error ? 'alert' : 'status'}>{error || '正在打开课程资料…'}</p>
+            {failed || document.status === 'failed' ? <button onClick={() => { setAttempt(value => value + 1); document.retry(); }}>重试</button> : null}
+        </div></div>;
+    }
 
     const tree = <Outline course={course} knowledge={knowledge} topic={topic} material={material} onOpen={open} />;
     return <DocPlaceProvider value={place}>
@@ -98,6 +113,21 @@ export default function KnowledgeApp() {
     </DocPlaceProvider>;
 }
 
+/** Documents and diagrams need the kernel; browsing the course catalogue does not. */
+function useDocument(needed: boolean) {
+    const [status, setStatus] = useState<'pending' | 'ready' | 'failed'>('pending');
+    const [attempt, setAttempt] = useState(0);
+    useEffect(() => {
+        if (!needed) return;
+        let current = true;
+        setStatus('pending');
+        void docReady().then(() => { if (current) setStatus('ready'); })
+            .catch(() => { if (current) setStatus('failed'); });
+        return () => { current = false; };
+    }, [needed, attempt]);
+    return { status, retry: () => setAttempt(value => value + 1) };
+}
+
 const safeMermaidLabel = (text: string) => text.replace(/["\[\]{}]/g, '').replace(/[（(][^）)]*[）)]/g, '').trim() || text.replace(/["\[\]{}]/g, '');
 
 const TERM_TITLES = ['', '大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
@@ -105,9 +135,10 @@ const GRADE_OPTIONS: [string, number | null][] = [['全部', null], ['大一', 1
 const primaryCodeLabel = (codes: string[]) => codes.length > 1 ? `${codes[0]} +${codes.length - 1}` : codes[0] || '培养方案课程';
 
 /** Every course in the unified training-plan model: term-grouped course cards (like RoomsBrowse) + curriculum dependency graph. */
-function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curriculum: CurriculumCourse[]; onOpen: (code: string) => void }) {
+function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: KnowledgeCatalog; onOpen: (code: string) => void }) {
     const [query, setQuery] = useState('');
     const [view, setView] = useState<'list' | 'graph'>('list');
+    const document = useDocument(view === 'graph');
     const [category, setCategory] = useState('全部');
     const [nature, setNature] = useState('全部');
     const [grade, setGrade] = useState('全部');
@@ -115,27 +146,27 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     const [cohort, setCohort] = useState('');
     const cohorts = [...new Set(curriculum.flatMap(course => course.plans.map(plan => plan.grade)))].sort().reverse();
     const planYear = cohort || cohorts[0] || '';
-    const inPlan = (plan: CurriculumCourse['plans'][number]) => plan.grade === planYear && (major === '全部专业' || plan.major === major)
+    const inPlan = (plan: CatalogCurriculum['plans'][number]) => plan.grade === planYear && (major === '全部专业' || plan.major === major)
         && (category === '全部' || plan.category === category) && (nature === '全部' || plan.nature === nature);
 
     const byCode = useMemo(() => {
-        const map = new Map<string, CurriculumCourse>();
+        const map = new Map<string, CatalogCurriculum>();
         for (const item of curriculum) map.set(item.code, item);
         return map;
     }, [curriculum]);
 
     const compiledByCode = useMemo(() => {
-        const map = new Map<string, KnowledgeCourse>();
-        for (const c of knowledge.courses) {
+        const map = new Map<string, CatalogCourse>();
+        for (const c of catalog) {
             for (const code of [...c.codes, ...c.former]) map.set(code, c);
         }
         return map;
-    }, [knowledge.courses]);
+    }, [catalog]);
 
     const courseMeta = useMemo(() => {
         const meta = new Map<string, { categories: string[]; natures: string[]; majors: string[]; credits: number[]; terms: number[] }>();
-        for (const c of knowledge.courses) {
-            const matched = [...new Set([...c.codes, ...c.former].map(code => byCode.get(code)).filter((x): x is CurriculumCourse => Boolean(x)))].flatMap(course => course.plans).filter(inPlan);
+        for (const c of catalog) {
+            const matched = [...new Set([...c.codes, ...c.former].map(code => byCode.get(code)).filter((x): x is CatalogCurriculum => Boolean(x)))].flatMap(course => course.plans).filter(inPlan);
             const categories = [...new Set(matched.map(m => m.category).filter(Boolean))];
             const natures = [...new Set(matched.map(m => m.nature).filter(Boolean))];
             const majors = [...new Set(matched.map(m => m.major).filter(Boolean))];
@@ -144,7 +175,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
             meta.set(c.id, { categories, natures, majors, credits, terms });
         }
         return meta;
-    }, [knowledge.courses, byCode, planYear, major, category, nature]);
+    }, [catalog, byCode, planYear, major, category, nature]);
 
     const categories = useMemo(() => {
         const all = new Set(['专业基础课', '专业课', '通识教育课']);
@@ -162,7 +193,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     const q = query.trim().toLowerCase();
     const targetGrade = GRADE_OPTIONS.find(([label]) => label === grade)?.[1] ?? null;
     const courses = useMemo(() => {
-        return knowledge.courses.filter(course => {
+        return catalog.filter(course => {
             const meta = courseMeta.get(course.id);
             if (category !== '全部' && !meta?.categories.includes(category)) return false;
             if (nature !== '全部' && !meta?.natures.includes(nature)) return false;
@@ -171,12 +202,12 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
             if (!q) return true;
             return course.name.toLowerCase().includes(q)
                 || course.codes.some(c => c.toLowerCase().includes(q))
-                || course.chapters.some(ch => ch.title.toLowerCase().includes(q));
+                || course.chapters.some(title => title.toLowerCase().includes(q));
         });
-    }, [knowledge.courses, courseMeta, category, nature, major, targetGrade, q]);
+    }, [catalog, courseMeta, category, nature, major, targetGrade, q]);
 
     const groupedByTerm = useMemo(() => {
-        const groups = new Map<number, KnowledgeCourse[]>();
+        const groups = new Map<number, CatalogCourse[]>();
         for (const course of courses) {
             const terms = courseMeta.get(course.id)?.terms ?? [];
             const matching = terms.filter(term => term >= 1 && term <= 8 && (targetGrade === null || Math.ceil(term / 2) === targetGrade));
@@ -195,7 +226,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
     }, [courses, courseMeta, targetGrade]);
 
     const graphNodes = useMemo(() => {
-        if (view !== 'graph') return { doc: '', linked: [] as KnowledgeCourse[] };
+        if (view !== 'graph') return { doc: '', linked: [] as CatalogCourse[] };
         const scoped = curriculum.filter(item => item.plans.some(inPlan));
         const scopedCodes = new Set(scoped.map(item => item.code));
         const nodes = scoped.filter(item => (!q || item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q) || item.requires.some(r => r.toLowerCase().includes(q))));
@@ -223,7 +254,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
                 }
             }
             lines.push('```');
-            const linked: KnowledgeCourse[] = [];
+            const linked: CatalogCourse[] = [];
             const seenCourses = new Set<string>();
             for (const n of nodes) {
                 const kc = compiledByCode.get(n.code);
@@ -235,7 +266,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
             return { doc: nodes.length ? lines.join('\n') : '当前筛选没有培养方案课程。', linked };
         }
 
-    }, [view, curriculum, byCode, compiledByCode, knowledge.courses, courses, major, category, nature, q, planYear]);
+    }, [view, curriculum, byCode, compiledByCode, courses, major, category, nature, q, planYear]);
 
     return <div className="sd page knowledge"><div className="wrap">
         <div className="ph"><div><h1>知识</h1><p>按培养方案与学期组织的知识体系，每门课连着它的先修依赖、课程资料。</p></div></div>
@@ -265,7 +296,9 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
         </div>
         {view === 'graph'
             ? <div className="kn-graph">
-                <DocText text={graphNodes.doc} />
+                {document.status === 'ready' ? <DocText text={graphNodes.doc} />
+                    : document.status === 'failed' ? <p role="alert">依赖图没能打开。<button onClick={document.retry}>重试</button></p>
+                        : <p className="muted" role="status">正在打开依赖图…</p>}
                 {graphNodes.linked.length ? <div className="kn-graph-links">
                     <small>图中有已编译资料的课程（点击进入）</small>
                     <div>{graphNodes.linked.map(c => <button key={c.id} style={tone(c.id)} onClick={() => onOpen(c.id)}>{c.name}</button>)}</div>
@@ -277,8 +310,6 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
                     <section key={section.term} className="kn-term-group">
                         <header className="kn-term-head"><h2>{section.title}</h2><small>{section.sub}</small></header>
                         <div className="kn-courses">{section.courses.map(course => {
-                            const topics = new Set(course.chapters.flatMap(chapter => chapter.topics)).size;
-                            const materials = knowledge.materials.filter(item => item.course === course.id).length;
                             const meta = courseMeta.get(course.id);
                             const badges = [
                                 primaryCodeLabel(course.codes),
@@ -289,7 +320,7 @@ function Home({ knowledge, curriculum, onOpen }: { knowledge: Knowledge; curricu
                             return <button key={course.id} className="kn-course" style={tone(course.id)} onClick={() => onOpen(course.id)}>
                                 <b>{course.name}</b>
                                 <small>{badges.join(' · ')}</small>
-                                <span>{course.chapters.length} 章 · {topics} 个知识点 · {materials} 份资料</span>
+                                <span>{course.chapters.length} 章 · {course.topics} 个知识点 · {course.materials} 份资料</span>
                                 <Chevron />
                             </button>;
                         })}</div>
@@ -345,6 +376,7 @@ function TopicView({ topic }: { topic: KnowledgeTopic }) {
 }
 
 function MaterialView({ material, anchor, onTopic }: { material: KnowledgeMaterial; anchor: string | null; onTopic: (href: string) => void }) {
+    const documentRef = useRef<HTMLElement>(null);
     const text = useText(material.path);
     const parts = useMemo(() => {
         if (text === null) return null;
@@ -355,11 +387,36 @@ function MaterialView({ material, anchor, onTopic }: { material: KnowledgeMateri
     useEffect(() => { setShown(new Set()); }, [material.path]);
     const owner = parts?.find(part => part.kind === 'section' && anchor && part.answer.some(piece => containsAnchor(piece.blocks, anchor)));
     const ownerAnchor = owner?.kind === 'section' ? owner.anchor : null;
-    const visible = !ownerAnchor || shown.has(ownerAnchor);
     useEffect(() => { if (ownerAnchor) setShown(current => new Set([...current, ownerAnchor])); }, [ownerAnchor]);
-    useEffect(() => { if (parts && anchor && visible) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' })); }, [parts, anchor, visible]);
+    useEffect(() => {
+        const article = documentRef.current;
+        if (!article || !anchor) return;
+        // Pictures and formulas can still grow after the address opens. Follow that address until the reader
+        // takes control, including while its text is loading or its containing answer is being revealed.
+        const intent = new AbortController();
+        let frame = 0;
+        const align = () => {
+            frame = 0;
+            if (intent.signal.aborted) return;
+            const target = document.getElementById(anchor);
+            if (target && article.contains(target)) target.scrollIntoView({ block: 'start', behavior: 'instant' });
+        };
+        const schedule = () => { if (!intent.signal.aborted && !frame) frame = requestAnimationFrame(align); };
+        const observer = new ResizeObserver(schedule);
+        const stop = () => { intent.abort(); observer.disconnect(); cancelAnimationFrame(frame); };
+        const options = { capture: true, passive: true, signal: intent.signal };
+        addEventListener('wheel', stop, options);
+        addEventListener('touchstart', stop, options);
+        addEventListener('pointerdown', stop, options);
+        addEventListener('keydown', event => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) stop();
+        }, options);
+        observer.observe(article);
+        schedule();
+        return stop;
+    }, [material.path, anchor]);
     const all = parts?.filter(part => part.kind === 'section' && part.answer.length).length ?? 0;
-    return <article className="kn-doc">
+    return <article className="kn-doc" ref={documentRef}>
         <p className="kn-count"><span className="kn-kind" style={{ '--kind': `var(--${KIND_TONE[material.kind] ?? 'muted'})` } as CSSProperties}>{material.kind}</span>{[material.term].filter(Boolean).map(term => ` · ${term}`)}{material.sections ? ` · ${material.sections} 处关联` : ''}{/^https?:\/\//.test(material.source) ? <> · <a href={material.source} target="_blank" rel="noreferrer">原件</a></> : null}
             {all && material.kind !== '课件' ? <button className="kn-toggle" onClick={() => setShown(shown.size ? new Set() : new Set(parts!.flatMap(part => part.kind === 'section' ? [part.anchor] : [])))}>{shown.size ? '收起全部解答' : '展开全部解答'}</button> : null}</p>
         {parts === null ? <p className="muted">正在打开…</p> : parts.map((part, at) => {

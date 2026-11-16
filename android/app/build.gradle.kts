@@ -149,7 +149,9 @@ val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtu
         rootProject.file("../public/data/${metadata["version"]}")
     }) {
         include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/B240402.json")
+        include("knowledge/materials/batch-2/B0300053S/数据结构第5章-树课件.md")
     }
+    from(manifest) { rename { "release.json" } }
     into(layout.buildDirectory.dir("generated/academic-test/data"))
 }
 val verifyMapInputs = tasks.register<VerifyMapInputsTask>("verifyMapInputs") {
@@ -178,6 +180,7 @@ android {
         applicationId = "top.hicancan.studev"
         minSdk = (androidProduct["minSdk"] as Number).toInt()
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Production distribution is arm64 only. Debug keeps x86_64 so the
         // emulator remains a first-class development target.
         ndk { abiFilters += listOf("arm64-v8a") }
@@ -235,6 +238,7 @@ android {
         }
         getByName("test").resources.directories.add(layout.buildDirectory.dir("generated/campus/assets").get().asFile.absolutePath)
         getByName("test").resources.directories.add(layout.buildDirectory.dir("generated/academic-test").get().asFile.absolutePath)
+        getByName("androidTest").assets.directories.add(layout.buildDirectory.dir("generated/academic-test").get().asFile.absolutePath)
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -264,5 +268,9 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     testImplementation(libs.junit)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
     debugImplementation(libs.compose.ui.tooling)
 }

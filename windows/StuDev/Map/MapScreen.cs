@@ -117,7 +117,7 @@ public sealed partial class MapScreen : Screen
         loading = true;
         try
         {
-            var places = Space.Load(repo); var shape = repo.Read("space/{Product.Campus}/model.json", FactsJson.Default.CampusModel); var index = repo.Rooms();
+            var places = Space.Load(repo); var shape = repo.Read($"space/{Product.Campus}/model.json", FactsJson.Default.CampusModel); var index = repo.Rooms();
             await Task.WhenAll(places, shape, index);
             space = places.Result; model = shape.Result; roomIndex = index.Result;
             roomById = roomIndex.Rooms.Where(r => Names.Placed(r.Id)).ToDictionary(r => r.Id);

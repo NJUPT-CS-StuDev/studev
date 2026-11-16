@@ -6,6 +6,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -37,8 +38,61 @@ public static class Doc
     {
         var column = new StackPanel { Spacing = 10 };
         for (var i = 0; i < blocks.Count; i++) column.Children.Add(Block(blocks[i]["block"]!, link, live && i == blocks.Count - 1, image));
-        if (anchor is not null) column.Loaded += (_, _) => FindAnchor(column, anchor)?.StartBringIntoView();
+        if (anchor is not null) FollowAnchor(column, anchor);
         return column;
+    }
+
+    /** An addressed heading follows asynchronous layout until the reader takes over this document's scroller. */
+    private static void FollowAnchor(FrameworkElement document, string anchor)
+    {
+        ScrollViewer? viewport = null;
+        FrameworkElement? heading = null;
+        var queued = false;
+        PointerEventHandler pointer = null!;
+        KeyEventHandler key = null!;
+        pointer = (_, _) => Stop();
+        key = (_, _) => Stop();
+
+        void Stop()
+        {
+            if (viewport is null) return;
+            viewport.LayoutUpdated -= Layout;
+            viewport.RemoveHandler(UIElement.PointerPressedEvent, pointer);
+            viewport.RemoveHandler(UIElement.PointerWheelChangedEvent, pointer);
+            viewport.RemoveHandler(UIElement.KeyDownEvent, key);
+            viewport = null;
+            heading = null;
+        }
+
+        void Layout(object? sender, object args)
+        {
+            if (viewport is null || heading is null || queued) return;
+            queued = true;
+            document.DispatcherQueue.TryEnqueue(() =>
+            {
+                queued = false;
+                if (viewport?.Content is not UIElement content || heading is null) return;
+                var top = heading.TransformToVisual(content).TransformPoint(default).Y;
+                var offset = Math.Clamp(top, 0, viewport.ScrollableHeight);
+                if (Math.Abs(viewport.VerticalOffset - offset) > .5) viewport.ChangeView(null, offset, null, true);
+            });
+        }
+
+        document.Loaded += (_, _) =>
+        {
+            Stop();
+            heading = FindAnchor(document, anchor);
+            if (heading is null) return;
+            for (var parent = VisualTreeHelper.GetParent(document); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+                if (parent is ScrollViewer scroll) { viewport = scroll; break; }
+            if (viewport is null) return;
+            viewport.LayoutUpdated += Layout;
+            viewport.AddHandler(UIElement.PointerPressedEvent, pointer, true);
+            viewport.AddHandler(UIElement.PointerWheelChangedEvent, pointer, true);
+            viewport.AddHandler(UIElement.KeyDownEvent, key, true);
+            Layout(null, EventArgs.Empty);
+        };
+        document.Unloaded += (_, _) => Stop();
     }
 
     private static FrameworkElement? FindAnchor(DependencyObject parent, string anchor)

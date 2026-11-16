@@ -191,29 +191,15 @@ public sealed partial class KnowledgeScreen : Screen
         allMajors.AddRange(preferredMajors.Where(foundMajors.Contains));
         allMajors.AddRange(foundMajors.Where(m => !preferredMajors.Contains(m)));
 
-        var gradeNum = gradeFilter switch { "大一" => 1, "大二" => 2, "大三" => 3, "大四" => 4, _ => 0 };
-        var q = query.Trim().ToLowerInvariant();
-        var filtered = idx.Courses.Where(c =>
-        {
-            var meta = metaMap[c.Id];
-            if (categoryFilter != "全部" && !meta.Cats.Contains(categoryFilter)) return false;
-            if (natureFilter != "全部" && !meta.Nats.Contains(natureFilter)) return false;
-            if (majorFilter != "全部专业" && !meta.Majs.Contains(majorFilter)) return false;
-            if (gradeNum > 0 && !meta.Terms.Any(t => (t + 1) / 2 == gradeNum)) return false;
-            if (q.Length == 0) return true;
-            return c.Name.ToLowerInvariant().Contains(q)
-                || c.Codes.Any(code => code.ToLowerInvariant().Contains(q))
-                || c.Chapters.Any(ch => ch.Title.ToLowerInvariant().Contains(q));
-        }).ToList();
-
         var rootCol = new StackPanel { Spacing = 14 };
+        var results = new StackPanel { Spacing = 14 };
         rootCol.Children.Add(Pages.Header("知识", "按培养方案与学期组织的知识体系，每门课连着先修依赖、课程资料。"));
 
         var topRow = new Grid { ColumnSpacing = 12 };
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 380 });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var searchBox = Kit.Field(query, "筛选课程名称、课程代码或章节…", "筛选课程");
-        searchBox.TextChanged += (_, _) => { query = searchBox.Text; Render(); };
+        searchBox.TextChanged += (_, _) => { query = searchBox.Text; RenderResults(); };
         topRow.Children.Add(searchBox);
         var modeSwitch = Kit.Choice([("list", "按学期看"), ("graph", "培养方案依赖图")], homeView, v => { homeView = v; Render(); });
         Grid.SetColumn(modeSwitch, 1);
@@ -235,98 +221,121 @@ public sealed partial class KnowledgeScreen : Screen
         filterWrap.Children.Add(majorBox);
         rootCol.Children.Add(filterWrap);
 
-        if (homeView == "graph")
+        void RenderResults()
         {
-            var scoped = curriculum.Where(item => item.Plans.Any(InPlan)).ToList();
-            var scopedCodes = scoped.Select(i => i.Code).ToHashSet();
-            var nodes = scoped.Where(item => (q.Length == 0 || item.Name.ToLowerInvariant().Contains(q) || item.Code.ToLowerInvariant().Contains(q))).ToList();
-            var nodeSet = nodes.Select(n => n.Code).ToHashSet();
-            foreach (var n in nodes.ToList())
-                foreach (var r in n.Requires)
-                    if (scopedCodes.Contains(r) && !nodeSet.Contains(r) && byCode.TryGetValue(r, out var reqCourse)) { nodes.Add(reqCourse); nodeSet.Add(r); }
-
-            var md = new StringBuilder();
-            md.AppendLine("```mermaid");
-            md.AppendLine("flowchart LR");
-            List<KnowledgeCourse> linkedCourses;
+            results.Children.Clear();
+            var gradeNum = gradeFilter switch { "大一" => 1, "大二" => 2, "大三" => 3, "大四" => 4, _ => 0 };
+            var q = query.Trim().ToLowerInvariant();
+            var filtered = idx.Courses.Where(c =>
             {
-                var idOf = nodes.Select((n, i) => (n.Code, Id: $"P{i}")).ToDictionary(x => x.Code, x => x.Id);
-                foreach (var n in nodes) md.AppendLine($"  {idOf[n.Code]}[\"{SafeMermaidLabel(n.Name)}\"]");
-                foreach (var n in nodes) foreach (var req in n.Requires) if (idOf.TryGetValue(req, out var fromId)) md.AppendLine($"  {fromId} --> {idOf[n.Code]}");
-                linkedCourses = nodes.Select(n => compiledByCode.GetValueOrDefault(n.Code)).Where(c => c is not null).Cast<KnowledgeCourse>().DistinctBy(c => c.Id).ToList();
-            }
-            md.AppendLine("```");
+                var meta = metaMap[c.Id];
+                if (categoryFilter != "全部" && !meta.Cats.Contains(categoryFilter)) return false;
+                if (natureFilter != "全部" && !meta.Nats.Contains(natureFilter)) return false;
+                if (majorFilter != "全部专业" && !meta.Majs.Contains(majorFilter)) return false;
+                if (gradeNum > 0 && !meta.Terms.Any(t => (t + 1) / 2 == gradeNum)) return false;
+                if (q.Length == 0) return true;
+                return c.Name.ToLowerInvariant().Contains(q)
+                    || c.Codes.Any(code => code.ToLowerInvariant().Contains(q))
+                    || c.Chapters.Any(ch => ch.Title.ToLowerInvariant().Contains(q));
+            }).ToList();
 
-            var card = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(18) };
-            var graphStack = new StackPanel { Spacing = 14 };
-            graphStack.Children.Add(Doc.Make(Doc.Read(nodes.Count > 0 ? md.ToString() : "当前筛选没有培养方案课程。")));
-            if (linkedCourses.Count > 0)
+            if (homeView == "graph")
             {
-                graphStack.Children.Add(Kit.Hairline());
-                graphStack.Children.Add(Kit.Text("图中有已编译资料的课程（点击进入）", Role.Caption, "muted"));
-                var pills = new WrapRow { Gap = 8 };
-                foreach (var c in linkedCourses)
+                var scoped = curriculum.Where(item => item.Plans.Any(InPlan)).ToList();
+                var scopedCodes = scoped.Select(i => i.Code).ToHashSet();
+                var nodes = scoped.Where(item => (q.Length == 0 || item.Name.ToLowerInvariant().Contains(q) || item.Code.ToLowerInvariant().Contains(q))).ToList();
+                var nodeSet = nodes.Select(n => n.Code).ToHashSet();
+                foreach (var n in nodes.ToList())
+                    foreach (var r in n.Requires)
+                        if (scopedCodes.Contains(r) && !nodeSet.Contains(r) && byCode.TryGetValue(r, out var reqCourse)) { nodes.Add(reqCourse); nodeSet.Add(r); }
+
+                var md = new StringBuilder();
+                md.AppendLine("```mermaid");
+                md.AppendLine("flowchart LR");
+                List<KnowledgeCourse> linkedCourses;
                 {
-                    var t = ToneOf(c.Id);
-                    var pill = new Tap(Paint.Tone(t, "bg"), Paint.ToneFaded(t, "bg", .85))
-                    {
-                        CornerRadius = new CornerRadius(8), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(1),
-                        Padding = new Thickness(11, 5, 11, 5), Content = Kit.Text(c.Name, Role.Label),
-                    };
-                    ((TextBlock)pill.Content).Foreground = Paint.Tone(t, "fg");
-                    pill.Click += (_, _) => Open(course: c.Id);
-                    pills.Children.Add(pill);
+                    var idOf = nodes.Select((n, i) => (n.Code, Id: $"P{i}")).ToDictionary(x => x.Code, x => x.Id);
+                    foreach (var n in nodes) md.AppendLine($"  {idOf[n.Code]}[\"{SafeMermaidLabel(n.Name)}\"]");
+                    foreach (var n in nodes) foreach (var req in n.Requires) if (idOf.TryGetValue(req, out var fromId)) md.AppendLine($"  {fromId} --> {idOf[n.Code]}");
+                    linkedCourses = nodes.Select(n => compiledByCode.GetValueOrDefault(n.Code)).Where(c => c is not null).Cast<KnowledgeCourse>().DistinctBy(c => c.Id).ToList();
                 }
-                graphStack.Children.Add(pills);
-            }
-            card.Child = graphStack;
-            rootCol.Children.Add(card);
-        }
-        else
-        {
-            var termTitles = new[] { "", "大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下" };
-            var grouped = filtered.SelectMany(c => {
-                var terms = metaMap[c.Id].Terms.Where(t => gradeNum == 0 || (t + 1) / 2 == gradeNum).ToList();
-                return (terms.Count > 0 ? terms : [99]).Select(term => (Term: term, Course: c));
-            }).GroupBy(item => item.Term, item => item.Course).OrderBy(g => g.Key).ToList();
+                md.AppendLine("```");
 
-            if (grouped.Count == 0) rootCol.Children.Add(Pages.Empty("没有符合当前筛选条件的课程"));
-            foreach (var group in grouped)
-            {
-                var termTitle = group.Key is >= 1 and <= 8 ? termTitles[group.Key] : "其他与通识课程";
-                var termSub = group.Key is >= 1 and <= 8 ? $"第 {group.Key} 学期 · {group.Count()} 门" : $"{group.Count()} 门";
-                var head = new Grid { Padding = new Thickness(0, 8, 0, 4), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) };
-                head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var hTitle = Kit.Text(termTitle, Role.Heading); hTitle.FontSize = 17; head.Children.Add(hTitle);
-                var hSub = Kit.Text(termSub, Role.Caption, "muted"); hSub.VerticalAlignment = VerticalAlignment.Bottom; Grid.SetColumn(hSub, 1); head.Children.Add(hSub);
-                rootCol.Children.Add(head);
-
-                var grid = new WrapRow { Gap = 12 };
-                foreach (var c in group)
+                var card = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(18) };
+                var graphStack = new StackPanel { Spacing = 14 };
+                graphStack.Children.Add(Doc.Make(Doc.Read(nodes.Count > 0 ? md.ToString() : "当前筛选没有培养方案课程。")));
+                if (linkedCourses.Count > 0)
                 {
-                    var t = ToneOf(c.Id);
-                    var topicsCount = c.chaptersCountTopics(out var chCount);
-                    var matsCount = idx.Materials.Count(m => m.Course == c.Id);
-                    var meta = metaMap[c.Id];
-                    var codeLabel = c.Codes.Count > 1 ? $"{c.Codes[0]} +{c.Codes.Count - 1}" : c.Codes.FirstOrDefault() ?? "培养方案课程";
-                    var sub = string.Join(" · ", new[] { codeLabel, meta.Cats.FirstOrDefault(), meta.Nats.Count > 0 ? string.Join("/", meta.Nats) : null, meta.Cred is { } cr ? $"{cr} 学分" : null }.Where(s => !string.IsNullOrEmpty(s)));
-                    var stack = new StackPanel { Spacing = 4, Width = 310 };
-                    var title = Kit.Text(c.Name, Role.Body, bold: true); title.Foreground = Paint.Tone(t, "fg");
-                    stack.Children.Add(title);
-                    stack.Children.Add(Kit.Text(sub, Role.Caption, "muted", wrap: true));
-                    stack.Children.Add(Kit.Text($"{chCount} 章 · {topicsCount} 个知识点 · {matsCount} 份资料", Role.Caption, "muted"));
-                    var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
+                    graphStack.Children.Add(Kit.Hairline());
+                    graphStack.Children.Add(Kit.Text("图中有已编译资料的课程（点击进入）", Role.Caption, "muted"));
+                    var pills = new WrapRow { Gap = 8 };
+                    foreach (var c in linkedCourses)
                     {
-                        CornerRadius = new CornerRadius(10), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
-                        Padding = new Thickness(16, 14, 16, 14), Content = stack,
-                    };
-                    tap.Click += (_, _) => Open(course: c.Id);
-                    grid.Children.Add(tap);
+                        var t = ToneOf(c.Id);
+                        var pill = new Tap(Paint.Tone(t, "bg"), Paint.ToneFaded(t, "bg", .85))
+                        {
+                            CornerRadius = new CornerRadius(8), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(1),
+                            Padding = new Thickness(11, 5, 11, 5), Content = Kit.Text(c.Name, Role.Label),
+                        };
+                        ((TextBlock)pill.Content).Foreground = Paint.Tone(t, "fg");
+                        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(pill, c.Name);
+                        pill.Click += (_, _) => Open(course: c.Id);
+                        pills.Children.Add(pill);
+                    }
+                    graphStack.Children.Add(pills);
                 }
-                rootCol.Children.Add(grid);
+                card.Child = graphStack;
+                results.Children.Add(card);
+            }
+            else
+            {
+                var termTitles = new[] { "", "大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下" };
+                var grouped = filtered.SelectMany(c => {
+                    var terms = metaMap[c.Id].Terms.Where(t => gradeNum == 0 || (t + 1) / 2 == gradeNum).ToList();
+                    return (terms.Count > 0 ? terms : [99]).Select(term => (Term: term, Course: c));
+                }).GroupBy(item => item.Term, item => item.Course).OrderBy(g => g.Key).ToList();
+
+                if (grouped.Count == 0) results.Children.Add(Pages.Empty("没有符合当前筛选条件的课程"));
+                foreach (var group in grouped)
+                {
+                    var termTitle = group.Key is >= 1 and <= 8 ? termTitles[group.Key] : "其他与通识课程";
+                    var termSub = group.Key is >= 1 and <= 8 ? $"第 {group.Key} 学期 · {group.Count()} 门" : $"{group.Count()} 门";
+                    var head = new Grid { Padding = new Thickness(0, 8, 0, 4), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) };
+                    head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    var hTitle = Kit.Text(termTitle, Role.Heading); hTitle.FontSize = 17; head.Children.Add(hTitle);
+                    var hSub = Kit.Text(termSub, Role.Caption, "muted"); hSub.VerticalAlignment = VerticalAlignment.Bottom; Grid.SetColumn(hSub, 1); head.Children.Add(hSub);
+                    results.Children.Add(head);
+
+                    var grid = new WrapRow { Gap = 12 };
+                    foreach (var c in group)
+                    {
+                        var t = ToneOf(c.Id);
+                        var topicsCount = c.chaptersCountTopics(out var chCount);
+                        var matsCount = idx.Materials.Count(m => m.Course == c.Id);
+                        var meta = metaMap[c.Id];
+                        var codeLabel = c.Codes.Count > 1 ? $"{c.Codes[0]} +{c.Codes.Count - 1}" : c.Codes.FirstOrDefault() ?? "培养方案课程";
+                        var sub = string.Join(" · ", new[] { codeLabel, meta.Cats.FirstOrDefault(), meta.Nats.Count > 0 ? string.Join("/", meta.Nats) : null, meta.Cred is { } cr ? $"{cr} 学分" : null }.Where(s => !string.IsNullOrEmpty(s)));
+                        var stack = new StackPanel { Spacing = 4, Width = 310 };
+                        var title = Kit.Text(c.Name, Role.Body, bold: true); title.Foreground = Paint.Tone(t, "fg");
+                        stack.Children.Add(title);
+                        stack.Children.Add(Kit.Text(sub, Role.Caption, "muted", wrap: true));
+                        stack.Children.Add(Kit.Text($"{chCount} 章 · {topicsCount} 个知识点 · {matsCount} 份资料", Role.Caption, "muted"));
+                        var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
+                        {
+                            CornerRadius = new CornerRadius(10), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
+                            Padding = new Thickness(16, 14, 16, 14), Content = stack,
+                        };
+                        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, c.Name);
+                        tap.Click += (_, _) => Open(course: c.Id);
+                        grid.Children.Add(tap);
+                    }
+                    results.Children.Add(grid);
+                }
             }
         }
 
+        rootCol.Children.Add(results);
+        RenderResults();
         host.Children.Add(Pages.Frame(rootCol, 1160));
     }
 

@@ -277,7 +277,8 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         LaunchedEffect(course.id, topic?.id, material?.path, route.knowledgeAnchor) {
             if (route.knowledgeAnchor == null) scrollState.scrollTo(0)
         }
-        Column(Modifier.weight(1f).verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        key(relPath) { DocAnchors(route.knowledgeAnchor.takeIf { material != null }, scrollState) { anchors ->
+        Column(Modifier.weight(1f).then(anchors).verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when {
                 textErr -> Plain("这篇内容没能加载，请稍后重试。", 14.sp, Ink.muted)
                 text == null -> Plain("正在打开…", 14.sp, Ink.muted)
@@ -289,7 +290,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
                     route.knowledge(course = course.id, topic = t, material = m)
                 }
             }
-        }
+        } } }
     }
 
     if (showOutline) {
@@ -660,7 +661,6 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
     val owner = parts.filterIsInstance<MatPart.Section>().firstOrNull { part -> anchor != null && part.answer.any { (_, blocks) -> blocks.any { containsAnchor(it, anchor) } } }?.anchor
     LaunchedEffect(owner) { if (owner != null) shown = shown + owner }
 
-    DocAnchors(anchor.takeIf { owner == null || owner in shown }) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         SmallTag(material.kind, ct.bg, ct.fg)
         val meta = listOfNotNull(material.term, material.sections.takeIf { it > 0 }?.let { "$it 处关联" }).joinToString(" · ")
@@ -717,5 +717,5 @@ private fun primaryCodeLabel(codes: List<String>) = if (codes.size > 1) "${codes
                 } }
             }
         }
-    } }
+    }
 }

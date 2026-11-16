@@ -1,7 +1,15 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
 import KnowledgeApp from '../campus/knowledge/KnowledgeApp';
+import { readFile } from 'node:fs/promises';
+import { DATA_RELEASE } from '../campus/world/config';
+import { knowledgeCatalog } from '../campus/knowledge/catalog';
+const [knowledge, curriculum] = await Promise.all([
+  readFile(`public${DATA_RELEASE.base}/knowledge/knowledge.json`, 'utf8').then(JSON.parse),
+  readFile(`public${DATA_RELEASE.base}/curriculum/courses.json`, 'utf8').then(JSON.parse),
+]);
+const catalog = knowledgeCatalog(knowledge, curriculum);
 ---
 <SiteLayout title="知识 — StuDev" description="按课程组织的知识点：每个知识点连着它依赖的、用到它的，以及历年考过它的题。" active="knowledge">
-  <KnowledgeApp client:only="react" />
+  <KnowledgeApp catalog={catalog} client:load />
 </SiteLayout>

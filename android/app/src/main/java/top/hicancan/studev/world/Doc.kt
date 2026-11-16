@@ -9,8 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -23,7 +22,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.*
@@ -37,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.flow.filterNotNull
+import kotlin.math.roundToInt
 import top.hicancan.studev.app.Ink
 import top.hicancan.studev.app.Plain
 import top.hicancan.studev.app.marks
@@ -59,28 +67,57 @@ private val JsonObject.type get() = getValue("type").jsonPrimitive.content
 private fun JsonObject.list(key: String) = get(key)?.jsonArray.orEmpty().map { it.jsonObject }
 private fun JsonObject.str(key: String) = get(key)?.jsonPrimitive?.contentOrNull.orEmpty()
 
-private val AnchorTargets = staticCompositionLocalOf<MutableMap<String, BringIntoViewRequester>?> { null }
-
-/** A document view opens the address the shared reader assigned to one of its headings. */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun DocAnchors(anchor: String?, content: @Composable () -> Unit) {
-    val targets = remember { mutableMapOf<String, BringIntoViewRequester>() }
-    LaunchedEffect(anchor) {
-        if (anchor != null) { withFrameNanos {}; targets[anchor]?.bringIntoView() }
-    }
-    CompositionLocalProvider(AnchorTargets provides targets, content = content)
+private class AnchorTarget {
+    var coordinates: LayoutCoordinates? = null
+    var offset by mutableStateOf<Int?>(null)
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun DocAnchor(anchor: String, content: @Composable () -> Unit) {
-    val targets = AnchorTargets.current
-    if (targets == null) { content(); return }
-    val requester = remember(anchor) { BringIntoViewRequester() }
-    DisposableEffect(targets, anchor, requester) {
-        targets[anchor] = requester
-        onDispose { if (targets[anchor] === requester) targets.remove(anchor) }
+private class AnchorViewport(val scroll: ScrollState) {
+    val targets = mutableStateMapOf<String, AnchorTarget>()
+    var coordinates: LayoutCoordinates? = null
+    var following by mutableStateOf(true)
+
+    fun place(target: AnchorTarget) {
+        val viewport = coordinates?.takeIf { it.isAttached } ?: return
+        val heading = target.coordinates?.takeIf { it.isAttached } ?: return
+        // Store the content position during layout, before scrollTo can change ScrollState.
+        target.offset = (viewport.localPositionOf(heading, Offset.Zero).y + scroll.value).roundToInt()
     }
-    Box(Modifier.bringIntoViewRequester(requester)) { content() }
+}
+
+private val AnchorTargets = staticCompositionLocalOf<AnchorViewport?> { null }
+
+/** Keep an addressed heading at the viewport's top through image layout, until the reader interacts. */
+@Composable fun DocAnchors(anchor: String?, scroll: ScrollState, content: @Composable (Modifier) -> Unit) {
+    val viewport = remember(anchor, scroll) { AnchorViewport(scroll) }
+    LaunchedEffect(viewport) {
+        if (anchor != null) snapshotFlow {
+            viewport.targets[anchor]?.offset?.takeIf { viewport.following }?.let { it to scroll.maxValue }
+        }.filterNotNull().collect { (offset, _) -> scroll.scrollTo(offset.coerceAtLeast(0)) }
+    }
+    val modifier = Modifier.onGloballyPositioned {
+        viewport.coordinates = it
+        viewport.targets.values.forEach(viewport::place)
+    }.pointerInput(viewport) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type == PointerEventType.Scroll || event.changes.any { it.pressed }) viewport.following = false
+            }
+        }
+    }.onPreviewKeyEvent { viewport.following = false; false }
+    CompositionLocalProvider(AnchorTargets provides viewport.takeIf { anchor != null }) { content(modifier) }
+}
+
+@Composable fun DocAnchor(anchor: String, content: @Composable () -> Unit) {
+    val viewport = AnchorTargets.current
+    if (viewport == null) { content(); return }
+    val target = remember(viewport, anchor) { AnchorTarget() }
+    DisposableEffect(viewport, anchor, target) {
+        viewport.targets[anchor] = target
+        onDispose { if (viewport.targets[anchor] === target) viewport.targets.remove(anchor) }
+    }
+    Box(Modifier.onGloballyPositioned { target.coordinates = it; viewport.place(target) }) { content() }
 }
 
 private sealed interface Run {

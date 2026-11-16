@@ -77,6 +77,31 @@ test('the first page starts light: the timetable loads itself after the shell', 
   assert.ok(!existsSync(join(output, 'logo.png')), 'full logo original must not be distributed');
 });
 
+test('knowledge opens with the released course catalogue before JavaScript or documents load', async () => {
+  const html = await readFile(join(output, 'knowledge/index.html'), 'utf8');
+  const release = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
+  const knowledge = JSON.parse(await readFile(`public${release.base}/knowledge/knowledge.json`, 'utf8'));
+  const courses = new Map();
+  let search;
+  const text = (node) => node.nodeName === '#text' ? node.value : (node.childNodes ?? []).map(text).join('');
+  walk(parse(html), (node) => {
+    const attr = attributes(node);
+    if (node.tagName === 'input' && attr['aria-label'] === '筛选课程') search = attr;
+    if (node.tagName === 'button' && attr.class?.split(/\s+/).includes('kn-course')) {
+      const name = node.childNodes.find(child => child.tagName === 'b');
+      const count = node.childNodes.find(child => child.tagName === 'span');
+      courses.set(text(name), text(count));
+    }
+  });
+  assert.equal(search?.type, 'search', 'course filtering must be present in the initial HTML');
+  assert.deepEqual([...courses.keys()].sort(), knowledge.courses.map(course => course.name).sort());
+  for (const course of knowledge.courses) {
+    const topics = new Set(course.chapters.flatMap(chapter => chapter.topics)).size;
+    const materials = knowledge.materials.filter(material => material.course === course.id).length;
+    assert.equal(courses.get(course.name), `${course.chapters.length} 章 · ${topics} 个知识点 · ${materials} 份资料`);
+  }
+});
+
 test('article metadata and Markdown emphasis remain correct', async () => {
   const firstStar = await readFile(join(output, 'study/guide-first-star/index.html'), 'utf8');
   assert.match(firstStar, /2026-09-23/);

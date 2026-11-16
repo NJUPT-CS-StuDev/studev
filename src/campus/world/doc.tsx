@@ -7,7 +7,7 @@ import { diagram, initialize, math, read, Stream, type Block, type Inline, type 
 
 let ready: Promise<void> | undefined;
 /** The kernel, loaded once. */
-export const docReady = () => ready ??= initialize();
+export const docReady = () => ready ??= initialize().catch(error => { ready = undefined; throw error; });
 export { read as readDoc, Stream as DocStream, type Block, type Inline, type Keyed, type Update };
 
 /** What the kernel drew, kept by what it was drawn from: a streamed answer draws the same formula many times over. */
