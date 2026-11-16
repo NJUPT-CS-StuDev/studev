@@ -193,7 +193,7 @@ public sealed partial class SearchScreen : Screen
                 var dot = new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 6, Height = 6, Fill = room.Busy ? Paint.Brush("faint") : Paint.Brush("free"), VerticalAlignment = VerticalAlignment.Center };
                 main.Children.Add(Kit.Line(5, dot, Kit.Text(room.Text, Role.Caption, "muted")));
             }
-            else if (adds) main.Children.Add(Marked(snippet!, r["snippetHighlights"]?.AsArray(), 12.5, "muted", "ink"));
+            else if (source != "places" && adds) main.Children.Add(Marked(snippet!, r["snippetHighlights"]?.AsArray(), 12.5, "muted", "ink"));
             Grid.SetColumn(main, 1); grid.Children.Add(main);
             var chev = Kit.Icon(Icons.Chevron, 14, "faint"); chev.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(chev, 2); grid.Children.Add(chev);
             var tap = new Tap(Paint.Brush("paper"), Paint.Faded("surfaceSunken", .55)) { Content = grid };
@@ -207,7 +207,8 @@ public sealed partial class SearchScreen : Screen
             return tap;
         }
         var date = r["publishedAt"]?.GetValue<string>() ?? r["updatedAt"]?.GetValue<string>();
-        var crumbs = string.Join(" › ", new[] { (string?)r["sourceName"], r["section"]?.GetValue<string>() }.Where(s => !string.IsNullOrEmpty(s)));
+        var sec = r["section"]?.GetValue<string>();
+        var crumbs = string.Join(" › ", new[] { (string?)r["sourceName"], sec == "Direct detail links" ? null : sec }.Where(s => !string.IsNullOrEmpty(s)));
         var doc = new StackPanel { Padding = new Thickness(0, 16, 0, 16), Spacing = 3 };
         doc.Children.Add(Kit.Text($"{crumbs}{(date is not null ? $" · {date[..10]}" : "")}{((string?)r["kind"] == "file" ? " · 文件" : (string?)r["kind"] == "link" ? " · 站外" : "")}", Role.Caption, "muted"));
         var link = Marked(title, r["titleHighlights"]?.AsArray(), 17, "brand", "brand", wrap: true); link.LineHeight = 24;

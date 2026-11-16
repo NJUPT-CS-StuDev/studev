@@ -156,7 +156,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
             }
             Column(Modifier.align(Alignment.BottomEnd).padding(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.End) {
                 if (BuildConfig.DEBUG && state.simulating) Box {
-                    FilledTonalIconButton(onClick = { debug = true }, Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreHoriz, "调试菜单") }
+                    FilledTonalIconButton(onClick = { debug = true }, Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreHoriz, "模拟选项") }
                     DropdownMenu(debug, { debug = false }) {
                         DropdownMenuItem(text = { Text("暂停 / 继续模拟") }, onClick = { debug = false; runtime.debugCommand("pause") })
                         DropdownMenuItem(text = { Text("模拟偏航") }, onClick = { debug = false; runtime.debugCommand("detour") })
@@ -213,7 +213,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                         FilterChip(state.mode == "walk", { runtime.mode("walk") }, { Text("步行") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, null, Modifier.size(18.dp)) }, modifier = Modifier.weight(1f), colors = modeColors)
                         FilterChip(state.mode == "bike", { runtime.mode("bike") }, { Text("骑行") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DirectionsBike, null, Modifier.size(18.dp)) }, modifier = Modifier.weight(1f), colors = modeColors)
                         if (BuildConfig.DEBUG) Box {
-                            IconButton(onClick = { debug = true }) { Icon(Icons.Outlined.MoreHoriz, "调试菜单") }
+                            IconButton(onClick = { debug = true }) { Icon(Icons.Outlined.MoreHoriz, "模拟选项") }
                             DropdownMenu(debug, { debug = false }) {
                                 DropdownMenuItem(text = { Text("模拟走一遍") }, onClick = { debug = false; start(true) }, enabled = state.route != null)
                                 DropdownMenuItem(text = { Text("模拟走一遍 · 20 倍速") }, onClick = { debug = false; start(true, 20.0) }, enabled = state.route != null)

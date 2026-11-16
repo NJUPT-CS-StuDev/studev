@@ -41,7 +41,7 @@
   /* The turning arrows: shown while pointed at or held, and once when the map first shows. */
   .ball-turn{fill:none;stroke:var(--muted);stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .2s}
   .ball:hover .ball-turn,.ball:active .ball-turn,.ball.hinting .ball-turn{opacity:1}
-  .ball-tip{position:absolute;right:60px;top:-2px;white-space:nowrap;line-height:1.5;padding:6px 10px;border-radius:8px;background:var(--ink);color:var(--paper);font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,.18);animation:sd-fade .2s;pointer-events:none}
+  .ball-tip{position:absolute;right:0;top:62px;white-space:nowrap;line-height:1.5;padding:6px 10px;border-radius:8px;background:var(--ink);color:var(--paper);font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,.18);animation:sd-fade .2s;pointer-events:none;z-index:4}
   .tilt svg{width:20px;height:20px;stroke:none;transition:transform .7s var(--ease)}
   .tilt svg .n{fill:var(--danger)}
   .tilt svg .s{fill:var(--faint);opacity:.45}

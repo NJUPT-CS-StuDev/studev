@@ -42,7 +42,7 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
 @Composable fun KeyRow(key: String?, value: String, note: String? = null, color: Color = Ink.text, chevron: Boolean = false, trailing: @Composable (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
     val base = Modifier.fillMaxWidth().topHairline(Ink.line)
     Row((if (onClick != null) base.clickable(onClick = onClick) else base).padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (key != null) Plain(key, 12.5.sp, Ink.faint, modifier = Modifier.width(40.dp))
+        if (key != null) Plain(key, 12.5.sp, Ink.faint, maxLines = 1, modifier = Modifier.width(56.dp))
         Column(Modifier.weight(1f)) { Plain(value, 14.sp, color); if (note != null) Plain(note, 12.sp, Ink.muted) }
         trailing?.invoke()
         if (chevron) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(16.dp), tint = Ink.faint)
@@ -61,11 +61,12 @@ fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(
 }
 /** One of a few, all in view. */
 @Composable fun Choice(items: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+    val padH = if (items.size >= 5) 10.dp else 14.dp
     Row(Modifier.clip(RoundedCornerShape(8.dp)).background(Ink.sunken).padding(2.dp)) {
         items.forEach { (key, label) ->
             val on = key == selected
-            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(if (on) Ink.paper else Color.Transparent).clickable { onSelect(key) }.padding(horizontal = 14.dp, vertical = 6.dp)) {
-                Plain(label, 13.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.Medium else FontWeight.Normal)
+            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(if (on) Ink.paper else Color.Transparent).clickable { onSelect(key) }.padding(horizontal = padH, vertical = 6.dp)) {
+                Plain(label, 13.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.Medium else FontWeight.Normal, maxLines = 1)
             }
         }
     }

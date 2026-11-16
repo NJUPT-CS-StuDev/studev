@@ -251,9 +251,9 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             Row(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, top = 12.dp, end = 68.dp).height(40.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(46.dp).fillMaxHeight().clickable { campusOpen = true }, contentAlignment = Alignment.Center) { Plain("仙林", 13.sp, weight = FontWeight.SemiBold) }
                 Box(Modifier.fillMaxHeight().width(1.dp).background(Ink.line))
-                Box(Modifier.weight(1f).fillMaxHeight().clickable { route.scope = "place"; route.tab = "search" }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) { Plain("搜地点或教室", 14.sp, Ink.faint) }
+                Box(Modifier.weight(1f).fillMaxHeight().clickable { route.scope = "place"; route.searchFocus = true; route.tab = "search" }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) { Plain("搜地点或教室", 14.sp, Ink.faint) }
             }
-            if (hinting) Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 19.dp, end = 64.dp).clip(RoundedCornerShape(6.dp)).background(Ink.text).padding(horizontal = 10.dp, vertical = 5.dp)) {
+            if (hinting) Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 64.dp, end = 12.dp).clip(RoundedCornerShape(8.dp)).background(Ink.text).padding(horizontal = 10.dp, vertical = 6.dp)) {
                 Column { Plain("拖动小球旋转视角 · 点按回正", 12.5.sp, Ink.paper); Plain("双指也能旋转，上下滑动调俯仰", 12.5.sp, Ink.paper) }
             }
             Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 3.dp, end = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -328,9 +328,9 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         }
     }
     if (campusOpen) PlainSheet("校区", { campusOpen = false }) {
-        KeyRow(null, "仙林", "${model?.buildings?.size ?: ""} 栋楼", trailing = { Plain("当前", 12.5.sp, Ink.muted) })
-        KeyRow(null, "三牌楼", "地图资料收集中")
-        KeyRow(null, "锁金", "地图资料收集中")
+        KeyRow(null, "仙林", "${model?.buildings?.size ?: ""} 栋楼", trailing = { Plain("当前", 12.5.sp, Ink.brand) })
+        KeyRow(null, "三牌楼", "地图资料收集中 · 敬请期待", color = Ink.faint)
+        KeyRow(null, "锁金", "地图资料收集中 · 敬请期待", color = Ink.faint)
     }
 }
 
@@ -441,7 +441,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 }
                 Plain(if (inFloor.isNotEmpty()) "${free.size} / ${inFloor.size} 间空闲" + (if (floor != null) " · 全楼 ${freeBy[building.id]?.first ?: 0} 间" else "") else "楼层布局", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp))
             }
-            item { KeyRow(null, "这栋楼的一切", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = building.id; route.tab = "search" }) }
+            item { KeyRow(null, "整栋楼的安排", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = building.id; route.tab = "search" }) }
             if (inFloor.isNotEmpty()) items(free, key = { it.first.id }) { (room, status) -> RoomRow(room, status) { openRoom(room.id) } }
             else if (floor != null) items(scene?.roomsOf(building.id, floor).orEmpty(), key = { it.id }) { row ->
                 val place = campus.byId[row.id]

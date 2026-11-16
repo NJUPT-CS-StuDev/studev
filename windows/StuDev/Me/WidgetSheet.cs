@@ -10,7 +10,7 @@ public static class WidgetSheet
 {
     private static readonly (string Kind, string Name, string Said)[] Kinds =
     [
-        ("list", "清单", "过期的、这一周要做的和考试，一句话添加"),
+        ("list", "清单", "之前没做完的、这一周要做的和考试，一句话添加"),
         ("calendar", "日历", "日、周、学期，课程、实验和考试一眼看到"),
     ];
     private static readonly Dictionary<string, string> ViewNames = new() { ["today"] = "今天", ["all"] = "全部", ["day"] = "日", ["week"] = "周", ["term"] = "学期" };

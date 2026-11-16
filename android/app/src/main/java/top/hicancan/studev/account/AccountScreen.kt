@@ -47,7 +47,7 @@ import top.hicancan.studev.app.Tokens
             }.getOrNull()
         }
     }
-    if (!valid) { Text("用于重要通知联系与自动匹配官方 QQ 头像", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    if (!valid) return
     Row(Modifier.fillMaxWidth().testTag("qq-preview"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
             avatar?.let { androidx.compose.foundation.Image(it, "QQ 头像", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
@@ -120,7 +120,7 @@ import top.hicancan.studev.app.Tokens
         Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(Tokens.Space.xl.dp), verticalArrangement = Arrangement.spacedBy(Tokens.Space.l.dp)) {
             if (!loaded) { CircularProgressIndicator(); return@Column }
             Icon(Icons.Outlined.Lock, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(if (user == null) if (register) "注册 studev" else "登录 studev" else user!!.nickname, style = MaterialTheme.typography.headlineMedium)
+            Text(if (user == null) if (register) "注册 StuDev" else "登录 StuDev" else user!!.nickname, style = MaterialTheme.typography.headlineMedium)
             Text(if (user == null) "每位同学都可以注册，网页与 App 共用一个账号。" else "学号 ${user!!.studentId}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             error?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error) }
             notice?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.primary) }
@@ -134,12 +134,13 @@ import top.hicancan.studev.app.Tokens
                 if (register) {
                     OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称") }, supportingText = { Text("其他同学只会看到你的昵称。身份与联系方式仅本人和管理员可见。") }, singleLine = true, enabled = !busy)
-                    OutlinedTextField(qq, { qq = it.take(12) }, Modifier.fillMaxWidth(), label = { Text("联系 QQ") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy)
+                    OutlinedTextField(qq, { qq = it.take(12) }, Modifier.fillMaxWidth(), label = { Text("联系 QQ") }, supportingText = { Text("用于重要通知、找回密码和注销验证，也可匹配 QQ 头像。") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy)
                     QqPreview(qq)
                 }
                 SecretField("密码", password, !busy) { password = it }
                 if (register) {
                     SecretField("确认密码", confirm, !busy) { confirm = it }
+                    Text("密码需要 12–256 个字符。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = agreed, onCheckedChange = { agreed = it }, enabled = !busy)
                         Column(Modifier.weight(1f)) {
@@ -170,7 +171,6 @@ import top.hicancan.studev.app.Tokens
                     client.request("/auth/password/forgot", buildJsonObject { put("studentId", id) })
                     notice = "如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，请在 30 分钟内打开。没收到的话看看垃圾箱。"
                 } }, enabled = !busy, contentPadding = PaddingValues(0.dp)) { Text("忘记密码？发送重设链接到 QQ 邮箱") }
-                Text("密码需要 12–256 个字符。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     listOf("profile" to "资料", "security" to "安全", "devices" to "设备").forEachIndexed { i, (value, label) ->

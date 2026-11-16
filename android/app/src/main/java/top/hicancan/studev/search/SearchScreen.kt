@@ -15,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
@@ -98,6 +100,13 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val channel = CHANNELS.firstOrNull { it.id == route.scope } ?: CHANNELS[0]
     val query = route.query.trim()
     val list = rememberLazyListState()
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(route.tab, route.searchFocus) {
+        if (route.tab == "search" && route.searchFocus) {
+            route.searchFocus = false
+            runCatching { searchFocus.requestFocus() }
+        }
+    }
     val browsing = query.isEmpty()
     val live = channel.id == "room" && browsing && route.within == null
     val key = listOf(query, channel.id, source, since, byDate, page, route.within, engine.hashCode()).toString()
@@ -141,11 +150,11 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp).padding(top = 14.dp)) {
         Box(Modifier.padding(end = 40.dp, bottom = 12.dp)) {
-            SearchField(route.query, "搜课程、老师、班级、地点、通知、资料") { route.query = it; page = 1 }
+            SearchField(route.query, "搜课程、老师、地点、通知、资料", Modifier.focusRequester(searchFocus)) { route.query = it; page = 1 }
         }
         route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; page = 1 }) } }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 18.dp) { next -> route.scope = next; source = null; if (next != "all" && CHANNELS.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }
+            TextTabs(CHANNELS.map { it.id to it.label }, channel.id, gap = 12.dp) { next -> route.scope = next; source = null; if (next != "all" && CHANNELS.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }
         }
         if (live) { RoomsBrowse(state, route, Modifier.weight(1f)); return@Column }
         if (channel.dated || channel.id == "all") Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -193,7 +202,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
                 Text(marked(hit.title, hit.ranges("titleHighlights"), SpanStyle(color = brand)), style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium, color = text), maxLines = 1)
                 hit.text("section")?.let { Plain(it, 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 8.dp), maxLines = 1) }
             }
-            hit.snippet?.takeIf { it != hit.title }?.let { Text(marked(it, hit.ranges("snippetHighlights"), SpanStyle(color = text)), style = TextStyle(fontSize = 12.5.sp, color = Ink.muted), maxLines = 1) }
+            hit.snippet?.takeIf { hit.source != "places" && it != hit.title }?.let { Text(marked(it, hit.ranges("snippetHighlights"), SpanStyle(color = text)), style = TextStyle(fontSize = 12.5.sp, color = Ink.muted), maxLines = 1) }
         }
         Plain("›", 15.sp, Ink.faint)
     }
@@ -205,8 +214,9 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val tint = SpanStyle(color = Ink.text, background = brand.copy(alpha = .1f))
     fun says(value: String) = value.replace(Regex("\\.[A-Za-z0-9]{1,5}$"), "").trim()
     val snippet = hit.snippet?.takeIf { value -> says(value) != says(hit.title) && hit.files.none { says(it.first) == says(value) } }
+    val section = hit.text("section")?.takeIf { it != "Direct detail links" }
     Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
-        Plain(listOfNotNull(hit.text("sourceName"), hit.text("section")).joinToString(" › ") + (hit.date?.let { " · $it" } ?: ""), 12.5.sp, Ink.muted, maxLines = 1)
+        Plain(listOfNotNull(hit.text("sourceName"), section).joinToString(" › ") + (hit.date?.let { " · $it" } ?: ""), 12.5.sp, Ink.muted, maxLines = 1)
         Text(marked(hit.title, hit.ranges("titleHighlights"), SpanStyle(fontWeight = FontWeight.Bold)), Modifier.padding(vertical = 3.dp).clickable { open(hit.url) }, style = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, color = brand))
         snippet?.let { Text(marked(it, hit.ranges("snippetHighlights"), tint), style = TextStyle(fontSize = 14.sp, lineHeight = 23.sp, color = Ink.muted), maxLines = 3) }
         if (hit.files.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {

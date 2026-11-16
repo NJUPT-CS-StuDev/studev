@@ -82,12 +82,20 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
 /** One thing on the timetable, wherever it was tapped: a lesson, an exam or 早锻炼. It says what matters
  *  for going there and preparing, and links on to the course, the people and the rest. */
 /** Who teaches it, in one row as the classes are: each name opens that teacher's timetable. */
+@Composable private fun KnowledgeRow(code: String?, course: String, repo: top.hicancan.studev.data.AcademicRepository?, onOpen: (String) -> Unit) {
+    val index by produceState<top.hicancan.studev.knowledge.KnowledgeIndex?>(null, repo) { value = repo?.let { runCatching { it.read<top.hicancan.studev.knowledge.KnowledgeIndex>("knowledge/knowledge.json") }.getOrNull() } }
+    val norm = code?.trim()?.uppercase()
+    val found = index?.courses?.firstOrNull { c -> (norm != null && norm in c.codes) || c.name == course || course in c.former } ?: return
+    val topics = found.chapters.sumOf { it.topics.size }
+    KeyRow("知识", "查看这门课的知识与真题", "${found.chapters.size} 章 · $topics 个知识点", chevron = true, onClick = { onOpen(found.id) })
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable private fun TeacherRow(teachers: List<String>, onOpen: (String) -> Unit) {
     val names = teachers.flatMap { it.split("、") }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     if (names.isEmpty()) return
     Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Plain("老师", 12.5.sp, Ink.faint, modifier = Modifier.width(40.dp))
+        Plain("老师", 12.5.sp, Ink.faint, maxLines = 1, modifier = Modifier.width(56.dp))
         FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             names.forEach { name ->
                 Surface({ onOpen(name) }, shape = RoundedCornerShape(50), color = Ink.sunken, modifier = Modifier.semantics { contentDescription = "$name 的课表" }) {
@@ -139,7 +147,6 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     if (event.kind == "run" && plan != null) {
         val place = plan.rule.xianlin
         PlainSheet("早锻炼", onClose, strip, head) {
-            if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
             Plain(whenText, 13.5.sp, Ink.muted)
             if (place != null) Row(Modifier.padding(top = 16.dp, bottom = 8.dp)) { ActionButton("去起点", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = "仙林/${place.route[0]}") } }
             if (place != null) {
@@ -147,6 +154,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                 KeyRow("刷脸", "起点 ${place.start_scan_end} 前，终点 ${place.end_scan_end} 前", if (place.male_minutes == place.female_minutes) "${place.male_minutes} 分钟内跑完" else "男生 ${place.male_minutes} 分钟、女生 ${place.female_minutes} 分钟内跑完")
             }
             KeyRow("次数", "${CampusLine.tally(plan, now).count} / ${plan.rule.required}", "编排整个学期", chevron = true, onClick = { onClose(); route.scale = "term"; route.termMode = "run"; route.tab = "timetable" })
+            if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
             KeyRow(null, "这天没跑", color = mark.danger, onClick = { model.setRun { it.copy(runDays = CampusLine.toggleRun(it.runDays, date)) }; onClose() })
         }
         return
@@ -155,7 +163,6 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     val lab = event.lab
     val kinds = mapOf("class" to "课", "lab" to "实验", "exam" to "考试")
     PlainSheet(if (exam != null) "考试 · ${event.name}" else if (lab != null) "实验 · ${event.name}" else event.name, onClose, strip, head) {
-        if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
         val placed = Names.placed(event.room)
         val roomName = event.room?.let(Names::room)
         val facts = if (exam != null) Exams.courseOf(line.courseMeetings, exam.course) else if (lab != null) Exams.courseOf(line.courseMeetings, lab.course) else event.meeting?.course
@@ -189,7 +196,9 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         if (lab != null) KeyRow("来源", Exams.sheetName(lab.source), "实验中心排课表，${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本；调整以老师通知为准")
         if (Names.isRoom(event.room)) KeyRow(if (exam != null) "考场" else "教室", "$roomName 的课表", chevron = true, onClick = { onClose(); route.timetable("room", event.room!!) })
         val courseTitle = Names.course(event.meeting?.course?.name ?: event.lab?.course?.name ?: event.exam?.course?.name ?: event.name)
+        val courseCode = event.meeting?.course?.code ?: event.lab?.course?.code ?: event.exam?.course?.code
         KeyRow("课程", "这门课的全部时段", chevron = true, onClick = { onClose(); route.timetable("course", courseTitle) })
+        KnowledgeRow(courseCode, courseTitle, state.repository) { id -> onClose(); route.knowledge(course = id) }
         val context = androidx.compose.ui.platform.LocalContext.current
         MaterialsRow(courseTitle, state.repository) { url -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
         line.sharingSlot(event).forEach { other ->
@@ -220,6 +229,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                 Chip("原名", { model.renameCourse(id, ""); onClose() })
             }
         }
+        if (isMe) top.hicancan.studev.timetable.EventChoices(event, line, model.settings)
         if (isMe && exam != null) KeyRow(null, "不参加这场考试", color = mark.danger, onClick = { model.examAttendance(event.id, false); onClose() })
         if (isMe && meeting != null) KeyRow(null, if (top.hicancan.studev.timetable.Courses.isCustom(meeting.teaching_class.id)) "删除这门课" else "从我的课表移除", color = mark.danger, onClick = { model.removeCourse(meeting.teaching_class.id); onClose() })
         if (isMe && lab != null) {
@@ -328,14 +338,16 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 KeyRow(null, "显示在课表上", if (grade != null && grade <= 2) "大${"一二"[grade - 1]}必做，本学期 ${rule.required} 次" else "大三大四需要补跑时打开", trailing = { Toggle(runOn) { on -> model.setRun { it.copy(runShown = on) } } })
             }
             Plain("桌面小组件", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Plain("日历显示", 14.sp, Ink.muted, modifier = Modifier.width(80.dp))
-                Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周", "term" to "学期"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
+            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Plain("日历显示", 14.sp, Ink.muted)
+                Box(Modifier.horizontalScroll(rememberScrollState())) {
+                    Choice(listOf("auto" to "随大小", "next" to "下一节", "day" to "一天", "week" to "一周", "term" to "学期"), settings.widgetView) { next -> model.settings.update { it.copy(widgetView = next) } }
+                }
             }
             KeyRow(null, "添加日历", "课程、实验和考试；也可以长按桌面空白处，在窗口小工具里找 StuDev", chevron = true, onClick = {
                 if (!top.hicancan.studev.widget.CampusWidget.pin(context, settings.widgetView)) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev")
             })
-            KeyRow(null, "添加清单", "过期的、这一周要做的和考试，在桌面上直接勾掉", chevron = true, onClick = {
+            KeyRow(null, "添加清单", "之前没做完的、这一周要做的和考试，在桌面上直接勾掉", chevron = true, onClick = {
                 if (!top.hicancan.studev.widget.CampusWidget.pin(context, "list")) model.tell("这台手机要从桌面添加：长按空白处，打开窗口小工具，找到 StuDev 清单")
             })
             val background = remember(settings) { top.hicancan.studev.device.BackgroundSettings.status(context) }

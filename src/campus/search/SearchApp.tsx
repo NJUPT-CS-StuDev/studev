@@ -51,7 +51,7 @@ function Result({ result, roomState, onCourse }: { result: SearchResult; roomSta
             <span className="kind">{result.sourceName}</span>
             <span className="m">
                 <span className="a">{title}{result.section ? <small>{result.section}</small> : null}</span>
-                {room ? <span className="b"><span className={`state-dot ${room.busy ? 'busy' : ''}`} />{room.text}</span> : snippet ? <span className="b">{snippet}</span> : null}
+                {room ? <span className="b"><span className={`state-dot ${room.busy ? 'busy' : ''}`} />{room.text}</span> : result.source !== 'places' && snippet ? <span className="b">{snippet}</span> : null}
             </span>
             <Chevron />
         </>;
@@ -60,7 +60,8 @@ function Result({ result, roomState, onCourse }: { result: SearchResult; roomSta
             : <a className="hit entity" href={result.url}>{body}</a>;
     }
     const date = result.publishedAt ?? result.updatedAt;
-    const crumbs = [result.sourceName, result.section].filter(Boolean).join(' › ');
+    const section = result.section && result.section !== 'Direct detail links' ? result.section : null;
+    const crumbs = [result.sourceName, section].filter(Boolean).join(' › ');
     return (
         <article className="hit doc">
             <div className="crumb">{crumbs}{date ? <time> · {date.slice(0, 10)}</time> : null}{result.kind === 'file' ? ' · 文件' : result.kind === 'link' ? ' · 站外' : ''}</div>
@@ -104,6 +105,10 @@ export default function SearchApp() {
     const input = useRef<HTMLInputElement>(null);
     const client = useMemo(() => new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH }), []);
     useEffect(() => () => client.dispose(), [client]);
+    useEffect(() => {
+        const scope = params.get('scope');
+        if (scope === 'place' || scope === 'course') input.current?.focus();
+    }, [params]);
     useEffect(() => { void client.initialize().then(ready => setOptions(ready.filterOptions)).catch(() => { setFailed(true); void reloadIfGone(); }); }, [client]);
 
     const filters = useMemo<SearchFilters>(() => ({
