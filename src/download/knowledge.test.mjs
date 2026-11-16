@@ -21,6 +21,13 @@ test('redirects knowledge media requests to presigned object-storage URL', async
     assert.ok(location?.startsWith('https://storage.example.test/studev-download/knowledge/20261115-2307/materials/%E5%A4%A7%E5%AD%A6%E7%89%A9%E7%90%86/%E8%AF%BE%E4%BB%B6.assets/%E7%AC%AC10%E9%A1%B5.webp?'));
     assert.match(location, /X-Amz-Signature=/);
     assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+
+    const special = await onRequest({
+        request: req('/data/map-v0.9.1__20261115-1916__k20261115-2307__p10/knowledge/materials/batch-2/%E6%95%B0%E5%AD%A6%E5%BB%BA%E6%A8%A1/Climate-counts%21-(test).assets/%E5%9B%BE1.jpg'),
+        env,
+    });
+    assert.equal(special.status, 302);
+    assert.match(special.headers.get('location') ?? '', /Climate-counts%21-%28test%29\.assets/);
 });
 
 test('rejects non-media files, traversal and invalid paths with 404', async () => {

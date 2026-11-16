@@ -5,7 +5,8 @@ import { createHash, createHmac } from 'node:crypto';
 const hmac = (key, text) => createHmac('sha256', key).update(text).digest();
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 const REGION = 'us-east-1';
-const encodePath = key => key.split('/').map(encodeURIComponent).join('/');
+const encodeSegment = s => encodeURIComponent(s).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+const encodePath = key => key.split('/').map(encodeSegment).join('/');
 const signingKey = (secret, day) => ['s3', 'aws4_request'].reduce(hmac, hmac(hmac(`AWS4${secret}`, day), REGION));
 const clock = () => { const stamp = new Date().toISOString().replace(/[-:]|\.\d+/g, ''); return { stamp, day: stamp.slice(0, 8), scope: `${stamp.slice(0, 8)}/${REGION}/s3/aws4_request` }; };
 

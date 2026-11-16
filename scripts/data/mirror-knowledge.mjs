@@ -39,7 +39,8 @@ async function putWithRetry(store, key, body, contentType) {
                 signal: AbortSignal.timeout(30_000),
             });
             if (response.ok) return;
-            last = new Error(`HTTP ${response.status} for ${key}`);
+            const detail = await response.text().catch(() => '');
+            last = new Error(`HTTP ${response.status} for ${key}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
         } catch (error) {
             last = error;
         }
