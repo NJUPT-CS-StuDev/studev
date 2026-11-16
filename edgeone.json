@@ -41,5 +41,8 @@
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     }
+  ],
+  "redirects": [
+    { "source": "/download/windows/*", "destination": "https://dl.hicancan.top/windows/:splat", "statusCode": 302 }
   ]
 }

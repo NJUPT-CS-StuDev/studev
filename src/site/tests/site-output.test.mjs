@@ -7,7 +7,9 @@ import test from 'node:test';
 
 const output = resolve('dist');
 // Paths answered by cloud functions rather than built pages: /api/ and every catch-all under cloud-functions/.
-const served = ['/api/', ...(await readdir('cloud-functions', { recursive: true })).filter((file) => file.endsWith('[[path]].js')).map((file) => `/${dirname(file).replaceAll('\\', '/')}/`)];
+// Paths answered by something other than a built file: a cloud function, or a redirect in edgeone.json.
+const redirected = (JSON.parse(await readFile('edgeone.json', 'utf8')).redirects ?? []).map((rule) => rule.source.replace(/\*$/, ''));
+const served = ['/api/', ...redirected, ...(await readdir('cloud-functions', { recursive: true })).filter((file) => file.endsWith('[[path]].js')).map((file) => `/${dirname(file).replaceAll('\\', '/')}/`)];
 async function pages(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {

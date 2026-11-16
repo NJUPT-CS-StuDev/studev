@@ -62,8 +62,8 @@ $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.osca_download.secret_key
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
 
 # The Windows app: the kernels from their pinned tags, the parity checks, a NativeAOT build, and a Velopack release whose
-# portable zip, packages and feed go to windows/ on the download store, where /download/windows/ serves them and unzipped
-# copies update themselves. Only the portable zip is offered: unzip and run, nothing to install.
+# portable zip, packages and feed go to windows/ on Cloudflare R2 (public at dl.hicancan.top, no egress fee), where the
+# site's /download/windows/ redirects and unzipped copies update themselves. Only the portable zip is offered.
 $env:DOTNET_ROOT = 'D:\Dev\dotnet'
 $env:Path = "D:\Dev\dotnet;$env:USERPROFILE\.dotnet\tools;$env:Path"
 $windows = Join-Path $repo 'windows'
@@ -81,7 +81,6 @@ $velopack = Join-Path $tempRoot 'windows-releases'
 New-Item -ItemType Directory -Path $velopack -Force | Out-Null
 $feed = "$($product.origin)/download/windows"
 # The releases already out, so the new one carries a delta from the last; none yet before the first.
-# Read with GET: the address redirects to a link signed for GET, which refuses HEAD.
 $known = try { Invoke-WebRequest "$feed/releases.win.json" -MaximumRedirection 5 -ErrorAction Stop | Out-Null; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
 if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEXITCODE -ne 0) { throw 'Earlier Windows releases could not be read' } }
 & vpk pack --packId top.hicancan.studev --packVersion $versionName --packDir $publish --mainExe StuDev.exe --packTitle StuDev --packAuthors 'NJUPT StuDev' `
@@ -90,6 +89,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
 $portable = Join-Path $velopack 'top.hicancan.studev-win-Portable.zip'
 if (-not (Test-Path -LiteralPath $portable)) { throw "Windows portable zip is missing: $portable" }
 # Packages first, the feed last: an installed copy never reads a feed naming a package not yet there.
+$env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
+$env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
+$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
+$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
 $made = Get-ChildItem $velopack -File | Where-Object { $_.Extension -in '.nupkg', '.zip' -and $_.LastWriteTime -gt (Get-Item $publish).LastWriteTime.AddMinutes(-1) }
 foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
 & node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
