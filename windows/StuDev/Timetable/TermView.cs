@@ -36,7 +36,7 @@ public static class TermView
         if (showing == "exam")
         {
             var head = ahead.Count > 0 ? Kit.Column(2, Kit.Text($"{Lead(ahead[0].Days)}考试", Role.Heading), Kit.Text(string.Join("、", ahead[0].Exams.Select(x => Names.CourseShort(x.Course.Name))), Role.Body, "muted"))
-                : Kit.Column(0, Kit.Text("后面没有考试了", Role.Heading));
+                : Kit.Column(0, Kit.Text("暂未查到待考安排", Role.Heading));
             ((TextBlock)head.Children[0]).FontSize = 22; head.Padding = new Thickness(0, 4, 0, 14);
             var list = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Left };
             list.Children.Add(head);

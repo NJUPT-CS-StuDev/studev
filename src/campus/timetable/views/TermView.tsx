@@ -150,7 +150,7 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
             {tabs}
             <div className="xlist">
                 {/* The first thing to know: how soon, and what. */}
-                <div className="xhead">{ahead[0] ? <><b>{lead(ahead[0].days)}考试</b><span>{ahead[0].exams.map(exam => courseShort(exam.course.name)).join('、')}</span></> : <b>后面没有考试了</b>}</div>
+                <div className="xhead">{ahead[0] ? <><b>{lead(ahead[0].days)}考试</b><span>{ahead[0].exams.map(exam => courseShort(exam.course.name)).join('、')}</span></> : <b>暂未查到待考安排</b>}</div>
                 {ahead.map((day, at) => <section key={day.date} className="xgroup">
                     <div className={`xdate ${at === 0 ? 'next' : ''}`}><small>{Number(day.date.slice(5, 7))}月</small><b>{Number(day.date.slice(8))}</b><small>{WEEKDAYS[weekdayOf(day.date)]}</small></div>
                     <div className="xitems">{day.exams.map(exam => (

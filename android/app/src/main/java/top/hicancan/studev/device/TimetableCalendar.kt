@@ -26,10 +26,10 @@ private class Entry(val id: String, val title: String, val start: Long, val end:
 object TimetableCalendar {
     private const val ACCOUNT = "studev"
     private data class Book(val name: String, val title: String)
-    private val lessons = Book("studev", "studev 课程")
-    private val exams = Book("studev-exams", "studev 考试")
-    private val runs = Book("studev-run", "studev 早锻炼")
-    private val tasks = Book("studev-tasks", "studev 任务")
+    private val lessons = Book("studev", "StuDev 课程")
+    private val exams = Book("studev-exams", "StuDev 考试")
+    private val runs = Book("studev-run", "StuDev 早锻炼")
+    private val tasks = Book("studev-tasks", "StuDev 任务")
     private fun adapter(uri: android.net.Uri) = uri.buildUpon().appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
         .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, ACCOUNT)
         .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL).build()

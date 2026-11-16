@@ -419,11 +419,15 @@ private data class Slot(val group: String, val index: Int, val top: Float, val b
         if (suggested.isNotEmpty() && dragId == null && picked == null) {
             Plain("从你的安排里", 13.sp, brand, FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
             suggested.forEach { (key, task) ->
-                Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).border(1.5.dp, brand, RoundedCornerShape(5.dp)).clickable { store.save(task.copy(id = store.newId(), order = -System.currentTimeMillis().toDouble())) }, contentAlignment = Alignment.Center) { Plain("+", 15.sp, brand) }
-                    Plain(task.title, 15.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                    task.course?.let { id -> courses[id]?.let { CourseTag(Names.courseShort(it), tones[id]) } }
-                    Plain("${dayWord(task.due!!.date)} 截止", 12.sp, Ink.muted, maxLines = 1)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Plain(task.title, 15.sp, maxLines = 2)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            task.course?.let { id -> courses[id]?.let { CourseTag(Names.courseShort(it), tones[id]) } }
+                            Plain("${dayWord(task.due!!.date)} 截止", 12.sp, Ink.muted, maxLines = 1)
+                        }
+                    }
                     Plain("×", 15.sp, Ink.faint, modifier = Modifier.clickable { settings.update { it.copy(hints = it.hints.copy(setAside = (it.hints.setAside - key + key).takeLast(200))) } }.padding(horizontal = 4.dp))
                 }
             }

@@ -23,11 +23,11 @@ export function EventChoices({ event, line }: { event: CampusEvent; line: Timeli
         return { ...prefs, events };
     });
     return <details className="event-choices">
-        <summary>排程 · {AVOIDANCE.find(item => item.value === current.avoid)?.name}</summary>
+        <summary>时间冲突 · {AVOIDANCE.find(item => item.value === current.avoid)?.name}</summary>
         {(event.kind === 'class' || event.kind === 'lab') && <label className="meta"><input type="checkbox" checked={series} onChange={event => setSeries(event.target.checked)} /> 应用到这门{event.kind === 'lab' ? '实验' : '课'}的全部时段</label>}
         <div className="picks">{AVOIDANCE.map(({ value, name }) => <button key={value} className={current.avoid === value ? 'on' : ''} onClick={() => change({ avoid: value })}>{name}</button>)}</div>
-        <button className="ib" onClick={() => change({ avoid: undefined })}>恢复排程默认</button>
-        <p className="meta">排时间时如何避让这项安排；不改变是否参加、提醒或显示顺序。</p>
+        <button className="ib" onClick={() => change({ avoid: undefined })}>恢复默认规则</button>
+        <p className="meta">影响 AI 找空闲时间或自动排任务时是否避开此时段；不改变上课本身或提醒。</p>
         <div className="btns">
             <button className="btn" onClick={() => change({ layer: Date.now() }, false)}>将这一项置于前面</button>
             <button className="btn" onClick={() => change({ layer: undefined }, false)}>恢复图层</button>

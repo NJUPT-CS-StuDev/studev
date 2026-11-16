@@ -111,7 +111,27 @@ public static class Events
         }
         // Where it is and what it is, each opening the whole of it: the room's week, the course's every slot.
         void Place(string key) { if (Names.IsRoom(e.Room)) Row(key, Value($"{Names.Room(e.Room!)} 的课表"), () => See("room", e.Room!)); }
-        void Course(string course) => Row("课程", Value("这门课的全部时段"), () => See("course", course));
+        void Course(string course, string? code = null)
+        {
+            Row("课程", Value("这门课的全部时段"), () => See("course", course));
+            var holder = new StackPanel(); body.Children.Add(holder);
+            async void FillKnowledge()
+            {
+                try
+                {
+                    var bytes = await campus.Repository!.Bytes("knowledge/knowledge.json");
+                    var index = System.Text.Json.JsonSerializer.Deserialize(bytes, Data.FactsJson.Default.KnowledgeIndex);
+                    if (index is null) return;
+                    var norm = code?.Trim().ToUpperInvariant();
+                    var found = index.Courses.FirstOrDefault(c => (norm is { Length: > 0 } && c.Codes.Contains(norm)) || c.Name == course || c.Former.Contains(course));
+                    if (found is null) return;
+                    var topics = found.Chapters.Sum(ch => ch.Topics.Count);
+                    holder.Children.Add(Kit.Row("知识", Value("查看这门课的知识与真题", $"{found.Chapters.Count} 章 · {topics} 个知识点"), () => { Close(); App.Open("knowledge", $"/knowledge/?course={Uri.EscapeDataString(found.Id)}"); }));
+                }
+                catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or System.Text.Json.JsonException) { }
+            }
+            FillKnowledge();
+        }
         void Together(string key, List<string> classes, int? people)
         {
             if (classes.Count < 2 && people is null) return;
@@ -167,6 +187,7 @@ public static class Events
         }
 
         var courseName = Names.Course(e.Meeting?.Course.Name ?? e.Lab?.Course.Name ?? e.Exam?.Course.Name ?? e.Name);
+        var courseCode = e.Meeting?.Course.Code ?? e.Lab?.Course.Code ?? e.Exam?.Course.Code;
         if (e.Lab is { } lab)
         {
             if (Lessons.CourseOf(line.CourseMeetings, lab.Course) is { } facts) Meta(Lessons.CourseLine(facts.Credits, facts.Nature));
@@ -178,7 +199,7 @@ public static class Events
             Together("一起上", lab.Classes, lab.Students);
             Teachers();
             Place("教室");
-            Course(courseName);
+            Course(courseName, courseCode);
             Materials(courseName);
             if (!mine) return root;
             Danger("不上这次实验", () => { Choices.LeaveLab(campus.Preferences, "skip", lab.Id); Close(); });
@@ -195,7 +216,7 @@ public static class Events
             if (x.Note is { Length: > 0 } note) Row("备注", Value(note));
             Teachers();
             Place("考场");
-            Course(courseName);
+            Course(courseName, courseCode);
             Materials(courseName);
             Row("考试", Value($"全部考试 · {line.Exams.Select(o => o.Course.Code ?? o.Course.Name).Distinct().Count()} 门"), mine ? () => { Close(); App.Open("timetable", "exams"); } : null);
             if (mine && campus.Preferences.Class is { } klass) Danger("不参加这场考试", () => { Choices.SkipExam(campus.Preferences, term, klass, x.Id); Close(); });
@@ -214,7 +235,7 @@ public static class Events
         }
         Teachers();
         Place("教室");
-        Course(courseName);
+        Course(courseName, courseCode);
         Materials(courseName);
         foreach (var other in Lessons.SharingSlot(line, e))
             Row("同时段", Value(Names.Course(other.Course.Name), $"{Lessons.WeeksText(other.Weeks)} · 本周不上"), () => { if (line.Around(other.Id, e.Date) is { } found) Again(found); });

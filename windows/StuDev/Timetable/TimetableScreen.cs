@@ -158,6 +158,7 @@ public sealed partial class TimetableScreen : Screen
             actions.Add(Kit.Button("今天", () => { picked = null; Draw(); }));
             actions.Add(Kit.Button("下一个", () => Shift(1), Icons.Chevron, iconOnly: true));
         }
+        if (mine) actions.Add(Kit.Button("加课", () => App.Open("search", "course")));
         if (mine) actions.Add(Kit.Button("新任务", () => TaskSheet.New(campus, now), Icons.Plus, 20));
         else actions.Add(Kit.Button("我的课表", Mine));
 

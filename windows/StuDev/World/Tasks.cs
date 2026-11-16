@@ -78,7 +78,7 @@ public static class TaskRules
     public static readonly (int Minutes, string Name)[] DayReminders = [(8 * 60, "当天 8:00"), (12 * 60, "当天 12:00"), (20 * 60, "当天 20:00")];
     public static readonly string[] Examples = ["明天下午3点 交毛概作业 !!", "周五前 交实验报告", "晚上8点到10点 自习", "下周三 答辩 #"];
     public static string NewId() => Guid.NewGuid().ToString();
-    public static readonly string[] GroupNames = ["待补做", "今天", "明天", "未来 7 天", "更晚", "还没排日期"];
+    public static readonly string[] GroupNames = ["未完成", "今天", "明天", "未来 7 天", "更晚", "还没排日期"];
     public static List<PersonalTask> Merge(List<PersonalTask> mine, List<PersonalTask> theirs)
     {
         var merged = mine.ToDictionary(t => t.Id);

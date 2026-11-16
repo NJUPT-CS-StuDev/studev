@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadMaterials } from '@/world/data';
+import { loadKnowledge, type KnowledgeCourse } from '@/world/knowledge';
 import { kindCounts, MATERIAL_KINDS, materialsOf, type CourseMaterials, type Material } from '@/world/materials';
 import { clusters, eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
@@ -74,6 +75,22 @@ function Materials({ course }: { course: string }) {
     );
 }
 
+function KnowledgeLink({ code, course }: { code?: string | null; course: string }) {
+    const [found, setFound] = useState<KnowledgeCourse | null>(null);
+    useEffect(() => {
+        let live = true;
+        void loadKnowledge().then(index => {
+            if (!live) return;
+            const norm = code?.trim().toUpperCase();
+            setFound(index.courses.find(c => (norm && c.codes.includes(norm)) || c.name === course || c.former.includes(course)) ?? null);
+        }, () => {});
+        return () => { live = false; };
+    }, [code, course]);
+    if (!found) return null;
+    const topics = found.chapters.reduce((n, ch) => n + ch.topics.length, 0);
+    return <a className="kv" href={`/knowledge/?course=${encodeURIComponent(found.id)}`}><span className="k">知识</span><span className="v">查看这门课的知识与真题<small>{found.chapters.length} 章 · {topics} 个知识点</small></span><Chevron /></a>;
+}
+
 /**
  * One thing on the timetable, wherever it was tapped: a lesson, a lab, an exam or 早锻炼. It says what
  * matters for going there and preparing, and links on to the course, the people and the rest.
@@ -102,7 +119,8 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
             </button>)}
         </div>
     );
-    const dress = { top: <>{strip}{isMe && <EventChoices key={event.id} event={event} line={line} />}</>, className: `toned ${event.kind}`, style: toneOf(event) };
+    const choices = isMe ? <EventChoices key={event.id} event={event} line={line} /> : null;
+    const dress = { top: strip || undefined, className: `toned ${event.kind}`, style: toneOf(event) };
     if (event.task) { const task = line.tasks.find(item => item.id === event.task!.id) ?? event.task; return <TaskSheet key={task.id} task={task} line={line} top={strip || undefined} onClose={onClose} />; }
     const when = `${WEEKDAYS[weekdayOf(event.date)]} ${dateLabel(event.date)} · ${hm(event.start)}–${hm(event.end)}`;
     const run = line.run;
@@ -115,6 +133,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 {place && <div className="kv"><span className="k">路线</span><span className="v">{place.route.join(' ↔ ')}，约 {place.metres} 米</span></div>}
                 {place && <div className="kv"><span className="k">刷脸</span><span className="v">起点 {place.start_scan_end} 前，终点 {place.end_scan_end} 前<small>{place.male_minutes === place.female_minutes ? `${place.male_minutes} 分钟内跑完` : `男生 ${place.male_minutes} 分钟、女生 ${place.female_minutes} 分钟内跑完`}</small></span></div>}
                 <button className="kv" onClick={onPlan}><span className="k">次数</span><span className="v">{runTally(run, now).count} / {run.rule.required}<small>编排整个学期</small></span><Chevron /></button>
+                {choices}
                 <button className="kv" onClick={onUnplan}><span className="k" /><span className="v danger">这天没跑</span></button>
             </Sheet>
         );
@@ -127,7 +146,8 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
     </div> : <div style={{ height: 12 }} />;
     const teachers = <Teachers names={event.teachers} />;
     const courseTitle = courseName(event.meeting?.course.name ?? event.lab?.course.name ?? event.exam?.course.name ?? event.name);
-    const course = <><a className="kv" href={whoLink('course', courseTitle)}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a><Materials course={courseTitle} /></>;
+    const courseCode = event.meeting?.course.code ?? event.lab?.course.code ?? event.exam?.course.code;
+    const course = <><a className="kv" href={whoLink('course', courseTitle)}><span className="k">课程</span><span className="v">这门课的全部时段</span><Chevron /></a><KnowledgeLink code={courseCode} course={courseTitle} /><Materials course={courseTitle} /></>;
 
     const dayOff = line.holidays.get(event.date);
 
@@ -147,6 +167,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">教室</span><span className="v">{name} 的课表</span><Chevron /></a>}
                 {course}
                 <div className="kv"><span className="k">来源</span><span className="v">{sheetName(lab.source)}<small>实验中心排课表，{dateLabel(publishedOn(lab.source))} 的版本；调整以老师通知为准</small></span></div>
+                {choices}
                 {isMe && <button className="kv" onClick={() => onSkipLab(event)}><span className="k" /><span className="v danger">不上这次实验</span></button>}
                 {isMe && <button className="kv" onClick={() => onDropLab(event)}><span className="k" /><span className="v danger">不上这门实验<small>共 {line.labs.filter(other => labCourseKey(other) === labCourseKey(lab)).length} 次，可在“我 · 实验安排”里恢复</small></span></button>}
             </Sheet>
@@ -171,6 +192,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 {course}
                 <button className="kv" onClick={onExams}><span className="k">考试</span><span className="v">全部考试 · {new Set(line.exams.map(item => item.course.code ?? item.course.name)).size} 门</span><Chevron /></button>
                 {sheet && <div className="kv"><span className="k">来源</span><span className="v">{sheetName(sheet.file)}<small>{dateLabel(publishedOn(sheet.file))} 发布</small></span></div>}
+                {choices}
                 {isMe && <button className="kv" onClick={() => onSkipExam(event)}><span className="k" /><span className="v danger">不参加这场考试</span></button>}
             </Sheet>
         );
@@ -204,6 +226,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                     <button className="ib" disabled={!naming.trim()} onClick={() => { onRename(event, naming.trim()); setNaming(null); }}>保存</button>
                     <button className="ib" onClick={() => { onRename(event, null); setNaming(null); }}>原名</button>
                 </div>)}
+            {choices}
             {isMe && <button className="kv" onClick={() => onHide(event)}><span className="k" /><span className="v danger">{meeting?.teaching_class.id.startsWith('custom:') ? '删除这门课' : '从我的课表移除'}</span></button>}
         </Sheet>
     );

@@ -11,6 +11,12 @@ import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/cou
 
 const tileStyle = (event: CampusEvent, tones: Map<string, number>, line: Timeline) => { const tone = eventTone(tones, event, line.courseMeetings ?? line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
 const tileClass = (event: CampusEvent, record: ExamRecord | null) => event.kind === 'exam' ? `exam ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''}` : event.kind === 'class' ? '' : event.kind;
+/** Group repeated event short names in order, e.g. 计网（2 节）. */
+function goneSummary(events: CampusEvent[]) {
+    const counts = new Map<string, number>();
+    for (const event of events) counts.set(event.short, (counts.get(event.short) ?? 0) + 1);
+    return [...counts].map(([name, count]) => count > 1 ? `${name}（${count} 节）` : name).join('、');
+}
 /** Free rooms are the rooms dimension of search, at a moment. */
 const roomsAt = (date: string, min: number) => `/search/?scope=room&t=${momentText({ date, min })}`;
 
@@ -72,7 +78,7 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, o
     const fold = today && isMe;
     const gone = fold ? events.filter(event => event.end <= now.min) : [];
     const live = fold ? events.filter(event => event.end > now.min) : events;
-    if (!live.length) return <>{head}{strip}{dues}{gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {gone.map(event => event.short).join('、')}</div>}<div className="empty">今天的课都上完了</div></>;
+    if (!live.length) return <>{head}{strip}{dues}{gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {goneSummary(gone)}</div>}<div className="empty">今天的课都上完了</div></>;
     // The campus day opens with the first period. Before that nobody looks for a room, and the column does not
     // stretch back to midnight: "now" joins it only within the hour before the day's first thing.
     const opens = minutesOf(line.periods[0]!.start);
@@ -83,14 +89,14 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, o
     const y = (minutes: number) => Math.round(minutes - from);
     const hours: number[] = [];
     for (let time = Math.ceil(from / 60) * 60; time <= to; time += 60) hours.push(time);
-    const gap = (start: number, end: number, key: string) => <a key={key} className="gapbtn" style={{ top: y((start + end) / 2) }} href={roomsAt(day, start)}>空 {durationText(end - start)} · 看这时的空教室<Chevron /></a>;
+    const gap = (start: number, end: number, key: string, leadNow = false) => <a key={key} className="gapbtn" style={{ top: y((start + end) / 2) }} href={roomsAt(day, start)}>{leadNow ? '现在有空' : `空 ${durationText(end - start)}`} · 看这时的空教室<Chevron /></a>;
     return (
         <>
             {head}{strip}{dues}
-            {gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {gone.map(event => event.short).join('、')}</div>}
+            {gone.length > 0 && <div className="gone">已结束 {gone.length} 项 · {goneSummary(gone)}</div>}
             <div className="tl" style={{ height: y(to) }}>
                 {hours.map(time => <div key={time}><div className="hl" style={{ top: y(time) }} />{!(awake && Math.abs(time - now.min) < 16) && <div className="hn" style={{ top: y(time) }}>{time / 60}:00</div>}</div>)}
-                {awake && live[0]!.start - free >= 45 && gap(free, live[0]!.start, 'first')}
+                {awake && live[0]!.start - free >= 45 && gap(free, live[0]!.start, 'first', free === now.min)}
                 {/* Everything on, at its own time, back to front: what is behind shows beside what is in front. */}
                 {layers(live, order).map(({ event, under }) => (
                     <button key={event.id} className={`t ${tileClass(event, record)} ${event.task?.done ? 'done' : ''}`} style={{ top: y(event.start) + 1, height: Math.max(40, y(event.end) - y(event.start) - 2), right: under * 8, ...tileStyle(event, tones, line) }} onClick={() => onOpen(event)}>

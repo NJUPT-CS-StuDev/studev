@@ -150,7 +150,7 @@ export default function TimetableApp() {
                             <button className="ib" aria-label="下一个" onClick={() => shift(1)}><Chevron /></button>
                         </>}
                         {isMe && prefs.class && <button className="ib" onClick={() => setCalendar(true)}>日历</button>}
-                        {isMe && wide && <a className="ib" href="/search/?scope=course">加课</a>}
+                        {isMe && <a className="ib" href="/search/?scope=course">{wide || !showShift ? '加课' : '+'}</a>}
                     </div>
                 </header>
                 <div className="tabs" role="tablist">

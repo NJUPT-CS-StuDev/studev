@@ -25,6 +25,7 @@ class Route {
     var moment by mutableStateOf<Pair<LocalDate, Int>?>(null)
     var query by mutableStateOf("")
     var scope by mutableStateOf("all")
+    var searchFocus by mutableStateOf(false)
     /** Search only inside this entity. */
     var within by mutableStateOf<String?>(null)
     var knowledgeCourse by mutableStateOf<String?>(null)

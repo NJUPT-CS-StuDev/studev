@@ -27,12 +27,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
         settings.copy(events = events)
     }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        KeyRow("排程", Schedule.AVOIDANCE.find { it.first == current.avoid }?.second.orEmpty(), chevron = true, onClick = { open = !open })
+        KeyRow("时间冲突", Schedule.AVOIDANCE.find { it.first == current.avoid }?.second.orEmpty(), chevron = true, onClick = { open = !open })
         if (open) {
             if (event.kind == "class" || event.kind == "lab") Chip(if (series) "整门课程 · 切换为仅这次" else "仅这次 · 切换为整门课程", { series = !series })
             Picks(Schedule.AVOIDANCE.mapIndexed { i, item -> i to item.second }, { Schedule.AVOIDANCE[it].first == current.avoid }) { i -> change { it.copy(avoid = Schedule.AVOIDANCE[i].first) } }
-            Chip("恢复排程默认", { change { it.copy(avoid = null) } })
-            Plain("排时间时如何避让；不改变是否参加、提醒或显示顺序。", 12.sp, Ink.muted)
+            Chip("恢复默认规则", { change { it.copy(avoid = null) } })
+            Plain("影响 AI 找空闲时间或自动排任务时是否避开此时段；不改变上课本身或提醒。", 12.sp, Ink.muted)
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip("将这一项置于前面", { change(false) { it.copy(layer = System.currentTimeMillis()) } })
                 Chip("恢复图层", { change(false) { it.copy(layer = null) } })

@@ -85,7 +85,7 @@ import java.time.LocalDate
     val title = when {
         !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
         scale == "list" -> "清单"
-        scale == "term" -> "${term.year}–${term.year + 1} 学年第${if (term.number == 1) "一" else "二"}学期"
+        scale == "term" -> "${term.year}–${term.year + 1}\n第${if (term.number == 1) "一" else "二"}学期"
         scale == "week" -> if (week != null) "第 $week 周" else "假期"
         else -> "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
     }
@@ -93,7 +93,8 @@ import java.time.LocalDate
     val pending = line.tasks.count { it.parent == null && it.done == null }
     val sub = when (scale) {
         "list" -> if (pending > 0) "$pending 件要做" else "没有要做的事"
-        "term" -> "${dateLabel(LocalDate.parse(term.weeks.first().start))} – ${dateLabel(LocalDate.parse(term.weeks.last().end))} · " +
+        // Two lines, so the narrow header never breaks inside a date.
+        "term" -> "${dateLabel(LocalDate.parse(term.weeks.first().start))} – ${dateLabel(LocalDate.parse(term.weeks.last().end))}\n" +
             (line.weekOf(now.date)?.let { "第 $it / ${term.weeks.size} 周" } ?: "${term.weeks.size} 周") + (lastDay?.let { " · 课上到 ${dateLabel(it)}" } ?: "")
         "week" -> (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + "${dateLabel(monday)} – ${dateLabel(monday.plusDays(6))}"
         else -> if (week != null) "第 $week 周" else "假期"
@@ -101,7 +102,18 @@ import java.time.LocalDate
     val order = listOf("day", "week", "term")
     var pinch by remember { mutableFloatStateOf(1f) }
     var calendar by remember { mutableStateOf(false) }
+    var addingCourse by remember { mutableStateOf(false) }
+    var customCourseOpen by remember { mutableStateOf(false) }
     if (calendar) CalendarSheet(state, settings, model) { calendar = false }
+    if (addingCourse) PlainSheet("加课", { addingCourse = false }) {
+        KeyRow(null, "从全校课表里挑一门", "查看其他班或老师的时间，点击可预览冲突后加入", chevron = true) {
+            addingCourse = false; route.scope = "course"; route.query = ""; route.searchFocus = true; route.tab = "search"
+        }
+        KeyRow(null, "手动记一门自己的课", "教务课表里没有的任选课、实习或固定活动", chevron = true) {
+            addingCourse = false; customCourseOpen = true
+        }
+    }
+    if (customCourseOpen) CustomCourseSheet(settings.timetableEdits(term.term), term.weeks.size, line.periods.size, model) { customCourseOpen = false }
     Column(Modifier.fillMaxSize().pointerInput(scale) {
         detectTransformGestures { _, _, zoom, _ ->
             pinch *= zoom
@@ -127,6 +139,7 @@ import java.time.LocalDate
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (scale == "week") { Chip("‹", { route.day = day.minusDays(7) }); Chip("今天", { route.day = if (ahead > 0) now.date else null }); Chip("›", { route.day = day.plusDays(7) }) }
+                if (isMe) Chip(if (scale == "week") "+" else "加课", { addingCourse = true })
                 if (isMe && scale != "week") Chip("日历", { calendar = true })
             }
         }
@@ -174,15 +187,15 @@ import java.time.LocalDate
 
 @Composable fun SearchField(value: String, hint: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
     Row(modifier.fillMaxWidth().height(44.dp).border(1.dp, Ink.line, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicTextField(value, onChange, Modifier.weight(1f), singleLine = true, textStyle = TextStyle(fontSize = 15.5.sp, color = Ink.text), cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.brand), decorationBox = { inner ->
-            if (value.isEmpty()) Plain(hint, 15.5.sp, Ink.faint, maxLines = 1)
+        BasicTextField(value, onChange, Modifier.weight(1f), singleLine = true, textStyle = TextStyle(fontSize = 15.sp, color = Ink.text), cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.brand), decorationBox = { inner ->
+            if (value.isEmpty()) Plain(hint, 14.5.sp, Ink.faint, maxLines = 1)
             inner()
         })
     }
 }
 
 /** One thing on the line; what lies behind it shows beside it, so it needs no count of its own. */
-@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, onClick: () -> Unit) {
+@Composable private fun Tile(event: LineEvent, toneIndex: Int?, past: Boolean, modifier: Modifier, big: Boolean, changed: Boolean = false, topInset: Dp = 0.dp, onClick: () -> Unit) {
     val mark = marks()
     val tones = toneIndex?.let { tone(it) }
     val paper = Ink.paper
@@ -195,11 +208,11 @@ import java.time.LocalDate
         val lab = event.lab
         val note = if (big) "${hm(event.start)}–${hm(event.end)}${if (lab != null) " · ${lab.project}" else ""}${if (event.room != null) " · ${Names.room(event.room)}" else ""}"
             else if (lab != null) lab.room?.let(Names::roomShort) ?: Names.compactPlace(lab.short) else Names.roomShort(event.room)
-        TileBox(if (big) event.name else event.short, if (event.task != null) (if (big) "${hm(event.start)}–${hm(event.end)}" else "") else note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null || event.task != null)
+        TileBox(if (big) event.name else event.short, if (event.task != null) (if (big) "${hm(event.start)}–${hm(event.end)}" else "") else note, bg, border, fg, Modifier.fillMaxSize(), big, onClick, strong = lab != null || event.task != null, topInset = topInset)
         if (changed) Box(Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(3.dp)).background(paper).padding(horizontal = 3.dp)) { Plain("改", 10.sp, mark.warning, FontWeight.SemiBold) }
     }
 }
-@Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?, strong: Boolean = false) {
+@Composable private fun TileBox(name: String, note: String, bg: Color, border: Color, fg: Color, modifier: Modifier, big: Boolean, onClick: (() -> Unit)?, strong: Boolean = false, topInset: Dp = 0.dp) {
     // A day reads as an agenda, as on the web: left-aligned on the course's tint with its bar at the edge; a tile on
     // the paper (a task, 早锻炼) keeps its outline, having no tint to stand on.
     if (big) {
@@ -217,10 +230,16 @@ import java.time.LocalDate
         return
     }
     val base = modifier.clip(RoundedCornerShape(8.dp)).background(bg).border(if (strong) 2.dp else 1.dp, border, RoundedCornerShape(8.dp))
-    Column((if (onClick != null) base.clickable(onClick = onClick) else base).padding(horizontal = 2.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Column((if (onClick != null) base.clickable(onClick = onClick) else base).padding(start = 2.dp, end = 2.dp, top = maxOf(3.dp, topInset), bottom = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (topInset > 0.dp) Arrangement.Top else Arrangement.Center) {
         Text(name, color = fg, textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 14.5.sp else 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = if (big) 19.sp else 14.sp))
         if (note.isNotEmpty()) Text(note, color = fg.copy(alpha = .82f), textAlign = TextAlign.Center, style = TextStyle(fontSize = if (big) 12.5.sp else 10.sp, lineHeight = if (big) 17.sp else 13.sp))
     }
+}
+
+private fun goneSummary(events: List<LineEvent>): String {
+    val counts = LinkedHashMap<String, Int>()
+    for (event in events) counts[event.short] = (counts[event.short] ?: 0) + 1
+    return counts.entries.joinToString("、") { (name, count) -> if (count > 1) "$name（$count 节）" else name }
 }
 
 @Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, order: List<String>, store: top.hicancan.studev.me.TaskStore, onOpen: (LineEvent) -> Unit) {
@@ -260,7 +279,7 @@ import java.time.LocalDate
         val fold = today && isMe
         val gone = if (fold) events.filter { it.end <= now.min } else emptyList()
         val live = if (fold) events.filter { it.end > now.min } else events
-        if (gone.isNotEmpty()) Plain("已结束 ${gone.size} 项 · ${gone.joinToString("、") { it.short }}", 13.sp, Ink.faint, maxLines = 1, modifier = Modifier.padding(bottom = 12.dp))
+        if (gone.isNotEmpty()) Plain("已结束 ${gone.size} 项 · ${goneSummary(gone)}", 13.sp, Ink.faint, maxLines = 1, modifier = Modifier.padding(bottom = 12.dp))
         if (live.isEmpty()) { Empty("今天的课都上完了"); return@Column }
         // The campus day opens with the first period. Before that nobody looks for a room, and the column does not
         // stretch back to midnight: "now" joins it only within the hour before the day's first thing.
@@ -280,8 +299,8 @@ import java.time.LocalDate
                 Box(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.dp).offset(y = y(at)).background(hairline))
                 hour += 60
             }
-            @Composable fun gap(start: Int, end: Int) = Plain("空 ${durationText(end - start)} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.rooms(day to start) })
-            if (awake && live.first().start - free >= 45) gap(free, live.first().start)
+            @Composable fun gap(start: Int, end: Int, leadNow: Boolean = false) = Plain("${if (leadNow) "现在有空" else "空 ${durationText(end - start)}"} · 看这时的空教室 ›", 12.5.sp, Ink.muted, modifier = Modifier.padding(start = 54.dp).offset(y = y((start + end) / 2) - 9.dp).clickable { route.rooms(day to start) })
+            if (awake && live.first().start - free >= 45) gap(free, live.first().start, leadNow = free == now.min)
             // Everything on, at its own time, back to front: what is behind shows beside what is in front.
             CampusLine.layers(live, order).forEach { (event, under) ->
                 Tile(event, TimetablePresentation.toneOf(event, tones, line.courseMeetings), false, Modifier.padding(start = 44.dp, end = (under * 8).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(40.dp, y(event.end) - y(event.start) - 2.dp)), true,
@@ -410,10 +429,13 @@ import java.time.LocalDate
                                 Modifier.padding(horizontal = 2.dp).fillMaxWidth().offset(y = y(start) + 1.dp).height(y(end) - y(start) - 2.dp), false, event?.let { found -> { onOpen(found) } })
                         }
                         // Everything on, at its own time, back to front: what is behind shows beside what is in front.
-                        CampusLine.layers(events[index], order).forEach { (event, under) ->
+                        val layered = CampusLine.layers(events[index], order)
+                        layered.forEachIndexed { idx, (event, under) ->
                             val past = event.kind != "exam" && (date < now.date || (date == now.date && event.end <= now.min))
+                            val coverEnd = layered.drop(idx + 1).filter { (upper, _) -> upper.date == event.date && upper.start <= event.start + 12 && upper.end < event.end - 16 }.maxOfOrNull { it.event.end } ?: 0
+                            val pushDown = if (coverEnd > event.start) y(coverEnd) - y(event.start) + 4.dp else 0.dp
                             Tile(event, TimetablePresentation.toneOf(event, lineTones, line.courseMeetings), past, Modifier.padding(start = 2.dp, end = (2 + under * 5).dp).fillMaxWidth().offset(y = y(event.start) + 1.dp).height(maxOf(22.dp, y(event.end) - y(event.start) - 2.dp)), false,
-                                event.exam?.let { Exams.wasChanged(record, it) } == true) { onOpen(event) }
+                                event.exam?.let { Exams.wasChanged(record, it) } == true, pushDown) { onOpen(event) }
                         }
                         shownGhosts.filter { it.weekday == index + 1 }.forEach { meeting ->
                             val start = period.getValue(meeting.periods.first()).first
@@ -511,7 +533,7 @@ import java.time.LocalDate
             item {
                 Column(Modifier.padding(top = 4.dp, bottom = 14.dp)) {
                     val first = ahead.firstOrNull()
-                    Plain(if (first != null) "${lead(first.second)}考试" else "后面没有考试了", 22.sp, weight = FontWeight.SemiBold)
+                    Plain(if (first != null) "${lead(first.second)}考试" else "暂未查到待考安排", 22.sp, weight = FontWeight.SemiBold)
                     if (first != null) Plain(first.third.joinToString("、") { Names.courseShort(it.course.name) }, 14.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp))
                 }
             }

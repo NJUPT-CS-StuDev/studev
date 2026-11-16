@@ -110,7 +110,7 @@ export const liveTasks = (tasks: Task[]) => tasks.filter(task => !task.deleted);
  */
 export type TaskGroup = 'overdue' | 'today' | 'tomorrow' | 'week' | 'later' | 'someday';
 export const TASK_GROUPS: { key: TaskGroup; name: string }[] = [
-    { key: 'overdue', name: '待补做' }, { key: 'today', name: '今天' }, { key: 'tomorrow', name: '明天' },
+    { key: 'overdue', name: '未完成' }, { key: 'today', name: '今天' }, { key: 'tomorrow', name: '明天' },
     { key: 'week', name: '未来 7 天' }, { key: 'later', name: '更晚' }, { key: 'someday', name: '还没排日期' },
 ];
 export function taskGroup(task: Task, now: Moment): TaskGroup {

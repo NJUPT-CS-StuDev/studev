@@ -53,7 +53,12 @@ public static class DayView
         }
         var gone = today ? events.Where(e => e.End <= now.Min).ToList() : [];
         var live = today ? events.Where(e => e.End > now.Min).ToList() : events;
-        if (gone.Count > 0) { var g = Kit.Text($"已结束 {gone.Count} 项 · {string.Join("、", gone.Select(e => e.Short))}", Role.Label, "faint"); g.Margin = new Thickness(0, 0, 0, 12); page.Children.Add(g); }
+        if (gone.Count > 0)
+        {
+            var summary = string.Join("、", gone.GroupBy(e => e.Short).Select(g => g.Count() > 1 ? $"{g.Key}（{g.Count()} 节）" : g.Key));
+            var g = Kit.Text($"已结束 {gone.Count} 项 · {summary}", Role.Label, "faint");
+            g.Margin = new Thickness(0, 0, 0, 12); page.Children.Add(g);
+        }
         if (live.Count == 0) { page.Children.Add(Pages.Empty("今天的课都上完了")); return page; }
 
         // The campus day opens with the first period; "now" joins the hours only within the hour before the first thing.
@@ -74,14 +79,14 @@ public static class DayView
             lane.Mark(new Rectangle { Height = 1, Fill = Paint.Brush("line") }, Y(time) + .5);
             if (!(awake && Math.Abs(time - now.Min) < 16)) { var h = Kit.Text($"{time / 60}:00", Role.Caption, "faint"); h.FontSize = 11.5; h.HorizontalAlignment = HorizontalAlignment.Right; h.Margin = new Thickness(0, 0, 8, 0); side.Mark(h, Y(time)); }
         }
-        void Gap(int start, int end)
+        void Gap(int start, int end, bool leadNow = false)
         {
-            var words = Kit.Line(4, Kit.Text($"空 {Clock.Duration(end - start)} · 看这时的空教室", Role.Label, "muted"), Kit.Icon(Icons.Chevron, 13, "muted"));
+            var words = Kit.Line(4, Kit.Text($"{(leadNow ? "现在有空" : $"空 {Clock.Duration(end - start)}")} · 看这时的空教室", Role.Label, "muted"), Kit.Icon(Icons.Chevron, 13, "muted"));
             var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = words, Padding = new Thickness(8, 3, 8, 3), CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left };
             tap.Click += (_, _) => App.Open("search", ("rooms", new Moment(day, start)));
             lane.Put(tap, Y((start + end) / 2.0) - 13, 26, 10, 0);
         }
-        if (awake && live[0].Start - free >= 45) Gap(free, live[0].Start);
+        if (awake && live[0].Start - free >= 45) Gap(free, live[0].Start, free == now.Min);
         foreach (var (e, under) in CampusLine.Layers(live, line.Order))
         {
             var look = Tiles.LookOf(e, CourseTones.ToneOf(e, tones, line.CourseMeetings), false);

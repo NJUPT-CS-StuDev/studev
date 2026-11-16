@@ -48,7 +48,7 @@ object Tasks {
     }
     /** A task given a time but no end takes this long on the line. */
     const val MINUTES = 30
-    val GROUPS = listOf("overdue" to "待补做", "today" to "今天", "tomorrow" to "明天", "week" to "未来 7 天", "later" to "更晚", "someday" to "还没排日期")
+    val GROUPS = listOf("overdue" to "未完成", "today" to "今天", "tomorrow" to "明天", "week" to "未来 7 天", "later" to "更晚", "someday" to "还没排日期")
     val TIMED_REMINDERS = listOf(0 to "准时", 15 to "提前 15 分钟", 60 to "提前 1 小时", 1440 to "提前 1 天")
     val DAY_REMINDERS = listOf(8 * 60 to "当天 8:00", 12 * 60 to "当天 12:00", 20 * 60 to "当天 20:00")
 
