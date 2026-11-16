@@ -269,7 +269,8 @@ async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<{
         const body = await readFile(join(dir, topic.path), 'utf8');
         const url = `/knowledge/?topic=${encodeURIComponent(topic.id)}`;
         const course = topic.taught_by.map(code => names.get(code) ?? code).join(' ');
-        docs.push(entity('topics', topic.id, url, topic.title, course, [plain(body).slice(0, 1200)]));
+        // The note's own # title is the result's title already; the snippet starts after it.
+        docs.push(entity('topics', topic.id, url, topic.title, course, [plain(body.replace(/^#\s+.*\n/, '')).slice(0, 1200)]));
         const said = (ids: string[]) => ids.map(id => titles.get(id) ?? id).join('、') || '无';
         const tested = topic.tested_by.slice(0, 12).map(test => `- ${test.heading} · ${materialTitles.get(test.material) ?? test.material}（id questions/${test.material}#${test.heading}）`);
         readable.set(`topics/${topic.id}`, { title: topic.title, url, source: `知识点 · ${course}`,
@@ -413,7 +414,8 @@ async function* searchDocuments(dir: string): AsyncGenerator<SearchDocument> {
             const search = campusConfig.search;
             const text = [doc.title, doc.section ?? '', ...doc.tags].join(' ').toLowerCase();
             const categoryId = search.categories.find(rule => rule.words.some(word => text.includes(word)))?.id ?? search.defaultCategory;
-            yield { ...doc, source: source.id, source_name: source.name, category: doc.kind === 'file' ? search.fileCategory : doc.kind === 'link' ? search.linkCategory : categoryId };
+            const section = doc.section && doc.section !== 'Direct detail links' ? doc.section : null;
+            yield { ...doc, section, source: source.id, source_name: source.name, category: doc.kind === 'file' ? search.fileCategory : doc.kind === 'link' ? search.linkCategory : categoryId };
         }
     }
 }
