@@ -1,7 +1,7 @@
 ﻿# The Windows app as it ships, opened and used before it is released, in a home of its own so no one's records are
 # touched: a class chosen, the four boards, a search, and a desktop widget opened on one of its lessons. After every
 # step the app must still be running and must not have written a crash log. Usage: pwsh windows.ps1 -Exe <StuDev.exe>
-param([Parameter(Mandatory)] [string]$Exe, [switch]$KeepData, [switch]$Online)
+param([Parameter(Mandatory)] [string]$Exe, [switch]$KeepData, [switch]$Online, [switch]$RoutesOnly)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $release = Get-Content -LiteralPath (Join-Path $repo 'src/data/campus-release.json') -Raw | ConvertFrom-Json
@@ -90,6 +90,19 @@ for ($traceIndex = 0; $traceIndex -lt $traceMessages.Count; $traceIndex++) {
 $traceCalls = @($traceMessages | ForEach-Object { if ($_.ContainsKey('tool_calls')) { $_.tool_calls } })
 $traceRead = $traceCalls | Where-Object { $_.function.name -eq 'read' } | Select-Object -First 1
 if (-not $traceRead -or $traceMessages[-1].role -ne 'assistant') { throw 'the real AI conversation fixture is incomplete' }
+if ($RoutesOnly) {
+    # Ordinary public links exercise the same native entry used by actual AI route cards.
+    $links = @(
+        @{ label='楼内位置'; from='仙林/教1-102'; to='仙林/教1-101' },
+        @{ label='楼内跨层'; from='仙林/教1-101'; to='仙林/教1-201' },
+        @{ label='同一教室'; from='仙林/教1-101'; to='仙林/教1-101' },
+        @{ label='查看二层'; from='仙林/教1-101'; to='仙林/教1/2' },
+        @{ label='错误起点'; from='仙林/不存在的起点'; to='仙林/教1-101' },
+        @{ label='跨楼骑行'; from='仙林/教1-101'; to='仙林/教2-101'; mode='bike' }
+    ) | ForEach-Object { "[$($_.label)](/map/?from=$([uri]::EscapeDataString($_.from))&nav=$([uri]::EscapeDataString($_.to))$(if($_.mode){'&mode='+$_.mode}))" }
+    $traceNodes = @(@{ id='route-links'; parent=''; message=@{ role='assistant'; content=$links -join "`n`n" } })
+    $traceChosen = @{ ''='route-links' }
+}
 $traceSeed = @{ current = 'ai-replay'; chats = @(@{ id = 'ai-replay'; title = ''; updated = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); proposals = @(); thread = @{ nodes = $traceNodes; chosen = $traceChosen } }) }
 New-Item -ItemType Directory -Path (Join-Path $home_ 'ai') -Force | Out-Null
 $traceSeed | ConvertTo-Json -Depth 50 -Compress | Set-Content -LiteralPath (Join-Path $home_ 'ai/chats.json') -Encoding utf8NoBOM
@@ -401,6 +414,32 @@ try {
     if (-not $window) { throw 'the main window never appeared' }
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Alive 'open the app'
+    if ($RoutesOnly) {
+        Press $window 'AI' 'open the saved route links'
+        foreach ($case in @(@('楼内位置','1 层 · 教1-101'), @('楼内跨层','2 层 · 教1-201'), @('同一教室','1 层 · 教1-101'))) {
+            PressText $window $case[0] 'follow a public route link'
+            Find $window (Is $A::NameProperty '同在教1') $null 'same building access presents locations' 30 | Out-Null
+            Find $window (Is $A::NameProperty "目的地：$($case[1])") $null 'the requested room remains the destination' | Out-Null
+            if ($window.FindFirst($Tree::Descendants, (Both (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) (Is $A::NameProperty '0 米')))) { throw 'indoor location produced a zero-metre road' }
+            Capture $case[0]
+            Press $window 'AI' 'return to the same saved route links'
+        }
+        PressText $window '查看二层' 'follow a floor entity link'
+        Press $window '查看楼层' 'open the requested floor'
+        Find $window (Is $A::NameProperty '教1 2 层') $null 'the floor link selects floor two' 30 | Out-Null
+        Capture 'route-floor'
+        Press $window 'AI' 'return to route links'
+        PressText $window '错误起点' 'follow an invalid explicit origin'
+        Find $window (Is $A::NameProperty '没有找到出发地。') $null 'invalid explicit origin does not use GPS' | Out-Null
+        Press $window 'AI' 'return to route links'
+        PressText $window '跨楼骑行' 'follow the cycling route'
+        Find $window (Is $A::NameProperty '道路路线到教2入口') $null 'road guidance ends at the real entrance' 30 | Out-Null
+        Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '^骑行 (?:不到 1|\d+) 分钟 · [1-9]' } 'the URL retains cycling and a positive measured road distance' | Out-Null
+        Find $window (Is $A::NameProperty '进入教2后，前往1 层 · 教2-101') $null 'the indoor target follows the measured road leg' | Out-Null
+        Capture 'route-entrance'
+        Write-Output 'Windows room/building/road routing acceptance passed'
+        return
+    }
     # The picker asks once the campus data is in, which a first run fetches.
     Find $window (Is $A::NameProperty '你在哪个班？') $null 'the class picker' 90 | Out-Null
     Fill $window $null 'B240402' 'search a class'
