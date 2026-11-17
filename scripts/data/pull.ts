@@ -7,33 +7,68 @@ import { fileURLToPath } from 'node:url';
 import product from '../../product.json' with { type: 'json' };
 import { resourceAt, validRelease, type CampusRelease } from '../../src/campus/world/release.ts';
 
-export async function pullSnapshot(entry = `${product.campusOrigin}/campus-release.json`, root = process.cwd()): Promise<CampusRelease> {
+class MissingPublishedResource extends Error {}
+
+async function currentSnapshot(entry: string, publicRoot: string): Promise<CampusRelease> {
     const response = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`published campus snapshot is unavailable (${response.status})`);
     const snapshot: unknown = await response.json();
     if (!validRelease(snapshot) || !Array.isArray(snapshot.all) || !snapshot.all.length) throw new Error('published campus snapshot has no complete resource list');
     const bases = [snapshot.base, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base];
-    const publicRoot = resolve(root, 'public');
     for (const path of snapshot.all) {
         if (typeof path !== 'string' || !bases.some(base => path.startsWith(base + '/')) || path.includes('\\')
             || path.split('/').some(part => part === '..' || part === '.')
             || !resolve(publicRoot, '.' + path).startsWith(publicRoot + sep)) throw new Error(`invalid published resource path: ${path}`);
     }
+    return snapshot;
+}
+
+const components = (snapshot: CampusRelease) => JSON.stringify([snapshot.version, snapshot.base, snapshot.map_version, snapshot.data_version,
+    snapshot.knowledge_version, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base]);
+
+async function downloadSnapshot(snapshot: CampusRelease, entry: string, publicRoot: string): Promise<number> {
     let cursor = 0, fetched = 0;
-    await Promise.all(Array.from({ length: 8 }, async () => {
-        while (cursor < snapshot.all!.length) {
-            const path = snapshot.all![cursor++]!, file = join(publicRoot, path);
-            if (existsSync(file)) continue; // Versioned paths are immutable.
-            const resource = await fetch(resourceAt(path, entry), { signal: AbortSignal.timeout(60_000) });
-            if (!resource.ok) throw new Error(`published resource is unavailable (${resource.status}): ${path}`);
-            const content = Buffer.from(await resource.arrayBuffer());
-            if (path.endsWith('.json')) JSON.parse(content.toString());
-            await mkdir(dirname(file), { recursive: true });
-            const pending = file + `.pending-${process.pid}`;
-            try { await writeFile(pending, content); await rename(pending, file); fetched++; }
-            finally { await rm(pending, { force: true }); }
-        }
+    const controller = new AbortController();
+    const settled = await Promise.allSettled(Array.from({ length: 8 }, async () => {
+        try {
+            while (!controller.signal.aborted && cursor < snapshot.all!.length) {
+                const path = snapshot.all![cursor++]!, file = join(publicRoot, path);
+                if (existsSync(file)) continue; // Versioned paths are immutable.
+                const resource = await fetch(resourceAt(path, entry), { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]) });
+                if (!resource.ok) {
+                    const message = `published resource is unavailable (${resource.status}): ${path}`;
+                    throw resource.status === 404 ? new MissingPublishedResource(message) : new Error(message);
+                }
+                const content = Buffer.from(await resource.arrayBuffer());
+                controller.signal.throwIfAborted();
+                if (path.endsWith('.json')) JSON.parse(content.toString());
+                await mkdir(dirname(file), { recursive: true });
+                const pending = file + `.pending-${process.pid}`;
+                try { await writeFile(pending, content); await rename(pending, file); fetched++; }
+                finally { await rm(pending, { force: true }); }
+            }
+        } catch (error) { controller.abort(); throw error; }
     }));
+    // Aborted requests and filesystem writes must settle before another snapshot
+    // can reuse the immutable cache or the same pending-file names.
+    const failures = settled.filter(result => result.status === 'rejected').map(result => result.reason).filter(error => error !== controller.signal.reason);
+    const failure = failures.find(error => !(error instanceof MissingPublishedResource)) ?? failures[0];
+    if (failures.length) throw failure;
+    return fetched;
+}
+
+export async function pullSnapshot(entry = `${product.campusOrigin}/campus-release.json`, root = process.cwd()): Promise<CampusRelease> {
+    const publicRoot = resolve(root, 'public');
+    let snapshot = await currentSnapshot(entry, publicRoot), fetched = 0;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try { fetched = await downloadSnapshot(snapshot, entry, publicRoot); break; }
+        catch (error) {
+            if (!(error instanceof MissingPublishedResource) || attempt === 2) throw error;
+            const current = await currentSnapshot(entry, publicRoot);
+            if (components(current) === components(snapshot)) throw error;
+            snapshot = current;
+        }
+    }
     // Native packaging reads the same snapshot through its bundled directory.
     // These copies are local build inputs; public publication omits duplicates.
     for (const [name, base] of [['space', snapshot.map_base], ['knowledge', snapshot.knowledge_base], ['search', snapshot.search_base], ['texts', snapshot.texts_base]])
@@ -45,7 +80,7 @@ export async function pullSnapshot(entry = `${product.campusOrigin}/campus-relea
     const pending = manifest + `.pending-${process.pid}`;
     try { await writeFile(pending, JSON.stringify(snapshot)); await rename(pending, manifest); }
     finally { await rm(pending, { force: true }); }
-    console.log(`read published snapshot ${snapshot.version}; ${fetched} downloaded, ${snapshot.all.length - fetched} already local`);
+    console.log(`read published snapshot ${snapshot.version}; ${fetched} downloaded, ${snapshot.all!.length - fetched} already local`);
     return snapshot;
 }
 
