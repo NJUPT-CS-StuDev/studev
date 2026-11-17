@@ -162,7 +162,7 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
                     ["from"] = NameOf(from), ["to"] = NameOf(to), ["distance_m"] = (long)Math.Round((double)route["distance_m"]!, MidpointRounding.AwayFromZero), ["duration_s"] = (long)Math.Round((double)route["duration_s"]!, MidpointRounding.AwayFromZero),
                     ["steps"] = new JsonArray([.. route["maneuvers"]!.AsArray().Select(m => (JsonNode)(string)m!["instruction"]!)]), ["url"] = url,
                 };
-                if (Map.Routing.Access(to, s.ById).Kind == "building") { result["scope"] = "to-entrance"; result["arrival"] = Map.Routing.Name(Map.Routing.Access(to, s.ById), s.ById) + "入口"; if (Map.Routing.Floor(to) is { } level) result["floor"] = level; if (Map.Routing.Indoor(to)) result["steps"]!.AsArray().Add(JsonValue.Create(Map.Routing.Inside(to, s.ById))); }
+                if (Map.Routing.Access(to, s.ById).Kind == "building") { result["scope"] = "to-entrance"; result["arrival"] = Map.Routing.Name(Map.Routing.Access(to, s.ById), s.ById) + "入口"; if (Map.Routing.Floor(to) is { } level) result["floor"] = level; if (Map.Routing.Indoor(to)) result["steps"]!.AsArray().Add((JsonNode?)JsonValue.Create(Map.Routing.Inside(to, s.ById))); }
                 return result;
             }
         }
