@@ -31,10 +31,11 @@ public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, 
     /** Front first: an exam, then one's own task, a lab, a lesson, 早锻炼. */
     public static readonly string[] LayerOrder = ["exam", "task", "lab", "class", "run"];
 
-    public int? WeekOf(DateOnly date)
+    public int? WeekOf(DateOnly date) => WeekOf(Term, date);
+    public static int? WeekOf(TeachingTerm term, DateOnly date)
     {
         var text = Clock.Text(date);
-        return Term.Weeks.FirstOrDefault(week => string.CompareOrdinal(text, week.Start) >= 0 && string.CompareOrdinal(text, week.End) <= 0)?.Week;
+        return term.Weeks.FirstOrDefault(week => string.CompareOrdinal(text, week.Start) >= 0 && string.CompareOrdinal(text, week.End) <= 0)?.Week;
     }
 
     public List<LineEvent> On(DateOnly date)

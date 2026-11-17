@@ -134,8 +134,7 @@ public sealed partial class AiScreen : Screen
     private Situation SituationNow()
     {
         var user = Account.Shared.User;
-        var date = Clock.Text(CampusDay.Today());
-        int? week = campus.Term is { } term ? term.Weeks.FirstOrDefault(week => string.CompareOrdinal(date, week.Start) >= 0 && string.CompareOrdinal(date, week.End) <= 0)?.Week ?? 0 : null;
+        int? week = campus.Term is { } term ? CampusLine.WeekOf(term, CampusDay.Today()) ?? 0 : null;
         return new(week, campus.Preferences.Class, campus.Preferences.Campus,
             user is null ? null : user.RealName.Length > 0 ? user.RealName : user.Nickname.Length > 0 ? user.Nickname : null, user?.StudentId is { Length: > 0 } s ? s : null, memory.On ? memory.Text : null);
     }

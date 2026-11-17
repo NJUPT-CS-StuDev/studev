@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const apk = process.argv[2];
+const resume = process.argv.includes('--resume');
 if (!apk || !existsSync(apk)) throw new Error(`no APK at ${apk}`);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const sdk = process.env.ANDROID_HOME ?? 'D:\\Dev\\Android\\Sdk';
@@ -504,6 +505,12 @@ async function aiTrace() {
 
 try {
 await device();
+if (resume) {
+    const expected = /versionCode='(\d+)'/.exec(badging)?.[1];
+    const installedVersion = /versionCode=(\d+)/.exec(adb('shell', 'dumpsys', 'package', app))?.[1];
+    if (!expected || installedVersion !== expected) throw new Error('resume requires the same installed application version');
+    console.log(`resuming the remaining acceptance flow of ${app} ${expected} on ${serial}`);
+} else {
 const installed = adb('shell', 'pm', 'list', 'packages', app).split(/\r?\n/).includes(`package:${app}`);
 console.log(`installing ${apk} on ${serial}`);
 adb('install', '-r', apk);
@@ -531,6 +538,7 @@ adb('logcat', '-c');
 await seedRelease();
 adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1');
 await sleep(4000);
+}
 await chooseClass();
 for (const [scale, name] of [['周', 'week'], ['学期', 'term'], ['任务', 'tasks'], ['天', 'day']]) {
     await tap(scale, `the ${scale} view`);

@@ -43,8 +43,12 @@ public abstract partial class DeskWidget : Window
     /** What sits under the head, above the scrolled body: the list's one-line adder. */
     protected virtual FrameworkElement? Under() => null;
     protected abstract void Draw(Campus campus, CampusLine line, Moment now);
-    protected virtual string Subtitle(CampusLine? line, Moment now) =>
-        $"{Clock.DateLabel(now.Date)} {Clock.Weekdays[Clock.Weekday(now.Date)]} · {(line?.WeekOf(now.Date) is { } w ? $"第 {w} 周" : "假期")}";
+    protected virtual string Subtitle(CampusLine? line, Moment now)
+    {
+        var date = $"{Clock.DateLabel(now.Date)} {Clock.Weekdays[Clock.Weekday(now.Date)]}";
+        var term = line?.Term ?? Campus.Shared.Term;
+        return term is null ? date : $"{date} · {(CampusLine.WeekOf(term, now.Date) is { } w ? $"第 {w} 周" : "假期")}";
+    }
 
     protected DeskWidget(string id)
     {
