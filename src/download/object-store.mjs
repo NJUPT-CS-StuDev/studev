@@ -31,17 +31,3 @@ export async function signedFetch(store, method, key, { body = '', headers = {},
     return fetch(url, { method, signal, body: method === 'GET' || method === 'HEAD' ? undefined : body, headers: { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${store.accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` } });
 }
 
-/** The longest a signed link may last. */
-export const WEEK = 7 * 24 * 3600;
-
-/** A plain GET link to one object, good for `seconds` (at most a week). */
-export function presignGet(store, key, seconds, extra = {}) {
-    const url = new URL(`/${store.bucket}/${encodePath(key)}`, store.endpoint);
-    const { stamp, day, scope } = clock();
-    const params = new URLSearchParams({ 'X-Amz-Algorithm': 'AWS4-HMAC-SHA256', 'X-Amz-Credential': `${store.accessKey}/${scope}`, 'X-Amz-Date': stamp, 'X-Amz-Expires': String(seconds), 'X-Amz-SignedHeaders': 'host', ...extra });
-    params.sort();
-    const canonicalQuery = params.toString().replaceAll('+', '%20');
-    const canonical = ['GET', url.pathname, canonicalQuery, `host:${url.host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');
-    const signature = createHmac('sha256', signingKey(store.secretKey, day)).update(['AWS4-HMAC-SHA256', stamp, scope, sha256(canonical)].join('\n')).digest('hex');
-    return `${url.href}?${canonicalQuery}&X-Amz-Signature=${signature}`;
-}
