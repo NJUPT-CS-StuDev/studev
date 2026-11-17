@@ -233,7 +233,7 @@ async function referenceGroups() {
     healthy('large reference groups and the course homepage');
 }
 async function pickFilter(label, value) {
-    await tap(node => node.clickable === 'true' && node['content-desc'].startsWith(`${label}：`), `open the ${label} dropdown`);
+    await tap(node => node['content-desc'].startsWith(`${label}：`), `open the ${label} dropdown`);
     await tap(value, `choose ${value} in the ${label} filter`);
 }
 async function knowledgeFilters() {
