@@ -12,7 +12,7 @@ async function fixture() {
   const store = memoryBlob(), repo = createRepository(store, { secret: env.PLATFORM_SESSION_SECRET });
   const handle = createPlatformHandler({ getStore: () => store });
   const one = requestClient(handle, env), two = requestClient(handle, env), visitor = requestClient(handle, env);
-  const first = await one.call('/auth/register', { method: 'POST', body: { studentId: 'MEMBER001', realName: '吴双灿', nickname: '', qq: '10000801', password } });
+  const first = await one.call('/auth/register', { method: 'POST', body: { studentId: 'MEMBER001', realName: '测试同学', nickname: '', qq: '10000801', password } });
   const second = await two.call('/auth/register', { method: 'POST', body: { studentId: 'MEMBER002', realName: '保密姓名', nickname: '风中的树', qq: '10000802', password } });
   assert.equal(first.status, 201); assert.equal(second.status, 201);
   await one.call('/auth/login', { method: 'POST', body: { studentId: 'MEMBER001', password } });
@@ -21,16 +21,16 @@ async function fixture() {
 }
 
 test('nickname is explicit or the final complete character, never a private identifier fallback', () => {
-  assert.equal(profileNickname({ realName: '吴双灿', nickname: '' }), '灿');
-  assert.equal(profileNickname({ realName: '吴双灿', nickname: 'hicancan' }), 'hicancan');
-  assert.equal(profileNickname({ realName: '吴双灿', nickname: '吴双灿' }), '灿');
+  assert.equal(profileNickname({ realName: '测试同学', nickname: '' }), '学');
+  assert.equal(profileNickname({ realName: '测试同学', nickname: '自选昵称' }), '自选昵称');
+  assert.equal(profileNickname({ realName: '测试同学', nickname: '测试同学' }), '学');
   assert.equal(profileNickname({ realName: '任𠮷' }), '𠮷');
   assert.equal(profileNickname({ studentId: 'PRIVATE001', qq: '10000801' }), '同学');
 });
 
 test('ordinary signed-in members browse only public fields while full account lookup remains privileged', async () => {
   const f = await fixture();
-  assert.equal(f.first.nickname, '灿');
+  assert.equal(f.first.nickname, '学');
   assert.equal((await f.visitor.call('/members')).status, 401);
   assert.equal((await f.visitor.call(`/members/${f.first.id}`)).status, 401);
   const listed = await f.one.call('/members');

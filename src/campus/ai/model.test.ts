@@ -5,7 +5,7 @@ import { STARTING_OWN } from './model';
 afterEach(() => vi.unstubAllGlobals());
 const own = { ...STARTING_OWN, key: 'test-only-provider-key' };
 const messages = [{ role: 'user' as const, content: '你好' }];
-const situation = { week: 11, class: 'B240402', campus: '仙林', name: '吴双灿', student: 'B24040213', memory: null };
+const situation = { week: 11, class: 'B240402', campus: '仙林', name: '测试同学', student: 'TEST000001', memory: null };
 
 it('uses only the explicitly chosen provider, without platform credentials, and reads a split event stream', async () => {
     const encoder = new TextEncoder();
@@ -22,7 +22,7 @@ it('uses only the explicitly chosen provider, without platform credentials, and 
     expect(init).toMatchObject({ credentials: 'omit', redirect: 'error', headers: { Authorization: 'Bearer test-only-provider-key' } });
     // Told the moment and who is asking, as the platform tells it; no memory kept, so nothing to remember with.
     const body = JSON.parse(String(init.body)) as { messages: { content: string }[]; tools: { function: { name: string } }[] };
-    expect(body.messages[0]!.content).toMatch(/本学期第 11 周。你在和仙林校区 B240402 班的吴双灿（学号 B24040213）说话/);
+    expect(body.messages[0]!.content).toMatch(/本学期第 11 周。你在和仙林校区 B240402 班的测试同学（学号 TEST000001）说话/);
     expect(body.tools.map(tool => tool.function.name)).not.toContain('remember');
 });
 

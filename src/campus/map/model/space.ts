@@ -51,7 +51,7 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
         loadRoomIndex(),
     ]);
     const joined = places.map(place => {
-        if (!place.routing || place.routing.type !== 'target' || place.routing.id !== place.id) {
+        if (!place.routing || place.routing.type !== 'target' || !network.targets[place.routing.id]?.length) {
             throw new Error(`地图实体缺少规范导航目标：${place.id}`);
         }
         const record = opening[place.id];

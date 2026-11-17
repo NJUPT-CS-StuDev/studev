@@ -5,7 +5,8 @@ import type { ExamRecord } from '@/world/data';
 import { wasChanged } from '@/world/exams';
 import { buildingOf, courseName, roomLabel, unplaced } from '@/world/names';
 import { addDays, daysBetween, dateLabel, durationText, hm, minutesOf, momentText, startOfWeek, WEEKDAYS, type Moment } from '@/world/time';
-import { walkMinutes } from '@/world/walk';
+import { walkTo, type WalkEstimate } from '@/world/walk';
+import { routeDuration } from '@/world/routes';
 import { Chevron } from '@/world/ui';
 import { courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 
@@ -23,11 +24,13 @@ const roomsAt = (date: string, min: number) => `/search/?scope=room&t=${momentTe
 function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     const event = nextEvent(line, now);
     const placed = event && !unplaced(event.room);
-    const [walk, setWalk] = useState<number | null>(null);
+    const [walking, setWalk] = useState<WalkEstimate | null>(null);
+    const walk = walking?.target === event?.room ? walking : null;
     useEffect(() => {
+        setWalk(null);
         if (!placed) return;
         let live = true;
-        void walkMinutes(event!.room!).then(value => { if (live) setWalk(value); });
+        void walkTo(event!.room!).then(value => { if (live) setWalk(value); });
         return () => { live = false; };
     }, [event?.room, placed]); // eslint-disable-line
     if (!event) return null;
@@ -41,7 +44,7 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
             <div className="l">
                 <span className="cap">{caption}</span>
                 <b>{hm(event.start)} {event.name}</b>
-                <span className="m">{event.room ? roomLabel(event.room) : '课表没写地点'}{walk !== null && !during ? ` · ${hm(event.start - walk - 2)} 出门，步行 ${walk} 分钟` : ''}</span>
+                <span className="m">{event.room ? roomLabel(event.room) : '课表没写地点'}{walk !== null && !during ? ` · 步行${routeDuration(walk.seconds)}到${walk.arrival}` : ''}</span>
                 {exam && <span className="xam"><span className="tag">考试</span>{exam.days === 0 ? '今天' : exam.days === 1 ? '明天' : `${exam.days} 天后`} {exam.exams.map(item => `${courseName(item.course.name)} ${item.start}`).join('、')}</span>}
             </div>
             {placed && <a className="btn go" href={`/map/?nav=${encodeURI(event.room!)}`}>去这里</a>}

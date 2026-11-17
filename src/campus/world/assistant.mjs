@@ -28,7 +28,7 @@ export function nanjingNow(now = Date.now()) {
 
 const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => String(values[key]));
 
-/** Who the model is talking to, in a phrase: 仙林校区 B240402 班的吴双灿（学号 B24040213）. */
+/** Who the model is talking to, in a phrase: 仙林校区 B240402 班的测试同学（学号 TEST000001）. */
 function who(situation) {
     const me = assistant.me;
     const where = fill(situation.class ? me.class : me.noClass, situation);

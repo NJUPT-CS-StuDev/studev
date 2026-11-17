@@ -13,6 +13,7 @@ import { courseSaid, curriculumSaid, scheduleSaid, UnknownReference } from './an
 import { textKey } from './texts';
 import { loadCurriculum, loadKnowledge } from './knowledge';
 import { campusConfig } from '../../../campus.config';
+import { placeFloor, routeContext } from './routes';
 
 /** Where a search looks, by the name a person gives it: the same channels as the search page. */
 const CHANNELS = campusConfig.search.channels as readonly { label: string; sources?: readonly string[]; excluded?: readonly string[] }[];
@@ -82,11 +83,18 @@ export class CampusTools {
     }
     async route(args: Record<string, unknown>) {
         const space = await this.places(), from = placeMeant(space.places, space.byId, String(args.from)), to = placeMeant(space.places, space.byId, String(args.to));
+        const context = routeContext(from, to, space.byId), mode = (args.mode ?? 'walk') as Mode;
+        const identity = { from: this.nameOf(from), to: this.nameOf(to), url: `/map/?from=${encodeURIComponent(from.id)}&nav=${encodeURIComponent(to.id)}${mode === 'bike' ? '&mode=bike' : ''}` };
+        if (context.withinBuilding) return { ...identity, scope: 'within-building', building: context.building,
+            ...(placeFloor(from) ? { from_floor: placeFloor(from) } : {}), ...(context.floor ? { to_floor: context.floor } : {}),
+            steps: [`起点：${context.fromLocation}`, `目的地：${context.location}`] };
         const router = await (this.router ??= initialize().then(() => new Router(space.network)));
-        const result = router.route({ origin: from.routing, destination: to.routing, mode: (args.mode ?? 'walk') as Mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 1 });
+        const result = router.route({ origin: from.routing, destination: to.routing, mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 1 });
         const route = result.routes[0];
         if (!route) throw new Error(`地图里没有从${this.nameOf(from)}到${this.nameOf(to)}的路。`);
-        return { from: this.nameOf(from), to: this.nameOf(to), distance_m: Math.round(route.distance_m), duration_s: Math.round(route.duration_s), steps: route.maneuvers.map(step => step.instruction), url: `/map/?from=${encodeURIComponent(from.id)}&nav=${encodeURIComponent(to.id)}` };
+        return { ...identity, ...(context.access.kind === 'building' ? { scope: 'to-entrance', arrival: context.arrival, ...(context.floor ? { floor: context.floor } : {}) } : {}),
+            distance_m: Math.round(route.distance_m), duration_s: Math.round(route.duration_s),
+            steps: [...route.maneuvers.map(step => step.type === 'arrive' && context.access.kind === 'building' ? `到达${context.arrival}` : step.instruction), ...(context.continuation ? [context.continuation] : [])] };
     }
     dispose() { this.search?.dispose(); void this.router?.then(router => router.free()); }
 }

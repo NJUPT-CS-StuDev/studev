@@ -38,6 +38,7 @@ import { compactPlace, courseName, courseShort, roomLabel } from '@/world/names'
 import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
 import { labelRule } from '../../map/model/labels';
+import { placeFloor, routeContext, routingPlace } from '@/world/routes';
 import type { Place } from '../../map/model/space';
 import type { CalendarTerm, ExamRecord, MorningRun, RoomIndex } from '@/world/data';
 import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, ExamChange, ExamVersion, ExamSource, Lab, RoomDay } from '@/world/facts';
@@ -45,7 +46,7 @@ import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, ExamChange, E
 const read = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
 const campusTimes = ['2026-11-16T15:59:59Z', '2026-11-16T16:00:00Z', '2026-12-31T16:00:00Z', '2026-11-17T00:00:00Z', '2026-03-08T10:30:00Z']
     .map(instant => ({ instant, now: momentNow(new Date(instant)) }));
-const release = read<{ version: string; teaching: string; exams?: string; labs: string }>('src/data/campus-release.json');
+const release = read<{ version: string; map_base: string; teaching: string; exams?: string; labs: string }>('src/data/campus-release.json');
 const base = `public/data/${release.version}`;
 const examIndex = read<{ sources: ExamSource[]; checked: string | null; history: ExamVersion[] }>(`${base}/exams/${release.exams}/index.json`);
 const examChanges = read<ExamChange[]>(`${base}/exams/${release.exams}/changes.json`);
@@ -105,14 +106,25 @@ const examAttendance = [
     { choices: {}, ownCodes: null }, { choices: { a: false }, ownCodes: null }, { choices: {}, ownCodes: ['X1'] }, { choices: { b: true }, ownCodes: ['X1'] },
 ].map(test => ({ ...test, expected: attendingExams(attendanceExams, test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id) }));
 const examReminders = EXAM_REMINDERS.flatMap(({ key }) => [8 * 60, 13 * 60 + 30, 18 * 60 + 30].map(start => ({ key, start, minutes: examReminderMinutes(key, start) })));
-const placeRows = JSON.parse(readFileSync(`public/data/${release.version}/space/仙林/entities.json`, 'utf8')) as Place[];
+const placeRows = JSON.parse(readFileSync(`public${release.map_base}/仙林/entities.json`, 'utf8')) as Place[];
 const hourFacts = JSON.parse(readFileSync(`public/data/${release.version}/hours.json`, 'utf8')) as Record<string, { hours: Place['hours'] }>;
 // The buildings and places of the campus, as home suggestions choose among them, and how each entity is named on the map.
 const places = placeRows.filter(place => (place.kind === 'building' || place.kind === 'place') && place.id.startsWith('仙林/')).map(place => ({ ...place, ...(hourFacts[place.id] ? { hours: hourFacts[place.id]!.hours } : {}) }));
 const placeById = new Map(placeRows.map(place => [place.id, place]));
+const routing = [
+    ['仙林/教1-102', '仙林/教1-101'], ['仙林/教1-101', '仙林/教1-201'],
+    ['仙林/教1-101', '仙林/教2-101'], ['仙林/教1-101', '仙林/教1/2'],
+    ['仙林/教1/2', '仙林/教1-201'],
+].map(([from, to]) => {
+    const start = placeById.get(from!)!, destination = placeById.get(to!)!, context = routeContext(start, destination, placeById);
+    return { from, to, sourceAccess: routingPlace(start, placeById).id, targetAccess: context.access.id,
+        withinBuilding: context.withinBuilding, indoorDestination: context.indoorDestination,
+        building: context.building, fromFloor: placeFloor(start) ?? null, toFloor: context.floor ?? null,
+        arrival: context.arrival, fromLocation: context.fromLocation, location: context.location, continuation: context.continuation };
+});
 // The map's entities as far as naming and finding them needs, for Android to read without the data release.
-const entities = placeRows.filter(place => ['campus', 'building', 'place', 'room'].includes(place.kind))
-    .map(({ id, kind, parent, names, centre, category, group, tier, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(centre ? { centre } : {}), ...(category ? { category } : {}), ...(group ? { group } : {}), ...(tier ? { tier } : {}), sources, routing }));
+const entities = placeRows.filter(place => ['campus', 'building', 'place', 'floor', 'room'].includes(place.kind))
+    .map(({ id, kind, parent, names, centre, category, group, tier, floor, sources, routing }) => ({ id, kind, ...(parent ? { parent } : {}), names, ...(centre ? { centre } : {}), ...(category ? { category } : {}), ...(group ? { group } : {}), ...(tier ? { tier } : {}), ...(floor ? { floor } : {}), sources, routing }));
 const labels = placeRows.filter(place => place.kind === 'building' || place.kind === 'place').map(place => ({ id: place.id, rule: labelRule(place, placeById), teaching: place.kind === 'building' ? labelRule(place, placeById, true) : null }));
 // Nearest first from the middle of the campus, as the map reads it when one's own place is not known.
 const from = placeById.get(PRODUCT_CONFIG.CAMPUS.id)!.centre as [number, number];
@@ -276,7 +288,7 @@ const streams = [
 const askAt = Date.parse('2026-11-13T16:30:00Z');
 // Public teaching time is independent of the chosen class; unknown and known outside term remain distinct.
 const situations: Situation[] = [
-    { week: 11, class: 'B240402', campus: '仙林', name: '吴双灿', student: 'B24040213', memory: '- 在准备考研\n- 喜欢早上学习' },
+    { week: 11, class: 'B240402', campus: '仙林', name: '测试同学', student: 'TEST000001', memory: '- 在准备考研\n- 喜欢早上学习' },
     { week: null, class: null, campus: '三牌楼', name: null, student: null, memory: '' },
     { week: 0, class: null, campus: '仙林', name: null, student: null, memory: null },
     { week: 12, class: null, campus: '仙林', name: null, student: null, memory: null },
@@ -350,5 +362,5 @@ const glance = {
 const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
     .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, examHistory: examHistoryCases, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, examHistory: examHistoryCases, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, routing, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

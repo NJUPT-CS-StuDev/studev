@@ -1,9 +1,10 @@
 // How long it takes to walk somewhere from here, asked only once someone has allowed location.
 import { initialize, Router, type Position } from 'wayfind';
 import { loadSpace } from '@/map/model/space';
+import { routeContext } from './routes';
 
-let router: Promise<Router> | null = null;
-const getRouter = () => router ??= Promise.all([loadSpace(), initialize()]).then(([space]) => new Router(space.network));
+let world: Promise<{ space: Awaited<ReturnType<typeof loadSpace>>; router: Router }> | null = null;
+const getWorld = () => world ??= Promise.all([loadSpace(), initialize()]).then(([space]) => ({ space, router: new Router(space.network) }));
 
 async function allowedPosition(): Promise<Position | null> {
     try {
@@ -17,12 +18,15 @@ async function allowedPosition(): Promise<Position | null> {
     ));
 }
 
-/** Walking minutes to a place, or null when it cannot be told. */
-export async function walkMinutes(target: string): Promise<number | null> {
+export interface WalkEstimate { target: string; seconds: number; arrival: string }
+/** The published outdoor walk reaches an access point, while the selected room remains the destination. */
+export async function walkTo(target: string): Promise<WalkEstimate | null> {
     const position = await allowedPosition();
     if (!position) return null;
     try {
-        const answer = (await getRouter()).route({ origin: { type: 'position', position }, destination: { type: 'target', id: target }, mode: 'walk', avoid_steps: false, max_snap_distance_m: 100, alternatives: 1 });
-        return answer.routes[0] ? Math.max(1, Math.ceil(answer.routes[0].duration_s / 60)) : null;
+        const { space, router } = await getWorld(), destination = space.byId.get(target);
+        if (!destination) return null;
+        const answer = router.route({ origin: { type: 'position', position }, destination: destination.routing, mode: 'walk', avoid_steps: false, max_snap_distance_m: 100, alternatives: 1 });
+        return answer.routes[0] ? { target, seconds: answer.routes[0].duration_s, arrival: routeContext(undefined, destination, space.byId).arrival } : null;
     } catch { return null; }
 }

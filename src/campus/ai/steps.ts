@@ -26,7 +26,7 @@ function detail(name: string, args: Record<string, unknown>, result: unknown, do
         case 'read': return done && text(field(result, 'title')) ? `《${text(field(result, 'title'))}》` : quoted('id');
         case 'find_place': { const first = Array.isArray(result) ? text(field(result[0], 'name')) : ''; return `${quoted('query')}${done ? first ? ` → ${first}` : ' · 没找到' : ''}`; }
         case 'nearby': { const places = field(result, 'places'); return `${text(field(result, 'near')) || text(args.near)}附近的${text(args.what)}${done && Array.isArray(places) ? ` · ${places.length} 处` : ''}`; }
-        case 'route': { const metres = field(result, 'distance_m'); return `${text(field(result, 'from')) || text(args.from)} → ${text(field(result, 'to')) || text(args.to)}${typeof metres === 'number' ? ` · ${Math.round(metres)} 米` : ''}`; }
+        case 'route': { const metres = field(result, 'distance_m'); return `${text(field(result, 'from')) || text(args.from)} → ${text(field(result, 'to')) || text(args.to)}${field(result, 'scope') === 'within-building' ? ` · 同在${text(field(result, 'building'))}` : typeof metres === 'number' ? ` · ${Math.round(metres)} 米${text(field(result, 'arrival')) ? ` · 到${text(field(result, 'arrival'))}` : ''}` : ''}`; }
         case 'timeline': return days(text(args.from), text(args.to));
         case 'exams': { const exams = field(result, 'exams'); return done && Array.isArray(exams) ? `${exams.length} 场` : ''; }
         case 'list_tasks': return done ? `${count(result)} 个` : '';

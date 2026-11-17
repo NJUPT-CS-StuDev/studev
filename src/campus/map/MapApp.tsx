@@ -24,6 +24,7 @@ import { fetchJson } from '@/world/fetch';
 import { holidayMap } from '@/world/events';
 import { readAppearance } from '@/world/appearance';
 import { orientationBall } from './ball';
+import { routeContext, routeDuration } from '@/world/routes';
 import '../campus.css';
 
 /** A photo of a place, sent with where it is: its name, its id on the map and, where the map has one, its centre. */
@@ -81,9 +82,8 @@ export default function MapApp() {
     // A changed date stops using the previous day's occupancy before its request finishes.
     const day = loadedDay?.date === moment.date ? loadedDay : null;
     const [me, setMe] = useState<Position | null>(null);
-    const [origin, setOrigin] = useState('');
-    const [mode, setMode] = useState<Mode>('walk');
-    const [routes, setRoutes] = useState<Route[]>([]);
+    const origin = params.get('from') ?? '';
+    const mode: Mode = params.get('mode') === 'bike' ? 'bike' : 'walk';
     const [chosen, setChosen] = useState(0);
     const [notice, setNotice] = useState<string | null>(null);
     const [snap, setSnap] = useState(0);
@@ -236,20 +236,20 @@ export default function MapApp() {
 
     /* Routes. */
     const destination = navId ? world?.space.byId.get(navId) : undefined;
-    useEffect(() => {
-        if (!destination || !world) { setRoutes([]); return; }
+    const routeInfo = useMemo(() => world && destination ? routeContext(origin ? world.space.byId.get(origin) : undefined, destination, world.space.byId) : null, [destination, origin, world]);
+    const planned = useMemo<{ routes: Route[]; notice: string | null }>(() => {
+        if (!destination || !world || routeInfo?.withinBuilding) return { routes: [], notice: null };
         const from = origin ? world.space.byId.get(origin)?.routing : me ? { type: 'position' as const, position: me as [number, number] } : null;
-        if (!from) { setRoutes([]); return; }
+        if (!from) return { routes: [], notice: origin ? '没有找到出发地。' : null };
         try {
             const answer = world.router.route({ origin: from, destination: destination.routing, mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 3 });
-            setRoutes(answer.routes);
-            setChosen(0);
-            setNotice(answer.routes.length ? null : '没有找到路线。');
+            return { routes: answer.routes, notice: answer.routes.length ? null : '没有找到路线。' };
         } catch {
-            setRoutes([]);
-            setNotice(origin ? '没有找到路线。' : '你现在不在校园路网附近，请选一个出发地。');
+            return { routes: [], notice: origin ? '没有找到路线。' : '你现在不在校园路网附近，请选一个出发地。' };
         }
-    }, [destination, me, mode, origin, world]);
+    }, [destination, me, mode, origin, routeInfo, world]);
+    const routes = planned.routes;
+    useEffect(() => { setChosen(0); setNotice(planned.notice); }, [planned]);
     useEffect(() => {
         if (!scene) return;
         if (navId && entered.current) { scene.exit(); entered.current = ''; }
@@ -280,16 +280,16 @@ export default function MapApp() {
         if (!world || !day) return [];
         return world.rooms.filter(isClassroom).map(room => ({ room, state: world.read(day, room.id, moment.min) })).filter(item => !item.state.busy);
     }, [day, moment.min, world]);
-    const walkTo = useCallback((room: Room) => {
+    const distanceTo = useCallback((room: Room) => {
         if (!me || !world) return null;
         const at = world.space.byId.get(`${room.campus}/${room.building}`)?.centre;
-        return at ? Math.max(1, Math.ceil(distance(me, at) / 80)) : null;
+        return at ? metres(distance(me, at)) : null;
     }, [me, world]);
     const roomRows = (items: { room: Room; state: RoomState }[]) => items.map(({ room, state }) => {
-        const walk = walkTo(room);
+        const away = distanceTo(room);
         return <button key={room.id} className="rrow" onClick={() => handlers.current.onRoom(room.id)}>
             <span className={`sw ${state.tier}`} />
-            <span className="m"><span className="a">{roomLabel(room.id)}</span><span className="b">{room.seats ? `${room.seats} 座` : '座位未知'}{walk ? ` · 约步行 ${walk} 分钟` : ''}</span></span>
+            <span className="m"><span className="a">{roomLabel(room.id)}</span><span className="b">{room.seats ? `${room.seats} 座` : '座位未知'}{away ? ` · 直线约 ${away}` : ''}</span></span>
             <span className="r">{state.minutes ? `到 ${hm(state.until)}` : '今天没课了'}</span>
         </button>;
     });
@@ -314,22 +314,25 @@ export default function MapApp() {
     /* Panels. */
     const close = () => set({ place: null, f: null, nav: null }, { push: true });
     let body = null;
-    if (world && destination) {
-        const route = routes[chosen];
+    if (world && destination && routeInfo) {
+        const route = routes[chosen] ?? routes[0];
         const name = destination.kind === 'room' ? roomLabel(destination.id) : displayName(destination, world.space.byId);
         body = <>
-            <div className="card-h top"><h2>{route ? `${mode === 'walk' ? '步行' : '骑行'} ${Math.max(1, Math.ceil(route.duration_s / 60))} 分钟 · ${metres(route.distance_m)}` : name}</h2></div>
-            <div className="meta">到 {name}</div>
+            <div className="card-h top"><h2>{routeInfo.withinBuilding ? `同在${routeInfo.building}` : route ? `${mode === 'walk' ? '步行' : '骑行'} ${routeDuration(route.duration_s)} · ${metres(route.distance_m)}` : name}</h2></div>
+            <div className="meta">{routeInfo.withinBuilding ? `${routeInfo.fromLocation} → ${routeInfo.location}` : `到 ${routeInfo.arrival}`}</div>
+            {!routeInfo.withinBuilding && routeInfo.indoorDestination && <div className="meta">目的地：{routeInfo.location}</div>}
             <label className="from">从
-                <select value={origin} onChange={event => setOrigin(event.target.value)}>
+                <select value={origin} onChange={event => set({ from: event.target.value || null })}>
                     <option value="">我的位置</option>
+                    {origin && world.space.byId.get(origin) && !['building', 'place'].includes(world.space.byId.get(origin)!.kind) && <option value={origin}>{routeInfo.fromLocation}</option>}
                     {world.space.places.filter(place => (place.kind === 'building' || place.kind === 'place') && place.id !== destination.id && place.names[0]).map(place => <option key={place.id} value={place.id}>{place.names[0]}</option>)}
                 </select>
             </label>
-            <div className="tabs slim">{(['walk', 'bike'] as const).map(item => <button key={item} className={mode === item ? 'on' : ''} onClick={() => setMode(item)}>{item === 'walk' ? '步行' : '骑行'}</button>)}</div>
-            {routes.length > 1 && routes.map((item, index) => <button key={index} className={`occ ${index === chosen ? 'cur' : ''}`} onClick={() => setChosen(index)}><span className="tm">{Math.max(1, Math.ceil(item.duration_s / 60))} 分钟</span><span className="nm">{metres(item.distance_m)}<small>经 {visibleRouteText(item.via)}</small></span></button>)}
-            {route && <ol className="steps">{route.maneuvers.map((step, index) => <li key={index}>{visibleRouteText(step.instruction)}</li>)}</ol>}
-            {!route && !notice && <p className="msum">正在找你的位置…</p>}
+            {!routeInfo.withinBuilding && <div className="tabs slim">{(['walk', 'bike'] as const).map(item => <button key={item} aria-pressed={mode === item} className={mode === item ? 'on' : ''} onClick={() => set({ mode: item === 'bike' ? item : null })}>{item === 'walk' ? '步行' : '骑行'}</button>)}</div>}
+            {!routeInfo.withinBuilding && routes.length > 1 && routes.map((item, index) => <button key={index} className={`occ ${index === chosen ? 'cur' : ''}`} onClick={() => setChosen(index)}><span className="tm">{routeDuration(item.duration_s)}</span><span className="nm">{metres(item.distance_m)}<small>经 {visibleRouteText(item.via)}</small></span></button>)}
+            {!routeInfo.withinBuilding && route && <ol className="steps">{route.maneuvers.map((step, index) => <li key={index}>{step.type === 'arrive' && routeInfo.access.kind === 'building' ? `到达${routeInfo.arrival}` : visibleRouteText(step.instruction)}</li>)}{routeInfo.continuation && <li>{routeInfo.continuation}</li>}</ol>}
+            {(routeInfo.withinBuilding || routeInfo.indoorDestination) && <div className="btns"><button className="btn go" onClick={() => set({ nav: null, from: null, place: destination.id, f: routeInfo.floor ?? null }, { push: true })}>查看楼层</button></div>}
+            {!routeInfo.withinBuilding && !route && !notice && <p className="msum">正在找你的位置…</p>}
         </>;
     } else if (world && pickedRoom && bId) {
         const room = world.roomById.get(pickedRoom.id);

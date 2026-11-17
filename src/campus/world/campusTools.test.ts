@@ -11,12 +11,15 @@ import { CampusTools } from './campusTools';
 import { courseSaid } from './answers';
 import { textKey } from './texts';
 import type { Knowledge } from './knowledge';
+import { initialize as initializeRouting } from 'wayfind';
 
 const base = join('public', release.base);
 let engine: SearchRuntime;
 let index: Knowledge;
 beforeAll(async () => {
     await initialize({ module_or_path: await readFile('node_modules/wasm-search/wasm/wasm_search_wasm_bg.wasm') });
+    await initializeRouting(await readFile('node_modules/wayfind/wasm/wayfind_wasm_bg.wasm'));
+    vi.stubGlobal('location', { origin: 'https://studev.test' });
     index = JSON.parse(await readFile(join(base, 'knowledge/knowledge.json'), 'utf8')) as Knowledge;
     // Only transport is local: the production WASM, range-reader, search runtime and published bundle are real.
     vi.stubGlobal('fetch', async (url: string, options?: RequestInit) => {
@@ -36,6 +39,23 @@ beforeAll(async () => {
     await engine.initialize();
 });
 afterAll(() => { engine?.dispose(); vi.unstubAllGlobals(); });
+
+it('uses released building access for real room routes and retains the requested room destinations', async () => {
+    const tools = new CampusTools();
+    try {
+        const inside = await tools.route({ from: '仙林/教1-102', to: '仙林/教1-101' });
+        expect(inside).toMatchObject({ from: '教1-102', to: '教1-101', scope: 'within-building', building: '教1', from_floor: '1', to_floor: '1' });
+        expect(inside).not.toHaveProperty('distance_m'); expect(inside).not.toHaveProperty('duration_s');
+        expect(new URL(inside.url, 'https://studev.test').searchParams.get('nav')).toBe('仙林/教1-101');
+        const outside = await tools.route({ from: '仙林/教1-101', to: '仙林/教2-101' });
+        expect(outside).toMatchObject({ scope: 'to-entrance', arrival: '教2入口', floor: '1' });
+        expect('distance_m' in outside && outside.distance_m).toBeGreaterThan(0);
+        expect(outside.steps.at(-1)).toBe('进入教2后，前往1 层 · 教2-101');
+        expect(new URL(outside.url, 'https://studev.test').searchParams.get('nav')).toBe('仙林/教2-101');
+        const bike = await tools.route({ from: '仙林/教1-101', to: '仙林/教2-101', mode: 'bike' });
+        expect(new URL(bike.url, 'https://studev.test').searchParams.get('mode')).toBe('bike');
+    } finally { tools.dispose(); }
+});
 
 it('finds the released TCP past-paper passages in exam materials and reads their exact search IDs', async () => {
     const channel = channels.find(channel => channel.label === '考试资料')!;

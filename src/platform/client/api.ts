@@ -168,7 +168,7 @@ export function nicknameOf(user: { nickname?: string; realName?: string; student
     const nick = (user.nickname || '').trim();
     return !nick || nick === user.realName || nick === user.studentId || nick === user.qq ? '' : nick;
 }
-/** Real name as the primary label, with a distinct nickname appended in a muted span: “吴双灿 hicancan”. */
+/** Real name as the primary label, with a distinct nickname appended in a muted span: “测试同学 自选昵称”. */
 export function nameNode<K extends keyof HTMLElementTagNameMap>(tag: K, user: { nickname?: string; realName?: string; studentId?: string; qq?: string }, className?: string): HTMLElementTagNameMap[K] {
     const node = el(tag, user.realName || user.nickname || user.studentId || user.qq || '', className);
     const nick = user.realName ? nicknameOf(user) : '';

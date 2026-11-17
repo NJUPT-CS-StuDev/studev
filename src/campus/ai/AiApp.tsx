@@ -26,6 +26,7 @@ import { addressError, endpoint, fetchModels, OWNER_AVATAR, ownName, readChoice,
 import { append, chain, choose, conversationId, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
+import { routeDuration } from '@/world/routes';
 import { MEMORY_LIMIT, readMemory, remembered, writeMemory, type Memory } from './memory';
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
@@ -73,8 +74,9 @@ function Found({ name, result }: { name: string; result: unknown }) {
     if (!value || typeof value !== 'object') return null;
     if (name === 'free_rooms' && Array.isArray(value.rooms)) return <div className="ai-cards">{(value.rooms as { room: string; until: number; minutes: number }[]).slice(0, 6).map(room =>
         <a key={room.room} className="ai-card" href={`/map/?place=${encodeURIComponent(room.room)}`}><b>{roomLabel(room.room)}</b><small>空到 {hm(room.until)} · {Math.floor(room.minutes / 60)} 小时 {room.minutes % 60} 分</small></a>)}</div>;
-    if (name === 'route' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url}><b>导航到{String(value.to)}</b>
-        <small>{String(value.distance_m)} 米 · 约 {Math.max(1, Math.round(Number(value.duration_s) / 60))} 分钟</small></a></div>;
+    if (name === 'route' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url}><b>{value.scope === 'within-building' ? '查看' : '导航到'}{String(value.to)}</b>
+        <small>{value.scope === 'within-building' ? `同在${String(value.building)}${value.to_floor ? ` · ${String(value.to_floor)} 层` : ''}`
+            : `${String(value.distance_m)} 米 · ${routeDuration(Number(value.duration_s))}${value.arrival ? `到${String(value.arrival)}` : ''}`}</small></a></div>;
     if (name === 'read' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url} target="_blank" rel="noreferrer"><b>{String(value.title)}</b><small>{[value.source, value.date].filter(Boolean).join(' · ')}</small></a></div>;
     if (name === 'nearby' && Array.isArray(value.places)) return <div className="ai-cards">{(value.places as { id: string; name: string; metres: number; now?: string }[]).slice(0, 4).map(item =>
         <a key={item.id} className="ai-card" href={`/map/?place=${encodeURIComponent(item.id)}`}><b>{item.name}</b><small>{[`${item.metres} 米`, item.now].filter(Boolean).join(' · ')}</small></a>)}</div>;
