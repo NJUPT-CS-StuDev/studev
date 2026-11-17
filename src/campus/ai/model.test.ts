@@ -38,3 +38,18 @@ it('does not send a key to an invalid or unencrypted provider address', async ()
     await expect(askOwn({ ...own, base: 'http://example.org' }, messages, situation, false, () => {}, new AbortController().signal)).rejects.toThrow('https://');
     expect(fetch).not.toHaveBeenCalled();
 });
+
+it.each(['data: {"error":{"message":"Local browser source stopped"}}\n\n', 'event: error\ndata: {"message":"Local browser source stopped"}\n\n'])('reports an SSE error received after a successful HTTP response: %s', async (body) => {
+    const fetch = vi.fn(async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(askOwn(own, messages, situation, false, () => {}, new AbortController().signal)).rejects.toThrow('Local browser source stopped');
+    expect(fetch).toHaveBeenCalledOnce();
+});
+
+it('closes an open response stream when its SSE error ends the request', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"error":{"message":"source failed"}}\n\n')); }, cancel });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body)));
+    await expect(askOwn(own, messages, situation, false, () => {}, new AbortController().signal)).rejects.toThrow('source failed');
+    expect(cancel).toHaveBeenCalledOnce();
+});

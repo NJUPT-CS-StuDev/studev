@@ -58,3 +58,9 @@ export function siblings(thread: Thread, id: string): { index: number; count: nu
 /** Messages said one after another, as a thread without forks. */
 export const chain = (messages: Message[], ids: string[]): Thread =>
     messages.reduce((thread, message, at) => append(thread, at ? ids[at - 1]! : START, ids[at]!, message), emptyThread());
+
+/** A selected branch keeps its model conversation, including tool rounds and interrupted answers. */
+export function conversationId(thread: Thread, at: string, chatId: string, forks: readonly string[]): string {
+    const anchors = new Set(forks);
+    return lineage(thread, at).findLast(node => anchors.has(node.id))?.id ?? chatId;
+}

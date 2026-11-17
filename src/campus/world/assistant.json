@@ -31,6 +31,25 @@
   "in": "本学期第 {week} 周",
   "out": "现在不在教学周内"
  },
+ "runtimeErrors": {
+  "provider_unavailable": "模型网站暂时不可用，请稍后再试。",
+  "browser_login_required": "请先在本机浏览器中登录模型网站，再重新提问。",
+  "browser_interaction_required": "模型网站需要你完成页面操作，请在浏览器中查看。",
+  "browser_unavailable": "本机浏览器尚未连接，请检查 Local Runtime。",
+  "browser_selection_required": "请先在 Local Runtime 中选择提供模型的浏览器。",
+  "model_interrupted": "本次生成已停止，回答尚未完成。",
+  "model_generation_lost": "模型页面已切换或连接中断，请重新提问。",
+  "model_not_found": "所选模型已不可用，请重新连接并选择模型。",
+  "model_session_not_empty": "模型页面已有对话，本次请求没有发送。",
+  "model_source_error": "本机模型未能确认回答状态，请查看模型页面。",
+  "invalid_tool_response": "模型没有按要求返回完整回答，请重试。",
+  "conversation_fork": "这条分支与模型会话不一致，请使用“重新回答”开始新分支。",
+  "conversation_retry_required": "这次请求已经发送，请点击“重试”继续。",
+  "conversation_retry_mismatch": "重试内容已经改变，请重新提问。",
+  "conversation_browser_conflict": "提供此会话的浏览器已经改变，请重新连接。",
+  "conversation_closed": "此模型会话已经关闭，请新建对话。",
+  "conversation_capacity": "本机模型会话已满，请先关闭不用的会话。"
+ },
  "diagrams": [
   "flowchart",
   "sequenceDiagram",

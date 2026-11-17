@@ -35,6 +35,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@edgeone/pages-blob": "^0.0.17",
     "@hackmd/js-sequence-diagrams": "^0.0.1-alpha.3",
+    "@local-runtime-mcp/browser-extension": "https://github.com/hicancan/local-runtime-mcp/releases/download/v14.0.0/local-runtime-mcp-web-sdk-14.0.0.tgz",
     "@noble/hashes": "^2.4.0",
     "astro": "^7.4.4",
     "docstream": "https://github.com/hicancan/docstream/releases/download/v0.5.1/docstream-0.5.1.tgz",

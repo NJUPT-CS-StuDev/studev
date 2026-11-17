@@ -4,7 +4,7 @@
 
 /** One's own provider: where its chat completions are, which model, and the key, which never leaves this device. */
 export interface Own { base: string; model: string; key: string }
-export interface Choice { use: 'free' | 'own'; own: Own }
+export interface Choice { use: 'free' | 'own' | 'runtime'; own: Own; runtime: { model: string } }
 
 export const OWNER_QQ = '2366522877';
 export const OWNER_AVATAR = `https://q1.qlogo.cn/g?b=qq&nk=${OWNER_QQ}&s=100`;
@@ -16,9 +16,12 @@ const KEY = 'studev_ai_model';
 export function readChoice(): Choice {
     try {
         const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Choice | null;
-        if (raw && (raw.use === 'free' || raw.use === 'own') && raw.own) return { use: raw.use === 'own' && raw.own.key ? 'own' : 'free', own: { ...STARTING_OWN, ...raw.own } };
+        if (raw && ['free', 'own', 'runtime'].includes(raw.use) && raw.own) return {
+            use: raw.use === 'runtime' ? 'runtime' : raw.use === 'own' && raw.own.key ? 'own' : 'free',
+            own: { ...STARTING_OWN, ...raw.own }, runtime: { model: typeof raw.runtime?.model === 'string' ? raw.runtime.model : '' },
+        };
     } catch { /* Nothing chosen yet. */ }
-    return { use: 'free', own: STARTING_OWN };
+    return { use: 'free', own: STARTING_OWN, runtime: { model: '' } };
 }
 export function writeChoice(choice: Choice) { try { localStorage.setItem(KEY, JSON.stringify(choice)); } catch { /* Kept for this page only. */ } }
 

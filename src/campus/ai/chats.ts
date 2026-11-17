@@ -3,7 +3,7 @@
 import { path, type Thread } from './thread';
 
 /** One conversation: its name (empty until one is given, then its first question names it) and when it last changed. */
-export interface Saved<P> { id: string; title: string; updated: number; thread: Thread; proposals: P[] }
+export interface Saved<P> { id: string; title: string; updated: number; thread: Thread; proposals: P[]; forks?: string[]; runtimeModels?: string[] }
 
 /** What a conversation is called: the name given it, else its first question, cut to a line. */
 export function titleOf(chat: { title: string; thread: Thread }): string {

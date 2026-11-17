@@ -60,14 +60,29 @@ export async function askOwn(own: Own, messages: Message[], situation: Situation
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     const completion = new Completion();
     let pending = '';
-    const take = (line: string) => { const piece = completion.take(line); if (piece) onDelta(piece); };
-    for (let read = await reader.read(); !read.done; read = await reader.read()) {
-        pending += read.value;
-        const lines = pending.split(/\r?\n/);
-        pending = lines.pop() ?? '';
-        lines.forEach(take);
-    }
-    take(pending);
+    let event = '';
+    const take = (line: string) => {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (!line.trim()) event = '';
+        if (line.startsWith('data:')) {
+            const data = line.slice(5).trim();
+            if (data && data !== '[DONE]') {
+                const value = JSON.parse(data) as { error?: string | { message?: string }; message?: string };
+                if (value.error) throw new AskError(typeof value.error === 'string' ? value.error : value.error.message || '模型接口在回答途中出错。');
+                if (event === 'error') throw new AskError(typeof value.message === 'string' ? value.message : '模型接口在回答途中出错。');
+            }
+        }
+        const piece = completion.take(line); if (piece) onDelta(piece);
+    };
+    try {
+        for (let read = await reader.read(); !read.done; read = await reader.read()) {
+            pending += read.value;
+            const lines = pending.split(/\r?\n/);
+            pending = lines.pop() ?? '';
+            lines.forEach(take);
+        }
+        take(pending);
+    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
     const { message, error } = completion.result();
     if (!message) throw new AskError(error);
     return message as Message;
