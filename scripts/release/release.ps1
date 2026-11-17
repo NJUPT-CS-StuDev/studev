@@ -1,5 +1,5 @@
 # One release of StuDev: the Android APK and the Windows app, both of the version in product.json, put on the download
-# store and on a GitHub release; publishing the release deploys the site that links to them.
+# store and on a GitHub release. Pushing main deploys the site that links to them.
 param(
     [string]$Notes = '',
     [string[]]$GradleArgs = @()
@@ -164,7 +164,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 & gh release upload $tag @assetPaths --repo $repoName --clobber
 if ($LASTEXITCODE -ne 0) { throw "GitHub release asset upload failed" }
-# Publish only once the asset exists; the published event deploys the website.
+# Publish only once the assets exist; main owns the application deployment.
 & gh release edit $tag --repo $repoName --draft=false --latest
 if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
 try {
