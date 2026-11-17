@@ -1,20 +1,13 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
-import { downloadStore, presignGet, WEEK } from '../download/object-store.mjs';
-
-// Signed when the site is built; data releases redeploy it several times a day, well inside the week.
-const store = downloadStore();
-if (!store) throw new Error('the download store is not configured');
 const version = PRODUCT_CONFIG.ANDROID_APP.VERSION;
-const signedFor = (file: string) => presignGet(store, file, WEEK, { 'response-content-disposition': `attachment; filename="${file}"` });
-const signed = signedFor(`studev-${version}.apk`);
 ---
 <SiteLayout title="下载 StuDev" noPwa>
   <section class="download-page">
     <h1>下载 StuDev</h1>
     <p class="download-summary">安卓手机：{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
-    <a class="download-button" href={signed} data-astro-prefetch="false" rel="nofollow">下载 Android 版 {version}</a>
+    <a class="download-button" href={PRODUCT_CONFIG.ANDROID_APP.PACKAGE_URL} data-astro-prefetch="false" rel="nofollow">下载 Android 版 {version}</a>
     <p class="download-help">下载后在浏览器的下载列表中打开，按系统提示安装。微信、QQ 内请先选择“在浏览器打开”。</p>
     {/* Each other way is a row of its own: what it is, why one would take it, and a chevron to say it opens. */}
     <h2 class="download-more">下载不动时换一个</h2>

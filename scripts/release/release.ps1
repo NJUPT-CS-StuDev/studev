@@ -106,10 +106,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Android smoke test failed' }
 
 $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
-$env:OSCA_DOWNLOAD_ENDPOINT = Get-Secret local.osca_download.endpoint
-$env:OSCA_DOWNLOAD_BUCKET = Get-Secret local.osca_download.bucket
-$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.osca_download.access_key
-$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.osca_download.secret_key
+$env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
+$env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
+$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
+$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
 & node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
 
@@ -141,10 +141,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
 $portable = Join-Path $velopack 'top.hicancan.studev-win-Portable.zip'
 if (-not (Test-Path -LiteralPath $portable)) { throw "Windows portable zip is missing: $portable" }
 # Upload packages now; the feed waits until the matching site and campus data are public.
-$env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
-$env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
-$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
-$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
 $fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
 Copy-Item $portable $fullPortable
 $made = Get-ChildItem $velopack -File -Filter "*-$versionName-*.nupkg"

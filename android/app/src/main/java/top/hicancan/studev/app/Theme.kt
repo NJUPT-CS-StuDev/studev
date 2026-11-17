@@ -5,6 +5,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +79,20 @@ private val shapes = Shapes(
 )
 @Composable
 fun StuDevTheme(content: @Composable () -> Unit) {
-    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
+    // Local configuration includes the user's application appearance override.
+    val dark = isSystemInDarkTheme()
+    val colors = if (dark) DarkColors else LightColors
+    val view = LocalView.current
+    val window = (view.context as? android.app.Activity)?.window
+    DisposableEffect(view, dark) {
+        window?.let {
+            androidx.core.view.WindowCompat.getInsetsController(it, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+        onDispose { }
+    }
     MaterialTheme(colorScheme = colors, typography = typography, shapes = shapes) {
         CompositionLocalProvider(LocalContentColor provides colors.onSurface, content = content)
     }

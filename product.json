@@ -5,6 +5,7 @@
   "summary": "学生发展中心官网与社团平台；课表、考场与三维校园时空联动，信息一搜即得。",
   "origin": "https://studev.hicancan.top",
   "campusOrigin": "https://data.hicancan.top",
+  "downloadOrigin": "https://dl.hicancan.top",
   "dataProject": { "name": "studev-data", "id": "makers-nmlv9rc4c2ob" },
   "repository": "NJUPT-CS-StuDev/studev",
   "timeZone": "Asia/Shanghai",

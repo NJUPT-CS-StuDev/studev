@@ -24,7 +24,7 @@ async function pages(directory) {
 const walk = (node, fn) => { fn(node); node.childNodes?.forEach((child) => walk(child, fn)); };
 const attributes = (node) => Object.fromEntries((node.attrs ?? []).map(({ name, value }) => [name, value]));
 
-test('download links name the immutable Windows package of this product version', async () => {
+test('download links name immutable packages without depending on a weekly site rebuild', async () => {
   const product = JSON.parse(await readFile('product.json', 'utf8'));
   const hrefs = [];
   walk(parse(await readFile(join(output, 'download/index.html'), 'utf8')), node => {
@@ -32,6 +32,8 @@ test('download links name the immutable Windows package of this product version'
   });
   assert.deepEqual(hrefs.filter(href => href?.startsWith('/download/windows/')),
     [`/download/windows/studev-${product.android.versionName}-windows.zip`]);
+  assert.ok(hrefs.includes(`${product.downloadOrigin}/studev-${product.android.versionName}.apk`));
+  assert.ok(hrefs.every(href => !href?.includes('X-Amz-Expires=')), 'public releases have no expiring build-time download signature');
 });
 
 const localFile = (url, document) => {
@@ -88,11 +90,15 @@ test('the first page starts light: the timetable loads itself after the shell', 
   assert.ok(!existsSync(join(output, 'logo.png')), 'full logo original must not be distributed');
 });
 
-test('knowledge renders its shell immediately and reads its catalogue from the independent snapshot', async () => {
+test('knowledge starts with a published catalogue and refreshes from the independent snapshot', async () => {
   const html = await readFile(join(output, 'knowledge/index.html'), 'utf8');
   assert.match(html, /<h1[^>]*>知识<\/h1>/);
-  assert.match(html, /role="status"[^>]*>正在加载课程/);
-  assert.doesNotMatch(html, /&quot;catalog&quot;/, 'a code build must not freeze the current catalogue in component props');
+  assert.doesNotMatch(html, /role="status"[^>]*>正在加载课程/);
+  let courses = 0;
+  walk(parse(html), node => {
+    if (node.attrs?.some(attribute => attribute.name === 'class' && attribute.value.split(/\s+/).includes('kn-course'))) courses++;
+  });
+  assert.ok(courses > 0, 'the first HTML includes real courses before JavaScript or a network refresh');
   for (const name of ['data', 'space', 'texts']) assert.ok(!existsSync(join(output, name)), `${name} belongs to the independent data publication`);
   const files = await readdir(join(output, '_astro'));
   const scripts = await Promise.all(files.filter(name => name.endsWith('.js')).map(name => readFile(join(output, '_astro', name), 'utf8')));

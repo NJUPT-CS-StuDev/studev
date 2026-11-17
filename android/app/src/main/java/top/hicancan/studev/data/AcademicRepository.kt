@@ -5,6 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -105,26 +108,26 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         try { pending.writeBytes(bytes); check(pending.renameTo(file)) { "无法保存离线数据" } } finally { pending.delete() }
         bytes
     } }
-    suspend inline fun <reified T> read(path: String): T = Json.decodeFromString(bytes(path).decodeToString())
+    suspend inline fun <reified T> read(path: String): T = withContext(Dispatchers.Default) { Json.decodeFromString(bytes(path).decodeToString()) }
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
     suspend fun classes() = read<List<TeachingClass>>("teaching/${release.teaching}/classes.json")
-    suspend fun coursePlans() = read<InformationEntityFile>("entities/information.json").items
+    suspend fun coursePlans() = withContext(Dispatchers.Default) { read<InformationEntityFile>("entities/information.json").items
         .filter { it["subtype"]?.jsonPrimitive?.content == "information:course-plan" }
-        .map { Json.decodeFromJsonElement<CoursePlan>(it) }
-    suspend fun teachingClasses() = read<AgentEntityFile>("entities/agent.json").items.filter { it.subtype == "agent:teaching-class" }
+        .map { Json.decodeFromJsonElement<CoursePlan>(it) } }
+    suspend fun teachingClasses() = withContext(Dispatchers.Default) { read<AgentEntityFile>("entities/agent.json").items.filter { it.subtype == "agent:teaching-class" } }
     private fun enrichMeetings(meetings: List<TeachingMeeting>, groups: Map<String, AgentEntity>): List<TeachingMeeting> =
         meetings.map { meeting ->
             groups[meeting.teaching_class.id]?.let { group ->
                 meeting.copy(teaching_class = TeachingGroup(group.id, group.names.firstOrNull(), group.size, group.enrolled, group.capacity))
             } ?: meeting
         }
-    suspend fun meetings(): List<TeachingMeeting> {
+    suspend fun meetings(): List<TeachingMeeting> = withContext(Dispatchers.Default) {
         val groups = teachingClasses().associateBy { it.id }
-        return enrichMeetings(read<List<TeachingMeeting>>("teaching/${release.teaching}/meetings.json"), groups)
+        enrichMeetings(read<List<TeachingMeeting>>("teaching/${release.teaching}/meetings.json"), groups)
     }
     suspend fun catalog(): List<top.hicancan.studev.timetable.CatalogCourse> =
-        top.hicancan.studev.timetable.CourseCatalog.groupCatalog(meetings(), coursePlans())
+        withContext(Dispatchers.Default) { top.hicancan.studev.timetable.CourseCatalog.groupCatalog(meetings(), coursePlans()) }
     suspend fun schedule(id: String): ClassSchedule {
         val groups = teachingClasses().associateBy { it.id }
         return read<ClassSchedule>("teaching/${release.teaching}/classes/$id.json").let { schedule ->
@@ -199,9 +202,9 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             top.hicancan.studev.timetable.ExamAttendance.ownCodes(release, schedule))
     }
     private val lenient = Json { ignoreUnknownKeys = true }
-    suspend fun calendar() = lenient.decodeFromString<top.hicancan.studev.world.CalendarFile>(bytes("calendar.json").decodeToString()).terms
-    suspend fun materials() = lenient.decodeFromString<List<top.hicancan.studev.world.CourseMaterials>>(bytes("materials.json").decodeToString())
-    suspend fun runs() = lenient.decodeFromString<Map<String, top.hicancan.studev.world.MorningRun>>(bytes("morning-run.json").decodeToString())
+    suspend fun calendar() = withContext(Dispatchers.Default) { lenient.decodeFromString<top.hicancan.studev.world.CalendarFile>(bytes("calendar.json").decodeToString()).terms }
+    suspend fun materials() = withContext(Dispatchers.Default) { lenient.decodeFromString<List<top.hicancan.studev.world.CourseMaterials>>(bytes("materials.json").decodeToString()) }
+    suspend fun runs() = withContext(Dispatchers.Default) { lenient.decodeFromString<Map<String, top.hicancan.studev.world.MorningRun>>(bytes("morning-run.json").decodeToString()) }
     suspend fun rooms() = read<RoomIndex>("rooms/index.json")
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }
     companion object {
@@ -281,17 +284,24 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         private suspend fun activate(context: Context, release: DataRelease, klass: String?): AcademicRepository {
             require(validRelease(release))
             val repository = AcademicRepository(context.applicationContext, release)
-            val term = repository.term()
-            repository.periods(); val classes = repository.classes(); repository.rooms(); repository.examIndex(); repository.labIndex()
-            repository.coursePlans(); repository.teachingClasses()
+            val (term, classes) = coroutineScope {
+                val term = async { repository.term() }
+                val classes = async { repository.classes() }
+                awaitAll(async { repository.periods() }, async { repository.rooms() },
+                    async { repository.examIndex() }, async { repository.labIndex() },
+                    async { repository.coursePlans() }, async { repository.teachingClasses() })
+                term.await() to classes.await()
+            }
             if (klass != null) {
-                if (classes.any { it.id == klass }) {
-                    repository.schedule(klass)
-                    val edits = top.hicancan.studev.me.CampusSettings(context).state.value.timetableEdits(term.term)
-                    if (edits.added.isNotEmpty()) repository.catalog()
+                coroutineScope {
+                    awaitAll(async {
+                        if (classes.any { it.id == klass }) {
+                            repository.schedule(klass)
+                            val edits = top.hicancan.studev.me.CampusSettings(context).state.value.timetableEdits(term.term)
+                            if (edits.added.isNotEmpty()) repository.catalog()
+                        }
+                    }, async { repository.exams(klass) }, async { repository.labs(klass) })
                 }
-                repository.exams(klass)
-                repository.labs(klass)
             }
             val index = activeRelease(context)
             index.parentFile!!.mkdirs()

@@ -19,29 +19,11 @@ jobs:
     env:
       PAGES_SOURCE: skills
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
-      OSCA_DOWNLOAD_ENDPOINT: ${{ secrets.OSCA_DOWNLOAD_ENDPOINT }}
-      OSCA_DOWNLOAD_BUCKET: ${{ secrets.OSCA_DOWNLOAD_BUCKET }}
-      OSCA_DOWNLOAD_ACCESS_KEY: ${{ secrets.OSCA_DOWNLOAD_ACCESS_KEY }}
-      OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.OSCA_DOWNLOAD_SECRET_KEY }}
       MAKERS_MODELS_KEY: ${{ secrets.MAKERS_MODELS_KEY }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
     steps:
       - uses: actions/checkout@v6
-      - name: Put the released APK on the backup host
-        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OSCA_DOWNLOAD_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          OSCA_DOWNLOAD_BUCKET: studev-download
-          OSCA_DOWNLOAD_ACCESS_KEY: ${{ secrets.R2_DOWNLOAD_ACCESS_KEY }}
-          OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.R2_DOWNLOAD_SECRET_KEY }}
-        run: |
-          version=$(node -p "require('./product.json').android.versionName")
-          for file in "studev-$version.apk"; do
-            gh release download "v$version" -R "$GITHUB_REPOSITORY" -p "$file" -D "$RUNNER_TEMP"
-            node scripts/release/put.mjs "$RUNNER_TEMP/$file" "$file"
-          done
       - uses: actions/setup-node@v6
         with:
           node-version: 24

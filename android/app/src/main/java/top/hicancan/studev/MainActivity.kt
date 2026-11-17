@@ -32,12 +32,6 @@ class MainActivity : ComponentActivity() {
         } }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); readLink(intent) }
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig)
-        // Compose and the map restyle from LocalConfiguration. Keep the native
-        // surface attached, and update the system bars for the new palette too.
-        enableEdgeToEdge()
-    }
     override fun onSaveInstanceState(outState: Bundle) { outState.putString("pendingPlace", place); super.onSaveInstanceState(outState) }
     private fun readLink(intent: Intent) {
         val uri = intent.data ?: return
