@@ -7,8 +7,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../StuDev/Data/*.cs" Exclude="../StuDev/Data/Secure.cs" Link="Data/%(Filename)%(Extension)" />
-    <Compile Include="../StuDev/Me/Preferences.cs;../StuDev/Me/Choices.cs;../StuDev/Me/Courses.cs" Link="Me/%(Filename)%(Extension)" />
+    <Compile Include="../StuDev/Data/*.cs" Link="Data/%(Filename)%(Extension)" />
+    <Compile Include="../StuDev/Me/Preferences.cs;../StuDev/Me/Choices.cs;../StuDev/Me/Courses.cs;../StuDev/Me/Account.cs" Link="Me/%(Filename)%(Extension)" />
     <Compile Include="../StuDev/Map/MapData.cs;../StuDev/Map/Find.cs;../StuDev/Map/Labels.cs;../StuDev/Map/Hours.cs;../StuDev/Map/Places.cs" Link="Map/%(Filename)%(Extension)" />
     <Compile Include="../StuDev/Ai/Assistant.cs;../StuDev/Ai/Steps.cs;../StuDev/Ai/Thread.cs;../StuDev/Ai/Answers.cs" Link="Ai/%(Filename)%(Extension)" />
     <Compile Include="../kernels/bindings/wayfind_native.cs" Link="Kernels/wayfind_native.cs" />
@@ -19,5 +19,8 @@
     <Compile Include="../StuDev/App/Product.cs" Link="App/Product.cs" />
     <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/campus/world/parity/golden.json" Link="golden.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>
 </Project>

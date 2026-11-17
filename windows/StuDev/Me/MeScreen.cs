@@ -12,6 +12,7 @@ public sealed partial class MeScreen : Screen
     private static readonly Dictionary<string, string> KindNames = new() { ["exam"] = "考试", ["task"] = "任务", ["lab"] = "实验", ["class"] = "课程", ["run"] = "早锻炼" };
     private readonly Campus campus = Campus.Shared;
     private string section = "home";
+    private AccountScreen? accountPage;
 
     public MeScreen()
     {
@@ -22,8 +23,17 @@ public sealed partial class MeScreen : Screen
         Device.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Draw();
     }
-    public override void Shown(object? argument) { section = "home"; Draw(); }
-    private void Go(string next) { section = next; Draw(); }
+    public override void Shown(object? argument)
+    {
+        accountPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
+        if (argument is "account") Go("account");
+    }
+    private void Go(string next)
+    {
+        if (section == "account" && next != "account") accountPage?.Leave();
+        section = next; App.Window?.AccountPages(section == "account"); Draw();
+        if (section == "account") accountPage!.Shown(null);
+    }
     private static string Form(string kind, string? where = null) =>
         $"{Repository.Site}/fill/?id={Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
     private static async void Browse(string url) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
@@ -51,6 +61,12 @@ public sealed partial class MeScreen : Screen
     }
     private void Draw()
     {
+        if (section == "account")
+        {
+            accountPage ??= new AccountScreen(() => Go("home"));
+            if (!Children.Contains(accountPage)) { Children.Clear(); Children.Add(accountPage); }
+            return;
+        }
         Children.Clear();
         var page = new StackPanel();
         var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", _ => "我" };
@@ -60,19 +76,12 @@ public sealed partial class MeScreen : Screen
         var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);
         if (section == "home")
         {
-            Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(); else Go("account"); });
+            Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(() => Go("account")); else Go("account"); });
             Row("", Value("课表设置", campus.Preferences.Class is { } klass ? $"{klass} · {info?.Major}" : "选择班级、调整课程与实验"), () => Go("timetable"));
             Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
             Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);
             Row("", Value("提醒与后台运行", "课前提醒、托盘和开机启动"), () => Go("device"));
             Row("", Value("帮助与关于", Updates.Ready is { } ready ? $"新版本 {ready} 已准备好" : "反馈、资料提交和应用更新"), () => Go("about"));
-        }
-        if (section == "account")
-        {
-            Row("昵称", Value(user?.Nickname ?? "未登录"));
-            Row("同步", Value("任务和课表设置在已登录的设备间同步", "桌面小组件位置、提醒和后台运行设置保留在这台电脑"));
-            Row("", Value("管理账号", "个人资料、密码、登录设备与账号注销"), () => Browse($"{Repository.Site}/account/"));
-            Row("", Value("退出登录"), async () => { try { await Account.Shared.SignOut(); } catch (Exception e) when (e is PlatformFailure or HttpRequestException or TaskCanceledException) { Account.Shared.Forget(); } Go("home"); });
         }
         if (section == "timetable")
         {

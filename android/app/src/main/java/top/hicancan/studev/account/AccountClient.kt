@@ -170,9 +170,11 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
             throw failure
         }
     }
+    private fun expired(reply: PlatformReply): Boolean = reply.status == 401 &&
+        reply.body["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content in setOf("TOKEN_INVALID", "AUTH_REQUIRED")
     private suspend fun authenticatedRequest(path: String, body: JsonObject?, credential: AccountSession): JsonObject {
         var reply = transport.send(path, body, credential.accessToken)
-        if (reply.status == 401) reply = transport.send(path, body, access(forceFor = credential).accessToken)
+        if (expired(reply)) reply = transport.send(path, body, access(forceFor = credential).accessToken)
         return checked(reply)
     }
     suspend fun request(path: String, body: JsonObject? = null, authenticated: Boolean = false): JsonObject {
@@ -183,7 +185,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     suspend fun stream(path: String, body: JsonObject, onEvent: (String, JsonObject) -> Unit) {
         val credential = access()
         var refused = streamer.stream(path, body, credential.accessToken, onEvent)
-        if (refused?.status == 401) refused = streamer.stream(path, body, access(forceFor = credential).accessToken, onEvent)
+        if (refused != null && expired(refused)) refused = streamer.stream(path, body, access(forceFor = credential).accessToken, onEvent)
         refused?.let(::checked)
     }
     suspend fun signOut() {

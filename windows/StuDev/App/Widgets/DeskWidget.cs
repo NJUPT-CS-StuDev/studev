@@ -24,7 +24,7 @@ public abstract partial class DeskWidget : Window
     public string Id { get; }
     protected readonly Surface root;
     protected readonly StackPanel body = new();
-    protected readonly Grip head = new() { Padding = new Thickness(16, 12, 8, 8), Background = Paint.Clear };
+    protected readonly Grid head = new() { Padding = new Thickness(16, 12, 8, 8), Background = Paint.Clear };
     protected readonly StackPanel tools = new() { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Top };
     private readonly TextBlock title = new() { FontSize = 17, FontWeight = Microsoft.UI.Text.FontWeights.Bold };
     private readonly TextBlock subtitle = new() { FontSize = 12 };
@@ -106,7 +106,7 @@ public abstract partial class DeskWidget : Window
         // Owned by the desktop's icon view it stays on the desktop and survives Win+D; on top it floats over every window.
         SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, settings.OnTop ? 0 : DesktopIcons());
         frost.Opacity = settings.Opacity / 100.0;
-        root.Movable = head.Movable = !settings.Locked;
+        root.Movable = !settings.Locked;
         Redraw();
     }
 

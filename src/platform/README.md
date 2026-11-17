@@ -1,6 +1,6 @@
 # Shared community accounts
 
-Web and Android use the same `/api/platform` identity endpoints and errors:
+Web, Android and Windows use the same `/api/platform` identity endpoints and errors:
 
 - `POST /auth/register`: `studentId`, `realName`, `nickname`, `qq`, `password`.
   Registration is open to every student as `user`. No invitation or email
@@ -10,8 +10,8 @@ Web and Android use the same `/api/platform` identity endpoints and errors:
 - `POST /auth/login`: `studentId`, `password`, optional `totp` (TOTP or recovery
   code), `deviceId` (16–128 URL-safe characters), `deviceName` (1–80 characters).
   Missing/invalid factors return `MFA_REQUIRED`/`MFA_INVALID`; used factors return
-  `MFA_REPLAYED`, identically for both clients. Temporary-password and owner TOTP
-  setup use the same restricted session and endpoints on either client.
+  `MFA_REPLAYED`, identically for all clients. Temporary-password and owner TOTP
+  setup use the same restricted session and endpoints on every client.
 - `POST /auth/password/forgot`: `studentId`. Mails a reset link to the account's
   QQ mailbox and answers `{ ok }` whether or not the student ID has an account.
   One mail per account per five minutes.
@@ -25,11 +25,14 @@ Web and Android use the same `/api/platform` identity endpoints and errors:
 - Mail is Resend's free plan (`RESEND_API_KEY`), capped at 90 a day so it is
   refused here before Resend refuses it. Every password change or reset also mails
   the account a note.
-  Web does all four; Android and Windows ask for reset links, and the links and the
-  rest of account management open on the website.
+  All three clients manage profiles, passwords, authenticators and login devices
+  in their own interface. Password-reset and account-deletion links confirm
+  mailbox access on the website; native clients request these mails in the app.
 - `POST /auth/refresh`: `deviceId`, plus a bearer client's `refreshToken`.
 - `GET /auth/session`, `POST /auth/logout`, `/auth/profile`, `/auth/password`,
   `/auth/totp/setup`, `/auth/totp/confirm`, `/auth/totp/disable` are shared.
+  Clients renew credentials only for `TOKEN_INVALID` or `AUTH_REQUIRED`, never
+  for a rejected password, verification code or recovery code.
 - `GET /auth/devices` lists both carriers with `kind`, `current`, `id`,
   `deviceName`, `createdAt`, `expiresAt`. `POST /auth/devices/<id>/revoke` revokes
   either kind, including the current session, from either client.

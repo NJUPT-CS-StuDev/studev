@@ -26,7 +26,7 @@ public sealed partial class Shell : Window
     private readonly StackPanel nav = new() { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Stretch };
     private readonly Grid layer = new() { Visibility = Visibility.Collapsed };
     private readonly Dictionary<string, Screen> screens = new();
-    private readonly Border face = new();
+    private readonly Me.AccountAvatar face = new();
     private readonly TextBlock faceName = new() { FontSize = 12, MaxWidth = 80, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly Tap me = new();
     private readonly ColumnDefinition inset = new() { Width = new GridLength(140) };
@@ -55,8 +55,9 @@ public sealed partial class Shell : Window
         AutomationProperties.SetName(me, "我"); AutomationProperties.SetAutomationId(me, "me");
         me.Click += (_, _) => Open("me");
         Grid.SetColumn(me, 3); bar.Children.Add(me);
-        Face(Me.Account.Shared.User?.Letter);
-        Me.Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(() => Face(Me.Account.Shared.User?.Letter));
+        face.Changed += () => AutomationProperties.SetHelpText(me, face.Status);
+        Face();
+        Me.Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Face);
         root.Children.Add(bar);
         SetTitleBar(drag);
 
@@ -75,6 +76,7 @@ public sealed partial class Shell : Window
     /** Opens an entry, or 我; its page is made the first time and kept. */
     public void Open(string entry, object? argument = null)
     {
+        if (entry != "me") AccountPages(false);
         if (!screens.TryGetValue(entry, out var screen))
         {
             screen = entry switch
@@ -100,15 +102,18 @@ public sealed partial class Shell : Window
     }
 
     /** One's face in the bar: the QQ picture, the nickname's first character, or the outline of nobody. */
-    public void Face(string? letter)
+    private void Face()
     {
+        var user = Me.Account.Shared.User;
         me.Ground(Paint.Brush("surfaceSunken"), Paint.Brush("surface"));
-        faceName.Text = Me.Account.Shared.User?.Nickname ?? "未登录"; faceName.Foreground = Paint.Brush("muted");
+        faceName.Text = user?.Nickname ?? "未登录"; faceName.Foreground = Paint.Brush("muted");
         AutomationProperties.SetName(me, $"我 · {faceName.Text}");
-        face.Width = 32; face.Height = 32; face.CornerRadius = new CornerRadius(16); face.Background = Paint.Brush("surfaceSunken");
-        face.Child = letter is null ? Kit.Icon(Icons.Person, 18, "muted", 24, 1.8) : new TextBlock { Text = letter, FontSize = 12.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Paint.Brush("muted"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        if (face.Child is FrameworkElement child) { child.HorizontalAlignment = HorizontalAlignment.Center; child.VerticalAlignment = VerticalAlignment.Center; }
+        face.Show(user);
+        AutomationProperties.SetHelpText(me, face.Status);
     }
+
+    /** Account pages already show who is signed in; their header does not repeat the entry to one's settings. */
+    public void AccountPages(bool shown) => me.Visibility = shown ? Visibility.Collapsed : Visibility.Visible;
 
     private void Tabs()
     {
@@ -164,7 +169,7 @@ public sealed partial class Shell : Window
     private void Turned()
     {
         Paint.Turn(root.ActualTheme == ElementTheme.Dark);
-        Face(Me.Account.Shared.User?.Letter);
+        Face();
         var bar = AppWindow.TitleBar;
         bar.ButtonBackgroundColor = Paint.Clear.Color; bar.ButtonInactiveBackgroundColor = Paint.Clear.Color;
         bar.ButtonForegroundColor = Paint.Of("ink", Paint.Dark); bar.ButtonInactiveForegroundColor = Paint.Of("faint", Paint.Dark);

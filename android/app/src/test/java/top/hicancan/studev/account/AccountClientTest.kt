@@ -83,7 +83,7 @@ class AccountClientTest {
         val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
             "/auth/login" -> reply()
             "/auth/refresh" -> reply("access-two", "refresh-two")
-            else -> { calls++; PlatformReply(if (bearer == "access-one") 401 else 200, buildJsonObject {}) }
+            else -> { calls++; PlatformReply(if (bearer == "access-one") 401 else 200, buildJsonObject { if (bearer == "access-one") put("error", buildJsonObject { put("code", "TOKEN_INVALID") }) }) }
         } })
         client.signIn("TEST123456", "password", "", "device")
         client.request("/auth/devices", authenticated = true)
@@ -98,6 +98,22 @@ class AccountClientTest {
         assertNull(storage.value.session); assertEquals(1, refreshes)
         try { client.request("/auth/devices", authenticated = true); fail() } catch (e: PlatformFailure) { assertEquals("AUTH_REQUIRED", e.code) }
         assertEquals(1, refreshes)
+    }
+    @Test fun invalidSecurityFactorsAreNotRefreshedOrReplayed() = runBlocking {
+        for (code in listOf("PASSWORD_INVALID", "MFA_INVALID", "MFA_REPLAYED", "MFA_REQUIRED")) {
+            val storage = Storage(); val calls = mutableListOf<String>()
+            val client = AccountClient(storage, PlatformTransport { path, _, _ ->
+                calls.add(path)
+                if (path == "/auth/login") reply() else PlatformReply(401, buildJsonObject {
+                    put("error", buildJsonObject { put("code", code); put("message", "请检查输入。") })
+                })
+            })
+            client.signIn("TEST123456", "password", "", "device")
+            try { client.request("/auth/password", buildJsonObject {}, authenticated = true); fail() }
+            catch (failure: PlatformFailure) { assertEquals(code, failure.code) }
+            assertEquals(listOf("/auth/login", "/auth/password"), calls)
+            assertEquals("access-one", storage.value.session!!.accessToken)
+        }
     }
     @Test fun signOutRevokesBeforeClearingAndKeepsStableDeviceId() = runBlocking {
         val storage = Storage(); var revoked = false
@@ -146,7 +162,7 @@ class AccountClientTest {
         val tokensUsed = mutableListOf<String?>(); var logins = 0
         val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
             "/auth/login" -> { logins++; reply("access-$logins", "refresh-$logins", "family-$logins") }
-            "/auth/devices" -> { tokensUsed.add(bearer); sent.complete(Unit); release.await(); PlatformReply(401, buildJsonObject {}) }
+            "/auth/devices" -> { tokensUsed.add(bearer); sent.complete(Unit); release.await(); PlatformReply(401, buildJsonObject { put("error", buildJsonObject { put("code", "TOKEN_INVALID") }) }) }
             else -> error("Unexpected request: $path")
         } })
         client.signIn("ACCOUNT1", "password", "", "device")

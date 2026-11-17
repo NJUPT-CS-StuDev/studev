@@ -47,4 +47,6 @@ public sealed partial class FactsJson : JsonSerializerContext;
 [JsonSerializable(typeof(List<Ai.TaskProposal>))]
 [JsonSerializable(typeof(StoredAccount))]
 [JsonSerializable(typeof(AccountUser))]
+[JsonSerializable(typeof(AccountState))]
+[JsonSerializable(typeof(List<AccountDevice>))]
 public sealed partial class StorageJson : JsonSerializerContext;

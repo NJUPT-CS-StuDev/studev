@@ -107,14 +107,3 @@ public static class SettingsSync
         return next;
     }
 }
-
-/** One's account as this device keeps it, encrypted (Account.cs): who, and the session's tokens. */
-public sealed record AccountUser(string Id, string Nickname, string StudentId = "", bool TotpEnabled = false, string RealName = "", string Qq = "", string Role = "user", int Revision = 0,
-    string Department = "", string Title = "", string Signature = "", string Email = "", string Status = "active", bool ProfileComplete = true)
-{
-    public string RoleName => Role switch { "owner" => "所有者", "admin" => "管理员", _ => "用户" };
-    /** The one letter shown when there is no picture. */
-    public string Letter => (Nickname.Length > 0 ? Nickname : RealName.Length > 0 ? RealName : "我")[..1];
-}
-public sealed record AccountSession(string AccessToken, string RefreshToken, long ExpiresAt, string DeviceSessionId, AccountUser User);
-public sealed record StoredAccount(string DeviceId, AccountSession? Session);
