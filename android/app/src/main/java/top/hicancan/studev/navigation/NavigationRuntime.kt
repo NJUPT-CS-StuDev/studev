@@ -258,7 +258,7 @@ class NavigationRuntime private constructor(private val context: Context) {
         native { session?.close(); session = checkNotNull(engine).navigate(route) }
         lastTimestamp = 0; lastFixTimestamp = -1; lastReroute = Long.MIN_VALUE / 2
         simulationPaused = false; simulationCommand = null
-        _state.update { it.copy(trip = TripState(TripPhase.Navigating), simulating = simulated) }
+        _state.update { it.copy(open = true, trip = TripState(TripPhase.Navigating), simulating = simulated) }
     }
     suspend fun feed(fix: NavFix): List<VoicePrompt> {
         if (!state.value.active) return emptyList()

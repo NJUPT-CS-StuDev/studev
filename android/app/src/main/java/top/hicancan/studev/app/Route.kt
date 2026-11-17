@@ -68,6 +68,7 @@ class Route {
                 tab = "knowledge"
             }
             "/search" -> { query = param("q").orEmpty(); scope = param("scope") ?: "all"; within = param("within"); tab = "search" }
+            "/ai" -> tab = "ai"
             else -> return false
         }
         return true

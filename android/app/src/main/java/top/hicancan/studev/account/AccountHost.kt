@@ -22,7 +22,10 @@ import androidx.compose.ui.platform.testTag
     LaunchedEffect(client) { runCatching { if (client.current() != null) client.state() } }
     LaunchedEffect(campusLink) { if (campusLink != null) {
         val uri = android.net.Uri.parse(campusLink)
-        if (uri.path.orEmpty().trimEnd('/') == "/members") { members = uri.getQueryParameter("id").orEmpty(); memberQuery = uri.getQueryParameter("query").orEmpty() }
+        when (uri.path.orEmpty().trimEnd('/')) {
+            "/members" -> { memberReturn = null; members = uri.getQueryParameter("id").orEmpty(); memberQuery = uri.getQueryParameter("query").orEmpty() }
+            "/account", "/login" -> open = true
+        }
         Forms.fromLink(campusLink)?.let { open = false; form = it }
     } }
     Box(Modifier.fillMaxSize()) {

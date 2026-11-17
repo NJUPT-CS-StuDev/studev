@@ -71,6 +71,16 @@
                 <data android:pathPrefix="/map" />
                 <data android:pathPrefix="/search" />
                 <data android:pathPrefix="/fill" />
+                <data android:path="/knowledge" />
+                <data android:path="/knowledge/" />
+                <data android:path="/ai" />
+                <data android:path="/ai/" />
+                <data android:path="/members" />
+                <data android:path="/members/" />
+                <data android:path="/account" />
+                <data android:path="/account/" />
+                <data android:path="/login" />
+                <data android:path="/login/" />
             </intent-filter>
         </activity>
         <!-- Photos taken for a form are written to the app's cache and handed to the camera from here. -->
