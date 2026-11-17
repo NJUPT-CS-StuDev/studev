@@ -223,6 +223,9 @@ async function referenceGroups() {
     await scrollFind(`展开全部 ${refs.length} 处`, 'the long reference group starts collapsed');
     if (screen().some(node => node['resource-id'] === identity(refs[3]))) throw new Error('the collapsed reference group exposes more than three references');
     await scrollTap(`展开全部 ${refs.length} 处`, 'expand the complete reference group');
+    // Preview excerpts can reflow above this group while scrolling. Re-anchor
+    // at its expanded heading before looking for the exact fourth reference.
+    await scrollFind('收起', 'the expanded reference group heading', 12, -1);
     await scrollFind(node => node['resource-id'] === identity(refs[3]), 'the fourth exact reference appears after expansion');
     await scrollTap('收起', 'collapse the complete reference group', 12, -1);
     await find(`展开全部 ${refs.length} 处`, 'the reference group can be expanded again');
