@@ -94,7 +94,7 @@ function screen() {
     if (!dumped.includes('dumped to: /sdcard/smoke.xml')) return [];
     const xml = adb('shell', 'cat', '/sdcard/smoke.xml');
     return [...xml.matchAll(/<node\b[^>]*>/g)].flatMap(([node]) => {
-        const attrs = Object.fromEntries([...node.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, key, value]) => [key, decode(value)]));
+        const attrs = Object.fromEntries([...node.matchAll(/([\w-]+)=(["'])([\s\S]*?)\2/g)].map(([, key, , value]) => [key, decode(value)]));
         const bounds = attrs.bounds?.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
         return bounds && +bounds[3] > +bounds[1] && +bounds[4] > +bounds[2] ? [{ ...attrs, text: attrs.text ?? '', words: `${attrs.text}|${attrs['content-desc']}`, left: +bounds[1], top: +bounds[2], right: +bounds[3], bottom: +bounds[4], x: (+bounds[1] + +bounds[3]) / 2, y: (+bounds[2] + +bounds[4]) / 2 }] : [];
     });
