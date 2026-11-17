@@ -189,19 +189,31 @@ public static class Models
         return transport && uri.Host.Length > 0 && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? null : said;
     }
     public static string Name(Own own) => own.Model.Trim().Length > 0 ? own.Model : "我的 API";
-    public static async Task CloseConversationsAsync(HttpClient http, Own own, IEnumerable<string> ids)
+    public static async Task CloseConversationsAsync(HttpClient http, Own own, IEnumerable<string> models, IEnumerable<string> ids)
     {
         if (!own.Runtime || own.Key.Length == 0) return;
         if (AddressError(own.Base, true) is { } wrong) throw new InvalidOperationException(wrong);
         var root = Endpoint(own.Base)[..^"/chat/completions".Length];
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        foreach (var id in ids.Distinct())
+        var pages = models.Distinct().SelectMany(model => ids.Distinct().Select(id => (Model: model, Id: id)));
+        Exception? failure = null;
+        foreach (var batch in pages.Chunk(4))
         {
-            using var request = new HttpRequestMessage(HttpMethod.Delete, $"{root}/conversations/{Uri.EscapeDataString(id)}?model={Uri.EscapeDataString(own.Model)}");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", own.Key);
-            using var response = await http.SendAsync(request, timeout.Token);
-            if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
-                throw new InvalidOperationException($"本地模型服务未能关闭对应网页（{(int)response.StatusCode}）。");
+            var results = await Task.WhenAll(batch.Select(async page =>
+            {
+                try
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Delete, $"{root}/conversations/{Uri.EscapeDataString(page.Id)}?model={Uri.EscapeDataString(page.Model)}");
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", own.Key);
+                    using var response = await http.SendAsync(request, timeout.Token);
+                    if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+                        throw new InvalidOperationException($"本地模型服务未能关闭对应网页（{(int)response.StatusCode}）。");
+                    return (Exception?)null;
+                }
+                catch (Exception error) when (error is HttpRequestException or OperationCanceledException or InvalidOperationException) { return error; }
+            }));
+            failure ??= results.FirstOrDefault(result => result is not null);
         }
+        if (failure is not null) throw failure;
     }
 }

@@ -235,7 +235,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         chats = chats.filter { it.id != chat.id }
         if (current == chat.id) open(null)
         if (provider.runtime && provider.key.isNotBlank()) scope.launch {
-            try { for (model in chat.runtimeModels) Models.closeConversations(provider.copy(model = model), listOf(chat.id) + chat.forks) }
+            try { Models.closeConversations(provider, chat.runtimeModels, listOf(chat.id) + chat.forks) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { cleanupFailed = if (failure is IllegalStateException) failure.message ?: "模型网页尚未关闭。" else "无法连接本地模型服务，网页尚未关闭。" }
         }

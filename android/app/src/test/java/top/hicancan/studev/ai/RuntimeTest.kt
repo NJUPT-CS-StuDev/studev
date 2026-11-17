@@ -8,6 +8,7 @@ import java.net.Socket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.thread
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
@@ -95,5 +96,30 @@ class RuntimeTest {
         } finally {
             peer.get()?.close(); listening.close(); job.cancel(); server.join(1_000)
         }
+    }
+
+    @Test fun aFailedCloseStillReleasesEveryOtherModelAndBranch() = runBlocking {
+        val listening = ServerSocket(0, 4, InetAddress.getByName("127.0.0.1")).apply { soTimeout = 4_000 }
+        val calls = ConcurrentLinkedQueue<String>()
+        val server = thread(isDaemon = true) {
+            repeat(4) {
+                listening.accept().use { socket ->
+                    val headers = ByteArrayOutputStream(); val input = socket.getInputStream()
+                    while (!headers.toString(Charsets.US_ASCII).endsWith("\r\n\r\n")) headers.write(input.read().also { check(it >= 0) })
+                    val said = headers.toString(Charsets.US_ASCII)
+                    check(said.contains("Authorization: Bearer test-model-key", ignoreCase = true))
+                    val path = said.lineSequence().first().split(' ')[1]
+                    calls.add(path)
+                    val status = if (path == "/v1/conversations/root?model=model-a") "503 Service Unavailable" else "404 Not Found"
+                    socket.getOutputStream().apply { write("HTTP/1.1 $status\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray()); flush() }
+                }
+            }
+        }
+        try {
+            val own = Own("http://127.0.0.1:${listening.localPort}/v1", "model-a", "test-model-key", true)
+            val failed = runCatching { Models.closeConversations(own, listOf("model-a", "model-b", "model-a"), listOf("root", "fork", "root")) }.exceptionOrNull()
+            assertTrue(failed is IllegalStateException)
+            assertEquals(listOf("/v1/conversations/fork?model=model-a", "/v1/conversations/fork?model=model-b", "/v1/conversations/root?model=model-a", "/v1/conversations/root?model=model-b"), calls.sorted())
+        } finally { listening.close(); server.join(1_000) }
     }
 }

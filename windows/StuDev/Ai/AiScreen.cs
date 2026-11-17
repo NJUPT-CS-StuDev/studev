@@ -388,7 +388,7 @@ public sealed partial class AiScreen : Screen
     }
     private async Task CloseModelPages(SavedChat removed, Own provider)
     {
-        try { foreach (var model in removed.RuntimeModels ?? []) await Models.CloseConversationsAsync(Http, provider with { Model = model }, [removed.Id, .. removed.Forks ?? []]); }
+        try { await Models.CloseConversationsAsync(Http, provider, removed.RuntimeModels ?? [], [removed.Id, .. removed.Forks ?? []]); }
         catch (Exception failure) when (failure is HttpRequestException or OperationCanceledException or InvalidOperationException)
         {
             var reason = failure is InvalidOperationException ? failure.Message : failure is OperationCanceledException ? "本地模型服务没有及时响应，网页尚未关闭。" : "无法连接本地模型服务，网页尚未关闭。";

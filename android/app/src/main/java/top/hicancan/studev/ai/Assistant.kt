@@ -6,6 +6,10 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -226,19 +230,29 @@ object Models {
     }.getOrElse { addressHint(runtime) }
     private fun addressHint(runtime: Boolean) = if (runtime) "Local Runtime 使用 HTTPS，或 http://localhost / http://127.0.0.1。" else "接口地址以 https:// 开头，只写地址本身。"
     fun name(own: Own) = own.model.ifBlank { "我的 API" }
-    suspend fun closeConversations(own: Own, ids: List<String>) = withContext(Dispatchers.IO) {
+    suspend fun closeConversations(own: Own, models: List<String>, ids: List<String>) = withContext(Dispatchers.IO) {
         if (!own.runtime || own.key.isBlank()) return@withContext
         addressError(own.base, true)?.let { throw IllegalStateException(it) }
         val root = endpoint(own.base).removeSuffix("/chat/completions")
-        for (id in ids.distinct()) {
-            val url = "$root/conversations/${java.net.URLEncoder.encode(id, "UTF-8")}?model=${java.net.URLEncoder.encode(own.model, "UTF-8")}"
-            val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
-                requestMethod = "DELETE"; connectTimeout = 5_000; readTimeout = 5_000; instanceFollowRedirects = false
-                setRequestProperty("Authorization", "Bearer ${own.key}")
-            }
-            try { val status = connection.responseCode; if (status !in 200..299 && status != 404) throw IllegalStateException("本地模型服务未能关闭对应网页（$status）。") }
-            finally { connection.disconnect() }
+        var failure: Exception? = null
+        val pages = models.distinct().flatMap { model -> ids.distinct().map { id -> model to id } }
+        for (batch in pages.chunked(4)) {
+            val results = coroutineScope { batch.map { (model, id) -> async {
+                try {
+                    val url = "$root/conversations/${java.net.URLEncoder.encode(id, "UTF-8")}?model=${java.net.URLEncoder.encode(model, "UTF-8")}"
+                    val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+                        requestMethod = "DELETE"; connectTimeout = 5_000; readTimeout = 5_000; instanceFollowRedirects = false
+                        setRequestProperty("Authorization", "Bearer ${own.key}")
+                    }
+                    try { val status = connection.responseCode; if (status !in 200..299 && status != 404) throw IllegalStateException("本地模型服务未能关闭对应网页（$status）。") }
+                    finally { connection.disconnect() }
+                    null
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: Exception) { error }
+            } }.awaitAll() }
+            if (failure == null) failure = results.firstOrNull { it != null }
         }
+        failure?.let { throw it }
     }
     fun read(prefs: android.content.SharedPreferences): Pair<Boolean, Own> {
         val own = Own(prefs.getString("base", null) ?: STARTING.base, prefs.getString("model", null) ?: STARTING.model, prefs.getString("key", null).orEmpty(), prefs.getBoolean("runtime", false))
