@@ -423,66 +423,91 @@ public sealed partial class KnowledgeScreen : Screen
         var t = ToneOf(course.Id);
         var courseHome = topic is null && material is null;
         var layout = new Grid { MaxWidth = 1440, HorizontalAlignment = HorizontalAlignment.Stretch, ColumnSpacing = 28, Padding = new Thickness(24, 16, 24, 32) };
-        if (!courseHome) layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });
+        var outlineColumn = courseHome ? null : new ColumnDefinition { Width = new GridLength(250) };
+        if (outlineColumn is not null) layout.ColumnDefinitions.Add(outlineColumn);
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 780 });
-        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
-
-        // Left: Course knowledge tree
-        var leftTree = new StackPanel { Spacing = 12 };
-        var courseHead = new Tap(topic is null && material is null ? Paint.Tone(t, "bg") : Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 7, 10, 7) };
-        var courseTitle = Kit.Text(course.Name, Role.Body, bold: true); courseTitle.Foreground = Paint.Tone(t, "fg");
-        courseHead.Content = courseTitle;
-        courseHead.Click += (_, _) => Open(course: course.Id);
-        leftTree.Children.Add(courseHead);
-
-        foreach (var ch in course.Chapters)
-        {
-            var sec = new StackPanel { Spacing = 2 };
-            var chHead = Kit.Text(ch.Title, Role.Caption); chHead.Foreground = Paint.Tone(t, "fg");
-            sec.Children.Add(chHead);
-            foreach (var tid in ch.Topics)
-            {
-                var label = idx.Topics.FirstOrDefault(x => x.Id == tid)?.Title ?? tid;
-                var on = topic?.Id == tid;
-                var btn = new Tap(on ? Paint.Tone(t, "bg") : Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 5, 8, 5) };
-                var tb = Kit.Text(label, Role.Label, bold: on, wrap: true); if (on) tb.Foreground = Paint.Tone(t, "fg");
-                btn.Content = tb;
-                btn.Click += (_, _) => Open(course: course.Id, topic: tid);
-                sec.Children.Add(btn);
-            }
-            leftTree.Children.Add(sec);
-        }
+        var relatedColumn = new ColumnDefinition { Width = new GridLength(260) };
+        layout.ColumnDefinitions.Add(relatedColumn);
         var courseMats = idx.Materials.Where(m => m.Course == course.idOrEmpty()).ToList();
-        if (courseMats.Count > 0)
+
+        // The same course tree is a sidebar where it fits, or opened from the course name while reading.
+        StackPanel Outline(bool inSheet = false)
         {
-            var msec = new StackPanel { Spacing = 2 };
-            var mHead = Kit.Text("资料", Role.Caption); mHead.Foreground = Paint.Tone(t, "fg");
-            msec.Children.Add(mHead);
-            foreach (var m in courseMats)
+            void Navigate(Action open) { if (inSheet) App.Window?.Close(); open(); }
+            var tree = new StackPanel { Spacing = 12 };
+            var courseHead = new Tap(courseHome ? Paint.Tone(t, "bg") : Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 7, 10, 7) };
+            var courseTitle = Kit.Text(course.Name, Role.Body, bold: true); courseTitle.Foreground = Paint.Tone(t, "fg");
+            courseHead.Content = courseTitle;
+            courseHead.Click += (_, _) => Navigate(() => Open(course: course.Id));
+            tree.Children.Add(courseHead);
+
+            foreach (var ch in course.Chapters)
             {
-                var on = material?.Path == m.Path;
-                var btn = new Tap(on ? Paint.Tone(t, "bg") : Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 5, 8, 5) };
-                var tb = Kit.Text(m.Title, Role.Label, bold: on, wrap: true); if (on) tb.Foreground = Paint.Tone(t, "fg");
-                btn.Content = tb;
-                btn.Click += (_, _) => Open(course: course.Id, material: m.Path);
-                msec.Children.Add(btn);
+                var sec = new StackPanel { Spacing = 2 };
+                var chHead = Kit.Text(ch.Title, Role.Caption); chHead.Foreground = Paint.Tone(t, "fg");
+                sec.Children.Add(chHead);
+                foreach (var tid in ch.Topics)
+                {
+                    var label = idx.Topics.FirstOrDefault(x => x.Id == tid)?.Title ?? tid;
+                    var on = topic?.Id == tid;
+                    var btn = new Tap(on ? Paint.Tone(t, "bg") : Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 5, 8, 5) };
+                    var tb = Kit.Text(label, Role.Label, bold: on, wrap: true); if (on) tb.Foreground = Paint.Tone(t, "fg");
+                    btn.Content = tb;
+                    btn.Click += (_, _) => Navigate(() => Open(course: course.Id, topic: tid));
+                    sec.Children.Add(btn);
+                }
+                tree.Children.Add(sec);
             }
-            leftTree.Children.Add(msec);
+            if (courseMats.Count > 0)
+            {
+                var msec = new StackPanel { Spacing = 2 };
+                var mHead = Kit.Text("资料", Role.Caption); mHead.Foreground = Paint.Tone(t, "fg");
+                msec.Children.Add(mHead);
+                foreach (var m in courseMats)
+                {
+                    var on = material?.Path == m.Path;
+                    var btn = new Tap(on ? Paint.Tone(t, "bg") : Paint.Clear, Paint.Brush("surface")) { CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 5, 8, 5) };
+                    var tb = Kit.Text(m.Title, Role.Label, bold: on, wrap: true); if (on) tb.Foreground = Paint.Tone(t, "fg");
+                    btn.Content = tb;
+                    btn.Click += (_, _) => Navigate(() => Open(course: course.Id, material: m.Path));
+                    msec.Children.Add(btn);
+                }
+                tree.Children.Add(msec);
+            }
+            return tree;
         }
-        var leftScroll = new ScrollViewer { Content = leftTree, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var leftScroll = new ScrollViewer { Content = courseHome ? null : Outline(), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Disabled };
         if (topic is not null || material is not null) layout.Children.Add(leftScroll);
 
         // Middle: Main content + below tested questions
         var midStack = new StackPanel { Spacing = 14 };
         var backBtn = Kit.TextAction("知识", () => Open(), Icons.Back);
         backBtn.HorizontalAlignment = HorizontalAlignment.Left;
-        midStack.Children.Add(backBtn);
+        var detailHead = new Grid { ColumnSpacing = 12 };
+        detailHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        detailHead.ColumnDefinitions.Add(new ColumnDefinition());
+        detailHead.Children.Add(backBtn);
+        var outlineWords = Kit.Text(course.Name, Role.Label, bold: true); outlineWords.Foreground = Paint.Tone(t, "fg");
+        var outlineContent = new Grid { ColumnSpacing = 5, VerticalAlignment = VerticalAlignment.Center };
+        outlineContent.ColumnDefinitions.Add(new ColumnDefinition()); outlineContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        outlineContent.Children.Add(outlineWords);
+        var arrow = Kit.Icon("M3.5,6 L8,10.5 L12.5,6", 14, "muted"); arrow.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(arrow, 1); outlineContent.Children.Add(arrow);
+        var outlineButton = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = outlineContent, MinHeight = Paint.Number("size", "control"), CornerRadius = Kit.Capsule(Paint.Number("size", "control")), Padding = new Thickness(8, 4, 8, 4), HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(outlineButton, $"{course.Name}，课程目录");
+        outlineButton.Click += (_, _) => {
+            var body = new StackPanel { Padding = new Thickness(20, 18, 20, 22), Spacing = 14 };
+            body.Children.Add(Pages.SheetHead(Pages.SheetTitle(course.Name), () => App.Window?.Close()));
+            body.Children.Add(Outline(inSheet: true));
+            App.Window?.Sheet(body, Math.Min(520, Math.Max(280, host.ActualWidth - 32)));
+        };
+        Grid.SetColumn(outlineButton, 1); detailHead.Children.Add(outlineButton);
+        midStack.Children.Add(detailHead);
 
         var contentHost = new StackPanel { Spacing = 14 };
         midStack.Children.Add(contentHost);
         var relPath = topic?.Path ?? material?.Path ?? course.Path;
         _ = LoadDocument(contentHost, idx, course, topic, material, relPath, t);
-        var midScroll = new ScrollViewer { Content = midStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var midScroll = new ScrollViewer { Content = midStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Disabled };
         Grid.SetColumn(midScroll, courseHome ? 0 : 1);
         layout.Children.Add(midScroll);
 
@@ -558,11 +583,43 @@ public sealed partial class KnowledgeScreen : Screen
             rightStack.Children.Add(rHead);
             foreach (var m in courseMats) rightStack.Children.Add(RelLink($"{m.Title} ({(m.Sections > 0 ? $"{m.Sections} 处关联" : m.Kind)})", () => Open(course: course.Id, material: m.Path)));
         }
-        var rightScroll = new ScrollViewer { Content = rightStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var rightScroll = new ScrollViewer { Content = rightStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Disabled };
         Grid.SetColumn(rightScroll, courseHome ? 1 : 2);
         layout.Children.Add(rightScroll);
 
-        host.Children.Add(layout);
+        // Fixed sidebars must never consume the document's reading width. Resizing moves
+        // related knowledge below the same document without rebuilding it or its anchor scroller.
+        var detailHost = new Grid(); detailHost.Children.Add(layout);
+        var relatedDivider = Kit.Hairline();
+        bool? compactLayout = null;
+        void Reflow(double width)
+        {
+            var compact = width < (courseHome ? 900 : 1100);
+            if (compactLayout == compact) return;
+            compactLayout = compact;
+            layout.MaxWidth = compact ? 828 : 1440;
+            layout.ColumnSpacing = compact ? 0 : 28;
+            if (outlineColumn is not null) outlineColumn.Width = new GridLength(compact ? 0 : 250);
+            relatedColumn.Width = new GridLength(compact ? 0 : 260);
+            leftScroll.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            rightScroll.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            outlineButton.Visibility = compact && !courseHome ? Visibility.Visible : Visibility.Collapsed;
+            if (compact)
+            {
+                rightScroll.Content = null;
+                midStack.Children.Add(relatedDivider);
+                midStack.Children.Add(rightStack);
+            }
+            else
+            {
+                midStack.Children.Remove(rightStack);
+                midStack.Children.Remove(relatedDivider);
+                rightScroll.Content = rightStack;
+            }
+        }
+        detailHost.SizeChanged += (_, e) => Reflow(e.NewSize.Width);
+        detailHost.Loaded += (_, _) => Reflow(detailHost.ActualWidth);
+        host.Children.Add(detailHost);
     }
 
     private static Tap RelLink(string label, Action act)
