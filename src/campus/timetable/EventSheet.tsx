@@ -195,7 +195,7 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">考场</span><span className="v">{name} 的课表</span><Chevron /></a>}
                 {course}
                 <button className="kv" onClick={onExams}><span className="k">考试</span><span className="v">全部考试 · {new Set(line.exams.map(item => item.course.code ?? item.course.name)).size} 门</span><Chevron /></button>
-                {sheet && <div className="kv"><span className="k">来源</span><span className="v">{examFileName(sheet.file)}{sheet.published && <small>{examTime(sheet.published.slice(0, 10))} 官方发布</small>}<small><a href={sheet.notice} target="_blank" rel="noreferrer">官方公告</a> · <a href={sheet.url} target="_blank" rel="noreferrer">官方附件</a></small><small>历史公告可能撤回，部分附件需连接校园网。</small></span></div>}
+                {sheet && <div className="kv"><span className="k">来源</span><span className="v">{examFileName(sheet.file)}{sheet.published && <small>{examTime(sheet.published.slice(0, 10))} 官方发布</small>}<small><a href={sheet.notice} target="_blank" rel="noreferrer">官方公告</a> · <a href={sheet.url} target="_blank" rel="noreferrer">官方附件</a></small></span></div>}
                 {choices}
                 {isMe && <button className="kv" onClick={() => onSkipExam(event)}><span className="k" /><span className="v danger">不参加这场考试</span></button>}
             </Sheet>

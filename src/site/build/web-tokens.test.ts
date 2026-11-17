@@ -16,8 +16,10 @@ describe('web design tokens', () => {
   it('derives aliases and all course slots from the shared palette', () => {
     expect(css).toContain('--blue: var(--brand)');
     expect(css).toContain('--color-google-blue: var(--brand)');
-    for (let index = 0; index < 24; index++) {
-      for (const part of ['bg', 'border', 'fg']) expect(css).toContain(`--course-tone-${index}-${part}: color-mix(`);
+    for (const palette of Object.values(tokens.course)) {
+      Object.values(palette).forEach((tone, index) => {
+        for (const [part, value] of Object.entries(tone)) expect(css).toContain(`--course-tone-${index}-${part}: ${value};`);
+      });
     }
   });
   it('regenerates aliases when the shared palette changes', () => {
@@ -31,14 +33,9 @@ describe('web design tokens', () => {
     expect(css).toContain('--size-control: 40px');
     expect(css).toContain('--size-target: 44px');
   });
-  it('keeps 24 mathematically distinct course mixtures, including reversed pairs', () => {
-    const mixtures = [...css.matchAll(/--course-tone-\d+-bg: color-mix\(in srgb, (.*?) 12%,/g)].map(match => {
-      const mixed = match[1]!.match(/color-mix\(in oklab, var\(--(\w+)\) (\d+)%, var\(--(\w+)\)\)/);
-      if (!mixed) return `${match[1]}:100`;
-      const weights = [[mixed[1], Number(mixed[2])], [mixed[3], 100 - Number(mixed[2])]];
-      return weights.sort(([left], [right]) => String(left).localeCompare(String(right))).map(([name, weight]) => `${name}:${weight}`).join(',');
-    });
-    expect(mixtures).toHaveLength(24);
-    expect(new Set(mixtures).size).toBe(24);
+  it('keeps the native palette without adding another set of course identities', () => {
+    const slots = Object.keys(tokens.course.light).length;
+    expect(css).not.toContain(`--course-tone-${slots}-bg`);
+    for (const palette of Object.values(tokens.course)) expect(new Set(Object.values(palette).map(tone => tone.bg)).size).toBe(slots);
   });
 });

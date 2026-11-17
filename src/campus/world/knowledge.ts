@@ -5,6 +5,7 @@ import { DATA_RELEASE, releaseReady } from '@/world/config';
 import { fetchJson, fetchText } from '@/world/fetch';
 import { plainText, type Inline, type Keyed } from '@/world/doc';
 import type { KnowledgeCatalog } from '@/knowledge/catalog';
+import tokens from '../../../design/tokens.json';
 
 /** A subject's outline; codes are the course plans taught now that teach it, former the codes it had before. */
 export interface KnowledgeCourse { id: string; name: string; codes: string[]; former: string[]; chapters: { title: string; topics: string[] }[]; path: string }
@@ -126,11 +127,11 @@ export function materialParts(blocks: Keyed[]): MaterialPart[] {
     return parts;
 }
 
-/** A subject's colour: one of the course tones, fixed by its name so it is the same everywhere. */
+/** A subject's stable slot in the course palette shared by all three clients. */
 export function toneOf(id: string): number {
     let hash = 0;
     for (const char of id) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
-    return hash % 24;
+    return hash % Object.keys(tokens.course.light).length;
 }
 /** The colour a kind of document wears. */
 export const KIND_TONE: Record<string, string> = { 期末试卷: 'danger', 答案: 'success', 习题: 'shop', 复习要点: 'warning', 课件: 'brand', 实验: 'food' };

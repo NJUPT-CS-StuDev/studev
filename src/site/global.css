@@ -31,7 +31,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .wordmark { font-size: 17px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); margin-right: 12px; }
 .site-nav { display: flex; gap: 28px; flex: 1; }
 .site-nav a { font-size: 14px; font-weight: 500; color: var(--muted); }
-.site-nav a.active { color: var(--ink); font-weight: 600; }
+.site-nav a.active { color: var(--brand); font-weight: 600; }
 .site-account { display: flex; align-items: center; flex: none; }
 .avatar, .sd .avatar { height: var(--size-search); min-width: var(--size-target); max-width: calc(var(--size-account-base) + var(--size-account-name-max)); border: 0; border-radius: var(--radius-pill); background: var(--surface-sunken); color: var(--muted); font: 500 12px var(--font-sans); cursor: pointer; flex: none; }
 .club-nav { display: flex; gap: 22px; padding: 0 24px; border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
@@ -55,7 +55,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .app-offer button { width: 32px; height: 32px; border: 0; background: none; color: var(--faint); font-size: 18px; cursor: pointer; flex: none; }
 .phone-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; height: calc(50px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--paper); border-top: 1px solid var(--line); }
 .phone-tabs a { flex: 1; display: grid; place-items: center; font-size: 14px; font-weight: 500; color: var(--muted); }
-.phone-tabs a.active { color: var(--ink); font-weight: 600; }
+.phone-tabs a.active { color: var(--brand); font-weight: 600; }
 @media (min-width: 1000px) {
   body { padding-bottom: 0; }
   .phone-tabs { display: none; }

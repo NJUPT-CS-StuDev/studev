@@ -59,11 +59,15 @@ async function examsHistory(page, name) {
     const before = await prefs(page);
     try {
         await goto(page, '/?scale=term&mode=exam');
-        await page.getByText('本次更新未影响本班', { exact: true }).waitFor({ state: 'visible' });
-        await page.locator('.xtrust > details').first().locator(':scope > summary').click();
+        const current = page.locator('.xversion.current');
+        await current.getByText('本次更新未影响本班', { exact: true }).waitFor({ state: 'visible' });
+        assert.equal(await current.locator('.xversion-head').getAttribute('aria-expanded'), 'true', 'the current version opens without another disclosure');
         const baseline = page.locator(`[data-exam-version="${examIndex.history.find(version => version.baseline).id}"]`);
-        await baseline.locator(':scope > summary').click();
+        await baseline.locator('.xversion-head').click();
         assert((await baseline.innerText()).includes('首次记录'));
+        assert.equal(await current.locator('.xversion-head').getAttribute('aria-expanded'), 'false', 'viewing the baseline closes the previous detail');
+        assert.equal(await current.getByText('当前版本', { exact: true }).count(), 1, 'the current identity survives selection of history');
+        assert.equal(await page.locator('.xversion-detail').count(), 1, 'only one version detail is open');
         await screenshot(page, `${name}-exam-unaffected-baseline`);
 
         const schedule = JSON.parse(await readFile(join(root, `public/data/${release.version}/teaching/${release.teaching}/classes/${affectedExam.class}.json`), 'utf8'));
@@ -72,20 +76,19 @@ async function examsHistory(page, name) {
             before, klass: affectedExam.class, term: release.teaching, hidden: [...new Set(schedule.meetings.map(meeting => meeting.teaching_class.id))],
         });
         await goto(page, '/?scale=term&mode=exam');
-        await page.locator('.xtrust > details').first().locator(':scope > summary').click();
         const version = page.locator(`[data-exam-version="${affectedExam.version}"]`);
-        await version.locator(':scope > summary').click();
+        await version.locator('.xversion-head').click();
         await version.locator('.xchange').filter({ hasText: affectedExam.course.name }).waitFor({ state: 'visible' });
         const change = version.locator('.xchange').filter({ hasText: affectedExam.course.name });
         if (affectedExam.change === 'changed') assert((await change.innerText()).includes('→'), 'the real changed course has before/after values');
-        await version.locator('details > summary').click();
         const files = examIndex.history.find(item => item.id === affectedExam.version).files;
+        assert.equal(await version.getByRole('link', { name: /^官方公告：/ }).count(), new Set(files.map(file => file.notice)).size, 'one announcement link per actual official page');
         for (const file of files) {
-            const row = version.locator('.xsources li').filter({ hasText: file.file.replace(/^\d{4}-\d{2}-\d{2}-/, '') });
-            assert.equal(await row.getByRole('link', { name: '官方公告', exact: true }).getAttribute('href'), file.notice);
-            assert.equal(await row.getByRole('link', { name: '官方附件', exact: true }).getAttribute('href'), file.url);
+            const row = version.locator('[data-exam-file]').filter({ hasText: file.file.replace(/^\d{4}-\d{2}-\d{2}-/, '') });
+            assert.equal(await row.getByRole('link', { name: /^官方附件：/ }).getAttribute('href'), file.url);
+            assert.equal(await row.locator('xpath=ancestor::*[contains(@class,"xsource-group")]').getByRole('link', { name: /^官方公告：/ }).getAttribute('href'), file.notice);
         }
-        assert((await version.innerText()).includes('历史公告可能撤回，部分附件需连接校园网。'));
+        assert.equal(await page.locator('.xtrust details').count(), 0, 'files and changes do not hide behind another layer');
         await screenshot(page, `${name}-exam-affected-sources`);
         log(`${name}: real exam baseline, unaffected class, before/after history despite hidden lectures and official sources`);
     } finally {
@@ -135,6 +138,7 @@ async function searchRanges(page, name) {
         await goto(page, '/search/?' + new URLSearchParams({ q: 'B240402', scope: 'academic' }));
         assert(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)), 'the built worker controls the search document');
         await page.locator('.hits .hit').filter({ hasText: 'B240402' }).first().waitFor({ state: 'visible' });
+        await searchGeometry(page);
         for (const query of [navigationMeeting.teachers[0].name, '高等数学']) {
             await page.getByRole('textbox', { name: '搜索', exact: true }).fill(query);
             await page.waitForURL(url => url.searchParams.get('q') === query);
@@ -255,6 +259,22 @@ async function noAvatarOverlap(page, selector) {
         });
     }, selector);
     assert.deepEqual(collisions, [], `the login entry must not cover ${selector}`);
+}
+
+async function searchGeometry(page) {
+    const sizes = await page.evaluate(() => {
+        const box = element => { const { x, right, width } = element.getBoundingClientRect(); return { x, right, width }; };
+        const header = document.querySelector('.search .campus-header');
+        const slot = header.querySelector('.campus-account-slot');
+        return { field: box(header.querySelector('.sfield')), main: box(header.querySelector('.campus-header-main')),
+            results: box(document.querySelector('.search .hits')), slot: box(slot), slotShown: getComputedStyle(slot).display !== 'none',
+            gap: parseFloat(getComputedStyle(header).columnGap) || 0, document: document.documentElement.scrollWidth, viewport: innerWidth };
+    });
+    assert(sizes.document <= sizes.viewport + 1, 'search does not overflow the viewport');
+    assert(Math.abs(sizes.field.width - sizes.main.width) <= 1, 'search fills the available shared-header main slot');
+    assert(Math.abs(sizes.field.x - sizes.results.x) <= 1, 'search and results share their left edge');
+    if (sizes.slotShown) assert(Math.abs(sizes.field.right + sizes.gap - sizes.slot.x) <= 1, 'search uses the remaining space beside the mobile account');
+    else assert(Math.abs(sizes.field.right - sizes.results.right) <= 1, 'desktop search and results share a full column');
 }
 
 async function headerAligned(page, selector) {

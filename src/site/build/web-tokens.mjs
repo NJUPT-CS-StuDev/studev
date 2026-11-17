@@ -31,19 +31,8 @@ export function renderWebTokens(tokens) {
     'color-google-bg-dark': 'var(--surface)',
     'asset-paper': tokens.color.light.paper,
   };
-  // Stable course slots use only the shared semantic hues. Text and borders
-  // retain contrast in either scheme; the allocator keeps adjacent courses apart.
-  const hues = ['brand', 'success', 'warning', 'food', 'danger', 'shop'];
-  for (let index = 0; index < 24; index++) {
-    const base = `var(--${hues[index % hues.length]})`;
-    const companion = `var(--${hues[(index + 1 + Math.floor(index / hues.length)) % hues.length]})`;
-    // Different weights also distinguish a pair when its order is reversed.
-    const weight = [100, 65, 52, 28][Math.floor(index / hues.length)];
-    const hue = index < hues.length ? base : `color-mix(in oklab, ${base} ${weight}%, ${companion})`;
-    aliases[`course-tone-${index}-bg`] = `color-mix(in srgb, ${hue} 12%, var(--paper))`;
-    aliases[`course-tone-${index}-border`] = `color-mix(in srgb, ${hue} 36%, var(--paper))`;
-    aliases[`course-tone-${index}-fg`] = `color-mix(in srgb, ${hue} 70%, var(--ink))`;
-  }
+  // Knowledge and the native clients wear the same twelve authored course tones.
+  const courses = scheme => Object.fromEntries(Object.values(tokens.course[scheme]).flatMap((tone, index) => Object.entries(tone).map(([part, value]) => [`course-tone-${index}-${part}`, value])));
   const declarations = values => Object.entries(values).map(([name, value]) => `  --${kebab(name)}: ${value};`).join('\n');
   const dimensions = {};
   for (const section of ['radius', 'size', 'space', 'motion', 'elevation']) {
@@ -53,7 +42,7 @@ export function renderWebTokens(tokens) {
     for (const [key, value] of Object.entries(values)) dimensions[`type-${name}-${key}`] = `${value}${key === 'weight' ? '' : 'px'}`;
   }
   const compactHeader = tokens.size.headerContent + tokens.size.headerGap + tokens.size.accountBase + tokens.size.accountNameMin;
-  return `/* Generated from design/tokens.json. */\n:root {\n${declarations(tokens.color.light)}\n${declarations(aliases)}\n${declarations(dimensions)}\n}\n:root[data-theme='dark'] {\n${declarations(tokens.color.dark)}\n}\n@container campus-header (width < ${compactHeader}px) {\n  .sd .campus-account-slot .avatar-name { display: none; }\n  .sd .campus-account-slot .avatar { width: var(--size-target); padding-inline: 4px; gap: 0; }\n}\n`;
+  return `/* Generated from design/tokens.json. */\n:root {\n${declarations(tokens.color.light)}\n${declarations(aliases)}\n${declarations(courses('light'))}\n${declarations(dimensions)}\n}\n:root[data-theme='dark'] {\n${declarations(tokens.color.dark)}\n${declarations(courses('dark'))}\n}\n@container campus-header (width < ${compactHeader}px) {\n  .sd .campus-account-slot .avatar-name { display: none; }\n  .sd .campus-account-slot .avatar { width: var(--size-target); padding-inline: 4px; gap: 0; }\n}\n`;
 }
 
 export default function webTokens() {
