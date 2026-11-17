@@ -23,8 +23,8 @@ import androidx.compose.ui.platform.testTag
     LaunchedEffect(campusLink) { if (campusLink != null) {
         val uri = android.net.Uri.parse(campusLink)
         when (uri.path.orEmpty().trimEnd('/')) {
-            "/members" -> { memberReturn = null; members = uri.getQueryParameter("id").orEmpty(); memberQuery = uri.getQueryParameter("query").orEmpty() }
-            "/account", "/login" -> open = true
+            "/members" -> { open = false; form = null; memberReturn = null; members = uri.getQueryParameter("id").orEmpty(); memberQuery = uri.getQueryParameter("query").orEmpty() }
+            "/account", "/login" -> { members = null; form = null; memberReturn = null; open = true }
         }
         Forms.fromLink(campusLink)?.let { open = false; form = it }
     } }
