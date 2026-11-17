@@ -35,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.hicancan.studev.account.AccountUser
 import top.hicancan.studev.account.Accounts
+import top.hicancan.studev.account.avatarLetter
 
 private val avatarPictures = android.util.LruCache<String, ImageBitmap>(64)
 
@@ -72,7 +73,7 @@ private val avatarPictures = android.util.LruCache<String, ImageBitmap>(64)
     QqAvatarImage(qq, Modifier.size((Tokens.Size.search - 8).dp)) {
         val shown = user
         when {
-            shown != null -> Plain(shown.nickname.take(1).ifEmpty { "我" }, 12.5.sp, ink, FontWeight.SemiBold)
+            shown != null -> Plain(avatarLetter(shown.nickname), 12.5.sp, ink, FontWeight.SemiBold)
             else -> Canvas(Modifier.size(18.dp)) {
                 val unit = size.width / 24
                 val line = Stroke(1.8f * unit, cap = StrokeCap.Round)

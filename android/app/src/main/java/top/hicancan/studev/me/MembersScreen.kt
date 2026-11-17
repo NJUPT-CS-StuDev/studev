@@ -116,6 +116,5 @@ import top.hicancan.studev.app.*
 }
 
 @Composable private fun MemberFace(member: PublicMember, size: Int) = AvatarImage(member.avatarUrl, Modifier.size(size.dp).background(Ink.sunken, CircleShape)) {
-    val letter = member.nickname.codePoints().findFirst().orElse('我'.code).let { String(Character.toChars(it)) }
-    Plain(letter, (size * .36f).sp, Ink.brand, FontWeight.SemiBold)
+    Plain(avatarLetter(member.nickname), (size * .36f).sp, Ink.brand, FontWeight.SemiBold)
 }

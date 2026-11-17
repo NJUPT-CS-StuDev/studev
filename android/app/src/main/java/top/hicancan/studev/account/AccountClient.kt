@@ -20,6 +20,9 @@ internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = tru
     val department: String = "", val title: String = "", val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true)
 /** The server resolves the public nickname, including its default. */
 @Serializable data class PublicMember(val id: String, val nickname: String, val signature: String, val avatarUrl: String)
+fun avatarLetter(nickname: String): String = if (nickname.isEmpty()) "我" else java.text.BreakIterator.getCharacterInstance(java.util.Locale.ROOT).run {
+    setText(nickname); first(); nickname.substring(0, next())
+}
 @Serializable data class MemberPage(val items: List<PublicMember>, val total: Int, val offset: Int, val limit: Int)
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)

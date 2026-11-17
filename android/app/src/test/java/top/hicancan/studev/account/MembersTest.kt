@@ -6,6 +6,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MembersTest {
+    @Test fun avatarFallbackPreservesSupplementaryCharacters() {
+        assertEquals("𠮷", avatarLetter("𠮷同学"))
+        assertEquals("🦆", avatarLetter("🦆同学"))
+        assertEquals("🧑‍💻", avatarLetter("🧑‍💻同学"))
+        assertEquals("é", avatarLetter("é同学"))
+        assertEquals("灿", avatarLetter("灿"))
+        assertEquals("我", avatarLetter(""))
+    }
     @Test fun memberDirectoryUsesItsPublicContractAndUnwrapsDetails() = runBlocking {
         val member = PublicMember("public-a", "灿", "一起学习", "https://studev.example/api/platform/members/public-a/avatar")
         var stored = StoredAccount("member-test-device", AccountSession("test-only-access", "test-only-refresh", Long.MAX_VALUE, "test-only-family", AccountUser("self", "本人")))
