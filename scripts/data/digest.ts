@@ -397,9 +397,9 @@ function centre(geometry: MapPlace['geometry']): [number, number] | undefined {
 }
 
 /** One map entity as the clients read it. What a place is (category, group, tier) is the map's; a room is a 教室. */
-function normalizePlace(raw: MapPlace, ids: Set<string>, roomFacts: Map<string, any>, mapLevels: Map<string, number>) {
-    if (!raw.routing || raw.routing.type !== 'target' || raw.routing.id !== raw.id) {
-        throw new Error(`map entity has no canonical routing target: ${raw.id}`);
+function normalizePlace(raw: MapPlace, ids: Set<string>, targets: Set<string>, roomFacts: Map<string, any>, mapLevels: Map<string, number>) {
+    if (!raw.routing || raw.routing.type !== 'target' || !ids.has(raw.routing.id) || !targets.has(raw.routing.id)) {
+        throw new Error(`map entity references no connected routing target: ${raw.id}`);
     }
     const prefix = raw.id.includes('/') ? raw.id.slice(0, raw.id.lastIndexOf('/')) : '';
     const fact = roomFacts.get(raw.id);
@@ -541,10 +541,12 @@ async function buildCampus(
     const from = join(mapRoot, campus);
     const to = join(out, 'space', campus);
     const entities = await read<MapPlace[]>(join(from, 'entities.json'));
+    const network = await read<{ targets: Record<string, number[]> }>(join(from, 'network.json'));
+    const targets = new Set(Object.entries(network.targets).filter(([, nodes]) => nodes.length > 0).map(([id]) => id));
     const mapLevels = new Map<string, number>();
     for (const place of entities) if (place.kind === 'floor' && place.parent && place.level != null) mapLevels.set(place.parent, Math.max(mapLevels.get(place.parent) ?? 0, place.level));
     const ids = new Set(entities.map(place => place.id));
-    const normalized = entities.map(place => normalizePlace(place, ids, roomFacts, mapLevels));
+    const normalized = entities.map(place => normalizePlace(place, ids, targets, roomFacts, mapLevels));
     await mkdir(to, { recursive: true });
     await write(join(to, 'entities.json'), normalized);
     for (const file of SPACE_FILES) {
@@ -639,9 +641,6 @@ async function main() {
     try { const value: unknown = await read(join(root, 'src/data/campus-release.json')); if (validRelease(value)) previous = value; } catch { /* first build */ }
     const map = await locateMap();
     const data = await locateData();
-    if (data.index.map?.resolved_map_version && data.index.map.resolved_map_version !== map.version) {
-        throw new Error(`data release pins ${data.index.map.resolved_map_version}, selected map is ${map.version}`);
-    }
     const mapSpaceRoot = join(map.dir, 'space');
     const campuses = (await readdir(mapSpaceRoot)).sort();
     if (!campuses.length) {
