@@ -202,7 +202,8 @@ async function chooseClass() {
     await tap(node => node.class === 'android.widget.EditText', 'the class picker');
     await type('B240402', 'search a class');
     await tap(node => node.text.includes('计算机科学与技术'), 'choose B240402');
-    dismissKeyboard();
+    // Selecting a class closes this sheet and its keyboard together. A second
+    // Back can leave the app while InputMethodManager still reports the old IME.
 }
 async function examHistory() {
     await link('/?scale=term&mode=exam', 'open the personal exam arrangements');
