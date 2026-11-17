@@ -3,11 +3,12 @@ import { eventsOn, examDays, lastLesson, planRuns, runDates, runGone, runTally, 
 import { updateRun, writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { loadCalendar, type CalendarTerm, type ExamRecord } from '@/world/data';
-import type { Exam, ExamChange, Practice } from '@/world/facts';
-import { CHANGE_NAMES, changeLines, wasChanged, weeksText } from '@/world/exams';
+import type { Exam, Practice } from '@/world/facts';
+import { wasChanged, weeksText } from '@/world/exams';
+import { ExamHistory } from '../ExamHistory';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
-import { Chevron } from '@/world/ui';
+import { Chevron, TextAction } from '@/world/ui';
 
 /** The term in three pages: the grid with everything on it, the exams as a list, and 早锻炼 to plan. */
 export type TermMode = 'course' | 'exam' | 'run';
@@ -15,7 +16,6 @@ export type TermMode = 'course' | 'exam' | 'run';
 const lead = (days: number) => days === 0 ? '今天' : days === 1 ? '明天' : `${days} 天后`;
 const dayHead = (date: string) => `${dateLabel(date)} ${WEEKDAYS[weekdayOf(date)]}`;
 const placeOf = (exam: Exam) => exam.room ? roomLabel(exam.room) : exam.location;
-const clock = (iso: string) => new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//, '月').replace(/ /, '日 ');
 
 function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Moment }) {
     const { rule, adjust } = plan;
@@ -31,51 +31,29 @@ function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Mom
     );
 }
 
-/**
- * Why the list can be trusted, said as something one can check: every sheet the office published has
- * been read, and when its site was last looked at; then every change seen, on request. The office
- * withdraws old notices, so nothing here links to them.
- */
-function ExamRecordNote({ record, changes }: { record: ExamRecord; changes: ExamChange[] }) {
-    const days = [...new Set(changes.map(change => change.observed))].sort().reverse();
-    return (
-        <div className="xtrust">
-            {record.checked && <p>已核对教务处发布的全部考试安排表 · 最近检查 {clock(record.checked)}</p>}
-            {days.length > 0 && <details className="xhist">
-                <summary>变动 {changes.length} 处 · 最近 {dateLabel(days[0]!)}</summary>
-                {days.map(day => changes.filter(change => change.observed === day).map((change, at) => (
-                    <div key={`${day}-${at}`} className="xchange">
-                        <span className={`xk ${change.change}`}>{CHANGE_NAMES[change.change]}</span>
-                        <span className="m">{courseName(change.course.name)}<small>{dateLabel(day)} 发现</small>{changeLines(change).map(text => <small key={text}>{text}</small>)}</span>
-                    </div>
-                )))}
-            </details>}
-        </div>
-    );
-}
-
-export function TermView({ line, now, isMe, record, practice, mode, onMode, onPick, onOpen }: {
+export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry, practice, mode, onMode, onPick, onOpen }: {
     line: Timeline; now: Moment; isMe: boolean; record: ExamRecord | null; practice: Practice[]; mode: TermMode;
+    recordFailed: boolean; onRecordRetry: () => void;
     onMode: (mode: TermMode) => void; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void;
 }) {
     const [terms, setTerms] = useState<CalendarTerm[]>([]);
     const { prefs } = usePreferences();
     const seen = prefs.examsSeen;
     useEffect(() => { void loadCalendar().then(setTerms); }, []);
-    const codes = useMemo(() => new Set(line.meetings.map(meeting => meeting.course.code ?? '')), [line.meetings]);
-    const changes = (record?.changes ?? []).filter(change => !isMe || codes.has(change.course.code ?? ''));
-    const latest = changes.map(change => change.observed).sort().at(-1) ?? null;
+    const changes = record?.changes ?? [];
+    const latest = record?.history.filter(version => changes.some(change => change.version === version.id)).at(-1)?.id ?? null;
+    const seenIndex = record?.history.findIndex(version => version.id === seen) ?? -1;
     useEffect(() => {
         // Someone arriving for the first time has nothing new to be told about.
-        if (isMe && latest && seen !== latest && (mode === 'exam' || seen === undefined)) writePreferences(current => ({ ...current, examsSeen: latest }));
-    }, [isMe, latest, mode, seen]);
-    const fresh = Boolean(isMe && latest && seen && latest > seen && mode !== 'exam');
+        if (isMe && latest && seen !== latest && (mode === 'exam' || seenIndex < 0)) writePreferences(current => ({ ...current, examsSeen: latest }));
+    }, [isMe, latest, mode, seen, seenIndex]);
+    const fresh = Boolean(isMe && latest && seenIndex >= 0 && latest !== seen && mode !== 'exam');
     const plan = isMe ? line.run : null;
     const ahead = examDays(line, now.date);
     const taken = useMemo(() => line.exams.filter(exam => exam.date < now.date).sort((left, right) => right.date.localeCompare(left.date) || right.start.localeCompare(left.start)), [line.exams, now.date]);
-    const hasExams = line.exams.length > 0 || changes.length > 0;
-    const showing: TermMode = mode === 'exam' && hasExams ? 'exam' : mode === 'run' && plan ? 'run' : 'course';
-    const modes: [TermMode, string][] = [['course', '课程'], ...(hasExams ? [['exam', '考试'] as [TermMode, string]] : []), ...(plan ? [['run', '早锻炼'] as [TermMode, string]] : [])];
+    const hasExams = line.exams.length > 0 || (record?.history.length ?? 0) > 0 || recordFailed;
+    const showing: TermMode = mode === 'exam' ? 'exam' : mode === 'run' && plan ? 'run' : 'course';
+    const modes: [TermMode, string][] = [['course', '课程'], ...(hasExams || mode === 'exam' ? [['exam', '考试'] as [TermMode, string]] : []), ...(plan ? [['run', '早锻炼'] as [TermMode, string]] : [])];
     const runnable = useMemo(() => new Set(plan ? runDates(plan.rule, line.holidays) : []), [plan, line.holidays]);
     const calendar = terms.find(term => term.start === line.term.weeks[0]?.start);
     const termEnd = calendar?.end ?? line.term.weeks.at(-1)!.end;
@@ -161,7 +139,8 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
                     ))}</div>
                 </section>)}
                 {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
-                {record && <ExamRecordNote record={record} changes={changes} />}
+                {record && <ExamHistory record={record} />}
+                {recordFailed && <div className="xtrust"><p>更新记录暂时无法加载</p><TextAction onClick={onRecordRetry}>重试</TextAction></div>}
             </div>
         </>
     );
@@ -181,11 +160,11 @@ export function TermView({ line, now, isMe, record, practice, mode, onMode, onPi
                             </button>
                         ); })()}
                         {hasExams && <button className="runc xcard" onClick={() => onMode('exam')}>
-                            <b>考试 · 已发现 {courses} 门{fresh && <i className="dot" aria-label="有新变动" />}</b>
+                            <b>{courses ? `考试 · 已发现 ${courses} 门` : '考试 · 最新安排与更新记录'}{fresh && <i className="dot" aria-label="有新变动" />}</b>
                             {ahead[0] ? <>
                                 <span className="xday">{dayHead(ahead[0].date)} · {lead(ahead[0].days)}</span>
                                 {ahead[0].exams.map(exam => <span key={exam.id} className="xline"><span>{courseName(exam.course.name)}</span><span>{exam.start} · {placeOf(exam)}</span></span>)}
-                            </> : <span className="xday">都考完了</span>}
+                            </> : <span className="xday">{courses ? '都考完了' : '暂无待考安排'}</span>}
                         </button>}
                         {offGrid.length > 0 && <>
                             <h3 className="sh">不在课表里的课</h3>

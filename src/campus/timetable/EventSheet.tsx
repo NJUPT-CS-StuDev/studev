@@ -5,7 +5,7 @@ import { kindCounts, MATERIAL_KINDS, materialsOf, type CourseMaterials, type Mat
 import { clusters, eventsOn, meetingAround, runTally, sharingSlot, type CampusEvent, type EventKind, type Timeline } from '@/world/events';
 import { courseIdentity, courseToneStyle, eventTone, timelineTones } from '@/timetable/model/courseColors';
 import type { ExamRecord } from '@/world/data';
-import { changeLines, changesOf, courseOf, lessonsLeft, publishedOn, sheetName, weeksText } from '@/world/exams';
+import { changeLines, changesOf, courseOf, examFileName, examTime, examVersionTime, lessonsLeft, publishedOn, sheetName, weeksText } from '@/world/exams';
 import { courseName, isRoom, roomLabel, unplaced } from '@/world/names';
 import { dateLabel, hm, momentText, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
 import { Chevron, Sheet, TextAction } from '@/world/ui';
@@ -188,14 +188,14 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
                 {facts && <div className="meta">{courseLine({ credits: facts.credits, nature: facts.nature })}</div>}
                 <div className="meta strong">{when} · {name ?? exam.location}{exam.campus && campus && exam.campus !== campus ? ` · ${exam.campus}校区` : ''}</div>
                 {go}
-                {changes.map(change => <div key={change.observed} className="kv"><span className="k">{change.change === 'added' ? '新发布' : '改过'}</span><span className="v">{dateLabel(change.observed)} 发现{change.change === 'changed' && changeLines(change).map(text => <small key={text}>{text}</small>)}</span></div>)}
+                {changes.map(change => <div key={change.version} className="kv"><span className="k">{change.change === 'added' ? '新发布' : '改过'}</span><span className="v">{examVersionTime(record!.history.find(version => version.id === change.version)!)}{change.change === 'changed' && changeLines(change).map(text => <small key={text}>{text}</small>)}</span></div>)}
                 <Together label="同考场" classes={exam.classes} people={exam.students} />
                 {exam.note && <div className="kv"><span className="k">备注</span><span className="v">{exam.note}</span></div>}
                 {teachers}
                 {isRoom(event.room) && <a className="kv" href={whoLink('room', event.room!)}><span className="k">考场</span><span className="v">{name} 的课表</span><Chevron /></a>}
                 {course}
                 <button className="kv" onClick={onExams}><span className="k">考试</span><span className="v">全部考试 · {new Set(line.exams.map(item => item.course.code ?? item.course.name)).size} 门</span><Chevron /></button>
-                {sheet && <div className="kv"><span className="k">来源</span><span className="v">{sheetName(sheet.file)}<small>{dateLabel(publishedOn(sheet.file))} 发布</small></span></div>}
+                {sheet && <div className="kv"><span className="k">来源</span><span className="v">{examFileName(sheet.file)}{sheet.published && <small>{examTime(sheet.published.slice(0, 10))} 官方发布</small>}<small><a href={sheet.notice} target="_blank" rel="noreferrer">官方公告</a> · <a href={sheet.url} target="_blank" rel="noreferrer">官方附件</a></small><small>历史公告可能撤回，部分附件需连接校园网。</small></span></div>}
                 {choices}
                 {isMe && <button className="kv" onClick={() => onSkipExam(event)}><span className="k" /><span className="v danger">不参加这场考试</span></button>}
             </Sheet>

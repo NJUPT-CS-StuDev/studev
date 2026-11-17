@@ -1,30 +1,34 @@
 import { readFile } from 'node:fs/promises';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { catalogScope, courseRelations, knowledgeCatalog, type CatalogCurriculum } from './catalog';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { catalogScope, courseRelations, type CatalogCurriculum, type KnowledgeCatalog } from './catalog';
 import KnowledgeApp from './KnowledgeApp';
-import type { CurriculumCourse, Knowledge } from '@/world/knowledge';
 
 let curriculum: CatalogCurriculum[];
+let catalog: KnowledgeCatalog;
 beforeAll(async () => {
     const release = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
     curriculum = JSON.parse(await readFile(`public${release.base}/curriculum/courses.json`, 'utf8'));
+    catalog = JSON.parse(await readFile(`public${release.base}/knowledge-catalog.json`, 'utf8'));
 });
 
 describe('released course relations', () => {
     it('renders the real catalogue on the server without touching personal storage or the browser URL', async () => {
-        const release = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
-        const knowledge: Knowledge = JSON.parse(await readFile(`public${release.base}/knowledge/knowledge.json`, 'utf8'));
-        const html = renderToString(createElement(KnowledgeApp, { catalog: knowledgeCatalog(knowledge, curriculum as CurriculumCourse[]) }));
+        const fetch = vi.spyOn(globalThis, 'fetch');
+        let html: string;
+        try {
+            html = renderToString(createElement(KnowledgeApp, { catalog }));
+            expect(fetch).not.toHaveBeenCalled();
+        } finally { fetch.mockRestore(); }
         expect(html).toContain('课程目录');
         expect(html.replaceAll(/<!--.*?-->/g, '')).toContain('2026级 · 全部专业');
         expect(html).toContain('class="kn-scope"');
         expect(html).toContain('>筛选</button>');
         expect(html).not.toContain('<select');
         expect(html).not.toContain('kn-filter-fields');
-        expect(html.match(/class="kn-course"/g)?.length).toBeGreaterThanOrEqual(knowledge.courses.length);
-        expect(html).not.toContain('正在打开知识');
+        expect(html.match(/class="kn-course"/g)?.length).toBeGreaterThanOrEqual(catalog.courses.length);
+        expect(html).not.toContain('正在加载课程');
         expect(html).not.toContain('已编译');
     });
     it('takes the actual class cohort and major, while an explicit shared link wins', async () => {

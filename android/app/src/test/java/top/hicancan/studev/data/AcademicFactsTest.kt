@@ -28,13 +28,11 @@ class AcademicFactsTest {
     }
     @Test fun discoverThePublishedReleaseWithoutDependingOnJavaScriptBundles() {
         val release = read<DataRelease>("release.json")
-        val manifest = Json.encodeToJsonElement(release).jsonObject.toMutableMap().apply {
-            put("core", JsonArray(emptyList())); put("all", JsonArray(emptyList())); put("bytes", JsonPrimitive(123))
-        }
+        val manifest = Json.encodeToJsonElement(release).jsonObject.toMutableMap()
         assertEquals(release, AcademicRepository.releaseFromManifest(JsonObject(manifest).toString()))
         assertNull(AcademicRepository.releaseFromManifest("{}"))
-        val differentApp = release.copy(version = release.version + "__app0.0.0", base = release.base + "__app0.0.0")
-        assertNull(AcademicRepository.releaseFromManifest(Json.encodeToString(differentApp)))
+        val next = release.copy(version = "r20261117170000000", base = "/data/r20261117170000000")
+        assertEquals(next, AcademicRepository.releaseFromManifest(Json.encodeToString(next)))
         manifest["base"] = JsonPrimitive("https://other.invalid/data")
         assertNull(AcademicRepository.releaseFromManifest(JsonObject(manifest).toString()))
     }
@@ -48,8 +46,21 @@ class AcademicFactsTest {
         assertTrue(plans.all { it.teaching_class_ids.isNotEmpty() || it.plans.isNotEmpty() })
         assertTrue(plans.any { plan -> plan.plans.any { it["college"]?.jsonPrimitive?.content == "计算机学院" && it["grade"]?.jsonPrimitive?.content == "2025" } })
     }
-    @Test fun theReleaseManifestNamesTheCurrentApp() {
-        val app = appInManifest("""{"version":"v","base":"/data/v","android":{"versionName":"2.3.5","versionCode":29},"core":[]}""")
-        org.junit.Assert.assertEquals(AppRelease("2.3.5", 29), app)
+    @Test fun decodeEveryPublishedClassExamAndItsChangesStrictly() {
+        val release = read<DataRelease>("release.json")
+        val index = read<ExamIndex>("exams/${release.exams}/index.json")
+        var changes = 0
+        for (klass in index.classes) {
+            val record = read<ClassExams>("exams/${release.exams}/classes/$klass.json")
+            assertTrue(record.exams.all { klass in it.classes })
+            assertTrue(record.changes.all { it.klass == klass })
+            changes += record.changes.size
+        }
+        assertTrue("The released exam history must exercise changed classes", changes > 0)
+    }
+    @Test fun applicationMetadataNamesTheAppAndDiscoversTheDataAddress() {
+        val runtime = appRuntime("""{"android":{"versionName":"2.3.5","versionCode":29},"campus_entry":"https://data.example/campus-release.json"}""")
+        assertEquals(AppRelease("2.3.5", 29), runtime.android)
+        assertEquals("https://data.example/campus-release.json", runtime.campus_entry)
     }
 }

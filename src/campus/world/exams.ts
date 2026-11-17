@@ -1,16 +1,30 @@
 // What is known about exams beyond the timetable: how each came to be and which published sheet it
 // is from. Nothing about an exam moves silently.
 import type { ExamRecord } from './data';
-import type { Exam, ExamChange, ExamSlot, TeachingMeeting, TeachingTerm } from './facts';
+import type { Exam, ExamChange, ExamSlot, ExamVersion, TeachingMeeting, TeachingTerm } from './facts';
 import { addDays, weekdayOf, type Moment } from './time';
+
+/** Public versions with the selected class's complete impact, independent of personal attendance. */
+export const examHistory = (record: ExamRecord) => record.history.map(version => ({
+    ...version,
+    changes: record.changes.filter(change => change.version === version.id),
+})).reverse();
+
+export const examImpact = (baseline: boolean, changes: ExamChange[]) => baseline ? '首次记录' : changes.length ? `本班 ${changes.length} 门考试有变动` : '本次更新未影响本班';
+
+/** Old publications may have only a known date; never invent a time for them. */
+export const examTime = (iso: string) => iso.length === 10
+    ? `${Number(iso.slice(5, 7))}月${Number(iso.slice(8, 10))}日`
+    : new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace('/', '月').replace(' ', '日 ');
+export const examVersionTime = (version: ExamVersion) => version.observed ? `${examTime(version.observed)} 发现` : `${examTime(version.published!)} 官方发布`;
+export const examFileName = (file: string) => file.replace(/^\d{4}-\d{2}-\d{2}-/, '');
 
 const sameCourse = (change: ExamChange, exam: Exam) => (change.course.code ?? change.course.name) === (exam.course.code ?? exam.course.name);
 
 /** The changes that led to this sitting, oldest first: what it was before and when that was seen. */
 export const changesOf = (record: ExamRecord | null, exam: Exam) =>
     (record?.changes ?? []).filter(change => change.change !== 'removed' && sameCourse(change, exam)
-        && (change.after ?? []).some(slot => slot.date === exam.date && slot.start === exam.start))
-        .sort((left, right) => left.observed.localeCompare(right.observed));
+        && (change.after ?? []).some(slot => slot.date === exam.date && slot.start === exam.start));
 
 /** A sitting whose time or place the office changed after first publishing it. */
 export const wasChanged = (record: ExamRecord | null, exam: Exam) => changesOf(record, exam).some(change => change.change === 'changed');
@@ -50,7 +64,7 @@ export function lessonsLeft(term: TeachingTerm, meeting: TeachingMeeting, holida
 
 const slotText = (slots: ExamSlot[] | null, read: (slot: ExamSlot) => string | number | null) => [...new Set((slots ?? []).map(read))].map(value => value === null || value === '' ? '未填写' : String(value)).join('、') || '未填写';
 const SLOT_FIELDS: [string, (slot: ExamSlot) => string | number | null][] = [
-    ['时间', slot => `${slot.date} ${slot.start}–${slot.end}`], ['地点', slot => slot.location], ['校区', slot => slot.campus], ['老师', slot => slot.teacher], ['人数', slot => slot.students],
+    ['时间', slot => `${slot.date} ${slot.start}–${slot.end}`], ['地点', slot => slot.location], ['校区', slot => slot.campus], ['老师', slot => slot.teacher], ['人数', slot => slot.students], ['备注', slot => slot.note ?? null],
 ];
 /** What one change did, in words: "时间：2026-11-19 13:30–15:20 → 2026-11-20 09:00–10:50". */
 export const changeLines = (change: ExamChange) => change.change === 'changed'

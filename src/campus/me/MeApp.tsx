@@ -1,8 +1,8 @@
 // The one place for personal settings, reached from the avatar on every page.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { avatarUrl } from '../../platform/client/api';
-import { readCachedAccount, type CachedAccount } from '../../platform/client/auth-status';
+import { readCachedAccount, subscribeCachedAccount, type CachedAccount } from '../../platform/client/auth-status';
 import { DATA_RELEASE } from '@/world/config';
 import { formLink, PRODUCT_CONFIG } from '@/world/product';
 import { writePreferences } from '@/world/preferences';
@@ -18,19 +18,22 @@ import { gradeOf, LAYER_ORDER, type EventKind } from '@/world/events';
 import { Chevron, Sheet, Toggle, TextAction } from '@/world/ui';
 import type { Lab, TeachingClass, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
+import { useWide } from '@/world/useUrl';
 import '../campus.css';
 
-export default function MeApp() {
+const noSubscription = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+const serverAccount = () => null;
+
+export default function MeApp({ placement = 'site', campus = false }: { placement?: 'site' | 'page'; campus?: boolean }) {
+    const wide = useWide();
     const [open, setOpen] = useState(false);
-    const [account, setAccount] = useState(readCachedAccount);
-    useEffect(() => {
-        const refresh = () => setAccount(readCachedAccount());
-        refresh();
-        window.addEventListener('storage', refresh);
-        window.addEventListener('studev:account', refresh);
-        return () => { window.removeEventListener('storage', refresh); window.removeEventListener('studev:account', refresh); };
-    }, []);
+    const account = useSyncExternalStore(subscribeCachedAccount, readCachedAccount, serverAccount);
+    const ready = useSyncExternalStore(noSubscription, clientReady, serverReady);
     const name = account?.nickname || '未登录';
+    if (placement === 'page' ? wide : campus && !wide) return null;
+    if (!ready) return <span className="avatar avatar-loading" role="status" aria-label="正在加载个人菜单" aria-busy="true"><AccountFace account={null} /><span className="avatar-name">加载中</span></span>;
     return <>
         <button className="avatar" type="button" data-me aria-label={`${name}，打开我`} onClick={() => setOpen(true)}>
             <AccountFace account={account} /><span className="avatar-name" data-me-name>{name}</span>
@@ -42,6 +45,7 @@ export default function MeApp() {
 function AccountFace({ account }: { account: CachedAccount | null }) {
     const picture = account ? avatarUrl(account, 100) : '';
     const [failed, setFailed] = useState('');
+    useEffect(() => setFailed(''), [picture]);
     return <span className="avatar-face" data-me-face>
         {picture && failed !== picture ? <img src={picture} alt="" referrerPolicy="no-referrer" onError={() => setFailed(picture)} />
             : account ? account.nickname?.slice(0, 1) || '我'

@@ -43,6 +43,13 @@ foreach (var item in golden["campusTimes"]!.AsArray())
     Equal("campus time", new { date = Clock.Text(DateOnly.FromDateTime(at)), min = at.Hour * 60 + at.Minute }, item["now"]);
 }
 var periods = Read<List<TeachingPeriod>>(golden["periods"]!);
+foreach (var test in golden["examHistory"]!["times"]!.AsArray()) Equal("exam time", Exams.Time((string)test!["value"]!), test["text"]);
+foreach (var test in golden["examHistory"]!["comparisons"]!.AsArray()) Equal("exam before and after", Exams.ChangeLines(Read<ExamChange>(test!["change"]!)), test["lines"]);
+foreach (var test in golden["examHistory"]!["classes"]!.AsArray())
+{
+    var record = Read<ExamRecord>(test!["record"]!);
+    Equal("class exam history", Exams.History(record).Select(version => new { id = version.Id, time = Exams.VersionTime(version), impact = Exams.Impact(version.Baseline, version.Changes), changes = version.Changes.Select(change => new { course = change.Course.Name, kind = change.Change, lines = Exams.ChangeLines(change) }) }), test["versions"]);
+}
 var holidays = CampusLine.HolidaysOf(Read<List<CalendarTerm>>(golden["calendar"]!));
 var meetings = Read<List<TeachingMeeting>>(golden["schedules"]![0]!["meetings"]!);
 var basic = new CampusLine(term, periods, meetings, [], [], holidays)

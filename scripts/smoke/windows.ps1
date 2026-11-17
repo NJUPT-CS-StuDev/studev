@@ -16,6 +16,17 @@ $reference = $topic.references | Select-Object -First 1
 $ownSchedule = (Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/teaching/$($release.teaching)/classes/B240402.json") -Raw | ConvertFrom-Json).meetings
 $managedCourse = $ownSchedule | Where-Object { $_.course.name -like '*计算机通信与网络*' } | Select-Object -First 1
 $managedName = $managedCourse.course.name -replace '[（(].*?[)）]', ''
+$allMeetings = @(Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/teaching/$($release.teaching)/meetings.json") -Raw | ConvertFrom-Json)
+$ownTeachingGroups = @($ownSchedule.teaching_class.id)
+$catalogCourse = $allMeetings | Where-Object { $_.teaching_class.id -notin $ownTeachingGroups -and $_.course.code -and $_.teachers.Count -gt 0 } | Select-Object -First 1
+$catalogName = ($catalogCourse.course.name -replace '[（(].*?[)）]', '').Trim()
+$navTeacher = ($ownSchedule | Where-Object { $_.teachers.Count -gt 0 } | Select-Object -First 1).teachers[0].name
+$navExam = Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/exams.json") -Raw | ConvertFrom-Json | Select-Object -First 1
+$examIndex = Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/index.json") -Raw | ConvertFrom-Json
+$examChanges = @(Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/changes.json") -Raw | ConvertFrom-Json)
+$classIds = @((Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/teaching/$($release.teaching)/classes.json") -Raw | ConvertFrom-Json).id)
+$affectedExam = $examChanges | Where-Object { $_.class -in $classIds } | Select-Object -First 1
+if (-not $affectedExam -or -not ($examIndex.history | Where-Object baseline)) { throw 'the actual release has no exam baseline or affected class' }
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @"
@@ -87,8 +98,15 @@ $traceSeed | ConvertTo-Json -Depth 50 -Compress | Set-Content -LiteralPath (Join
 if (-not $Online) {
     $cacheRoot = Join-Path $home_ 'cache/campus'
     New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repo "public/data/$($release.version)") -Destination $cacheRoot -Recurse
-    Copy-Item -LiteralPath (Join-Path $repo 'src/data/campus-release.json') -Destination (Join-Path $cacheRoot "release-$($product.android.versionName).json")
+    $facts = Join-Path $cacheRoot $release.base.TrimStart('/')
+    New-Item -ItemType Directory -Path $facts -Force | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $repo "public$($release.base)") | Where-Object Name -NotIn @('space','knowledge','search','texts') | Copy-Item -Destination $facts -Recurse
+    foreach ($base in @($release.map_base,$release.knowledge_base,$release.search_base,$release.texts_base)) {
+        $destination = Join-Path $cacheRoot $base.TrimStart('/')
+        New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repo "public$base") -Destination (Split-Path $destination) -Recurse
+    }
+    Copy-Item -LiteralPath (Join-Path $repo 'src/data/campus-release.json') -Destination (Join-Path $cacheRoot 'release.json')
 }
 $start = [Diagnostics.ProcessStartInfo]::new($Exe)
 $start.Environment['STUDEV_DATA_DIR'] = $home_
@@ -294,6 +312,88 @@ function ReferenceGroups() {
     Alive 'large reference groups expand and collapse without losing links'
 }
 
+function ExamHistory {
+    Press $window '学期' 'open the personal term'
+    Press $window '考试' 'open the personal exam arrangements'
+    Find $window (Is $A::NameProperty '本次更新未影响本班') $null 'the latest update does not affect B240402' 30 | Out-Null
+    Press $window { param($e) $e.Current.Name.StartsWith('更新记录 ·') } 'open exam update history'
+    $baseline = $examIndex.history | Where-Object baseline | Select-Object -First 1
+    Press $window { param($e) $e.Current.AutomationId -eq "exam-version:$($baseline.id)" } 'open the original exam baseline'
+    Capture 'exam-unaffected-baseline'
+
+    Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'open personal settings to select an affected class'
+    Press $window '课表设置' 'open timetable settings'
+    Press $window { param($e) $e.Current.Name.StartsWith('班级 ') } 'choose another real class'
+    Fill $window { param($e) $e.Current.Name -eq '班号或专业' } $affectedExam.class 'find a real affected class'
+    Press $window $affectedExam.class 'select the affected class'
+    Press $window { param($e) $e.Current.AutomationId -eq 'timetable' } 'return to the affected class timetable'
+    Press $window '学期' 'open the affected class term'
+    Press $window { param($e) $e.Current.Name.StartsWith('考试') -and $e.Current.Name.Length -lt 8 } 'open the affected class exams'
+    Press $window { param($e) $e.Current.Name.StartsWith('更新记录 ·') } 'open the affected class history'
+    Press $window { param($e) $e.Current.AutomationId -eq "exam-version:$($affectedExam.version)" } 'open the real update affecting this class'
+    Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name.Contains($affectedExam.course.name) } 'the actual changed course is named' | Out-Null
+    $sitting = if ($affectedExam.after) { $affectedExam.after[0] } else { $affectedExam.before[0] }
+    Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name.Contains($sitting.date) -and $e.Current.Name.Contains($sitting.start) } 'the actual added or previous sitting is explained' | Out-Null
+    $version = $examIndex.history | Where-Object id -EQ $affectedExam.version | Select-Object -First 1
+    Press $window "采用的文件 · $($version.files.Count) 份" 'open the files actually used by this version'
+    foreach ($file in $version.files) { Find $window (Is $A::NameProperty ($file.file -replace '^\d{4}-\d{2}-\d{2}-', '')) $null 'the official file name is visible' | Out-Null }
+    Find $window (Both $Pressable (Is $A::NameProperty '官方公告')) $null 'the official announcement link exists' | Out-Null
+    Find $window (Both $Pressable (Is $A::NameProperty '官方附件')) $null 'the official attachment link exists' | Out-Null
+    Find $window (Is $A::NameProperty '历史公告可能撤回，部分附件需连接校园网。') $null 'official source limitations are explained' | Out-Null
+    Capture 'exam-affected-official-sources'
+    Alive 'real exam versions, baseline, class impact and official sources'
+
+    Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'restore the personal class after exam acceptance'
+    Press $window '课表设置' 'return to timetable settings'
+    Press $window { param($e) $e.Current.Name.StartsWith('班级 ') } 'restore the original class'
+    Fill $window { param($e) $e.Current.Name -eq '班号或专业' } 'B240402' 'find the original class'
+    Press $window 'B240402' 'restore B240402'
+    Press $window { param($e) $e.Current.AutomationId -eq 'timetable' } 'return to the original timetable'
+}
+
+function SearchNavigation {
+    Press $window { param($e) $e.Current.AutomationId -eq 'search' } 'open native entity search'
+    Press $window '教务' 'scope search to campus academic entities'
+    Fill $window { param($e) $e.Current.Name -eq '搜索' } 'B240402' 'search a real class'
+    Press $window 'B240402' 'open the class timetable inside Windows' 45
+    Find $window (Is $A::NameProperty '我的课表') $null 'the class result opened a native timetable' | Out-Null
+
+    Press $window { param($e) $e.Current.AutomationId -eq 'search' } 'search a teacher'
+    Fill $window { param($e) $e.Current.Name -eq '搜索' } $navTeacher 'search a released teacher'
+    Press $window $navTeacher 'open the teacher timetable inside Windows' 45
+    Find $window (Is $A::NameProperty "$navTeacher 老师") $null 'the teacher result retains its identity' | Out-Null
+
+    Press $window { param($e) $e.Current.AutomationId -eq 'search' } 'search a course catalogue entry'
+    Fill $window { param($e) $e.Current.Name -eq '搜索' } $catalogCourse.course.code 'search a released course code'
+    Press $window $catalogName 'open the native course catalogue details' 45
+    Find $window (Is $A::NameProperty '选择教学班') $null 'the course details are inside the app' | Out-Null
+    Press $window { param($e) $e.Current.AutomationId -eq "catalog-teaching-class:$($catalogCourse.teaching_class.id)" } 'inspect a real teaching group'
+    Find $window (Is $A::NameProperty '上课安排') $null 'course arrangements reuse the course manager details' | Out-Null
+    Press $window '预览课表' 'preview that teaching group over the personal timetable'
+    Find $window (Is $A::NameProperty "预览 · $catalogName") $null 'the preview retains its teaching group' | Out-Null
+    Capture 'native-course-preview'
+    Press $window '加入课表' 'add the previewed published group'
+    $added = (Get-Content -LiteralPath (Join-Path $home_ 'preferences.json') -Raw | ConvertFrom-Json).timetable.($release.teaching).added
+    if ($added -notcontains $catalogCourse.teaching_class.id) { throw 'the native preview did not add its teaching group' }
+    Press $window { param($e) $e.Current.AutomationId -eq 'search' } 'return to the same course result'
+    Press $window $catalogName 'reopen the chosen native course' 45
+    Press $window { param($e) $e.Current.AutomationId -eq "catalog-teaching-class:$($catalogCourse.teaching_class.id)" } 'inspect the chosen teaching group'
+    Press $window '从我的课表移除' 'restore this isolated timetable after the add test'
+
+    Press $window { param($e) $e.Current.AutomationId -eq 'search' } 'search a real exam'
+    $examName = ($navExam.course.name -replace '[（(].*?[)）]', '').Trim()
+    Fill $window { param($e) $e.Current.Name -eq '搜索' } "$examName 考试 $($navExam.date)" 'search the exact course and exam date'
+    Press $window "$examName 考试" 'open the exam result inside Windows' 45
+    Press $window $examName 'open the actual exam tile on the linked day'
+    $date = [DateOnly]::ParseExact($navExam.date, 'yyyy-MM-dd')
+    $dateSaid = "$($date.Month)月$($date.Day)日"
+    Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name.Contains($dateSaid) -and $e.Current.Name.Contains($navExam.start) } 'the exam link preserved its actual day and time' | Out-Null
+    Capture 'native-exam-search-link'
+    Press $window '关闭' 'close the native exam details'
+    Press $window '我的课表' 'return from the course timetable to the personal timetable'
+    Alive 'class, teacher, course, preview/add/remove and exam search results remain native'
+}
+
 
 try {
     for ($i = 0; -not ($window = Main) -and $i -lt 120; $i++) { Start-Sleep -Milliseconds 250 }
@@ -326,6 +426,8 @@ try {
             Fill $window { param($e) $e.Current.Name -eq '添加任务' } '' 'clear the isolated task draft'
         }
     }
+    SearchNavigation
+    ExamHistory
     ManagedCourses
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Press $window '地图' 'the map'

@@ -81,7 +81,7 @@ fun roomDisplayName(room: String?, byId: Map<String, Place>): String? {
 /** Pure binding: glyph placeholders remain intact for MapLibre. */
 object StyleTokens {
     const val DATA = "asset://data/space/仙林"
-    const val ASSETS = "asset://map"
+    const val ASSETS = "asset://data/space/assets"
     fun resolve(json: String, data: String = DATA, assets: String = ASSETS): String = json.replace("{data}", data).replace("{assets}", assets)
 }
 
@@ -90,28 +90,24 @@ class CampusPackage private constructor(
     val places: List<Place>,
     val style: String,
     val basemapFile: File?,
+    val repository: AcademicRepository,
 ) {
     val byId = places.associateBy { it.id }
     fun position(place: Place) = place.centre ?: place.parent?.let(byId::get)?.centre
     companion object {
         const val BASE = "data/space/仙林"
-        suspend fun load(assets: AssetManager): CampusPackage = withContext(Dispatchers.IO) {
-            load(assets, null)
-        }
-        suspend fun load(context: Context): CampusPackage = withContext(Dispatchers.IO) {
-            val mapFile = File(context.filesDir, "campus-map/basemap.pmtiles").apply {
-                parentFile?.mkdirs()
-                context.assets.open("$BASE/basemap.pmtiles").use { input -> outputStream().use { output -> input.copyTo(output) } }
-            }
-            load(context.assets, mapFile)
-        }
-        private fun load(assets: AssetManager, mapFile: File?): CampusPackage {
-            fun text(path: String) = assets.open(path).bufferedReader().use { it.readText() }
-            val places = Json.decodeFromString<List<Place>>(text("$BASE/entities.json"))
-            val opening = Json.decodeFromString<Map<String, OpeningRecord>>(text("data/hours.json"))
+        suspend fun load(context: Context, repository: AcademicRepository? = null): CampusPackage = withContext(Dispatchers.IO) {
+            val repo = repository ?: AcademicRepository.open(context)
+            suspend fun text(path: String) = repo.bytes(path).decodeToString()
+            val mapFile = repo.localFile("space/仙林/basemap.pmtiles")
+            val places = Json.decodeFromString<List<Place>>(text("space/仙林/entities.json"))
+            val opening = Json.decodeFromString<Map<String, OpeningRecord>>(text("hours.json"))
+            val rooms = repo.rooms().rooms.associateBy { it.id }
             val data = mapFile?.parentFile?.let { "file://${it.absolutePath}" } ?: StyleTokens.DATA
-            return CampusPackage(text("data/version.txt").trim(), places.map { place -> place.copy(hours = opening[place.id]?.hours) },
-                StyleTokens.resolve(text("$BASE/style.json"), data, StyleTokens.ASSETS), mapFile)
+            CampusPackage(requireNotNull(repo.release.map_version), places.map { place ->
+                val room = rooms[place.id]
+                place.copy(hours = opening[place.id]?.hours, names = (place.names + room?.names.orEmpty()).distinct(), seats = room?.seats, roomKinds = room?.kinds.orEmpty())
+            }, StyleTokens.resolve(text("space/仙林/style.json"), data, repo.mapAssets()), mapFile, repo)
         }
     }
 }

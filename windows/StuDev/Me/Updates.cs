@@ -7,7 +7,7 @@ namespace StuDev.Me;
 
 public static class Updates
 {
-    public const string Feed = $"{Data.Repository.Site}/download/windows";
+    public static string Feed => $"{Data.Repository.Site}/download/windows";
     private static readonly UpdateManager Manager = new(new SimpleWebSource(Feed));
     public static string? Ready { get; private set; }
     public static event Action? Changed;

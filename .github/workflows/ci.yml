@@ -12,9 +12,6 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
-      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -22,16 +19,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run digest
+      - run: npm run data:pull
       - run: npm run typecheck
       - run: npm run test:campus
       - run: npm run test:platform
 
   android-apk:
     runs-on: ubuntu-latest
-    env:
-      DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
-      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -52,7 +46,7 @@ jobs:
           yes | "$sdkmanager_path" --licenses >/dev/null || true
           "$sdkmanager_path" --channel=1 "platforms;android-37.0" "ndk;28.2.13676358" "cmake;3.22.1"
       - run: npm ci
-      - run: npm run digest
+      - run: npm run data:pull
       - run: npm run golden
       - name: Build native search, routing and document kernels
         run: bash android/kernels-ci.sh

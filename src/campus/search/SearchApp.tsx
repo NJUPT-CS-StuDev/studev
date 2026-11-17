@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SearchClient, type FilterOptions, type SearchFilters, type SearchResult, type SortMode } from 'wasm-search';
 import type { TeachingMeeting } from '@/world/facts';
-import { APP_CONFIG } from '@/world/config';
+import { APP_CONFIG, releaseReady } from '@/world/config';
 import { loadMeetings, loadPeriods, loadRoomDay } from '@/world/data';
 import { courseName, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
@@ -103,13 +103,17 @@ export default function SearchApp() {
     const [course, setCourse] = useState<string | null>(null);
     const [rooms, setRooms] = useState<((id: string) => { busy: boolean; text: string } | null) | null>(null);
     const input = useRef<HTMLInputElement>(null);
-    const client = useMemo(() => new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH }), []);
-    useEffect(() => () => client.dispose(), [client]);
+    const [client, setClient] = useState<SearchClient | null>(null);
+    useEffect(() => {
+        let current = true; let reader: SearchClient | undefined;
+        void releaseReady.then(() => { if (current) { reader = new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH }); setClient(reader); } });
+        return () => { current = false; reader?.dispose(); };
+    }, []);
     useEffect(() => {
         const scope = params.get('scope');
         if (scope === 'place' || scope === 'course') input.current?.focus();
     }, [params]);
-    useEffect(() => { void client.initialize().then(ready => setOptions(ready.filterOptions)).catch(() => { setFailed(true); void reloadIfGone(); }); }, [client]);
+    useEffect(() => { if (client) void client.initialize().then(ready => setOptions(ready.filterOptions)).catch(() => { setFailed(true); void reloadIfGone(); }); }, [client]);
 
     const filters = useMemo<SearchFilters>(() => ({
         ...(source ? { sourceIds: [source] } : channel.sources ? { sourceIds: [...channel.sources] } : {}),
@@ -126,6 +130,7 @@ export default function SearchApp() {
     const live = channel.id === 'room' && browsing && !within;
     const key = JSON.stringify([query.trim(), filters, sort, page]);
     useEffect(() => {
+        if (!client) return;
         const trimmed = query.trim();
         if (trimmed.length === 1 || live) { setAnswer(null); return; }
         let current = true;

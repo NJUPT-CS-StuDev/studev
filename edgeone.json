@@ -23,16 +23,9 @@
       ]
     },
     {
-      "source": "/pwa-release.json",
+      "source": "/app-release.json",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" }
-      ]
-    },
-    {
-      "source": "/data/*",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
       ]
     },
     {

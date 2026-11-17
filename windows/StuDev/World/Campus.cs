@@ -34,9 +34,17 @@ public sealed class Campus
     private bool checkedRelease;
     private bool rediscovered;
     private int generation;
+    private DateTime checkedAt = DateTime.MinValue;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer refreshClock = new() { Interval = TimeSpan.FromMinutes(10) };
 
     private Campus()
     {
+        var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        Data.Repository.Retired += release => dispatcher.TryEnqueue(() => {
+            if (Repository?.Release == release) _ = Refresh();
+        });
+        refreshClock.Tick += (_, _) => Resume();
+        refreshClock.Start();
         Preferences.Changed += changed => { if (changed.Overlaps(SettingsSync.Line)) { loading = null; _ = Load(); } };
         Tasks.Changed += () => { if (Line is { } line) line.Tasks = Tasks.Live.ToList(); Changed?.Invoke(); };
     }
@@ -75,13 +83,16 @@ public sealed class Campus
     public void Touch() => Changed?.Invoke();
     public void Retry() { Error = null; loading = null; _ = Load(); }
     public Task Refresh() => updating ??= Update();
+    /** Foreground and an open window share one ten-minute data refresh cadence. */
+    public void Resume() { if (Repository is not null && DateTime.UtcNow - checkedAt >= TimeSpan.FromMinutes(10)) _ = Refresh(); }
     private async Task Update()
     {
+        checkedAt = DateTime.UtcNow;
         try
         {
             var latest = await Data.Repository.Discover();
             UpdateError = null;
-            if (Repository?.Release.Version != latest.Release.Version) { loading = Fetch(latest); await loading; }
+            if (Repository?.Release != latest.Release) { loading = Fetch(latest); await loading; }
         }
         catch (Exception error) when (error is HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException)
         { UpdateError = "暂时无法检查更新，继续使用已保存的校园数据。"; }

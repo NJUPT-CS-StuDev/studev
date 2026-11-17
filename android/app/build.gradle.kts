@@ -17,6 +17,7 @@ val product = JsonSlurper().parseText(
 ) as Map<*, *>
 val androidProduct = product["android"] as Map<*, *>
 val productOrigin = product["origin"] as String
+val campusOrigin = product["campusOrigin"] as String
 val compileSdkVersion = providers.gradleProperty("studev.compileSdk").orNull?.toInt() ?: 37
 
 abstract class DesignTokensTask : DefaultTask() {
@@ -76,7 +77,7 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
         val version = metadata["version"] as String
         check(version.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid campus release version" }
         val release = releases.get().asFile.resolve(version)
-        check(release.resolve("space/仙林").isDirectory) { "Campus package missing. Run npm run digest in the repository root." }
+        check(release.resolve("space/仙林").isDirectory) { "Campus package missing. Run npm run data:pull in the repository root." }
         fs.sync {
             from(release)
             into(assetDir.dir("data"))
@@ -148,7 +149,7 @@ val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtu
         val metadata = JsonSlurper().parse(manifest.asFile) as Map<*, *>
         rootProject.file("../public/data/${metadata["version"]}")
     }) {
-        include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/B240402.json")
+        include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/*.json")
         include("knowledge/knowledge.json", "curriculum/courses.json")
         include("knowledge/materials/batch-2/B0300053S/数据结构第5章-树课件.md")
     }
@@ -213,11 +214,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
-            buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse(productOrigin).trimEnd('/')}\"")
+            buildConfigField("String", "DATA_HOST", "\"${providers.gradleProperty("studev.dataHost").getOrElse(campusOrigin).trimEnd('/')}\"")
             buildConfigField("String", "PLATFORM_HOST", "\"${providers.gradleProperty("studev.platformHost").getOrElse(productOrigin).trimEnd('/')}\"")
         }
         release {
-            buildConfigField("String", "DATA_HOST", "\"$productOrigin\"")
+            buildConfigField("String", "DATA_HOST", "\"$campusOrigin\"")
             buildConfigField("String", "PLATFORM_HOST", "\"$productOrigin\"")
             isMinifyEnabled = true
             isShrinkResources = true

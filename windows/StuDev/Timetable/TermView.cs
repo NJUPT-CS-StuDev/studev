@@ -18,14 +18,20 @@ public static class TermView
     private static string DayHead(DateOnly date) => $"{Clock.DateLabel(date)} {Clock.Weekdays[Clock.Weekday(date)]}";
     private static string PlaceOf(Exam exam) => exam.Room is not null ? Names.Room(exam.Room) : exam.Location;
 
-    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open)
+    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null)
     {
         var campus = Campus.Shared;
-        var hasExams = line.Exams.Count > 0;
+        var hasExams = line.Exams.Count > 0 || record?.History.Count > 0;
+        var latest = record?.History.LastOrDefault(version => record.Changes.Any(change => change.Version == version.Id))?.Id;
+        var seen = campus.Preferences.Get("examsSeen", StorageJson.Default.String);
+        var knownSeen = record?.History.Any(version => version.Id == seen) == true;
+        var mine = klass is not null && klass == campus.Preferences.Class;
+        if (mine && latest is not null && latest != seen && (mode == "exam" || !knownSeen)) campus.Preferences.Set("examsSeen", latest, StorageJson.Default.String);
+        var fresh = mine && knownSeen && latest is not null && latest != seen && mode != "exam";
         var plan = line.Run is not null;
-        var showing = mode == "exam" && hasExams ? "exam" : mode == "run" && plan ? "run" : "course";
+        var showing = mode == "exam" ? "exam" : mode == "run" && plan ? "run" : "course";
         var modes = new List<(string, string)> { ("course", "课程") };
-        if (hasExams) modes.Add(("exam", "考试"));
+        if (hasExams || mode == "exam") modes.Add(("exam", fresh ? "考试 •" : "考试"));
         if (plan) modes.Add(("run", "早锻炼"));
         var page = new StackPanel();
         if (modes.Count > 1) { var choice = Kit.Choice(modes, showing, onMode); choice.Margin = new Thickness(0, 0, 0, 18); page.Children.Add(choice); }
@@ -71,6 +77,7 @@ public static class TermView
                 list.Children.Add(Pages.Section($"已考 {taken.Count} 场"));
                 foreach (var exam in taken) list.Children.Add(Row(Clock.DateLabel(Clock.Parse(exam.Date)), Names.Course(exam.Course.Name), $"{exam.Start}–{exam.End} · {PlaceOf(exam)}", () => { if (EventOf(exam) is { } e) open(e); }));
             }
+            if (record is not null) list.Children.Add(ExamHistory.Make(record));
             page.Children.Add(list);
             return page;
         }
@@ -168,7 +175,8 @@ public static class TermView
             }
             if (hasExams)
             {
-                var card = Kit.Column(4, Kit.Text($"考试 · 已发现 {line.Exams.Select(x => x.Course.Code ?? x.Course.Name).Distinct().Count()} 门", Role.Body, bold: true));
+                var courses = line.Exams.Select(x => x.Course.Code ?? x.Course.Name).Distinct().Count();
+                var card = Kit.Column(4, Kit.Text((courses > 0 ? $"考试 · 已发现 {courses} 门" : "考试 · 最新安排与更新记录") + (fresh ? " •" : ""), Role.Body, bold: true));
                 if (ahead.Count > 0)
                 {
                     card.Children.Add(Kit.Text($"{DayHead(ahead[0].Date)} · {Lead(ahead[0].Days)}", Role.Label, "muted"));
@@ -179,7 +187,7 @@ public static class TermView
                         card.Children.Add(line2);
                     }
                 }
-                else card.Children.Add(Kit.Text("都考完了", Role.Label, "muted"));
+                else card.Children.Add(Kit.Text(courses > 0 ? "都考完了" : "暂无待考安排", Role.Label, "muted"));
                 right.Children.Add(Card(card, () => onMode("exam")));
             }
             var practice = campus.Classes.FirstOrDefault(c => c.Id == klass)?.Practice ?? [];

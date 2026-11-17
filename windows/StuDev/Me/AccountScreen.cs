@@ -39,10 +39,11 @@ public sealed partial class AccountScreen : Screen
     public override void Shown(object? argument)
     {
         active = true; visit++;
-        tab = "profile"; notice = error = null;
+        tab = argument is "security" or "devices" ? (string)argument : "profile"; notice = error = null;
         Accept(Account.Shared.CachedState, true);
         Draw();
         _ = Verify();
+        if (tab == "devices") _ = LoadDevices();
     }
 
     public void Leave()

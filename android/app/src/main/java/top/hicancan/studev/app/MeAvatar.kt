@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -34,13 +36,18 @@ import kotlinx.coroutines.withContext
 import top.hicancan.studev.account.AccountUser
 import top.hicancan.studev.account.Accounts
 
+private val avatarPictures = android.util.LruCache<String, ImageBitmap>(16)
+
 /** Loads a public QQ avatar image cleanly when given a valid QQ number. */
 @Composable fun QqAvatarImage(qq: String, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
-    val face by produceState<ImageBitmap?>(null, qq) {
+    val face by key(qq) { produceState<ImageBitmap?>(avatarPictures.get(qq), qq) {
         value = if (!Regex("[1-9]\\d{4,11}").matches(qq)) null else withContext(Dispatchers.IO) {
-            runCatching { java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100").openStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
+            avatarPictures.get(qq) ?: runCatching {
+                val connection = java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100").openConnection().apply { connectTimeout = 8_000; readTimeout = 8_000 }
+                connection.getInputStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap()?.also { avatarPictures.put(qq, it) }
+            }.getOrNull()
         }
-    }
+    } }
     Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
         if (face != null) Image(face!!, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else fallback()
@@ -48,14 +55,14 @@ import top.hicancan.studev.account.Accounts
 }
 
 /** Who is signed in, at a glance: their QQ face, the first letter of their name, or the outline of nobody. */
-@Composable fun MeAvatar() {
+@Composable fun MeAvatar(labelWidth: Dp? = Tokens.Size.accountNameMax.dp) {
     val context = LocalContext.current
     val accounts = Accounts.get(context)
     val user by accounts.user.collectAsStateWithLifecycle()
     LaunchedEffect(accounts) { accounts.current() }
     val qq = user?.qq.orEmpty()
     val ink = Ink.muted
-    Row(Modifier.padding(start = 3.dp, end = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(start = 4.dp, end = if (labelWidth == null) 4.dp else 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
     QqAvatarImage(qq, Modifier.size((Tokens.Size.search - 8).dp)) {
         val shown = user
         when {
@@ -68,6 +75,6 @@ import top.hicancan.studev.account.Accounts
             }
         }
     }
-    Plain(user?.nickname ?: "未登录", 12.sp, ink, modifier = Modifier.padding(start = 4.dp).widthIn(max = 48.dp), maxLines = 1)
+    if (labelWidth != null) Plain(user?.nickname ?: "未登录", 12.sp, ink, modifier = Modifier.padding(start = 6.dp).widthIn(max = labelWidth), maxLines = 1)
     }
 }

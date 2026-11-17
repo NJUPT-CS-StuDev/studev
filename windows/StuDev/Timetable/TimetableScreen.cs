@@ -27,6 +27,12 @@ public sealed partial class TimetableScreen : Screen
     private Who? who;
     private CampusLine? others;
     private string? othersError;
+    private (Data.Repository Repository, string Class)? recordKey;
+    private Data.ExamRecord? examRecord;
+    private string? recordError;
+    private string? preview;
+    private List<Data.TeachingMeeting>? previewRows;
+    private string? previewError;
     /** The class picker while one is being chosen: kept across redraws, so what is typed in it stays. */
     private (List<Data.TeachingClass> Classes, FrameworkElement View)? picker;
 
@@ -70,10 +76,38 @@ public sealed partial class TimetableScreen : Screen
 
     public override void Shown(object? argument)
     {
-        if (argument is DateOnly date) { picked = date; scale = "week"; }
-        if (argument is "exams") { scale = "term"; termMode = "exam"; }
+        if (argument is Uri address)
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(address.Query);
+            var value = query["who"]?.Split(':', 2);
+            var destination = value is { Length: 2 } && value[0] is "class" or "course" or "teacher" or "room" ? new Who(value[0], value[1]) : null;
+            if (who != destination) { who = destination; others = null; othersError = null; if (destination is not null) Gather(destination); }
+            scale = Scales.Any(item => item.Key == query["scale"]) ? query["scale"]! : "week";
+            picked = DateOnly.TryParseExact(query["t"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var linkedDate) ? linkedDate : null;
+            termMode = query["mode"] is "exam" or "run" ? query["mode"]! : "course";
+            preview = query["preview"]; previewRows = null; previewError = null;
+            if (preview is not null) _ = GatherPreview(preview);
+        }
+        if (argument is DateOnly date) { who = null; others = null; preview = null; previewRows = null; picked = date; scale = "week"; }
+        if (argument is "exams") { who = null; others = null; preview = null; previewRows = null; scale = "term"; termMode = "exam"; }
+        if (argument is Who) { preview = null; previewRows = null; }
         if (argument is Who next && next != who) { who = next; others = null; othersError = null; picked = null; scale = "week"; Gather(next); }
         now = Moment.Now(); Draw();
+    }
+
+    private async Task GatherPreview(string id)
+    {
+        try {
+            var rows = campus.Repository is { } repo ? (await repo.Meetings()).Where(meeting => meeting.TeachingClass.Id == id).ToList() : [];
+            if (preview != id) return;
+            previewRows = rows;
+            if (rows.Count == 0) previewError = "没找到这个教学班";
+        }
+        catch (Exception error) when (error is HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException) {
+            if (preview != id) return;
+            previewError = "预览暂时无法加载";
+        }
+        DispatcherQueue.TryEnqueue(Draw);
     }
 
     private async void Gather(Who next)
@@ -92,8 +126,22 @@ public sealed partial class TimetableScreen : Screen
         Draw();
     }
 
+    private async Task GatherRecord(Data.Repository repository, string klass)
+    {
+        try {
+            var record = await repository.ExamRecord(klass);
+            if (recordKey != (repository, klass)) return;
+            examRecord = record;
+        }
+        catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException) {
+            if (recordKey != (repository, klass)) return;
+            recordError = "更新记录暂时无法加载";
+        }
+        DispatcherQueue.TryEnqueue(Draw);
+    }
+
     /** Back to one's own timetable. */
-    private void Mine() { who = null; others = null; othersError = null; picked = null; Draw(); }
+    private void Mine() { who = null; others = null; othersError = null; preview = null; previewRows = null; picked = null; Draw(); }
 
     private void Shift(int direction)
     {
@@ -134,6 +182,16 @@ public sealed partial class TimetableScreen : Screen
         }
         if ((who is null ? campus.Line : others) is not { } line || campus.Term is not { } term) return;
         var mine = who is null;
+        var previewIds = previewRows?.Select(meeting => meeting.Id).ToHashSet() ?? [];
+        if (mine && previewRows is { Count: > 0 }) line = new CampusLine(line.Term, line.Periods, line.Meetings.Concat(previewRows).DistinctBy(meeting => meeting.Id).ToList(), line.Labs, line.Exams, line.Holidays) {
+            CourseMeetings = line.CourseMeetings.Concat(previewRows).DistinctBy(meeting => meeting.Id).ToList(), Tasks = line.Tasks, CourseNames = line.CourseNames,
+            Preferences = line.Preferences, Order = line.Order, Run = line.Run, RunDays = line.RunDays, RunAdjust = line.RunAdjust,
+        };
+        var recordClass = mine ? campus.Preferences.Class : who!.Type == "class" ? who.Id : null;
+        if (recordClass is not null && recordKey != (campus.Repository, recordClass)) {
+            recordKey = (campus.Repository, recordClass); examRecord = null; recordError = null;
+            _ = GatherRecord(campus.Repository, recordClass);
+        }
 
         var day = Day(line);
         var ahead = picked is null ? (Clock.WeekStart(day).DayNumber - Clock.WeekStart(now.Date).DayNumber) / 7 : 0;
@@ -180,15 +238,32 @@ public sealed partial class TimetableScreen : Screen
         page.Children.Add(Pages.Header(title, subtitle, actions.ToArray()));
         var tabs = Kit.Tabs(ScalesShown, scale, key => { scale = key; Draw(); }, separateBefore: "list"); tabs.Margin = new Thickness(0, 0, 0, 20);
         page.Children.Add(tabs);
-        void Open(LineEvent e) { if (e.Task is { } task) TaskSheet.Open(campus, task.Id, now); else Events.Open(campus, e, now, mine ? null : line); }
+        if (preview is { } previewId) {
+            var words = previewRows is { Count: > 0 } ? $"预览 · {Names.Course(previewRows[0].Course.Name)}" : previewError ?? "正在读取预览…";
+            var previewBar = Kit.Column(8, Kit.Text(words, Role.Body, bold: true));
+            var buttons = Kit.Line(12, Kit.TextAction("取消预览", () => { preview = null; previewRows = null; Draw(); }));
+            if (previewRows is { Count: > 0 }) {
+                var own = campus.ClassMeetings.Any(meeting => meeting.TeachingClass.Id == previewId);
+                var edits = Me.Choices.Edits(campus.Preferences, term.Term);
+                if (own && !edits.Hidden.Contains(previewId) || edits.Added.Contains(previewId)) buttons.Children.Add(Kit.Text("已在我的课表", Role.Label, "muted"));
+                else buttons.Children.Add(Kit.Action(own ? "恢复到课表" : "加入课表", () => {
+                    preview = null; previewRows = null;
+                    if (own) Me.Choices.Restore(campus.Preferences, term.Term, previewId); else Me.Choices.Add(campus.Preferences, term.Term, previewId);
+                    Draw();
+                }, go: true));
+            } else if (previewError is not null) buttons.Children.Add(Kit.TextAction("重试", () => { previewError = null; _ = GatherPreview(previewId); Draw(); }, Icons.Again));
+            previewBar.Children.Add(buttons); previewBar.Margin = new Thickness(0, 0, 0, 18); page.Children.Add(previewBar);
+        }
+        void Open(LineEvent e) { if (e.Task is { } task) TaskSheet.Open(campus, task.Id, now); else Events.Open(campus, e, now, !mine || e.Meeting is { } meeting && previewIds.Contains(meeting.Id) ? line : null); }
         void OpenTask(World.PersonalTask task) => TaskSheet.Open(campus, task.Id, now);
         page.Children.Add(scale switch
         {
             "week" => WeekView.Make(line, day, now, wide, Open, OpenTask),
             "day" => DayView.Make(line, day, now, Open, OpenTask, date => { picked = date == now.Date ? null : date; Draw(); }, mine),
-            "term" => TermView.Make(line, mine ? campus.Preferences.Class : who!.Type == "class" ? who.Id : null, now, termMode, mode => { termMode = mode; Draw(); }, date => { picked = date; scale = "week"; Draw(); }, Open),
+            "term" => TermView.Make(line, recordClass, now, termMode, mode => { termMode = mode; Draw(); }, date => { picked = date; scale = "week"; Draw(); }, Open, recordClass is not null ? examRecord : null),
             _ => ListView.Make(campus, line, now, OpenTask, Open, roomy),
         });
+        if (scale == "term" && recordClass is not null && recordError is { } recordMessage) page.Children.Add(Kit.TextAction($"{recordMessage} · 重试", () => { recordError = null; _ = GatherRecord(campus.Repository, recordClass); Draw(); }));
         frame = Pages.Frame(page);
         var keep = lastScroll;
         frame.Loaded += (_, _) => frame.ChangeView(null, keep, null, true);

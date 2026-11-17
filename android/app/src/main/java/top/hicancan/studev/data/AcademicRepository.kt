@@ -23,8 +23,27 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     private val context = context
     private val fetchBytes = fetchBytes
     val release = release
+    private val checkedRetirement = java.util.concurrent.atomic.AtomicBoolean()
+    private fun missing() { if (checkedRetirement.compareAndSet(false, true)) retired.tryEmit(release) }
     private val bundled: DataRelease by lazy { Json.decodeFromString(context.assets.open("data/release.json").bufferedReader().use { it.readText() }) }
-    private val root = File(context.filesDir, "campus/${release.version}")
+    private fun component(path: String): Pair<String, String> = when {
+        path.startsWith("space/") -> release.map_base to path.removePrefix("space/")
+        path.startsWith("knowledge/") -> release.knowledge_base to path.removePrefix("knowledge/")
+        path.startsWith("search/") -> release.search_base to path.removePrefix("search/")
+        path.startsWith("texts/") -> release.texts_base to path.removePrefix("texts/")
+        else -> release.base to path
+    }
+    private fun address(path: String): String { val (base, relative) = component(path); return URI(BuildConfig.DATA_HOST).resolve(base).toString() + "/" + relative.split('/').joinToString("/") { encode(it) } }
+    private fun local(path: String): File { val (base, relative) = component(path); return File(context.filesDir, "campus${URI(base).path}/$relative") }
+    suspend fun localFile(path: String): File { bytes(path); return local(path) }
+    suspend fun mapAssets(): String {
+        if (URI(release.map_base).path == URI(bundled.map_base).path) return StyleTokens.ASSETS
+        val prefix = URI(release.map_base).path + "/assets/"
+        val assets = release.core.map { URI(it).path }.filter { it.startsWith(prefix) }
+        require(assets.isNotEmpty()) { "地图字体资源未发布" }
+        for (path in assets) bytes("space/assets/" + path.removePrefix(prefix))
+        return File(context.filesDir, "campus${URI(release.map_base).path}/assets").toURI().toString().trimEnd('/')
+    }
     /** A knowledge picture, named by its full address on one of the hosts the knowledge release lists; kept on disk. */
     suspend fun media(address: String, hosts: List<String>): ByteArray? = withContext(Dispatchers.IO) {
         if (hosts.none { address.startsWith("$it/") }) return@withContext null
@@ -37,7 +56,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     }
     suspend fun bytes(path: String): ByteArray = withContext(Dispatchers.IO) {
         require(path.isNotBlank() && !path.startsWith('/') && path.none { it in "\\:%?#" } && path.split('/').none { it == ".." || it == "." || it.isEmpty() })
-        val file = File(root, path)
+        val file = local(path)
         // Coalesce same-file reads across repository instances without a single
         // release-wide lock blocking all unrelated data behind one download.
         val lock = locks[(file.absolutePath.hashCode() and Int.MAX_VALUE) % locks.size]
@@ -45,12 +64,20 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         coroutineContext.ensureActive()
         if (file.isFile) return@withLock file.readBytes()
         // The bundled release is already local. Do not wait for the network to use it.
-        if (release.version == bundled.version) {
-            val local = try { context.assets.open("data/$path").use { it.readBytes() } } catch (_: FileNotFoundException) { null }
-            if (local != null) return@withLock local
+        val sameComponent = when {
+            path.startsWith("space/") -> URI(release.map_base).path == URI(bundled.map_base).path
+            path.startsWith("knowledge/") -> URI(release.knowledge_base).path == URI(bundled.knowledge_base).path
+            else -> release.version == bundled.version
         }
-        val bytes = try { fetchBytes("${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }) }
-        catch (e: FileNotFoundException) { throw e }
+        if (sameComponent) {
+            val local = try { context.assets.open("data/$path").use { it.readBytes() } } catch (_: FileNotFoundException) { null }
+            if (local != null) {
+                file.parentFile?.mkdirs(); file.writeBytes(local)
+                return@withLock local
+            }
+        }
+        val bytes = try { fetchBytes(address(path)) }
+        catch (e: FileNotFoundException) { missing(); throw e }
         catch (e: IOException) { throw DataUnavailableException(e) }
         if (path.endsWith(".json")) Json.parseToJsonElement(bytes.decodeToString())
         file.parentFile!!.mkdirs()
@@ -62,21 +89,17 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         bytes
     } }
     /** One byte range of an immutable file, kept on disk so a query works offline next time. */
-    suspend fun block(path: String, mirror: String?, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun block(path: String, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
         require(offset >= 0 && length > 0 && offset <= Long.MAX_VALUE - length)
-        val file = File(root, "$path.$offset")
+        val file = File(local(path).absolutePath + ".$offset")
         val lock = locks[(file.absolutePath.hashCode() and Int.MAX_VALUE) % locks.size]
         lock.withLock {
         coroutineContext.ensureActive()
         if (file.isFile) return@withLock file.readBytes().also { if (it.size != length) throw DataCorruptionException("离线搜索数据不完整") }
-        val address = "${BuildConfig.DATA_HOST}${release.base}/" + path.split('/').joinToString("/") { encode(it) }
-        val activeMirror = mirror?.takeIf { m -> URI(m).host?.let { it !in deadMirrors } ?: true }
-        val bytes = try {
-            activeMirror?.let { m ->
-                try { download(m, offset, length, connectTimeoutMs = 3_500) }
-                catch (_: IOException) { URI(m).host?.let(deadMirrors::add); null }
-            } ?: download(address, offset, length)
-        } catch (e: IOException) { throw DataUnavailableException(e) }
+        val address = address(path)
+        val bytes = try { download(address, offset, length) }
+        catch (e: FileNotFoundException) { missing(); throw e }
+        catch (e: IOException) { throw DataUnavailableException(e) }
         file.parentFile!!.mkdirs()
         val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
         try { pending.writeBytes(bytes); check(pending.renameTo(file)) { "无法保存离线数据" } } finally { pending.delete() }
@@ -139,9 +162,9 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         return top.hicancan.studev.timetable.CourseCatalog.effectiveLabs(own, choices.classes, extra)
     }
     suspend fun examRecord(id: String): ExamRecord {
-        val index = examIndex() ?: return ExamRecord(emptyList(), emptyList(), null)
-        if (id !in index.classes) return ExamRecord(emptyList(), index.sources, index.checked)
-        return ExamRecord(read<ClassExams>("exams/${release.exams}/classes/$id.json").changes, index.sources, index.checked)
+        val index = examIndex() ?: return ExamRecord(emptyList(), emptyList(), null, emptyList())
+        if (id !in index.classes) return ExamRecord(emptyList(), index.sources, index.checked, index.history)
+        return ExamRecord(read<ClassExams>("exams/${release.exams}/classes/$id.json").changes, index.sources, index.checked, index.history)
     }
     suspend fun examCandidates(id: String, edits: top.hicancan.studev.me.TimetableEdits, availableCatalog: List<top.hicancan.studev.timetable.CatalogCourse>? = null): List<Exam> {
         val published = exams(id).toMutableList()
@@ -182,15 +205,15 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     suspend fun rooms() = read<RoomIndex>("rooms/index.json")
     suspend fun roomDay(term: String, date: String): RoomDay? = try { read<RoomDay>("rooms/$term/$date.json") } catch (_: FileNotFoundException) { null }
     companion object {
+        internal val retired = kotlinx.coroutines.flow.MutableSharedFlow<DataRelease>(extraBufferCapacity = 1)
         private val locks = Array(64) { Mutex() }
-        private val deadMirrors = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-        private fun activeRelease(context: Context) = File(context.filesDir, "campus/release-${BuildConfig.VERSION_CODE}.json")
+        private fun activeRelease(context: Context) = File(context.filesDir, "campus/release.json")
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         fun download(address: String, offset: Long? = null, length: Int = 0, connectTimeoutMs: Int = 8_000): ByteArray {
             val url = URI(address).toURL()
             require(url.protocol == "https" || (BuildConfig.DEBUG && url.protocol == "http" && address.startsWith(BuildConfig.DATA_HOST + "/")))
             val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = connectTimeoutMs; connection.readTimeout = 15_000
+            connection.connectTimeout = connectTimeoutMs; connection.readTimeout = minOf(connectTimeoutMs, 15_000)
             connection.setRequestProperty("User-Agent", "studev-android")
             if (offset != null) connection.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
             try {
@@ -225,19 +248,36 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
          * reached. Data that is published but cannot be decoded is reported, not skipped: it means this app is behind.
          */
         suspend fun discover(context: Context, klass: String? = null): Discovery? = withContext(Dispatchers.IO) {
-            val text = try { download("${BuildConfig.DATA_HOST}/pwa-release.json").decodeToString() } catch (e: CancellationException) { throw e } catch (_: IOException) { return@withContext null }
-            // A manifest this app cannot read says nothing it can act on: the data it has stays in use.
-            val app = try { appInManifest(text) } catch (_: kotlinx.serialization.SerializationException) { return@withContext null } catch (_: IllegalArgumentException) { return@withContext null }
-            if (app.versionCode != BuildConfig.VERSION_CODE || app.versionName != BuildConfig.VERSION_NAME) return@withContext Discovery(app, null, unreadable = true)
+            // Application updates and campus snapshots have independent lifecycles.
+            val runtimeFile = File(context.filesDir, "campus/app.json")
+            val runtime = try {
+                val fresh = download("${BuildConfig.SITE_ORIGIN}/app-release.json", connectTimeoutMs = 2_500).decodeToString()
+                val parsed = appRuntime(fresh)
+                runtimeFile.parentFile?.mkdirs(); runtimeFile.writeText(fresh)
+                parsed
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { runCatching { appRuntime(runtimeFile.readText()) }.getOrNull() }
+            val app = runtime?.android
+            val entry = runtime?.campus_entry ?: "${BuildConfig.DATA_HOST}/campus-release.json"
+            val text = try { download(entry).decodeToString() } catch (e: CancellationException) { throw e } catch (_: IOException) { return@withContext null }
             try {
                 val release = releaseFromManifest(text) ?: return@withContext Discovery(app, null, unreadable = true)
-                Discovery(app, activate(context, release, klass), unreadable = false)
+                val at = URI(entry)
+                Discovery(app, activate(context, release.copy(base = at.resolve(release.base).toString(),
+                    map_base = at.resolve(release.map_base).toString(), knowledge_base = at.resolve(release.knowledge_base).toString(),
+                    search_base = at.resolve(release.search_base).toString(), texts_base = at.resolve(release.texts_base).toString()), klass), unreadable = false)
             } catch (e: CancellationException) { throw e }
             catch (_: kotlinx.serialization.SerializationException) { Discovery(app, null, unreadable = true) }
             catch (_: IllegalArgumentException) { Discovery(app, null, unreadable = true) }
             catch (_: IOException) { Discovery(app, null, unreadable = false) }
         }
-        private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && release.base == "/data/${release.version}" && release.version.endsWith("__app${BuildConfig.VERSION_NAME}")
+        private fun componentBase(value: String, prefix: String): Boolean = runCatching {
+            val uri = URI(value)
+            (uri.scheme == null && uri.rawAuthority == null || uri.scheme == "https" && uri.host != null) && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null
+                && Regex("/$prefix/[A-Za-z0-9._-]+").matches(uri.path)
+        }.getOrDefault(false)
+        private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && runCatching { val base = URI(release.base); base.path == "/data/${release.version}" && (base.scheme == null || base.scheme == "https") && base.rawUserInfo == null && base.rawQuery == null && base.rawFragment == null }.getOrDefault(false)
+            && componentBase(release.map_base, "space") && componentBase(release.knowledge_base, "knowledge")
+            && componentBase(release.search_base, "search") && componentBase(release.texts_base, "texts")
         private suspend fun activate(context: Context, release: DataRelease, klass: String?): AcademicRepository {
             require(validRelease(release))
             val repository = AcademicRepository(context.applicationContext, release)
@@ -260,6 +300,12 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
                 pending.writeText(Json.encodeToString(release))
                 check(pending.renameTo(index))
             } finally { pending.delete() }
+            // Only the superseded public cache layout is retired. Account,
+            // preferences and tasks live elsewhere and are never touched here.
+            index.parentFile?.listFiles()?.forEach { child ->
+                if (child.isFile && Regex("release-\\d+\\.json").matches(child.name)) child.delete()
+                if (child.isDirectory && "__app" in child.name && child.canonicalPath.startsWith(index.parentFile!!.canonicalPath + File.separator)) child.deleteRecursively()
+            }
             top.hicancan.studev.widget.WidgetRefreshWorker.refresh(context)
             return repository
         }

@@ -3,12 +3,11 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { compileBundle } from 'wasm-search/compile';
 import { initialize as initializeDocuments, read as readDocument, type Block, type Inline } from 'docstream';
-import { mirrorSearch } from './mirror-search.mjs';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
@@ -17,6 +16,9 @@ import type { Exam, Room, TeachingClass, TeachingMeeting } from '../../src/campu
 import { style } from '../../design/map/campus-style.mjs';
 import { displayName } from '../../src/campus/map/model/displayName.ts';
 import { textKey } from '../../src/campus/world/texts.ts';
+import { knowledgeCatalog } from '../../src/campus/knowledge/catalog.ts';
+import type { CurriculumCourse } from '../../src/campus/world/knowledge.ts';
+import { validRelease, type CampusRelease } from '../../src/campus/world/release.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -30,6 +32,17 @@ const write = async (path: string, value: unknown) => {
 };
 
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+async function equalTrees(left: string, right: string): Promise<boolean> {
+    if (!existsSync(right)) return false;
+    const a = await readdir(left, { withFileTypes: true }), b = await readdir(right, { withFileTypes: true });
+    if (a.length !== b.length || a.some(item => !b.some(other => item.name === other.name && item.isDirectory() === other.isDirectory()))) return false;
+    for (const item of a) {
+        if (item.isDirectory()) { if (!await equalTrees(join(left, item.name), join(right, item.name))) return false; }
+        else if (!(await readFile(join(left, item.name))).equals(await readFile(join(right, item.name)))) return false;
+    }
+    return true;
+}
 
 const safeRelative = (name: string) => {
     if (!name || name.startsWith('/') || name.includes('\\') || name.split('/').includes('..')) {
@@ -182,7 +195,7 @@ async function verifyMap(rootDir: string): Promise<{ dir: string; layers: string
     return { dir: base, layers: layersRoot, version: manifest.map_version, manifest };
 }
 
-async function locateMap() {
+export async function locateMap() {
     const local = process.env.MAP_DIR?.trim() || process.env.MAP_INPUT?.trim();
     if (local) {
         const path = local.replace(/^file:\/\//, '');
@@ -195,12 +208,14 @@ async function locateMap() {
         return verifyMap(path);
     }
     const repository = process.env.MAP_REPOSITORY?.trim() || 'hicancan/njupt-map';
-    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
+    const requested = process.env.MAP_VERSION?.trim();
+    if (requested && !/^[A-Za-z0-9._-]+$/.test(requested)) throw new Error('invalid MAP_VERSION');
+    const response = await fetch(`https://api.github.com/repos/${repository}${requested ? `/releases/tags/${requested}` : '/releases/latest'}`, {
         // Anonymous calls share one limit across a hosted runner's address.
         headers: { Accept: 'application/vnd.github+json', ...(process.env.DATA_TOKEN?.trim() ? { Authorization: `Bearer ${process.env.DATA_TOKEN.trim()}` } : {}) },
     });
     if (!response.ok) {
-        throw new Error(`reading latest map release: HTTP ${response.status}`);
+        throw new Error(`reading map release: HTTP ${response.status}`);
     }
     const latest = await response.json() as { tag_name: string; assets: { browser_download_url: string; name: string }[] };
     const asset = latest.assets.find(item => item.name === `njupt-map-${latest.tag_name.replace(/^map-/, '')}.tar.gz`);
@@ -224,14 +239,16 @@ async function locateMap() {
 }
 
 /** The knowledge: KNOWLEDGE_DIR (a built njupt-knowledge, for development) or the latest knowledge release. */
-async function locateKnowledge(): Promise<{ dir: string; version: string }> {
+export async function locateKnowledge(): Promise<{ dir: string; version: string }> {
     const local = process.env.KNOWLEDGE_DIR?.trim();
     if (local) return { dir: local, version: 'local' };
     const repository = process.env.KNOWLEDGE_REPOSITORY?.trim() || 'hicancan/njupt-knowledge';
-    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
+    const requested = process.env.KNOWLEDGE_VERSION?.trim();
+    if (requested && !/^[A-Za-z0-9._-]+$/.test(requested)) throw new Error('invalid KNOWLEDGE_VERSION');
+    const response = await fetch(`https://api.github.com/repos/${repository}${requested ? `/releases/tags/knowledge-${requested}` : '/releases/latest'}`, {
         headers: { Accept: 'application/vnd.github+json', ...(process.env.DATA_TOKEN?.trim() ? { Authorization: `Bearer ${process.env.DATA_TOKEN.trim()}` } : {}) },
     });
-    if (!response.ok) throw new Error(`reading latest knowledge release: HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`reading knowledge release: HTTP ${response.status}`);
     const latest = await response.json() as { tag_name: string; assets: { browser_download_url: string; name: string }[] };
     const asset = latest.assets.find(item => item.name === `njupt-knowledge-${latest.tag_name}.tar.gz`);
     if (!asset) throw new Error(`latest knowledge release ${latest.tag_name} has no archive`);
@@ -324,7 +341,9 @@ async function locateData(): Promise<{ dir: string; version: string; index: Data
     const api = (path: string, accept = 'application/vnd.github+json') => fetch(`https://api.github.com/repos/${repository}${path}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: accept },
     });
-    const latestResponse = await api('/releases/latest');
+    const requested = process.env.DATA_VERSION?.trim();
+    if (requested && !/^[A-Za-z0-9._-]+$/.test(requested)) throw new Error('invalid DATA_VERSION');
+    const latestResponse = await api(requested ? `/releases/tags/data-${requested}` : '/releases/latest');
     if (!latestResponse.ok) {
         throw new Error(`reading latest data release: HTTP ${latestResponse.status}`);
     }
@@ -615,6 +634,9 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
 }
 
 async function main() {
+    console.log('campus: locating the pinned upstream inputs');
+    let previous: CampusRelease | undefined;
+    try { const value: unknown = await read(join(root, 'src/data/campus-release.json')); if (validRelease(value)) previous = value; } catch { /* first build */ }
     const map = await locateMap();
     const data = await locateData();
     if (data.index.map?.resolved_map_version && data.index.map.resolved_map_version !== map.version) {
@@ -644,15 +666,13 @@ async function main() {
     // The product release versions the packaging code; upstream releases version its inputs.
     const knowledge = await locateKnowledge();
     const knowledgeIndex = await read<KnowledgeIndex>(join(knowledge.dir, 'knowledge.json'));
-    const product = await read<{ android: { versionName: string } }>(join(root, 'product.json'));
-    const version = `${map.version}__${data.version}__k${knowledge.version}__app${product.android.versionName}`;
+    const version = `r${new Date().toISOString().replace(/\D/g, '').slice(0, 17)}`;
     const outRoot = join(root, 'public', 'data');
     const out = join(outRoot, version);
     await mkdir(outRoot, { recursive: true });
-    for (const entry of await readdir(outRoot)) {
-        await rm(join(outRoot, entry), { recursive: true, force: true });
-    }
+    await rm(out, { recursive: true, force: true });
     const terms = await packageFacts(data.dir, out, data.index, [...mapPlacesByCampus.values()].flat());
+    console.log(`campus: facts ${data.version} packaged as ${version}`);
     for (const file of ['hours.json', 'calendar.json', 'morning-run.json']) {
         await copyFile(join(data.dir, file), join(out, file));
     }
@@ -661,6 +681,7 @@ async function main() {
         await mkdir(join(out, 'curriculum'), { recursive: true });
         await copyFile(join(data.dir, 'curriculum', 'courses.json'), join(out, 'curriculum', 'courses.json'));
     }
+    await write(join(out, 'knowledge-catalog.json'), knowledgeCatalog(knowledgeIndex, await read<CurriculumCourse[]>(join(data.dir, 'curriculum', 'courses.json'))));
     const dataEntities = join(data.dir, 'entities');
     for (const file of ['index.json', 'agent.json', 'information.json', 'time.json']) {
         if (existsSync(join(dataEntities, file))) {
@@ -671,11 +692,21 @@ async function main() {
     const roomFacts = new Map((await read<any[]>(join(data.dir, 'places', 'rooms.json'))).map(row => [row.id, row]));
     const places: Normalized[] = [];
     for (const campus of campuses) {
-        places.push(...await buildCampus(campus, mapSpaceRoot, map.layers, out, roomFacts));
+        // Space is versioned by njupt-map alone. Teaching room attributes are
+        // campus facts and are joined by readers, never baked into map assets.
+        places.push(...await buildCampus(campus, mapSpaceRoot, map.layers, out, new Map()));
     }
+    await cp(join(root, 'public/map'), join(out, 'space/assets'), { recursive: true });
+    const previousMapPath = previous?.map_base;
+    const mapPath = previous?.map_version === map.version && previousMapPath && await equalTrees(join(out, 'space'), join(root, 'public', previousMapPath))
+        ? previousMapPath : `/space/${map.version}__${version}`;
     const teachingDir = join(out, 'teaching', terms.teaching);
     const examRows = terms.exams ? await read<Exam[]>(join(data.dir, 'exams', terms.exams, 'exams.json')) : [];
-    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, places, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms,
+    const searchablePlaces = places.map(place => {
+        const fact = roomFacts.get(place.id);
+        return { ...place, ...(fact ? { names: [...new Set([...place.names, ...fact.names])], seats: fact.seats, room_kinds: fact.kinds } : {}) };
+    });
+    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, searchablePlaces, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms,
         new Map((await read<{ items: { subtype: string; names: string[]; aliases: string[] }[] }>(join(data.dir, 'entities', 'information.json'))).items
             .filter(item => item.subtype === 'information:course-plan' && item.aliases.length).map(item => [item.names[0]!, item.aliases])));
     for await (const doc of searchDocuments(data.dir)) {
@@ -690,15 +721,58 @@ async function main() {
     // The knowledge release is text; its pictures are named by full address on the knowledge's own static hosts.
     if (!knowledgeIndex.media?.length) throw new Error('the knowledge release names no media hosts');
     await cp(knowledge.dir, join(out, 'knowledge'), { recursive: true });
-    const knowledgeTexts = await knowledgeDocuments(knowledge.dir, knowledgeIndex);
+    // A knowledge release is immutable. Ordinary timetable/room checks reuse its
+    // parsed search documents and readable sections without parsing the corpus again.
+    const knowledgeCache = join(root, '.data', 'knowledge-search', knowledge.version);
+    const knowledgeCacheFile = join(knowledgeCache, 'documents.json');
+    let knowledgeTexts: Awaited<ReturnType<typeof knowledgeDocuments>>;
+    if (knowledge.version !== 'local' && existsSync(knowledgeCacheFile)) {
+        console.log(`campus: reusing parsed knowledge ${knowledge.version}`);
+        const kept = await read<{ docs: SearchDocument[]; readable: [string, Readable][] }>(knowledgeCacheFile);
+        knowledgeTexts = { docs: kept.docs, readable: new Map(kept.readable) };
+    } else {
+        console.log(`campus: parsing knowledge ${knowledge.version}`);
+        knowledgeTexts = await knowledgeDocuments(knowledge.dir, knowledgeIndex);
+        await write(knowledgeCacheFile, { docs: knowledgeTexts.docs, readable: [...knowledgeTexts.readable] });
+    }
     docs.push(...knowledgeTexts.docs);
-    await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
+    // Free-room observations and check timestamps do not change searchable content.
+    // Compare the actual compiler inputs, not release numbers or file hashes.
+    const searchCache = join(root, '.data', 'search');
+    const searchInputs = JSON.stringify({ profile: campusConfig.search.profile, docs });
+    const inputsFile = join(searchCache, 'inputs.json');
+    const searchVersionFile = join(searchCache, 'version.txt');
+    let searchVersion = version;
+    if (existsSync(inputsFile) && await readFile(inputsFile, 'utf8') === searchInputs) {
+        console.log('campus: reusing unchanged search artifacts');
+        await cp(join(searchCache, 'bundle'), join(out, 'search'), { recursive: true });
+        searchVersion = (await readFile(searchVersionFile, 'utf8')).trim();
+    } else {
+        console.log(`campus: compiling ${docs.length} search documents`);
+        await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
+        await rm(searchCache, { recursive: true, force: true });
+        await mkdir(searchCache, { recursive: true });
+        await cp(join(out, 'search'), join(searchCache, 'bundle'), { recursive: true });
+        await writeFile(inputsFile, searchInputs);
+        await writeFile(searchVersionFile, version);
+    }
     await writeTexts(docs, knowledgeTexts.readable, join(out, 'texts'));
-    await mirrorSearch(join(out, 'search'), version);
+    // Native bundles keep their familiar relative paths. The public publisher
+    // serves each independently versioned component once at its stable address.
+    for (const [folder, target] of [
+        ['space', mapPath.slice(1)], ['knowledge', `knowledge/${knowledge.version}`],
+        ['search', `search/${searchVersion}`], ['texts', `texts/${searchVersion}`],
+    ]) {
+        await cp(join(out, folder!), join(root, 'public', target!), { recursive: true });
+    }
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,
         data_version: data.version,
         knowledge_version: knowledge.version,
+        knowledge_base: `/knowledge/${knowledge.version}`,
+        map_base: mapPath,
+        search_base: `/search/${searchVersion}`,
+        texts_base: `/texts/${searchVersion}`,
         version,
         base: `/data/${version}`,
         built_at: data.index.built_at,
@@ -707,4 +781,4 @@ async function main() {
     console.log(`digested ${map.version} + ${data.version} (${version})`);
 }
 
-await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

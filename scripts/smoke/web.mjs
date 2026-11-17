@@ -1,6 +1,6 @@
 // Use the built site in an isolated Edge context; changes touch this test's local preferences only.
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 import { inspectAiTrace } from './ai-web.mjs';
@@ -10,10 +10,19 @@ const origin = new URL(process.env.STUDEV_WEB_URL || 'http://127.0.0.1:4322');
 const output = process.env.STUDEV_WEB_SMOKE_DIR || 'D:\\Temp\\codex\\studev-web-experience';
 await mkdir(output, { recursive: true });
 const release = JSON.parse(await readFile(join(root, 'src/data/campus-release.json'), 'utf8'));
+const product = JSON.parse(await readFile(join(root, 'product.json'), 'utf8'));
+const dataOrigin = new URL(product.campusOrigin);
 const knowledge = JSON.parse(await readFile(join(root, `public${release.base}/knowledge/knowledge.json`), 'utf8'));
 const teaching = JSON.parse(await readFile(join(root, `public${release.base}/teaching/${release.teaching}/classes.json`), 'utf8'));
 const person = teaching.find(item => item.id === 'B240402');
 assert(person, 'The released class is available for the actual UI test');
+const examIndex = JSON.parse(await readFile(join(root, `public/data/${release.version}/exams/${release.exams}/index.json`), 'utf8'));
+const examChanges = JSON.parse(await readFile(join(root, `public/data/${release.version}/exams/${release.exams}/changes.json`), 'utf8'));
+const affectedExam = examChanges.find(change => teaching.some(klass => klass.id === change.class));
+assert(affectedExam && examIndex.history.some(version => version.baseline), 'the released exam history has a baseline and a real affected class');
+const ownMeetings = JSON.parse(await readFile(join(root, `public/data/${release.version}/teaching/${release.teaching}/classes/B240402.json`), 'utf8')).meetings;
+const navigationMeeting = ownMeetings.find(meeting => meeting.teachers.length > 0 && meeting.course.code);
+const navigationExam = JSON.parse(await readFile(join(root, `public/data/${release.version}/exams/${release.exams}/exams.json`), 'utf8'))[0];
 const military = knowledge.topics.find(topic => topic.id === '军事理论/现代国防观');
 assert(military);
 const groups = new Map();
@@ -24,8 +33,13 @@ const sports = knowledge.courses.find(item => item.name === '体育理论');
 assert(material && sports && references.length > 3);
 
 const results = [];
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const timeout = 30_000;
+const avatarBundles = new Set();
+for (const name of await readdir(join(root, 'dist', '_astro'))) {
+    if (name.endsWith('.js') && (await readFile(join(root, 'dist', '_astro', name), 'utf8')).includes('data-me-name')) avatarBundles.add(name);
+}
+assert(avatarBundles.size, 'the built personal-menu implementation is available for cold loading acceptance');
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
 let active;
 const log = step => { results.push(step); console.log(`ok  ${step}`); };
 async function prefs(page) { return page.evaluate(() => JSON.parse(localStorage.getItem('studev_prefs') || '{}')); }
@@ -40,6 +54,102 @@ async function openCourses(page) {
     await page.getByRole('dialog').getByRole('button', { name: /^我的课程/ }).click();
     await heading(page, '我的课程');
     await page.getByRole('button', { name: /^查看课程详情：/ }).first().waitFor({ state: 'visible' });
+}
+async function examsHistory(page, name) {
+    const before = await prefs(page);
+    try {
+        await goto(page, '/?scale=term&mode=exam');
+        await page.getByText('本次更新未影响本班', { exact: true }).waitFor({ state: 'visible' });
+        await page.locator('.xtrust > details').first().locator(':scope > summary').click();
+        const baseline = page.locator(`[data-exam-version="${examIndex.history.find(version => version.baseline).id}"]`);
+        await baseline.locator(':scope > summary').click();
+        assert((await baseline.innerText()).includes('首次记录'));
+        await screenshot(page, `${name}-exam-unaffected-baseline`);
+
+        const schedule = JSON.parse(await readFile(join(root, `public/data/${release.version}/teaching/${release.teaching}/classes/${affectedExam.class}.json`), 'utf8'));
+        // Hiding every lecture must not hide public changes for the selected class.
+        await page.evaluate(({ before, klass, term, hidden }) => localStorage.setItem('studev_prefs', JSON.stringify({ ...before, class: klass, timetable: { ...before.timetable, [term]: { added: [], hidden, custom: [], names: {} } } })), {
+            before, klass: affectedExam.class, term: release.teaching, hidden: [...new Set(schedule.meetings.map(meeting => meeting.teaching_class.id))],
+        });
+        await goto(page, '/?scale=term&mode=exam');
+        await page.locator('.xtrust > details').first().locator(':scope > summary').click();
+        const version = page.locator(`[data-exam-version="${affectedExam.version}"]`);
+        await version.locator(':scope > summary').click();
+        await version.locator('.xchange').filter({ hasText: affectedExam.course.name }).waitFor({ state: 'visible' });
+        const change = version.locator('.xchange').filter({ hasText: affectedExam.course.name });
+        if (affectedExam.change === 'changed') assert((await change.innerText()).includes('→'), 'the real changed course has before/after values');
+        await version.locator('details > summary').click();
+        const files = examIndex.history.find(item => item.id === affectedExam.version).files;
+        for (const file of files) {
+            const row = version.locator('.xsources li').filter({ hasText: file.file.replace(/^\d{4}-\d{2}-\d{2}-/, '') });
+            assert.equal(await row.getByRole('link', { name: '官方公告', exact: true }).getAttribute('href'), file.notice);
+            assert.equal(await row.getByRole('link', { name: '官方附件', exact: true }).getAttribute('href'), file.url);
+        }
+        assert((await version.innerText()).includes('历史公告可能撤回，部分附件需连接校园网。'));
+        await screenshot(page, `${name}-exam-affected-sources`);
+        log(`${name}: real exam baseline, unaffected class, before/after history despite hidden lectures and official sources`);
+    } finally {
+        await page.evaluate(value => localStorage.setItem('studev_prefs', JSON.stringify(value)), before);
+        await goto(page, '/');
+    }
+}
+async function searchNavigation(page, name) {
+    for (const [source, query, kind, expected] of [
+        ['classes', 'B240402', 'class', 'B240402'],
+        ['teachers', navigationMeeting.teachers[0].name, 'teacher', navigationMeeting.teachers[0].name],
+    ]) {
+        await goto(page, '/search/?' + new URLSearchParams({ q: query, scope: 'academic', source }));
+        await page.locator(`a.hit.entity[href*="who=${kind}:"]`).first().click();
+        await page.waitForURL(url => url.searchParams.get('who') === `${kind}:${expected}`);
+        await page.locator('.sd.timetable-page').waitFor({ state: 'visible' });
+    }
+    await goto(page, '/search/?' + new URLSearchParams({ q: navigationMeeting.course.code, scope: 'academic', source: 'courses' }));
+    await page.locator('button.hit.entity').first().click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('link', { name: '这门课的全部时段' }).click();
+    await page.waitForURL(url => url.searchParams.get('who')?.startsWith('course:'));
+    const course = navigationExam.course.name.replace(/[（(].*?[)）]/g, '').trim();
+    await goto(page, '/search/?' + new URLSearchParams({ q: `${course} 考试 ${navigationExam.date}`, scope: 'academic', source: 'exams' }));
+    await page.locator('a.hit.entity').first().click();
+    await page.waitForURL(url => url.searchParams.get('who') === `course:${course}` && url.searchParams.get('t') === navigationExam.date && url.searchParams.get('scale') === 'day');
+    await page.locator('.sd.timetable-page').waitFor({ state: 'visible' });
+    assert.equal(page.context().pages().length, 1, 'campus entity results stay in the current application surface');
+    await screenshot(page, `${name}-entity-search-navigation`);
+    log(`${name}: class, teacher, course and exam links preserve their native campus destination and exam date`);
+    await goto(page, '/');
+}
+async function searchRanges(page, name) {
+    await page.waitForFunction(() => navigator.serviceWorker?.controller !== null && Boolean(navigator.serviceWorker?.controller));
+    const cachedPacks = () => page.evaluate(async () => {
+        const cache = await caches.open('studev-public-data');
+        return (await cache.keys()).filter(request => /\/search\/[^/]+\/pack-[^/]+\./.test(new URL(request.url).pathname)).length;
+    });
+    assert.equal(await cachedPacks(), 0, 'the first search starts without a complete cached search archive');
+    const requests = [], responses = [];
+    const pack = url => url.origin === dataOrigin.origin && url.pathname.startsWith(`${release.search_base}/pack-`);
+    const context = page.context();
+    const onRequest = request => { if (pack(new URL(request.url()))) requests.push({ range: request.headers().range ?? null }); };
+    const onResponse = response => { if (pack(new URL(response.url()))) responses.push({ status: response.status(), range: response.headers()['content-range'] ?? null }); };
+    context.on('request', onRequest); context.on('response', onResponse);
+    try {
+        await goto(page, '/search/?' + new URLSearchParams({ q: 'B240402', scope: 'academic' }));
+        assert(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)), 'the built worker controls the search document');
+        await page.locator('.hits .hit').filter({ hasText: 'B240402' }).first().waitFor({ state: 'visible' });
+        for (const query of [navigationMeeting.teachers[0].name, '高等数学']) {
+            await page.getByRole('textbox', { name: '搜索', exact: true }).fill(query);
+            await page.waitForURL(url => url.searchParams.get('q') === query);
+            await page.locator('.hits .hit').filter({ hasText: query }).first().waitFor({ state: 'visible' });
+            assert.equal(await page.getByText('搜索暂时出了问题，请稍后重试。', { exact: true }).count(), 0);
+        }
+        assert(requests.length > 0 && responses.some(response => response.status === 206), 'real uncached pack range requests complete through the active worker');
+        assert(requests.every(request => /^bytes=\d+-\d*$/.test(request.range ?? '')), 'neither the page nor its worker fetches a whole pack for an online range query');
+        assert(responses.every(response => response.status === 206 && /^bytes \d+-\d+\/\d+$/.test(response.range ?? '')), 'range responses preserve their actual byte boundaries');
+        assert.equal(await cachedPacks(), 0, 'online searches never cache a complete 16 MB pack as a side effect');
+        log(`${name}: active service worker, three successive real searches and ${responses.length} partial pack responses without a whole-pack download`);
+    } finally {
+        context.off('request', onRequest); context.off('response', onResponse);
+        await goto(page, '/');
+    }
 }
 async function selectValue(page, label, value) {
     await page.waitForFunction(({ label, value }) => [...document.querySelectorAll('.kn-filter-fields label')]
@@ -138,6 +248,7 @@ async function noAvatarOverlap(page, selector) {
     const collisions = await page.evaluate(selector => {
         const avatar = document.querySelector('[data-me]').getBoundingClientRect();
         return [...document.querySelectorAll(selector)].flatMap(element => {
+            if (element.closest('[data-me]')) return [];
             const box = element.getBoundingClientRect();
             return box.width && box.height && Math.min(avatar.right, box.right) > Math.max(avatar.left, box.left)
                 && Math.min(avatar.bottom, box.bottom) > Math.max(avatar.top, box.top) ? [element.textContent || element.getAttribute('aria-label') || selector] : [];
@@ -166,7 +277,7 @@ async function coldAvatar(viewport, name) {
     page.on('pageerror', error => errors.push(error.message));
     let release;
     const ready = new Promise(resolve => { release = resolve; });
-    const component = /\/_astro\/MeApp\.[^/]+\.js$/;
+    const component = url => url.pathname.startsWith('/_astro/') && (/^MeApp\.[^/]+\.js$/.test(url.pathname.split('/').at(-1)) || avatarBundles.has(url.pathname.split('/').at(-1)));
     await context.route(component, async route => { await ready; await route.continue(); });
     try {
         await goto(page, '/');
@@ -277,7 +388,7 @@ async function mapAvailability(name, viewport) {
     let releaseRequest;
     const pending = new Promise(resolve => { releaseRequest = resolve; });
     let failedRequests = 0;
-    const dayUrl = new URL(`${release.base}/rooms/${roomIndex.term}/${failedDate}.json`, origin).href;
+    const dayUrl = new URL(`${release.base}/rooms/${roomIndex.term}/${failedDate}.json`, dataOrigin).href;
     await page.route(dayUrl, async route => {
         failedRequests++;
         await pending;
@@ -356,17 +467,20 @@ try {
         page.on('pageerror', error => errors.push(error.stack || error.message));
         page.on('response', response => {
             const url = new URL(response.url());
-            if (url.origin === origin.origin && url.pathname.startsWith('/data/') && response.status() >= 400) dataErrors.push(`${response.status()} ${url.pathname}`);
+            if (url.origin === dataOrigin.origin && /^\/(data|space|knowledge|search|texts)\//.test(url.pathname) && response.status() >= 400) dataErrors.push(`${response.status()} ${url.pathname}`);
         });
         page.on('requestfailed', request => {
             const url = new URL(request.url());
-            if (url.origin === origin.origin && url.pathname.startsWith('/data/') && !request.failure()?.errorText.includes('ERR_ABORTED')) dataErrors.push(`${request.failure()?.errorText} ${url.pathname}`);
+            if (url.origin === dataOrigin.origin && /^\/(data|space|knowledge|search|texts)\//.test(url.pathname) && !request.failure()?.errorText.includes('ERR_ABORTED')) dataErrors.push(`${request.failure()?.errorText} ${url.pathname}`);
         });
 
         await goto(page, '/');
         await page.locator('[data-me-name]').waitFor({ state: 'visible' });
         assert.equal(await page.locator('[data-me-name]').innerText(), '未登录');
         await headerAligned(page, '.ph h1');
+        await examsHistory(page, name);
+        await searchRanges(page, name);
+        await searchNavigation(page, name);
         await sheetHistory(page, name);
         await openCourses(page);
         await screenshot(page, `${name}-my-courses`);
@@ -496,7 +610,7 @@ try {
 
         const retryTopic = knowledge.topics.find(topic => sports.chapters.some(chapter => chapter.topics.includes(topic.id)));
         assert(retryTopic);
-        const retryUrl = new URL(`${release.base}/knowledge/${retryTopic.path.split('/').map(encodeURIComponent).join('/')}`, origin).href;
+        const retryUrl = new URL(`${release.knowledge_base}/${retryTopic.path.split('/').map(encodeURIComponent).join('/')}`, dataOrigin).href;
         // A normal warm PWA correctly serves this document from its worker cache. Test network failure in
         // a separate clean browser context without a worker, so the real fetch is actually made to fail.
         const availability = await browser.newContext({ viewport, colorScheme: 'dark', locale: 'zh-CN', serviceWorkers: 'block' });

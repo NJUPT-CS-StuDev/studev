@@ -1,6 +1,5 @@
 package top.hicancan.studev.map
 
-import android.content.res.AssetManager
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlinx.serialization.Serializable
@@ -14,9 +13,9 @@ object Models {
 
     init { System.loadLibrary("campusmodels") }
 
-    fun load(assets: AssetManager): Loaded {
-        val index = Json.decodeFromString<Index>(assets.open("${CampusPackage.BASE}/models.json").bufferedReader().use { it.readText() })
-        val raw = java.util.zip.GZIPInputStream(assets.open("${CampusPackage.BASE}/models.bin.gzip")).use { it.readBytes() }
+    suspend fun load(repository: top.hicancan.studev.data.AcademicRepository): Loaded {
+        val index = Json.decodeFromString<Index>(repository.bytes("space/仙林/models.json").decodeToString())
+        val raw = java.util.zip.GZIPInputStream(repository.bytes("space/仙林/models.bin.gzip").inputStream()).use { it.readBytes() }
         return Loaded(index, ByteBuffer.allocateDirect(raw.size).order(ByteOrder.LITTLE_ENDIAN).put(raw).apply { rewind() })
     }
 

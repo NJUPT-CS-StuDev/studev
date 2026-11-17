@@ -242,7 +242,7 @@ public static class Doc
                     {
                         var href = Str(inline, "href");
                         var h = new Hyperlink { Foreground = Paint.Brush("brand"), UnderlineStyle = UnderlineStyle.Single };
-                        h.Click += async (_, _) => { if (System.Text.RegularExpressions.Regex.IsMatch(href, "^[a-zA-Z][a-zA-Z0-9+.-]*:") && Uri.TryCreate(href, UriKind.Absolute, out var uri)) await Windows.System.Launcher.LaunchUriAsync(uri); else link?.Invoke(href); };
+                        h.Click += (_, _) => { if (Uri.TryCreate(href, UriKind.Absolute, out _) || href.StartsWith('/')) App.OpenLink(href); else if (link is not null) link(href); else App.OpenLink(href); };
                         Walk(List(inline, "children"), h.Inlines); into.Add(h); break;
                     }
                     case "image": into.Add(new Run { Text = $"［图片：{Str(inline, "alt")}］", Foreground = Paint.Brush("muted") }); break;

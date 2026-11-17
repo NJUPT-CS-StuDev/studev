@@ -52,6 +52,10 @@ GEMINI.md
 /.data/
 /public/data/
 /src/data/campus-release.json
+/public/space/
+/public/knowledge/
+/public/search/
+/public/texts/
 
 # Android build output
 /android/.gradle/

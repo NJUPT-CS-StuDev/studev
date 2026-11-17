@@ -119,6 +119,13 @@ public sealed partial class MapScreen : Screen
     {
         switch (argument)
         {
+            case Uri address:
+                var query = System.Web.HttpUtility.ParseQueryString(address.Query);
+                placeId = query["place"]; navId = query["nav"];
+                floor = int.TryParse(query["f"], out var level) ? level : null;
+                if (DateTime.TryParse(query["t"], System.Globalization.CultureInfo.InvariantCulture, out var at)) { moment = new Moment(DateOnly.FromDateTime(at), at.Hour * 60 + at.Minute); isNow = false; }
+                else { moment = Moment.Now(); isNow = true; }
+                break;
             case ValueTuple<string, string> { Item1: "place" } place: placeId = place.Item2; navId = null; floor = null; break;
             case ValueTuple<string, string> { Item1: "nav" } nav: navId = nav.Item2; placeId = null; break;
         }
@@ -141,7 +148,7 @@ public sealed partial class MapScreen : Screen
             router = new Kernels.Wayfind.Router(space.Network);
             await surface.Ready;
             var style = JsonNode.Parse(System.Text.Encoding.UTF8.GetString(await repo.Bytes($"space/{Product.Campus}/style.json"))
-                .Replace("{assets}", $"{Repository.Site}/map"))!.AsObject();
+                .Replace("{assets}", $"{repo.Release.MapBase}/assets"))!.AsObject();
             var basemap = await repo.LocalFile($"space/{Product.Campus}/basemap.pmtiles");
             style["sources"]!["basemap"]!["url"] = $"pmtiles://{new Uri(basemap).AbsoluteUri}";
             // Labels from Microsoft YaHei, which every Chinese Windows has, as the web draws Chinese from the system's font:

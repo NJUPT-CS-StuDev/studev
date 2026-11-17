@@ -85,7 +85,8 @@ import java.time.LocalDate
     val week = line.weekOf(day)
     val ahead = if (route.day == null) CampusLine.daysBetween(now.date.minusDays(now.date.dayOfWeek.value - 1L), monday) / 7 else 0
     val classId = if (isMe) settings.klass else if (route.whoType == "class") route.whoId else null
-    val record = examRecordOf(state, classId)
+    val recordState = examRecordOf(state, classId)
+    val record = recordState.record
     val title = when {
         !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
         scale == "list" -> "任务"
@@ -164,7 +165,7 @@ import java.time.LocalDate
             when (scale) {
                 "list" -> TaskList(line, now, model.tasks, model.settings) { onEvent(it, line) }
                 "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
-                "term" -> TermView(line, state, model, now, isMe, record, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
+                "term" -> TermView(line, state, model, now, isMe, recordState, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
                 else -> DayView(line, day, now, isMe, record, route, walk, settings.layers, model.tasks) { onEvent(it, line) }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
@@ -175,8 +176,18 @@ import java.time.LocalDate
 }
 
 /** How a class's exams came to be: loaded once per class, for every view and sheet that shows an exam. */
-@Composable fun examRecordOf(state: AcademicState, classId: String?): ExamRecord? =
-    produceState<ExamRecord?>(null, classId, state.repository) { value = classId?.let { id -> runCatching { state.repository?.examRecord(id) }.getOrNull() } }.value
+data class ExamRecordState(val record: ExamRecord?, val failed: Boolean, val retry: () -> Unit)
+@Composable fun examRecordOf(state: AcademicState, classId: String?): ExamRecordState {
+    var attempt by remember(classId, state.repository) { mutableIntStateOf(0) }
+    var failed by remember(classId, state.repository) { mutableStateOf(false) }
+    val record by produceState<ExamRecord?>(null, classId, state.repository, attempt) {
+        value = null; failed = false
+        try { value = classId?.let { id -> state.repository?.examRecord(id) } }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { failed = true }
+    }
+    return ExamRecordState(record, failed) { attempt++ }
+}
 
 @Composable private fun ClassPicker(state: AcademicState, onPick: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
@@ -485,32 +496,32 @@ private fun goneSummary(events: List<LineEvent>): String {
 
 /** The term in three pages: the grid with everything on it, the exams as a list, and 早锻炼 to plan. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, record: ExamRecord?, practice: List<Practice>, settings: PersonalSettings, route: Route, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
+@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, recordState: ExamRecordState, practice: List<Practice>, settings: PersonalSettings, route: Route, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
+    val record = recordState.record
     val mark = marks()
     val hairline = Ink.line
     val calendar = state.calendar.firstOrNull { it.start == line.term.weeks.firstOrNull()?.start }
     val plan = line.run.takeIf { isMe }
     val runnable = remember(plan, line) { plan?.let { CampusLine.runDates(it.rule, line.holidays).toSet() }.orEmpty() }
-    val codes = remember(line) { line.meetings.map { it.course.code.orEmpty() }.toSet() }
-    val changes = record?.changes.orEmpty().filter { !isMe || it.course.code.orEmpty() in codes }
-    val latest = changes.maxOfOrNull { it.observed }
+    val changes = record?.changes.orEmpty()
+    val latest = record?.history?.lastOrNull { version -> changes.any { it.version == version.id } }?.id
+    val seenIndex = record?.history?.indexOfFirst { it.id == settings.examsSeen } ?: -1
     val ahead = remember(line, now.date) { line.examDays(now.date) }
     val taken = line.exams.filter { it.date < now.date.toString() }.sortedWith(compareByDescending<Exam> { it.date }.thenByDescending { it.start })
-    val hasExams = line.exams.isNotEmpty() || changes.isNotEmpty()
-    val mode = when { route.termMode == "exam" && hasExams -> "exam"; route.termMode == "run" && plan != null -> "run"; else -> "course" }
+    val hasExams = line.exams.isNotEmpty() || record?.history?.isNotEmpty() == true || recordState.failed
+    val mode = when { route.termMode == "exam" -> "exam"; route.termMode == "run" && plan != null -> "run"; else -> "course" }
     val run = plan.takeIf { mode == "run" }
     LaunchedEffect(latest, mode, settings.examsSeen, isMe) {
         // Someone arriving for the first time has nothing new to be told about.
-        if (isMe && latest != null && settings.examsSeen != latest && (mode == "exam" || settings.examsSeen == null)) model.settings.update { it.copy(examsSeen = latest) }
+        if (isMe && latest != null && settings.examsSeen != latest && (mode == "exam" || seenIndex < 0)) model.settings.update { it.copy(examsSeen = latest) }
     }
-    val fresh = isMe && latest != null && settings.examsSeen != null && latest > settings.examsSeen && mode != "exam"
+    val fresh = isMe && latest != null && seenIndex >= 0 && latest != settings.examsSeen && mode != "exam"
     val termStart = LocalDate.parse(line.term.weeks.first().start)
     val termEnd = LocalDate.parse(calendar?.end ?: line.term.weeks.last().end)
     val last = remember(line) { line.lastLesson() }
     val courses = line.exams.map { it.course.code ?: it.course.name }.distinct().size
     val offGrid = practice.distinctBy { it.name to it.weeks }.sortedWith(compareBy({ it.weeks.first() }, { it.name }))
     var takenOpen by remember { mutableStateOf(false) }
-    var detailOpen by remember { mutableStateOf(false) }
     fun lead(days: Int) = when (days) { 0 -> "今天"; 1 -> "明天"; else -> "$days 天后" }
     fun dayHead(date: LocalDate) = "${dateLabel(date)} ${WEEKDAYS[date.dayOfWeek.value]}"
     fun placeOf(exam: Exam) = exam.room?.let(Names::room) ?: exam.location
@@ -539,7 +550,7 @@ private fun goneSummary(events: List<LineEvent>): String {
         }
     }
     val present = states.values.toSet() + (if (now.date in states) setOf("today") else emptySet())
-    val modes = listOf("course" to "课程") + (if (hasExams) listOf("exam" to (if (fresh) "考试 •" else "考试")) else emptyList()) + (if (plan != null) listOf("run" to "早锻炼") else emptyList())
+    val modes = listOf("course" to "课程") + (if (hasExams || mode == "exam") listOf("exam" to (if (fresh) "考试 •" else "考试")) else emptyList()) + (if (plan != null) listOf("run" to "早锻炼") else emptyList())
     // The pages sit above the list, so the list never starts scrolled past them while they appear.
     Column(Modifier.fillMaxSize()) {
     if (modes.size > 1) Box(Modifier.padding(bottom = 12.dp)) { Choice(modes, mode) { route.termMode = it } }
@@ -586,30 +597,8 @@ private fun goneSummary(events: List<LineEvent>): String {
                 Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { takenOpen = !takenOpen }.padding(vertical = 11.dp)) { Plain("已考 ${taken.size} 场", 13.5.sp, Ink.muted) }
                 if (takenOpen) taken.forEach { examRow(it, dateLabel(LocalDate.parse(it.date))) }
             }
-            if (record != null) item {
-                // Why the list can be trusted, said as something one can check: every sheet the office published has been
-                // read, and when its site was last looked at; then every change seen. The office withdraws old notices, so nothing links to them.
-                Column(Modifier.padding(top = 24.dp)) {
-                    record.checked?.let { at ->
-                        val local = java.time.OffsetDateTime.parse(at).atZoneSameInstant(CampusDay.zone)
-                        Plain("已核对教务处发布的全部考试安排表 · 最近检查 ${local.monthValue}月${local.dayOfMonth}日 ${hm(local.hour * 60 + local.minute)}", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 12.dp))
-                    }
-                    if (changes.isNotEmpty()) {
-                        Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { detailOpen = !detailOpen }.padding(vertical = 10.dp)) { Plain("变动 ${changes.size} 处 · 最近 ${dateLabel(LocalDate.parse(latest!!))}", 13.5.sp, Ink.muted) }
-                        if (detailOpen) changes.sortedByDescending { it.observed }.forEach { change ->
-                            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Plain(Exams.changeNames.getValue(change.change), 11.5.sp, when (change.change) { "added" -> mark.free; "changed" -> mark.warning; else -> Ink.faint }, FontWeight.Medium)
-                                Column {
-                                    Plain(Names.course(change.course.name), 14.sp)
-                                    Plain("${dateLabel(LocalDate.parse(change.observed))} 发现", 12.5.sp, Ink.muted)
-                                    Exams.changeLines(change).forEach { Plain(it, 12.5.sp, Ink.muted) }
-                                }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(24.dp))
-                }
-            }
+            if (record != null) item { ExamRecordView(record) }
+            if (recordState.failed) item { Column(Modifier.padding(vertical = 24.dp)) { Plain("更新记录暂时无法加载", 13.sp, Ink.muted); TextAction("重试", onClick = recordState.retry) } }
             return@LazyColumn
         }
         item {
@@ -667,11 +656,11 @@ private fun goneSummary(events: List<LineEvent>): String {
             }
             if (hasExams) Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { route.termMode = "exam" }.padding(vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Plain("考试 · 已发现 $courses 门", 17.sp, weight = FontWeight.SemiBold)
+                    Plain(if (courses > 0) "考试 · 已发现 $courses 门" else "考试 · 最新安排与更新记录", 17.sp, weight = FontWeight.SemiBold)
                     if (fresh) Box(Modifier.padding(start = 6.dp).size(6.dp).clip(RoundedCornerShape(3.dp)).background(mark.warning))
                 }
                 val first = ahead.firstOrNull()
-                if (first == null) Plain("都考完了", 14.sp, weight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
+                if (first == null) Plain(if (courses > 0) "都考完了" else "暂无待考安排", 14.sp, weight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
                 else {
                     Plain("${dayHead(first.first)} · ${lead(first.second)}", 14.sp, weight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
                     first.third.forEach { exam ->

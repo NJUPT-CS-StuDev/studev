@@ -111,7 +111,8 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
     val whenText = "${WEEKDAYS[date.dayOfWeek.value]} ${dateLabel(date)} · ${hm(event.start)}–${hm(event.end)}"
     val plan = line.run
     val classId = if (isMe) settings.klass else if (route.whoType == "class") route.whoId else null
-    val record = top.hicancan.studev.timetable.examRecordOf(state, classId)
+    val recordState = top.hicancan.studev.timetable.examRecordOf(state, classId)
+    val record = recordState.record
     // The sheet is the tile it opened from, enlarged: the same colour. Things on at the same time sit in a strip above
     // it, in the order they are stacked, and switch in place.
     val tones = remember(line) { top.hicancan.studev.timetable.TimetablePresentation.tones(line) }
@@ -177,7 +178,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         if (lab != null) line.holidays[date]?.let { Plain("这天是$it，实验表照常排了这一次，以老师通知为准", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp)) }
         if (exam != null) {
             Exams.changesOf(record, exam).forEach { change ->
-                KeyRow(if (change.change == "added") "新发布" else "改过", "${dateLabel(java.time.LocalDate.parse(change.observed))} 发现", if (change.change == "changed") Exams.changeLines(change).joinToString("\n") else null)
+                KeyRow(if (change.change == "added") "新发布" else "改过", Exams.versionTime(record!!.history.first { it.id == change.version }), if (change.change == "changed") Exams.changeLines(change).joinToString("\n") else null)
             }
             Together("同考场", exam.classes, exam.students)
             exam.note?.let { KeyRow("备注", it) }
@@ -208,8 +209,11 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         if (exam != null) {
             KeyRow("考试", "全部考试 · ${line.exams.map { it.course.code ?: it.course.name }.distinct().size} 门", chevron = true, onClick = { onClose(); route.tab = "timetable"; route.scale = "term"; route.termMode = "exam" })
             record?.sources?.firstOrNull { it.file == exam.source }?.let { sheet ->
-                KeyRow("来源", Exams.sheetName(sheet.file), "${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(sheet.file)))} 发布")
+                KeyRow("来源", Exams.fileName(sheet.file), sheet.published?.let { "${Exams.time(it.take(10))} 官方发布" })
+                KeyRow(null, "查看官方公告", chevron = true, onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sheet.notice))) })
+                KeyRow(null, "查看官方附件", "历史公告可能撤回，部分附件需连接校园网。", chevron = true, onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sheet.url))) })
             }
+            if (recordState.failed) KeyRow("来源", "暂时无法加载 · 重试", onClick = recordState.retry)
         } else if (meeting != null) {
             val own = line.exams.filter { (it.course.code ?: it.course.name) == (meeting.course.code ?: meeting.course.name) }.minByOrNull { it.date }
             own?.let { found -> line.on(java.time.LocalDate.parse(found.date)).firstOrNull { it.exam?.id == found.id } }?.let { examEvent ->

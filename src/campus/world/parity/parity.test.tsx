@@ -16,14 +16,24 @@ import { mergeSettings, settingsOf, settingsTaken } from '../sync';
 import type { Preferences } from '../preferences';
 import { append as threadAppend, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import type { CalendarTerm, MorningRun } from '@/world/data';
-import type { Exam, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
+import type { Exam, ExamChange, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
 import { momentNow } from '../time';
+import { changeLines, examHistory, examImpact, examTime, examVersionTime } from '../exams';
+import type { ExamRecord } from '../data';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
 const line: Timeline = { term: golden.term as TeachingTerm, periods: golden.periods as TeachingPeriod[], meetings: golden.schedules[0]!.meetings as unknown as TeachingMeeting[], labs: [], exams: [], holidays, tasks: [], run: { rule: golden.run as unknown as MorningRun, days: golden.runDays as string[], adjust: 5 } };
 const brief = (event: ReturnType<typeof eventsOn>[number]) => ({ kind: event.kind, name: event.name, short: event.short, start: event.start, end: event.end, room: event.room });
 
 describe('the shared web / Android real-data contract', () => {
+    it('projects all class exam versions, including unaffected updates and honestly dated historical publications', () => {
+        for (const item of golden.examHistory.times) expect(examTime(item.value)).toBe(item.text);
+        for (const item of golden.examHistory.comparisons) expect(changeLines(item.change as ExamChange)).toEqual(item.lines);
+        for (const item of golden.examHistory.classes) {
+            const record = item.record as ExamRecord;
+            expect(examHistory(record).map(version => ({ id: version.id, time: examVersionTime(version), impact: examImpact(version.baseline, version.changes), changes: version.changes.map(change => ({ course: change.course.name, kind: change.change, lines: changeLines(change) })) }))).toEqual(item.versions);
+        }
+    });
     it('uses campus time across midnight, the year boundary and a device daylight-saving transition', () => {
         for (const test of golden.campusTimes) expect(momentNow(new Date(test.instant))).toEqual(test.now);
         expect(momentNow(new Date('2026-11-16T16:00:00Z'))).toEqual({ date: '2026-11-17', min: 0 });

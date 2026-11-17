@@ -1,7 +1,12 @@
-/* DATA_VERSION is injected by the static Astro endpoint. */
-const SHELL = `studev-shell-2-${DATA_VERSION}`;
-const DATA = `studev-data-${DATA_VERSION}`;
-const META = 'studev-release';
+/* Shell code and public campus snapshots have independent lifecycles. */
+import { resourceAt } from '../campus/world/release.ts';
+const SHELL = `studev-shell-${APP_VERSION}`;
+const DATA = 'studev-public-data';
+const META = 'studev-current-campus';
+const ENTRY = `${DATA_ORIGIN}/campus-release.json`;
+const RUNTIME = `${APP_ORIGIN}/app-release.json`;
+const CURRENT = '/__studev_current_release__';
+let knownOrigins;
 const SHELL_PATHS = ['/', '/map/', '/search/'];
 const PUBLIC_PAGE = new Set(SHELL_PATHS);
 const saved = new Set();
@@ -50,14 +55,48 @@ async function saveFiles(paths, cache, recursive = false) {
     return failed;
 }
 
-/** The published release, if it is the one this worker serves; a newer one means this worker is already behind. */
+/** Discover one complete published snapshot, with an offline copy when unreachable. */
 async function ownRelease() {
-    const response = await fetch('/pwa-release.json', { cache: 'no-cache' });
-    if (!response.ok) throw new Error('release unavailable');
-    const release = await response.clone().json();
-    if (release.version !== DATA_VERSION) return null;
-    await (await caches.open(META)).put('/pwa-release.json', response);
-    return release;
+    const meta = await caches.open(META);
+    let entry = ENTRY;
+    const runtimeEntry = async response => {
+        if (!response?.ok) throw new Error('application configuration unavailable');
+        const value = await response.json();
+        const url = new URL(value.campus_entry);
+        if (url.protocol !== 'https:' || url.username || url.password) throw new Error('invalid campus entry');
+        return url.href;
+    };
+    try { entry = await runtimeEntry(await meta.match(RUNTIME)); } catch { /* first start */ }
+    try {
+        const response = await fetch(RUNTIME, { cache: 'no-cache' });
+        entry = await runtimeEntry(response.clone());
+        await meta.put(RUNTIME, response);
+    } catch { /* Saved runtime configuration remains usable offline. */ }
+    let response;
+    try {
+        response = await fetch(entry, { cache: 'no-cache' });
+        if (!response.ok) throw new Error('release unavailable');
+        await meta.put(entry, response.clone());
+    } catch (error) { response = await meta.match(entry); if (!response) throw error; }
+    const release = await response.json();
+    const complete = { ...release, core: release.core.map(path => resourceAt(path, entry)), all: release.all.map(path => resourceAt(path, entry)) };
+    for (const key of ['base', 'map_base', 'knowledge_base', 'search_base', 'texts_base']) if (release[key]) complete[key] = new URL(release[key], entry).href;
+    await meta.put(CURRENT, new Response(JSON.stringify(complete), { headers: { 'Content-Type': 'application/json' } }));
+    knownOrigins = new Set([complete.base, complete.map_base, complete.knowledge_base, complete.search_base, complete.texts_base].filter(Boolean).map(value => new URL(value).origin));
+    return complete;
+}
+
+async function publicOrigin(origin) {
+    if (PUBLIC_ORIGINS.includes(origin)) return true;
+    if (!knownOrigins) {
+        knownOrigins = new Set();
+        try {
+            const response = await (await caches.open(META)).match(CURRENT);
+            const release = response && await response.json();
+            for (const value of [release?.base, release?.map_base, release?.knowledge_base, release?.search_base, release?.texts_base]) if (value) knownOrigins.add(new URL(value).origin);
+        } catch { /* An unrelated origin is never written to this cache. */ }
+    }
+    return knownOrigins.has(origin);
 }
 
 /** Saves the shell and the release's core (or everything) and says how it went; returns how many files failed. */
@@ -67,8 +106,8 @@ async function save(release, all) {
     const shellFailed = await saveFiles([...SHELL_PATHS, '/manifest.webmanifest', '/pwa-icons/180.png', '/pwa-icons/192.png', '/pwa-icons/512.png', '/pwa-icons/512-maskable.png'], shell, true);
     const data = await caches.open(DATA);
     const failed = shellFailed + await saveFiles(all ? [...release.core, ...release.all] : release.core, data);
-    if (!failed) await data.put('/__studev_offline_ready__', new Response(JSON.stringify({ version: DATA_VERSION, all }), { headers: { 'Content-Type': 'application/json' } }));
-    await announce({ type: failed ? 'OFFLINE_PARTIAL' : 'OFFLINE_READY', version: DATA_VERSION, all, failed });
+    if (!failed) await data.put('/__studev_offline_ready__', new Response(JSON.stringify({ version: release.version, all }), { headers: { 'Content-Type': 'application/json' } }));
+    await announce({ type: failed ? 'OFFLINE_PARTIAL' : 'OFFLINE_READY', version: release.version, all, failed });
     return failed;
 }
 
@@ -78,28 +117,23 @@ async function save(release, all) {
 self.addEventListener('install', event => {
     event.waitUntil((async () => {
         const release = await ownRelease();
-        if (!release) throw new Error('a newer release replaces this worker');
         if (await save(release, false)) throw new Error('the core of this release is not saved');
     })());
 });
 self.addEventListener('activate', event => {
     event.waitUntil((async () => {
-        // Keep one previous release for open tabs; activating an update never strands their data.
+        // Versioned component URLs remain stable across data updates. Retire the
+        // previous app-bound cache mechanism once this worker is active.
         const keys = await caches.keys();
-        for (const prefix of ['studev-shell-', 'studev-data-']) {
-            const candidates = keys.filter(key => key.startsWith(prefix));
-            await Promise.all(candidates.slice(0, -2).map(key => caches.delete(key)));
-        }
+        await Promise.all(keys.filter(key => (key.startsWith('studev-shell-') || key.startsWith('studev-data-') || key === 'studev-release') && key !== SHELL).map(key => caches.delete(key)));
         await self.clients.claim();
-        await announce({ type: 'WORKER_ACTIVE', version: DATA_VERSION });
+        await announce({ type: 'WORKER_ACTIVE', version: APP_VERSION });
     })());
 });
 self.addEventListener('message', event => {
     if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
     if (event.data?.type === 'SAVE_OFFLINE') event.waitUntil((async () => {
         const release = await ownRelease();
-        // Behind the published release: fetch the newer worker, which saves its own data and then offers itself.
-        if (!release) return self.registration.update();
         await save(release, Boolean(event.data.all));
     })().catch(() => announce({ type: 'OFFLINE_PARTIAL' })));
 });
@@ -122,18 +156,18 @@ async function rangeResponse(response, header) {
 self.addEventListener('fetch', event => {
     const request = event.request;
     const url = new URL(request.url);
-    if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+    const publicData = /^\/(data|space|knowledge|search|texts|map)\//.test(url.pathname);
+    if (request.method !== 'GET' || (url.origin !== self.location.origin && !publicData && url.href !== ENTRY)) return;
     const path = url.pathname;
-    if (path === '/pwa-release.json') {
+    if (url.href === ENTRY) {
         event.respondWith((async () => {
             const cache = await caches.open(META);
-            const cached = await cache.match(path);
+            const cached = await cache.match(ENTRY);
             const refresh = fetch(request, { cache: 'no-cache' }).then(async response => {
-                if (response.ok) await cache.put(path, response.clone());
+                if (response.ok) await cache.put(ENTRY, response.clone());
                 return response;
             });
-            event.waitUntil(refresh.catch(() => undefined));
-            return cached || refresh;
+            try { return await refresh; } catch { return cached || Response.error(); }
         })());
         return;
     }
@@ -150,18 +184,18 @@ self.addEventListener('fetch', event => {
         })());
         return;
     }
-    if (!path.startsWith('/data/') && !path.startsWith('/_astro/') && !path.startsWith('/map/') && !path.startsWith('/pwa-icons/') && path !== '/manifest.webmanifest') return;
+    if (!publicData && !path.startsWith('/_astro/') && !path.startsWith('/pwa-icons/') && path !== '/manifest.webmanifest') return;
     event.respondWith((async () => {
-        const cache = await caches.open(path.startsWith('/data/') || path.startsWith('/map/') ? DATA : SHELL);
-        // Cache full PMTiles, then serve byte ranges locally. Never cache a 206 as a whole archive.
+        if (publicData && !await publicOrigin(url.origin)) return fetch(request);
+        const cache = await caches.open(publicData ? DATA : SHELL);
+        // Reuse a complete offline archive when present. An online range read
+        // stays a range read: search must not wait for an entire pack to cache.
         const range = request.headers.get('Range');
         const key = request.url;
         let response = await cache.match(key);
         if (!response) {
-            const headers = new Headers(request.headers);
-            headers.delete('Range');
-            response = await fetch(new Request(request, { headers }));
-            if (response.ok && response.status !== 206) await cache.put(key, response.clone());
+            response = await fetch(request);
+            if (response.ok && response.status !== 206) event.waitUntil(cache.put(key, response.clone()));
         }
         return range && response.status === 200 ? rangeResponse(response, range) : response;
     })());

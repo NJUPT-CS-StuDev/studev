@@ -68,8 +68,8 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     val dark = isSystemInDarkTheme()
     val navigation by runtime.state.collectAsStateWithLifecycle()
     val controller = remember { CampusMapController() }
-    val model by produceState<CampusModel?>(null, campus) {
-        value = withContext(Dispatchers.IO) { Json { ignoreUnknownKeys = true }.decodeFromString<CampusModel>(context.assets.open("${CampusPackage.BASE}/model.json").bufferedReader().use { it.readText() }) }
+    val model by produceState<CampusModel?>(null, campus.version) {
+        value = withContext(Dispatchers.IO) { Json { ignoreUnknownKeys = true }.decodeFromString<CampusModel>(campus.repository.bytes("space/仙林/model.json").decodeToString()) }
     }
     var scene by remember { mutableStateOf<Scene?>(null) }
     var cameraTick by remember { mutableIntStateOf(0) }
@@ -190,8 +190,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 },
                 onCamera = { cameraTick++ }, routeState = navigation, onRoute = runtime::choose, modifier = Modifier.fillMaxSize())
             LaunchedEffect(model, mapRef) { val map = mapRef; val data = model; if (map != null && data != null && scene == null) map.style?.let { scene = Scene(map, it, data) } }
-            val assets = androidx.compose.ui.platform.LocalContext.current.assets
-            LaunchedEffect(scene) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(assets) }) } }
+            LaunchedEffect(scene, campus.version) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(campus.repository) }) } }
             // Labels are placed over the model at their real height, so they stay on the roofs when the view tilts.
             val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas, day) {
                 val map = mapRef; val active = scene

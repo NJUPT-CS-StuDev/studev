@@ -591,11 +591,7 @@ public sealed partial class AiScreen : Screen
     /** A link inside the site, opened in its entry here. */
     private static void Link(string href)
     {
-        var query = href.Contains('?') ? System.Web.HttpUtility.ParseQueryString(href[(href.IndexOf('?') + 1)..]) : null;
-        if (href.StartsWith("/map/")) { if (query?["nav"] is { } nav) App.Open("map", ("nav", nav)); else if (query?["place"] is { } place) App.Open("map", ("place", place)); else App.Open("map"); }
-        else if (href.StartsWith("/search/")) App.Open("search", ("query", query?["q"] ?? ""));
-        else if (href == "/" || href.StartsWith("/?")) App.Open("timetable");
-        else _ = Windows.System.Launcher.LaunchUriAsync(new Uri(Repository.Site + href));
+        App.OpenLink(href);
     }
 
     /** What a tool found, as things to tap: rooms and places on the map, a route to follow, an article to read. */
@@ -620,7 +616,7 @@ public sealed partial class AiScreen : Screen
                 Card($"导航到{(string)result["to"]!}", $"{(long)result["distance_m"]!} 米 · 约 {Math.Max(1, (int)Math.Round((long)result["duration_s"]! / 60.0))} 分钟", () => Link((string)result["url"]!));
                 break;
             case "read" when result["url"] is not null:
-                Card((string)result["title"]!, string.Join(" · ", new[] { (string?)result["source"], (string?)result["date"] }.Where(s => !string.IsNullOrEmpty(s))), () => _ = Windows.System.Launcher.LaunchUriAsync(new Uri((string)result["url"]!)));
+                Card((string)result["title"]!, string.Join(" · ", new[] { (string?)result["source"], (string?)result["date"] }.Where(s => !string.IsNullOrEmpty(s))), () => App.OpenLink((string)result["url"]!));
                 break;
             case "nearby" when result["places"] is JsonArray places:
                 foreach (var p in places.Take(4)) { var id = (string)p!["id"]!; Card((string)p["name"]!, string.Join(" · ", new[] { $"{(long)p["metres"]!} 米", (string?)p["now"] }.Where(s => !string.IsNullOrEmpty(s))), () => App.Open("map", ("place", id))); }

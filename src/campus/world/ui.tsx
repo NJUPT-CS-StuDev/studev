@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import MeApp from '../me/MeApp';
 
 export const Chevron = () => <svg viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>;
 export const Back = () => <svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg>;
@@ -23,7 +24,7 @@ export const Magnifier = () => <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r=
 
 /** The first row of a campus entry shares one account-aligned baseline on narrow screens. */
 export function CampusHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
-    return <div className={`campus-header ${className}`}>{children}</div>;
+    return <div className={`campus-header ${className}`}><div className="campus-header-main">{children}</div><span className="campus-account-slot"><MeApp placement="page" /></span></div>;
 }
 
 interface SheetOwner { close: () => void; leaving: boolean }

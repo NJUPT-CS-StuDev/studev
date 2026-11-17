@@ -6,8 +6,6 @@ on:
   workflow_dispatch:
   release:
     types: [published]
-  repository_dispatch:
-    types: [upstream-release]
 
 permissions:
   contents: read
@@ -21,16 +19,13 @@ jobs:
     env:
       PAGES_SOURCE: skills
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
-      DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
       OSCA_DOWNLOAD_ENDPOINT: ${{ secrets.OSCA_DOWNLOAD_ENDPOINT }}
       OSCA_DOWNLOAD_BUCKET: ${{ secrets.OSCA_DOWNLOAD_BUCKET }}
       OSCA_DOWNLOAD_ACCESS_KEY: ${{ secrets.OSCA_DOWNLOAD_ACCESS_KEY }}
       OSCA_DOWNLOAD_SECRET_KEY: ${{ secrets.OSCA_DOWNLOAD_SECRET_KEY }}
-      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
       MAKERS_MODELS_KEY: ${{ secrets.MAKERS_MODELS_KEY }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      MAP_REPOSITORY: hicancan/njupt-map
     steps:
       - uses: actions/checkout@v6
       - name: Put the released APK on the backup host
@@ -52,33 +47,20 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Configure release inputs for the EdgeOne builder
+      - name: Configure the platform runtime
         run: |
           # The CLI reports a missing project link and still exits 0, so link it first.
           mkdir -p .edgeone
           echo '{"Name":"studev","ProjectId":"makers-xubgsi8n79pp"}' > .edgeone/project.json
           # The EdgeOne API drops a call now and then, here as in the deploy below.
           makers() { for try in 1 2 3 4; do npx -y edgeone@1.6.44 makers "$@" -e production -t "$EDGEONE_API_TOKEN" && return 0; sleep $((try * 15)); done; return 1; }
-          makers env set DATA_REPOSITORY "$DATA_REPOSITORY"
-          makers env set DATA_TOKEN "$DATA_TOKEN"
           for name in MAKERS_MODELS_KEY NVIDIA_API_KEY RESEND_API_KEY; do
             makers env set "$name" "${!name}"
           done
-          makers env pull
-          grep -q RESEND_API_KEY .env* || { echo "project environment was not updated"; exit 1; }
-      # An application release serves the exact data compiled into its native clients.
-      - name: Read the released campus package
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download "${{ github.event.release.tag_name }}" -R "$GITHUB_REPOSITORY" -p 'campus-data.tar.gz' -D "$RUNNER_TEMP"
-          tar -xzf "$RUNNER_TEMP/campus-data.tar.gz"
-      - run: npm run digest
-        if: github.event_name != 'release'
+      - name: Read the published campus snapshot
+        run: npm run data:pull
       - run: npm run typecheck
       - run: npm run test:campus
-        if: github.event_name != 'release'
       - run: npm run test:platform
       - run: npm run build
       - run: npm run test:site
@@ -93,13 +75,13 @@ jobs:
             sleep $((try * 60))
           done
           echo "the CLI failed after the deployment went live; checking the site"
-          base=$(node -p "require('./src/data/campus-release.json').base")
+          origin=$(node -p "require('./product.json').origin")
           script=$(grep -o '/_astro/[^\"]*\.js' dist/index.html | head -1)
           for attempt in $(seq 1 20); do
-            data=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$base/rooms/index.json")
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://studev.hicancan.top$script")
-            if [ "$data" = "200" ] && [ "$code" = "200" ]; then echo "serving $base and $script"; exit 0; fi
+            data=$(curl -s -o /dev/null -w '%{http_code}' "$origin/app-release.json")
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$origin$script")
+            if [ "$data" = "200" ] && [ "$code" = "200" ]; then echo "serving app metadata and $script"; exit 0; fi
             sleep 15
           done
-          echo "the site does not serve $base and $script after five minutes"
+          echo "the site does not serve app metadata and $script after five minutes"
           exit 1

@@ -3,7 +3,7 @@ import { buildWorker } from './build-worker';
 import { runInNewContext } from 'node:vm';
 
 const origin = 'https://campus.example';
-const worker = buildWorker('fixture');
+const worker = buildWorker('fixture', origin);
 
 function harness() {
     const stores = new Map<string, Map<string, Response>>();
@@ -18,7 +18,8 @@ function harness() {
     };
     const fetch = vi.fn(async (input: string | Request) => {
         const path = new URL(typeof input === 'string' ? input : input.url, origin).pathname;
-        if (path === '/pwa-release.json') return new Response(JSON.stringify({ version: 'fixture', core: ['/data/fixture/space/test/basemap.pmtiles'], all: [] }), { headers: { 'Content-Type': 'application/json' } });
+        if (path === '/app-release.json') return new Response(JSON.stringify({ campus_entry: `${origin}/campus-release.json` }), { headers: { 'Content-Type': 'application/json' } });
+        if (path === '/campus-release.json') return new Response(JSON.stringify({ version: 'fixture', base: '/data/fixture', map_base: '/space/map1', knowledge_base: '/knowledge/k1', search_base: '/search/s1', texts_base: '/texts/s1', core: ['/space/map1/test/basemap.pmtiles'], all: [] }), { headers: { 'Content-Type': 'application/json' } });
         if (path.endsWith('.pmtiles')) return new Response(new Uint8Array([0, 1, 2, 3, 4, 5]), { headers: { 'Content-Type': 'application/octet-stream' } });
         if (path === '/_astro/app.js') return new Response('import "./chunk.js";', { headers: { 'Content-Type': 'application/javascript' } });
         if (path === '/_astro/chunk.js') return new Response('const wasm=`/_astro/kernel.wasm`; const imports={"./kernel_bg.js":{}};', { headers: { 'Content-Type': 'application/javascript' } });
@@ -43,24 +44,38 @@ function harness() {
 describe('offline worker', () => {
     it('warms the shell, its imported chunks/WASM and the entire current campus archive', async () => {
         const app = harness(); await app.dispatch('install');
-        const shell = app.stores.get('studev-shell-2-fixture')!;
+        const shell = app.stores.get('studev-shell-fixture')!;
         expect(shell.has(`${origin}/map/`)).toBe(true);
         expect(shell.has(`${origin}/_astro/chunk.js`)).toBe(true);
         expect(shell.has(`${origin}/_astro/kernel.wasm`)).toBe(true);
         expect(shell.has(`${origin}/_astro/kernel_bg.js`)).toBe(false);
-        expect(app.stores.get('studev-data-fixture')?.has(`${origin}/data/fixture/space/test/basemap.pmtiles`)).toBe(true);
+        expect(app.stores.get('studev-public-data')?.has(`${origin}/space/map1/test/basemap.pmtiles`)).toBe(true);
         expect(app.messages).toContainEqual({ type: 'OFFLINE_READY', version: 'fixture', all: false, failed: 0 });
     });
     it('serves correct PMTiles ranges offline without storing a partial response', async () => {
         const app = harness(); await app.dispatch('install'); app.fetch.mockRejectedValue(new Error('offline'));
-        const response = await app.dispatch('fetch', new Request(`${origin}/data/fixture/space/test/basemap.pmtiles`, { headers: { Range: 'bytes=2-4' } }));
+        const response = await app.dispatch('fetch', new Request(`${origin}/space/map1/test/basemap.pmtiles`, { headers: { Range: 'bytes=2-4' } }));
         expect(response?.status).toBe(206);
         expect(response?.headers.get('Content-Range')).toBe('bytes 2-4/6');
         expect([...new Uint8Array(await response!.arrayBuffer())]).toEqual([2, 3, 4]);
-        const invalid = await app.dispatch('fetch', new Request(`${origin}/data/fixture/space/test/basemap.pmtiles`, { headers: { Range: 'bytes=7-' } }));
+        const invalid = await app.dispatch('fetch', new Request(`${origin}/space/map1/test/basemap.pmtiles`, { headers: { Range: 'bytes=7-' } }));
         expect(invalid?.status).toBe(416);
-        const cached = await (await app.caches.open('studev-data-fixture')).match('/data/fixture/space/test/basemap.pmtiles');
+        const cached = await (await app.caches.open('studev-public-data')).match('/space/map1/test/basemap.pmtiles');
         expect(cached?.status).toBe(200);
+    });
+    it('forwards an uncached search range and returns its partial response without fetching or caching the whole pack', async () => {
+        const app = harness();
+        const pack = `${origin}/search/s1/pack-0.wsb`;
+        app.fetch.mockImplementation(async input => {
+            expect(input).toBeInstanceOf(Request);
+            expect((input as Request).headers.get('Range')).toBe('bytes=2-4');
+            return new Response(new Uint8Array([2, 3, 4]), { status: 206, headers: { 'Content-Range': 'bytes 2-4/16777216' } });
+        });
+        const response = await app.dispatch('fetch', new Request(pack, { headers: { Range: 'bytes=2-4' } }));
+        expect(response?.status).toBe(206);
+        expect([...new Uint8Array(await response!.arrayBuffer())]).toEqual([2, 3, 4]);
+        expect(app.fetch).toHaveBeenCalledTimes(1);
+        expect(await (await app.caches.open('studev-public-data')).match(pack)).toBeUndefined();
     });
     it('does not intercept or cache account, form or submission requests', async () => {
         const app = harness();
@@ -69,21 +84,39 @@ describe('offline worker', () => {
         }
         expect(app.fetch).not.toHaveBeenCalled();
     });
-    it('returns the cached release while refreshing it, without offering an update itself', async () => {
+    it('reads new campus metadata without requiring a new application worker', async () => {
         const app = harness(); await app.dispatch('install');
         app.fetch.mockResolvedValue(new Response(JSON.stringify({ version: 'next' }), { headers: { 'Content-Type': 'application/json' } }));
-        const response = await app.dispatch('fetch', new Request(`${origin}/pwa-release.json`));
-        expect((await response!.json()).version).toBe('fixture');
+        const response = await app.dispatch('fetch', new Request(`${origin}/campus-release.json`));
+        expect((await response!.json()).version).toBe('next');
         expect(app.messages.some(message => (message as { type: string }).type === 'DATA_UPDATE')).toBe(false);
     });
-    it('does not install behind a newer release, nor without its core saved', async () => {
-        const behind = harness();
-        behind.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ version: 'next', core: [], all: [] }), { headers: { 'Content-Type': 'application/json' } }));
-        await expect(behind.dispatch('install')).rejects.toThrow('newer release');
+    it('installs against the current data revision and refuses an incomplete offline core', async () => {
+        const newer = harness();
+        const original = newer.fetch.getMockImplementation()!;
+        newer.fetch.mockImplementation(async input => new URL(typeof input === 'string' ? input : input.url, origin).pathname === '/campus-release.json'
+            ? new Response(JSON.stringify({ version: 'next', base: '/data/next', core: [], all: [] }), { headers: { 'Content-Type': 'application/json' } }) : original(input));
+        await newer.dispatch('install');
+        expect(newer.messages).toContainEqual({ type: 'OFFLINE_READY', version: 'next', all: false, failed: 0 });
         const broken = harness();
         const real = broken.fetch.getMockImplementation()!;
         broken.fetch.mockImplementation(async input => new URL(typeof input === 'string' ? input : input.url, origin).pathname.endsWith('.pmtiles') ? new Response(null, { status: 503 }) : real(input));
         await expect(broken.dispatch('install')).rejects.toThrow('not saved');
-        expect(broken.stores.get('studev-data-fixture')?.has(`${origin}/__studev_offline_ready__`)).toBe(false);
+        expect(broken.stores.get('studev-public-data')?.has(`${origin}/__studev_offline_ready__`)).toBe(false);
+    });
+    it('follows a changed data domain from application metadata and keeps its map usable offline', async () => {
+        const app = harness();
+        const original = app.fetch.getMockImplementation()!;
+        app.fetch.mockImplementation(async input => {
+            const url = new URL(typeof input === 'string' ? input : input.url, origin);
+            if (url.pathname === '/app-release.json') return new Response(JSON.stringify({ campus_entry: 'https://new-data.example/campus-release.json' }));
+            if (url.pathname === '/campus-release.json') return new Response(JSON.stringify({ version: 'moved', base: '/data/moved', map_base: '/space/map1', core: ['/space/map1/test/basemap.pmtiles'], all: [] }));
+            return original(input);
+        });
+        await app.dispatch('install');
+        expect(app.fetch.mock.calls.some(([input]) => String(input) === 'https://new-data.example/campus-release.json')).toBe(true);
+        app.fetch.mockRejectedValue(new Error('offline'));
+        const response = await app.dispatch('fetch', new Request('https://new-data.example/space/map1/test/basemap.pmtiles', { headers: { Range: 'bytes=0-1' } }));
+        expect(response?.status).toBe(206);
     });
 });

@@ -1,8 +1,9 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
 import TimetableApp from '../campus/timetable/TimetableApp';
+import { CampusHeader } from '../campus/world/ui';
 import { PRODUCT_CONFIG } from '../campus/world/product';
 ---
 <SiteLayout title={`${PRODUCT_CONFIG.APP_NAME} · ${PRODUCT_CONFIG.ORGANIZATION}`} description={PRODUCT_CONFIG.SUMMARY} active="timetable">
-  <TimetableApp client:only="react" />
+  <TimetableApp client:only="react"><div slot="fallback" class="sd page campus-entry timetable-page" aria-busy="true"><div class="wrap"><CampusHeader className="ph"><h1>课表</h1></CampusHeader></div></div></TimetableApp>
 </SiteLayout>

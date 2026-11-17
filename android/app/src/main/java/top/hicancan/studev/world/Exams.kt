@@ -5,6 +5,17 @@ import java.time.LocalDate
 
 /** What is known about exams beyond the timetable; same answers as src/campus/world/exams.ts. */
 object Exams {
+    data class Version(val id: String, val observed: String?, val published: String?, val baseline: Boolean, val files: List<ExamSource>, val changes: List<ExamChange>)
+    fun history(record: ExamRecord) = record.history.map { Version(it.id, it.observed, it.published, it.baseline, it.files, record.changes.filter { change -> change.version == it.id }) }.reversed()
+    fun impact(baseline: Boolean, changes: List<ExamChange>) = if (baseline) "首次记录" else if (changes.isEmpty()) "本次更新未影响本班" else "本班 ${changes.size} 门考试有变动"
+    fun time(value: String): String {
+        if (value.length == 10) return LocalDate.parse(value).let { "${it.monthValue}月${it.dayOfMonth}日" }
+        val local = java.time.OffsetDateTime.parse(value).atZoneSameInstant(CampusDay.zone)
+        return "${local.monthValue}月${local.dayOfMonth}日 ${hm(local.hour * 60 + local.minute)}"
+    }
+    fun versionTime(version: ExamVersion) = version.observed?.let { "${time(it)} 发现" } ?: "${time(requireNotNull(version.published))} 官方发布"
+    fun versionTime(version: Version) = version.observed?.let { "${time(it)} 发现" } ?: "${time(requireNotNull(version.published))} 官方发布"
+    fun fileName(file: String) = file.replace(Regex("^\\d{4}-\\d{2}-\\d{2}-"), "")
     /** When an exam reminds; same keys and minutes as src/campus/timetable/model/calendar.ts. */
     val REMINDERS = listOf("week" to "一周前", "days" to "三天前", "eve" to "前一天 20:00", "early" to "两小时前", "hour" to "一小时前")
     val DEFAULT_REMINDERS = listOf("eve", "hour")
@@ -15,7 +26,7 @@ object Exams {
     fun changesOf(record: ExamRecord?, exam: Exam) = record?.changes.orEmpty().filter { change ->
         change.change != "removed" && key(change.course.code, change.course.name) == key(exam.course.code, exam.course.name) &&
             change.after.orEmpty().any { it.date == exam.date && it.start == exam.start }
-    }.sortedBy { it.observed }
+    }
     /** A sitting whose time or place the office changed after first publishing it. */
     fun wasChanged(record: ExamRecord?, exam: Exam) = changesOf(record, exam).any { it.change == "changed" }
     /** The day a sheet was published: its file name starts with it. */
@@ -43,7 +54,7 @@ object Exams {
         date !in holidays && (date > now.date || (date == now.date && end > now.min))
     }
     private val fields: List<Pair<String, (ExamSlot) -> String?>> = listOf(
-        "时间" to { "${it.date} ${it.start}–${it.end}" }, "地点" to { it.location }, "校区" to { it.campus }, "老师" to { it.teacher }, "人数" to { it.students?.toString() },
+        "时间" to { "${it.date} ${it.start}–${it.end}" }, "地点" to { it.location }, "校区" to { it.campus }, "老师" to { it.teacher }, "人数" to { it.students?.toString() }, "备注" to { it.note },
     )
     private fun slotText(slots: List<ExamSlot>?, read: (ExamSlot) -> String?) = slots.orEmpty().map { read(it)?.takeIf(String::isNotEmpty) ?: "未填写" }.distinct().joinToString("、").ifEmpty { "未填写" }
     /** What one change did, in words. */

@@ -217,6 +217,11 @@ public static class Events
             if (Lessons.CourseOf(line.CourseMeetings, x.Course) is { } facts) Meta(Lessons.CourseLine(facts.Credits, facts.Nature));
             Meta($"{when} · {place ?? x.Location}{(x.Campus is not null && x.Campus != campus.Preferences.Campus ? $" · {x.Campus}校区" : "")}", true);
             Go();
+            if (campus.Repository is { } repository)
+            {
+                var details = new StackPanel(); body.Children.Add(details);
+                _ = ExamDetails(details, repository, mine ? campus.Preferences.Class : null, x);
+            }
             Together("同考场", x.Classes, x.Students);
             if (x.Note is { Length: > 0 } note) Row("备注", Value(note));
             Teachers();
@@ -272,5 +277,27 @@ public static class Events
         if (meeting is not null)
             Danger(meeting.TeachingClass.Id.StartsWith("custom:") ? "删除这门课" : "从我的课表移除", () => { Choices.Hide(campus.Preferences, term, meeting.TeachingClass.Id); Close(); });
         return root;
+    }
+
+    private static async Task ExamDetails(StackPanel target, Data.Repository repository, string? klass, Data.Exam exam)
+    {
+        try
+        {
+            var record = await repository.ExamRecord(klass);
+            target.Children.Clear();
+            foreach (var change in Exams.ChangesOf(record, exam))
+            {
+                var title = $"{(change.Change == "added" ? "新发布" : "改过")} · {Exams.VersionTime(record.History.First(version => version.Id == change.Version))}";
+                var words = Kit.Column(2, Kit.Text(title, Role.Label));
+                if (change.Change == "changed") foreach (var line in Exams.ChangeLines(change)) words.Children.Add(Kit.Text(line, Role.Caption, "muted", wrap: true));
+                words.Margin = new Thickness(0, 0, 0, 12); target.Children.Add(words);
+            }
+            if (record.Sources.FirstOrDefault(source => source.File == exam.Source) is { } source) target.Children.Add(ExamHistory.Sources([source]));
+        }
+        catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            target.Children.Clear();
+            target.Children.Add(Kit.TextAction("官方来源暂时无法加载 · 重试", () => { target.Children.Clear(); _ = ExamDetails(target, repository, klass, exam); }));
+        }
     }
 }

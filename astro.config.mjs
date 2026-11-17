@@ -15,7 +15,7 @@ import rehypeEditorialImages from './src/site/markdown/rehype-editorial-images.m
 import rehypeStaticMermaid from './src/site/markdown/rehype-static-mermaid.mjs';
 import localFonts from './src/site/build/local-fonts.mjs';
 import webTokens from './src/site/build/web-tokens.mjs';
-import { copyFile } from 'node:fs/promises';
+import { copyFile, readdir, rm } from 'node:fs/promises';
 
 const excludedSitemapPaths = new Set([
   '/404',
@@ -44,7 +44,17 @@ export default defineConfig({
     // EdgeOne reads edgeone.json from the project root; a copy beside the built
     // files covers deployments of the output directory alone.
     name: 'studev-edgeone-config',
-    hooks: { 'astro:build:done': ({ dir }) => copyFile('edgeone.json', new URL('edgeone.json', dir)) },
+    hooks: { 'astro:build:done': async ({ dir }) => {
+      await copyFile('edgeone.json', new URL('edgeone.json', dir));
+      // public/ also stages native bundles and independent campus components.
+      // Only the application shell is deployed here. Keep generated page indexes
+      // such as /knowledge/index.html while removing their public resource children.
+      for (const name of ['data', 'space', 'texts']) await rm(new URL(name, dir), { recursive: true, force: true });
+      for (const name of ['knowledge', 'search', 'map']) {
+        let entries; try { entries = await readdir(`public/${name}`); } catch { continue; }
+        for (const entry of entries) await rm(new URL(`${name}/${entry}`, dir), { recursive: true, force: true });
+      }
+    } },
   }, sitemap({
     filter: (page) => !excludedSitemapPaths.has(new URL(page).pathname.replace(/\/$/, '')),
   })],

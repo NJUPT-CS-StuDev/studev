@@ -21,8 +21,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     {
         var number = (int)value["pack"]!;
         var pack = (string)manifest!["packs"]![number]!;
-        var mirror = manifest["mirrors"]?.AsArray().ElementAtOrDefault(number)?.GetValue<string>();
-        return repository.Block($"search/{pack}", mirror, (long)value["offset"]!, (int)value["bytes"]!);
+        return repository.Block($"search/{pack}", (long)value["offset"]!, (int)value["bytes"]!);
     }
 
     /** Blocks accumulate between queries; past the budget, start from the index again. */

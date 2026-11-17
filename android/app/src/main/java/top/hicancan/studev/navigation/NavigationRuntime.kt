@@ -91,7 +91,7 @@ class NavigationRuntime private constructor(private val context: Context) {
     @Volatile var simulationCommand: String? = null
     init {
         scope.launch {
-            val campus = try { CampusPackage.load(context.assets) }
+            val campus = try { CampusPackage.load(context) }
             catch (e: CancellationException) { throw e } catch (_: Exception) { return@launch }
             placeIndex = campus.byId
             _state.update { it.copy(originLabel = it.origin?.let(::placeLabel), destinationLabel = it.destination?.let(::placeLabel) ?: it.destinationLabel) }
@@ -120,8 +120,8 @@ class NavigationRuntime private constructor(private val context: Context) {
             notice("路线已导出，可用 android/tooling/replay.ps1 回放。")
         }
     }
-    private suspend fun <T> native(block: () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
-    private fun engine() = engine ?: Wayfind.load(context.assets).also { engine = it }
+    private suspend fun <T> native(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
+    private suspend fun engine() = engine ?: Wayfind.load(top.hicancan.studev.data.AcademicRepository.open(context)).also { engine = it }
     private fun placeLabel(place: Place): String = if (place.kind == "room") roomDisplayName(place.id, placeIndex + (place.id to place)).orEmpty() else place.displayName(placeIndex)
     /** How long the kernel says it takes to walk between two points. */
     suspend fun walkMinutes(from: Endpoint, to: Endpoint): Int? = native {

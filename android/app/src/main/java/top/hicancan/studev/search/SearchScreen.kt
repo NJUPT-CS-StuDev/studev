@@ -78,7 +78,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val context = LocalContext.current
     val channels = remember(context) { Channel.load(context) }
     val repository = state.repository
-    val engine = remember(repository) { repository?.let { repo -> NativeSearch({ path -> repo.bytes("search/$path") }, { pack, mirror, offset, bytes -> repo.block("search/$pack", mirror, offset, bytes) }) } }
+    val engine = remember(repository) { repository?.let { repo -> NativeSearch({ path -> repo.bytes("search/$path") }, { pack, offset, bytes -> repo.block("search/$pack", offset, bytes) }) } }
     DisposableEffect(engine) { onDispose { engine?.close() } }
     var page by remember { mutableIntStateOf(1) }
     var source by remember { mutableStateOf<String?>(null) }

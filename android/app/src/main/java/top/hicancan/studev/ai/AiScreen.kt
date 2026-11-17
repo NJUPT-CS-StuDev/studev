@@ -266,7 +266,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        CampusHeader(Modifier.padding(start = 6.dp)) {
+        CampusHeader(Modifier.padding(start = 6.dp, end = 14.dp)) {
             IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
             Box(Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

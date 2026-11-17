@@ -1,0 +1,82 @@
+name: Publish campus data
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [upstream-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: campus-data
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PAGES_SOURCE: skills
+      DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY }}
+      DATA_TOKEN: ${{ secrets.DATA_TOKEN }}
+      EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - id: inputs
+        run: npm run data:inputs
+      - uses: actions/cache@v5
+        with:
+          key: campus-map-input-${{ steps.inputs.outputs.map }}
+          path: .data/${{ steps.inputs.outputs.map }}
+      - uses: actions/cache@v5
+        with:
+          key: campus-knowledge-${{ steps.inputs.outputs.knowledge }}-docstream-0.5.1
+          path: |
+            .data/knowledge-${{ steps.inputs.outputs.knowledge }}
+            .data/knowledge-search/${{ steps.inputs.outputs.knowledge }}
+            public/knowledge/${{ steps.inputs.outputs.knowledge }}
+      - uses: actions/cache/restore@v5
+        with:
+          key: campus-space-${{ steps.inputs.outputs.previous_map }}
+          path: public/space/${{ steps.inputs.outputs.previous_map }}
+      - uses: actions/cache/restore@v5
+        with:
+          key: campus-search-${{ steps.inputs.outputs.previous_search }}-wasm-search-5.0.2
+          path: |
+            .data/search
+            public/search/${{ steps.inputs.outputs.previous_search }}
+            public/texts/${{ steps.inputs.outputs.previous_search }}
+      - run: npm run digest
+        env:
+          MAP_VERSION: ${{ steps.inputs.outputs.map }}
+          KNOWLEDGE_VERSION: ${{ steps.inputs.outputs.knowledge }}
+          DATA_VERSION: ${{ steps.inputs.outputs.data }}
+      - run: npm run typecheck
+      - run: npm run test:data
+      - run: npm run test:campus
+      - run: npm run data:publish
+      - id: built
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync,appendFileSync} from 'node:fs';
+          const release=JSON.parse(readFileSync('src/data/campus-release.json','utf8'));
+          for (const [key,value] of Object.entries({map:release.map_base.split('/').at(-1),search:release.search_base.split('/').at(-1)})) appendFileSync(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);
+          JS
+      - uses: actions/cache/save@v5
+        if: steps.built.outputs.map != steps.inputs.outputs.previous_map
+        with:
+          key: campus-space-${{ steps.built.outputs.map }}
+          path: public/space/${{ steps.built.outputs.map }}
+      - uses: actions/cache/save@v5
+        if: steps.built.outputs.search != steps.inputs.outputs.previous_search
+        with:
+          key: campus-search-${{ steps.built.outputs.search }}-wasm-search-5.0.2
+          path: |
+            .data/search
+            public/search/${{ steps.built.outputs.search }}
+            public/texts/${{ steps.built.outputs.search }}

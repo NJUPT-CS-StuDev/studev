@@ -29,6 +29,8 @@ public sealed partial class SearchScreen : Screen
     private Repository? searchRepository;
     private Channel channel = Channels[0];
     private string since = "";
+    private string? within, sourceOnly, category;
+    private bool byDate;
     private int page = 1;
     private CancellationTokenSource? running;
     private (List<JsonObject> Results, int Total, double Seconds)? answer;
@@ -57,7 +59,16 @@ public sealed partial class SearchScreen : Screen
 
     public override void Shown(object? argument)
     {
-        if (argument is ValueTuple<string, Moment> { Item1: "rooms" } rooms) { channel = Channels.First(c => c.Id == "room"); box.Text = ""; roomsAt = rooms.Item2; Draw(); }
+        if (argument is Uri address)
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(address.Query);
+            channel = Channels.FirstOrDefault(item => item.Id == query["scope"]) ?? Channels[0];
+            since = Since.Any(item => item.Value == query["since"]) ? query["since"]! : "";
+            within = query["within"]; sourceOnly = query["source"]; category = query["type"]; byDate = query["sort"] == "date";
+            box.Text = query["q"] ?? ""; page = int.TryParse(query["page"], out var requested) && requested > 0 ? requested : 1; Run(); Draw();
+        }
+        else if (argument is "course") { channel = Channels.First(item => item.Id == "academic"); within = sourceOnly = category = null; since = ""; byDate = false; box.Text = ""; page = 1; Run(); Draw(); }
+        else if (argument is ValueTuple<string, Moment> { Item1: "rooms" } rooms) { channel = Channels.First(c => c.Id == "room"); within = sourceOnly = category = null; since = ""; byDate = false; box.Text = ""; roomsAt = rooms.Item2; Draw(); }
         else if (argument is ValueTuple<string, string> { Item1: "query" } query) { box.Text = query.Item2; }
         else if (argument is ValueTuple<string, string> { Item1: "channel" } scope && Channels.FirstOrDefault(c => c.Id == scope.Item2) is { } chosen) { channel = chosen; page = 1; Run(); Draw(); }
         // Opened with nothing typed, it shows what is newest, as the web and Android do.
@@ -65,18 +76,21 @@ public sealed partial class SearchScreen : Screen
         DispatcherQueue.TryEnqueue(() => box.Focus(FocusState.Programmatic));
     }
 
-    private bool Live => channel.Id == "room" && box.Text.Trim().Length == 0;
+    private bool Live => channel.Id == "room" && box.Text.Trim().Length == 0 && within is null;
 
     private JsonObject Filters()
     {
         var query = box.Text.Trim();
         var filters = new JsonObject();
-        if (channel.Sources is { } sources) filters["sourceIds"] = new JsonArray([.. sources.Select(s => (JsonNode)s)]);
-        if (channel.Excluded is { } excluded)
+        if (sourceOnly is not null) filters["sourceIds"] = new JsonArray(sourceOnly);
+        else if (channel.Sources is { } sources) filters["sourceIds"] = new JsonArray([.. sources.Select(s => (JsonNode)s)]);
+        if (sourceOnly is null && channel.Excluded is { } excluded)
             filters["excludedSourceIds"] = new JsonArray([.. (channel.Id == "all" && System.Text.RegularExpressions.Regex.IsMatch(query, @"\S\s+\S") ? excluded.Where(id => id != "teaching-classes") : excluded).Select(s => (JsonNode)s)]);
         string Ago(int days) => Clock.Text(CampusDay.Today().AddDays(-days));
         if (since.Length > 0) { filters["publishedFrom"] = Ago(int.Parse(since)); filters["publishedTo"] = Ago(0); filters["includeUndated"] = false; }
         else if (query.Length == 0) { filters["publishedTo"] = Ago(0); filters["includeUndated"] = true; }
+        if (within is not null) filters["within"] = within;
+        if (category is not null) filters["category"] = category;
         return filters;
     }
 
@@ -101,7 +115,7 @@ public sealed partial class SearchScreen : Screen
         {
             await Task.Delay(120, cancel);
             // Nothing typed lists the newest first; a query, the best match first.
-            var done = await search.Page(query, PageSize, query.Length == 0 ? "date_desc" : "relevance", Filters(), (page - 1) * PageSize,
+            var done = await search.Page(query, PageSize, byDate || query.Length == 0 ? "date_desc" : "relevance", Filters(), (page - 1) * PageSize,
                 ranked => { if (!cancel.IsCancellationRequested) { answer = (ranked.Results, ranked.Total, started.Elapsed.TotalSeconds); Draw(); } }, cancel);
             if (cancel.IsCancellationRequested) return;
             answer = (done.Results, done.Total, answer?.Seconds ?? started.Elapsed.TotalSeconds);
@@ -125,11 +139,12 @@ public sealed partial class SearchScreen : Screen
     private void Draw()
     {
         chips.Children.Clear();
-        var tabs = Kit.Tabs(Channels.Select(c => (c.Id, c.Label)).ToList(), channel.Id, id => { channel = Channels.First(c => c.Id == id); if (!channel.Dated && channel.Id != "all") since = ""; page = 1; Run(); Draw(); }, 16);
+        var tabs = Kit.Tabs(Channels.Select(c => (c.Id, c.Label)).ToList(), channel.Id, id => { channel = Channels.First(c => c.Id == id); sourceOnly = category = null; if (!channel.Dated && channel.Id != "all") since = ""; page = 1; Run(); Draw(); }, 16);
         tabs.Margin = new Thickness(0, 12, 0, 0);
         chips.Children.Add(tabs);
         body.Children.Clear();
         if (campus.Repository is null) return;
+        if (within is not null) body.Children.Add(Kit.TextAction($"在 {Names.Room(within)} 里 ×", () => { within = null; page = 1; Run(); }));
         if (Live) { Rooms(); return; }
         if (channel.Dated || channel.Id == "all")
         {
@@ -215,9 +230,8 @@ public sealed partial class SearchScreen : Screen
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, title);
             tap.Click += (_, _) =>
             {
-                var id = ((string)r["id"]!)[(source.Length + 1)..];
-                if (source is "rooms" or "places") App.Open("map", ("place", id));
-                else Browse(url);
+                if (source == "courses") CourseSheet.Open(title);
+                else App.OpenLink(url);
             };
             return tap;
         }
@@ -248,11 +262,7 @@ public sealed partial class SearchScreen : Screen
         return doc;
     }
 
-    private static async void Browse(string url)
-    {
-        if (url.StartsWith("/knowledge/", StringComparison.Ordinal)) { App.Open("knowledge", url); return; }
-        await Windows.System.Launcher.LaunchUriAsync(new Uri(url.StartsWith("http") ? url : Repository.Site + url));
-    }
+    private static void Browse(string url) => App.OpenLink(url);
 
     private RoomIndex? roomIndex;
     private Rooms? reader;

@@ -1,9 +1,10 @@
 // The knowledge as the data release carries it (built by njupt-knowledge): course outlines in teaching order, topics
 // with what they build on, and source documents whose questions name the topics they test. Backlinks are already
 // computed there; this only reads them. Every end opens the same three kinds of place by the same paths.
-import { DATA_RELEASE } from '@/world/config';
-import { fetchJson } from '@/world/fetch';
+import { DATA_RELEASE, releaseReady } from '@/world/config';
+import { fetchJson, fetchText } from '@/world/fetch';
 import { plainText, type Inline, type Keyed } from '@/world/doc';
+import type { KnowledgeCatalog } from '@/knowledge/catalog';
 
 /** A subject's outline; codes are the course plans taught now that teach it, former the codes it had before. */
 export interface KnowledgeCourse { id: string; name: string; codes: string[]; former: string[]; chapters: { title: string; topics: string[] }[]; path: string }
@@ -21,27 +22,26 @@ export interface CurriculumEntry {
     hours: string; exam_mode: string; category: string; nature: string; weeks: string;
 }
 
-const base = `${DATA_RELEASE.base}/knowledge`;
+const base = () => DATA_RELEASE.knowledge_base;
+let catalog: Promise<KnowledgeCatalog> | null = null;
+export const loadKnowledgeCatalog = () => catalog ??= releaseReady.then(() => fetchJson<KnowledgeCatalog>(`${DATA_RELEASE.base}/knowledge-catalog.json`)).catch(error => { catalog = null; throw error; });
 let index: Promise<Knowledge> | null = null;
-export const loadKnowledge = () => index ??= fetchJson<Knowledge>(`${base}/knowledge.json`).catch(error => { index = null; throw error; });
+export const loadKnowledge = () => index ??= releaseReady.then(() => fetchJson<Knowledge>(`${base()}/knowledge.json`)).catch(error => { index = null; throw error; });
 let curriculum: Promise<CurriculumCourse[]> | null = null;
-export const loadCurriculum = () => curriculum ??= fetchJson<CurriculumCourse[]>(`${DATA_RELEASE.base}/curriculum/courses.json`).catch(error => { curriculum = null; throw error; });
+export const loadCurriculum = () => curriculum ??= releaseReady.then(() => fetchJson<CurriculumCourse[]>(`${DATA_RELEASE.base}/curriculum/courses.json`)).catch(error => { curriculum = null; throw error; });
 const texts = new Map<string, Promise<string>>();
 /** One document's Markdown, by its path from the knowledge's root. */
 export function loadKnowledgeText(path: string) {
     let text = texts.get(path);
     if (!text) {
-        text = fetch(`${base}/${path.split('/').map(encodeURIComponent).join('/')}`).then(response => {
-            if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-            return response.text();
-        });
+        text = releaseReady.then(() => fetchText(`${base()}/${path.split('/').map(encodeURIComponent).join('/')}`));
         texts.set(path, text);
         text.catch(() => texts.delete(path));
     }
     return text;
 }
 /** A picture or file inside the knowledge, by its path from the root. */
-export const knowledgeFile = (path: string) => `${base}/${path.split('/').map(encodeURIComponent).join('/')}`;
+export const knowledgeFile = (path: string) => `${base()}/${path.split('/').map(encodeURIComponent).join('/')}`;
 
 /** Where a link inside a knowledge document leads: a topic, a course, or a place in a material; null if outside. */
 export type KnowledgePlace = { topic: string } | { course: string } | { material: string; anchor: string | null };

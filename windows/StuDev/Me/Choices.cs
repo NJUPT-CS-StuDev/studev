@@ -24,6 +24,7 @@ public static class Choices
         return [.. Group(own, "class"), .. Group(chosen.Where(m => edits.Added.Contains(m.TeachingClass.Id) && !ownIds.Contains(m.Id)), "added"), .. Group((edits.Custom ?? []).SelectMany(CustomMeetings), "custom")];
     }
     public static void Restore(Preferences prefs, string term, string id) => Edit(prefs, term, e => e with { Hidden = e.Hidden.Where(h => h != id).ToList() });
+    public static void Add(Preferences prefs, string term, string id) => Edit(prefs, term, e => e with { Added = e.Added.Append(id).Distinct().ToList(), Hidden = e.Hidden.Where(hidden => hidden != id).ToList() });
     public static void SaveCustom(Preferences prefs, string term, CustomCourse course) => Edit(prefs, term, e => e with { Custom = [.. (e.Custom ?? []).Where(c => c.Id != course.Id), course] });
     /** Changes one term's edits of the timetable: what is hidden, added, renamed, one's own courses. */
     public static void Edit(Preferences prefs, string term, Func<TimetableEdits, TimetableEdits> change)

@@ -49,7 +49,13 @@ export default function TimetableApp() {
     const [calendar, setCalendar] = useState(false);
     const classId = who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null;
     const [record, setRecord] = useState<ExamRecord | null>(null);
-    useEffect(() => { let live = true; setRecord(null); if (classId) void loadExamRecord(classId).then(next => { if (live) setRecord(next); }); return () => { live = false; }; }, [classId]);
+    const [recordFailed, setRecordFailed] = useState(false);
+    const [recordAttempt, setRecordAttempt] = useState(0);
+    useEffect(() => {
+        let live = true; setRecord(null); setRecordFailed(false);
+        if (classId) void loadExamRecord(classId).then(next => { if (live) setRecord(next); }).catch(() => { if (live) setRecordFailed(true); });
+        return () => { live = false; };
+    }, [classId, recordAttempt]);
 
     const page = useRef<HTMLDivElement>(null);
     // Pinching, or ctrl with the wheel, moves between day, week and term.
@@ -100,9 +106,9 @@ export default function TimetableApp() {
         return () => window.removeEventListener('keydown', press);
     }, [sheetOpen, set, who.type]);
 
-    if (ready && who.type === 'me' && !prefs.class) return <div className="sd page"><ClassPicker /></div>;
-    if (error) return <div className="sd page"><div className="wrap narrow"><p className="empty">课表暂时打不开，请刷新重试。</p></div></div>;
-    if (!loaded) return <div className="sd page" aria-busy="true" />;
+    if (ready && who.type === 'me' && !prefs.class) return <div className="sd page campus-entry timetable-page"><div className="wrap"><CampusHeader className="ph"><h1>课表</h1></CampusHeader><ClassPicker /></div></div>;
+    if (error) return <div className="sd page campus-entry timetable-page"><div className="wrap"><CampusHeader className="ph"><h1>课表</h1></CampusHeader><p className="empty">课表暂时打不开，请刷新重试。</p></div></div>;
+    if (!loaded) return <div className="sd page campus-entry timetable-page" aria-busy="true"><div className="wrap"><CampusHeader className="ph"><h1>课表</h1></CampusHeader></div></div>;
 
     const { term, line } = loaded;
     const isMe = who.type === 'me';
@@ -160,7 +166,7 @@ export default function TimetableApp() {
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'list' && isMe && <ListView line={line} now={now} courses={courses} onTask={openTask} onOpen={openEvent} />}
-                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
+                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} recordFailed={recordFailed} onRecordRetry={() => setRecordAttempt(current => current + 1)} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}

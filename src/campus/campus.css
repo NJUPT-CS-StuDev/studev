@@ -1,5 +1,7 @@
 /* The timetable, search and every sheet. Scoped to .sd so club pages keep their own type. */
 :root{--ease:cubic-bezier(.2,.8,.2,1)}
+.campus-header-main{display:flex;align-items:center;justify-content:flex-start;gap:inherit;flex:1;min-width:0}
+.campus-account-slot{display:none;flex:none;align-items:center}
 .sd{font-size:15px;line-height:1.5;color:var(--ink);-webkit-font-smoothing:antialiased;
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
@@ -235,6 +237,15 @@
   .xitem svg{width:14px;height:14px;color:var(--faint);flex:none}
   .xtrust{margin-top:24px;font-size:13px;color:var(--muted)}
   .xtrust p{margin:0 0 6px}
+  .xtrust .xhist{padding:0}
+  .xtrust summary{min-height:var(--size-target);padding:11px 0;box-sizing:border-box}
+  .xversion{border-bottom:1px solid var(--line)}
+  .xversion>summary{color:var(--ink);line-height:1.6}
+  .xversion .xhist{margin-top:8px;border-top:0;padding-bottom:0}
+  .xsources{list-style:none;padding:0;margin:8px 0 0}
+  .xsources li{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 0;overflow-wrap:anywhere}
+  .xsources .btns{margin-top:0;gap:20px}
+  .xsources a{display:inline-flex;align-items:center;min-height:var(--size-target)}
   .xlist section{margin-bottom:6px}
   .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warning);margin-left:6px;vertical-align:2px}
   .xcard{display:block;width:100%;text-align:left}
@@ -425,11 +436,12 @@
   }
   .sd.timetable-page .ph{display:block;padding-right:0}
   .sd.timetable-page .ph .acts{margin-top:12px;flex-wrap:wrap}
-  .sd.campus-entry{--campus-account-space:112px}
-  .sd.campus-entry:not(.page){--campus-account-space:128px}
-  .sd.campus-entry:not(.page) .campus-header{padding-left:16px}
+  .sd.campus-entry:not(.page) .campus-header{padding-inline:16px}
   .sd.campus-entry.page{padding-top:0}
-  .sd.campus-entry .campus-header{display:flex;align-items:center;flex:none;box-sizing:border-box;height:calc(48px + env(safe-area-inset-top,0px));min-height:calc(48px + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);padding-bottom:0;padding-right:var(--campus-account-space)}
+  .sd.campus-entry .campus-header{display:flex;align-items:center;gap:var(--size-header-gap);flex:none;box-sizing:border-box;height:calc(var(--size-header) + env(safe-area-inset-top,0px));min-height:calc(var(--size-header) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);padding-bottom:0;padding-right:0;container:campus-header / inline-size}
+  .sd.campus-entry:not(.page) .campus-header{padding-right:16px}
+  .campus-account-slot{display:flex}
+  .campus-account-slot .avatar-name{max-width:clamp(0px,calc(100cqw - var(--size-header-content) - var(--size-header-gap) - var(--size-account-base)),var(--size-account-name-max))}
   .sd.campus-entry .campus-header .back{margin:0}
   .sd.campus-entry .campus-header h1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sd.campus-entry.search .sfield{min-width:0;flex:1;height:var(--size-search);margin:0}

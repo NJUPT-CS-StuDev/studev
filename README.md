@@ -198,13 +198,25 @@ studev/
 
 ---
 
+## 数据与应用独立发布
+
+`studev.hicancan.top` 发布应用界面和账号 API，`data.hicancan.top` 发布公共校园数据。
+两个入口由 `product.json` 配置；三端通过应用的 `app-release.json` 发现数据入口。
+地图、校园事实、知识与检索资源各自保留版本，数据清单选择当前组合。数据更新不会重建网站或要求安装新版客户端。
+
+上游发布触发独立的数据工作流：读取 map / data / knowledge → 编译变化部分 → 校验 → 发布数据。
+应用构建只运行 `npm run data:pull` 消费已经发布的快照，不在发版时重新选择上游或推进数据版本。
+免费静态托管当前仍按完整部署压缩包上传；本地编译和客户端缓存复用未变化的资源，不代表托管平台只传变化文件。
+考试公开最新安排、变更记录、本班影响和官方来源，不向用户归档旧原件。
+
 ## 本地开发与质量门禁
 
 环境要求：**Node.js >= 22.13.0**（构建 Android 原生客户端需 **JDK 21** 与 **Android SDK 36+**）。
 
 ```powershell
 # 1. 安装依赖
-npm install
+npm ci
+npm run data:pull
 
 # 2. 启动本地开发服务器 (http://localhost:4321)
 npm run dev

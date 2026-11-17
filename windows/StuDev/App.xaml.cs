@@ -39,6 +39,25 @@ public partial class App : Application
         Current.Exit();
     }
     public static void Open(string entry, object? argument = null) => Window?.Open(entry, argument);
+    /** Every native surface follows the site's addresses through this one entry. */
+    public static void OpenLink(string href)
+    {
+        var origin = new Uri(Data.Repository.Site);
+        if (!Uri.TryCreate(origin, href, out var uri)) return;
+        if (uri.Scheme == origin.Scheme && uri.Authority.Equals(origin.Authority, StringComparison.OrdinalIgnoreCase))
+        {
+            switch (uri.AbsolutePath.TrimEnd('/'))
+            {
+                case "": Open("timetable", uri); return;
+                case "/map": Open("map", uri); return;
+                case "/knowledge": Open("knowledge", "/knowledge/" + uri.Query + uri.Fragment); return;
+                case "/search": Open("search", uri); return;
+                case "/ai": Open("ai"); return;
+                case "/account": case "/login": Open("me", uri); return;
+            }
+        }
+        _ = Windows.System.Launcher.LaunchUriAsync(uri);
+    }
     /** A task run without being awaited: if it fails, the failure is written down and ends the app, never swallowed. */
     public static async void Watch(Task task)
     {

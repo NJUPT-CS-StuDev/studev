@@ -1,6 +1,6 @@
 import { SearchClient } from 'wasm-search';
 import { initialize, Router, type Mode } from 'wayfind';
-import { APP_CONFIG } from './config';
+import { APP_CONFIG, releaseReady } from './config';
 import { loadPeriods, loadRoomDay, loadRoomIndex } from './data';
 import { buildingWord, isClassroom, makeRoomReader } from './rooms';
 import { loadSpace, type Space } from '@/map/model/space';
@@ -20,21 +20,24 @@ const CHANNELS = campusConfig.search.channels as readonly { label: string; sourc
 const READ = 8000;
 /** Adapters call the same released search/routing kernels and room interpreter as the visual entries. */
 export class CampusTools {
-    private search = new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH });
+    private search?: SearchClient;
     private space?: Promise<Space>;
     private router?: Promise<Router>;
     private places() { return this.space ??= loadSpace(); }
     async query(query: string, within = '全部') {
         const channel = CHANNELS.find(item => item.label === within);
         if (!channel) throw new Error('没有这个搜索范围。');
-        await this.search.initialize();
+        await releaseReady;
+        const search = this.search ??= new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH });
+        await search.initialize();
         const filters = { ...(channel.sources ? { sourceIds: [...channel.sources] } : {}), ...(channel.excluded ? { excludedSourceIds: [...channel.excluded] } : {}) };
-        const answer = await this.search.search({ query, offset: 0, limit: 6, sort: 'relevance', filters }).response;
+        const answer = await search.search({ query, offset: 0, limit: 6, sort: 'relevance', filters }).response;
         return answer.results.map(item => ({ id: /^(topics|sections)\//.test(item.id) ? textKey(item.id) : item.id, title: item.title, source: item.sourceName, ...(item.publishedAt ? { date: item.publishedAt.slice(0, 10) } : {}), snippet: item.snippet, url: item.url }));
     }
     /** One result's own text, as far as it is kept: an article, a knowledge topic or a question. Courses, teachers,
      * classes, rooms and places are not texts; their own tools answer for them. */
     async read(id: string, offset = 0) {
+        await releaseReady;
         if (!/^[0-9a-f]{16}$/.test(id)) throw new UnknownReference();
         const shard = await fetchJson<Record<string, { title: string; path?: string; url: string; source: string; published: string | null; text: string; files: { name: string; url: string }[] }>>(`${APP_CONFIG.DATA_URLS.TEXTS}/${id.slice(0, 2)}.json`);
         const doc = shard[id];
@@ -85,5 +88,5 @@ export class CampusTools {
         if (!route) throw new Error(`地图里没有从${this.nameOf(from)}到${this.nameOf(to)}的路。`);
         return { from: this.nameOf(from), to: this.nameOf(to), distance_m: Math.round(route.distance_m), duration_s: Math.round(route.duration_s), steps: route.maneuvers.map(step => step.instruction), url: `/map/?from=${encodeURIComponent(from.id)}&nav=${encodeURIComponent(to.id)}` };
     }
-    dispose() { this.search.dispose(); void this.router?.then(router => router.free()); }
+    dispose() { this.search?.dispose(); void this.router?.then(router => router.free()); }
 }

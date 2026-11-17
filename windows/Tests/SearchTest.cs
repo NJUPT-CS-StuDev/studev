@@ -34,27 +34,29 @@ internal static class SearchTest
         var release = JsonSerializer.Deserialize(releaseText, FactsJson.Default.DataRelease)!;
         var searchFolder = Path.Combine(root, "public/data", release.Version, "search");
         await using var server = new Packs(searchFolder);
-        var activeRelease = Path.Combine(Storage.CacheFor("campus"), $"release-{StuDev.Product.Version}.json");
-        var anotherApp = release with { Version = release.Version + "__app0.0.0", Base = release.Base + "__app0.0.0" };
-        Storage.Write(activeRelease, JsonSerializer.Serialize(anotherApp, FactsJson.Default.DataRelease));
-        var unsupported = false;
-        try { await Repository.Open(); } catch (NotSupportedException) { unsupported = true; }
-        equal("another app contract is never activated", unsupported, JsonValue.Create(true));
+        var activeRelease = Path.Combine(Storage.CacheFor("campus"), "release.json");
         Storage.Write(activeRelease, releaseText);
         var repository = await Repository.Open();
+        var oldPointer = Path.Combine(Storage.CacheFor("campus"), "release-3.4.1.json");
+        var oldPublic = Path.Combine(Storage.CacheFor("campus"), "old__app3.4.1", "calendar.json");
+        Storage.Write(oldPointer, "retired public pointer"); Storage.Write(oldPublic, "retired public data");
+        foreach (var name in new[] { "preferences.json", "tasks.json", "account.json" }) Storage.Write(Storage.PathFor(name), "personal state");
+        repository.Activate();
+        equal("retired public release pointer removed", File.Exists(oldPointer), JsonValue.Create(false));
+        equal("retired app-bound public directory removed", File.Exists(oldPublic), JsonValue.Create(false));
+        foreach (var name in new[] { "preferences.json", "tasks.json", "account.json" }) equal($"migration preserves {name}", Storage.Read(name), JsonValue.Create("personal state"));
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(searchFolder, "manifest.json")))!;
         var index = manifest["index"]!;
         var pack = manifest["packs"]![(int)index["pack"]!]!.GetValue<string>();
         server.WrongRange = true;
         var rejected = false;
-        try { await repository.Block($"search/{pack}", server.Address + pack, (long)index["offset"]!, (int)index["bytes"]!); }
+        try { await Repository.ReadRange(server.Address + pack, (long)index["offset"]!, (int)index["bytes"]!); }
         catch (InvalidDataException) { rejected = true; }
         equal("malformed search range is a data error", rejected, JsonValue.Create(true));
-        equal("malformed search range is not cached", File.Exists(Path.Combine(Storage.CacheFor("campus"), release.Version, $"search/{pack}.{(long)index["offset"]!}")), JsonValue.Create(false));
-
-        // Only the transport address changes; the index and every pack are the actual campus release.
-        manifest["mirrors"] = new JsonArray(manifest["packs"]!.AsArray().Select(p => (JsonNode?)JsonValue.Create(server.Address + p!.GetValue<string>())).ToArray());
-        Storage.Write(Path.Combine(Storage.CacheFor("campus"), release.Version, "search/manifest.json"), manifest.ToJsonString());
+        // The index and complete packs are the actual immutable data snapshot.
+        var cachedSearch = Path.Combine(Storage.CacheFor("campus"), new Uri(new Uri(StuDev.Product.CampusOrigin), release.SearchBase).AbsolutePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(cachedSearch);
+        foreach (var file in Directory.EnumerateFiles(searchFolder)) File.Copy(file, Path.Combine(cachedSearch, Path.GetFileName(file)), true);
         using var search = new NativeSearch(repository);
         var answer = await search.Page("101", 10, "relevance", new JsonObject(), 0, _ => search.Dispose(), CancellationToken.None);
         equal("disposing during ranking finishes the active query", answer.Results.Any(r => r["title"]?.GetValue<string>() == "教1-101"), JsonValue.Create(true));

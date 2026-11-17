@@ -3,7 +3,7 @@
 // document where it is and leads back. Everything shown is a link someone can send (?course, ?topic, ?material#题).
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Doc, readDoc, docReady, DocPlaceProvider, DocStream, DocText, type DocPlace } from '@/world/doc';
-import { containsAnchor, knowledgeFile, knowledgePlace, loadKnowledge, loadKnowledgeText, materialParts, referenced, toneOf, KIND_TONE, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
+import { containsAnchor, knowledgeFile, knowledgePlace, loadKnowledge, loadKnowledgeCatalog, loadKnowledgeText, materialParts, referenced, toneOf, KIND_TONE, type Knowledge, type KnowledgeCourse, type KnowledgeMaterial, type KnowledgeTopic } from '@/world/knowledge';
 import { referencePreviews } from './references';
 import { catalogScope, courseRelations, type CatalogCourse, type CatalogCurriculum, type KnowledgeCatalog } from './catalog';
 import { reloadIfGone } from '@/world/stale';
@@ -22,12 +22,21 @@ const tone = (id: string) => {
 
 type Open = { course?: string; topic?: string; material?: string; anchor?: string | null };
 
-export default function KnowledgeApp({ catalog }: { catalog: KnowledgeCatalog }) {
+export default function KnowledgeApp({ catalog: initialCatalog }: { catalog: KnowledgeCatalog }) {
     const { params, set } = useUrl();
     const wide = useWide();
     const [knowledge, setKnowledge] = useState<Knowledge | null>(null);
     const [failed, setFailed] = useState('');
     const [attempt, setAttempt] = useState(0);
+    const [catalog, setCatalog] = useState(initialCatalog);
+    const [catalogCurrent, setCatalogCurrent] = useState(false);
+    const [catalogError, setCatalogError] = useState(false);
+    useEffect(() => {
+        let current = true;
+        setCatalogError(false);
+        void loadKnowledgeCatalog().then(value => { if (current) { setCatalog(value); setCatalogCurrent(true); } }).catch(() => { if (current) setCatalogError(true); });
+        return () => { current = false; };
+    }, [attempt]);
     const [outline, setOutline] = useState(false);
     const [anchor, setAnchor] = useState<string | null>(null);
     useEffect(() => {
@@ -74,7 +83,7 @@ export default function KnowledgeApp({ catalog }: { catalog: KnowledgeCatalog })
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }), [course?.id]);
 
-    if (!requested) return <Home catalog={catalog} onOpen={id => open({ course: id })} />;
+    if (!requested) return <Home catalog={catalog} current={catalogCurrent} failed={catalogError} retry={() => setAttempt(value => value + 1)} onOpen={id => open({ course: id })} />;
     if (!knowledge || !course || document.status !== 'ready') {
         const name = catalog.courses.find(item => item.id === courseId)?.name ?? '课程资料';
         const error = failed || (document.status === 'failed' ? '内容没能打开，请稍后重试。' : '')
@@ -145,11 +154,13 @@ const courseMajors = (curriculum: CatalogCurriculum[], cohort: string) => {
 };
 
 /** Every course in the unified training-plan model: term-grouped course cards (like RoomsBrowse) + curriculum dependency graph. */
-function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: KnowledgeCatalog; onOpen: (code: string) => void }) {
+function Home({ catalog: { courses: catalog, curriculum }, current, failed, retry, onOpen }: { catalog: KnowledgeCatalog; current: boolean; failed: boolean; retry: () => void; onOpen: (code: string) => void }) {
     const { params, set } = useUrl();
     const { prefs } = usePreferences();
     const [classes, setClasses] = useState<TeachingClass[]>([]);
-    useEffect(() => { if (prefs.class) void loadClasses().then(setClasses).catch(() => undefined); }, [prefs.class]);
+    // Join personal class facts only after adopting the catalogue from this
+    // visit's snapshot; the first paint uses the app build's published catalogue.
+    useEffect(() => { if (current && prefs.class) void loadClasses().then(setClasses).catch(() => undefined); }, [current, prefs.class]);
     const person = classes.find(item => item.id === prefs.class) ?? null;
     const scope = catalogScope(curriculum, person, { cohort: params.get('cohort'), major: params.get('major') });
     const query = params.get('q') ?? '';
@@ -256,6 +267,7 @@ function Home({ catalog: { courses: catalog, curriculum }, onOpen }: { catalog: 
 
     return <div className="sd page campus-entry knowledge"><div className="wrap">
         <CampusHeader className="ph"><div><h1>知识</h1></div></CampusHeader>
+        {failed ? <div className="content-failure" role="alert"><p>课程目录暂时无法更新，可以继续浏览已加载的内容。</p><TextAction refresh onClick={retry}>重试</TextAction></div> : null}
         <div className="kn-tools">
             <input className="kn-search" type="search" value={query} onChange={e => set({ q: e.target.value })} placeholder={view === 'graph' ? '搜索课程或代码' : '搜索课程、代码或章节'} aria-label="筛选课程" />
             <div className="kn-view-row"><div className="kn-tabs" role="tablist" aria-label="视图切换">

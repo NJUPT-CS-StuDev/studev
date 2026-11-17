@@ -42,7 +42,11 @@ import top.hicancan.studev.world.Moment
     val route = remember { Route() }
     val snackbar = remember { SnackbarHostState() }
     var campus by remember { mutableStateOf<CampusPackage?>(null) }
-    LaunchedEffect(Unit) { campus = runCatching { CampusPackage.load(context) }.getOrNull() }
+    LaunchedEffect(state.repository?.release?.version) {
+        state.repository?.let { repository ->
+            runCatching { CampusPackage.load(context, repository) }.getOrNull()?.let { campus = it }
+        }
+    }
     var now by remember { mutableStateOf(Moment.of(CampusDay.now())) }
     LaunchedEffect(Unit) { while (true) { now = Moment.of(CampusDay.now()); delay(30_000) } }
     LaunchedEffect(notice) { notice?.let { snackbar.showSnackbar(it); model.clearNotice() } }
@@ -70,6 +74,7 @@ import top.hicancan.studev.world.Moment
             else -> { route.whoType = "me"; route.whoId = "" }
         }
     }
+    CompositionLocalProvider(LocalMeAction provides { me = true }) {
     Scaffold(containerColor = Ink.paper, snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
         if (!navigation.active) Row(Modifier.fillMaxWidth().background(Ink.paper).topHairline(Ink.line).navigationBarsPadding().height(50.dp)) {
             listOf("timetable" to "课表", "map" to "地图", "knowledge" to "知识", "search" to "搜索", "ai" to "AI").forEach { (key, label) ->
@@ -83,17 +88,15 @@ import top.hicancan.studev.world.Moment
         // The bar below counts as room already given: a keyboard rising over it lifts the page only by what it covers beyond.
         Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = padding.calculateBottomPadding()))) {
             // The native map keeps its surface while another entry is on top of it.
-            if (mapOpened) campus?.let { loaded -> MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) }
+            if (mapOpened) campus?.let { loaded -> key(loaded.version) { MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) } }
             when (route.tab) {
                 "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
                 "knowledge" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.knowledge.KnowledgeScreen(route, state, settings) }
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, model) }
                 "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model, route) }
             }
-            if (route.tab != "map") Surface({ me = true }, Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 6.dp, end = 14.dp).height(Tokens.Size.search.dp).testTag("me"), shape = androidx.compose.foundation.shape.RoundedCornerShape(Tokens.Radius.pill.dp), color = Ink.sunken) {
-                MeAvatar()
-            }
         }
+    }
     }
     open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings, state, now, onOpen = { open = it to line }) { open = null } }
     if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm) { me = false }

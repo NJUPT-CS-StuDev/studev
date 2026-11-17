@@ -3,11 +3,24 @@ import { api, PlatformError, type Session } from './api';
 const CACHE_KEY = 'studev_auth_user';
 
 export interface CachedAccount { nickname: string; role?: string; qq?: string; verifiedAt?: number }
+let cachedText: string | null | undefined;
+let cachedAccount: CachedAccount | null = null;
 export function readCachedAccount(): CachedAccount | null {
   try {
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    return cached && (cached.nickname || cached.role) ? cached : null;
+    const text = localStorage.getItem(CACHE_KEY);
+    if (text === cachedText) return cachedAccount;
+    const cached = JSON.parse(text || 'null');
+    cachedAccount = cached && (cached.nickname || cached.role) ? cached : null;
+    cachedText = text;
+    return cachedAccount;
   } catch { return null; }
+}
+
+export function subscribeCachedAccount(change: () => void) {
+  const storage = (event: StorageEvent) => { if (event.key === CACHE_KEY || event.key === null) change(); };
+  window.addEventListener('storage', storage);
+  window.addEventListener('studev:account', change);
+  return () => { window.removeEventListener('storage', storage); window.removeEventListener('studev:account', change); };
 }
 
 function updateNavLinks(isLoggedIn: boolean) {
@@ -19,6 +32,7 @@ function updateNavLinks(isLoggedIn: boolean) {
   else delete document.documentElement.dataset.authenticated;
 }
 
+if (typeof window !== 'undefined') {
 const cached = readCachedAccount();
 const hasCachedUser = Boolean(cached);
 // Page changes within a minute share the cached verification.
@@ -27,7 +41,7 @@ updateNavLinks(hasCachedUser);
 
 // 多标签页实时同步登录状态
 window.addEventListener('storage', (e) => {
-  if (e.key === CACHE_KEY) {
+  if (e.key === CACHE_KEY || e.key === null) {
     updateNavLinks(Boolean(readCachedAccount()));
   }
 });
@@ -62,4 +76,5 @@ if (hasCachedUser && shouldVerify && !isPlatformManagedPage) {
       }
     }
   })();
+}
 }

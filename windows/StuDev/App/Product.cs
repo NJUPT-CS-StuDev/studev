@@ -8,6 +8,8 @@ public static class Product
 {
     public static JsonElement Root { get; } = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "product.json"))).RootElement;
     public static string Version { get; } = Root.GetProperty("android").GetProperty("versionName").GetString()!;
+    public static string Origin { get; } = Root.GetProperty("origin").GetString()!;
+    public static string CampusOrigin { get; } = Root.GetProperty("campusOrigin").GetString()!;
     /** The campus shown when one has chosen none. */
     public static string Campus { get; } = Root.GetProperty("campus").GetProperty("id").GetString()!;
     /** The place the campus map opens over. */

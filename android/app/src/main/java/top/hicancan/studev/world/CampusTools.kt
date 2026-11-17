@@ -52,7 +52,7 @@ class CampusTools(private val context: android.content.Context, private val repo
         if (name == "search") {
             val repo = repository() ?: error("校园数据还没准备好。")
             val channel = channels.firstOrNull { it.label == (args["in"]?.jsonPrimitive?.content ?: "全部") } ?: error("没有这个搜索范围。")
-            val engine = search ?: NativeSearch({ path -> repo.bytes("search/$path") }, { pack, mirror, offset, length -> repo.block("search/$pack", mirror, offset, length) }).also { search = it }
+            val engine = search ?: NativeSearch({ path -> repo.bytes("search/$path") }, { pack, offset, length -> repo.block("search/$pack", offset, length) }).also { search = it }
             val filters = buildJsonObject { if (channel.sources.isNotEmpty()) put("sourceIds", JsonArray(channel.sources.map(::JsonPrimitive))); if (channel.excluded.isNotEmpty()) put("excludedSourceIds", JsonArray(channel.excluded.map(::JsonPrimitive))) }
             return JsonArray(engine.page(args.getValue("query").jsonPrimitive.content, 6, filters = filters).results.map { result -> buildJsonObject {
                 val id = result.getValue("id").jsonPrimitive.content
@@ -91,11 +91,11 @@ class CampusTools(private val context: android.content.Context, private val repo
             }
         }
         if (name == "find_place") {
-            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context.assets).also { places = it }
+            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context, repository()).also { places = it }
             return JsonArray(Find.places(campus.places, args.getValue("query").jsonPrimitive.content).map { said(campus, it) })
         }
         if (name == "nearby") {
-            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context.assets).also { places = it }
+            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context, repository()).also { places = it }
             val at = Find.meant(campus.places, campus.byId, args.getValue("near").jsonPrimitive.content)
             return buildJsonObject {
                 put("near", nameOf(at))
@@ -113,10 +113,10 @@ class CampusTools(private val context: android.content.Context, private val repo
             return buildJsonObject { put("date", date.toString()); put("known", true); put("rooms", JsonArray(rooms.map { (room, state) -> buildJsonObject { put("room", room); put("until", state.until); put("minutes", state.minutes) } })) }
         }
         if (name == "route") {
-            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context.assets).also { places = it }
+            val campus = places ?: top.hicancan.studev.data.CampusPackage.load(context, repository()).also { places = it }
             val from = Find.meant(campus.places, campus.byId, args.getValue("from").jsonPrimitive.content)
             val to = Find.meant(campus.places, campus.byId, args.getValue("to").jsonPrimitive.content)
-            val engine = wayfind ?: Wayfind.load(context.assets).also { wayfind = it }
+            val engine = wayfind ?: Wayfind.load(campus.repository).also { wayfind = it }
             val route = engine.route(RouteRequest(from.routing, to.routing, args["mode"]?.jsonPrimitive?.content ?: "walk", alternatives = 1)).firstOrNull() ?: error("地图里没有从${nameOf(from)}到${nameOf(to)}的路。")
             return buildJsonObject { put("from", nameOf(from)); put("to", nameOf(to)); put("distance_m", kotlin.math.round(route.distance_m).toLong()); put("duration_s", kotlin.math.round(route.duration_s).toLong()); put("steps", JsonArray(route.maneuvers.map { JsonPrimitive(it.instruction) })); put("url", "/map/?from=${java.net.URLEncoder.encode(from.id, "UTF-8")}&nav=${java.net.URLEncoder.encode(to.id, "UTF-8")}") }
         }

@@ -76,8 +76,7 @@ class Wayfind(graph: String) : RoutingEngine {
     }
     override fun close() = router.close()
     companion object {
-        fun load(assets: AssetManager) = Wayfind(assets.open("${CampusPackage.BASE}/network.json")
-            .bufferedReader().use { it.readText() })
+        suspend fun load(repository: top.hicancan.studev.data.AcademicRepository) = Wayfind(repository.bytes("space/仙林/network.json").decodeToString())
     }
 }
 

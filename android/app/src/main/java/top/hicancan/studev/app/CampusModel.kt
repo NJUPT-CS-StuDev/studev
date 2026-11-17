@@ -64,6 +64,15 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     private var phone: Job? = null
     private var editing: Job? = null
     init {
+        viewModelScope.launch {
+            AcademicRepository.retired.collect { retired ->
+                if (state.value.repository?.release == retired) {
+                    try { AcademicRepository.discover(getApplication(), settings.state.value.klass)?.let { take(it) } }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { /* A failed check leaves the saved snapshot and retry available. */ }
+                }
+            }
+        }
         DeviceRefreshWorker.schedule(application)
         load()
     }
@@ -236,7 +245,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     private suspend fun take(found: Discovery): Boolean {
         _state.update { it.copy(app = found.app, appRequired = found.unreadable && found.appBehind) }
         val repo = found.repository ?: return false
-        if (repo.release.version == state.value.repository?.release?.version) return false
+        if (repo.release == state.value.repository?.release) return false
         loadRepository(repo)
         return true
     }
@@ -246,7 +255,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         if (found == null) { tell("暂时连不上，离线数据仍可使用"); return@launch }
         val fresh = try { take(found) } catch (e: CancellationException) { throw e } catch (_: Exception) { tell("新数据暂时无法读取，请稍后重试"); return@launch }
         tell(when {
-            found.appBehind -> "有新版本 ${found.app.versionName}" + if (fresh) "，校园数据已更新" else ""
+            found.appBehind -> "有新版本 ${found.app?.versionName}" + if (fresh) "，校园数据已更新" else ""
             fresh -> "校园数据已更新"
             else -> "App 和校园数据都是最新的"
         })

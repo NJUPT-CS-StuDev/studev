@@ -1,4 +1,4 @@
-import release from '../data/campus-release.json';
+import product from '../../product.json';
 
 interface InstallEvent extends Event {
     prompt(): Promise<void>;
@@ -33,7 +33,7 @@ if (iPhone) {
 
 function openPanel() {
     panel?.showModal();
-    void fetch('/pwa-release.json', { cache: 'no-cache' }).then(response => response.ok ? response.json() : null).then((data: { bytes?: number } | null) => {
+    void fetch(`${product.campusOrigin}/campus-release.json`, { cache: 'no-cache' }).then(response => response.ok ? response.json() : null).then((data: { bytes?: number } | null) => {
         const copy = document.querySelector<HTMLElement>('[data-pwa-size]');
         if (copy && data?.bytes && Number.isFinite(data.bytes)) {
             const megabytes = Math.ceil(data.bytes / 1_000_000);
@@ -72,6 +72,7 @@ window.addEventListener('offline', connectionStatus);
 
 // The update is offered only once a newer worker has installed and is waiting, so one tap switches.
 function showUpdate() { if (update && registration?.waiting && navigator.serviceWorker.controller) update.hidden = false; }
+window.addEventListener('studev:campus-update', () => { if (update) update.hidden = false; });
 function watchWorker(worker: ServiceWorker | null) {
     worker?.addEventListener('statechange', () => { if (worker.state === 'installed') showUpdate(); });
 }
@@ -79,7 +80,7 @@ function watchWorker(worker: ServiceWorker | null) {
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
     // Cache readiness is available without a network round trip. Registering or
     // updating a worker can fail offline even when its active worker serves the app.
-    void caches.open(`studev-data-${release.version}`).then(cache => cache.match('/__studev_offline_ready__')).then(marker => {
+    void caches.open('studev-public-data').then(cache => cache.match('/__studev_offline_ready__')).then(marker => {
         ready = Boolean(marker); connectionStatus();
     }).catch(() => connectionStatus());
     navigator.serviceWorker.addEventListener('message', event => {

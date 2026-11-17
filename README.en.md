@@ -198,13 +198,27 @@ Every university shares the same fundamental spatial-temporal primitives: academ
 
 ---
 
+## Independent Data and Application Releases
+
+`studev.hicancan.top` serves the application and account API; `data.hicancan.top` serves public campus data.
+Both origins are configured in `product.json`. All three clients discover the data entry through the application's
+`app-release.json`. The public snapshot selects independently versioned map, facts, knowledge and search resources.
+Data updates do not rebuild the website or require a new native application.
+
+Upstream releases trigger the independent data workflow: read map / data / knowledge, compile changed inputs,
+validate, then publish data. Application builds use `npm run data:pull` to consume an already published snapshot;
+they do not select upstream releases or advance the data pointer. The free hosting platform currently uploads a
+complete deployment archive. Reusing compilation output and client caches does not imply per-file incremental upload.
+Exams expose current arrangements, changes, class impact and official sources, without archiving old originals for users.
+
 ## Development & Verification
 
 Requirements: **Node.js >= 22.13.0** (building the native Android client requires **JDK 21** and **Android SDK 36+**).
 
 ```powershell
 # 1. Install dependencies
-npm install
+npm ci
+npm run data:pull
 
 # 2. Start local dev server (http://localhost:4321)
 npm run dev

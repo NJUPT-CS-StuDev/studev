@@ -1,7 +1,7 @@
 // Exercise the APK itself over the released campus data: an upgrade preserving its cache,
 // then a fresh start, search, knowledge links, the map and a route.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,13 @@ const release = JSON.parse(readFileSync(join(root, 'src/data/campus-release.json
 const data = join(root, 'public/data', release.version);
 const knowledge = JSON.parse(readFileSync(join(data, 'knowledge/knowledge.json'), 'utf8'));
 const ownSchedule = JSON.parse(readFileSync(join(data, `teaching/${release.teaching}/classes/B240402.json`), 'utf8')).meetings;
+const examIndex = JSON.parse(readFileSync(join(data, `exams/${release.exams}/index.json`), 'utf8'));
+const examChanges = JSON.parse(readFileSync(join(data, `exams/${release.exams}/changes.json`), 'utf8'));
+const teachingClasses = JSON.parse(readFileSync(join(data, `teaching/${release.teaching}/classes.json`), 'utf8'));
+const affectedExam = examChanges.find(change => teachingClasses.some(klass => klass.id === change.class));
+if (!affectedExam || !examIndex.history.some(version => version.baseline)) throw new Error('the actual release has no exam baseline or affected class');
+const navigationMeeting = ownSchedule.find(meeting => meeting.teachers.length > 0 && meeting.course.code);
+const navigationExam = JSON.parse(readFileSync(join(data, `exams/${release.exams}/exams.json`), 'utf8'))[0];
 const managedCourse = ownSchedule.find(meeting => meeting.course.name.includes('计算机通信与网络')) ?? ownSchedule[0];
 const managedName = managedCourse.course.name.replace(/[（(].*?[)）]/g, '').trim();
 const course = knowledge.courses.find(c => c.name === '数据结构');
@@ -82,8 +89,18 @@ async function seedRelease() {
     const cache = `/data/user/0/${app}/files/campus`;
     adb('shell', 'mkdir', '-p', cache);
     adb('shell', 'chown', owner, `/data/user/0/${app}/files`);
-    execFileSync(adbPath, ['-s', serial, 'push', data, cache], { stdio: 'ignore', timeout: 120_000 });
-    adb('push', join(root, 'src/data/campus-release.json'), `${cache}/release-${product.android.versionCode}.json`);
+    const facts = `${cache}${release.base}`;
+    adb('shell', 'mkdir', '-p', facts);
+    for (const entry of readdirSync(data)) {
+        if (['space', 'knowledge', 'search', 'texts'].includes(entry)) continue;
+        execFileSync(adbPath, ['-s', serial, 'push', join(data, entry), facts], { stdio: 'ignore', timeout: 120_000 });
+    }
+    for (const base of [release.map_base, release.knowledge_base, release.search_base, release.texts_base]) {
+        const parent = `${cache}${base.slice(0, base.lastIndexOf('/'))}`;
+        adb('shell', 'mkdir', '-p', parent);
+        execFileSync(adbPath, ['-s', serial, 'push', join(root, 'public', base), parent], { stdio: 'ignore', timeout: 120_000 });
+    }
+    adb('push', join(root, 'src/data/campus-release.json'), `${cache}/release.json`);
     adb('shell', 'chown', '-R', owner, cache);
     console.log(`seeded the real compiled release in the emulator cache: ${release.version}`);
 }
@@ -185,6 +202,50 @@ async function chooseClass() {
     await type('B240402', 'search a class');
     await tap(node => node.text.includes('计算机科学与技术'), 'choose B240402');
     dismissKeyboard();
+}
+async function examHistory() {
+    await link('/?scale=term&mode=exam', 'open the personal exam arrangements');
+    await scrollFind('本次更新未影响本班', 'the latest exam update does not affect B240402');
+    await scrollTap(node => node.text.startsWith('更新记录 ·'), 'open the exam update history');
+    await scrollTap(node => node.text.includes('首次记录'), 'open the original exam baseline');
+    capture('exam-unaffected-baseline');
+    await link(`/?who=${encodeURIComponent(`class:${affectedExam.class}`)}&scale=term&mode=exam`, 'open the actual affected class exams');
+    await scrollTap(node => node.text.startsWith('更新记录 ·'), 'open the affected class history');
+    const version = examIndex.history.find(item => item.id === affectedExam.version);
+    const date = (version.observed ? new Intl.DateTimeFormat('en-CA', { timeZone: product.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(version.observed)) : version.published).slice(0, 10);
+    const said = `${Number(date.slice(5, 7))}月${Number(date.slice(8))}日`;
+    await scrollTap(node => node.text.startsWith(said) && node.text.includes('门考试有变动'), 'open a real exam update affecting this class');
+    await scrollFind(node => node.text.includes(affectedExam.course.name), 'the affected course is named');
+    const sitting = affectedExam.after?.[0] ?? affectedExam.before?.[0];
+    await scrollFind(node => node.text.includes(sitting.date) && node.text.includes(sitting.start), 'the actual added or previous sitting is explained');
+    await scrollTap(`采用的文件 · ${version.files.length} 份`, 'open every file used by this exam version');
+    await scrollFind(version.files[0].file.replace(/^\d{4}-\d{2}-\d{2}-/, ''), 'the original official filename is visible');
+    await scrollFind('官方公告', 'the announcement remains directly accessible');
+    await scrollFind('官方附件', 'the official workbook remains directly accessible');
+    await scrollFind('历史公告可能撤回，部分附件需连接校园网。', 'official source access limits are explained honestly');
+    capture('exam-affected-official-sources');
+    healthy('real exam versions, baseline, class impact and official source links');
+    await link('/', 'return to the personal timetable after exam acceptance');
+}
+async function searchNavigation() {
+    for (const [query, title] of [['B240402', 'B240402'], [navigationMeeting.teachers[0].name, `${navigationMeeting.teachers[0].name} 老师`]]) {
+        await link('/search/?' + new URLSearchParams({ q: query, scope: 'academic' }), 'search a real class or teacher');
+        await tap(node => node.class !== 'android.widget.EditText' && node.text === query, 'open the real campus entity inside Android', 45);
+        await find(title, 'the native timetable retains the selected entity');
+    }
+    await link('/search/?' + new URLSearchParams({ q: navigationMeeting.course.code, scope: 'academic' }), 'search a real course');
+    const course = navigationMeeting.course.name.replace(/[（(].*?[)）]/g, '').trim();
+    await tap(node => node.class !== 'android.widget.EditText' && node.text === course, 'open native course details', 45);
+    await tap('这门课的全部时段', 'open the native course timetable');
+    await find(course, 'the course remains inside Android');
+    const examCourse = navigationExam.course.name.replace(/[（(].*?[)）]/g, '').trim();
+    await link('/search/?' + new URLSearchParams({ q: `${examCourse} 考试 ${navigationExam.date}`, scope: 'academic' }), 'search a real exam');
+    await tap(`${examCourse} 考试`, 'open the real exam result', 45);
+    await find(examCourse, 'the exam opens its course inside Android');
+    await find(node => node.text.includes(navigationExam.start) && node.text.includes(navigationExam.end), 'the exam link retains the actual day and time');
+    capture('native-entity-search-navigation');
+    healthy('class, teacher, course and exam results remain inside Android');
+    await link('/', 'return to the personal timetable after entity navigation');
 }
 async function search101() {
     await link('/search/?q=101', 'search 101');
@@ -471,6 +532,8 @@ for (const [scale, name] of [['周', 'week'], ['学期', 'term'], ['任务', 'ta
     await tap(scale, `the ${scale} view`);
     capture(`timetable-${name}`);
 }
+await examHistory();
+await searchNavigation();
 await managedCourses();
 await mapFloors();
 await unknownRoomDay();

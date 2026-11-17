@@ -26,10 +26,12 @@ public sealed partial class Shell : Window
     private readonly StackPanel nav = new() { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Stretch };
     private readonly Grid layer = new() { Visibility = Visibility.Collapsed };
     private readonly Dictionary<string, Screen> screens = new();
-    private readonly Me.AccountAvatar face = new();
-    private readonly TextBlock faceName = new() { FontSize = 12, MaxWidth = 80, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Me.AccountAvatar face = new(28);
+    private readonly TextBlock faceName = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private readonly StackPanel faceRow = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
     private readonly Tap me = new();
     private readonly ColumnDefinition inset = new() { Width = new GridLength(140) };
+    private FrameworkElement? wordmark;
     private string shown = "";
     private Action? closing;
 
@@ -48,10 +50,12 @@ public sealed partial class Shell : Window
         bar.ColumnDefinitions.Add(inset);
         var mark = Kit.Text("StuDev", Role.Body, bold: true); mark.FontSize = 17; mark.FontWeight = Microsoft.UI.Text.FontWeights.Bold; mark.CharacterSpacing = -30;
         mark.VerticalAlignment = VerticalAlignment.Center; mark.Margin = new Thickness(0, 0, 28, 2); mark.IsHitTestVisible = false;
+        wordmark = mark;
         bar.Children.Add(mark);
         Grid.SetColumn(nav, 1); bar.Children.Add(nav);
         var drag = new Grid { Background = Paint.Clear }; Grid.SetColumn(drag, 2); bar.Children.Add(drag);
-        me.Content = Kit.Line(6, face, faceName); me.Height = Paint.Number("size", "search"); me.Padding = new Thickness(2, 0, 10, 0); me.CornerRadius = Kit.Capsule(me.Height); me.VerticalAlignment = VerticalAlignment.Center; me.Margin = new Thickness(0, 0, 8, 0);
+        faceRow.Children.Add(face); faceRow.Children.Add(faceName);
+        me.Content = faceRow; me.Height = Paint.Number("size", "search"); me.MinWidth = Paint.Number("size", "target"); me.Padding = new Thickness(4, 0, 12, 0); me.CornerRadius = Kit.Capsule(me.Height); me.VerticalAlignment = VerticalAlignment.Center; me.Margin = new Thickness(0, 0, 8, 0);
         AutomationProperties.SetName(me, "我"); AutomationProperties.SetAutomationId(me, "me");
         me.Click += (_, _) => Open("me");
         Grid.SetColumn(me, 3); bar.Children.Add(me);
@@ -66,10 +70,12 @@ public sealed partial class Shell : Window
         Content = root;
         root.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape && layer.Visibility == Visibility.Visible) { Close(); e.Handled = true; } };
         root.ActualThemeChanged += (_, _) => Turned();
+        bar.SizeChanged += (_, _) => AccountWidth();
+        nav.SizeChanged += (_, _) => AccountWidth();
         // The caption buttons' width can read 0 while a window comes back from the tray or from minimized, and changes
         // with the display's scale; it is read again on every change and a reading of none keeps the last.
         AppWindow.Changed += (_, e) => { if (e.DidSizeChange || e.DidPositionChange || e.DidVisibilityChange || e.DidPresenterChange) Inset(); };
-        Activated += (_, _) => Inset();
+        Activated += (_, _) => { Inset(); World.Campus.Shared.Resume(); };
         Place();
     }
 
@@ -110,10 +116,26 @@ public sealed partial class Shell : Window
         AutomationProperties.SetName(me, $"我 · {faceName.Text}");
         face.Show(user);
         AutomationProperties.SetHelpText(me, face.Status);
+        AccountWidth();
     }
 
     /** Account pages already show who is signed in; their header does not repeat the entry to one's settings. */
-    public void AccountPages(bool shown) => me.Visibility = shown ? Visibility.Collapsed : Visibility.Visible;
+    public void AccountPages(bool shown) { me.Visibility = shown ? Visibility.Collapsed : Visibility.Visible; AccountWidth(); }
+
+    private void AccountWidth()
+    {
+        if (root.ActualWidth <= 0) return;
+        if (wordmark is not null) wordmark.Visibility = root.ActualWidth < 720 ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var tap in nav.Children.OfType<Tap>()) tap.Padding = new Thickness(root.ActualWidth < 800 ? 8 : 12, 0, root.ActualWidth < 800 ? 8 : 12, 0);
+        // Navigation and a usable title-bar drag area precede the optional nickname.
+        var markWidth = wordmark?.Visibility == Visibility.Visible ? wordmark.ActualWidth + 28 : 0;
+        var remaining = root.ActualWidth - inset.Width.Value - 20 - markWidth - nav.ActualWidth - 60 - 8 - Paint.Number("size", "accountBase");
+        var compact = remaining < Paint.Number("size", "accountNameMin");
+        faceName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        faceName.MaxWidth = Math.Max(0, Math.Min(remaining, Paint.Number("size", "accountNameMax")));
+        faceRow.Spacing = compact ? 0 : 6;
+        me.Padding = compact ? new Thickness(4, 0, 4, 0) : new Thickness(4, 0, 12, 0);
+    }
 
     private void Tabs()
     {
@@ -190,6 +212,7 @@ public sealed partial class Shell : Window
     {
         var scale = root.XamlRoot?.RasterizationScale ?? 1;
         if (AppWindow.TitleBar.RightInset > 0) inset.Width = new GridLength(AppWindow.TitleBar.RightInset / scale);
+        AccountWidth();
     }
 
     private void Place()

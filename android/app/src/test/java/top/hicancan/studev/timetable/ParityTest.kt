@@ -40,6 +40,22 @@ class ParityTest {
             assertEquals(expected.getValue("min").jsonPrimitive.int, at.hour * 60 + at.minute)
         }
     }
+    @Test fun examHistoryMatchesClassImpactAndHistoricalDatePrecision() {
+        val cases = golden.getValue("examHistory").jsonObject
+        cases.getValue("comparisons").jsonArray.forEach { item -> val test = item.jsonObject; assertEquals(test.getValue("lines").jsonArray.map { it.jsonPrimitive.content }, Exams.changeLines(json.decodeFromJsonElement<ExamChange>(test.getValue("change")))) }
+        cases.getValue("times").jsonArray.forEach { item -> val test = item.jsonObject; assertEquals(test.getValue("text").jsonPrimitive.content, Exams.time(test.getValue("value").jsonPrimitive.content)) }
+        cases.getValue("classes").jsonArray.forEach { item ->
+            val test = item.jsonObject
+            val record = json.decodeFromJsonElement<ExamRecord>(test.getValue("record"))
+            val actual = JsonArray(Exams.history(record).map { version -> buildJsonObject {
+                put("id", version.id); put("time", Exams.versionTime(version)); put("impact", Exams.impact(version.baseline, version.changes))
+                put("changes", JsonArray(version.changes.map { change -> buildJsonObject {
+                    put("course", change.course.name); put("kind", change.change); put("lines", JsonArray(Exams.changeLines(change).map(::JsonPrimitive)))
+                } }))
+            } })
+            assertEquals(test.getValue("versions"), actual)
+        }
+    }
     @Test fun settingsSyncMatches() {
         val test = golden.getValue("settingsSync").jsonObject
         fun settings(value: JsonObject): top.hicancan.studev.me.PersonalSettings = value.entries.filter { it.key != "modified" }

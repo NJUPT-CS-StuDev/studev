@@ -32,20 +32,41 @@ import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
+import { changeLines, examHistory, examImpact, examTime, examVersionTime } from '@/world/exams';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, nextLesson, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { compactPlace, courseName, courseShort, roomLabel } from '@/world/names';
 import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
 import { openingStatus, recommendations } from '../../map/model/homePolicy';
 import { labelRule } from '../../map/model/labels';
 import type { Place } from '../../map/model/space';
-import type { CalendarTerm, MorningRun, RoomIndex } from '@/world/data';
-import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, Lab, RoomDay } from '@/world/facts';
+import type { CalendarTerm, ExamRecord, MorningRun, RoomIndex } from '@/world/data';
+import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, ExamChange, ExamVersion, ExamSource, Lab, RoomDay } from '@/world/facts';
 
 const read = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
 const campusTimes = ['2026-11-16T15:59:59Z', '2026-11-16T16:00:00Z', '2026-12-31T16:00:00Z', '2026-11-17T00:00:00Z', '2026-03-08T10:30:00Z']
     .map(instant => ({ instant, now: momentNow(new Date(instant)) }));
 const release = read<{ version: string; teaching: string; exams?: string; labs: string }>('src/data/campus-release.json');
 const base = `public/data/${release.version}`;
+const examIndex = read<{ sources: ExamSource[]; checked: string | null; history: ExamVersion[] }>(`${base}/exams/${release.exams}/index.json`);
+const examChanges = read<ExamChange[]>(`${base}/exams/${release.exams}/changes.json`);
+const releasedExams = read<Exam[]>(`${base}/exams/${release.exams}/exams.json`);
+const exampleExam = releasedExams[0]!;
+const exampleSlot = { date: exampleExam.date, start: exampleExam.start, end: exampleExam.end, campus: exampleExam.campus, location: exampleExam.location, teacher: exampleExam.teacher, students: exampleExam.students, note: exampleExam.note };
+// Boundary inputs use a released sitting; they are comparisons for tests, never published arrangements.
+const comparedChanges: ExamChange[] = [
+    { version: 'comparison', observed: '2026-11-17T00:01:00+00:00', class: exampleExam.classes[0]!, course: exampleExam.course, change: 'changed', before: [exampleSlot], after: [{ ...exampleSlot, date: addDays(exampleSlot.date, 1) }] },
+    { version: 'comparison', observed: '2026-11-17T00:01:00+00:00', class: exampleExam.classes[0]!, course: exampleExam.course, change: 'changed', before: [exampleSlot], after: [{ ...exampleSlot, location: releasedExams.find(exam => exam.location !== exampleSlot.location)!.location }] },
+    { version: 'comparison', observed: '2026-11-17T00:01:00+00:00', class: exampleExam.classes[0]!, course: exampleExam.course, change: 'changed', before: [exampleSlot], after: [{ ...exampleSlot, note: exampleSlot.note ? null : '携带有效证件' }] },
+    { version: 'comparison', observed: '2026-11-17T00:01:00+00:00', class: exampleExam.classes[0]!, course: exampleExam.course, change: 'removed', before: [exampleSlot], after: null },
+];
+const examHistoryCases = {
+    comparisons: comparedChanges.map(change => ({ change, lines: changeLines(change) })),
+    times: ['2026-11-04', '2026-11-17T00:01:00+00:00', '2026-11-16T16:01:00+00:00'].map(value => ({ value, text: examTime(value) })),
+    classes: [...new Set(['B240402', ...examChanges.slice(0, 1).map(change => change.class)])].map(klass => {
+        const record: ExamRecord = { ...examIndex, changes: examChanges.filter(change => change.class === klass) };
+        return { klass, record, versions: examHistory(record).map(version => ({ id: version.id, time: examVersionTime(version), impact: examImpact(version.baseline, version.changes), changes: version.changes.map(change => ({ course: change.course.name, kind: change.change, lines: changeLines(change) })) })) };
+    }),
+};
 const term = read<TeachingTerm>(`${base}/teaching/${release.teaching}/term.json`);
 const periods = read<TeachingPeriod[]>(`${base}/teaching/${release.teaching}/periods.json`);
 const calendar = read<{ terms: CalendarTerm[] }>(`${base}/calendar.json`).terms;
@@ -327,5 +348,5 @@ const glance = {
 const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
     .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, examHistory: examHistoryCases, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

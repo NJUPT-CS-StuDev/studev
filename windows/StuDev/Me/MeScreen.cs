@@ -27,12 +27,13 @@ public sealed partial class MeScreen : Screen
     {
         accountPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
         if (argument is "account") Go("account");
+        if (argument is Uri address) Go("account", System.Web.HttpUtility.ParseQueryString(address.Query)["tab"]);
     }
-    private void Go(string next)
+    private void Go(string next, string? accountTab = null)
     {
         if (section == "account" && next != "account") accountPage?.Leave();
         section = next; App.Window?.AccountPages(section == "account"); Draw();
-        if (section == "account") accountPage!.Shown(null);
+        if (section == "account") accountPage!.Shown(accountTab);
     }
     private static string Form(string kind, string? where = null) =>
         $"{Repository.Site}/fill/?id={Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";

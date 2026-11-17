@@ -52,7 +52,8 @@ export function renderWebTokens(tokens) {
   for (const [name, values] of Object.entries(tokens.type)) {
     for (const [key, value] of Object.entries(values)) dimensions[`type-${name}-${key}`] = `${value}${key === 'weight' ? '' : 'px'}`;
   }
-  return `/* Generated from design/tokens.json. */\n:root {\n${declarations(tokens.color.light)}\n${declarations(aliases)}\n${declarations(dimensions)}\n}\n:root[data-theme='dark'] {\n${declarations(tokens.color.dark)}\n}\n`;
+  const compactHeader = tokens.size.headerContent + tokens.size.headerGap + tokens.size.accountBase + tokens.size.accountNameMin;
+  return `/* Generated from design/tokens.json. */\n:root {\n${declarations(tokens.color.light)}\n${declarations(aliases)}\n${declarations(dimensions)}\n}\n:root[data-theme='dark'] {\n${declarations(tokens.color.dark)}\n}\n@container campus-header (width < ${compactHeader}px) {\n  .sd .campus-account-slot .avatar-name { display: none; }\n  .sd .campus-account-slot .avatar { width: var(--size-target); padding-inline: 4px; gap: 0; }\n}\n`;
 }
 
 export default function webTokens() {

@@ -88,29 +88,15 @@ test('the first page starts light: the timetable loads itself after the shell', 
   assert.ok(!existsSync(join(output, 'logo.png')), 'full logo original must not be distributed');
 });
 
-test('knowledge opens with the released course catalogue before JavaScript or documents load', async () => {
+test('knowledge renders its shell immediately and reads its catalogue from the independent snapshot', async () => {
   const html = await readFile(join(output, 'knowledge/index.html'), 'utf8');
-  const release = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
-  const knowledge = JSON.parse(await readFile(`public${release.base}/knowledge/knowledge.json`, 'utf8'));
-  const courses = new Map();
-  let search;
-  const text = (node) => node.nodeName === '#text' ? node.value : (node.childNodes ?? []).map(text).join('');
-  walk(parse(html), (node) => {
-    const attr = attributes(node);
-    if (node.tagName === 'input' && attr['aria-label'] === '筛选课程') search = attr;
-    if (node.tagName === 'button' && attr.class?.split(/\s+/).includes('kn-course')) {
-      const name = node.childNodes.find(child => child.tagName === 'b');
-      const count = node.childNodes.find(child => child.tagName === 'span');
-      courses.set(text(name), text(count));
-    }
-  });
-  assert.equal(search?.type, 'search', 'course filtering must be present in the initial HTML');
-  assert.deepEqual([...courses.keys()].sort(), knowledge.courses.map(course => course.name).sort());
-  for (const course of knowledge.courses) {
-    const topics = new Set(course.chapters.flatMap(chapter => chapter.topics)).size;
-    const materials = knowledge.materials.filter(material => material.course === course.id).length;
-    assert.equal(courses.get(course.name), `${course.chapters.length} 章 · ${topics} 个知识点 · ${materials} 份资料`);
-  }
+  assert.match(html, /<h1[^>]*>知识<\/h1>/);
+  assert.match(html, /role="status"[^>]*>正在加载课程/);
+  assert.doesNotMatch(html, /&quot;catalog&quot;/, 'a code build must not freeze the current catalogue in component props');
+  for (const name of ['data', 'space', 'texts']) assert.ok(!existsSync(join(output, name)), `${name} belongs to the independent data publication`);
+  const files = await readdir(join(output, '_astro'));
+  const scripts = await Promise.all(files.filter(name => name.endsWith('.js')).map(name => readFile(join(output, '_astro', name), 'utf8')));
+  assert.ok(scripts.some(text => text.includes('knowledge-catalog.json')), 'the live catalogue loader must be bundled');
 });
 
 test('article metadata and Markdown emphasis remain correct', async () => {
@@ -266,5 +252,5 @@ test('stable sitemap files revalidate without changing other asset headers', asy
   assert.match(cache, /(?:^|,\s*)must-revalidate(?:,|$)/);
   assert.doesNotMatch(cache, /immutable/);
   const cacheRules = config.headers.filter((rule) => rule.headers.some((header) => header.key.toLowerCase() === 'cache-control'));
-  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/data/*', '/_astro/*', '/sw.js', '/pwa-release.json'].includes(rule.source)), 'only sitemaps, update manifests/workers and versioned assets may receive a cache override');
+  assert.ok(cacheRules.every((rule) => ['/sitemap-*.xml', '/_astro/*', '/sw.js', '/app-release.json'].includes(rule.source)), 'only sitemaps, app metadata/workers and versioned shell assets may receive a cache override');
 });

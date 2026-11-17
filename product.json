@@ -4,6 +4,8 @@
   "positioning": "南邮计软网安学生发展中心的官网与社团平台，也是我们为全校同学做的时空联动数字校园。",
   "summary": "学生发展中心官网与社团平台；课表、考场与三维校园时空联动，信息一搜即得。",
   "origin": "https://studev.hicancan.top",
+  "campusOrigin": "https://data.hicancan.top",
+  "dataProject": { "name": "studev-data", "id": "makers-nmlv9rc4c2ob" },
   "repository": "NJUPT-CS-StuDev/studev",
   "timeZone": "Asia/Shanghai",
   "forms": {
@@ -17,8 +19,8 @@
     "police": { "number": "苏公网安备32011302323214号", "code": "32011302323214" }
   },
   "android": {
-    "versionName": "3.4.1",
-    "versionCode": 70,
+    "versionName": "3.5.0",
+    "versionCode": 71,
     "minSdk": 26
   },
   "campus": {

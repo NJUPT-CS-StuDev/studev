@@ -6,7 +6,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-function Wait-PublishedCampus([string]$Origin, [string]$Version, [string]$Base) {
+function Wait-PublishedApp([string]$Origin, [string]$Version, [int]$VersionCode) {
     $deadline = [DateTime]::UtcNow.AddMinutes(15)
     $originUrl = $Origin.TrimEnd('/')
     $http = [System.Net.Http.HttpClient]::new()
@@ -31,40 +31,50 @@ function Wait-PublishedCampus([string]$Origin, [string]$Version, [string]$Base) 
     }
     try {
         do {
-            $manifest = Read-Status "$originUrl/pwa-release.json"
+            $manifest = Read-Status "$originUrl/app-release.json"
             $publishedVersion = '-'
+            $runtime = $null
             if ($manifest.Status -eq 200) {
-                try { $publishedVersion = [string]($manifest.Content | ConvertFrom-Json).version } catch { $publishedVersion = 'invalid' }
+                try { $runtime = $manifest.Content | ConvertFrom-Json; $publishedVersion = [string]$runtime.android.versionName } catch { $publishedVersion = 'invalid' }
             }
             $roomsStatus = $knowledgeStatus = 'waiting'
-            if ($publishedVersion -ceq $Version) {
-                $roomsStatus = (Read-Status "$originUrl$($Base.TrimEnd('/'))/rooms/index.json").Status
-                $knowledgeStatus = (Read-Status "$originUrl$($Base.TrimEnd('/'))/knowledge/knowledge.json").Status
+            if ($publishedVersion -ceq $Version -and [int]$runtime.android.versionCode -eq $VersionCode) {
+                try {
+                    $entry = [Uri]$runtime.campus_entry
+                    if ($entry.Scheme -ne 'https') { throw 'invalid campus entry' }
+                    $snapshot = Read-Status $entry.AbsoluteUri
+                    if ($snapshot.Status -eq 200) {
+                        $current = $snapshot.Content | ConvertFrom-Json
+                        $roomsUrl = [Uri]::new($entry, "$($current.base.TrimEnd('/'))/rooms/index.json")
+                        $roomsStatus = (Read-Status $roomsUrl.AbsoluteUri).Status
+                        $knowledgeUrl = [Uri]::new($entry, "$($current.knowledge_base.TrimEnd('/'))/knowledge.json")
+                        $knowledgeStatus = (Read-Status $knowledgeUrl.AbsoluteUri).Status
+                    }
+                } catch { $roomsStatus = 'unavailable' }
             }
             Write-Output "site version=$publishedVersion manifest=$($manifest.Status) rooms=$roomsStatus knowledge=$knowledgeStatus"
-            if ($publishedVersion -ceq $Version -and $roomsStatus -eq 200 -and $knowledgeStatus -eq 200) { return }
+            if ($publishedVersion -ceq $Version -and [int]$runtime.android.versionCode -eq $VersionCode -and $roomsStatus -eq 200 -and $knowledgeStatus -eq 200) { return }
             $remaining = ($deadline - [DateTime]::UtcNow).TotalSeconds
             if ($remaining -gt 0) { Start-Sleep -Seconds ([Math]::Min(15, $remaining)) }
         } while ([DateTime]::UtcNow -lt $deadline)
-        throw "The site did not serve $Version and its rooms/knowledge data within 15 minutes; the Windows update feed was not published."
+        throw "The site did not serve app $Version and a readable campus entry within 15 minutes; the Windows update feed was not published."
     } finally { $http.Dispose() }
 }
 
 $env:JAVA_HOME = 'D:\Dev\java\jdk-21.0.13+9'
 $env:ANDROID_HOME = 'D:\Dev\Android\Sdk'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+Push-Location $repo
+try { & npm run data:pull; if ($LASTEXITCODE -ne 0) { throw 'reading the published campus snapshot failed' } } finally { Pop-Location }
 $android = Join-Path $repo 'android'
 $gradle = Join-Path $android 'gradlew.bat'
 $privateModule = 'D:\personal-config\secrets\secrets.psm1'
 Import-Module $privateModule
-$keystore = 'D:\personal-config\secrets\projects\studev\android-release.p12'
-$alias = 'studev'
-$storePassword = [string](Get-Secret local.studev_android.store_password)
-if (-not (Test-Path $keystore)) { throw "release keystore is missing: $keystore" }
-$signingArgs = @("-Pstudev.keystore=$keystore", "-Pstudev.keyAlias=$alias", "-Pstudev.storePassword=$storePassword")
-Push-Location $android
-try { & $gradle assembleRelease @signingArgs @GradleArgs; $gradleExitCode = $LASTEXITCODE } finally { Pop-Location }
-if ($gradleExitCode -ne 0) { throw "assembleRelease failed" }
+$tempBase = 'D:\Temp\codex\studev-release'
+$tempRoot = Join-Path $tempBase ([guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+& (Join-Path $PSScriptRoot 'build-android.ps1') -OutputDir $tempRoot -GradleArgs $GradleArgs
+if ($LASTEXITCODE -ne 0) { throw 'signed Android build failed' }
 $apk = Join-Path $android 'app\build\outputs\apk\release\app-release.apk'
 $product = Get-Content (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
 $versionName = $product.android.versionName
@@ -94,17 +104,8 @@ if (-not $sha1.StartsWith('C1:02:6E:54')) { throw "unexpected release certificat
 & node (Join-Path $repo 'scripts/smoke/android.mjs') $apk
 if ($LASTEXITCODE -ne 0) { throw 'Android smoke test failed' }
 
-$tempBase = 'D:\Temp\codex\studev-release'
-$tempRoot = Join-Path $tempBase ([guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
-# This is the package both native clients were built against. Deployment extracts it
-# and renders the site; it never recompiles another bundle under the same name.
-$campusData = Join-Path $tempRoot 'campus-data.tar.gz'
-$campusRelease = Get-Content (Join-Path $repo 'src/data/campus-release.json') -Raw | ConvertFrom-Json
-& tar -czf $campusData -C $repo public/data public/map src/data/campus-release.json
-if ($LASTEXITCODE -ne 0) { throw 'Campus data packaging failed' }
 $env:OSCA_DOWNLOAD_ENDPOINT = Get-Secret local.osca_download.endpoint
 $env:OSCA_DOWNLOAD_BUCKET = Get-Secret local.osca_download.bucket
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.osca_download.access_key
@@ -151,7 +152,7 @@ foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $f
 & node (Join-Path $repo 'scripts/release/put.mjs') $fullPortable "windows/studev-$versionName-windows.zip"
 if ($LASTEXITCODE -ne 0) { throw 'Windows portable upload failed' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
-$assetPaths = @($fullApk, $fullPortable, $campusData)
+$assetPaths = @($fullApk, $fullPortable)
 $tag = "v$versionName"
 $repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()
@@ -171,7 +172,7 @@ if ($LASTEXITCODE -ne 0) { throw "GitHub release asset upload failed" }
 & gh release edit $tag --repo $repoName --draft=false --latest
 if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
 try {
-    Wait-PublishedCampus $product.origin $campusRelease.version $campusRelease.base
+    Wait-PublishedApp $product.origin $versionName $versionCode
     & node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
     if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
 } catch {

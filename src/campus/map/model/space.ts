@@ -3,8 +3,9 @@ import { PRODUCT_CONFIG } from '@/world/product';
 // contributed by the campus facts release and are joined by canonical map id.
 import type { StyleSpecification } from 'maplibre-gl';
 import type { GraphData, Position, Endpoint } from 'wayfind';
-import { DATA_RELEASE } from '@/world/config';
-import { fetchJson } from '@/world/fetch';
+import { DATA_RELEASE, releaseReady } from '@/world/config';
+import { fetchJson, fetchText } from '@/world/fetch';
+import { loadRoomIndex } from '@/world/data';
 
 const CAMPUS = PRODUCT_CONFIG.CAMPUS.id;
 
@@ -38,30 +39,36 @@ export interface Space {
 }
 
 export const spaceBase = (campus = CAMPUS) =>
-    new URL(`${DATA_RELEASE.base}/space/${encodeURIComponent(campus)}`, location.origin).href;
+    new URL(`${DATA_RELEASE.map_base}/${encodeURIComponent(campus)}`, location.origin).href;
 
 export async function loadSpace(campus = CAMPUS): Promise<Space> {
+    await releaseReady;
     const base = spaceBase(campus);
-    const [places, network, opening] = await Promise.all([
+    const [places, network, opening, rooms] = await Promise.all([
         fetchJson<Place[]>(`${base}/entities.json`),
         fetchJson<GraphData>(`${base}/network.json`),
         fetchJson<Record<string, OpeningRecord>>(`${DATA_RELEASE.base}/hours.json`),
+        loadRoomIndex(),
     ]);
     const joined = places.map(place => {
         if (!place.routing || place.routing.type !== 'target' || place.routing.id !== place.id) {
             throw new Error(`地图实体缺少规范导航目标：${place.id}`);
         }
         const record = opening[place.id];
-        return { ...place, ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };
+        const room = rooms.rooms.find(room => room.id === place.id);
+        return { ...place,
+            ...(room ? { names: [...new Set([...place.names, ...room.names])], seats: room.seats ?? undefined, room_kinds: room.kinds } : {}),
+            ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };
     });
     return { places: joined, byId: new Map(joined.map(p => [p.id, p])), network };
 }
 
 /** The packaged style, with its two tokens bound to this site. */
 export async function loadStyle(campus = CAMPUS): Promise<StyleSpecification> {
+    await releaseReady;
     const base = spaceBase(campus);
-    const text = await (await fetch(`${base}/style.json`)).text();
-    return JSON.parse(text.replaceAll('{data}', base).replaceAll('{assets}', new URL('/map', location.origin).href));
+    const text = await fetchText(`${base}/style.json`);
+    return JSON.parse(text.replaceAll('{data}', base).replaceAll('{assets}', `${DATA_RELEASE.map_base}/assets`));
 }
 
 

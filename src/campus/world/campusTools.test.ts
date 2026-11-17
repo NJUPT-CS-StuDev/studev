@@ -18,11 +18,9 @@ let index: Knowledge;
 beforeAll(async () => {
     await initialize({ module_or_path: await readFile('node_modules/wasm-search/wasm/wasm_search_wasm_bg.wasm') });
     index = JSON.parse(await readFile(join(base, 'knowledge/knowledge.json'), 'utf8')) as Knowledge;
-    const manifest = JSON.parse(await readFile(join(base, 'search/manifest.json'), 'utf8')) as { packs: string[]; mirrors?: Record<string, string> };
     // Only transport is local: the production WASM, range-reader, search runtime and published bundle are real.
     vi.stubGlobal('fetch', async (url: string, options?: RequestInit) => {
-        const mirror = Object.entries(manifest.mirrors ?? {}).find(([, value]) => value === url)?.[0];
-        const relative = mirror === undefined ? decodeURIComponent(new URL(url, 'https://studev.test').pathname) : `${release.base}/search/${manifest.packs[Number(mirror)]}`;
+        const relative = decodeURIComponent(new URL(url, 'https://studev.test').pathname);
         const path = join('public', relative);
         const range = new Headers(options?.headers).get('range')?.match(/^bytes=(\d+)-(\d+)$/);
         if (!range) return new Response(await readFile(path));

@@ -5,7 +5,8 @@ using System.Text.Json.Serialization;
 
 namespace StuDev.Data;
 
-public sealed record DataRelease(string Version, string Base, string BuiltAt, string Teaching, string? Exams, string? Labs, string Rooms, string? MapVersion, string? DataVersion);
+public sealed record DataRelease(string Version, string Base, string BuiltAt, string Teaching, string? Exams, string? Labs, string Rooms, string? MapVersion, string? DataVersion,
+    string? KnowledgeVersion, string MapBase, string KnowledgeBase, string SearchBase, string TextsBase);
 public sealed record AppRelease(string VersionName, int VersionCode);
 public sealed record TeachingWeek(int Week, string Start, string End);
 public sealed record TeachingTerm(string Term, int Year, int Number, List<TeachingWeek> Weeks, string ObservedAt);
@@ -21,8 +22,13 @@ public sealed record ClassSchedule([property: JsonPropertyName("class")] Teachin
 public sealed record ExamCourse(string? Code, string Name);
 public sealed record Exam(string Id, List<string> Classes, ExamCourse Course, string? Teacher, string? Campus, string Location, string? Room, string Date, string Start, string End,
     int? Students, string? Note, string Source, string Kind, string Subtype);
-public sealed record ClassExams(List<Exam> Exams, List<JsonElement> Changes);
-public sealed record ExamIndex(List<string> Classes, List<JsonElement> Sources, string Checked);
+public sealed record ExamSource(string File, string Url, string Notice, string Title, string? Published = null);
+public sealed record ExamVersion(string Id, string? Observed, string? Published, bool Baseline, List<ExamSource> Files);
+public sealed record ExamSlot(string Date, string Start, string End, string? Campus, string? Location, string? Teacher, int? Students, string? Note = null);
+public sealed record ExamChange(string Version, string? Observed, ExamCourse Course, string Change, List<ExamSlot>? Before, List<ExamSlot>? After);
+public sealed record ClassExams(List<Exam> Exams, List<ExamChange> Changes);
+public sealed record ExamIndex(List<string> Classes, List<ExamSource> Sources, string? Checked, List<ExamVersion> History);
+public sealed record ExamRecord(List<ExamChange> Changes, List<ExamSource> Sources, string? Checked, List<ExamVersion> History);
 public sealed record Lab(string Id, List<string> Classes, int? Group, ExamCourse Course, string Project, List<string> Teachers, string Location, string Place, string Short,
     string? Room, int Week, int Weekday, List<int> Periods, string Date, string Start, string End, int? Students, string Source, string Kind, string Subtype);
 public sealed record ClassLabs(List<Lab> Labs);

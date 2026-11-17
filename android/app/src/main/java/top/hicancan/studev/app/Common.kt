@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
 
 object Ink {
     val line @Composable get() = MaterialTheme.colorScheme.outlineVariant
@@ -38,9 +40,21 @@ object Ink {
 fun Modifier.topHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1f) }
 fun Modifier.bottomHairline(color: Color) = drawBehind { drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), 1f) }
 
-/** The campus's top row shares a centre line with the account pill at 6 + 36/2 dp. */
-@Composable fun CampusHeader(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) =
-    Row(modifier.fillMaxWidth().height(48.dp).padding(end = 100.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content)
+val LocalMeAction = staticCompositionLocalOf<(() -> Unit)?> { null }
+
+/** Content and account share one measured row; the name gives way before the page controls. */
+@Composable fun CampusHeader(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    val openMe = LocalMeAction.current
+    BoxWithConstraints(modifier.fillMaxWidth().height(Tokens.Size.header.dp)) {
+        val labelWidth = (maxWidth.value - Tokens.Size.headerContent - Tokens.Size.headerGap - Tokens.Size.accountBase).coerceAtMost(Tokens.Size.accountNameMax.toFloat())
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Size.headerGap.dp)) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content)
+            if (openMe != null) Surface(openMe, Modifier.height(Tokens.Size.search.dp).widthIn(min = Tokens.Size.target.dp).testTag("me"), shape = RoundedCornerShape(Tokens.Radius.pill.dp), color = Ink.sunken) {
+                MeAvatar(labelWidth.takeIf { it >= Tokens.Size.accountNameMin }?.dp)
+            }
+        }
+    }
+}
 
 /** A plain row under a hairline, the one list item used everywhere. A trailing lambda is what a tap does; a control
  * at its end is passed by name (trailing = …). */

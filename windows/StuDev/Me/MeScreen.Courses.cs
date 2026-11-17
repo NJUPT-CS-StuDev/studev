@@ -51,16 +51,7 @@ public sealed partial class MeScreen
         void Row(string key, string value, string? note = null, Action? open = null) => body.Children.Add(Kit.Row(key, Value(value, note), open));
         Row("来源", course.Source switch { "class" => $"班级课表 · {campus.Preferences.Class}", "custom" => "自定义课程", _ => "从全校课程添加" }, course.Hidden ? "已从个人课表隐藏" : null);
         if (custom is null && first.Course.Name != name) Row("原名", first.Course.Name);
-        if (first.Course.Code is { } code) Row("课程代码", code);
-        var teachers = course.Meetings.SelectMany(m => m.Teachers).Select(t => t.Name).Distinct().ToList();
-        if (teachers.Count > 0) Row("教师", string.Join('、', teachers));
-        body.Children.Add(Pages.Section("上课安排"));
-        foreach (var meeting in course.Meetings)
-        {
-            var start = campus.Periods.FirstOrDefault(p => p.Period == meeting.Periods[0])?.Start;
-            var end = campus.Periods.FirstOrDefault(p => p.Period == meeting.Periods[^1])?.End;
-            Row("", $"{Clock.Weekdays[meeting.Weekday]} · 第 {meeting.Periods[0]}–{meeting.Periods[^1]} 节{(start is not null && end is not null ? $" · {start}–{end}" : "")}", $"{Lessons.WeeksText(meeting.Weeks)} · {(meeting.Room is { } room ? Names.Room(room) : meeting.Location ?? "地点未定")}");
-        }
+        CourseInfo.Arrangements(body, campus, course.Meetings);
         if (custom is not null)
         {
             Row("", "编辑课程", "修改名称、时间、地点或教师", () => CustomEditor(custom));
