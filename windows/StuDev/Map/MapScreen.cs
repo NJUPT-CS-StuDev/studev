@@ -32,6 +32,7 @@ public sealed partial class MapScreen : Screen
     private World.Rooms? reader;
     private RoomDay? day;
     private string? dayDate;
+    private int dayRequest;
     private Kernels.Wayfind.Router? router;
     private Moment moment = Moment.Now();
     /** The sun the shadows were last drawn for, to draw them again only when it has moved. */
@@ -177,10 +178,16 @@ public sealed partial class MapScreen : Screen
     {
         if (campus.Repository is not { } repo || roomIndex is null) return;
         var date = Clock.Text(moment.Date);
-        if (dayDate == date) return;
+        if (dayDate == date && day is not null) return;
+        var request = ++dayRequest;
         dayDate = date;
-        try { day = await repo.RoomDay(roomIndex.Term, date); }
-        catch (Exception error) when (error is HttpRequestException or IOException or JsonException) { day = null; }
+        day = null;
+        Counts(); FloorButtons(openBuilding); Draw();
+        if (openBuilding is not null) await PaintRooms();
+        RoomDay? loaded;
+        try { loaded = await repo.RoomDay(roomIndex.Term, date); }
+        catch (Exception error) when (error is HttpRequestException or IOException or JsonException or OperationCanceledException) { loaded = null; }
+        if (request == dayRequest && ReferenceEquals(campus.Repository, repo)) day = loaded;
     }
 
     private Task Layer(string json, string? before = null) => surface.Map.AddStyleLayerJsonAsync(json, before ?? "");
@@ -329,14 +336,19 @@ public sealed partial class MapScreen : Screen
     {
         if (reader is null || roomIndex is null) return;
         var free = new Dictionary<string, int>();
-        foreach (var room in roomIndex.Rooms.Where(World.Rooms.Classroom))
+        if (day is not null) foreach (var room in roomIndex.Rooms.Where(World.Rooms.Classroom))
         {
             var key = $"{room.Campus}/{room.Building}";
-            if (day is not null && !reader.At(day, room.Id, moment.Min).Busy) free[key] = free.GetValueOrDefault(key) + 1; else free.TryAdd(key, 0);
+            if (!reader.At(day, room.Id, moment.Min).Busy) free[key] = free.GetValueOrDefault(key) + 1; else free.TryAdd(key, 0);
         }
         foreach (var (tap, _, _, _, id, _) in buildingLabels)
             if (((Tap)tap).Tag is Border { Child: TextBlock words } && words.Inlines.Count == 3 && words.Inlines[2] is Microsoft.UI.Xaml.Documents.Run count)
-            { var n = free.GetValueOrDefault(id); count.Text = n.ToString(); count.Foreground = n > 0 ? Paint.Brush("free") : Paint.Brush("faint"); }
+            {
+                var n = free.GetValueOrDefault(id);
+                if (words.Inlines[1] is Microsoft.UI.Xaml.Documents.Run gap) gap.Text = day is null ? "" : " ";
+                count.Text = day is null ? "" : n.ToString();
+                count.Foreground = n > 0 ? Paint.Brush("free") : Paint.Brush("faint");
+            }
     }
 
     private static double[] Centre(JsonElement geometry)
@@ -451,6 +463,7 @@ public sealed partial class MapScreen : Screen
 
     private int BestFloor(string building, List<int> levels)
     {
+        if (day is null) return levels[0];
         var rooms = TeachingRooms(building); var best = levels[0]; var most = -1;
         foreach (var level in levels) { var free = rooms.Count(r => r.Floor == level.ToString() && StateOf(r.Id)?.Busy == false); if (free > most) { most = free; best = level; } }
         return best;
@@ -776,7 +789,7 @@ public sealed partial class MapScreen : Screen
             Meta($"{building.Names.FirstOrDefault()} {floor} 层{(room?.Seats is { } seats ? $" · {seats} 座" : "")}{(room?.Kinds.FirstOrDefault() is { } kind ? $" · {System.Text.RegularExpressions.Regex.Replace(kind, "^(仙林|三牌楼|锁金)", "")}" : "")}");
             if (state is not null)
             {
-                var said = day is null ? "这一天没有排课数据" : state.Busy ? $"{(state.Current is not null ? "上课中" : "有人用")}，到 {Clock.Hm(state.Until)}" : state.Minutes > 0 ? $"空闲，到 {Clock.Hm(state.Until)}，还能待 {Clock.Duration(state.Minutes)}" : "空闲，今天没课了";
+                var said = day is null ? "暂无这一天的排课数据" : state.Busy ? $"{(state.Current is not null ? "上课中" : "有人用")}，到 {Clock.Hm(state.Until)}" : state.Minutes > 0 ? $"空闲，到 {Clock.Hm(state.Until)}，还能待 {Clock.Duration(state.Minutes)}" : "空闲，今天没课了";
                 var t = Kit.Text(said, Role.Body, state.Busy || day is null ? "muted" : "free", bold: true); t.Margin = new Thickness(0, 0, 0, 6); body.Children.Add(t);
             }
             Buttons(("去这里", () => { navId = picked.Id; placeId = null; _ = Scene(); Draw(); }, true));
@@ -787,12 +800,13 @@ public sealed partial class MapScreen : Screen
         else if (building is not null && HasFloors(building.Id))
         {
             var rooms = TeachingRooms(building.Id).Where(r => floor is null || r.Floor == floor.ToString()).ToList();
-            var free = rooms.Select(r => (Room: r, State: StateOf(r.Id)!)).Where(x => day is not null && !x.State.Busy).OrderByDescending(x => x.State.Minutes).ToList();
             Title($"{building.Names.FirstOrDefault()}{(floor is not null ? $" {floor} 层" : "")}");
             Buttons(("去这里", () => { navId = building.Id; placeId = null; _ = Scene(); Draw(); }, true));
-            if (rooms.Count > 0)
+            if (rooms.Count > 0 && day is null) Meta("暂无这一天的排课数据");
+            else if (rooms.Count > 0)
             {
-                var all = TeachingRooms(building.Id).Count(r => day is not null && StateOf(r.Id)?.Busy == false);
+                var free = rooms.Select(r => (Room: r, State: StateOf(r.Id)!)).Where(x => !x.State.Busy).OrderByDescending(x => x.State.Minutes).ToList();
+                var all = TeachingRooms(building.Id).Count(r => StateOf(r.Id)?.Busy == false);
                 var sum = new TextBlock { FontSize = 13.5, Foreground = Paint.Brush("muted"), Margin = new Thickness(0, 4, 0, 6) };
                 sum.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = free.Count.ToString(), Foreground = Paint.Brush("free"), FontWeight = FontWeights.SemiBold });
                 sum.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = $" / {rooms.Count} 间空闲 · 全楼 {all} 间" });
