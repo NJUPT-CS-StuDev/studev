@@ -55,6 +55,8 @@ public sealed partial class AiScreen : Screen
     private CancellationTokenSource? stop;
     private DocStream? stream;
     private string said = "";
+    private string draft = "";
+    private bool compact, conversationsOpen;
     private bool liveDirty;
     private readonly DispatcherTimer frame = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private readonly HashSet<string> openSteps = [];
@@ -69,6 +71,7 @@ public sealed partial class AiScreen : Screen
         Children.Add(side);
         Grid.SetColumn(main, 1); Children.Add(main);
         frame.Tick += (_, _) => { if (liveDirty) { liveDirty = false; DrawLive(); } };
+        SizeChanged += (_, change) => { var narrow = change.NewSize.Width < 760; if (compact != narrow) { compact = narrow; conversationsOpen = false; Draw(); } };
         Paint.Turned += Draw;
         Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Draw();
@@ -124,13 +127,16 @@ public sealed partial class AiScreen : Screen
         thread = found?.Thread ?? ChatThread.Empty; proposals = found is null ? [] : keptProposals.GetValueOrDefault(found.Id) ?? [];
         current = found?.Id ?? Guid.NewGuid().ToString(); error = ""; editing = null; openSteps.Clear();
         runtimeRequest = null; runtimeFirstAssistant = null;
+        conversationsOpen = false;
         WriteChats(); Draw();
     }
 
     private Situation SituationNow()
     {
         var user = Account.Shared.User;
-        return new(campus.Line?.WeekOf(CampusDay.Today()), campus.Preferences.Class, campus.Preferences.Campus,
+        var date = Clock.Text(CampusDay.Today());
+        int? week = campus.Term is { } term ? term.Weeks.FirstOrDefault(week => string.CompareOrdinal(date, week.Start) >= 0 && string.CompareOrdinal(date, week.End) <= 0)?.Week ?? 0 : null;
+        return new(week, campus.Preferences.Class, campus.Preferences.Campus,
             user is null ? null : user.RealName.Length > 0 ? user.RealName : user.Nickname.Length > 0 ? user.Nickname : null, user?.StudentId is { Length: > 0 } s ? s : null, memory.On ? memory.Text : null);
     }
 
@@ -307,7 +313,15 @@ public sealed partial class AiScreen : Screen
     }
 
     // ——— drawing ———
-    private void Draw() { DrawSide(); DrawMain(); }
+    private void Draw()
+    {
+        side.Visibility = !compact || conversationsOpen ? Visibility.Visible : Visibility.Collapsed;
+        side.Width = compact ? double.NaN : 260;
+        side.HorizontalAlignment = compact ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+        Grid.SetColumnSpan(side, compact ? 2 : 1);
+        main.Visibility = compact && conversationsOpen ? Visibility.Collapsed : Visibility.Visible;
+        DrawSide(); DrawMain();
+    }
 
     private static Tap Icon(string label, string path, Action act, double box = 20, bool enabled = true)
     {
@@ -333,7 +347,13 @@ public sealed partial class AiScreen : Screen
         ((StackPanel)top.Content).VerticalAlignment = VerticalAlignment.Center;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(top, "新对话");
         top.Click += (_, _) => Open(null);
-        side.Children.Add(top);
+        if (compact)
+        {
+            var heading = new StackPanel();
+            heading.Children.Add(Kit.TextAction("返回对话", () => { conversationsOpen = false; Draw(); }, Icons.Back));
+            heading.Children.Add(top); side.Children.Add(heading);
+        }
+        else side.Children.Add(top);
         var list = new StackPanel { Padding = new Thickness(10, 0, 10, 8) };
         foreach (var (name, group) in Chats.Groups(chats, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
         {
@@ -405,7 +425,8 @@ public sealed partial class AiScreen : Screen
         var blank = thread.Path().Count == 0;
         // The bar: which model answers, and the conversation's name.
         var bar = new Grid { Padding = new Thickness(14, 8, 14, 0), ColumnSpacing = 6, MinHeight = 48 };
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
+        if (compact) bar.Children.Add(Icon("对话", Icons.Note, () => { conversationsOpen = true; Draw(); }, 16));
         var modelFace = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Child = new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(Models.OwnerAvatar)) } };
         var modelContent = own ? Kit.Line(4, Kit.Text(Models.Name(choice.Mine), Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted"))
             : Kit.Line(6, modelFace, Kit.Text("免费额度", Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted"));
@@ -421,8 +442,8 @@ public sealed partial class AiScreen : Screen
         pick.Items.Add(free); pick.Items.Add(mine); pick.Items.Add(new MenuFlyoutSeparator()); pick.Items.Add(set);
         model.IsEnabled = !busy;
         model.Click += (_, _) => pick.ShowAt(model, new FlyoutShowOptions { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft });
-        bar.Children.Add(model);
-        if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); bar.Children.Add(title); }
+        Grid.SetColumn(model, 1); bar.Children.Add(model);
+        if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 2); bar.Children.Add(title); }
         main.Children.Add(bar);
 
         var column = new StackPanel { Padding = new Thickness(18, 12, 18, 28) };
@@ -473,7 +494,7 @@ public sealed partial class AiScreen : Screen
 
     private FrameworkElement Composer()
     {
-        var box = new TextBox { PlaceholderText = "问点什么", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
+        var box = new TextBox { Text = draft, PlaceholderText = "问点什么", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
         box.Resources["TextControlBackgroundFocused"] = Paint.Clear; box.Resources["TextControlBackgroundPointerOver"] = Paint.Clear; box.Resources["TextControlBorderBrushFocused"] = Paint.Clear;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, "问点什么");
         var send = new Tap(Paint.Brush("ink")) { Width = 36, Height = 36, CornerRadius = new CornerRadius(18), VerticalAlignment = VerticalAlignment.Bottom, Content = Kit.Icon(busy ? Icons.Square : Icons.Up, 20, "paper", 20, 2) };
@@ -482,7 +503,7 @@ public sealed partial class AiScreen : Screen
         void Go() { if (busy) { stop?.Cancel(); return; } var text = box.Text; box.Text = ""; Send(text); }
         send.Click += (_, _) => Go();
         void Shade() { send.Opacity = busy || box.Text.Trim().Length > 0 ? 1 : .18; }
-        box.TextChanged += (_, _) => Shade(); Shade();
+        box.TextChanged += (_, _) => { draft = box.Text; Shade(); }; Shade();
         box.PreviewKeyDown += (_, e) =>
         {
             var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);

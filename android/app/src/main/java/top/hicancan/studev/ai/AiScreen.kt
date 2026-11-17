@@ -146,7 +146,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         var history = base.lineage(at).map { it.message }.let { if (runtime) it else recent(it) }
         // The moment and who is asking, as this device knows them now.
         val settings = model.settings.state.value; val line = model.myLine(model.state.value, settings); val user = client.current()
-        val situation = Situation(line?.weekOf(top.hicancan.studev.world.CampusDay.now().toLocalDate()), settings.klass, settings.campus,
+        val week = model.state.value.term?.let { top.hicancan.studev.world.CampusDay.weekOf(it.weeks, top.hicancan.studev.world.CampusDay.now().toLocalDate())?.week ?: 0 }
+        val situation = Situation(week, settings.klass, settings.campus,
             user?.let { it.realName.ifBlank { it.nickname }.ifBlank { null } }, user?.studentId?.ifBlank { null }, memory.takeIf { it.on }?.text)
         tools.definitions = assistant.toolsFor(situation)
         var said = ""

@@ -47,7 +47,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
 
     /** What the model is told before the conversation. */
     fun instructions(s: Situation, now: Instant = Instant.now()): String {
-        val week = if (s.week == null) phrase("week", "out") else fill(phrase("week", "in"), mapOf("week" to s.week))
+        val week = when (s.week) { null -> phrase("week", "unknown"); 0 -> phrase("week", "out"); else -> fill(phrase("week", "in"), mapOf("week" to s.week)) }
         val values = mapOf("now" to nanjingNow(now), "week" to week, "me" to who(s), "diagrams" to diagrams.joinToString("、"))
         val all = lines("prompt").map { fill(it, values) } + if (s.memory != null) lines("memory").map { fill(it, mapOf("memory" to s.memory.trim().ifEmpty { "（还没有）" })) } else emptyList()
         return all.joinToString("\n")

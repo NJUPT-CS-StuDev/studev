@@ -48,7 +48,7 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     /** What the model is told before the conversation. */
     public string Instructions(Situation s, DateTimeOffset now)
     {
-        var week = s.Week is null ? Phrase("week", "out") : Fill(Phrase("week", "in"), new() { ["week"] = s.Week });
+        var week = s.Week switch { null => Phrase("week", "unknown"), 0 => Phrase("week", "out"), _ => Fill(Phrase("week", "in"), new() { ["week"] = s.Week }) };
         var values = new Dictionary<string, object?> { ["now"] = NanjingNow(now), ["week"] = week, ["me"] = Who(s), ["diagrams"] = string.Join("、", Diagrams) };
         var all = Lines("prompt").Select(l => Fill(l, values)).ToList();
         if (s.Memory is not null) all.AddRange(Lines("memory").Select(l => Fill(l, new() { ["memory"] = s.Memory.Trim() is { Length: > 0 } m ? m : "（还没有）" })));
