@@ -5,7 +5,7 @@ import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
-import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl, profileNickname } from './roster.mjs';
+import { ROSTER_SCHEMA, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, isRosterMember, publicRoster, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl, profileNickname } from './roster.mjs';
 import { avatarBody, createMembers } from './members.mjs';
 
 const API = '/api/platform';
@@ -80,7 +80,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       profileComplete: profileComplete(user),
       term: user.term || '',
       department: normalizeDepartmentName(user.department || ''),
-      title: normalizeRoleTitle(user.title || '', user.studentId || ''),
+      title: normalizeRoleTitle(user.title || ''),
       order: Number.isSafeInteger(user.order) ? user.order : 999,
       signature: user.signature || '',
       role: user.role,
@@ -294,77 +294,10 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   async function rebuildRoster(term = '2026-2027') {
     if (!term || !/^[0-9]{4}-[0-9]{4}$/.test(term)) return null;
     const users = await loadAllUsers();
-    const snapshot = buildRosterSnapshot(users, term, iso(now));
+    const snapshot = buildRosterSnapshot(users, term, iso(now), origin);
     await repo.put(`roster/${term}.json`, snapshot);
     return snapshot;
   }
-  async function seedAndSyncRoster(term = '2026-2027') {
-    if (term === '2026-2027') {
-      for (const seed of ROSTER_SEED_2026_2027) {
-        const studentRef = await repo.get(studentKey(seed.studentId));
-        const qqRef = await repo.get(`identity/qq/${seed.qq}.json`);
-        const targetId = studentRef?.id || qqRef?.id;
-        const existing = targetId && ID.test(targetId) ? await repo.latest(userKey(targetId)) : null;
-        if (existing) {
-          const nextStudentId = existing.studentId || seed.studentId;
-          const nextRealName = existing.realName || seed.realName;
-          const nextTerm = existing.term || seed.term;
-          const nextDept = normalizeDepartmentName(existing.department || seed.department);
-          const nextTitle = normalizeRoleTitle(existing.title !== undefined && existing.title !== '' ? existing.title : seed.title, nextStudentId);
-          const nextOrder = Number.isSafeInteger(existing.order) && existing.order !== 999 ? existing.order : seed.order;
-          const nextSig = existing.signature !== undefined && existing.signature !== '' ? existing.signature : seed.signature;
-          const nextVerified = true;
-          if (!existing.studentId && nextStudentId) await claimStudent(nextStudentId, existing.id);
-          if (existing.studentId !== nextStudentId || existing.realName !== nextRealName || existing.term !== nextTerm || existing.department !== nextDept || (existing.title || '') !== nextTitle || existing.order !== nextOrder || (existing.signature || '') !== nextSig || existing.identityVerified !== nextVerified) {
-            await saveUser(existing, {
-              studentId: nextStudentId,
-              realName: nextRealName,
-              term: nextTerm,
-              department: nextDept,
-              title: nextTitle,
-              order: nextOrder,
-              signature: nextSig,
-              identityVerified: nextVerified,
-            });
-          }
-        } else {
-          const id = targetId && ID.test(targetId) ? targetId : randomUUID();
-          if (!qqRef) {
-            try { await repo.putNew(`identity/qq/${seed.qq}.json`, { id }); }
-            catch (error) { if (!isConflict(error)) throw error; }
-          }
-          await claimStudent(seed.studentId, id);
-          const pendingUser = {
-            id,
-            qq: seed.qq,
-            nickname: '',
-            email: `${seed.qq}@qq.com`,
-            emailVerified: false,
-            studentId: seed.studentId,
-            realName: seed.realName,
-            identityVerified: true,
-            term: seed.term,
-            department: seed.department,
-            title: seed.title,
-            order: seed.order,
-            signature: seed.signature,
-            role: 'admin',
-            status: 'pending',
-            passwordHash: '',
-            mustChangePassword: false,
-            securityVersion: secretToken(),
-            totp: null,
-            createdAt: iso(now),
-            updatedAt: iso(now),
-          };
-          try { await createUser(pendingUser); }
-          catch (error) { if (!isConflict(error)) throw error; }
-        }
-      }
-    }
-    return rebuildRoster(term);
-  }
-
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
     if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/members`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
@@ -374,7 +307,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     const memberAvatar = route.match(/^\/members\/([a-f0-9-]{36})\/avatar$/);
     if (method === 'GET' && memberAvatar) {
       const user = await repo.latest(userKey(memberAvatar[1]));
-      if (!user || user.status !== 'active') fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
+      if (!user || (user.status !== 'active' && !isRosterMember(user))) fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
       // The image is public; its address must not disclose the private QQ number.
       let picture;
       try { picture = await fetcher(qqAvatarUrl(user.qq), { signal: AbortSignal.timeout(8000), redirect: 'error' }); }
@@ -425,10 +358,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
       if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) {
-        await bootstrap();
-        snapshot = await seedAndSyncRoster(term);
+        snapshot = await rebuildRoster(term);
       }
-      return response(snapshot);
+      return response(publicRoster(snapshot, origin));
     }
     const userLookup = route.match(/^\/admin\/users\/([a-f0-9-]{36})$/);
     if (method === 'GET' && userLookup) {
@@ -440,7 +372,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const body = await readJson(request, 8192);
       const term = typeof body.term === 'string' && /^[0-9]{4}-[0-9]{4}$/.test(body.term) ? body.term : '2026-2027';
       if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(400, 'INVALID_TERM', '不支持该届别名册同步。');
-      const snapshot = await seedAndSyncRoster(term);
+      const snapshot = await rebuildRoster(term);
       await repo.audit(auth.user.id, 'identity.roster.synced', term, { totalCount: snapshot.totalCount, activeCount: snapshot.activeCount });
       return response({ snapshot });
     }
@@ -452,7 +384,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const studentId = normalizeStudentId(body.studentId), realName = normalizeRealName(body.realName);
       const nickname = text(body.nickname, '昵称', 40);
       await repo.throttle('register-account', qq, 3, 600);
-      // Check if this studentId belongs to a pre-seeded pending roster member
+      // Check if this studentId belongs to a staff-recorded pending roster member
       const studentClaim = await repo.get(studentKey(studentId));
       const claimedUser = studentClaim?.id && ID.test(studentClaim.id) ? await repo.latest(userKey(studentClaim.id)) : null;
       if (claimedUser?.status === 'pending') fail(409, 'ACCOUNT_PENDING_REVIEW', '此学号已有预录账号，请联系管理员核实并激活。');

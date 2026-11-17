@@ -1,8 +1,8 @@
-import tokens from '../../../design/tokens.json';
+import { avatarImg } from '../../platform/client/api';
 
 interface RosterPerson {
-  name: string;
-  nickname?: string;
+  id: string;
+  nickname: string;
   role?: string;
   avatarUrl: string;
   signature?: string;
@@ -22,65 +22,17 @@ interface RosterSnapshot {
   groups: RosterGroup[];
 }
 
-function fallbackAvatarSvg(label: string): string {
-  const ch = (label.trim().charAt(0) || 'S').toUpperCase().replace(/[<>&"']/g, '');
-  const colors = tokens.color[document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="${colors.brandContainer}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="${colors.brand}" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
 function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement {
   const article = document.createElement('article');
   article.className = featured ? 'member member-featured' : 'member';
-  article.id = `member-${person.name}`;
-
-  const img = document.createElement('img');
-  img.className = 'member-avatar';
-  const qqMatch = person.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
-  const qq = qqMatch ? qqMatch[1] : '';
-  if (qq) {
-    img.src = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=140`;
-    img.srcset = `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=140 1x, https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=640 2x`;
-    img.style.cursor = 'zoom-in';
-    img.title = '点击查看 1080×1080 原图头像';
-    img.addEventListener('click', () => {
-      window.open(`https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=0`, '_blank', 'noopener,noreferrer');
-    });
-    let step = 0;
-    img.addEventListener('error', () => {
-      step++;
-      img.removeAttribute('srcset');
-      if (step === 1) {
-        img.src = `https://q2.qlogo.cn/headimg_dl?dst_uin=${encodeURIComponent(qq)}&spec=140`;
-      } else if (step === 2) {
-        img.src = `https://qlogo4.store.qq.com/qzone/${encodeURIComponent(qq)}/${encodeURIComponent(qq)}/640`;
-      } else {
-        img.src = fallbackAvatarSvg(person.name);
-      }
-    });
-  } else {
-    const safeUrl = person.avatarUrl && /^https?:\/\//i.test(person.avatarUrl) ? person.avatarUrl : '';
-    img.src = safeUrl || fallbackAvatarSvg(person.name);
-  }
-  img.alt = `${person.name}的头像`;
-  img.width = featured ? 52 : 48;
-  img.height = featured ? 52 : 48;
-  img.loading = featured ? 'eager' : 'lazy';
-  img.decoding = 'async';
-  img.referrerPolicy = 'no-referrer';
-  article.append(img);
+  article.id = 'member-' + person.id;
+  article.append(avatarImg(person, { width: featured ? 52 : 48, className: 'member-avatar', lazy: !featured }));
 
   const copy = document.createElement('div');
   copy.className = 'member-copy';
 
   const h4 = document.createElement('h4');
-  h4.textContent = person.name;
-  if (person.nickname && person.nickname !== person.name) {
-    const nick = document.createElement('span');
-    nick.className = 'member-nick';
-    nick.textContent = person.nickname;
-    h4.append(nick);
-  }
+  h4.textContent = person.nickname;
   copy.append(h4);
 
   if (person.role) {

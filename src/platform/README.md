@@ -61,11 +61,20 @@ Roles are one axis: `owner` > `admin` > `user`. Admins and the owner appear in t
 public term roster, manage forms and may list/look up users through `/admin/users`
 and `/admin/users/<id>`. Ordinary users cannot access any account-management
 endpoint. Admins can resolve ordinary-user identity disputes; only the owner
-manages roles or other administrators. Public roster snapshots exclude `user`
-even when their records have department/title/term fields. Public roster reads
+manages roles or other administrators. Public term rosters retain departments,
+positions and signatures, while each person exposes only an opaque ID, nickname
+and opaque avatar address. Appointed `pending` staff remain in their official
+term roster and may load that avatar; pending ordinary accounts and disabled
+accounts do not. Signed-in member browsing remains limited to active accounts.
+Snapshots exclude `user` even when their records have department/title/term fields.
+The roster derives from existing private identities, maintained through staff
+account management. It never initializes or seeds accounts. A schema change
+rebuilds the stored snapshot before responding; every response projects only
+public fields. Public roster reads
 are not cached in the browser or CDN, so an old projection is never used after
 a role change. Ordinary students'
-identity and contact details are available only to themselves and staff. Other
+identity and contact details, including staff identities, are available only to
+themselves and authorized staff. Other
 students see only the avatar, nickname and signature. An unset nickname uses the
 final character of the real name; the raw empty nickname stays unset in storage.
 `GET /members?query=&offset=0&limit=50` and `GET /members/<id>` require sign-in

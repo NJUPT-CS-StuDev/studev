@@ -8,179 +8,6 @@ const DEPARTMENTS_2026_2027 = [
   '心理工作部',
 ];
 
-export const ROSTER_SEED_2026_2027 = [
-  {
-    order: 1,
-    term: '2026-2027',
-    department: '主席团',
-    realName: '吴双灿',
-    studentId: 'B24040213',
-    qq: '2366522877',
-    title: '执行主席 · 运营支持部',
-    signature: '在薛定谔的叠加态中保持自旋',
-  },
-  {
-    order: 2,
-    term: '2026-2027',
-    department: '主席团',
-    realName: '杨庭益',
-    studentId: 'B24041216',
-    qq: '3521551489',
-    title: '分管主席 · 易班建设部',
-    signature: '心平能愈三千疾，心静可通万事理',
-  },
-  {
-    order: 3,
-    term: '2026-2027',
-    department: '主席团',
-    realName: '李雅婷',
-    studentId: 'B24041902',
-    qq: '1775706379',
-    title: '分管主席 · 媒体宣传部',
-    signature: '',
-  },
-  {
-    order: 4,
-    term: '2026-2027',
-    department: '主席团',
-    realName: '杨婉露',
-    studentId: 'B24041703',
-    qq: '1694145617',
-    title: '分管主席 · 心理工作部',
-    signature: '得之我命，失之我幸。',
-  },
-  {
-    order: 5,
-    term: '2026-2027',
-    department: '运营支持部',
-    realName: '赵润芊',
-    studentId: 'B25042405',
-    qq: '3604611804',
-    title: '运营支持部部长',
-    signature: '',
-  },
-  {
-    order: 6,
-    term: '2026-2027',
-    department: '运营支持部',
-    realName: '白蕊',
-    studentId: 'B25042201',
-    qq: '2821600451',
-    title: '运营支持部部长',
-    signature: '安好',
-  },
-  {
-    order: 7,
-    term: '2026-2027',
-    department: '运营支持部',
-    realName: '宋子龙',
-    studentId: 'B25042314',
-    qq: '2304741537',
-    title: '运营支持部部长',
-    signature: '',
-  },
-  {
-    order: 8,
-    term: '2026-2027',
-    department: '易班建设部',
-    realName: '钱俞楠',
-    studentId: 'B25040524',
-    qq: '3905536819',
-    title: '易班建设部部长',
-    signature: '平淡些，三杯两盏就够了',
-  },
-  {
-    order: 9,
-    term: '2026-2027',
-    department: '易班建设部',
-    realName: '王雨霏',
-    studentId: 'B25040801',
-    qq: '3980795045',
-    title: '易班建设部部长',
-    signature: '*^_^*\u0000'.slice(0, 5),
-  },
-  {
-    order: 10,
-    term: '2026-2027',
-    department: '易班建设部',
-    realName: '沈冠旭',
-    studentId: 'B25041218',
-    qq: '3474934240',
-    title: '易班建设部部长',
-    signature: '无限月读',
-  },
-  {
-    order: 11,
-    term: '2026-2027',
-    department: '媒体宣传部',
-    realName: '李文轩',
-    studentId: 'B25040304',
-    qq: '3916649535',
-    title: '媒体宣传部部长',
-    signature: '时间从不回答，生命从不喧哗',
-  },
-  {
-    order: 12,
-    term: '2026-2027',
-    department: '媒体宣传部',
-    realName: '胡可',
-    studentId: 'B25042404',
-    qq: '3473792115',
-    title: '媒体宣传部部长',
-    signature: '🖤💙',
-  },
-  {
-    order: 13,
-    term: '2026-2027',
-    department: '媒体宣传部',
-    realName: '沈一柏',
-    studentId: 'B25042517',
-    qq: '753563998',
-    title: '媒体宣传部部长',
-    signature: 'Still we clash against the sky',
-  },
-  {
-    order: 14,
-    term: '2026-2027',
-    department: '心理工作部',
-    realName: '王丽妍',
-    studentId: 'B25040701',
-    qq: '3788969130',
-    title: '心理工作部部长',
-    signature: '这是只为了唯一一位读者所写的故事',
-  },
-  {
-    order: 15,
-    term: '2026-2027',
-    department: '心理工作部',
-    realName: '冉可欣',
-    studentId: 'B25042102',
-    qq: '428126314',
-    title: '心理工作部部长',
-    signature: '在心理学上有个概念叫「浪漫友谊」',
-  },
-  {
-    order: 16,
-    term: '2026-2027',
-    department: '心理工作部',
-    realName: '骆昕彤',
-    studentId: 'B25040407',
-    qq: '1956613258',
-    title: '心理工作部部长',
-    signature: '这不是强加于我的命运，而是我自己主动背负的命运',
-  },
-  {
-    order: 17,
-    term: '2026-2027',
-    department: '心理工作部',
-    realName: '孙欣妍',
-    studentId: 'B25041304',
-    qq: '3476855828',
-    title: '心理工作部部长',
-    signature: '美貌与意志并重，女孩不顽强就没办法生存。',
-  },
-];
-
 export function qqAvatarUrl(qq) {
   return typeof qq === 'string' && /^[1-9]\d{4,11}$/.test(qq)
     ? `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qq)}&s=640`
@@ -188,9 +15,8 @@ export function qqAvatarUrl(qq) {
 }
 
 /** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
-export const ROSTER_SCHEMA = 5;
+export const ROSTER_SCHEMA = 6;
 
-const SEED_BY_STUDENT_ID = new Map(ROSTER_SEED_2026_2027.map((s) => [s.studentId, s]));
 
 export function normalizeDepartmentName(dept) {
   const raw = typeof dept === 'string' ? dept.trim() : '';
@@ -198,11 +24,8 @@ export function normalizeDepartmentName(dept) {
   return raw;
 }
 
-export function normalizeRoleTitle(title, studentId = '') {
+export function normalizeRoleTitle(title) {
   const raw = typeof title === 'string' ? title.trim() : '';
-  if (!raw && studentId && SEED_BY_STUDENT_ID.has(studentId)) {
-    return SEED_BY_STUDENT_ID.get(studentId).title;
-  }
   if (raw === '学生发展中心主席 · StuDev 发起人' || raw.startsWith('执行统筹 · ')) {
     return '执行主席 · 运营支持部';
   }
@@ -225,45 +48,37 @@ export function profileNickname(user) {
   return [...new Intl.Segmenter('zh', { granularity: 'grapheme' }).segment(name)].at(-1)?.segment || '同学';
 }
 
-export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new Date().toISOString()) {
-  const rosterUsers = users
-    .filter((u) => u && ['admin', 'owner'].includes(u.role) && u.term === term && u.status !== 'disabled')
-    .map((u) => ({
-      ...u,
-      department: normalizeDepartmentName(u.department || '学生发展中心'),
-      title: normalizeRoleTitle(u.title, u.studentId),
-    }))
-    .sort((a, b) => ((a.order ?? 999) - (b.order ?? 999)) || String(a.studentId || '').localeCompare(String(b.studentId || '')));
+/** Public organization membership includes appointed staff awaiting account activation. */
+export function isRosterMember(user, term = user?.term) {
+  return Boolean(user && SUPPORTED_ROSTER_TERMS.has(term) && user.term === term
+    && ['admin', 'owner'].includes(user.role) && ['active', 'pending'].includes(user.status));
+}
 
-  const departmentOrder = [...DEPARTMENTS_2026_2027];
-  for (const u of rosterUsers) {
-    if (u.department && !departmentOrder.includes(u.department)) {
-      departmentOrder.push(u.department);
-    }
-  }
-
-  const groups = departmentOrder
-    .map((deptName) => {
-      const people = rosterUsers
-        .filter((u) => u.department === deptName)
-        .map((u) => ({
-          name: u.realName || u.nickname,
-          nickname: u.realName ? distinctNickname(u) : '',
-          role: u.title || '',
-          avatarUrl: u.avatarUrl || qqAvatarUrl(u.qq),
-          signature: u.signature || '',
-          featured: deptName === '主席团',
-        }));
-      return { name: deptName, people };
-    })
-    .filter((g) => g.people.length > 0);
-
+/** Only this projection leaves the private identity store, including on cached reads. */
+export function publicRoster(snapshot, origin) {
   return {
-    schema: ROSTER_SCHEMA,
-    term,
-    updatedAt,
-    totalCount: rosterUsers.length,
-    activeCount: rosterUsers.filter((u) => u.status === 'active').length,
-    groups,
+    schema: ROSTER_SCHEMA, term: snapshot.term, updatedAt: snapshot.updatedAt,
+    totalCount: snapshot.totalCount, activeCount: snapshot.activeCount,
+    groups: snapshot.groups.map(group => ({ name: group.name, people: group.people.map(person => ({
+      id: person.id, nickname: person.nickname, role: person.role, signature: person.signature,
+      avatarUrl: origin + '/api/platform/members/' + person.id + '/avatar', featured: person.featured,
+    })) })),
   };
+}
+
+export function buildRosterSnapshot(users, term, updatedAt, origin) {
+  const rosterUsers = users.filter(user => isRosterMember(user, term))
+    .sort((a, b) => ((a.order ?? 999) - (b.order ?? 999)) || a.id.localeCompare(b.id));
+  const departmentOrder = [...DEPARTMENTS_2026_2027];
+  for (const user of rosterUsers) {
+    const department = normalizeDepartmentName(user.department || '学生发展中心');
+    if (!departmentOrder.includes(department)) departmentOrder.push(department);
+  }
+  const groups = departmentOrder.map(name => ({ name, people: rosterUsers
+    .filter(user => normalizeDepartmentName(user.department || '学生发展中心') === name)
+    .map(user => ({ id: user.id, nickname: profileNickname(user), role: normalizeRoleTitle(user.title),
+      signature: user.signature || '', featured: name === '主席团' }))
+  })).filter(group => group.people.length);
+  return publicRoster({ term, updatedAt, totalCount: rosterUsers.length,
+    activeCount: rosterUsers.filter(user => user.status === 'active').length, groups }, origin);
 }

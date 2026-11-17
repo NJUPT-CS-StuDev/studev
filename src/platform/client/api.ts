@@ -110,7 +110,7 @@ export function avatarUrl(user: { qq?: string; avatarUrl?: string }, size: 0 | 1
     return user.avatarUrl || '';
 }
 function avatarFallbackDataUri(label: string): string {
-    const ch = (label.trim().charAt(0) || 'S').toUpperCase().replace(/[<>&"']/g, '');
+    const ch = ([...new Intl.Segmenter('zh', { granularity: 'grapheme' }).segment(label.trim())][0]?.segment || 'S').toUpperCase().replace(/[<>&"']/g, '');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e8f0fe"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#1a73e8" font-family="sans-serif" font-size="28" font-weight="600">${ch}</text></svg>`;
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
