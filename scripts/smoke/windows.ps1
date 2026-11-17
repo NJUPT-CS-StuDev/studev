@@ -23,6 +23,7 @@ using System; using System.Collections.Generic; using System.Runtime.InteropServ
 public static class Owned {
     [StructLayout(LayoutKind.Sequential)] public struct Bounds { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Bounds bounds);
+    [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr context, uint flags);
     delegate bool Each(IntPtr window, IntPtr context);
     [DllImport("user32.dll")] static extern bool EnumWindows(Each each, IntPtr context);
@@ -43,6 +44,10 @@ public static class Owned {
         SetWindowPos(window, new IntPtr(1), 0, 0, 0, 0, 0x33);
     }
     public static void ResizeForTest(IntPtr window, int width, int height) {
+        // Test viewports are logical DIPs; Win32 window dimensions are physical pixels.
+        var dpi = GetDpiForWindow(window);
+        if (dpi == 0) throw new InvalidOperationException("cannot read the owned test window DPI");
+        width = (int)Math.Round(width * dpi / 96d); height = (int)Math.Round(height * dpi / 96d);
         // Do not let a headless desktop's small work area cap this isolated window's tracking size.
         if (!SetWindowPos(window, IntPtr.Zero, 0, 0, width, height, 0x416)) throw new InvalidOperationException("cannot resize the owned test window");
         if (!GetWindowRect(window, out var bounds) || bounds.Right - bounds.Left != width || bounds.Bottom - bounds.Top != height)
