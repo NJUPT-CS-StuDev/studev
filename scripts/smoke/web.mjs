@@ -408,8 +408,10 @@ async function mapAvailability(name, viewport) {
     let releaseRequest;
     const pending = new Promise(resolve => { releaseRequest = resolve; });
     let failedRequests = 0;
-    const dayUrl = new URL(`${release.base}/rooms/${roomIndex.term}/${failedDate}.json`, dataOrigin).href;
-    await page.route(dayUrl, async route => {
+    // The app discovers newer public data independently of its bundled release. Inject the selected day, not one
+    // historical release directory, so a legitimate pointer advance cannot bypass the intended unavailable response.
+    const failedDay = url => url.origin === dataOrigin.origin && url.pathname.endsWith(`/rooms/${roomIndex.term}/${failedDate}.json`);
+    await page.route(failedDay, async route => {
         failedRequests++;
         await pending;
         await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Deliberate day-file availability test' });
@@ -433,6 +435,7 @@ async function mapAvailability(name, viewport) {
             for (let frame = 0; frame < 30; frame++) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
                 if (new URL(location.href).searchParams.get('t')?.startsWith(date)) observed.push({
+                    dateText: document.querySelector('.rdate')?.textContent || '',
                     text: document.querySelector('.mbody')?.textContent || '',
                     counts: document.querySelectorAll('.labels .lb.teach .n').length,
                 });
@@ -443,12 +446,13 @@ async function mapAvailability(name, viewport) {
         await page.waitForURL(url => url.searchParams.get('t')?.startsWith(failedDate));
         await unknownOccupancy();
         const observed = await frames;
+        await writeFile(join(output, `${name}-map-date-frames.json`), JSON.stringify(observed, null, 2));
         assert(observed.length > 0, 'the unavailable day is observed while its request is still pending');
         for (const frame of observed) {
             assert(!/\d+\s*\/\s*\d+ 间空闲|这一层此刻没有空教室/.test(frame.text), 'date changes do not flash the previous day as current availability');
             assert.equal(frame.counts, 0, 'loading a different day never flashes numeric building counts');
         }
-        const failedResponse = page.waitForResponse(response => response.url() === dayUrl && response.status() === 503);
+        const failedResponse = page.waitForResponse(response => failedDay(new URL(response.url())) && response.status() === 503);
         releaseRequest();
         await failedResponse;
         await unknownOccupancy();
