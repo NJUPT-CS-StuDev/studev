@@ -431,6 +431,8 @@ async function unknownRoomDay() {
 }
 async function personalViews() {
     await tap('AI', 'the AI board');
+    const opening = await find(node => node.text === '有什么可以帮你？' || node['content-desc'] === '新对话', 'an empty board or a retained conversation');
+    if (opening['content-desc'] === '新对话') await tap(node => node['content-desc'] === '新对话', 'open an empty board without removing the retained conversation');
     await find('有什么可以帮你？', 'the empty conversation board');
     await find('问点什么', 'the AI composer');
     await find('免费额度', 'the configured provider selector');
