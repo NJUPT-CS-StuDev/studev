@@ -30,4 +30,3 @@ export async function signedFetch(store, method, key, { body = '', headers = {},
     const { host: _host, ...sent } = all;
     return fetch(url, { method, signal, body: method === 'GET' || method === 'HEAD' ? undefined : body, headers: { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${store.accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` } });
 }
-
