@@ -42,7 +42,7 @@ import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.map.CampusMapController
 import top.hicancan.studev.map.Routing
 import top.hicancan.studev.data.Place
-import java.time.LocalTime
+import top.hicancan.studev.world.CampusDay
 import java.time.format.DateTimeFormatter
 
 /** Distinct silhouettes for all wayfind modifiers, stairs and arrival; no font arrows. */
@@ -181,7 +181,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(Routing.duration(update?.eta_s ?: state.route!!.duration_s), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
-                            val eta = LocalTime.now().plusSeconds((update?.eta_s ?: state.route!!.duration_s).toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
+                            val eta = CampusDay.now().toLocalTime().plusSeconds((update?.eta_s ?: state.route!!.duration_s).toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
                             Text("${metres(update?.distance_remaining_m ?: state.route!!.distance_m)} · $eta 到达", style = MaterialTheme.typography.bodyMedium)
                         }
                         OutlinedButton(onClick = { runtime.stop() }, shape = RoundedCornerShape(8.dp)) { Text("退出") }
