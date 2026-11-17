@@ -1,0 +1,26 @@
+---
+import SiteLayout from '../site/SiteLayout.astro';
+import '../platform/platform.css';
+import '../platform/members.css';
+---
+<SiteLayout title="成员 — StuDev" active="members" noindex={true}>
+  <div class="platform p-members">
+    <header class="p-heading p-members-heading">
+      <h1 data-members-title>成员</h1>
+      <a class="p-button secondary" href="/members/" data-members-back hidden>‹ 成员</a>
+    </header>
+    <form role="search" data-members-search-form>
+      <input class="p-input" type="search" aria-label="搜索昵称" placeholder="搜索昵称" maxlength="40" autocomplete="off" data-members-search />
+    </form>
+    <p class="p-help p-members-count" aria-live="polite" data-members-count></p>
+    <p class="p-message" role="status" aria-live="polite" data-members-status>正在读取成员…</p>
+    <div class="p-members-list" data-members-list></div>
+    <section class="p-member-profile" aria-label="成员资料" data-members-profile hidden></section>
+    <div class="p-actions p-members-actions">
+      <button class="p-button secondary" type="button" data-members-retry hidden>重试</button>
+      <button class="p-button secondary" type="button" data-members-more hidden>加载更多</button>
+    </div>
+    <noscript><p class="p-message">查看成员需要启用 JavaScript。</p></noscript>
+  </div>
+  <script>import '../platform/client/members';</script>
+</SiteLayout>

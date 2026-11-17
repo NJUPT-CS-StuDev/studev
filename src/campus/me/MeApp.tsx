@@ -144,6 +144,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
         <Sheet title={section === 'timetable' ? '课表设置' : section === 'about' ? '帮助与关于' : '我'} top={section !== 'home' ? <button className="back" onClick={() => setSection('home')}>‹ 返回</button> : undefined} onClose={onClose}>
             {section === 'home' && <>
             <a className="kv me-account" href="/account/"><span className="v"><strong>{account?.nickname || '未登录'}</strong><small>{account ? '管理账号 · 任务和课表设置自动同步' : '登录后同步任务和课表设置'}</small></span><Chevron /></a>
+            {account && <a className="kv" href="/members/"><span className="v">成员<small>查看头像、昵称与签名</small></span><Chevron /></a>}
             <button className="kv" onClick={() => setSection('timetable')}><span className="v">课表设置<small>{[prefs.class, info?.major].filter(Boolean).join(' · ') || '选择班级、管理课程与实验'}</small></span><Chevron /></button>
             <div className="kv"><span className="v">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{value === 'auto' ? '跟随系统' : label}</button>)}</div></div>
             <button className="kv" onClick={() => setSection('about')}><span className="v">帮助与关于</span><Chevron /></button>
