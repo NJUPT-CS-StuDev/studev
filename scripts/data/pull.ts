@@ -4,10 +4,12 @@ import { cp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import product from '../../product.json' with { type: 'json' };
 import { resourceAt, validRelease, type CampusRelease } from '../../src/campus/world/release.ts';
 
 class MissingPublishedResource extends Error {}
+class TemporaryPublishedResource extends Error {}
 
 async function currentSnapshot(entry: string, publicRoot: string): Promise<CampusRelease> {
     const response = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(30_000) });
@@ -26,6 +28,34 @@ async function currentSnapshot(entry: string, publicRoot: string): Promise<Campu
 const components = (snapshot: CampusRelease) => JSON.stringify([snapshot.version, snapshot.base, snapshot.map_version, snapshot.data_version,
     snapshot.knowledge_version, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base]);
 
+async function resourceBytes(path: string, entry: string, signal: AbortSignal): Promise<Buffer> {
+    let firstFailure: unknown;
+    for (let attempt = 0; ; attempt++) {
+        try {
+            signal.throwIfAborted();
+            const resource = await fetch(resourceAt(path, entry), { signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]) });
+            if (!resource.ok) {
+                const message = `published resource is unavailable (${resource.status}): ${path}`;
+                const failure = resource.status === 404 ? new MissingPublishedResource(message)
+                    : [502, 503, 504].includes(resource.status) ? new TemporaryPublishedResource(message) : new Error(message);
+                // Release an error response's connection before another request.
+                try { await resource.body?.cancel(); } catch { /* Keep the original HTTP failure. */ }
+                throw failure;
+            }
+            const content = Buffer.from(await resource.arrayBuffer());
+            signal.throwIfAborted();
+            return content;
+        } catch (error) {
+            if (signal.aborted) throw firstFailure ?? error;
+            if (!(error instanceof TemporaryPublishedResource || error instanceof TypeError || (error instanceof Error && error.name === 'TimeoutError'))) throw error;
+            firstFailure ??= error;
+            if (attempt === 2) throw firstFailure;
+            try { await delay(500 * 2 ** attempt, undefined, { signal }); }
+            catch { throw firstFailure; }
+        }
+    }
+}
+
 async function downloadSnapshot(snapshot: CampusRelease, entry: string, publicRoot: string): Promise<number> {
     let cursor = 0, fetched = 0;
     const controller = new AbortController();
@@ -34,12 +64,7 @@ async function downloadSnapshot(snapshot: CampusRelease, entry: string, publicRo
             while (!controller.signal.aborted && cursor < snapshot.all!.length) {
                 const path = snapshot.all![cursor++]!, file = join(publicRoot, path);
                 if (existsSync(file)) continue; // Versioned paths are immutable.
-                const resource = await fetch(resourceAt(path, entry), { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]) });
-                if (!resource.ok) {
-                    const message = `published resource is unavailable (${resource.status}): ${path}`;
-                    throw resource.status === 404 ? new MissingPublishedResource(message) : new Error(message);
-                }
-                const content = Buffer.from(await resource.arrayBuffer());
+                const content = await resourceBytes(path, entry, controller.signal);
                 controller.signal.throwIfAborted();
                 if (path.endsWith('.json')) JSON.parse(content.toString());
                 await mkdir(dirname(file), { recursive: true });
