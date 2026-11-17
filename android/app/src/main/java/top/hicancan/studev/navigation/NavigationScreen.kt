@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.map.CampusMapController
+import top.hicancan.studev.map.Routing
+import top.hicancan.studev.data.Place
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -87,7 +89,10 @@ internal fun ManeuverIcon(kind: String, modifier: String, size: Int = 40) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, controller: CampusMapController,
-                              locationGranted: Boolean, requestLocation: () -> Unit, pick: (Boolean) -> Unit) {
+                              locationGranted: Boolean, requestLocation: () -> Unit, pick: (Boolean) -> Unit,
+                              places: Map<String, Place>, viewFloor: (Place) -> Unit) {
+    val indoor = state.destination?.takeIf(Routing::indoor)
+    val entrance = state.destination?.let { Routing.access(it, places) }?.takeIf { it.kind == "building" }?.let { Routing.name(it, places) + "入口" }
     var steps by rememberSaveable { mutableStateOf(false) }
     var debug by remember { mutableStateOf(false) }
     var exit by remember { mutableStateOf(false) }
@@ -175,7 +180,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                     val update = state.trip.update
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("${minutes(update?.eta_s ?: state.route!!.duration_s)} 分钟", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text(Routing.duration(update?.eta_s ?: state.route!!.duration_s), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
                             val eta = LocalTime.now().plusSeconds((update?.eta_s ?: state.route!!.duration_s).toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
                             Text("${metres(update?.distance_remaining_m ?: state.route!!.distance_m)} · $eta 到达", style = MaterialTheme.typography.bodyMedium)
                         }
@@ -187,9 +192,9 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
         } else if (state.trip.phase == TripPhase.Arrived) {
             Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().testTag("arrival-card"), shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                        Text("已到达 ${state.destinationName}", style = MaterialTheme.typography.headlineMedium)
+                    Text("已到达 ${entrance ?: state.destinationName}", style = MaterialTheme.typography.headlineMedium)
                     Text(state.route?.maneuvers?.lastOrNull()?.instruction?.let(::visibleRouteText) ?: "已到达目的地附近")
-                    state.destination?.floor?.let { Text("${state.destinationName} 在 $it 楼", style = MaterialTheme.typography.titleMedium) }
+                    indoor?.let { Text(Routing.inside(it, places), style = MaterialTheme.typography.titleMedium); TextButton(onClick = { viewFloor(it) }) { Text("查看楼层") } }
                     Button(onClick = { runtime.stop(close = true) }, Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(8.dp)) { Text("完成") }
                 }
             }
@@ -232,6 +237,12 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
             }, shape = RoundedCornerShape(10.dp), shadowElevation = 1.dp) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     when {
+                        state.sameAccess -> {
+                            Text("同在${Routing.name(Routing.access(state.destination!!, places), places)}", style = MaterialTheme.typography.titleLarge)
+                            Text("起点：${Routing.location(state.origin!!, places)}")
+                            Text("目的地：${Routing.location(state.destination!!, places)}")
+                            Button(onClick = { viewFloor(state.destination!!) }, Modifier.fillMaxWidth()) { Text("查看楼层") }
+                        }
                         state.busy -> Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             CircularProgressIndicator(Modifier.size(24.dp)); Text("正在规划路线")
                         }
@@ -243,6 +254,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                             }
                         }
                         state.route != null -> {
+                            if (indoor != null) { Text("道路路线到$entrance", style = MaterialTheme.typography.titleMedium); Text(Routing.inside(indoor, places)); TextButton(onClick = { viewFloor(indoor) }) { Text("查看楼层") } }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(if (state.routes.size > 1) "${state.routes.size} 条可选路线" else "推荐路线", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                                 TextButton(onClick = { steps = true }) { Text("路线详情"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp)) }
@@ -254,7 +266,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                                         shape = RoundedCornerShape(8.dp), color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                                         border = null) {
                                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("${minutes(route.duration_s)} 分钟", style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                                            Text(Routing.duration(route.duration_s), style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.primary else LocalContentColor.current)
                                             Text(metres(route.distance_m), style = MaterialTheme.typography.bodyMedium)
                                             Text("经${visibleRouteText(route.via)}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
@@ -290,7 +302,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
             Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("${state.originName} → ${state.destinationName}", style = MaterialTheme.typography.titleLarge)
-                    Text("${minutes(stepRoute.duration_s)} 分钟 · ${metres(stepRoute.distance_m)} · ${if (state.mode == "bike") "骑行" else "步行"}", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${Routing.duration(stepRoute.duration_s)} · ${metres(stepRoute.distance_m)} · ${if (state.mode == "bike") "骑行" else "步行"}", Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = { steps = false }) { Icon(Icons.Outlined.Close, "关闭路线详情") }
             }

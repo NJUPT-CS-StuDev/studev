@@ -22,6 +22,8 @@ class Route {
     var place by mutableStateOf<String?>(null)
     var floor by mutableStateOf<Int?>(null)
     var nav by mutableStateOf<String?>(null)
+    var from by mutableStateOf<String?>(null)
+    var navMode by mutableStateOf("walk")
     var moment by mutableStateOf<Pair<LocalDate, Int>?>(null)
     var query by mutableStateOf("")
     var scope by mutableStateOf("all")
@@ -52,7 +54,8 @@ class Route {
                 tab = "timetable"
             }
             "/map" -> {
-                place = param("place"); nav = param("nav"); floor = param("f")?.toIntOrNull()
+                place = param("place"); nav = param("nav"); from = param("from"); floor = param("f")?.toIntOrNull()
+                navMode = param("mode")?.takeIf { it == "bike" } ?: "walk"
                 moment = param("t")?.let { text -> runCatching { LocalDate.parse(text.take(10)) to (text.drop(11).take(2).toInt() * 60 + text.drop(14).take(2).toInt()) }.getOrNull() }
                 tab = "map"
             }
@@ -73,7 +76,7 @@ class Route {
         knowledgeCourse = course; knowledgeTopic = topic; knowledgeMaterial = material; knowledgeAnchor = anchor; tab = "knowledge"
     }
     fun timetable(type: String, id: String, newScale: String = "week", at: LocalDate? = null) { whoType = type; whoId = id; scale = newScale; day = at; preview = null; tab = "timetable" }
-    fun map(place: String? = null, at: Pair<LocalDate, Int>? = null, nav: String? = null) { this.place = place; this.moment = at; this.nav = nav; floor = null; tab = "map" }
+    fun map(place: String? = null, at: Pair<LocalDate, Int>? = null, nav: String? = null, from: String? = null, mode: String = "walk") { this.place = place; this.moment = at; this.nav = nav; this.from = from; navMode = mode.takeIf { it == "bike" } ?: "walk"; floor = null; tab = "map" }
     /** Free rooms are the rooms dimension of search, at a moment. */
     fun rooms(at: Pair<LocalDate, Int>) { scope = "room"; moment = at; tab = "search" }
 }

@@ -26,6 +26,7 @@ public sealed partial class MapScreen : Screen
     private readonly StackPanel sheet = new();
     private readonly StackPanel floorsBar = new() { Spacing = 0 };
     private Space? space;
+    private Repository? snapshot;
     private CampusModel? model;
     private RoomIndex? roomIndex;
     private Dictionary<string, Room> roomById = new();
@@ -101,7 +102,7 @@ public sealed partial class MapScreen : Screen
         surface.Shown += _ => { if (surface.Shot is { } shot) ball.Show(shot.Bearing, shot.Pitch); };
         surface.Tapped2 += point => _ = Tap(point);
         Paint.Turned += () => { Repaint(); Draw(); };
-        campus.Changed += () => DispatcherQueue.TryEnqueue(() => { if (space is null) _ = Load(); });
+        campus.Changed += () => DispatcherQueue.TryEnqueue(() => _ = Load());
         _ = Load();
         Draw();
     }
@@ -121,13 +122,14 @@ public sealed partial class MapScreen : Screen
         {
             case Uri address:
                 var query = System.Web.HttpUtility.ParseQueryString(address.Query);
-                placeId = query["place"]; navId = query["nav"];
+                placeId = query["place"]; navId = query["nav"]; origin = query["from"];
+                mode = query["mode"] == "bike" ? "bike" : "walk";
                 floor = int.TryParse(query["f"], out var level) ? level : null;
                 if (DateTime.TryParse(query["t"], System.Globalization.CultureInfo.InvariantCulture, out var at)) { moment = new Moment(DateOnly.FromDateTime(at), at.Hour * 60 + at.Minute); isNow = false; }
                 else { moment = Moment.Now(); isNow = true; }
                 break;
-            case ValueTuple<string, string> { Item1: "place" } place: placeId = place.Item2; navId = null; floor = null; break;
-            case ValueTuple<string, string> { Item1: "nav" } nav: navId = nav.Item2; placeId = null; break;
+            case ValueTuple<string, string> { Item1: "place" } place: placeId = place.Item2; navId = null; origin = null; floor = null; break;
+            case ValueTuple<string, string> { Item1: "nav" } nav: navId = nav.Item2; placeId = null; origin = null; mode = "walk"; break;
         }
         Draw(); _ = Scene();
     }
@@ -136,16 +138,22 @@ public sealed partial class MapScreen : Screen
     private bool loading;
     private async Task Load()
     {
-        if (loading || space is not null || campus.Repository is not { } repo) return;
+        if (loading || campus.Repository is not { } repo || snapshot?.Release.Version == repo.Release.Version) return;
         loading = true;
+        var complete = false;
         try
         {
+            var mapChanged = space is null || snapshot?.Release.MapBase != repo.Release.MapBase;
             var places = Space.Load(repo); var shape = repo.Read($"space/{Product.Campus}/model.json", FactsJson.Default.CampusModel); var index = repo.Rooms();
             await Task.WhenAll(places, shape, index);
+            var nextRouter = mapChanged ? new Kernels.Wayfind.Router(places.Result.Network) : null;
             space = places.Result; model = shape.Result; roomIndex = index.Result;
             roomById = roomIndex.Rooms.Where(r => Names.Placed(r.Id)).ToDictionary(r => r.Id);
             reader = new World.Rooms(campus.Periods);
-            router = new Kernels.Wayfind.Router(space.Network);
+            dayDate = null; day = null; ++dayRequest;
+            if (!mapChanged) { snapshot = repo; await LoadDay(repo); Labels(); await Scene(); complete = true; return; }
+            router?.Dispose(); router = nextRouter;
+            styled = false; shadeKey = null; night = -1; openBuilding = null; modelled.Clear();
             await surface.Ready;
             var style = JsonNode.Parse(System.Text.Encoding.UTF8.GetString(await repo.Bytes($"space/{Product.Campus}/style.json"))
                 .Replace("{assets}", $"{repo.Release.MapBase}/assets"))!.AsObject();
@@ -165,25 +173,26 @@ public sealed partial class MapScreen : Screen
             frame = CampusFrame.Of(model!);
             await surface.Map.AddImageSourceImageAsync("shadow", Shadows.Corners(frame), Shadows.Draw(frame, [], 0, 0));
             await Layer("""{"id":"shadow","type":"raster","source":"shadow","paint":{"raster-opacity":0,"raster-fade-duration":0}}""", "context");
-            App.Watch(LoadModels(repo));
+            await LoadModels(repo);
             // The campus opens over the place product.json names; a map without it is a broken release, not a place to guess.
             var teach = space.ById.GetValueOrDefault(Product.Opens)?.Centre ?? throw new InvalidDataException($"the map data has no {Product.Opens}");
             surface.Move(new CameraOptions { Center = new LatLng(teach[1] - .0002, teach[0] + .0006), Zoom = 16.05, Bearing = -24, Pitch = 52 }, CameraUpdateMode.Jump);
             styled = true;
             await Shade();
             Labels();
-            await LoadDay();
+            await LoadDay(repo);
             Counts();
             Repaint();
             await Scene();
+            snapshot = repo; complete = true;
         }
         catch (Exception error) when (error is HttpRequestException or IOException or JsonException or MaplibreException) { notice = "地图暂时打不开，请稍后重试。"; }
-        finally { loading = false; Draw(); }
+        finally { loading = false; Draw(); if (complete && campus.Repository?.Release.Version != snapshot?.Release.Version) _ = Load(); }
     }
 
-    private async Task LoadDay()
+    private async Task LoadDay(Repository? source = null)
     {
-        if (campus.Repository is not { } repo || roomIndex is null) return;
+        if ((source ?? snapshot ?? campus.Repository) is not { } repo || roomIndex is null) return;
         var date = Clock.Text(moment.Date);
         if (dayDate == date && day is not null) return;
         var request = ++dayRequest;
@@ -194,7 +203,7 @@ public sealed partial class MapScreen : Screen
         RoomDay? loaded;
         try { loaded = await repo.RoomDay(roomIndex.Term, date); }
         catch (Exception error) when (error is HttpRequestException or IOException or JsonException or OperationCanceledException) { loaded = null; }
-        if (request == dayRequest && ReferenceEquals(campus.Repository, repo)) day = loaded;
+        if (request == dayRequest) day = loaded;
     }
 
     private Task Layer(string json, string? before = null) => surface.Map.AddStyleLayerJsonAsync(json, before ?? "");
@@ -257,7 +266,8 @@ public sealed partial class MapScreen : Screen
     {
         var index = await repo.Read("space/仙林/models.json", FactsJson.Default.ModelIndex);
         var bytes = await repo.Bytes("space/仙林/models.bin.gzip");
-        surface.Models = new Models(surface.Device!, index, bytes);
+        var next = new Models(surface.Device!, index, bytes);
+        surface.Models?.Dispose(); surface.Models = next;
         modelled = [.. surface.Models.Buildings];
         await SetRaw("plain", "filter", PlainFilter());
         await Buildings();
@@ -612,7 +622,8 @@ public sealed partial class MapScreen : Screen
         routes = [];
         if (navId is not null && space?.ById.GetValueOrDefault(navId) is { } destination && router is not null)
         {
-            JsonNode? from = origin is not null && space.ById.GetValueOrDefault(origin) is { } start ? JsonNode.Parse(start.Routing.GetRawText()) : me is not null ? new JsonObject { ["type"] = "position", ["position"] = new JsonArray(me[0], me[1]) } : null;
+            if (origin is not null && !space.ById.ContainsKey(origin)) { notice = "没有找到出发地。"; await surface.Map.SetGeoJsonSourceDataAsync("route", Collection([])); surface.Redraw(); Draw(); return; }
+            JsonNode? from = origin is not null ? JsonNode.Parse(space.ById[origin].Routing.GetRawText()) : me is not null ? new JsonObject { ["type"] = "position", ["position"] = new JsonArray(me[0], me[1]) } : null;
             if (from is null)
             {
                 notice = "输入出发地，或点右边的定位。";
@@ -622,6 +633,7 @@ public sealed partial class MapScreen : Screen
             }
             else
             {
+                if (origin is not null && space.ById.GetValueOrDefault(origin) is { } source && Routing.SameAccess(source, destination)) { notice = null; await surface.Map.SetGeoJsonSourceDataAsync("route", Collection([])); surface.Redraw(); Draw(); return; }
                 var request = new JsonObject { ["origin"] = from, ["destination"] = JsonNode.Parse(destination.Routing.GetRawText()), ["mode"] = mode, ["avoid_steps"] = false, ["max_snap_distance_m"] = 100, ["alternatives"] = 3 };
                 try { routes = JsonNode.Parse(router.Route(request.ToJsonString()))!["routes"]!.AsArray().Select(r => r!).ToList(); notice = routes.Count > 0 ? null : "没有找到路线。"; }
                 catch (Exception error) when (error is not OutOfMemoryException) { notice = origin is not null ? "没有找到路线。" : "你现在不在校园路网附近，请选一个出发地。"; }
@@ -745,10 +757,21 @@ public sealed partial class MapScreen : Screen
         {
             var name = destination.Kind == "room" ? Names.Room(destination.Id) : Places.DisplayName(destination, space.ById);
             var route = routes.Count > chosen ? routes[chosen] : null;
-            Title(route is not null ? $"{(mode == "walk" ? "步行" : "骑行")} {Math.Max(1, (int)Math.Ceiling((double)route["duration_s"]! / 60))} 分钟 · {Metres((double)route["distance_m"]!)}" : name);
-            Meta($"到 {name}");
+            var sameAccess = origin is not null && space.ById.GetValueOrDefault(origin) is { } source && Routing.SameAccess(source, destination);
+            if (sameAccess)
+            {
+                Title($"同在{Routing.Name(Routing.Access(destination, space.ById), space.ById)}");
+                Meta($"起点：{Routing.Location(space.ById[origin!], space.ById)}");
+                Meta($"目的地：{Routing.Location(destination, space.ById)}");
+            }
+            else
+            {
+                Title(route is not null ? $"{(mode == "walk" ? "步行" : "骑行")} {Routing.Duration((double)route["duration_s"]!)} · {Metres((double)route["distance_m"]!)}" : name);
+                Meta(Routing.Access(destination, space.ById).Kind == "building" ? $"道路路线到{Routing.Name(Routing.Access(destination, space.ById), space.ById)}入口" : $"到 {name}");
+                if (Routing.Indoor(destination)) Meta(Routing.Inside(destination, space.ById));
+            }
             // Where from: one's position, or a place typed and picked, found as every place is found (Find.Places).
-            var fromName = origin is not null && space.ById.GetValueOrDefault(origin) is { } start ? Places.DisplayName(start, space.ById) : null;
+            var fromName = origin is not null && space.ById.GetValueOrDefault(origin) is { } start ? Routing.Name(start, space.ById) : null;
             var fromBox = Kit.Field(fromName ?? "", "从我的位置出发，或输入出发地", "出发地");
             var found = new StackPanel { Margin = new Thickness(0, 4, 0, 6) };
             fromBox.TextChanged += (_, _) =>
@@ -771,7 +794,7 @@ public sealed partial class MapScreen : Screen
                 for (var i = 0; i < routes.Count; i++)
                 {
                     var r = routes[i]; var index = i;
-                    Row($"{Math.Max(1, (int)Math.Ceiling((double)r["duration_s"]! / 60))} 分钟", Value(Metres((double)r["distance_m"]!), $"经 {Places.RouteText((string?)r["via"] ?? "")}"), () => { chosen = index; _ = Routes(); });
+                    Row(Routing.Duration((double)r["duration_s"]!), Value(Metres((double)r["distance_m"]!), $"经 {Places.RouteText((string?)r["via"] ?? "")}"), () => { chosen = index; _ = Routes(); });
                 }
             if (route is not null)
             {
@@ -786,6 +809,7 @@ public sealed partial class MapScreen : Screen
                 }
                 body.Children.Add(steps);
             }
+            if (Routing.Indoor(destination)) Buttons(("查看楼层", () => { navId = null; routes = []; placeId = destination.Id; floor = Routing.Floor(destination) is { } level && int.TryParse(level, out var number) ? number : null; _ = Scene(); Draw(); }, true));
             Buttons(("结束导航", () => { navId = null; routes = []; _ = Routes(); Draw(); }, false));
         }
         else if (picked is not null && building is not null)

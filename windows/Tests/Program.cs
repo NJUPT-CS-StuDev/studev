@@ -210,6 +210,22 @@ using (var router = new StuDev.Kernels.Wayfind.Router(File.ReadAllText(Path.Comb
     Equal("native wayfind answers", answer.Contains("\"routes\""), JsonValue.Create(true));
 }
 var places = Read<List<Place>>(golden["entities"]!); var byId = places.ToDictionary(p => p.Id);
+foreach (var test in golden["routing"]!.AsArray())
+{
+    var sourcePlace = byId[(string)test!["from"]!]; var targetPlace = byId[(string)test["to"]!];
+    Equal("route source access", Routing.AccessId(sourcePlace), test["sourceAccess"]);
+    Equal("route target access", Routing.AccessId(targetPlace), test["targetAccess"]);
+    Equal("route within building", Routing.SameAccess(sourcePlace, targetPlace), test["withinBuilding"]);
+    Equal("route indoor destination", Routing.Indoor(targetPlace), test["indoorDestination"]);
+    Equal("route building", Routing.Name(Routing.Access(targetPlace, byId), byId), test["building"]);
+    Equal("route origin floor", Routing.Floor(sourcePlace), test["fromFloor"]);
+    Equal("route destination floor", Routing.Floor(targetPlace), test["toFloor"]);
+    Equal("route position", Routing.Location(targetPlace, byId), test["location"]);
+    Equal("route origin position", Routing.Location(sourcePlace, byId), test["fromLocation"]);
+    Equal("route indoor continuation", Routing.Inside(targetPlace, byId), test["continuation"]);
+}
+var indoorPlace = places.First(p => p.Kind == "room");
+Equal("same room stays within building", Routing.SameAccess(indoorPlace, indoorPlace), JsonValue.Create(true));
 foreach (var test in golden["finding"]!["queries"]!.AsArray()) Equal("place query", Find.Places(places, (string)test!["query"]!).Select(p => p.Id), test["found"]);
 foreach (var test in golden["finding"]!["meant"]!.AsArray())
 {

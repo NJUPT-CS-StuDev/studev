@@ -19,6 +19,7 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
     private Search.NativeSearch? search;
     private Space? space;
     private Kernels.Wayfind.Router? router;
+    private Repository? spaceSnapshot;
 
     /** A building as said, as the room data writes it: 教三楼 → 教3. */
     public static string BuildingWord(string said)
@@ -50,7 +51,15 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
     private static DateOnly Date(string value) => System.Text.RegularExpressions.Regex.IsMatch(value, @"^\d{4}-\d{2}-\d{2}$") && DateOnly.TryParseExact(value, "yyyy-MM-dd", out var d) ? d : throw new ArgumentException("日期无效。");
     private static string ToolDay(DateOnly day) => $"{Clock.DateLabel(day)} {Clock.Weekdays[Clock.Weekday(day)]}";
     private Repository Repo => campus.Repository ?? throw new InvalidOperationException("校园数据还没准备好。");
-    private async Task<Space> Places() => space ??= await Space.Load(Repo);
+    private async Task<Space> Places()
+    {
+        var repo = Repo;
+        if (space is not null && spaceSnapshot?.Release.Version == repo.Release.Version) return space;
+        var next = await Space.Load(repo);
+        if (spaceSnapshot?.Release.MapBase != repo.Release.MapBase) { router?.Dispose(); router = null; }
+        space = next; spaceSnapshot = repo;
+        return next;
+    }
     private static string NameOf(Place place) => place.Kind == "room" ? place.Id[(place.Id.IndexOf('/') + 1)..] : place.Names.FirstOrDefault() ?? place.Id;
 
     /** A place as the model is told it: what it is, where, and whether it is open now. */
@@ -134,16 +143,27 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
             {
                 var s = await Places();
                 var from = Find.Meant(s.Places, s.ById, Text("from")); var to = Find.Meant(s.Places, s.ById, Text("to"));
+                var mode = (string?)args["mode"] ?? "walk";
+                var url = $"/map/?from={Uri.EscapeDataString(from.Id)}&nav={Uri.EscapeDataString(to.Id)}" + (mode == "bike" ? "&mode=bike" : "");
+                if (Map.Routing.SameAccess(from, to))
+                {
+                    var within = new JsonObject { ["from"] = NameOf(from), ["to"] = NameOf(to), ["scope"] = "within-building", ["building"] = Map.Routing.Name(Map.Routing.Access(to, s.ById), s.ById), ["steps"] = new JsonArray(Map.Routing.Location(from, s.ById), Map.Routing.Location(to, s.ById)), ["url"] = url };
+                    if (Map.Routing.Floor(from) is { } fromFloor) within["from_floor"] = fromFloor;
+                    if (Map.Routing.Floor(to) is { } toFloor) within["to_floor"] = toFloor;
+                    return within;
+                }
                 router ??= new Kernels.Wayfind.Router(s.Network);
-                var request = new JsonObject { ["origin"] = JsonNode.Parse(from.Routing.GetRawText()), ["destination"] = JsonNode.Parse(to.Routing.GetRawText()), ["mode"] = (string?)args["mode"] ?? "walk", ["avoid_steps"] = false, ["max_snap_distance_m"] = 100, ["alternatives"] = 1 };
+                var request = new JsonObject { ["origin"] = JsonNode.Parse(from.Routing.GetRawText()), ["destination"] = JsonNode.Parse(to.Routing.GetRawText()), ["mode"] = mode, ["avoid_steps"] = false, ["max_snap_distance_m"] = 100, ["alternatives"] = 1 };
                 var routes = JsonNode.Parse(router.Route(request.ToJsonString()))!["routes"]!.AsArray();
                 if (routes.Count == 0) throw new ArgumentException($"地图里没有从{NameOf(from)}到{NameOf(to)}的路。");
                 var route = routes[0]!;
-                return new JsonObject
+                var result = new JsonObject
                 {
                     ["from"] = NameOf(from), ["to"] = NameOf(to), ["distance_m"] = (long)Math.Round((double)route["distance_m"]!, MidpointRounding.AwayFromZero), ["duration_s"] = (long)Math.Round((double)route["duration_s"]!, MidpointRounding.AwayFromZero),
-                    ["steps"] = new JsonArray([.. route["maneuvers"]!.AsArray().Select(m => (JsonNode)(string)m!["instruction"]!)]), ["url"] = $"/map/?from={Uri.EscapeDataString(from.Id)}&nav={Uri.EscapeDataString(to.Id)}",
+                    ["steps"] = new JsonArray([.. route["maneuvers"]!.AsArray().Select(m => (JsonNode)(string)m!["instruction"]!)]), ["url"] = url,
                 };
+                if (Map.Routing.Access(to, s.ById).Kind == "building") { result["scope"] = "to-entrance"; result["arrival"] = Map.Routing.Name(Map.Routing.Access(to, s.ById), s.ById) + "入口"; if (Map.Routing.Floor(to) is { } level) result["floor"] = level; if (Map.Routing.Indoor(to)) result["steps"]!.AsArray().Add(JsonValue.Create(Map.Routing.Inside(to, s.ById))); }
+                return result;
             }
         }
         var line = campus.Line ?? throw new InvalidOperationException("请先选择班级，等待课表读取完成。");

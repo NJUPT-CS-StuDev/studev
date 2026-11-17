@@ -68,7 +68,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     val dark = isSystemInDarkTheme()
     val navigation by runtime.state.collectAsStateWithLifecycle()
     val controller = remember { CampusMapController() }
-    val model by produceState<CampusModel?>(null, campus.version) {
+    val model by produceState<CampusModel?>(null, campus.repository.release.map_base) {
         value = withContext(Dispatchers.IO) { Json { ignoreUnknownKeys = true }.decodeFromString<CampusModel>(campus.repository.bytes("space/仙林/model.json").decodeToString()) }
     }
     var scene by remember { mutableStateOf<Scene?>(null) }
@@ -121,7 +121,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     val floors = remember(scene, buildingId) { if (buildingId != null) scene?.floorsOf(buildingId).orEmpty() else emptyList() }
     val inBuilding = remember(classrooms, buildingId) { classrooms.filter { "${it.campus}/${it.building}" == buildingId } }
     val bestFloor = floors.maxByOrNull { level -> inBuilding.count { it.floor.toIntOrNull() == level && day != null && reader?.at(day, it.id, moment.min)?.busy == false } }
-    val floor = picked?.floor?.toIntOrNull() ?: route.floor?.takeIf { it in floors } ?: bestFloor
+    val floor = selected?.let(Routing::floor)?.toIntOrNull()?.takeIf { it in floors } ?: route.floor?.takeIf { it in floors } ?: bestFloor
     val paints = remember(scene, buildingId, floor, day, moment.min, picked?.id) {
         val active = scene
         if (active == null || buildingId == null || floor == null) emptyList() else active.roomsOf(buildingId, floor).map { row ->
@@ -151,10 +151,14 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             (selected?.centre?.toDoubleArray() ?: buildingId?.let(active::centreOf))?.let { active.focus(it, false) }
         }
     }
-    LaunchedEffect(route.nav, campus) {
-        route.nav?.let(campus.byId::get)?.let { target -> runtime.open(target); if (!access.granted) requestLocation() }
+    LaunchedEffect(route.nav, route.from, route.navMode, campus) {
+        route.nav?.let(campus.byId::get)?.let { target ->
+            val source = route.from?.let(campus.byId::get)
+            runtime.open(target, source, route.from != null && source == null, route.navMode)
+            if (route.from == null && !access.granted) requestLocation()
+        }
     }
-    LaunchedEffect(navigation.open) { if (!navigation.open) route.nav = null }
+    LaunchedEffect(navigation.open) { if (!navigation.open) { route.nav = null; route.from = null } }
     val labels = remember(model, scene, classrooms) {
         val active = model ?: return@remember emptyList<LabelInfo>()
         val teaching = classrooms.mapTo(HashSet()) { "${it.campus}/${it.building}" }
@@ -190,7 +194,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 },
                 onCamera = { cameraTick++ }, routeState = navigation, onRoute = runtime::choose, modifier = Modifier.fillMaxSize())
             LaunchedEffect(model, mapRef) { val map = mapRef; val data = model; if (map != null && data != null && scene == null) map.style?.let { scene = Scene(map, it, data) } }
-            LaunchedEffect(scene, campus.version) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(campus.repository) }) } }
+            LaunchedEffect(scene, campus.repository.release.map_base) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(campus.repository) }) } }
             // Labels are placed over the model at their real height, so they stay on the roofs when the view tilts.
             val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas, day) {
                 val map = mapRef; val active = scene
@@ -246,7 +250,8 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             placed.forEach { item -> key(item.key) { MapLabel(item, nightScene, mark.free) } }
         }
         if (navigation.open) {
-            NavigationScreen(navigation, runtime, controller, access.granted, requestLocation, pick = { origin -> picker = origin })
+            NavigationScreen(navigation, runtime, controller, access.granted, requestLocation, pick = { origin -> picker = origin }, places = if (navigation.active) runtime.places() else campus.byId,
+                viewFloor = { place -> runtime.stop(close = true); route.place = place.id; route.floor = Routing.floor(place)?.toIntOrNull() })
         } else {
             Row(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, top = 12.dp, end = 68.dp).height(40.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(46.dp).fillMaxHeight().clickable { campusOpen = true }, contentAlignment = Alignment.Center) { Plain("仙林", 13.sp, weight = FontWeight.SemiBold) }

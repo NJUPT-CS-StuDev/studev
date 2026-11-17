@@ -33,7 +33,7 @@ import top.hicancan.studev.world.LineEvent
 import top.hicancan.studev.world.Moment
 
 /** Three entries over one shell, the same as the website. */
-@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: () -> Unit, model: CampusModel = viewModel()) {
+@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: (() -> Unit) -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { model.resume() }
     val state by model.state.collectAsStateWithLifecycle()
@@ -62,10 +62,11 @@ import top.hicancan.studev.world.Moment
     var me by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     val location = remember(context) { CampusLocation.get(context) }
-    val walk: suspend (String) -> Int? = walk@{ target ->
+    val walk: suspend (String) -> top.hicancan.studev.navigation.WalkEstimate? = walk@{ target ->
         val fix = location.fix.value ?: return@walk null
-        val place = campus?.byId?.get(target) ?: return@walk null
-        runCatching { runtime.walkMinutes(Endpoint.Position(fix.position), place.endpoint) }.getOrNull()
+        val places = campus?.byId ?: return@walk null
+        val place = places[target] ?: return@walk null
+        runCatching { runtime.walk(Endpoint.Position(fix.position), place) }.getOrNull()
     }
     BackHandler(enabled = route.tab != "timetable" || route.whoType != "me" || route.preview != null) {
         when {
@@ -88,7 +89,7 @@ import top.hicancan.studev.world.Moment
         // The bar below counts as room already given: a keyboard rising over it lifts the page only by what it covers beyond.
         Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = padding.calculateBottomPadding()))) {
             // The native map keeps its surface while another entry is on top of it.
-            if (mapOpened) campus?.let { loaded -> key(loaded.version) { MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) } }
+            if (mapOpened) campus?.let { loaded -> key(loaded.repository.release.map_base) { MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) } }
             when (route.tab) {
                 "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
                 "knowledge" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.knowledge.KnowledgeScreen(route, state, settings) }
@@ -99,7 +100,7 @@ import top.hicancan.studev.world.Moment
     }
     }
     open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings, state, now, onOpen = { open = it to line }) { open = null } }
-    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm, onMembers = onMembers) { me = false }
+    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm, onMembers = { onMembers { me = true } }) { me = false }
     if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
     if (state.appRequired) AppRequired(state.app!!)
 }

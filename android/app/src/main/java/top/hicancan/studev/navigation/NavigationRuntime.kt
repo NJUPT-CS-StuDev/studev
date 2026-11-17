@@ -22,6 +22,7 @@ import top.hicancan.studev.location.CampusLocation
 data class PlannerState(
     val open: Boolean = false, val origin: Place? = null, val destination: Place? = null,
     val destinationIsMyPosition: Boolean = false,
+    val missingOrigin: Boolean = false,
     val mode: String = "walk", val avoidSteps: Boolean = false,
     val routes: List<CampusRoute> = emptyList(), val selected: Int = 0,
     val busy: Boolean = false, val error: String? = null, val trip: TripState = TripState(),
@@ -32,6 +33,7 @@ data class PlannerState(
     val originName get() = originLabel ?: origin?.displayName(emptyMap()) ?: "我的位置"
     val destinationName get() = if (destinationIsMyPosition) "我的位置" else visibleRouteText(destinationLabel ?: destination?.displayName(emptyMap()) ?: "目的地")
     val active get() = trip.phase == TripPhase.Navigating
+    val sameAccess get() = !destinationIsMyPosition && origin != null && destination != null && top.hicancan.studev.map.Routing.sameAccess(origin, destination)
     fun swapped() = copy(origin = if (destinationIsMyPosition) null else destination,
         destination = origin, destinationIsMyPosition = origin == null,
         originLabel = if (destinationIsMyPosition) null else destinationLabel, destinationLabel = originLabel)
@@ -72,9 +74,11 @@ class NavigationRuntime private constructor(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mutex = Mutex()
     private var engine: RoutingEngine? = null
+    private var mapBase: String? = null
     private var session: NavigationSession? = null
     private var planning: Job? = null
     private var goal: Endpoint? = null
+    private var restored = false
     private var generation = 0
     private var lastTimestamp = 0L
     private var lastFixTimestamp = -1L
@@ -83,6 +87,7 @@ class NavigationRuntime private constructor(private val context: Context) {
     private var placeIndex: Map<String, Place> = emptyMap()
     private val _state = MutableStateFlow(PlannerState())
     val state = _state.asStateFlow()
+    fun places(): Map<String, Place> = placeIndex
     val location = CampusLocation.get(context)
     private val persisted = NavigationSessionStore(context)
     private val settings = context.getSharedPreferences("campus-settings", Context.MODE_PRIVATE)
@@ -90,13 +95,14 @@ class NavigationRuntime private constructor(private val context: Context) {
         private set
     @Volatile var simulationCommand: String? = null
     init {
+        val record = persisted.load()
         scope.launch {
-            val campus = try { CampusPackage.load(context) }
+            try { native { engine() } }
             catch (e: CancellationException) { throw e } catch (_: Exception) { return@launch }
-            placeIndex = campus.byId
-            _state.update { it.copy(originLabel = it.origin?.let(::placeLabel), destinationLabel = it.destination?.let(::placeLabel) ?: it.destinationLabel) }
+            _state.update { state -> val requested = state.destination ?: (record?.destination as? Endpoint.Target)?.id?.let(placeIndex::get); state.copy(destination = requested, originLabel = state.origin?.let(::placeLabel), destinationLabel = requested?.let(::placeLabel) ?: state.destinationLabel) }
         }
-        persisted.load()?.let { record ->
+        record?.let { record ->
+            restored = true
             goal = record.destination
             _state.value = PlannerState(
                 mode = record.mode,
@@ -121,18 +127,48 @@ class NavigationRuntime private constructor(private val context: Context) {
         }
     }
     private suspend fun <T> native(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
-    private suspend fun engine() = engine ?: Wayfind.load(top.hicancan.studev.data.AcademicRepository.open(context)).also { engine = it }
-    private fun placeLabel(place: Place): String = if (place.kind == "room") roomDisplayName(place.id, placeIndex + (place.id to place)).orEmpty() else place.displayName(placeIndex)
+    /** A running trip owns its snapshot. A new plan reads places and roads from one current reader. */
+    private suspend fun engine(): RoutingEngine {
+        if (state.value.active) engine?.let { return it }
+        val repository = top.hicancan.studev.data.AcademicRepository.open(context)
+        if (engine == null || mapBase != repository.release.map_base) {
+            val campus = CampusPackage.load(context, repository)
+            val next = Wayfind.load(repository)
+            session?.close(); session = null
+            engine?.close()
+            placeIndex = campus.byId; engine = next; mapBase = repository.release.map_base
+            _state.update { current ->
+                val source = current.origin?.id?.let(placeIndex::get)
+                val destination = current.destination?.id?.let(placeIndex::get)
+                current.copy(origin = source, destination = destination,
+                    originLabel = source?.let(::placeLabel), destinationLabel = destination?.let(::placeLabel) ?: current.destinationLabel)
+            }
+        }
+        return checkNotNull(engine)
+    }
+    private suspend fun roadEndpoint(requested: Endpoint): Endpoint = when (requested) {
+        is Endpoint.Position -> requested
+        is Endpoint.Target -> {
+            placeIndex.getValue(requested.id).routing
+        }
+    }
+    private fun placeLabel(place: Place): String = if (placeIndex.containsKey(top.hicancan.studev.map.Routing.accessId(place))) top.hicancan.studev.map.Routing.name(place, placeIndex) else if (place.kind == "room") roomDisplayName(place.id, placeIndex + (place.id to place)).orEmpty() else place.displayName(placeIndex)
     /** How long the kernel says it takes to walk between two points. */
-    suspend fun walkMinutes(from: Endpoint, to: Endpoint): Int? = native {
-        engine().route(RouteRequest(from, to, "walk", false, 100.0, 1)).firstOrNull()?.let { kotlin.math.ceil(it.duration_s / 60).toInt().coerceAtLeast(1) }
+    suspend fun walk(from: Endpoint, to: Place): WalkEstimate? = native {
+        val router = engine()
+        val target = placeIndex.getValue(to.id)
+        val access = top.hicancan.studev.map.Routing.access(target, placeIndex)
+        router.route(RouteRequest(from, target.routing, "walk", false, 100.0, 1)).firstOrNull()?.let { WalkEstimate(it.duration_s, top.hicancan.studev.map.Routing.name(access, placeIndex) + if (access.kind == "building") "入口" else "") }
     }
-    fun open(destination: Place) {
+    fun open(destination: Place, origin: Place? = null, missingOrigin: Boolean = false, mode: String = "walk") {
         if (state.value.active) return
-        _state.value = PlannerState(open = true, destination = destination, destinationLabel = placeLabel(destination))
-        plan()
+        planning?.cancel(); ++generation
+        _state.value = PlannerState(open = true, destination = destination, origin = origin, missingOrigin = missingOrigin, mode = mode,
+            destinationLabel = placeLabel(destination), originLabel = origin?.let(::placeLabel),
+            error = if (missingOrigin) "没有找到出发地。" else null)
+        if (!missingOrigin) plan()
     }
-    fun origin(place: Place?) { _state.update { it.copy(origin = place, originLabel = place?.let(::placeLabel)) }; plan() }
+    fun origin(place: Place?) { _state.update { it.copy(origin = place, originLabel = place?.let(::placeLabel), missingOrigin = false) }; plan() }
     fun destination(place: Place) { _state.update { it.copy(destination = place, destinationIsMyPosition = false, destinationLabel = placeLabel(place)) }; plan() }
     fun swap() {
         _state.update { it.swapped() }; plan()
@@ -148,9 +184,11 @@ class NavigationRuntime private constructor(private val context: Context) {
         notice("此设备没有可用的中文语音，请按屏幕指引前行。可在系统中安装中文语音。")
     }
     fun plan() {
+        restored = false
         planning?.cancel()
         val version = ++generation
         val current = state.value
+        if (current.missingOrigin) return
         val destination = current.destination
         if (destination == null && !current.destinationIsMyPosition) return
         val at = location.fix.value?.takeIf { SystemClock.elapsedRealtime() - it.timestamp < 30_000 }
@@ -165,18 +203,23 @@ class NavigationRuntime private constructor(private val context: Context) {
             }
             return
         }
-        val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else destination!!.endpoint
+        val endpoint = if (current.destinationIsMyPosition) Endpoint.Position(at!!.position) else Endpoint.Target(destination!!.id)
         goal = null
         _state.update { it.copy(busy = true, error = null, routes = emptyList(), selected = 0, trip = TripState()) }
         planning = scope.launch {
             try {
-                val result = native { engine().route(RouteRequest(
-                    current.origin?.endpoint ?: Endpoint.Position(at!!.position),
-                    endpoint, current.mode, current.mode == "walk" && current.avoidSteps)) }
+                val result = native {
+                    val router = engine()
+                    val source = current.origin?.id?.let(placeIndex::getValue)
+                    val target = (endpoint as? Endpoint.Target)?.id?.let(placeIndex::getValue)
+                    if (source != null && target != null && top.hicancan.studev.map.Routing.sameAccess(source, target)) null
+                    else router.route(RouteRequest(source?.routing ?: Endpoint.Position(at!!.position),
+                        roadEndpoint(endpoint), current.mode, current.mode == "walk" && current.avoidSteps))
+                }
                 if (version == generation) {
-                    goal = endpoint // Freeze a position destination for the whole trip, including reroutes.
-                    _state.update { it.copy(routes = result, busy = false,
-                        error = if (result.isEmpty()) "暂无可通行路线，请更换起终点或出行方式。" else null) }
+                    goal = if (current.destinationIsMyPosition) endpoint else Endpoint.Target(destination!!.id)
+                    _state.update { it.copy(routes = result.orEmpty(), busy = false,
+                        error = if (result?.isEmpty() == true) "暂无可通行路线，请更换起终点或出行方式。" else null) }
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (version == generation) _state.update { it.copy(busy = false,
@@ -205,8 +248,14 @@ class NavigationRuntime private constructor(private val context: Context) {
         }
     }
     suspend fun begin(simulated: Boolean) {
-        val route = state.value.route ?: return
-        native { session?.close(); session = engine().navigate(route) }
+        var route = state.value.route ?: return
+        if (restored) {
+            val previous = state.value
+            route = native { engine().route(RouteRequest(Endpoint.Position(location.fix.value?.position ?: route.geometry.first()), roadEndpoint(checkNotNull(goal)), previous.mode, previous.avoidSteps, alternatives = 1)).firstOrNull() } ?: error("无法恢复这条路线，请重新选择起终点。")
+            restored = false
+            _state.update { it.copy(routes = listOf(route), selected = 0) }
+        }
+        native { session?.close(); session = checkNotNull(engine).navigate(route) }
         lastTimestamp = 0; lastFixTimestamp = -1; lastReroute = Long.MIN_VALUE / 2
         simulationPaused = false; simulationCommand = null
         _state.update { it.copy(trip = TripState(TripPhase.Navigating), simulating = simulated) }
@@ -227,7 +276,7 @@ class NavigationRuntime private constructor(private val context: Context) {
             val current = state.value
             try {
                 val routes = native { engine().route(RouteRequest(Endpoint.Position(fix.position),
-                    checkNotNull(goal), current.mode, current.mode == "walk" && current.avoidSteps, alternatives = 1)) }
+                    roadEndpoint(checkNotNull(goal)), current.mode, current.mode == "walk" && current.avoidSteps, alternatives = 1)) }
                 val route = routes.first()
                 native { session?.close(); session = engine().navigate(route) }
                 _state.update { it.copy(origin = null, routes = routes, selected = 0,

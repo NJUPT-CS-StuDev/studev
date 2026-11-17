@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const apk = process.argv[2];
 const resume = process.argv.includes('--resume');
+const personalOnly = process.argv.includes('--personal');
+const routesOnly = process.argv.includes('--routes');
 if (!apk || !existsSync(apk)) throw new Error(`no APK at ${apk}`);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const sdk = process.env.ANDROID_HOME ?? 'D:\\Dev\\Android\\Sdk';
@@ -397,16 +399,34 @@ async function mapFloors() {
     capture('map-room');
 }
 async function routeDetails() {
-    await find('教1-102', 'the route starts at the selected real classroom');
-    await find('教1-101', 'the route ends at the selected real classroom');
-    await find(node => /^\d+(?:\.\d+)? 分钟$/.test(node.text), 'a computed travel time', 30);
-    await find(node => /^\d+(?:\.\d+)?\s*(?:米|公里)$/.test(node.text), 'a computed route length');
+    const path = (from, to, mode = 'walk') => `/map/?from=${encodeURIComponent(from)}&nav=${encodeURIComponent(to)}${mode === 'bike' ? '&mode=bike' : ''}`;
+    for (const [from, to, name] of [['仙林/教1-102', '仙林/教1-101', 'same-floor'], ['仙林/教1-101', '仙林/教1-201', 'same-building'], ['仙林/教1-101', '仙林/教1-101', 'same-room']]) {
+        await link(path(from, to), `open the ${name} navigation link with both endpoints`);
+        await find('同在教1', 'shared building access is presented as indoor locations', 30);
+        const nodes = screen();
+        if (nodes.some(node => /^\d+(?:\.\d+)?\s*(?:米|公里)$/.test(node.text) || node.text === '开始导航')) throw new Error('indoor-only directions invented a road distance or trip');
+        await find(node => node.text.startsWith('目的地：') && node.text.includes(to.slice(to.indexOf('/') + 1)), 'the requested room remains the destination');
+        capture(`map-route-${name}`);
+    }
+    await link(path('仙林/教1-101', '仙林/教1/2'), 'navigate to an actual floor entity');
+    await find('同在教1', 'a floor shares the real building access');
+    await tap('查看楼层', 'open the actual requested floor');
+    await find('教1 2 层', 'the floor link opens floor 2 instead of a guessed free floor');
+    capture('map-route-floor');
+    await link(path('仙林/不存在的起点', '仙林/教1-101'), 'open an invalid explicit origin');
+    await find('没有找到出发地。', 'an invalid explicit origin does not silently become GPS');
+    await link(path('仙林/教1-101', '仙林/教2-101', 'bike'), 'open a cross-building cycling route');
+    await find('道路路线到教2入口', 'the measured road leg ends at the building entrance', 30);
+    if (screen().some(node => node.text === '避开楼梯')) throw new Error('a cycling link was changed back to walking');
+    await find(node => node.text.includes('进入教2后') && node.text.includes('教2-101'), 'the room position follows the entrance');
+    await find(node => /^(?:不到 1|\d+(?:\.\d+)?) 分钟$/.test(node.text), 'a computed road travel time', 30);
+    await find(node => /^\d+(?:\.\d+)?\s*(?:米|公里)$/.test(node.text) && parseFloat(node.text) > 0, 'a positive measured cross-building road distance');
     await find('开始导航', 'the route is ready to navigate');
     healthy('a computed route with both endpoints, length and duration');
     capture('map-route');
     await tap('路线详情', 'the route maneuvers');
-    await find('教1-102 → 教1-101', 'route details name both endpoints');
-    await find(node => /到达|沿|进入|离开|转|前行/.test(node.text) && node.text !== '教1-102 → 教1-101', 'real maneuver instructions');
+    await find('教1-101 → 教2-101', 'route details preserve both requested room endpoints');
+    await find(node => /到达|沿|进入|离开|转|前行/.test(node.text) && node.text !== '教1-101 → 教2-101', 'real maneuver instructions');
     healthy('the route detail instructions');
     capture('map-route-details');
     adb('shell', 'input', 'keyevent', '4');
@@ -444,7 +464,8 @@ async function personalViews() {
     await find(node => node.text.includes('B240402'), 'the selected class is retained');
     await tap('返回', 'back from timetable settings');
     await tap('帮助与关于', 'the about and update settings');
-    await scrollFind(node => node.text.includes(`App ${product.android.versionName} · 数据 ${release.data_version}`), 'the installed app and campus data versions');
+    const currentRelease = JSON.parse(adb('exec-out', 'cat', `/data/user/0/${app}/files/campus/release.json`));
+    await scrollFind(node => node.text.includes(`App ${product.android.versionName} · 数据 ${currentRelease.data_version}`), 'the installed app and current cached campus data versions');
     healthy('personal settings show the selected class, account and released version');
     capture('personal-settings');
     adb('shell', 'input', 'keyevent', '4');
@@ -507,6 +528,20 @@ async function aiTrace() {
 
 try {
 await device();
+if (routesOnly) {
+    await routeDetails();
+    console.log(`Android room/building/road routing acceptance passed: ${evidence}`);
+} else if (personalOnly) {
+    for (let layer = 0; layer < 2; layer++) {
+        const nodes = screen();
+        if (!nodes.some(node => node.text === '课表设置' || node.text === '检查更新')) break;
+        adb('shell', 'input', 'keyevent', '4');
+        await sleep(900);
+    }
+    await personalViews();
+    await aiTrace();
+    console.log(`Android personal and AI trace acceptance passed: ${evidence}`);
+} else {
 if (resume) {
     const expected = /versionCode='(\d+)'/.exec(badging)?.[1];
     const installedVersion = /versionCode=(\d+)/.exec(adb('shell', 'dumpsys', 'package', app))?.[1];
@@ -565,19 +600,6 @@ await find(node => node.class === 'android.widget.EditText' && node.text === '10
 await find('教1-102', 'the final query produces its own room result', 30);
 healthy('query replacement during a search');
 await search101();
-await tap('教1-101', 'open 教1-101 on the map', 30);
-await tap('去这里', 'route to it');
-await sleep(1500);
-if (screen().some(node => node.text === '暂不')) await tap('暂不', 'decline the location for now');
-await find(node => node.text === '选择起点' || /条可选路线|分钟/.test(node.text), 'the route sheet', 20);
-if (screen().some(node => node.text === '选择起点')) {
-    await tap('选择起点', 'choose a start');
-    await tap(node => node.text.startsWith('搜地点'), 'the start field');
-    await type('102', 'search 102');
-    dismissKeyboard();
-    await tap('教1-102', 'start at 教1-102');
-}
-await find(node => /条可选路线|分钟/.test(node.text), 'a route (the wayfind kernel)', 30);
 await routeDetails();
 await knowledgeLinks();
 await knowledgeFilters();
@@ -585,6 +607,7 @@ await referenceGroups();
 await personalViews();
 await aiTrace();
 console.log(`Android smoke passed; map and settings evidence: ${evidence}`);
+}
 } catch (error) {
     if (serial) {
         try { capture('failure'); } catch { /* Preserve the original failure if the app/device is already gone. */ }

@@ -565,7 +565,9 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
             }
             "route" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
                 val target = android.net.Uri.parse(url).getQueryParameter("nav")
-                Card("导航到${value["to"]?.jsonPrimitive?.contentOrNull.orEmpty()}", "${value.getValue("distance_m").jsonPrimitive.long} 米 · 约 ${maxOf(1L, kotlin.math.round(value.getValue("duration_s").jsonPrimitive.double / 60).toLong())} 分钟") { target?.let { route.map(nav = it) } }
+                val within = value["scope"]?.jsonPrimitive?.contentOrNull == "within-building"
+                val detail = value["distance_m"]?.jsonPrimitive?.long?.let { metres -> val seconds = value.getValue("duration_s").jsonPrimitive.double; "$metres 米 · ${if (seconds < 60) "不到1分钟" else "约 ${kotlin.math.ceil(seconds / 60).toInt()} 分钟"}" } ?: value["steps"]?.jsonArray.orEmpty().joinToString(" → ") { it.jsonPrimitive.content }
+                Card(if (within) "同在${value["building"]?.jsonPrimitive?.contentOrNull.orEmpty()}" else "导航到${value["arrival"]?.jsonPrimitive?.contentOrNull ?: value["to"]?.jsonPrimitive?.contentOrNull.orEmpty()}", detail) { openInApp(url, route) }
             }
             "nearby" -> value["places"]?.jsonArray?.take(4)?.forEach { item ->
                 val place = item.jsonObject
@@ -635,7 +637,7 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
 private fun openInApp(href: String, route: Route) {
     val uri = android.net.Uri.parse("https://studev$href")
     when {
-        uri.path?.startsWith("/map") == true -> uri.getQueryParameter("nav")?.let { route.map(nav = it) } ?: route.map(place = uri.getQueryParameter("place"))
+        uri.path?.startsWith("/map") == true -> uri.getQueryParameter("nav")?.let { route.map(nav = it, from = uri.getQueryParameter("from"), mode = uri.getQueryParameter("mode") ?: "walk") } ?: route.map(place = uri.getQueryParameter("place"))
         else -> route.tab = "timetable"
     }
 }

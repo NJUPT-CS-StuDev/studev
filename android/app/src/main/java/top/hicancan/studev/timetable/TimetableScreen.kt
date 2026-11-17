@@ -46,7 +46,7 @@ import top.hicancan.studev.world.*
 import java.time.LocalDate
 
 /** Whoever is being looked at, unfolded along time. */
-@Composable fun TimetableScreen(route: Route, model: CampusModel, state: AcademicState, settings: PersonalSettings, now: Moment, walk: suspend (String) -> Int?, onEvent: (LineEvent, CampusLine) -> Unit) {
+@Composable fun TimetableScreen(route: Route, model: CampusModel, state: AcademicState, settings: PersonalSettings, now: Moment, walk: suspend (String) -> top.hicancan.studev.navigation.WalkEstimate?, onEvent: (LineEvent, CampusLine) -> Unit) {
     val term = state.term
     if (settings.klass == null && route.whoType == "me") { ClassPicker(state) { model.chooseClass(it) }; return }
     if (term == null) { Box(Modifier.fillMaxSize()); return }
@@ -269,7 +269,7 @@ private fun goneSummary(events: List<LineEvent>): String {
     return counts.entries.joinToString("、") { (name, count) -> if (count > 1) "$name（$count 节）" else name }
 }
 
-@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> Int?, order: List<String>, store: top.hicancan.studev.me.TaskStore, onOpen: (LineEvent) -> Unit) {
+@Composable private fun DayView(line: CampusLine, day: LocalDate, now: Moment, isMe: Boolean, record: ExamRecord?, route: Route, walk: suspend (String) -> top.hicancan.studev.navigation.WalkEstimate?, order: List<String>, store: top.hicancan.studev.me.TaskStore, onOpen: (LineEvent) -> Unit) {
     val today = day == now.date
     val events = remember(line, day) { line.on(day) }
     val tones = remember(line) { TimetablePresentation.tones(line) }
@@ -349,10 +349,10 @@ private fun goneSummary(events: List<LineEvent>): String {
     }
 }
 
-@Composable private fun NextBlock(line: CampusLine, now: Moment, route: Route, walk: suspend (String) -> Int?) {
+@Composable private fun NextBlock(line: CampusLine, now: Moment, route: Route, walk: suspend (String) -> top.hicancan.studev.navigation.WalkEstimate?) {
     val event = remember(line, now) { line.next(now) } ?: return
-    var minutes by remember(event.room) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(event.room) { if (Names.placed(event.room)) minutes = walk(event.room!!) }
+    var walking by remember(event.id, event.room) { mutableStateOf<top.hicancan.studev.navigation.WalkEstimate?>(null) }
+    LaunchedEffect(event.id, event.room, now.min) { if (Names.placed(event.room)) walking = walk(event.room!!) }
     val today = event.date == now.date
     val during = today && event.start <= now.min
     val caption = when {
@@ -367,7 +367,7 @@ private fun goneSummary(events: List<LineEvent>): String {
         Column(Modifier.weight(1f)) {
             Plain(caption, 12.5.sp, Ink.muted)
             Plain("${hm(event.start)} ${event.name}", 19.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 2.dp))
-            Plain((if (event.room != null) Names.room(event.room) else "课表没写地点") + (minutes?.takeIf { !during }?.let { " · ${hm(event.start - it - 2)} 出门，步行 $it 分钟" } ?: ""), 13.5.sp, Ink.muted)
+            Plain((if (event.room != null) Names.room(event.room) else "课表没写地点") + (walking?.takeIf { !during }?.let { " · 步行${top.hicancan.studev.map.Routing.duration(it.seconds)}到${it.arrival}" } ?: ""), 13.5.sp, Ink.muted)
             if (exam != null) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 SmallTag("考试", mark.exam, mark.onExam)
                 val days = exam.second

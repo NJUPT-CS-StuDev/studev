@@ -50,6 +50,7 @@ data class NavFix(val longitude: Double, val latitude: Double, val accuracy: Dou
                   val heading: Double?, val timestamp: Long, val speed: Double = 0.0) {
     val position get() = listOf(longitude, latitude)
 }
+data class WalkEstimate(val seconds: Double, val arrival: String)
 interface NavigationSession : AutoCloseable { fun update(fix: NavFix): NavigationUpdate }
 interface RoutingEngine : AutoCloseable {
     fun route(request: RouteRequest): List<CampusRoute>

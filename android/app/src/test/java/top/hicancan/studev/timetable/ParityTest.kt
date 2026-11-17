@@ -476,6 +476,25 @@ class ParityTest {
             val got = runCatching { top.hicancan.studev.map.Find.meant(all, byId, case.getValue("said").jsonPrimitive.content).id }
             if (case["id"] != null) assertEquals(case.getValue("id").jsonPrimitive.content, got.getOrThrow()) else assertEquals(case.getValue("error").jsonPrimitive.content, got.exceptionOrNull()?.message) }
     }
+    @Test fun requestedIndoorPlacesKeepTheirRealRoadAccessAndFloor() {
+        val byId = json.decodeFromJsonElement<List<Place>>(golden.getValue("entities")).associateBy { it.id }
+        val routing = top.hicancan.studev.map.Routing
+        golden.getValue("routing").jsonArray.forEach { item -> val test = item.jsonObject
+            val from = byId.getValue(test.getValue("from").jsonPrimitive.content); val to = byId.getValue(test.getValue("to").jsonPrimitive.content)
+            assertEquals(test.getValue("sourceAccess").jsonPrimitive.content, routing.accessId(from))
+            assertEquals(test.getValue("targetAccess").jsonPrimitive.content, routing.accessId(to))
+            assertEquals(test.getValue("withinBuilding").jsonPrimitive.boolean, routing.sameAccess(from, to))
+            assertEquals(test.getValue("indoorDestination").jsonPrimitive.boolean, routing.indoor(to))
+            assertEquals(test.getValue("building").jsonPrimitive.content, routing.name(routing.access(to, byId), byId))
+            assertEquals(test["fromFloor"]?.jsonPrimitive?.contentOrNull, routing.floor(from))
+            assertEquals(test["toFloor"]?.jsonPrimitive?.contentOrNull, routing.floor(to))
+            assertEquals(test.getValue("location").jsonPrimitive.content, routing.location(to, byId))
+            assertEquals(test.getValue("fromLocation").jsonPrimitive.content, routing.location(from, byId))
+            assertEquals(test.getValue("continuation").jsonPrimitive.content, routing.inside(to, byId))
+        }
+        val room = byId.values.first { it.kind == "room" }
+        assertTrue(routing.sameAccess(room, room))
+    }
     @Test fun stepsAreSaidTheSame() {
         golden.getValue("steps").jsonArray.forEach { item -> val case = item.jsonObject
             val calls = case.getValue("calls").jsonArray.map { val call = it.jsonObject; top.hicancan.studev.ai.Steps.Call(call.getValue("id").jsonPrimitive.content, call.getValue("name").jsonPrimitive.content, call.getValue("arguments").jsonPrimitive.content) }

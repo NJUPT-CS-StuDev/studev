@@ -683,7 +683,7 @@ public sealed partial class AiScreen : Screen
                 foreach (var r in rooms.Take(6)) { var id = (string)r!["room"]!; var minutes = (int)r["minutes"]!; Card(Names.Room(id), $"空到 {Clock.Hm((int)r["until"]!)} · {minutes / 60} 小时 {minutes % 60} 分", () => App.Open("map", ("place", id))); }
                 break;
             case "route" when result["url"] is not null:
-                Card($"导航到{(string)result["to"]!}", $"{(long)result["distance_m"]!} 米 · 约 {Math.Max(1, (int)Math.Round((long)result["duration_s"]! / 60.0))} 分钟", () => Link((string)result["url"]!));
+                Card((string?)result["scope"] == "within-building" ? $"同在{(string)result["building"]!}" : $"导航到{(string?)result["arrival"] ?? (string)result["to"]!}", result["distance_m"] is null ? string.Join(" → ", result["steps"]!.AsArray().Select(s => (string)s!)) : $"{(long)result["distance_m"]!} 米 · {((long)result["duration_s"]! < 60 ? "不到1分钟" : $"约 {(int)Math.Ceiling((long)result["duration_s"]! / 60.0)} 分钟")}", () => Link((string)result["url"]!));
                 break;
             case "read" when result["url"] is not null:
                 Card((string)result["title"]!, string.Join(" · ", new[] { (string?)result["source"], (string?)result["date"] }.Where(s => !string.IsNullOrEmpty(s))), () => App.OpenLink((string)result["url"]!));

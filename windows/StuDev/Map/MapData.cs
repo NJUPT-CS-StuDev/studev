@@ -64,9 +64,11 @@ public sealed class Space(List<Place> places, string network)
         const string root = "space/仙林/";
         var entities = repo.Read(root + "entities.json", FactsJson.Default.ListPlace); var network = repo.Bytes(root + "network.json"); var hours = repo.Read("hours.json", FactsJson.Default.DictionaryStringOpeningRecord); var rooms = repo.Rooms();
         await Task.WhenAll(entities, network, hours, rooms);
+        using var networkDocument = System.Text.Json.JsonDocument.Parse(network.Result);
+        var targets = networkDocument.RootElement.GetProperty("targets");
         var joined = entities.Result.Select(place =>
         {
-            if (place.Routing.GetProperty("type").GetString() != "target" || place.Routing.GetProperty("id").GetString() != place.Id) throw new InvalidDataException("地图缺少规范导航目标。");
+            if (place.Routing.GetProperty("type").GetString() != "target" || place.Routing.GetProperty("id").GetString() is not { } target || !targets.TryGetProperty(target, out _)) throw new InvalidDataException("地图缺少真实导航接入点。");
             var room = rooms.Result.Rooms.FirstOrDefault(room => room.Id == place.Id);
             var joined = room is null ? place : place with { Names = place.Names.Concat(room.Names).Distinct().ToList(), Seats = room.Seats, RoomKinds = room.Kinds };
             return hours.Result.TryGetValue(place.Id, out var opening) ? joined with { Hours = opening.Hours } : joined;

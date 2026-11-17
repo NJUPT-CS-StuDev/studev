@@ -39,7 +39,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private fun fill(text: String, values: Map<String, Any?>) = Regex("\\{(\\w+)\\}").replace(text) { values[it.groupValues[1]].toString() }
     val diagrams = contract.getValue("diagrams").jsonArray.map { it.jsonPrimitive.content }
 
-    /** Who the model is talking to, in a phrase: 仙林校区 B240402 班的吴双灿（学号 B24040213）. */
+    /** Who the model is talking to, in a phrase: 仙林校区 TEST000001 班的测试同学. */
     private fun who(s: Situation): String {
         val where = fill(phrase("me", if (s.klass != null) "class" else "noClass"), mapOf("campus" to s.campus, "class" to s.klass))
         return where + if (s.name != null) fill(phrase("me", "named"), mapOf("name" to s.name, "student" to (s.student ?: "未知"))) else phrase("me", "anyone")
