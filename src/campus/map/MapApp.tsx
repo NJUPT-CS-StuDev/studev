@@ -76,7 +76,9 @@ export default function MapApp() {
     const navId = params.get('nav');
     const floorParam = Number(params.get('f')) || null;
     const pitch = params.get('tilt') === '0' ? 0 : 52;
-    const [day, setDay] = useState<RoomDay | null>(null);
+    const [loadedDay, setDay] = useState<RoomDay | null>(null);
+    // A changed date stops using the previous day's occupancy before its request finishes.
+    const day = loadedDay?.date === moment.date ? loadedDay : null;
     const [me, setMe] = useState<Position | null>(null);
     const [origin, setOrigin] = useState('');
     const [mode, setMode] = useState<Mode>('walk');
@@ -108,7 +110,11 @@ export default function MapApp() {
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-appearance'] });
         return () => observer.disconnect();
     }, []);
-    useEffect(() => { let live = true; void loadRoomDay(moment.date).then(value => { if (live) setDay(value); }); return () => { live = false; }; }, [moment.date]);
+    useEffect(() => {
+        let live = true; setDay(null);
+        void loadRoomDay(moment.date).then(value => { if (live) setDay(value); }).catch(() => { if (live) setDay(null); });
+        return () => { live = false; };
+    }, [moment.date]);
 
     useEffect(() => { scene?.map.resize(); }, [closed, scene]);
 
@@ -148,7 +154,7 @@ export default function MapApp() {
         if (!floors.length) return null;
         let best = floors[0]!, most = -1;
         for (const level of floors) {
-            const free = roomsInBuilding.filter(room => Number(room.floor) === level && !stateOf(room.id)?.busy).length;
+            const free = roomsInBuilding.filter(room => Number(room.floor) === level && day && !stateOf(room.id)?.busy).length;
             if (free > most) { most = free; best = level; }
         }
         return best;
@@ -170,9 +176,9 @@ export default function MapApp() {
         return counts;
     }, [day, moment.min, world]);
     useEffect(() => {
-        if (!scene) return;
+        if (!scene || !day) return;
         scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
-    }, [freeBy, scene]);
+    }, [day, freeBy, scene]);
     useEffect(() => { scene?.setMoment(moment.date, moment.min, appearance); }, [appearance, moment.date, moment.min, scene]);
 
     /* Labels. */
@@ -185,15 +191,15 @@ export default function MapApp() {
             const at = scene.centreOf(building.id);
             if (!name || !at) continue;
             const teaching = freeBy.has(building.id), rule = labelRule(place!, world.space.byId, teaching)!;
-            out.push({ id: building.id, text: name, ...(teaching ? { count: 0 } : {}), at, height: building.height, ...rule, className: teaching ? 'teach' : rule.priority > 1 ? 'minor' : '' });
+            out.push({ id: building.id, text: name, ...(teaching && day ? { count: freeBy.get(building.id)!.free } : {}), at, height: building.height, ...rule, className: teaching ? 'teach' : rule.priority > 1 ? 'minor' : '' });
         }
         for (const place of world.space.places) {
             const rule = place.centre && place.names[0] ? labelRule(place, world.space.byId) : null;
             if (rule) out.push({ id: place.id, text: place.names[0]!, at: place.centre!, height: 0, ...rule, className: 'minor place' });
         }
         scene.setLabels(out);
-        scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
-    }, [scene, world]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (day) scene.setCounts(new Map([...freeBy].map(([id, row]) => [id, row.free])));
+    }, [scene, world, Boolean(day)]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* Open the selected building, or fly to the selected place. */
     const padding = useMemo(() => wide ? { top: 60, bottom: 60, left: 50, right: 70 } : { top: 70, bottom: 272, left: 28, right: 64 }, [wide]);
@@ -332,7 +338,7 @@ export default function MapApp() {
         body = <>
             <div className="card-h top"><h2>{roomName}</h2></div>
             <div className="meta">{openBuilding?.names[0]} {floor} 层{room?.seats ? ` · ${room.seats} 座` : ''}{room?.kinds[0] ? ` · ${room.kinds[0].replace(/^(仙林|三牌楼|锁金)/, '')}` : ''}</div>
-            {state && (!day ? <div className="state busy">这一天没有排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>{state.minutes ? `，到 ${hm(state.until)}，还能待 ${durationText(state.minutes)}` : '，今天没课了'}</div>)}
+            {state && (!day ? <div className="msum">暂无这一天的排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>{state.minutes ? `，到 ${hm(state.until)}，还能待 ${durationText(state.minutes)}` : '，今天没课了'}</div>)}
             {state && day && <PeriodStrip periods={world.periods} state={state} min={moment.min} />}
             <div className="btns">
                 {state && <a className="btn" href={`/?who=room:${encodeURI(pickedRoom.id)}&scale=week&t=${moment.date}`}>这间的课表</a>}
@@ -349,9 +355,9 @@ export default function MapApp() {
         body = <>
             <div className="card-h top"><h2>{openBuilding.names[0]}{floor !== null ? ` ${floor} 层` : ''}</h2></div>
             <a className="kv" href={`/search/?within=${encodeURIComponent(openBuilding.id)}`}><span className="v">整栋楼的安排</span><Chevron /></a>
-            <div className="msum">{inFloor.length ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '楼层布局'}</div>
+            <div className="msum">{inFloor.length ? day ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '暂无这一天的排课数据' : '楼层布局'}</div>
             {inFloor.length > 0 ? roomRows(free) : named.map(place => <button key={place.id} className="rrow" onClick={() => handlers.current.onRoom(place.id)}><span className="m"><span className="a">{(place as Place & { title?: string }).title ?? place.names[0]}</span><span className="b">{place.names[0]}</span></span></button>)}
-            {inFloor.length > 0 && !free.length && <div className="empty">这一层此刻没有空教室</div>}
+            {day && inFloor.length > 0 && !free.length && <div className="empty">这一层此刻没有空教室</div>}
         </>;
     } else if (world && selected) {
         const status = selected.hours ? openingStatus(selected.hours, campusTime()) : null;
@@ -374,7 +380,7 @@ export default function MapApp() {
                     <span className="m"><span className="a">{displayName(place, world.space.byId)}</span><span className="b">{[place.category, status.state === 'unknown' ? null : openingLabel[status.state], me ? metres(distance) : null].filter(Boolean).join(' · ')}</span></span>
                 </button>
             ))}
-            {day && <a className="kv" href={`/search/?scope=room${isNow ? '' : `&t=${momentText(moment)}`}`}><span className="v">{freeRooms.length} 间空教室</span><Chevron /></a>}
+            {day ? <a className="kv" href={`/search/?scope=room${isNow ? '' : `&t=${momentText(moment)}`}`}><span className="v">{freeRooms.length} 间空教室</span><Chevron /></a> : <div className="msum">暂无这一天的排课数据</div>}
         </>;
     }
     const holiday = world?.holidays.get(moment.date);

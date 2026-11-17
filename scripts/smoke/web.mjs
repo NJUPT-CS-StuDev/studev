@@ -222,6 +222,87 @@ async function sheetHistory(page, name) {
     log(`${name}: nested sheet handoff, Back/Escape, rapid reopen and real-page Back/Forward`);
 }
 
+async function mapAvailability(name, viewport) {
+    const roomIndex = JSON.parse(await readFile(join(root, `public${release.base}/rooms/index.json`), 'utf8'));
+    const knownDate = roomIndex.weeks[Math.floor(roomIndex.weeks.length / 2)].start;
+    const failedDate = new Date(Date.parse(`${knownDate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    for (const date of [knownDate, failedDate]) {
+        const published = JSON.parse(await readFile(join(root, `public${release.base}/rooms/${roomIndex.term}/${date}.json`), 'utf8'));
+        assert.equal(published.date, date, 'availability tests use actual published day files');
+    }
+    const context = await browser.newContext({ viewport, colorScheme: 'dark', locale: 'zh-CN', timezoneId: 'Asia/Shanghai', serviceWorkers: 'block' });
+    await context.addInitScript(() => localStorage.setItem('studev_ball_hinted', '1'));
+    const page = await context.newPage();
+    const previous = active; active = page;
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    let releaseRequest;
+    const pending = new Promise(resolve => { releaseRequest = resolve; });
+    let failedRequests = 0;
+    const dayUrl = new URL(`${release.base}/rooms/${roomIndex.term}/${failedDate}.json`, origin).href;
+    await page.route(dayUrl, async route => {
+        failedRequests++;
+        await pending;
+        await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Deliberate day-file availability test' });
+    });
+    const mapUrl = (date, place) => new URL(`/map/?t=${date}T08:00${place ? `&place=${encodeURIComponent(place)}&f=1` : ''}`, origin).href;
+    const unknown = '暂无这一天的排课数据';
+    async function unknownOccupancy() {
+        await page.locator('.mbody').getByText(unknown, { exact: true }).waitFor({ state: 'visible' });
+        const text = await page.locator('.mbody').innerText();
+        assert(!/\d+\s*\/\s*\d+ 间空闲|这一层此刻没有空教室|\d+ 间空教室/.test(text), 'an unavailable day never means zero free classrooms');
+        assert.equal(await page.locator('.labels .lb.teach .n').count(), 0, 'unknown occupancy has no numeric building labels');
+    }
+    try {
+        await page.goto(mapUrl(knownDate, '仙林/教3'));
+        await page.locator('.mbody .msum').filter({ hasText: /\d+\s*\/\s*\d+ 间空闲/ }).waitFor({ state: 'visible' });
+        await page.locator('.floors button').first().waitFor({ state: 'visible' });
+        await page.waitForFunction(() => document.querySelectorAll('.labels .lb.teach .n').length > 0);
+        assert(await page.locator('.labels .lb.teach .n').count() > 0, 'known day occupancy still produces actual free counts');
+        const frames = page.evaluate(async date => {
+            const observed = [];
+            for (let frame = 0; frame < 30; frame++) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                if (new URL(location.href).searchParams.get('t')?.startsWith(date)) observed.push({
+                    text: document.querySelector('.mbody')?.textContent || '',
+                    counts: document.querySelectorAll('.labels .lb.teach .n').length,
+                });
+            }
+            return observed;
+        }, failedDate);
+        await page.getByRole('button', { name: '后一天', exact: true }).click();
+        await page.waitForURL(url => url.searchParams.get('t')?.startsWith(failedDate));
+        await unknownOccupancy();
+        const observed = await frames;
+        assert(observed.length > 0, 'the unavailable day is observed while its request is still pending');
+        for (const frame of observed) {
+            assert(!/\d+\s*\/\s*\d+ 间空闲|这一层此刻没有空教室/.test(frame.text), 'date changes do not flash the previous day as current availability');
+            assert.equal(frame.counts, 0, 'loading a different day never flashes numeric building counts');
+        }
+        const failedResponse = page.waitForResponse(response => response.url() === dayUrl && response.status() === 503);
+        releaseRequest();
+        await failedResponse;
+        await unknownOccupancy();
+        await page.locator('.floors').getByRole('button', { name: '2', exact: true }).click();
+        await page.locator('.mbody h2').filter({ hasText: '教3 2 层' }).waitFor({ state: 'visible' });
+        await unknownOccupancy();
+        assert.equal(await page.getByRole('link', { name: '整栋楼的安排', exact: true }).count(), 1, 'building browsing remains available without day occupancy');
+        await screenshot(page, `${name}-map-day-unavailable`);
+
+        await page.goto(mapUrl(failedDate, '仙林/教3-101'));
+        await unknownOccupancy();
+        assert.equal(await page.getByRole('button', { name: '去这里', exact: true }).count(), 1, 'room navigation remains available without day occupancy');
+        await page.goto(mapUrl(failedDate));
+        await unknownOccupancy();
+        assert((await page.locator('.mbody').innerText()).includes('此刻可以去'), 'campus recommendations remain available without day occupancy');
+        assert(failedRequests >= 3, 'building, room and campus-summary checks each exercise the actual unavailable day request');
+        assert.deepEqual(errors, [], 'unavailable room-day requests cause no JavaScript errors');
+        log(`${name}: real room-day loading/503 stays unknown across building, room and campus summary without false zero counts`);
+    } finally {
+        releaseRequest();
+        await context.close(); active = previous;
+    }
+}
+
 try {
     for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]]) {
         const context = await browser.newContext({ viewport, colorScheme: 'dark', locale: 'zh-CN', timezoneId: 'Asia/Shanghai' });
@@ -428,6 +509,8 @@ try {
         log(`${name}: ${await inspectAiTrace(page, { root, output, name })}`);
         await noAvatarOverlap(page, '.ai-bar button');
         await headerAligned(page, '.ai-model-b');
+
+        await mapAvailability(name, viewport);
 
         assert.deepEqual(errors, [], `${name} JavaScript errors`);
         assert.deepEqual(dataErrors, [], `${name} failed application data requests`);

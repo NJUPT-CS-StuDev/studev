@@ -97,7 +97,8 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     val isNow = route.moment == null
     val rooms = state.rooms
     val reader = remember(state.periods) { if (state.periods.isEmpty()) null else RoomReader(state.periods) }
-    var day by remember { mutableStateOf<RoomDay?>(null) }
+    // The previous date's occupancy must not remain visible while the next date loads.
+    var day by remember(moment.date, state.repository, rooms) { mutableStateOf<RoomDay?>(null) }
     LaunchedEffect(moment.date, state.repository, rooms) {
         day = rooms?.let { index -> state.repository?.let { repo -> runCatching { repo.roomDay(index.term, moment.date.toString()) }.getOrNull() } }
     }
@@ -119,7 +120,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     val buildingId = openBuilding?.id
     val floors = remember(scene, buildingId) { if (buildingId != null) scene?.floorsOf(buildingId).orEmpty() else emptyList() }
     val inBuilding = remember(classrooms, buildingId) { classrooms.filter { "${it.campus}/${it.building}" == buildingId } }
-    val bestFloor = floors.maxByOrNull { level -> inBuilding.count { it.floor.toIntOrNull() == level && reader?.at(day, it.id, moment.min)?.busy == false } }
+    val bestFloor = floors.maxByOrNull { level -> inBuilding.count { it.floor.toIntOrNull() == level && day != null && reader?.at(day, it.id, moment.min)?.busy == false } }
     val floor = picked?.floor?.toIntOrNull() ?: route.floor?.takeIf { it in floors } ?: bestFloor
     val paints = remember(scene, buildingId, floor, day, moment.min, picked?.id) {
         val active = scene
@@ -192,7 +193,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             val assets = androidx.compose.ui.platform.LocalContext.current.assets
             LaunchedEffect(scene) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(assets) }) } }
             // Labels are placed over the model at their real height, so they stay on the roofs when the view tilts.
-            val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas) {
+            val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas, day) {
                 val map = mapRef; val active = scene
                 if (map == null || active == null || canvas.width == 0) emptyList() else buildList<Placed> {
                     val camera = map.cameraPosition
@@ -218,7 +219,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                         val box = floatArrayOf(x - w / 2, y - h / 2 - 6, x + w / 2, y + h / 2 + 2)
                         if (taken.any { box[0] < it[2] && it[0] < box[2] && box[1] < it[3] && it[1] < box[3] }) continue
                         taken += box
-                        add(Placed(label.id, label.text, if (label.teach) freeBy[label.id]?.first ?: 0 else null, x.toInt(), y.toInt(), if (label.teach) "teach" else if (label.priority >= 3) "minor" else "plain") { route.place = label.id; route.floor = null; snap = 0 })
+                        add(Placed(label.id, label.text, if (label.teach && day != null) freeBy[label.id]?.first ?: 0 else null, x.toInt(), y.toInt(), if (label.teach) "teach" else if (label.priority >= 3) "minor" else "plain") { route.place = label.id; route.floor = null; snap = 0 })
                     }
                     if (open && floor != null) {
                         val building = active.openBuilding!!
@@ -410,7 +411,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 }
                 Plain(listOfNotNull("${building.names.firstOrNull().orEmpty()} $floor 层", room?.seats?.let { "$it 座" }, room?.kinds?.firstOrNull()?.removePrefix("仙林")).joinToString(" · "), 13.5.sp, Ink.muted)
                 if (current != null) {
-                    if (day == null) Plain("这一天没有排课数据", 14.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
+                    if (day == null) Plain("暂无这一天的排课数据", 14.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
                     else if (current.busy) Plain((if (current.current != null) "上课中" else "有人用") + "，到 ${hm(current.until)}", 14.sp, Ink.text, modifier = Modifier.padding(vertical = 12.dp))
                     else Plain(if (current.minutes > 0) "空闲，到 ${hm(current.until)}，还能待 ${durationText(current.minutes)}" else "空闲，今天没课了", 14.sp, mark.free, FontWeight.Medium, modifier = Modifier.padding(vertical = 12.dp))
                     if (day != null) PeriodStrip(state.periods, current, moment.min)
@@ -439,7 +440,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 Row(Modifier.padding(top = 8.dp)) {
                     Plain(building.names.firstOrNull().orEmpty() + (floor?.let { " $it 层" } ?: ""), 20.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 }
-                Plain(if (inFloor.isNotEmpty()) "${free.size} / ${inFloor.size} 间空闲" + (if (floor != null) " · 全楼 ${freeBy[building.id]?.first ?: 0} 间" else "") else "楼层布局", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp))
+                Plain(if (inFloor.isNotEmpty()) if (day == null) "暂无这一天的排课数据" else "${free.size} / ${inFloor.size} 间空闲" + (if (floor != null) " · 全楼 ${freeBy[building.id]?.first ?: 0} 间" else "") else "楼层布局", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp))
             }
             item { KeyRow(null, "整栋楼的安排", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = building.id; route.tab = "search" }) }
             if (inFloor.isNotEmpty()) items(free, key = { it.first.id }) { (room, status) -> RoomRow(room, status) { openRoom(room.id) } }
@@ -447,7 +448,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 val place = campus.byId[row.id]
                 KeyRow(null, place?.title ?: place?.names?.firstOrNull() ?: row.id, place?.names?.firstOrNull().takeIf { place?.title != null }, onClick = { openRoom(row.id) })
             }
-            if (inFloor.isNotEmpty() && free.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { Plain("这一层此刻没有空教室", 14.sp, Ink.faint) } }
+            if (day != null && inFloor.isNotEmpty() && free.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { Plain("这一层此刻没有空教室", 14.sp, Ink.faint) } }
         }
         return
     }
@@ -491,6 +492,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             }
         }
         if (free != null) item { KeyRow(null, "$free 间空教室", chevron = true, onClick = { route.query = ""; route.scope = "room"; route.within = null; route.tab = "search" }) }
+        else item { Plain("暂无这一天的排课数据", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
     }
 }
 
