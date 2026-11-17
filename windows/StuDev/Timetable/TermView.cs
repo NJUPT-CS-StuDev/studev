@@ -203,7 +203,18 @@ public static class TermView
         var layout = new Grid { ColumnSpacing = 40 };
         layout.ColumnDefinitions.Add(new ColumnDefinition());
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(340) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.Children.Add(left); Grid.SetColumn(right, 1); layout.Children.Add(right);
+        layout.SizeChanged += (_, e) =>
+        {
+            var compact = e.NewSize.Width < 800;
+            layout.ColumnDefinitions[1].Width = compact ? new GridLength(0) : new GridLength(340);
+            layout.ColumnSpacing = compact ? 0 : 40;
+            layout.RowSpacing = compact ? 24 : 0;
+            Grid.SetColumn(right, compact ? 0 : 1);
+            Grid.SetRow(right, compact ? 1 : 0);
+        };
         page.Children.Add(layout);
         return page;
     }

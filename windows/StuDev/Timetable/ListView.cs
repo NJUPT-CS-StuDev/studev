@@ -83,7 +83,7 @@ public static class ListView
 
     public static FrameworkElement Make(Campus campus, CampusLine line, Moment now, Action<PersonalTask> sheet, Action<LineEvent> open, bool wide)
     {
-        var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left, Width = 760 };
+        var page = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch };
         // Wide, a task opens beside the list and the list stays in view; narrow, it opens as a sheet over it.
         if (beside is not null && campus.Tasks.Live.All(t => t.Id != beside)) beside = null;
         void openTask(PersonalTask task) { if (!wide) { sheet(task); return; } beside = task.Id; besideOpen = null; Redraw(); }
