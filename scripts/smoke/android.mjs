@@ -9,6 +9,7 @@ const apk = process.argv[2];
 const resume = process.argv.includes('--resume');
 const personalOnly = process.argv.includes('--personal');
 const routesOnly = process.argv.includes('--routes');
+const entriesOnly = process.argv.includes('--entries');
 if (!apk || !existsSync(apk)) throw new Error(`no APK at ${apk}`);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const sdk = process.env.ANDROID_HOME ?? 'D:\\Dev\\Android\\Sdk';
@@ -432,6 +433,33 @@ async function routeDetails() {
     adb('shell', 'input', 'keyevent', '4');
     await tap('关闭路线规划', 'close the completed route preview');
 }
+async function entryLinks() {
+    for (const path of ['/ai/', '/knowledge/', '/members/', '/account/', '/login/']) {
+        const handlers = adb('shell', 'cmd', 'package', 'query-activities', '--brief', '-a', 'android.intent.action.VIEW', '-c', 'android.intent.category.BROWSABLE', '-d', quote(origin + path));
+        if (!handlers.includes(`${app}/`)) throw new Error(`the native entry is not registered: ${path}`);
+    }
+    for (const path of ['/admin/', '/club/']) {
+        const handlers = adb('shell', 'cmd', 'package', 'query-activities', '--brief', '-a', 'android.intent.action.VIEW', '-c', 'android.intent.category.BROWSABLE', '-d', quote(origin + path));
+        if (handlers.includes(`${app}/`)) throw new Error(`an unsupported site page was captured by the native app: ${path}`);
+    }
+    await link('/ai/', 'open the AI shared address');
+    await find('问点什么', 'the AI address reaches the native composer');
+    capture('entry-ai');
+    await link('/knowledge/', 'open the knowledge shared address');
+    await find('知识', 'the knowledge page');
+    await find('课程目录', 'the native knowledge directory');
+    capture('entry-knowledge');
+    await link('/account/', 'open the account shared address');
+    await find('登录 StuDev', 'the account link reaches native sign-in');
+    await link('/members/', 'open members over an already-open account');
+    await find('登录后查看成员', 'the new member address replaces the old account layer');
+    capture('entry-members');
+    await link('/login/', 'open sign-in over an already-open member page');
+    await find('登录 StuDev', 'the native sign-in address replaces members');
+    capture('entry-account');
+    healthy('shared addresses select their native screens and preserve site-only boundaries');
+    await tap('返回', 'leave sign-in after entry acceptance');
+}
 async function unknownRoomDay() {
     const index = JSON.parse(readFileSync(join(data, 'rooms/index.json'), 'utf8'));
     const outside = new Date(`${index.weeks.at(-1).end}T12:00:00Z`);
@@ -528,7 +556,10 @@ async function aiTrace() {
 
 try {
 await device();
-if (routesOnly) {
+if (entriesOnly) {
+    await entryLinks();
+    console.log(`Android native shared-address acceptance passed: ${evidence}`);
+} else if (routesOnly) {
     await routeDetails();
     console.log(`Android room/building/road routing acceptance passed: ${evidence}`);
 } else if (personalOnly) {
