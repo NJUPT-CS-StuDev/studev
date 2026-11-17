@@ -148,6 +148,14 @@ function Fill($root, [scriptblock]$match, [string]$text, [string]$step) {
     if ($e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -cne $text) { throw "the input changed during: $step" }
     Alive $step
 }
+function InWindow($element, [string]$step) {
+    $bounds_ = $element.Current.BoundingRectangle
+    $windowBounds_ = $window.Current.BoundingRectangle
+    if ($element.Current.IsOffscreen -or $bounds_.Width -le 0 -or $bounds_.Height -le 0 -or
+        $bounds_.Left -lt $windowBounds_.Left -or $bounds_.Right -gt $windowBounds_.Right -or
+        $bounds_.Top -lt $windowBounds_.Top -or $bounds_.Bottom -gt $windowBounds_.Bottom) { throw "the control is clipped: $step" }
+    Alive $step
+}
 function PressText($root, [string]$text, [string]$step) {
     $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
     for ($i = 0; $i -lt 40; $i++) {
@@ -278,12 +286,34 @@ function ReferenceGroups() {
 try {
     for ($i = 0; -not ($window = Main) -and $i -lt 120; $i++) { Start-Sleep -Milliseconds 250 }
     if (-not $window) { throw 'the main window never appeared' }
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Alive 'open the app'
     # The picker asks once the campus data is in, which a first run fetches.
     Find $window (Is $A::NameProperty '你在哪个班？') $null 'the class picker' 90 | Out-Null
     Fill $window $null 'B240402' 'search a class'
+    InWindow (Find $window $Editable $null 'the class input') 'the class picker input fits the compact window'
+    Capture 'compact-class-picker'
     Press $window 'B240402' 'choose B240402' 30
-    foreach ($scale in '周', '学期', '任务', '天') { Press $window $scale "the $scale view" 30 }
+    foreach ($scale in '周', '学期', '任务', '天') {
+        Press $window $scale "the $scale view" 30
+        if ($scale -eq '学期') {
+            $dates_ = @($window.FindAll($Tree::Descendants, $Pressable) | Where-Object { $_.Current.Name -match '^\d+月\d+日' -and -not $_.Current.IsOffscreen })
+            if ($dates_.Count -lt 7) { throw 'the compact term calendar has no visible week' }
+            $left_ = ($dates_ | ForEach-Object { $_.Current.BoundingRectangle.Left } | Measure-Object -Minimum).Minimum
+            $right_ = ($dates_ | ForEach-Object { $_.Current.BoundingRectangle.Right } | Measure-Object -Maximum).Maximum
+            $windowBounds_ = $window.Current.BoundingRectangle
+            if ($left_ -lt $windowBounds_.Left -or $right_ -gt $windowBounds_.Right -or $right_ - $left_ -lt $windowBounds_.Width * .7) { throw 'the compact term calendar is clipped or squeezed beside its secondary panel' }
+            Capture 'compact-term-calendar'
+            Alive 'the compact term calendar has room for all seven weekdays'
+        }
+        if ($scale -eq '任务') {
+            Fill $window { param($e) $e.Current.Name -eq '添加任务' } 'Smoke task' 'type in the compact task input'
+            InWindow (Find $window $Editable { param($e) $e.Current.Name -eq '添加任务' } 'the task input') 'the compact task input is fully visible'
+            InWindow (Find $window (Both $Pressable (Is $A::NameProperty '添加')) $null 'the add-task action') 'the add-task action fits beside the input'
+            Capture 'compact-task-input'
+            Fill $window { param($e) $e.Current.Name -eq '添加任务' } '' 'clear the isolated task draft'
+        }
+    }
     ManagedCourses
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Press $window '地图' 'the map'
