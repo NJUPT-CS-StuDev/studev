@@ -348,6 +348,23 @@ async function routeDetails() {
     adb('shell', 'input', 'keyevent', '4');
     await tap('关闭路线规划', 'close the completed route preview');
 }
+async function unknownRoomDay() {
+    const index = JSON.parse(readFileSync(join(data, 'rooms/index.json'), 'utf8'));
+    const outside = new Date(`${index.weeks.at(-1).end}T12:00:00Z`);
+    outside.setUTCFullYear(outside.getUTCFullYear() + 1);
+    const date = outside.toISOString().slice(0, 10);
+    if (existsSync(join(data, `rooms/${index.term}/${date}.json`))) throw new Error('the unknown-day case is covered by the actual release');
+    const building = start.id.slice(0, start.id.lastIndexOf('-'));
+    await link(`/map/?place=${encodeURIComponent(building)}&f=1&t=${date}T12:00`, 'a building outside the released teaching dates');
+    await find('暂无这一天的排课数据', 'missing building occupancy is explicitly unknown', 30);
+    if (screen().some(node => /间空闲|这一层此刻没有空教室/.test(node.text))) throw new Error('unknown building occupancy is presented as zero available rooms');
+    capture('map-unknown-day');
+    await link(`/map/?place=${encodeURIComponent(start.id)}&t=${date}T12:00`, 'a room outside the released teaching dates');
+    await find('暂无这一天的排课数据', 'missing room occupancy is explicitly unknown', 30);
+    await link(`/map/?place=${encodeURIComponent(opening.id)}&f=${floors[0]}`, 'return to the released current-day occupancy');
+    await find(node => /\d+\s*\/\s*\d+ 间空闲/.test(node.text), 'known occupancy returns after the unknown date', 30);
+    healthy('unknown room-day data stays distinct from zero availability');
+}
 async function personalViews() {
     await tap('AI', 'the AI board');
     await find('有什么可以帮你？', 'the empty conversation board');
@@ -453,6 +470,7 @@ for (const [scale, name] of [['周', 'week'], ['学期', 'term'], ['任务', 'ta
 }
 await managedCourses();
 await mapFloors();
+await unknownRoomDay();
 // Leaving while uncached searches fetch blocks must not release the engine they still use.
 for (const query of ['考试', '创新', '通信']) {
     startLink(`/search/?q=${encodeURIComponent(query)}`);
