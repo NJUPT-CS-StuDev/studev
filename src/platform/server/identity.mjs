@@ -5,7 +5,8 @@ import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
-import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl } from './roster.mjs';
+import { ROSTER_SCHEMA, ROSTER_SEED_2026_2027, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl, profileNickname } from './roster.mjs';
+import { avatarBody, createMembers } from './members.mjs';
 
 const API = '/api/platform';
 const ID = /^[a-f0-9-]{36}$/;
@@ -52,8 +53,9 @@ function cookieValue(request, name) {
   return matches.length === 1 ? matches[0].slice(name.length + 1) : null;
 }
 
-export function createIdentity({ repo, env, now = Date.now, mailer = createMailer({ env, repo }) }) {
+export function createIdentity({ repo, env, now = Date.now, mailer = createMailer({ env, repo }), fetcher = globalThis.fetch }) {
   const origin = platformOrigin(env);
+  const members = createMembers(repo, origin);
   const local = origin.startsWith('http://');
   const cookieName = local ? 'studev_platform_dev' : '__Host-studev_platform';
   const sessionSecret = env.PLATFORM_SESSION_SECRET;
@@ -69,7 +71,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       id: user.id,
       qq: user.qq,
       avatarUrl: user.avatarUrl || qqAvatarUrl(user.qq),
-      nickname: user.nickname,
+      nickname: profileNickname(user),
       email: user.email,
       emailVerified: user.emailVerified === true,
       studentId: user.studentId || '',
@@ -109,7 +111,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         term: '', department: '', title: '', order: 999, signature: '',
         role: 'owner', status: 'active', passwordHash: env.PLATFORM_OWNER_PASSWORD_HASH, mustChangePassword: true,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now) };
-      try { await claimStudent(user.studentId, user.id); await repo.append(userKey(index.id), user, 0); await repo.audit('system', 'identity.owner.initialized', index.id); }
+      try { await claimStudent(user.studentId, user.id); await createUser(user); await repo.audit('system', 'identity.owner.initialized', index.id); }
       catch (error) { if (!isConflict(error)) throw error; const winner = await repo.latest(userKey(index.id)); if (winner?.role !== 'owner') throw error; }
     })();
     return bootstrapPromise;
@@ -167,11 +169,19 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind, loginHead: auth.loginHead };
   }
   async function sessionResponse(user, mfaVerified, body, kind) {
+    await members.publish(user, user);
     const started = await sessions.start(user, body, { kind, mfaVerified });
     return credentialResponse(started, { user: publicUser(user), ...setupStatus(user, started.session) });
   }
   async function saveUser(current, changes) {
-    return repo.append(userKey(current.id), { ...current, ...changes, updatedAt: iso(now) }, current.revision);
+    const next = await repo.append(userKey(current.id), { ...current, ...changes, updatedAt: iso(now) }, current.revision);
+    await members.publish(next, current);
+    return next;
+  }
+  async function createUser(user) {
+    const next = await repo.append(userKey(user.id), user, 0);
+    await members.publish(next);
+    return next;
   }
   async function claimStudent(studentId, id) {
     const existing = await repo.get(studentKey(studentId));
@@ -251,6 +261,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   }
   async function deleteUser(user) {
     if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
+    await saveUser(user, { status: 'disabled', securityVersion: secretToken() });
     await repo.remove(`identity/qq/${user.qq}.json`);
     if (user.studentId) await repo.remove(studentKey(user.studentId));
     for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
@@ -266,7 +277,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   }
   async function loadAllUsers() {
     const keys = await repo.list('identity/qq/');
-    const indices = await Promise.all(keys.slice(0, 1000).map((key) => repo.get(key)));
+    const indices = [];
+    for (let offset = 0; offset < keys.length; offset += 32) indices.push(...await Promise.all(keys.slice(offset, offset + 32).map(key => repo.get(key))));
     const seen = new Set();
     const uniqueIds = [];
     for (const index of indices) {
@@ -275,7 +287,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         uniqueIds.push(index.id);
       }
     }
-    const users = await Promise.all(uniqueIds.map((id) => repo.latest(userKey(id))));
+    const users = [];
+    for (let offset = 0; offset < uniqueIds.length; offset += 32) users.push(...await Promise.all(uniqueIds.slice(offset, offset + 32).map(id => repo.latest(userKey(id)))));
     return users.filter(Boolean);
   }
   async function rebuildRoster(term = '2026-2027') {
@@ -324,7 +337,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
           const pendingUser = {
             id,
             qq: seed.qq,
-            nickname: seed.realName,
+            nickname: '',
             email: `${seed.qq}@qq.com`,
             emailVerified: false,
             studentId: seed.studentId,
@@ -344,7 +357,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
             createdAt: iso(now),
             updatedAt: iso(now),
           };
-          try { await repo.append(userKey(id), pendingUser, 0); }
+          try { await createUser(pendingUser); }
           catch (error) { if (!isConflict(error)) throw error; }
         }
       }
@@ -354,10 +367,34 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
 
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
-    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
+    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/members`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
     const request = context.request;
     const route = path.slice(API.length);
     const method = request.method;
+    const memberAvatar = route.match(/^\/members\/([a-f0-9-]{36})\/avatar$/);
+    if (method === 'GET' && memberAvatar) {
+      const user = await repo.latest(userKey(memberAvatar[1]));
+      if (!user || user.status !== 'active') fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
+      // The image is public; its address must not disclose the private QQ number.
+      let picture;
+      try { picture = await fetcher(qqAvatarUrl(user.qq), { signal: AbortSignal.timeout(8000), redirect: 'error' }); }
+      catch { fail(502, 'AVATAR_UNAVAILABLE', '头像暂时无法加载。'); }
+      const type = picture.headers.get('Content-Type')?.split(';')[0].trim();
+      if (!picture.ok || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(type) || Number(picture.headers.get('Content-Length') || 0) > 2 * 1024 * 1024) fail(502, 'AVATAR_UNAVAILABLE', '头像暂时无法加载。');
+      const bytes = await avatarBody(picture);
+      return new Response(bytes, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=900', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' } });
+    }
+    if (method === 'GET' && (route === '/members' || /^\/members\/[a-f0-9-]{36}$/.test(route))) {
+      await authenticate(request, { required: true });
+      if (route !== '/members') {
+        return response({ member: await members.get(route.slice('/members/'.length)) });
+      }
+      const url = new URL(request.url);
+      const query = text(url.searchParams.get('query') || '', '昵称', 40).normalize('NFKC').toLocaleLowerCase('zh-CN');
+      const offset = Number(url.searchParams.get('offset') || '0'), limit = Number(url.searchParams.get('limit') || '50');
+      if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) fail(400, 'INVALID_PAGE', '成员列表页码无效。');
+      return response(await members.list(query, offset, limit));
+    }
     // Existing credentials and public reads do not need to initialize the owner
     // again. Registration/login/reset-mail remain the account bootstrap paths.
     if (method === 'POST' && ['/auth/register', '/auth/login', '/auth/password/forgot'].includes(route)) await bootstrap();
@@ -413,7 +450,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       await repo.throttle('register-client', clientId(context), 60, 600);
       const qq = qqValue(body.qq), password = validatePassword(body.password);
       const studentId = normalizeStudentId(body.studentId), realName = normalizeRealName(body.realName);
-      const nickname = text(body.nickname, '昵称', 40, true);
+      const nickname = text(body.nickname, '昵称', 40);
       await repo.throttle('register-account', qq, 3, 600);
       // Check if this studentId belongs to a pre-seeded pending roster member
       const studentClaim = await repo.get(studentKey(studentId));
@@ -435,10 +472,10 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const { id } = index, { passwordHash } = index.registration;
       if (await repo.latest(userKey(id))) fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录。');
       await claimStudent(studentId, id);
-      const user = await repo.append(userKey(id), { id, qq, nickname, email: `${qq}@qq.com`, emailVerified: false, role: 'user', status: 'active',
+      const user = await createUser({ id, qq, nickname, email: `${qq}@qq.com`, emailVerified: false, role: 'user', status: 'active',
         studentId, realName, identityVerified: false,
         term: '', department: '', title: '', order: 999, signature: '',
-        passwordHash, securityVersion: secretToken(), mustChangePassword: false, totp: null, createdAt: iso(now), updatedAt: iso(now) }, 0);
+        passwordHash, securityVersion: secretToken(), mustChangePassword: false, totp: null, createdAt: iso(now), updatedAt: iso(now) });
       await repo.audit(id, 'identity.registered', id);
       return response({ user: publicUser(user) }, 201);
     }
@@ -480,9 +517,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const realName = body.realName === undefined && current.realName ? current.realName : normalizeRealName(body.realName);
       if ((current.studentId && studentId !== current.studentId) || (current.realName && realName !== current.realName)) fail(403, 'IDENTITY_LOCKED', '学号与真实姓名绑定后不可自行修改，请联系所有者核对。');
       const changedIdentity = studentId !== current.studentId || realName !== current.realName;
-      // A blank display nickname means the real name alone, which is how a nickname equal to it reads everywhere.
-      const nickname = body.nickname === undefined ? current.nickname : text(body.nickname, '昵称', 40) || realName;
-      if (!nickname) fail(400, 'INVALID_FIELD', '昵称填写不正确。');
+      const nickname = body.nickname === undefined ? current.nickname : text(body.nickname, '昵称', 40);
       const signature = body.signature === undefined ? (current.signature || '') : text(body.signature, '个性签名', 120, false);
       await bindStudent(current, studentId, realName);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });
@@ -616,13 +651,13 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const id = randomUUID();
       await repo.putNew(`identity/qq/${qq}.json`, { id });
       await claimStudent(studentId, id);
-      const user = await repo.append(userKey(id), {
-        id, qq, nickname: realName, email: `${qq}@qq.com`, emailVerified: false,
+      const user = await createUser({
+        id, qq, nickname: '', email: `${qq}@qq.com`, emailVerified: false,
         studentId, realName, identityVerified: true,
         term, department, title, order, signature,
         role, status: 'pending', passwordHash: '', mustChangePassword: false,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
-      }, 0);
+      });
       if (term) await rebuildRoster(term);
       await repo.audit(auth.user.id, 'identity.user.seeded', id, { studentId, qq, department, term });
       return response({ user: publicUser(user) }, 201);
@@ -664,7 +699,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (auth.user.role !== 'owner' && role !== user.role) fail(403, 'OWNER_REQUIRED', '角色由所有者管理。');
       const realName = body.realName === undefined ? (user.realName || '') : normalizeRealName(body.realName);
       const rawNick = body.nickname === undefined ? undefined : String(body.nickname).trim();
-      const nickname = rawNick === undefined ? user.nickname : text(rawNick, '昵称', 40, true);
+      const nickname = rawNick === undefined ? user.nickname : text(rawNick, '昵称', 40);
       const nameChanged = realName !== (user.realName || '');
       const identityChanged = studentId !== (user.studentId || '') || nameChanged;
       if (studentId && !user.studentId && !realName) fail(400, 'INVALID_REAL_NAME', '首次绑定学号时请同时填写真实姓名。');

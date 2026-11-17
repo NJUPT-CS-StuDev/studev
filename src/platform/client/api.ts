@@ -1,4 +1,6 @@
 type Role = 'owner' | 'admin' | 'user';
+export interface MemberProfile { id: string; nickname: string; signature: string; avatarUrl: string; }
+export interface MemberPage { items: MemberProfile[]; total: number; offset: number; limit: number; }
 export interface User {
     id: string;
     qq: string;
@@ -152,6 +154,7 @@ export function avatarImg(
         });
     } else {
         img.src = user.avatarUrl || avatarFallbackDataUri(label);
+        img.addEventListener('error', () => { img.src = avatarFallbackDataUri(label); }, { once: true });
     }
     return img;
 }

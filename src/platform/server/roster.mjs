@@ -217,6 +217,14 @@ function distinctNickname(user) {
   return nick;
 }
 
+/** An explicit nickname wins; otherwise use the final character of the name. */
+export function profileNickname(user) {
+  const nickname = distinctNickname(user);
+  if (nickname) return nickname;
+  const name = typeof user?.realName === 'string' ? user.realName.trim() : '';
+  return [...new Intl.Segmenter('zh', { granularity: 'grapheme' }).segment(name)].at(-1)?.segment || '同学';
+}
+
 export function buildRosterSnapshot(users, term = '2026-2027', updatedAt = new Date().toISOString()) {
   const rosterUsers = users
     .filter((u) => u && ['admin', 'owner'].includes(u.role) && u.term === term && u.status !== 'disabled')

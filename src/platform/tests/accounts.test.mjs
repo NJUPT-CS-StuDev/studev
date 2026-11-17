@@ -119,7 +119,7 @@ test('public roster derives exclusively from admin/owner roles; forged roster fi
   const selfEdit = await f.browser.call('/auth/profile', { method: 'POST', body: { revision: source.revision + 1, nickname: '', role: 'admin' } });
   assert.equal(selfEdit.status, 200);
   assert.equal(selfEdit.body.user.role, 'user');
-  assert.equal(selfEdit.body.user.nickname, ordinary.realName);
+  assert.equal(selfEdit.body.user.nickname, '名');
 });
 
 test('a first public roster read initializes its owner before seeding staff, while later reads only load the snapshot', async () => {

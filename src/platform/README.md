@@ -2,7 +2,7 @@
 
 Web, Android and Windows use the same `/api/platform` identity endpoints and errors:
 
-- `POST /auth/register`: `studentId`, `realName`, `nickname`, `qq`, `password`.
+- `POST /auth/register`: `studentId`, `realName`, optional `nickname`, `qq`, `password`.
   Registration is open to every student as `user`. No invitation or email
   verification. Student IDs normalize NFKC and case, and have one atomic claim.
   Pre-recorded staff accounts require administrator activation; public
@@ -66,7 +66,18 @@ even when their records have department/title/term fields. Public roster reads
 are not cached in the browser or CDN, so an old projection is never used after
 a role change. Ordinary students'
 identity and contact details are available only to themselves and staff. Other
-students see only their explicitly chosen nickname. Form receipts never expose
+students see only the avatar, nickname and signature. An unset nickname uses the
+final character of the real name; the raw empty nickname stays unset in storage.
+`GET /members?query=&offset=0&limit=50` and `GET /members/<id>` require sign-in
+and return only `id`, `nickname`, `signature`, and an opaque `avatarUrl` that
+does not disclose QQ. Search matches nicknames only; pages contain at most 100.
+The public image proxy admits fixed image types and reads at most 2 MiB.
+Member reads use `members/<id>/<account-revision>.json`, never private account
+history; account changes publish the minimal public projection at that revision.
+An inactive projection hides disabled/deleted accounts, and an older delayed
+publisher cannot replace a newer revision. Unchanged public fields need no new
+projection. Existing accounts are populated once before the new application is
+published. Form receipts never expose
 an authenticated submitter's identity or contact details to their holder.
 
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static

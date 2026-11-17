@@ -144,10 +144,10 @@ test('profile updates are versioned and cannot mutate QQ, user ID, role or email
   await rejects(f.call('/auth/profile', 'POST', { nickname: 'Stale', revision: member.user.revision }, member), 'REVISION_CONFLICT', 409);
 });
 
-test('a blank display nickname shows the real name alone, as the profile page says', async () => {
+test('a blank nickname defaults to the final character of the name', async () => {
   const f = fixture(), member = await f.member();
   const updated = await f.call('/auth/profile', 'POST', { nickname: '  ', signature: '一句话', revision: member.user.revision }, member);
-  assert.equal(updated.user.nickname, member.user.realName || updated.user.realName);
+  assert.equal(updated.user.nickname, '员');
   assert.equal(updated.user.signature, '一句话');
 });
 
