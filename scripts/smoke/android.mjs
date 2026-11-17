@@ -192,7 +192,7 @@ async function fillField(label, value, step) {
     await find(node => node.class === 'android.widget.EditText' && node.text === value, `${step}: the entered value remains`);
 }
 const quote = text => "'" + text.replaceAll("'", "'\\''") + "'";
-const startLink = path => adb('shell', 'am', 'start', '-n', `${app}/top.hicancan.studev.MainActivity`, '-a', 'android.intent.action.VIEW', '-d', quote(origin + path));
+const startLink = path => adb('shell', 'am', 'start', '-W', '-n', `${app}/top.hicancan.studev.MainActivity`, '-a', 'android.intent.action.VIEW', '-d', quote(origin + path));
 async function link(path, step) {
     startLink(path);
     await sleep(900);
