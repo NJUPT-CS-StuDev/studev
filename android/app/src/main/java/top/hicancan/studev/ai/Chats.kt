@@ -9,10 +9,11 @@ import kotlinx.serialization.json.*
  * The conversations kept on this device, as src/campus/ai/chats.ts: each named by its first question until renamed,
  * the newest first, grouped by when they were last spoken in.
  */
-data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread) {
-    fun toJson() = buildJsonObject { put("id", id); put("title", title); put("updated", updated); put("thread", thread.toJson()) }
+data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread, val forks: List<String> = emptyList(), val runtimeModels: List<String> = emptyList()) {
+    fun conversationId(at: String, from: ChatThread = thread) = from.lineage(at).lastOrNull { it.id in forks }?.id ?: id
+    fun toJson() = buildJsonObject { put("id", id); put("title", title); put("updated", updated); put("thread", thread.toJson()); if (forks.isNotEmpty()) put("forks", JsonArray(forks.map(::JsonPrimitive))); if (runtimeModels.isNotEmpty()) put("runtimeModels", JsonArray(runtimeModels.map(::JsonPrimitive))) }
     companion object {
-        fun of(json: JsonObject) = SavedChat(json.getValue("id").jsonPrimitive.content, json["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), json.getValue("updated").jsonPrimitive.long, ChatThread.of(json.getValue("thread").jsonObject))
+        fun of(json: JsonObject) = SavedChat(json.getValue("id").jsonPrimitive.content, json["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), json.getValue("updated").jsonPrimitive.long, ChatThread.of(json.getValue("thread").jsonObject), json["forks"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }, json["runtimeModels"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }.distinct())
     }
 }
 

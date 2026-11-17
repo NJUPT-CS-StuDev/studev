@@ -11,7 +11,7 @@ public static class ClassPicker
 {
     private static string Fold(string value) => System.Text.RegularExpressions.Regex.Replace(value.Normalize(System.Text.NormalizationForm.FormKC).ToUpperInvariant(), @"\s+", "");
 
-    public static FrameworkElement Make(List<TeachingClass> classes, Action<TeachingClass> picked, bool heading = true)
+    public static FrameworkElement Make(List<TeachingClass> classes, Action<TeachingClass> picked, bool heading = true, string query = "", Action<string>? queryChanged = null)
     {
         var column = new StackPanel { Spacing = 0, MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Stretch };
         if (heading)
@@ -20,7 +20,7 @@ public static class ClassPicker
             var lead = Kit.Text("输入班号或专业，课表、考试和校历就都有了。", Role.Body, "muted", wrap: true); lead.Margin = new Thickness(0, 6, 0, 18);
             column.Children.Add(lead);
         }
-        var box = Kit.Field("", "比如 B240402", "班号或专业");
+        var box = Kit.Field(query, "比如 B240402", "班号或专业");
         column.Children.Add(Kit.SearchField(box));
         var results = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         column.Children.Add(results);
@@ -42,7 +42,7 @@ public static class ClassPicker
                 results.Children.Add(tap);
             }
         }
-        box.TextChanged += (_, _) => Show();
+        box.TextChanged += (_, _) => { queryChanged?.Invoke(box.Text); Show(); };
         box.KeyDown += (_, e) =>
         {
             if (e.Key != Windows.System.VirtualKey.Enter) return;
@@ -50,6 +50,7 @@ public static class ClassPicker
             var exact = classes.FirstOrDefault(c => Fold(c.Name) == needle) ?? (classes.Count(c => Fold($"{c.Name} {c.Major ?? ""}").Contains(needle)) == 1 ? classes.First(c => Fold($"{c.Name} {c.Major ?? ""}").Contains(needle)) : null);
             if (exact is not null) picked(exact);
         };
+        Show();
         return column;
     }
 }

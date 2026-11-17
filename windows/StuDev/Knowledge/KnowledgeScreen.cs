@@ -399,10 +399,13 @@ public sealed partial class KnowledgeScreen : Screen
                         stack.Children.Add(title);
                         stack.Children.Add(Kit.Text(sub, Role.Caption, "muted", wrap: true));
                         stack.Children.Add(Kit.Text($"{chCount} 章 · {topicsCount} 个知识点 · {matsCount} 份资料", Role.Caption, "muted"));
-                        var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
+                        var card = new Grid();
+                        card.Children.Add(new Border { Width = 5, Background = Paint.Tone(t, "fg"), HorizontalAlignment = HorizontalAlignment.Left });
+                        stack.Margin = new Thickness(16, 14, 16, 14); card.Children.Add(stack);
+                        var tap = new Tap(Paint.Mix($"knowledge.card:{t}", dark => Paint.Blend(Paint.ToneOf(t, "bg", dark), Paint.Of("surfaceRaised", dark), .35)), Paint.Brush("surfaceSunken"))
                         {
-                            CornerRadius = new CornerRadius(Paint.Number("radius", "card")), BorderBrush = Paint.Tone(t, "border"), BorderThickness = new Thickness(4, 1, 1, 1),
-                            Padding = new Thickness(16, 14, 16, 14), Content = stack,
+                            CornerRadius = new CornerRadius(Paint.Number("radius", "card")), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1),
+                            Content = card,
                         };
                         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, c.Name);
                         tap.Click += (_, _) => Open(course: c.Id);

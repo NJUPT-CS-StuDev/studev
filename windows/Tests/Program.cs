@@ -233,6 +233,32 @@ foreach (var test in assistantCases["addresses"]!.AsArray())
 }
 var worldFolder = Path.Combine(repositoryRoot.FullName, "src", "campus", "world");
 var assistant = StuDev.Ai.Assistant.Load(worldFolder);
+foreach (var address in new[] { "http://localhost:9316/v1", "http://127.0.0.1:9316/v1" })
+{
+    Equal("ordinary API rejects cleartext", StuDev.Ai.Models.AddressError(address) is not null, JsonValue.Create(true));
+    Equal("explicit runtime accepts loopback", StuDev.Ai.Models.AddressError(address, true) is null, JsonValue.Create(true));
+}
+foreach (var address in new[] { "http://localhost.example.com/v1", "http://192.168.1.4/v1", "http://user@localhost/v1", "http://127.0.0.1/v1?key=value", "file:///tmp/model" })
+    Equal("runtime rejects nonlocal cleartext and credentials in URL", StuDev.Ai.Models.AddressError(address, true) is not null, JsonValue.Create(true));
+var runtimeRequest = assistant.Request("deepseek-web", [], new(null, null, "仙林", null, null, null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat");
+Equal("runtime omits unsupported sampling", runtimeRequest.ContainsKey("max_tokens") || runtimeRequest.ContainsKey("temperature"), JsonValue.Create(false));
+Equal("runtime sends its stable conversation", (string?)runtimeRequest["conversation_id"], JsonValue.Create("owned-chat"));
+Equal("runtime does not retry automatically", runtimeRequest.ContainsKey("retry"), JsonValue.Create(false));
+var runtimeRetry = assistant.Request("deepseek-web", [], new(null, null, "仙林", null, null, null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat", retry: true);
+Equal("explicit runtime retry", (bool?)runtimeRetry["retry"], JsonValue.Create(true));
+var stableThread = StuDev.Ai.ChatThread.Empty.Append("", "question", new() { ["role"] = "user" }).Append("question", "original", new() { ["role"] = "assistant" }).Append("original", "continued", new() { ["role"] = "assistant" }).Append("question", "fork", new() { ["role"] = "assistant" }).Append("fork", "tool", new() { ["role"] = "tool" }).Append("tool", "fork-answer", new() { ["role"] = "assistant" });
+var stableChat = new StuDev.Ai.SavedChat("chat", "", 0, stableThread, ["fork"], ["web-a", "web-b"]);
+Equal("main conversation survives adding another branch", stableChat.ConversationId("continued"), JsonValue.Create("chat"));
+Equal("tool rounds keep their fork conversation", stableChat.ConversationId("tool"), JsonValue.Create("fork"));
+Equal("conversation fork survives save and reopen", StuDev.Ai.SavedChat.Of(stableChat.ToJson()).ConversationId("fork-answer"), JsonValue.Create("fork"));
+Equal("models used by the conversation survive save and reopen", StuDev.Ai.SavedChat.Of(stableChat.ToJson()).RuntimeModels, new JsonArray("web-a", "web-b"));
+var partialThread = stableThread.Append("continued", "next-question", new() { ["role"] = "user" }).Append("next-question", "partial", new() { ["role"] = "assistant", ["content"] = "partial answer" });
+Equal("a stopped partial answer stays in its conversation", (stableChat with { Thread = partialThread }).ConversationId("partial"), JsonValue.Create("chat"));
+try { assistant.Read().Take("data: {\"error\":{\"message\":\"请先打开模型网页\",\"code\":\"provider_not_ready\"}}"); failures.Add("runtime SSE error was ignored"); }
+catch (InvalidOperationException error) { Equal("SSE error retains its actionable reason", error.Message, JsonValue.Create("请先打开模型网页")); }
+try { assistant.Read(true).Take("data: {\"error\":{\"message\":\"The remote model is unavailable\",\"code\":\"provider_unavailable\"}}"); failures.Add("runtime source error was ignored"); }
+catch (InvalidOperationException error) { Equal("runtime uses shared natural product copy", error.Message, JsonValue.Create("模型网站暂时不可用，请稍后再试。")); }
+Equal("unknown runtime source error retains its diagnostic", assistant.RuntimeError("unknown-provider-error", "provider text"), JsonValue.Create("provider text"));
 foreach (var test in assistantCases["streams"]!.AsArray())
 {
     var completion = assistant.Read();

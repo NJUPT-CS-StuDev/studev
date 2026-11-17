@@ -53,7 +53,7 @@ public partial class App : Application
                 case "/knowledge": Open("knowledge", "/knowledge/" + uri.Query + uri.Fragment); return;
                 case "/search": Open("search", uri); return;
                 case "/ai": Open("ai"); return;
-                case "/account": case "/login": Open("me", uri); return;
+                case "/account": case "/login": case "/members": Open("me", uri); return;
             }
         }
         _ = Windows.System.Launcher.LaunchUriAsync(uri);
@@ -80,6 +80,7 @@ public partial class App : Application
         Me.Appearance.Follow();
         Window.Open("timetable");
         Syncing = new Me.Sync(World.Campus.Shared, Window.DispatcherQueue);
+        _ = RefreshAccount();
         Watch(Me.Updates.Check());
         // Started at sign-in, StuDev stays in the tray with its card; otherwise its window opens.
         if (!Me.Device.Background) Window.Activate();
@@ -92,5 +93,14 @@ public partial class App : Application
         Me.Device.Changed += Presence;
         Presence();
         Reminders.Start(Window.DispatcherQueue);
+    }
+
+    // Verify a restored account once without delaying the initial campus page.
+    // Public nickname changes then reach the same account cache and header.
+    private static async Task RefreshAccount()
+    {
+        if (Me.Account.Shared.User is null) return;
+        try { await Me.Account.Shared.State(); }
+        catch (Exception failure) when (failure is Me.PlatformFailure or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
     }
 }

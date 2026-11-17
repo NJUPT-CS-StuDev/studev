@@ -13,6 +13,7 @@ public sealed partial class MeScreen : Screen
     private readonly Campus campus = Campus.Shared;
     private string section = "home";
     private AccountScreen? accountPage;
+    private MembersScreen? membersPage;
 
     public MeScreen()
     {
@@ -25,15 +26,21 @@ public sealed partial class MeScreen : Screen
     }
     public override void Shown(object? argument)
     {
-        accountPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
+        accountPage?.Leave(); membersPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
         if (argument is "account") Go("account");
-        if (argument is Uri address) Go("account", System.Web.HttpUtility.ParseQueryString(address.Query)["tab"]);
+        if (argument is Uri address)
+        {
+            if (address.AbsolutePath.TrimEnd('/') == "/members") Go("members", memberAddress: address);
+            else Go("account", System.Web.HttpUtility.ParseQueryString(address.Query)["tab"]);
+        }
     }
-    private void Go(string next, string? accountTab = null)
+    private void Go(string next, string? accountTab = null, Uri? memberAddress = null)
     {
         if (section == "account" && next != "account") accountPage?.Leave();
+        if (section == "members" && next != "members") membersPage?.Leave();
         section = next; App.Window?.AccountPages(section == "account"); Draw();
         if (section == "account") accountPage!.Shown(accountTab);
+        if (section == "members") membersPage!.Shown(memberAddress);
     }
     private static string Form(string kind, string? where = null) =>
         $"{Repository.Site}/fill/?id={Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
@@ -68,6 +75,12 @@ public sealed partial class MeScreen : Screen
             if (!Children.Contains(accountPage)) { Children.Clear(); Children.Add(accountPage); }
             return;
         }
+        if (section == "members")
+        {
+            membersPage ??= new MembersScreen(() => Go("home"));
+            if (!Children.Contains(membersPage)) { Children.Clear(); Children.Add(membersPage); }
+            return;
+        }
         Children.Clear();
         var page = new StackPanel();
         var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", _ => "我" };
@@ -78,6 +91,7 @@ public sealed partial class MeScreen : Screen
         if (section == "home")
         {
             Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(() => Go("account")); else Go("account"); });
+            Row("", Value("成员", "查看头像、昵称和签名"), () => Go("members"));
             Row("", Value("课表设置", campus.Preferences.Class is { } klass ? $"{klass} · {info?.Major}" : "选择班级、调整课程与实验"), () => Go("timetable"));
             Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
             Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);

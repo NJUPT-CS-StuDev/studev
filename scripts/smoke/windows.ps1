@@ -316,9 +316,12 @@ function ExamHistory {
     Press $window '学期' 'open the personal term'
     Press $window '考试' 'open the personal exam arrangements'
     Find $window (Is $A::NameProperty '本次更新未影响本班') $null 'the latest update does not affect B240402' 30 | Out-Null
-    Press $window { param($e) $e.Current.Name.StartsWith('更新记录 ·') } 'open exam update history'
     $baseline = $examIndex.history | Where-Object baseline | Select-Object -First 1
     Press $window { param($e) $e.Current.AutomationId -eq "exam-version:$($baseline.id)" } 'open the original exam baseline'
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
+    Find $window (Is $A::AutomationIdProperty "exam-version:$($baseline.id)") { param($e) $e.Current.HelpText -eq '已展开' } 'the selected history survives a responsive redraw' | Out-Null
+    Find $window (Is $A::NameProperty '当前版本') $null 'the current version remains identified while viewing history' | Out-Null
     Capture 'exam-unaffected-baseline'
 
     Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'open personal settings to select an affected class'
@@ -329,17 +332,15 @@ function ExamHistory {
     Press $window { param($e) $e.Current.AutomationId -eq 'timetable' } 'return to the affected class timetable'
     Press $window '学期' 'open the affected class term'
     Press $window { param($e) $e.Current.Name.StartsWith('考试') -and $e.Current.Name.Length -lt 8 } 'open the affected class exams'
-    Press $window { param($e) $e.Current.Name.StartsWith('更新记录 ·') } 'open the affected class history'
     Press $window { param($e) $e.Current.AutomationId -eq "exam-version:$($affectedExam.version)" } 'open the real update affecting this class'
     Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name.Contains($affectedExam.course.name) } 'the actual changed course is named' | Out-Null
     $sitting = if ($affectedExam.after) { $affectedExam.after[0] } else { $affectedExam.before[0] }
     Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name.Contains($sitting.date) -and $e.Current.Name.Contains($sitting.start) } 'the actual added or previous sitting is explained' | Out-Null
     $version = $examIndex.history | Where-Object id -EQ $affectedExam.version | Select-Object -First 1
-    Press $window "采用的文件 · $($version.files.Count) 份" 'open the files actually used by this version'
-    foreach ($file in $version.files) { Find $window (Is $A::NameProperty ($file.file -replace '^\d{4}-\d{2}-\d{2}-', '')) $null 'the official file name is visible' | Out-Null }
-    Find $window (Both $Pressable (Is $A::NameProperty '官方公告')) $null 'the official announcement link exists' | Out-Null
-    Find $window (Both $Pressable (Is $A::NameProperty '官方附件')) $null 'the official attachment link exists' | Out-Null
-    Find $window (Is $A::NameProperty '历史公告可能撤回，部分附件需连接校园网。') $null 'official source limitations are explained' | Out-Null
+    Find $window (Is $A::NameProperty "本版采用的文件 · $($version.files.Count) 份") $null 'the selected version shows its files directly' | Out-Null
+    foreach ($file in $version.files) { Find $window (Both $Pressable (Is $A::NameProperty ("官方附件：" + ($file.file -replace '^\d{4}-\d{2}-\d{2}-', '')))) $null 'the official file name links directly to its attachment' | Out-Null }
+    $announcements = @($window.FindAll($Tree::Descendants, $Pressable) | Where-Object { $_.Current.Name.StartsWith('官方公告：') })
+    if ($announcements.Count -ne @($version.files.notice | Select-Object -Unique).Count) { throw 'the same official announcement is repeated for each file' }
     Capture 'exam-affected-official-sources'
     Alive 'real exam versions, baseline, class impact and official sources'
 
@@ -506,6 +507,10 @@ try {
     Press $window { param($e) $e.Current.AutomationId -eq $traceHeadId } 'collapse the AI tool-call record'
     Alive 'the complete recorded AI calls and their raw JSON details remain inspectable'
     Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'the me board'
+    Press $window '成员' 'the public member directory remains inside the app'
+    Find $window (Is $A::NameProperty '登录后查看成员') $null 'member browsing asks a visitor to sign in' | Out-Null
+    Capture 'members-sign-in'
+    Press $window '返回' 'return from members to personal settings'
     Press $window '桌面小组件' 'the widgets sheet'
     $adds = @($window.FindAll($Tree::Descendants, (Both $Pressable (Is $A::NameProperty '添加'))))
     if ($adds.Count -lt 2) { throw 'the widgets sheet offers no list and calendar to add' }

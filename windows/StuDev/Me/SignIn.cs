@@ -94,7 +94,8 @@ public static class SignIn
         }
         var student = Field("学号", "account-register-student", 20);
         var realName = Field("真实姓名", "account-register-name", 40);
-        var nickname = Field("昵称", "account-register-nickname", 40);
+        var nickname = Field("昵称（选填）", "account-register-nickname", 40);
+        column.Children.Add(Kit.Text("留空使用默认昵称。其他同学可看到昵称、头像和签名。", Role.Caption, "muted", wrap: true));
         var qq = Field("联系 QQ", "account-register-qq", 12);
         column.Children.Add(Kit.Text("用于通知、找回密码和注销验证，也可匹配 QQ 头像。身份与联系方式仅本人和管理员可见。", Role.Caption, "muted", wrap: true));
         var password = Password("密码", "account-register-password");

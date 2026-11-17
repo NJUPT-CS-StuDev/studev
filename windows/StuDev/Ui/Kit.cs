@@ -102,7 +102,7 @@ public static class Kit
         words.HorizontalAlignment = HorizontalAlignment.Center; words.VerticalAlignment = VerticalAlignment.Center; words.FontSize = 14;
         var tap = new Tap(go ? Paint.Brush("brand") : Paint.Brush("paper"), go ? Paint.Mix("brand.hover", dark => Paint.Blend(Paint.Of("brand", dark), Paint.Of("ink", dark), .92)) : Paint.Brush("surfaceSunken"))
         {
-            Content = words, Height = Paint.Number("size", "control"), Padding = new Thickness(16, 0, 16, 0), CornerRadius = Capsule(Paint.Number("size", "control")),
+            Content = words, Height = Paint.Number("size", "control"), Padding = new Thickness(16, 0, 16, 0), CornerRadius = go ? Capsule(Paint.Number("size", "control")) : new CornerRadius(Paint.Number("radius", "control")),
             BorderBrush = go ? Paint.Brush("brand") : Paint.Brush("line"), BorderThickness = new Thickness(1),
         };
         AutomationProperties.SetName(tap, label);
@@ -151,10 +151,10 @@ public static class Kit
         {
             if (key == separateBefore) row.Children.Add(new Border { Width = 1, Height = 16, Background = Paint.Brush("line"), VerticalAlignment = VerticalAlignment.Center });
             var on = key == chosen;
-            var words = Text(label, Role.Label, on ? "ink" : "muted", bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
+            var words = Text(label, Role.Label, on ? "brand" : "muted", bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
             var cell = new Grid { Height = 38 };
             cell.Children.Add(words);
-            if (on) cell.Children.Add(new Rectangle { Height = 2, Fill = Paint.Brush("ink"), VerticalAlignment = VerticalAlignment.Bottom });
+            if (on) cell.Children.Add(new Rectangle { Height = 2, Fill = Paint.Brush("brand"), VerticalAlignment = VerticalAlignment.Bottom });
             var tap = new Tap { Content = cell };
             AutomationProperties.SetName(tap, label);
             tap.Click += (_, _) => pick(key);
@@ -173,12 +173,12 @@ public static class Kit
         {
             var on = key == chosen;
             var words = Text(label, Role.Label, on ? "ink" : "muted", bold: on); words.FontSize = 13;
-            var tap = new Tap(on ? Paint.Brush("paper") : Paint.Clear, on ? null : Paint.Brush("line")) { Content = words, MinHeight = Paint.Number("size", "search"), Padding = new Thickness(14, 5, 14, 6), CornerRadius = Capsule(Paint.Number("size", "search")) };
+            var tap = new Tap(on ? Paint.Brush("paper") : Paint.Clear, on ? null : Paint.Brush("line")) { Content = words, MinHeight = Paint.Number("size", "search"), Padding = new Thickness(14, 5, 14, 6), CornerRadius = new CornerRadius(Paint.Number("radius", "control") - 2) };
             AutomationProperties.SetName(tap, label);
             tap.Click += (_, _) => pick(key);
             row.Children.Add(tap);
         }
-        return new Border { Child = row, Padding = new Thickness(2), CornerRadius = Capsule(Paint.Number("size", "control")), Background = Paint.Brush("surfaceSunken"), HorizontalAlignment = HorizontalAlignment.Left };
+        return new Border { Child = row, Padding = new Thickness(2), CornerRadius = new CornerRadius(Paint.Number("radius", "control")), Background = Paint.Brush("surfaceSunken"), HorizontalAlignment = HorizontalAlignment.Left };
     }
 
     /** The switch (.toggle): 36 by 22, the line when off, the brand when on. */

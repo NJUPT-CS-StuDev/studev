@@ -72,9 +72,9 @@ val LocalMeAction = staticCompositionLocalOf<(() -> Unit)?> { null }
         for ((key, label) in items) {
             if (key == separateBefore) Box(Modifier.width(1.dp).height(16.dp).background(Ink.line).align(Alignment.CenterVertically))
             val on = key == selected
-            val ink = Ink.text
+            val ink = Ink.brand
             Box(Modifier.height(36.dp).clickable { onSelect(key) }.drawBehind { if (on) drawRect(ink, Offset(0f, size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx())) }, contentAlignment = Alignment.Center) {
-                Plain(label, 14.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Normal)
+                Plain(label, 14.sp, if (on) Ink.brand else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Normal)
             }
         }
     }
@@ -82,10 +82,10 @@ val LocalMeAction = staticCompositionLocalOf<(() -> Unit)?> { null }
 /** One of a few, all in view. */
 @Composable fun Choice(items: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     val padH = if (items.size >= 5) 10.dp else 14.dp
-    Row(Modifier.clip(RoundedCornerShape(Tokens.Radius.pill.dp)).background(Ink.sunken).padding(2.dp)) {
+    Row(Modifier.clip(RoundedCornerShape(Tokens.Radius.control.dp)).background(Ink.sunken).padding(2.dp)) {
         items.forEach { (key, label) ->
             val on = key == selected
-            Box(Modifier.clip(RoundedCornerShape(Tokens.Radius.pill.dp)).background(if (on) Ink.paper else Color.Transparent).clickable { onSelect(key) }.heightIn(min = Tokens.Size.search.dp).padding(horizontal = padH, vertical = 6.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.clip(RoundedCornerShape((Tokens.Radius.control - 2).dp)).background(if (on) Ink.paper else Color.Transparent).clickable { onSelect(key) }.heightIn(min = Tokens.Size.search.dp).padding(horizontal = padH, vertical = 6.dp), contentAlignment = Alignment.Center) {
                 Plain(label, 13.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.Medium else FontWeight.Normal, maxLines = 1)
             }
         }
@@ -99,7 +99,7 @@ val LocalMeAction = staticCompositionLocalOf<(() -> Unit)?> { null }
         Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) { Plain(text, 13.sp) }
     }
 @Composable fun ActionButton(text: String, go: Boolean = false, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) =
-    Surface(onClick, modifier.heightIn(min = Tokens.Size.control.dp), enabled = enabled, shape = RoundedCornerShape(Tokens.Radius.pill.dp), color = if (go) Ink.brand else Ink.paper, border = if (go) null else BorderStroke(1.dp, Ink.line)) {
+    Surface(onClick, modifier.heightIn(min = Tokens.Size.control.dp), enabled = enabled, shape = RoundedCornerShape((if (go) Tokens.Radius.pill else Tokens.Radius.control).dp), color = if (go) Ink.brand else Ink.paper, border = if (go) null else BorderStroke(1.dp, Ink.line)) {
         Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) { Plain(text, 14.sp, if (go) MaterialTheme.colorScheme.onPrimary else Ink.text, FontWeight.Medium, maxLines = 1) }
     }
 

@@ -18,7 +18,7 @@ public static class TermView
     private static string DayHead(DateOnly date) => $"{Clock.DateLabel(date)} {Clock.Weekdays[Clock.Weekday(date)]}";
     private static string PlaceOf(Exam exam) => exam.Room is not null ? Names.Room(exam.Room) : exam.Location;
 
-    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null)
+    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null, string? selectedVersion = null, Action<string>? selectVersion = null)
     {
         var campus = Campus.Shared;
         var hasExams = line.Exams.Count > 0 || record?.History.Count > 0;
@@ -77,7 +77,7 @@ public static class TermView
                 list.Children.Add(Pages.Section($"已考 {taken.Count} 场"));
                 foreach (var exam in taken) list.Children.Add(Row(Clock.DateLabel(Clock.Parse(exam.Date)), Names.Course(exam.Course.Name), $"{exam.Start}–{exam.End} · {PlaceOf(exam)}", () => { if (EventOf(exam) is { } e) open(e); }));
             }
-            if (record is not null) list.Children.Add(ExamHistory.Make(record));
+            if (record is not null) list.Children.Add(ExamHistory.Make(record, selectedVersion, selectVersion));
             page.Children.Add(list);
             return page;
         }

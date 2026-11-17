@@ -25,7 +25,7 @@ namespace StuDev.Ai;
 public sealed partial class AiScreen : Screen
 {
     private static readonly string[] Examples = ["这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？"];
-    private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     private readonly Campus campus = Campus.Shared;
     private readonly Assistant assistant = Assistant.Load(Path.Combine(AppContext.BaseDirectory, "world"));
     private readonly Grid side = new() { Width = 260 };
@@ -35,6 +35,8 @@ public sealed partial class AiScreen : Screen
     private Border live = new();
     private List<SavedChat> chats = [];
     private string? current;
+    private JsonObject? runtimeRequest;
+    private string? runtimeFirstAssistant;
     private ChatThread thread = ChatThread.Empty;
     private List<TaskProposal> proposals = [];
     private readonly Dictionary<string, List<TaskProposal>> keptProposals = new();
@@ -90,7 +92,7 @@ public sealed partial class AiScreen : Screen
         if (Storage.Read("ai/model.json") is { } c)
         {
             var node = JsonNode.Parse(c)!;
-            var mine = new Own((string)node["base"]!, (string)node["model"]!, Secure.Read("ai/key.bin") ?? "");
+            var mine = new Own((string)node["base"]!, (string)node["model"]!, Secure.Read("ai/key.bin") ?? "", (bool?)node["runtime"] ?? false);
             choice = ((string)node["use"]! == "own" && mine.Key.Length > 0, mine);
         }
     }
@@ -101,7 +103,8 @@ public sealed partial class AiScreen : Screen
     }.ToJsonString());
     private void WriteChoice()
     {
-        Storage.Write(Storage.PathFor("ai/model.json"), new JsonObject { ["use"] = choice.Own && choice.Mine.Key.Length > 0 ? "own" : "free", ["base"] = choice.Mine.Base, ["model"] = choice.Mine.Model }.ToJsonString());
+        runtimeRequest = null; runtimeFirstAssistant = null;
+        Storage.Write(Storage.PathFor("ai/model.json"), new JsonObject { ["use"] = choice.Own && choice.Mine.Key.Length > 0 ? "own" : "free", ["base"] = choice.Mine.Base, ["model"] = choice.Mine.Model, ["runtime"] = choice.Mine.Runtime }.ToJsonString());
         Secure.Write("ai/key.bin", choice.Mine.Key.Length > 0 ? choice.Mine.Key : null);
     }
     /** What is said in a conversation moves it to the top of the list and keeps it. */
@@ -110,7 +113,7 @@ public sealed partial class AiScreen : Screen
         if (thread.Nodes.Count == 0) return;
         var id = current ?? Guid.NewGuid().ToString();
         var before = chats.FirstOrDefault(c => c.Id == id);
-        chats = [new SavedChat(id, before?.Title ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), thread), .. chats.Where(c => c.Id != id)];
+        chats = [new SavedChat(id, before?.Title ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), thread, before?.Forks, before?.RuntimeModels), .. chats.Where(c => c.Id != id)];
         keptProposals[id] = proposals; current = id;
         WriteChats();
     }
@@ -119,7 +122,8 @@ public sealed partial class AiScreen : Screen
         if (busy) return;
         var found = chats.FirstOrDefault(c => c.Id == id);
         thread = found?.Thread ?? ChatThread.Empty; proposals = found is null ? [] : keptProposals.GetValueOrDefault(found.Id) ?? [];
-        current = found?.Id; error = ""; editing = null; openSteps.Clear();
+        current = found?.Id ?? Guid.NewGuid().ToString(); error = ""; editing = null; openSteps.Clear();
+        runtimeRequest = null; runtimeFirstAssistant = null;
         WriteChats(); Draw();
     }
 
@@ -145,17 +149,40 @@ public sealed partial class AiScreen : Screen
         if (asked.Length == 0 || busy) return;
         if (!(choice.Own && choice.Mine.Key.Length > 0) && Account.Shared.User is null) { SignIn(asked); return; }
         parent ??= thread.Tip();
+        var fork = parent != thread.Tip();
         var id = Guid.NewGuid().ToString();
-        App.Watch(Run(thread.Append(parent, id, new JsonObject { ["role"] = "user", ["content"] = asked }), id));
+        App.Watch(Run(thread.Append(parent, id, new JsonObject { ["role"] = "user", ["content"] = asked }), id, fork));
     }
 
-    private async Task Run(ChatThread start, string at)
+    private async Task Run(ChatThread start, string at, bool fork = false, JsonObject? retryRequest = null, string? firstAssistant = null)
     {
         thread = start; var tip = at;
         fresh = []; from = at;
-        void Grow(JsonObject message) { var id = Guid.NewGuid().ToString(); fresh.Add(id); thread = thread.Append(tip, id, message); tip = id; Keep(); Draw(); }
-        var history = Recent(thread.Lineage(at).Select(n => n.Message).ToList());
         busy = true; error = ""; editing = null; Keep(); Draw();
+        var provider = choice.Own && choice.Mine.Key.Length > 0 ? choice.Mine : null;
+        var runtime = provider?.Runtime == true;
+        var chat = chats.First(c => c.Id == current);
+        if (runtime && chat.RuntimeModels?.Contains(provider!.Model) != true)
+        {
+            chat = chat with { RuntimeModels = [.. chat.RuntimeModels ?? [], provider!.Model] };
+            chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList(); WriteChats();
+        }
+        firstAssistant ??= runtime && fork ? Guid.NewGuid().ToString() : null;
+        if (firstAssistant is not null && chat.Forks?.Contains(firstAssistant) != true)
+        {
+            chat = chat with { Forks = [.. chat.Forks ?? [], firstAssistant] };
+            chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList(); WriteChats();
+        }
+        var conversationId = retryRequest?["conversation_id"]?.GetValue<string>() ?? firstAssistant ?? chat.ConversationId(at, start);
+        runtimeFirstAssistant = firstAssistant;
+        void Grow(JsonObject message)
+        {
+            var id = (string?)message["role"] == "assistant" && firstAssistant is not null ? firstAssistant : Guid.NewGuid().ToString();
+            if (id == firstAssistant) { firstAssistant = null; runtimeFirstAssistant = null; }
+            fresh.Add(id); thread = thread.Append(tip, id, message); tip = id; Keep(); Draw();
+        }
+        var history = thread.Lineage(at).Select(n => n.Message).ToList();
+        if (!runtime) history = Recent(history);
         stop = new CancellationTokenSource(); var cancel = stop.Token;
         var situation = SituationNow();
         using var tools = new CampusTools(campus, assistant.ToolsFor(situation), Remember, proposal => { proposals = [.. proposals, proposal]; });
@@ -167,10 +194,10 @@ public sealed partial class AiScreen : Screen
                 var last = round == Assistant.Rounds - 1;
                 said = ""; stream = new DocStream(); liveDirty = true;
                 JsonObject answer;
-                try { answer = choice.Own && choice.Mine.Key.Length > 0 ? await AskOwn(history, situation, last, cancel) : await AskFree(history, situation, last, cancel); }
+                try { answer = provider is not null ? await AskOwn(provider, history, situation, last, cancel, conversationId, round == 0 ? retryRequest : null) : await AskFree(history, situation, last, cancel); }
                 finally { stream.Dispose(); stream = null; live.Child = null; }
                 history = [.. history, answer]; Grow(answer);
-                if (answer["tool_calls"] is not JsonArray calls || calls.Count == 0) return;
+                if (answer["tool_calls"] is not JsonArray calls || calls.Count == 0) { runtimeRequest = null; runtimeFirstAssistant = null; return; }
                 foreach (var item in calls)
                 {
                     var call = item!; var function = call["function"]!;
@@ -185,7 +212,14 @@ public sealed partial class AiScreen : Screen
                 }
             }
         }
-        catch (OperationCanceledException) { if (said.Length > 0) Grow(new JsonObject { ["role"] = "assistant", ["content"] = said }); }
+        catch (OperationCanceledException)
+        {
+            if (said.Length > 0)
+            {
+                Grow(new JsonObject { ["role"] = "assistant", ["content"] = said });
+            }
+            runtimeRequest = null; runtimeFirstAssistant = null;
+        }
         catch (Exception failure) when (failure is InvalidOperationException or HttpRequestException or IOException or PlatformFailure or JsonException)
         { error = failure is HttpRequestException or IOException ? "连不上 AI，检查一下网络。" : failure.Message; }
         finally { frame.Stop(); busy = false; from = null; stop = null; Keep(); Draw(); }
@@ -200,12 +234,13 @@ public sealed partial class AiScreen : Screen
     }
     private string? lastUpdate;
 
-    private async Task<JsonObject> AskOwn(List<JsonObject> history, Situation situation, bool last, CancellationToken cancel)
+    private async Task<JsonObject> AskOwn(Own mine, List<JsonObject> history, Situation situation, bool last, CancellationToken cancel, string conversationId, JsonObject? retryRequest = null)
     {
-        var mine = choice.Mine;
-        if (Models.AddressError(mine.Base) is { } wrong) throw new InvalidOperationException(wrong);
+        if (Models.AddressError(mine.Base, mine.Runtime) is { } wrong) throw new InvalidOperationException(wrong);
+        var payload = retryRequest?.DeepClone().AsObject() ?? assistant.Request(mine.Model, history, situation, DateTimeOffset.UtcNow, last, mine.Runtime, conversationId);
+        if (mine.Runtime) { if (retryRequest is not null) payload["retry"] = true; runtimeRequest = payload.DeepClone().AsObject(); }
         using var request = new HttpRequestMessage(HttpMethod.Post, Models.Endpoint(mine.Base))
-        { Content = new StringContent(assistant.Request(mine.Model, history, situation, DateTimeOffset.UtcNow, last).ToJsonString(), Encoding.UTF8, "application/json") };
+        { Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json") };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", mine.Key);
         HttpResponseMessage response;
@@ -216,7 +251,8 @@ public sealed partial class AiScreen : Screen
             if (!response.IsSuccessStatusCode)
             {
                 var text = await response.Content.ReadAsStringAsync(cancel);
-                string? detail = null; try { detail = (string?)JsonNode.Parse(text)?["error"]?["message"]; } catch (JsonException) { }
+                string? detail = null, code = null; try { var failure = JsonNode.Parse(text)?["error"]; detail = (string?)failure?["message"]; code = (string?)failure?["code"]; } catch (JsonException) { }
+                if (mine.Runtime) throw new InvalidOperationException(assistant.RuntimeError(code, detail ?? $"本地模型未能完成请求（{(int)response.StatusCode}）。"));
                 throw new InvalidOperationException((int)response.StatusCode switch
                 {
                     401 => "API Key 不对，在“我的 API”里改一下。", 402 => "你的 API 余额不足。", 429 => "你的 API 请求太频繁，稍后再试。",
@@ -224,7 +260,7 @@ public sealed partial class AiScreen : Screen
                     var status => $"你的 API 没有回答（{status}）" + (detail is not null ? $"：{detail}" : ""),
                 });
             }
-            var completion = assistant.Read();
+            var completion = assistant.Read(mine.Runtime);
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(cancel), Encoding.UTF8);
             while (await reader.ReadLineAsync(cancel) is { } line) OnDelta(completion.Take(line));
             return completion.Result();
@@ -343,9 +379,22 @@ public sealed partial class AiScreen : Screen
     }
     private void Remove(string id)
     {
+        var removed = chats.FirstOrDefault(chat => chat.Id == id);
+        var provider = choice.Mine;
         chats = chats.Where(c => c.Id != id).ToList(); keptProposals.Remove(id);
-        if (current == id) { current = null; thread = ChatThread.Empty; proposals = []; }
-        WriteChats(); Draw();
+        if (current == id) Open(null);
+        else { WriteChats(); Draw(); }
+        if (removed is not null && provider.Runtime && provider.Key.Length > 0) App.Watch(CloseModelPages(removed, provider));
+    }
+    private async Task CloseModelPages(SavedChat removed, Own provider)
+    {
+        try { foreach (var model in removed.RuntimeModels ?? []) await Models.CloseConversationsAsync(Http, provider with { Model = model }, [removed.Id, .. removed.Forks ?? []]); }
+        catch (Exception failure) when (failure is HttpRequestException or OperationCanceledException or InvalidOperationException)
+        {
+            var reason = failure is InvalidOperationException ? failure.Message : failure is OperationCanceledException ? "本地模型服务没有及时响应，网页尚未关闭。" : "无法连接本地模型服务，网页尚未关闭。";
+            var body = Kit.Column(12, Pages.SheetHead(Pages.SheetTitle("对话已删除"), () => App.Window?.Close()), Kit.Text($"本机记录已删除。{reason}", Role.Body, "muted", wrap: true));
+            body.Padding = new Thickness(22, 20, 22, 18); App.Window?.Sheet(body, 420);
+        }
     }
 
     private void DrawMain()
@@ -370,6 +419,7 @@ public sealed partial class AiScreen : Screen
         mine.Click += (_, _) => { if (choice.Mine.Key.Length > 0) { choice = (true, choice.Mine); WriteChoice(); Draw(); } else OwnSheet(); };
         var set = new MenuFlyoutItem { Text = "设置我的 API…" }; set.Click += (_, _) => OwnSheet();
         pick.Items.Add(free); pick.Items.Add(mine); pick.Items.Add(new MenuFlyoutSeparator()); pick.Items.Add(set);
+        model.IsEnabled = !busy;
         model.Click += (_, _) => pick.ShowAt(model, new FlyoutShowOptions { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft });
         bar.Children.Add(model);
         if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); bar.Children.Add(title); }
@@ -407,7 +457,7 @@ public sealed partial class AiScreen : Screen
             var row = Kit.Line(10, Kit.Text(error, Role.Body, "danger", wrap: true));
             ((TextBlock)row.Children[0]).MaxWidth = 600;
             var lastQuestion = thread.Path().LastOrDefault(n => (string?)n.Message["role"] == "user");
-            if (lastQuestion is not null) row.Children.Add(Kit.TextAction("重试", () => { if (!busy) App.Watch(Run(thread, lastQuestion.Id)); }, Icons.Again));
+            if (lastQuestion is not null) row.Children.Add(Kit.TextAction("重试", () => { if (!busy) App.Watch(runtimeRequest is { } failed ? Run(thread, thread.Tip(), retryRequest: failed, firstAssistant: runtimeFirstAssistant) : Run(thread, lastQuestion.Id)); }, Icons.Again));
             row.Margin = new Thickness(0, 14, 0, 0);
             column.Children.Add(row);
         }
@@ -536,7 +586,7 @@ public sealed partial class AiScreen : Screen
             {
                 var tools = Kit.Line(2);
                 if (answer is not null) tools.Children.Add(Icon("复制", Icons.Copy, () => Copy(answer)));
-                tools.Children.Add(Icon("重新回答", Icons.Again, () => { if (!busy) App.Watch(Run(thread, question.Id)); }, enabled: !busy));
+                tools.Children.Add(Icon("重新回答", Icons.Again, () => { if (!busy) App.Watch(Run(thread, question.Id, fork: true)); }, enabled: !busy));
                 tools.Children.Add(Branches(replies[0].Id));
                 turn.Children.Add(tools);
             }
@@ -726,33 +776,53 @@ public sealed partial class AiScreen : Screen
     private void OwnSheet()
     {
         var mine = choice.Mine;
+        var runtime = mine.Runtime;
         var address = Kit.Field(mine.Base, "https://api.deepseek.com", "接口地址");
         var model = Kit.Field(mine.Model, "deepseek-flash", "模型");
-        var key = new PasswordBox { Password = mine.Key, PlaceholderText = "sk-…", MinHeight = 40, FontSize = 14.5 };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(key, "API Key");
+        var key = new PasswordBox { Password = mine.Key, PlaceholderText = runtime ? "模型专用密钥" : "sk-…", MinHeight = 40, FontSize = 14.5 };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(key, runtime ? "模型密钥" : "API Key");
+        var keyLabel = Kit.Text(runtime ? "模型密钥" : "API Key", Role.Label, "muted"); keyLabel.Margin = new Thickness(0, 4, 0, -6);
         var hint = Kit.Text("", Role.Caption, "muted", wrap: true);
+        var modelPick = new ComboBox { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var fetchStatus = Kit.Text("", Role.Caption, "muted", wrap: true);
         Tap? save = null;
         void Check()
         {
-            var wrong = Models.AddressError(address.Text);
+            var wrong = Models.AddressError(address.Text, runtime);
             hint.Text = wrong ?? $"会请求 {Models.Endpoint(address.Text)}"; hint.Foreground = Paint.Brush(wrong is null ? "muted" : "danger");
             if (save is not null) { var ok = wrong is null && key.Password.Trim().Length > 0 && model.Text.Trim().Length > 0; save.IsEnabled = ok; save.Opacity = ok ? 1 : .5; }
         }
         TextBlock Label(string t) { var l = Kit.Text(t, Role.Label, "muted"); l.Margin = new Thickness(0, 4, 0, -6); return l; }
         var column = new StackPanel { Spacing = 12, Padding = new Thickness(22, 20, 22, 18) };
         column.Children.Add(Pages.SheetHead(Pages.SheetTitle("我的 API"), () => App.Window?.Close()));
-        column.Children.Add(Kit.Text("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。", Role.Label, "muted", wrap: true));
+        string Note() => runtime ? "通过 Local Runtime 使用网页模型。填写它提供的地址与模型密钥，校园查询仍在应用内执行。" : "填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。";
+        var providerNote = Kit.Text(Note(), Role.Label, "muted", wrap: true); column.Children.Add(providerNote);
+        var runtimeRow = new Grid { ColumnSpacing = 12 };
+        runtimeRow.ColumnDefinitions.Add(new ColumnDefinition()); runtimeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        runtimeRow.Children.Add(Kit.Column(4, Kit.Text("Local Runtime", Role.Label), Kit.Text("连接你运行的网页模型服务，填写模型专用密钥。", Role.Caption, "muted", wrap: true)));
+        var switchHost = new Border(); Grid.SetColumn(switchHost, 1); runtimeRow.Children.Add(switchHost);
+        void SwitchRuntime() => switchHost.Child = Kit.Switch(runtime, on => {
+            runtime = on;
+            var defaults = runtime ? Models.Runtime : Models.Starting;
+            address.Text = defaults.Base; model.Text = defaults.Model; key.Password = "";
+            modelPick.ItemsSource = null; modelPick.Visibility = Visibility.Collapsed; fetchStatus.Text = "";
+            keyLabel.Text = runtime ? "模型密钥" : "API Key";
+            key.PlaceholderText = runtime ? "模型专用密钥" : "sk-…";
+            providerNote.Text = Note();
+            AutomationProperties.SetName(key, keyLabel.Text); SwitchRuntime(); Check();
+        }, "Local Runtime");
+        SwitchRuntime(); column.Children.Add(runtimeRow);
         column.Children.Add(Label("接口地址")); column.Children.Add(address); column.Children.Add(hint);
-        column.Children.Add(Label("API Key")); column.Children.Add(key);
-        var modelPick = new ComboBox { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var fetchStatus = Kit.Text("", Role.Caption, "muted", wrap: true);
+        column.Children.Add(keyLabel); column.Children.Add(key);
         var fetchBtn = Kit.Action("拉取模型列表", async () =>
         {
             fetchStatus.Text = "正在拉取模型列表…";
             fetchStatus.Foreground = Paint.Brush("muted");
             try
             {
-                var ids = await Models.FetchModelsAsync(Http, address.Text, key.Password);
+                var source = new Own(address.Text, model.Text, key.Password, runtime);
+                var ids = await Models.FetchModelsAsync(Http, source.Base, source.Key, source.Runtime);
+                if (address.Text != source.Base || key.Password != source.Key || runtime != source.Runtime) return;
                 modelPick.ItemsSource = ids;
                 modelPick.Visibility = Visibility.Visible;
                 if (ids.Contains(model.Text.Trim())) modelPick.SelectedItem = model.Text.Trim();
@@ -770,7 +840,7 @@ public sealed partial class AiScreen : Screen
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (mine.Key.Length > 0) buttons.Children.Add(Pill("清除 Key", () => { choice = (false, mine with { Key = "" }); WriteChoice(); App.Window?.Close(); Draw(); }));
         var cancel = Pill("取消", () => App.Window?.Close()); Grid.SetColumn(cancel, 2); buttons.Children.Add(cancel);
-        save = Pill("保存并使用", () => { choice = (true, new Own(address.Text.Trim(), model.Text.Trim(), key.Password.Trim())); WriteChoice(); App.Window?.Close(); Draw(); }, true);
+        save = Pill("保存并使用", () => { choice = (true, new Own(address.Text.Trim(), model.Text.Trim(), key.Password.Trim(), runtime)); WriteChoice(); App.Window?.Close(); Draw(); }, true);
         Grid.SetColumn(save, 3); buttons.Children.Add(save);
         column.Children.Add(buttons);
         address.TextChanged += (_, _) => Check(); model.TextChanged += (_, _) => Check(); key.PasswordChanged += (_, _) => Check();

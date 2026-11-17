@@ -5,6 +5,11 @@ import java.net.URI
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
@@ -48,14 +53,18 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     fun toolsFor(s: Situation) = if (s.memory == null) tools.filter { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content != "remember" } else tools
 
     /** The request a provider is sent, OpenAI's chat completions as every provider speaks it. */
-    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now(), last: Boolean = false) = buildJsonObject {
-        put("model", model); put("stream", true); put("max_tokens", 4096); put("temperature", 0.2)
+    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now(), last: Boolean = false, runtime: Boolean = false, conversationId: String? = null, retry: Boolean = false) = buildJsonObject {
+        put("model", model); put("stream", true)
+        if (!runtime) { put("max_tokens", 4096); put("temperature", 0.2) }
+        else { require(!conversationId.isNullOrBlank()) { "对话尚未初始化，请重新打开对话。" }; put("conversation_id", conversationId); if (retry) put("retry", true) }
         if (!last) put("tools", JsonArray(toolsFor(s)))
         put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(s, now) + if (last) "\n${contract.getValue("finish").jsonPrimitive.content}" else "") }) + messages))
     }
 
     /** A streamed answer read line by line, as Completion in assistant.mjs. */
-    inner class Completion {
+    fun runtimeError(code: String?, fallback: String) = code?.let { (contract["runtimeErrors"] as? JsonObject)?.get(it)?.jsonPrimitive?.contentOrNull } ?: fallback
+
+    inner class Completion(private val runtime: Boolean = false) {
         private val content = StringBuilder()
         private var finish: String? = null
         private val calls = sortedMapOf<Int, Triple<StringBuilder, StringBuilder, StringBuilder>>()
@@ -67,7 +76,13 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
             if (!line.startsWith("data:")) return ""
             val data = line.removePrefix("data:").trim()
             if (data.isEmpty() || data == "[DONE]") return ""
-            val choice = Json.parseToJsonElement(data).jsonObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return ""
+            val envelope = Json.parseToJsonElement(data).jsonObject
+            envelope["error"]?.takeUnless { it is JsonNull }?.let { error ->
+                val message = ((error as? JsonObject)?.get("message") as? JsonPrimitive)?.contentOrNull
+                    ?: (error as? JsonPrimitive)?.contentOrNull ?: "模型服务未能完成请求。"
+                throw IllegalStateException(if (runtime) runtimeError((error as? JsonObject)?.get("code")?.jsonPrimitive?.contentOrNull, message) else message)
+            }
+            val choice = envelope["choices"]?.jsonArray?.firstOrNull()?.jsonObject ?: return ""
             val delta = choice["delta"] as? JsonObject ?: JsonObject(emptyMap())
             delta["tool_calls"]?.jsonArray?.forEach { item ->
                 val part = item.jsonObject
@@ -115,9 +130,11 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     }
 
     /** Asking with one's own key, straight from this device: no sign-in, nothing through the platform. */
-    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, last: Boolean, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
-        Models.addressError(own.base)?.let { throw IllegalStateException(it) }
+    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, last: Boolean, conversationId: String? = null, retry: Boolean = false, body: JsonObject? = null, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
+        Models.addressError(own.base, own.runtime)?.let { throw IllegalStateException(it) }
         val connection = try { URI(Models.endpoint(own.base)).toURL().openConnection() as HttpURLConnection } catch (e: Exception) { throw IllegalStateException("你填的接口地址无效。") }
+        // A separate suspended child reacts while readLine is blocked on the IO thread.
+        val cancellation = launch(start = CoroutineStart.UNDISPATCHED) { try { awaitCancellation() } finally { connection.disconnect() } }
         try {
             connection.connectTimeout = 15_000; connection.readTimeout = 90_000
             connection.instanceFollowRedirects = false
@@ -125,24 +142,29 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
             connection.setRequestProperty("Accept", "text/event-stream"); connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer ${own.key}")
             val status = try {
-                connection.outputStream.use { it.write(request(own.model, messages, situation, Instant.now(), last).toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use { it.write((body ?: request(own.model, messages, situation, Instant.now(), last, own.runtime, conversationId, retry)).toString().toByteArray(Charsets.UTF_8)) }
                 connection.responseCode
-            } catch (e: java.io.IOException) { throw IllegalStateException("连不上你填的接口地址，检查一下地址和网络。") }
+            } catch (e: java.io.IOException) { currentCoroutineContext().ensureActive(); throw IllegalStateException("连不上你填的接口地址，检查一下地址和网络。") }
             if (status !in 200..299) {
                 val said = connection.errorStream?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
-                val detail = runCatching { Json.parseToJsonElement(said).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull }.getOrNull()
+                val providerError = runCatching { Json.parseToJsonElement(said).jsonObject["error"]?.jsonObject }.getOrNull()
+                val detail = providerError?.get("message")?.jsonPrimitive?.contentOrNull
+                if (own.runtime) throw IllegalStateException(runtimeError(providerError?.get("code")?.jsonPrimitive?.contentOrNull, detail ?: "本地模型未能完成请求（$status）。"))
                 throw IllegalStateException(when (status) {
                     401 -> "API Key 不对，在“我的 API”里改一下。"; 402 -> "你的 API 余额不足。"
                     404 -> "接口或模型不存在" + (detail?.let { "：$it" } ?: "，检查地址和模型名。"); 429 -> "你的 API 请求太频繁，稍后再试。"
                     else -> "你的 API 没有回答（$status）" + (detail?.let { "：$it" } ?: "")
                 })
             }
-            val completion = Completion()
+            val completion = Completion(own.runtime)
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                while (true) { val line = reader.readLine() ?: break; completion.take(line).takeIf { it.isNotEmpty() }?.let { piece -> withContext(Dispatchers.Main) { onDelta(piece) } } }
+                while (true) { currentCoroutineContext().ensureActive(); val line = reader.readLine() ?: break; completion.take(line).takeIf { it.isNotEmpty() }?.let { piece -> withContext(Dispatchers.Main) { onDelta(piece) } } }
             }
             completion.result().getOrThrow()
-        } finally { connection.disconnect() }
+        } catch (error: java.io.IOException) {
+            currentCoroutineContext().ensureActive()
+            throw IllegalStateException("与模型服务的连接中断了，请重试。", error)
+        } finally { cancellation.cancel(); connection.disconnect() }
     }
 
     companion object {
@@ -160,25 +182,27 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
 }
 
 /** One's own provider, as Own in src/campus/ai/model.ts: where, which model, and the key, which never leaves this device. */
-data class Own(val base: String, val model: String, val key: String)
+data class Own(val base: String, val model: String, val key: String, val runtime: Boolean = false)
 
 /** Which model answers, as src/campus/ai/model.ts: the free quota, or one's own key. */
 object Models {
     const val OWNER_QQ = "2366522877"
     val STARTING = Own("https://api.deepseek.com", "deepseek-chat", "")
+    val RUNTIME = Own("http://127.0.0.1:9316/v1", "deepseek-web", "", true)
     fun endpoint(base: String): String { val root = base.trim().trimEnd('/'); return if (root.endsWith("/chat/completions")) root else "$root/chat/completions" }
     fun modelsEndpoints(base: String): List<String> {
         val root = base.trim().trimEnd('/').removeSuffix("/chat/completions").removeSuffix("/models")
         val first = "$root/models"
         return if (Regex("/v\\d+$").containsMatchIn(root)) listOf(first) else listOf(first, "$root/v1/models")
     }
-    suspend fun fetchModels(base: String, key: String): List<String> = withContext(Dispatchers.IO) {
-        require(addressError(base) == null) { "接口地址格式不对" }
+    suspend fun fetchModels(base: String, key: String, runtime: Boolean = false): List<String> = withContext(Dispatchers.IO) {
+        require(addressError(base, runtime) == null) { "接口地址格式不对" }
         val trimmed = key.trim()
         require(trimmed.isNotEmpty()) { "请先填写 API Key" }
         for (url in modelsEndpoints(base)) {
             val conn = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000
+                instanceFollowRedirects = false
                 setRequestProperty("Authorization", "Bearer $trimmed")
                 setRequestProperty("Accept", "application/json")
             }
@@ -195,16 +219,31 @@ object Models {
         }
         error("接口没有返回模型列表，可直接手动填写模型名")
     }
-    fun addressError(base: String): String? = runCatching {
+    fun addressError(base: String, runtime: Boolean = false): String? = runCatching {
         val uri = URI(base.trim())
-        if (uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.userInfo == null && uri.rawQuery == null && uri.rawFragment == null) null
-        else "接口地址以 https:// 开头，只写地址本身。"
-    }.getOrElse { "接口地址以 https:// 开头，只写地址本身。" }
+        val transport = uri.scheme == "https" || runtime && uri.scheme == "http" && uri.host?.lowercase() in setOf("localhost", "127.0.0.1")
+        if (transport && !uri.host.isNullOrEmpty() && uri.userInfo == null && uri.rawQuery == null && uri.rawFragment == null) null else addressHint(runtime)
+    }.getOrElse { addressHint(runtime) }
+    private fun addressHint(runtime: Boolean) = if (runtime) "Local Runtime 使用 HTTPS，或 http://localhost / http://127.0.0.1。" else "接口地址以 https:// 开头，只写地址本身。"
     fun name(own: Own) = own.model.ifBlank { "我的 API" }
+    suspend fun closeConversations(own: Own, ids: List<String>) = withContext(Dispatchers.IO) {
+        if (!own.runtime || own.key.isBlank()) return@withContext
+        addressError(own.base, true)?.let { throw IllegalStateException(it) }
+        val root = endpoint(own.base).removeSuffix("/chat/completions")
+        for (id in ids.distinct()) {
+            val url = "$root/conversations/${java.net.URLEncoder.encode(id, "UTF-8")}?model=${java.net.URLEncoder.encode(own.model, "UTF-8")}"
+            val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"; connectTimeout = 5_000; readTimeout = 5_000; instanceFollowRedirects = false
+                setRequestProperty("Authorization", "Bearer ${own.key}")
+            }
+            try { val status = connection.responseCode; if (status !in 200..299 && status != 404) throw IllegalStateException("本地模型服务未能关闭对应网页（$status）。") }
+            finally { connection.disconnect() }
+        }
+    }
     fun read(prefs: android.content.SharedPreferences): Pair<Boolean, Own> {
-        val own = Own(prefs.getString("base", null) ?: STARTING.base, prefs.getString("model", null) ?: STARTING.model, prefs.getString("key", null).orEmpty())
+        val own = Own(prefs.getString("base", null) ?: STARTING.base, prefs.getString("model", null) ?: STARTING.model, prefs.getString("key", null).orEmpty(), prefs.getBoolean("runtime", false))
         return (prefs.getString("use", "free") == "own" && own.key.isNotBlank()) to own
     }
     fun write(prefs: android.content.SharedPreferences, useOwn: Boolean, own: Own) =
-        prefs.edit().putString("use", if (useOwn && own.key.isNotBlank()) "own" else "free").putString("base", own.base).putString("model", own.model).putString("key", own.key).apply()
+        prefs.edit().putString("use", if (useOwn && own.key.isNotBlank()) "own" else "free").putString("base", own.base).putString("model", own.model).putString("key", own.key).putBoolean("runtime", own.runtime).apply()
 }

@@ -36,15 +36,21 @@ import kotlinx.coroutines.withContext
 import top.hicancan.studev.account.AccountUser
 import top.hicancan.studev.account.Accounts
 
-private val avatarPictures = android.util.LruCache<String, ImageBitmap>(16)
+private val avatarPictures = android.util.LruCache<String, ImageBitmap>(64)
 
 /** Loads a public QQ avatar image cleanly when given a valid QQ number. */
 @Composable fun QqAvatarImage(qq: String, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
-    val face by key(qq) { produceState<ImageBitmap?>(avatarPictures.get(qq), qq) {
-        value = if (!Regex("[1-9]\\d{4,11}").matches(qq)) null else withContext(Dispatchers.IO) {
-            avatarPictures.get(qq) ?: runCatching {
-                val connection = java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100").openConnection().apply { connectTimeout = 8_000; readTimeout = 8_000 }
-                connection.getInputStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap()?.also { avatarPictures.put(qq, it) }
+    AvatarImage(if (Regex("[1-9]\\d{4,11}").matches(qq)) "https://q1.qlogo.cn/g?b=qq&nk=$qq&s=100" else null, modifier, fallback)
+}
+
+/** An image address is sufficient; public member cards never need private QQ numbers. */
+@Composable fun AvatarImage(url: String?, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
+    val address = url.orEmpty()
+    val face by key(address) { produceState<ImageBitmap?>(avatarPictures.get(address), address) {
+        value = if (address.isEmpty()) null else withContext(Dispatchers.IO) {
+            avatarPictures.get(address) ?: runCatching {
+                val connection = java.net.URL(address).openConnection().apply { connectTimeout = 8_000; readTimeout = 8_000 }
+                connection.getInputStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap()?.also { avatarPictures.put(address, it) }
             }.getOrNull()
         }
     } }

@@ -196,8 +196,9 @@ async function link(path, step) {
     alive(step);
 }
 async function chooseClass() {
-    await sleep(1500);
-    if (!screen().some(node => node.text === '你在哪个班？')) return;
+    await link('/', 'open the personal timetable before checking the saved class');
+    const entry = await find(node => node.text === '你在哪个班？' || node.text === '周', 'the loaded class picker or personal timetable');
+    if (entry.text !== '你在哪个班？') return;
     await tap(node => node.class === 'android.widget.EditText', 'the class picker');
     await type('B240402', 'search a class');
     await tap(node => node.text.includes('计算机科学与技术'), 'choose B240402');
@@ -206,23 +207,20 @@ async function chooseClass() {
 async function examHistory() {
     await link('/?scale=term&mode=exam', 'open the personal exam arrangements');
     await scrollFind('本次更新未影响本班', 'the latest exam update does not affect B240402');
-    await scrollTap(node => node.text.startsWith('更新记录 ·'), 'open the exam update history');
     await scrollTap(node => node.text.includes('首次记录'), 'open the original exam baseline');
     capture('exam-unaffected-baseline');
     await link(`/?who=${encodeURIComponent(`class:${affectedExam.class}`)}&scale=term&mode=exam`, 'open the actual affected class exams');
-    await scrollTap(node => node.text.startsWith('更新记录 ·'), 'open the affected class history');
     const version = examIndex.history.find(item => item.id === affectedExam.version);
     const date = (version.observed ? new Intl.DateTimeFormat('en-CA', { timeZone: product.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(version.observed)) : version.published).slice(0, 10);
     const said = `${Number(date.slice(5, 7))}月${Number(date.slice(8))}日`;
-    await scrollTap(node => node.text.startsWith(said) && node.text.includes('门考试有变动'), 'open a real exam update affecting this class');
+    await scrollTap(node => node.text.startsWith(said) && node.text.endsWith(version.observed ? '发现' : '官方发布'), 'select a real exam update affecting this class');
     await scrollFind(node => node.text.includes(affectedExam.course.name), 'the affected course is named');
     const sitting = affectedExam.after?.[0] ?? affectedExam.before?.[0];
     await scrollFind(node => node.text.includes(sitting.date) && node.text.includes(sitting.start), 'the actual added or previous sitting is explained');
-    await scrollTap(`采用的文件 · ${version.files.length} 份`, 'open every file used by this exam version');
-    await scrollFind(version.files[0].file.replace(/^\d{4}-\d{2}-\d{2}-/, ''), 'the original official filename is visible');
-    await scrollFind('官方公告', 'the announcement remains directly accessible');
-    await scrollFind('官方附件', 'the official workbook remains directly accessible');
-    await scrollFind('历史公告可能撤回，部分附件需连接校园网。', 'official source access limits are explained honestly');
+    await scrollFind(`本版采用的文件 · ${version.files.length} 份`, 'the selected version shows its files directly');
+    await scrollFind(node => node.text.includes(version.files[0].file.replace(/^\d{4}-\d{2}-\d{2}-/, '')), 'the original official filename is visible');
+    await scrollFind(node => node.words.includes('官方公告：'), 'the announcement remains directly accessible');
+    await scrollFind(node => node.words.includes('官方附件：'), 'the official workbook remains directly accessible');
     capture('exam-affected-official-sources');
     healthy('real exam versions, baseline, class impact and official source links');
     await link('/', 'return to the personal timetable after exam acceptance');
@@ -447,6 +445,11 @@ async function personalViews() {
     capture('personal-settings');
     adb('shell', 'input', 'keyevent', '4');
     await find('课表设置', 'back from about to the personal home');
+    await tap('成员', 'open members inside the app');
+    await find('登录后查看成员', 'members asks a visitor to sign in');
+    capture('members-sign-in');
+    await tap('返回', 'return from member browsing');
+    await find('课表设置', 'members returns to the same personal home');
     adb('shell', 'input', 'keyevent', '4');
     await find('课表', 'return from personal settings');
 }

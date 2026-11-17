@@ -105,7 +105,7 @@ import top.hicancan.studev.world.CampusDay
     var revoke by remember { mutableStateOf<AccountDevice?>(null) }
     fun showUser(fresh: AccountUser) {
         user = fresh
-        student = fresh.studentId; realName = fresh.realName; nickname = fresh.displayNickname; signature = fresh.signature
+        student = fresh.studentId; realName = fresh.realName; nickname = fresh.nickname; signature = fresh.signature
     }
     fun showState(fresh: AccountState) {
         state = fresh; showUser(fresh.user)
@@ -166,7 +166,7 @@ import top.hicancan.studev.world.CampusDay
                 OutlinedTextField(student, { student = it.take(20); totp = "" }, Modifier.fillMaxWidth(), label = { Text("学号") }, singleLine = true, enabled = !busy)
                 if (register) {
                     OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, singleLine = true, enabled = !busy)
-                    OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称") }, supportingText = { Text("其他同学只会看到你的昵称。身份与联系方式仅本人和管理员可见。") }, singleLine = true, enabled = !busy)
+                    OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称（选填）") }, supportingText = { Text("留空使用默认昵称。其他同学可看到昵称、头像和签名。") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(qq, { qq = it.take(12) }, Modifier.fillMaxWidth(), label = { Text("联系 QQ") }, supportingText = { Text("用于重要通知、找回密码和注销验证，也可匹配 QQ 头像。") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy)
                     QqPreview(qq)
                 }
@@ -196,7 +196,7 @@ import top.hicancan.studev.world.CampusDay
                         section = "profile"; devices = emptyList(); devicesFor = null
                         password = ""; totp = ""; onSignedIn()
                     }
-                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && nickname.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
+                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
                     if (busy) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
                     Text(if (busy) if (register) "正在注册…" else "正在登录…" else if (register) "创建账号" else "登录")
                 }
@@ -222,7 +222,7 @@ import top.hicancan.studev.world.CampusDay
                         }
                         Text("个人资料", style = MaterialTheme.typography.titleSmall)
                         listOf(
-                            "学号" to me.studentId.ifBlank { "待补充" }, "姓名" to me.realName.ifBlank { "待补充" }, "昵称" to me.displayNickname.ifBlank { "未设置" },
+                            "学号" to me.studentId.ifBlank { "待补充" }, "姓名" to me.realName.ifBlank { "待补充" }, "昵称" to me.nickname,
                             "QQ 号" to me.qq, "联系邮箱" to me.email.ifBlank { "${me.qq}@qq.com" },
                         ).forEach { (key, value) -> KeyRow(key, value) }
                         if (me.role != "user") {
@@ -230,9 +230,9 @@ import top.hicancan.studev.world.CampusDay
                             if (me.title.isNotBlank()) KeyRow("职责", me.title)
                         }
                         HorizontalDivider()
-                        OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("显示昵称（选填）") }, placeholder = { Text("显示在真实姓名之后（如 hicancan）；留空则仅显示真实姓名") }, singleLine = true, enabled = !busy && !verifying && state != null)
+                        OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称（选填）") }, placeholder = { Text("留空使用默认昵称") }, singleLine = true, enabled = !busy && !verifying && state != null)
                         OutlinedTextField(signature, { signature = it.take(120) }, Modifier.fillMaxWidth(), label = { Text("个人签名") }, placeholder = { Text("显示在历届档案与个人名片上的一句话（选填）") }, singleLine = true, enabled = !busy && !verifying && state != null)
-                        if (me.role != "user") Text("昵称与签名将显示在组织成员名录。", style = MaterialTheme.typography.bodySmall)
+                        Text("成员可看到你的头像、昵称和签名。身份与联系方式仅本人和授权管理员可见。", style = MaterialTheme.typography.bodySmall)
                         Button(onClick = { run {
                             client.request("/auth/profile", buildJsonObject { put("revision", me.revision); put("studentId", student); put("realName", realName); put("nickname", nickname); put("signature", signature) }, authenticated = true)
                             reload(); notice = "资料已保存。"

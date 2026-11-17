@@ -61,7 +61,7 @@ public sealed partial class AccountScreen : Screen
         if (resetDrafts || next?.Id != user?.Id || !profileDirty)
         {
             student = next?.StudentId ?? ""; realName = next?.RealName ?? "";
-            nickname = next?.DisplayNickname ?? ""; signature = next?.Signature ?? "";
+            nickname = next?.Nickname ?? ""; signature = next?.Signature ?? "";
             profileDirty = false;
         }
         if (next?.Id != user?.Id) { ClearSecrets(); devices.Clear(); devicesFor = null; }
@@ -211,7 +211,7 @@ public sealed partial class AccountScreen : Screen
         page.Children.Add(identity);
         var rows = new StackPanel();
         void Row(string key, string value) => rows.Children.Add(Kit.Row(key, Words(string.IsNullOrEmpty(value) ? "未设置" : value)));
-        Row("学号", me.StudentId); Row("姓名", me.RealName); Row("昵称", me.DisplayNickname);
+        Row("学号", me.StudentId); Row("姓名", me.RealName); Row("昵称", me.Nickname);
         Row("QQ 号", me.Qq); Row("联系邮箱", me.Email.Length > 0 ? me.Email : $"{me.Qq}@qq.com");
         if (me.Role != "user") { if (me.Department.Length > 0) Row("部门", me.Department); if (me.Title.Length > 0) Row("职责", me.Title); }
         page.Children.Add(rows);
@@ -222,9 +222,9 @@ public sealed partial class AccountScreen : Screen
             Field(page, "学号", student, text => student = text, "account-student", 20, me.StudentId.Length > 0);
             Field(page, "真实姓名", realName, text => realName = text, "account-real-name", 40, me.RealName.Length > 0);
         }
-        Field(page, "显示昵称（选填）", nickname, text => nickname = text, "account-nickname");
+        Field(page, "昵称（选填）", nickname, text => nickname = text, "account-nickname");
         Field(page, "个人签名（选填）", signature, text => signature = text, "account-signature", 120);
-        page.Children.Add(Kit.Text(me.Role == "user" ? "其他同学只会看到你的昵称。身份与联系方式仅本人和管理员可见。" : "昵称与签名将显示在组织成员名录。", Role.Caption, "muted", wrap: true));
+        page.Children.Add(Kit.Text("留空使用默认昵称。成员可看到你的头像、昵称和签名。身份与联系方式仅本人和授权管理员可见。", Role.Caption, "muted", wrap: true));
         Action(page, incomplete ? "确认并绑定身份" : "保存个人资料", "account-save-profile", () => Run("正在保存…", async () =>
         {
             await Account.Shared.SaveProfile(me.Revision, student, realName, nickname, signature);

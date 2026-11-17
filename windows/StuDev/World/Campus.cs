@@ -92,7 +92,7 @@ public sealed class Campus
         {
             var latest = await Data.Repository.Discover();
             UpdateError = null;
-            if (Repository?.Release != latest.Release) { loading = Fetch(latest); await loading; }
+            if (Repository?.Release.Version != latest.Release.Version) { loading = Fetch(latest); await loading; }
         }
         catch (Exception error) when (error is HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException)
         { UpdateError = "暂时无法检查更新，继续使用已保存的校园数据。"; }

@@ -18,8 +18,9 @@ const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 @Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0,
     val department: String = "", val title: String = "", val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true)
-/** The nickname shown after the real name; blank when it only repeats the name, student ID or QQ (same rule as the web). */
-val AccountUser.displayNickname: String get() = nickname.trim().takeUnless { it.isEmpty() || it == realName || it == studentId || it == qq }.orEmpty()
+/** The server resolves the public nickname, including its default. */
+@Serializable data class PublicMember(val id: String, val nickname: String, val signature: String, val avatarUrl: String)
+@Serializable data class MemberPage(val items: List<PublicMember>, val total: Int, val offset: Int, val limit: Int)
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
@@ -181,6 +182,8 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         if (!authenticated) return checked(transport.send(path, body, null))
         return authenticatedRequest(path, body, access())
     }
+    suspend fun members(query: String = "", offset: Int = 0): MemberPage = accountJson.decodeFromJsonElement(request("/members?query=${java.net.URLEncoder.encode(query, "UTF-8")}&offset=$offset&limit=50", authenticated = true))
+    suspend fun member(id: String): PublicMember = accountJson.decodeFromJsonElement(request("/members/${java.net.URLEncoder.encode(id, "UTF-8")}", authenticated = true).getValue("member"))
     /** An event stream for someone signed in, renewing the pass once if it ran out before the stream began. */
     suspend fun stream(path: String, body: JsonObject, onEvent: (String, JsonObject) -> Unit) {
         val credential = access()

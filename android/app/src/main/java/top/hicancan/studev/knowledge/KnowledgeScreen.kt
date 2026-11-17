@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -497,12 +498,15 @@ private fun courseMajors(curriculum: List<CurriculumCourse>, cohort: String): Li
                             onClick = { onOpen(course.id) },
                             shape = RoundedCornerShape(Tokens.Radius.card.dp),
                             color = Ink.paper,
-                            border = BorderStroke(1.dp, ct.border),
+                            border = BorderStroke(1.dp, Ink.line),
                         ) {
-                            Column(Modifier.fillMaxWidth().background(ct.bg.copy(alpha = 0.25f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerHigh, ct.bg, .35f))) {
+                                Box(Modifier.width(5.dp).fillMaxHeight().background(ct.fg))
+                                Column(Modifier.weight(1f).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Plain(course.name, 16.sp, ct.fg, FontWeight.SemiBold)
                                 Plain(subtitle, 12.5.sp, Ink.muted, maxLines = 1)
                                 Plain("${course.chapters.size} 章 · $topicsCount 个知识点 · $materialsCount 份资料", 12.5.sp, Ink.muted)
+                                }
                             }
                         }
                     }

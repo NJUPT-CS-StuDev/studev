@@ -59,18 +59,21 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     public List<JsonObject> ToolsFor(Situation s) => s.Memory is null ? tools.Where(t => (string)t["function"]!["name"]! != "remember").ToList() : tools;
 
     /** The request a provider is sent: OpenAI's chat completions, as every provider speaks it. */
-    public JsonObject Request(string model, List<JsonObject> messages, Situation s, DateTimeOffset now, bool last = false)
+    public JsonObject Request(string model, List<JsonObject> messages, Situation s, DateTimeOffset now, bool last = false, bool runtime = false, string? conversationId = null, bool retry = false)
     {
-        var request = new JsonObject { ["model"] = model, ["stream"] = true, ["max_tokens"] = 4096, ["temperature"] = 0.2 };
+        var request = new JsonObject { ["model"] = model, ["stream"] = true };
+        if (!runtime) { request["max_tokens"] = 4096; request["temperature"] = 0.2; }
+        else { if (string.IsNullOrWhiteSpace(conversationId)) throw new InvalidOperationException("对话尚未初始化，请重新打开对话。"); request["conversation_id"] = conversationId; if (retry) request["retry"] = true; }
         if (!last) request["tools"] = new JsonArray([.. ToolsFor(s).Select(t => t.DeepClone())]);
         request["messages"] = new JsonArray([new JsonObject { ["role"] = "system", ["content"] = Instructions(s, now) + (last ? "\n" + (string)contract["finish"]! : "") }, .. messages.Select(m => m.DeepClone())]);
         return request;
     }
 
-    public Completion Read() => new(names);
+    public string RuntimeError(string? code, string fallback) => code is not null && contract["runtimeErrors"]?[code] is JsonValue value && value.TryGetValue<string>(out var text) ? text : fallback;
+    public Completion Read(bool runtime = false) => new(names, runtime ? RuntimeError : null);
 
     /** A streamed answer read line by line. */
-    public sealed class Completion(HashSet<string> names)
+    public sealed class Completion(HashSet<string> names, Func<string?, string, string>? runtimeError = null)
     {
         private readonly StringBuilder content = new();
         private string? finish;
@@ -84,7 +87,14 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
             if (!line.StartsWith("data:")) return "";
             var data = line["data:".Length..].Trim();
             if (data.Length == 0 || data == "[DONE]") return "";
-            if (JsonNode.Parse(data)?["choices"]?.AsArray().FirstOrDefault() is not JsonObject choice) return "";
+            var envelope = JsonNode.Parse(data);
+            if (envelope?["error"] is { } error)
+            {
+                var message = error is JsonObject detail ? detail["message"] : error;
+                var diagnostic = message is JsonValue value && value.TryGetValue<string>(out var said) ? said : "模型服务未能完成请求。";
+                throw new InvalidOperationException(runtimeError is null ? diagnostic : runtimeError(error is JsonObject coded ? (string?)coded["code"] : null, diagnostic));
+            }
+            if (envelope?["choices"]?.AsArray().FirstOrDefault() is not JsonObject choice) return "";
             var delta = choice["delta"] as JsonObject ?? [];
             foreach (var item in delta["tool_calls"]?.AsArray() ?? [])
             {
@@ -136,13 +146,14 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
 }
 
 /** One's own provider: where, which model, and the key, which never leaves this device. */
-public sealed record Own(string Base, string Model, string Key);
+public sealed record Own(string Base, string Model, string Key, bool Runtime = false);
 
 /** Which model answers, as src/campus/ai/model.ts. */
 public static class Models
 {
     public const string OwnerAvatar = "https://q1.qlogo.cn/g?b=qq&nk=2366522877&s=100";
     public static readonly Own Starting = new("https://api.deepseek.com", "deepseek-chat", "");
+    public static readonly Own Runtime = new("http://127.0.0.1:9316/v1", "deepseek-web", "", true);
     public static string Endpoint(string @base) { var root = @base.Trim().TrimEnd('/'); return root.EndsWith("/chat/completions") ? root : root + "/chat/completions"; }
     public static List<string> ModelsEndpoints(string @base)
     {
@@ -152,9 +163,9 @@ public static class Models
         var first = root + "/models";
         return Regex.IsMatch(root, @"/v\d+$") ? [first] : [first, root + "/v1/models"];
     }
-    public static async Task<List<string>> FetchModelsAsync(HttpClient http, string @base, string key)
+    public static async Task<List<string>> FetchModelsAsync(HttpClient http, string @base, string key, bool runtime = false)
     {
-        if (AddressError(@base) is not null) throw new InvalidOperationException("接口地址格式不对");
+        if (AddressError(@base, runtime) is not null) throw new InvalidOperationException("接口地址格式不对");
         var trimmed = key.Trim();
         if (trimmed.Length == 0) throw new InvalidOperationException("请先填写 API Key");
         foreach (var url in ModelsEndpoints(@base))
@@ -170,11 +181,27 @@ public static class Models
         }
         throw new InvalidOperationException("接口没有返回模型列表，可直接手动填写模型名");
     }
-    public static string? AddressError(string @base)
+    public static string? AddressError(string @base, bool runtime = false)
     {
-        const string said = "接口地址以 https:// 开头，只写地址本身。";
+        var said = runtime ? "Local Runtime 使用 HTTPS，或 http://localhost / http://127.0.0.1。" : "接口地址以 https:// 开头，只写地址本身。";
         if (!Uri.TryCreate(@base.Trim(), UriKind.Absolute, out var uri)) return said;
-        return uri.Scheme == "https" && uri.Host.Length > 0 && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? null : said;
+        var transport = uri.Scheme == "https" || runtime && uri.Scheme == "http" && uri.Host is "localhost" or "127.0.0.1";
+        return transport && uri.Host.Length > 0 && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? null : said;
     }
     public static string Name(Own own) => own.Model.Trim().Length > 0 ? own.Model : "我的 API";
+    public static async Task CloseConversationsAsync(HttpClient http, Own own, IEnumerable<string> ids)
+    {
+        if (!own.Runtime || own.Key.Length == 0) return;
+        if (AddressError(own.Base, true) is { } wrong) throw new InvalidOperationException(wrong);
+        var root = Endpoint(own.Base)[..^"/chat/completions".Length];
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        foreach (var id in ids.Distinct())
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Delete, $"{root}/conversations/{Uri.EscapeDataString(id)}?model={Uri.EscapeDataString(own.Model)}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", own.Key);
+            using var response = await http.SendAsync(request, timeout.Token);
+            if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+                throw new InvalidOperationException($"本地模型服务未能关闭对应网页（{(int)response.StatusCode}）。");
+        }
+    }
 }

@@ -143,7 +143,7 @@ public sealed partial class Shell : Window
         foreach (var (key, label) in Entries)
         {
             var on = key == shown;
-            var words = Kit.Text(label, Role.Label, on ? "ink" : "muted", bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
+            var words = Kit.Text(label, Role.Label, on ? "brand" : "muted", bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
             var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = words, Padding = new Thickness(12, 0, 12, 0), Height = 34, CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center };
             AutomationProperties.SetName(tap, label); AutomationProperties.SetAutomationId(tap, key);
             tap.Click += (_, _) => Open(key);

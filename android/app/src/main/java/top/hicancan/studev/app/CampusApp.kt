@@ -33,7 +33,7 @@ import top.hicancan.studev.world.LineEvent
 import top.hicancan.studev.world.Moment
 
 /** Three entries over one shell, the same as the website. */
-@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, model: CampusModel = viewModel()) {
+@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: () -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { model.resume() }
     val state by model.state.collectAsStateWithLifecycle()
@@ -80,7 +80,7 @@ import top.hicancan.studev.world.Moment
             listOf("timetable" to "课表", "map" to "地图", "knowledge" to "知识", "search" to "搜索", "ai" to "AI").forEach { (key, label) ->
                 val on = route.tab == key
                 Box(Modifier.weight(1f).fillMaxHeight().clickable { route.tab = key }.testTag("tab-$key"), contentAlignment = Alignment.Center) {
-                    Plain(label, 14.sp, if (on) Ink.text else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Medium)
+                    Plain(label, 14.sp, if (on) Ink.brand else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Medium)
                 }
             }
         }
@@ -99,7 +99,7 @@ import top.hicancan.studev.world.Moment
     }
     }
     open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings, state, now, onOpen = { open = it to line }) { open = null } }
-    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm) { me = false }
+    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm, onMembers = onMembers) { me = false }
     if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
     if (state.appRequired) AppRequired(state.app!!)
 }

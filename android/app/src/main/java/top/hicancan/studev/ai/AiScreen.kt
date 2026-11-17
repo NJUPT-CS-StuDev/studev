@@ -33,6 +33,7 @@ import top.hicancan.studev.app.CampusHeader
 import top.hicancan.studev.app.Chip
 import top.hicancan.studev.app.Ink
 import top.hicancan.studev.app.Plain
+import top.hicancan.studev.app.Toggle
 import top.hicancan.studev.app.PlainSheet
 import top.hicancan.studev.app.QqAvatarImage
 import top.hicancan.studev.app.Route
@@ -74,7 +75,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var draft by remember { mutableStateOf("") }
     val start = remember { readChats(kept) }
     var chats by remember { mutableStateOf(start.first) }
-    var current by remember { mutableStateOf(start.second) }
+    var current by remember { mutableStateOf<String?>(start.second ?: java.util.UUID.randomUUID().toString()) }
     var thread by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.thread ?: ChatThread()) }
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     var opening by remember { mutableStateOf(true) }
@@ -89,6 +90,9 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     val memory = model.settings.state.collectAsState().value.memory
     var minding by remember { mutableStateOf(false) }
     val asking = own.takeIf { useOwn && it.key.isNotBlank() }
+    var runtimeRequest by remember { mutableStateOf<JsonObject?>(null) }
+    var runtimeFirstAssistant by remember { mutableStateOf<String?>(null) }
+    var cleanupFailed by remember { mutableStateOf<String?>(null) }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
     var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
@@ -114,7 +118,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         if (thread.nodes.isEmpty()) return@LaunchedEffect
         val id = current ?: java.util.UUID.randomUUID().toString()
         val before = chats.firstOrNull { it.id == id }
-        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), thread)) + chats.filter { it.id != id }
+        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), thread, before?.forks.orEmpty(), before?.runtimeModels.orEmpty())) + chats.filter { it.id != id }
         current = id
     }
     LaunchedEffect(chats, current) { kept.edit().putString("chats", buildJsonObject { put("chats", JsonArray(chats.map { it.toJson() })); current?.let { put("current", it) } }.toString()).remove("thread").remove("messages").apply() }
@@ -123,11 +127,23 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     LaunchedEffect(thread.nodes.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
 
     /** Answering after [at] in [base]: each message said grows the branch from there, and is the one shown. */
-    suspend fun run(base: ChatThread, at: String) {
+    suspend fun run(base: ChatThread, at: String, fork: Boolean = false, retryRequest: JsonObject? = null, firstAssistant: String? = null) {
         var tipId = at
-        fun grow(message: JsonObject) { val id = java.util.UUID.randomUUID().toString(); fresh += id; thread = thread.append(tipId, id, message); tipId = id }
+        val runtime = asking?.runtime == true
+        val chatId = current ?: java.util.UUID.randomUUID().toString().also { current = it }
+        val before = chats.firstOrNull { it.id == chatId }
+        var reserved = firstAssistant ?: if (runtime && fork) java.util.UUID.randomUUID().toString() else null
+        val active = SavedChat(chatId, before?.title.orEmpty(), System.currentTimeMillis(), base, (before?.forks.orEmpty() + listOfNotNull(reserved)).distinct(), (before?.runtimeModels.orEmpty() + listOfNotNull(asking?.model?.takeIf { runtime })).distinct())
+        chats = listOf(active) + chats.filter { it.id != chatId }
+        val conversationId = retryRequest?.get("conversation_id")?.jsonPrimitive?.contentOrNull ?: reserved ?: active.conversationId(at, base)
+        runtimeFirstAssistant = reserved
+        fun grow(message: JsonObject) {
+            val id = if (message["role"]?.jsonPrimitive?.content == "assistant" && reserved != null) reserved!! else java.util.UUID.randomUUID().toString()
+            if (id == reserved) { reserved = null; runtimeFirstAssistant = null }
+            fresh += id; thread = thread.append(tipId, id, message); tipId = id
+        }
         thread = base; fresh.clear(); from = at; editing = null
-        var history = recent(base.lineage(at).map { it.message })
+        var history = base.lineage(at).map { it.message }.let { if (runtime) it else recent(it) }
         // The moment and who is asking, as this device knows them now.
         val settings = model.settings.state.value; val line = model.myLine(model.state.value, settings); val user = client.current()
         val situation = Situation(line?.weekOf(top.hicancan.studev.world.CampusDay.now().toLocalDate()), settings.klass, settings.campus,
@@ -144,7 +160,14 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                 try {
                     val mine = asking
-                    if (mine != null) answer = assistant.askOwn(mine, history, situation, last, ::onDelta)
+                    if (mine != null) {
+                        val body = if (mine.runtime) {
+                            val payload = if (round == 0 && retryRequest != null) JsonObject(retryRequest + ("retry" to JsonPrimitive(true)))
+                                else assistant.request(mine.model, history, situation, last = last, runtime = true, conversationId = conversationId)
+                            runtimeRequest = payload; payload
+                        } else null
+                        answer = assistant.askOwn(mine, history, situation, last, conversationId = conversationId, body = body, onDelta = ::onDelta)
+                    }
                     else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)); put("last", last); put("situation", situation.toJson()) }) { event, data ->
                         when (event) {
                             "delta" -> onDelta(data["content"]?.jsonPrimitive?.contentOrNull.orEmpty())
@@ -158,7 +181,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 val reply = answer ?: throw IllegalStateException("回答中断了，请重试。")
                 history = history + reply; grow(reply)
                 val calls = reply["tool_calls"]?.jsonArray.orEmpty()
-                if (calls.isEmpty()) return
+                if (calls.isEmpty()) { runtimeRequest = null; runtimeFirstAssistant = null; return }
                 for (item in calls) {
                     val call = item.jsonObject; val function = call.getValue("function").jsonObject
                     val result = try { withContext(Dispatchers.IO) { tools.execute(function.getValue("name").jsonPrimitive.content, Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject, call.getValue("id").jsonPrimitive.content) } }
@@ -171,13 +194,14 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         } catch (e: CancellationException) {
             // Stopped: what was said so far stays, as an answer cut short.
             if (said.isNotEmpty()) grow(buildJsonObject { put("role", "assistant"); put("content", said) })
+            runtimeRequest = null; runtimeFirstAssistant = null
             throw e
         } finally { streaming = null; live = null }
     }
-    fun start(base: ChatThread, at: String) {
+    fun start(base: ChatThread, at: String, fork: Boolean = false, retryRequest: JsonObject? = null, firstAssistant: String? = null) {
         error = ""
         job = scope.launch {
-            try { run(base, at) }
+            try { run(base, at, fork, retryRequest, firstAssistant) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalStateException) e.message.orEmpty() else "AI 暂不可用，请稍后重试。" }
             finally { job = null; from = null }
@@ -191,20 +215,32 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             if (asking == null && client.current() == null) { waiting = question; return@launch }
             if (parent == thread.tip()) draft = ""
             val id = java.util.UUID.randomUUID().toString()
-            start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id)
+            start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id, fork = parent != thread.tip())
         }
     }
     /** The answer to a question asked again, beside the answer it had. */
-    fun again(question: String) { if (!busy) start(thread, question) }
+    fun again(question: String) { if (!busy) start(thread, question, fork = true) }
     fun pick(id: String) { if (!busy) { thread = thread.choose(id); error = "" } }
     fun open(id: String?) {
         if (busy) return
         opening = true
         thread = chats.firstOrNull { it.id == id }?.thread ?: ChatThread()
-        current = chats.firstOrNull { it.id == id }?.id
+        current = chats.firstOrNull { it.id == id }?.id ?: java.util.UUID.randomUUID().toString()
+        runtimeRequest = null; runtimeFirstAssistant = null
         proposals = emptyList(); saved = emptySet(); error = ""; editing = null
         scope.launch { drawer.close() }
     }
+    fun removeChat(chat: SavedChat) {
+        val provider = own
+        chats = chats.filter { it.id != chat.id }
+        if (current == chat.id) open(null)
+        if (provider.runtime && provider.key.isNotBlank()) scope.launch {
+            try { for (model in chat.runtimeModels) Models.closeConversations(provider.copy(model = model), listOf(chat.id) + chat.forks) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { cleanupFailed = if (failure is IllegalStateException) failure.message ?: "模型网页尚未关闭。" else "无法连接本地模型服务，网页尚未关闭。" }
+        }
+    }
+    cleanupFailed?.let { reason -> PlainSheet("对话已删除", { cleanupFailed = null }) { Plain("本机记录已删除。$reason", 14.sp, Ink.muted) } }
     waiting?.let { question ->
         BackHandler { waiting = null }
         top.hicancan.studev.account.AccountScreen(client, onBack = { waiting = null }, onSignedIn = { waiting = null; ask(question) })
@@ -223,7 +259,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             Column(Modifier.verticalScroll(rememberScrollState())) { Plain(body, 13.sp, Ink.muted) }
         }
     } }
-    if (setting) OwnSettings(own, onClose = { setting = false }) { next -> own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
+    if (setting) OwnSettings(own, onClose = { setting = false }) { next -> runtimeRequest = null; runtimeFirstAssistant = null; own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
     renaming?.let { chat ->
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text("重命名") },
@@ -249,7 +285,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                                     IconAction(Icons.Outlined.MoreHoriz, "更多") { more = true }
                                     DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
                                         DropdownMenuItem({ Text("重命名") }, { more = false; renaming = chat })
-                                        DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; chats = chats.filter { it.id != chat.id }; if (current == chat.id) { opening = true; current = null; thread = ChatThread() } }, enabled = !(busy && on))
+                                        DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; removeChat(chat) }, enabled = !(busy && on))
                                     }
                                 }
                             }
@@ -281,13 +317,13 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                             Text("免费额度")
                         }
                         Plain("hicancan 为爱发电提供 · 登录后可用", 12.sp, Ink.muted)
-                    } }, { useOwn = false; Models.write(modelPrefs, false, own); picking = false },
+                    } }, { if (!busy) { runtimeRequest = null; runtimeFirstAssistant = null; useOwn = false; Models.write(modelPrefs, false, own) }; picking = false }, enabled = !busy,
                         trailingIcon = { if (asking == null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
                     DropdownMenuItem({ Column { Text("我的 API"); Plain(if (own.key.isNotBlank()) "${Models.name(own)} · 存在这台设备上" else "填上自己的 Key 就能用", 12.sp, Ink.muted) } },
-                        { picking = false; if (own.key.isNotBlank()) { useOwn = true; Models.write(modelPrefs, true, own) } else setting = true },
+                        { picking = false; if (own.key.isNotBlank()) { runtimeRequest = null; runtimeFirstAssistant = null; useOwn = true; Models.write(modelPrefs, true, own) } else setting = true }, enabled = !busy,
                         trailingIcon = { if (asking != null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
                     HorizontalDivider(color = Ink.line)
-                    DropdownMenuItem({ Text("设置我的 API…", color = Ink.muted) }, { picking = false; setting = true })
+                    DropdownMenuItem({ Text("设置我的 API…", color = Ink.muted) }, { picking = false; setting = true }, enabled = !busy)
                 }
             }
             if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null) }
@@ -366,7 +402,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             }
             if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
-                turns.lastOrNull()?.let { (question, _) -> top.hicancan.studev.app.TextAction("重试", { again(question.id) }, refresh = true) }
+                turns.lastOrNull()?.let { (question, _) -> top.hicancan.studev.app.TextAction("重试", { if (!busy) runtimeRequest?.let { start(thread, thread.tip(), retryRequest = it, firstAssistant = runtimeFirstAssistant) } ?: start(thread, question.id) }, refresh = true) }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -380,18 +416,27 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var base by remember { mutableStateOf(own.base) }
     var model by remember { mutableStateOf(own.model) }
     var key by remember { mutableStateOf(own.key) }
+    var runtime by remember { mutableStateOf(own.runtime) }
     var models by remember { mutableStateOf<List<String>>(emptyList()) }
     var pickingModel by remember { mutableStateOf(false) }
     var fetching by remember { mutableStateOf(false) }
     var fetchNote by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val invalid = Models.addressError(base)
+    val invalid = Models.addressError(base, runtime)
     AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("我的 API") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Plain("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台手机上，提问从这里直接发给服务商。", 13.sp, Ink.muted, lineHeight = 20.sp)
+            Plain(if (runtime) "通过 Local Runtime 使用网页模型。填写它提供的地址与模型密钥，校园查询仍在应用内执行。" else "填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台手机上，提问从这里直接发给服务商。", 13.sp, Ink.muted, lineHeight = 20.sp)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) { Plain("Local Runtime", 14.sp); Plain("连接你运行的网页模型服务，填写模型专用密钥。", 12.sp, Ink.muted) }
+                Toggle(runtime, { on ->
+                    runtime = on
+                    val defaults = if (on) Models.RUNTIME else Models.STARTING
+                    base = defaults.base; model = defaults.model; key = ""; models = emptyList(); fetchNote = ""
+                })
+            }
             OutlinedTextField(base, { base = it }, label = { Text("接口地址") }, singleLine = true)
             if (invalid != null) Plain(invalid, 12.sp, marks().danger)
-            OutlinedTextField(key, { key = it }, label = { Text("API Key") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+            OutlinedTextField(key, { key = it }, label = { Text(if (runtime) "模型密钥" else "API Key") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 if (models.isNotEmpty()) Box {
                     Chip("选模型 (${models.size}) ▾", { pickingModel = true })
@@ -403,7 +448,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                     if (fetching || invalid != null || key.isBlank()) return@Chip
                     fetching = true; fetchNote = ""
                     scope.launch {
-                        runCatching { Models.fetchModels(base, key) }
+                        runCatching { Models.fetchModels(base, key, runtime) }
                             .onSuccess { list -> models = list; if (list.isNotEmpty() && model.trim() !in list) model = list.first(); fetchNote = "已获取 ${list.size} 个模型" }
                             .onFailure { fetchNote = it.message ?: "拉取模型失败" }
                         fetching = false
@@ -413,7 +458,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             OutlinedTextField(model, { model = it }, label = { Text("模型") }, singleLine = true)
             if (fetchNote.isNotEmpty()) Plain(fetchNote, 12.sp, Ink.muted)
         } },
-        confirmButton = { TextButton({ onSave(Own(base.trim(), model.trim(), key.trim())) }, enabled = invalid == null && model.isNotBlank() && key.isNotBlank()) { Text("保存并使用") } },
+        confirmButton = { TextButton({ onSave(Own(base.trim(), model.trim(), key.trim(), runtime)) }, enabled = invalid == null && model.isNotBlank() && key.isNotBlank()) { Text("保存并使用") } },
         dismissButton = { Row { if (own.key.isNotBlank()) TextButton({ onSave(own.copy(key = "")) }) { Text("清除 Key", color = marks().danger) }; TextButton(onClose) { Text("取消") } } })
 }
 

@@ -49,4 +49,6 @@ public sealed partial class FactsJson : JsonSerializerContext;
 [JsonSerializable(typeof(AccountUser))]
 [JsonSerializable(typeof(AccountState))]
 [JsonSerializable(typeof(List<AccountDevice>))]
+[JsonSerializable(typeof(PublicMember))]
+[JsonSerializable(typeof(MemberPage))]
 public sealed partial class StorageJson : JsonSerializerContext;

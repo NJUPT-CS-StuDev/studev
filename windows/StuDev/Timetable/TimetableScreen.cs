@@ -29,12 +29,14 @@ public sealed partial class TimetableScreen : Screen
     private string? othersError;
     private (Data.Repository Repository, string Class)? recordKey;
     private Data.ExamRecord? examRecord;
+    private string? examVersion;
     private string? recordError;
     private string? preview;
     private List<Data.TeachingMeeting>? previewRows;
     private string? previewError;
     /** The class picker while one is being chosen: kept across redraws, so what is typed in it stays. */
     private (List<Data.TeachingClass> Classes, FrameworkElement View)? picker;
+    private string pickerQuery = "";
 
     public TimetableScreen()
     {
@@ -166,7 +168,7 @@ public sealed partial class TimetableScreen : Screen
         {
             if (picker is not { } kept || kept.Classes != campus.Classes)
             {
-                var made = Me.ClassPicker.Make(campus.Classes, c => campus.Preferences.SetClass(c.Id));
+                var made = Me.ClassPicker.Make(campus.Classes, c => campus.Preferences.SetClass(c.Id), query: pickerQuery, queryChanged: value => pickerQuery = value);
                 made.Margin = new Thickness(0, 48, 0, 0);
                 picker = (campus.Classes, Pages.Frame(made));
             }
@@ -174,6 +176,7 @@ public sealed partial class TimetableScreen : Screen
             return;
         }
         picker = null;
+        pickerQuery = "";
         if (who is { } other)
         {
             if (othersError is { } message) { Children.Add(Pages.Frame(Pages.Empty(message, Kit.TextAction("重试", () => { othersError = null; Gather(other); Draw(); }, Icons.Again)))); return; }
@@ -189,7 +192,7 @@ public sealed partial class TimetableScreen : Screen
         };
         var recordClass = mine ? campus.Preferences.Class : who!.Type == "class" ? who.Id : null;
         if (recordClass is not null && recordKey != (campus.Repository, recordClass)) {
-            recordKey = (campus.Repository, recordClass); examRecord = null; recordError = null;
+            recordKey = (campus.Repository, recordClass); examRecord = null; recordError = null; examVersion = null;
             _ = GatherRecord(campus.Repository, recordClass);
         }
 
@@ -260,7 +263,7 @@ public sealed partial class TimetableScreen : Screen
         {
             "week" => WeekView.Make(line, day, now, wide, Open, OpenTask),
             "day" => DayView.Make(line, day, now, Open, OpenTask, date => { picked = date == now.Date ? null : date; Draw(); }, mine),
-            "term" => TermView.Make(line, recordClass, now, termMode, mode => { termMode = mode; Draw(); }, date => { picked = date; scale = "week"; Draw(); }, Open, recordClass is not null ? examRecord : null),
+            "term" => TermView.Make(line, recordClass, now, termMode, mode => { termMode = mode; Draw(); }, date => { picked = date; scale = "week"; Draw(); }, Open, recordClass is not null ? examRecord : null, examVersion, value => examVersion = value),
             _ => ListView.Make(campus, line, now, OpenTask, Open, roomy),
         });
         if (scale == "term" && recordClass is not null && recordError is { } recordMessage) page.Children.Add(Kit.TextAction($"{recordMessage} · 重试", () => { recordError = null; _ = GatherRecord(campus.Repository, recordClass); Draw(); }));

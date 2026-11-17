@@ -211,7 +211,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             record?.sources?.firstOrNull { it.file == exam.source }?.let { sheet ->
                 KeyRow("来源", Exams.fileName(sheet.file), sheet.published?.let { "${Exams.time(it.take(10))} 官方发布" })
                 KeyRow(null, "查看官方公告", chevron = true, onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sheet.notice))) })
-                KeyRow(null, "查看官方附件", "历史公告可能撤回，部分附件需连接校园网。", chevron = true, onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sheet.url))) })
+                KeyRow(null, "查看官方附件", chevron = true, onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sheet.url))) })
             }
             if (recordState.failed) KeyRow("来源", "暂时无法加载 · 重试", onClick = recordState.retry)
         } else if (meeting != null) {
@@ -301,7 +301,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     }
 }
 
-@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onClose: () -> Unit) {
+@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: () -> Unit, onClose: () -> Unit) {
     var section by remember { mutableStateOf("home") }
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
@@ -330,6 +330,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             if (section == "home") {
                 KeyRow(null, account?.nickname ?: "未登录", if (account == null) "登录后同步任务和课表设置" else "管理账号 · 任务和课表设置自动同步", chevron = true, onClick = { onClose(); onAccount() })
                 Spacer(Modifier.height(12.dp))
+                KeyRow(null, "成员", "查看头像、昵称和签名", chevron = true, onClick = { onClose(); onMembers() })
                 KeyRow(null, "课表设置", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "选择班级、调整课程与实验" }, chevron = true, onClick = { section = "timetable" })
                 KeyRow(null, "外观", "跟随系统、浅色或深色", chevron = true, onClick = { section = "appearance" })
                 KeyRow(null, "桌面小组件", "把课表和任务放到桌面", chevron = true, onClick = { section = "widgets" })
