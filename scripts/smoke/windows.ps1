@@ -146,9 +146,16 @@ function Press($root, $what, [string]$step, [int]$seconds = 20) {
     Start-Sleep -Milliseconds 900
     Alive $step
 }
+function SetValue($element, [string]$text) {
+    $previous = [Owned]::GetForegroundWindow()
+    try { $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($text) }
+    finally {
+        if ($previous -ne [IntPtr]::Zero -and [Owned]::Owner([Owned]::GetForegroundWindow()) -eq $app.Id) { [Owned]::SetForegroundWindow($previous) | Out-Null }
+    }
+}
 function Fill($root, [scriptblock]$match, [string]$text, [string]$step) {
     $e = Find $root $Editable $match $step
-    $e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($text)
+    SetValue $e $text
     Start-Sleep -Milliseconds 1200
     if ($e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -cne $text) { throw "the input changed during: $step" }
     Alive $step
@@ -360,7 +367,7 @@ try {
     $identity = [string]::Join(',', $input.GetRuntimeId())
     $code = [string]$course.codes[0]
     foreach ($value in @($code.Substring(0, 1), $code.Substring(0, 2), $code.Substring(0, 5), $code, '数据', $course.name, '', $code)) {
-        $input.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($value)
+        SetValue $input $value
         Start-Sleep -Milliseconds 250
         $current = Find $window $Editable { param($e) $e.Current.Name -eq '筛选课程' } 'the same course input'
         if ([string]::Join(',', $current.GetRuntimeId()) -ne $identity) { throw "course input recreated after '$value'" }
