@@ -60,6 +60,8 @@ public sealed partial class MapScreen : Screen
     {
         ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
         ColumnDefinitions.Add(new ColumnDefinition());
+        RowDefinitions.Add(new RowDefinition());
+        RowDefinitions.Add(new RowDefinition { Height = new GridLength(0) });
         var panel = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 1, 0), Child = new ScrollViewer { Content = sheet, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
         Children.Add(panel);
         var stage = new Grid { Background = Paint.Brush("surfaceSunken") };
@@ -72,7 +74,9 @@ public sealed partial class MapScreen : Screen
         controls.Children.Add(ball);
         controls.Children.Add(new Border { Child = floorsBar, CornerRadius = new CornerRadius(8), Background = Paint.Brush("paper"), Translation = new System.Numerics.Vector3(0, 0, 6), Shadow = new ThemeShadow() });
         controls.Children.Add(Round("我的位置", "M13,10 A3,3 0 1 1 7,10 A3,3 0 1 1 13,10 Z M17.5,10 A7.5,7.5 0 1 1 2.5,10 A7.5,7.5 0 1 1 17.5,10 Z", () => _ = Locate()));
-        stage.Children.Add(controls);
+        var controlsScroll = new ScrollViewer { Content = controls, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        stage.SizeChanged += (_, e) => controlsScroll.MaxHeight = Math.Max(0, e.NewSize.Height);
+        stage.Children.Add(controlsScroll);
         var search = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = Kit.Line(8, Kit.Icon(Icons.Magnifier, 16, "muted", 20), Kit.Text("搜地点或教室", Role.Label, "muted")), Padding = new Thickness(14, 9, 18, 9), CornerRadius = new CornerRadius(20),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16), Translation = new System.Numerics.Vector3(0, 0, 8), Shadow = new ThemeShadow() };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "搜地点或教室");
@@ -81,6 +85,17 @@ public sealed partial class MapScreen : Screen
         var credit = Kit.Text("© OpenStreetMap 贡献者 · njupt-map", Role.Caption, "faint"); credit.FontSize = 10.5; credit.HorizontalAlignment = HorizontalAlignment.Right; credit.VerticalAlignment = VerticalAlignment.Bottom; credit.Margin = new Thickness(0, 0, 10, 6);
         stage.Children.Add(credit);
         Grid.SetColumn(stage, 1); Children.Add(stage);
+        SizeChanged += (_, e) =>
+        {
+            var compact = e.NewSize.Width < 800;
+            ColumnDefinitions[0].Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(360);
+            ColumnDefinitions[1].Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            RowDefinitions[0].Height = new GridLength(compact ? 3 : 1, GridUnitType.Star);
+            RowDefinitions[1].Height = compact ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+            Grid.SetColumn(stage, compact ? 0 : 1);
+            Grid.SetRow(panel, compact ? 1 : 0);
+            panel.BorderThickness = compact ? new Thickness(0, 1, 0, 0) : new Thickness(0, 0, 1, 0);
+        };
         surface.Shown += Place;
         surface.Shown += _ => { if (surface.Shot is { } shot) ball.Show(shot.Bearing, shot.Pitch); };
         surface.Tapped2 += point => _ = Tap(point);
@@ -414,17 +429,25 @@ public sealed partial class MapScreen : Screen
         {
             var levels = FloorsOf(building.Id);
             floor = picked?.Floor is { } f && int.TryParse(f, out var pf) ? pf : floor is { } chosenFloor && levels.Contains(chosenFloor) ? chosenFloor : BestFloor(building.Id, levels);
+            FloorButtons(building.Id);
+            Draw();
             await Enter(building.Id, floor!.Value, picked?.Id);
         }
         else
         {
+            FloorButtons(null);
             await Exit();
             var at = selected?.Centre ?? (building is not null ? Centre(model.Buildings.FirstOrDefault(b => b.Id == building.Id)?.Geometry ?? default) : null);
-            if (at is not null && navId is null) surface.Move(new CameraOptions { Center = new LatLng(at[1], at[0]), Zoom = 17.4, Padding = new EdgeInsets(60, 50, 60, 70) });
+            if (at is not null && navId is null) surface.Move(new CameraOptions { Center = new LatLng(at[1], at[0]), Zoom = 17.4, Padding = FitPadding(60, 50, 60, 70) });
         }
         await Routes();
         FloorButtons(building?.Id);
     }
+
+    /** Camera fitting must leave a real viewport even while a desktop window is being resized. */
+    private EdgeInsets FitPadding(double top, double right, double bottom, double left) => new(
+        Math.Min(top, surface.ActualHeight / 4), Math.Min(right, surface.ActualWidth / 4),
+        Math.Min(bottom, surface.ActualHeight / 4), Math.Min(left, surface.ActualWidth / 4));
 
     private int BestFloor(string building, List<int> levels)
     {
@@ -456,7 +479,7 @@ public sealed partial class MapScreen : Screen
         // Fly over the floor, turned to the building's longest side.
         var focus = picked is not null && data?.Rooms.FirstOrDefault(r => r.Id == picked) is { } room ? room.Geometry : shape.Geometry;
         var c = Centre(focus);
-        var camera = await surface.Map.CameraForLatLngBoundsAsync(new LatLngBounds(new LatLng(c[3], c[2]), new LatLng(c[5], c[4])), new CameraFitOptions { Padding = new EdgeInsets(90, 80, 90, 110), Bearing = Bearing(shape.Geometry), Pitch = 44 });
+        var camera = await surface.Map.CameraForLatLngBoundsAsync(new LatLngBounds(new LatLng(c[3], c[2]), new LatLng(c[5], c[4])), new CameraFitOptions { Padding = FitPadding(90, 80, 90, 110), Bearing = Bearing(shape.Geometry), Pitch = 44 });
         camera = camera with { Zoom = Math.Min(Math.Max(camera.Zoom ?? 18, 17.6), 19.1) };
         surface.Move(camera, same ? CameraUpdateMode.Ease : CameraUpdateMode.Fly, same ? 500 : 1050);
     }
@@ -592,7 +615,7 @@ public sealed partial class MapScreen : Screen
         {
             var line = routes[chosen]["geometry"]!.AsArray().Select(p => ((double)p![1]!, (double)p[0]!)).ToList();
             var bounds = new LatLngBounds(new LatLng(line.Min(p => p.Item1), line.Min(p => p.Item2)), new LatLng(line.Max(p => p.Item1), line.Max(p => p.Item2)));
-            var flat = await surface.Map.CameraForLatLngBoundsAsync(bounds, new CameraFitOptions { Padding = new EdgeInsets(90, 90, 90, 90), Pitch = 0, Bearing = 0 });
+            var flat = await surface.Map.CameraForLatLngBoundsAsync(bounds, new CameraFitOptions { Padding = FitPadding(90, 90, 90, 90), Pitch = 0, Bearing = 0 });
             // Seen tilted, the far half of the route needs a little more room than seen from above.
             var camera = new CameraOptions { Center = flat.Center, Zoom = Math.Min((flat.Zoom ?? 17) - .5, 18), Pitch = 45, Bearing = 0 };
             surface.Move(camera, CameraUpdateMode.Fly, 1000);

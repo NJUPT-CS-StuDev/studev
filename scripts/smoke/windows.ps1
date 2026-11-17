@@ -42,6 +42,12 @@ public static class Owned {
         ShowWindow(window, 4);
         SetWindowPos(window, new IntPtr(1), 0, 0, 0, 0, 0x33);
     }
+    public static void ResizeForTest(IntPtr window, int width, int height) {
+        // Do not let a headless desktop's small work area cap this isolated window's tracking size.
+        if (!SetWindowPos(window, IntPtr.Zero, 0, 0, width, height, 0x416)) throw new InvalidOperationException("cannot resize the owned test window");
+        if (!GetWindowRect(window, out var bounds) || bounds.Right - bounds.Left != width || bounds.Bottom - bounds.Top != height)
+            throw new InvalidOperationException("the owned test window did not reach its requested size");
+    }
     // A desktop widget belongs to the desktop's icon view, so it sits outside the automation tree's desktop children.
     public static List<IntPtr> Of(uint process, string title) {
         var found = new List<IntPtr>();
@@ -279,6 +285,7 @@ try {
     Press $window 'B240402' 'choose B240402' 30
     foreach ($scale in '周', '学期', '任务', '天') { Press $window $scale "the $scale view" 30 }
     ManagedCourses
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Press $window '地图' 'the map'
     Find $window (Both $Pressable (Is $A::NameProperty $building.names[0])) { param($e) -not $e.Current.IsOffscreen } 'a real building projected over a rendered map frame' 60 | Out-Null
     MapHealthy
@@ -288,6 +295,12 @@ try {
     Find $window (Both $Pressable (Is $A::NameProperty '1 层')) $null 'the building floor controls' 30 | Out-Null
     Press $window '1 层' 'open the first floor'
     MapHealthy
+    Find $window (Is $A::NameProperty "$($building.names[0]) 1 层") $null 'the selected floor in a narrow window' 30 | Out-Null
+    Capture 'map-narrow-floor'
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
+    Find $window (Both $Pressable (Is $A::NameProperty '1 层')) { param($e) -not $e.Current.IsOffscreen } 'the same floor controls after widening the window' 30 | Out-Null
+    Capture 'map-wide-floor'
+    Alive 'the map and floor controls work in both narrow and wide windows'
     Press $window '去这里' 'navigate to the selected building'
     Fill $window { param($e) $e.Current.Name -eq '出发地' } $origin.names[0] 'choose a route origin by place name'
     $from = Find $window $Editable { param($e) $e.Current.Name -eq '出发地' } 'the route origin'
@@ -301,6 +314,7 @@ try {
         Alive "the $travel route has a distance, duration and guidance"
     }
     Press $window '结束导航' 'finish navigation'
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Press $window '搜索' 'the search board'
     Fill $window { param($e) $e.Current.Name -eq '搜索' } '计算机' 'search 计算机'
     Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '条结果' } 'search results (the search kernel)' 30 | Out-Null
@@ -330,6 +344,7 @@ try {
     Find $window (Is $A::NameProperty '关联资料') $null 'the returned topic references' 30 | Out-Null
     Alive 'course to topic to material and back to topic'
     ReferenceGroups
+    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
     Press $window 'AI' 'the AI board'
     $traceHeadId = 'ai-steps:ai-replay-message-0'
     $traceHead = Find $window (Is $A::AutomationIdProperty $traceHeadId) $null 'the recorded AI tool calls'
