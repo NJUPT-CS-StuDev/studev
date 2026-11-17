@@ -124,7 +124,7 @@ function Editing({ text, onCancel, onSend }: { text: string; onCancel: () => voi
 export default function AiApp() {
     const { prefs, ready } = usePreferences(), tasks = useTasks();
     const who = useMemo(() => ({ type: 'me' as const }), []);
-    const { loaded, error: loadError } = useTimeline(who, prefs, ready, null, tasks);
+    const { loaded, term, error: loadError } = useTimeline(who, prefs, ready, null, tasks);
     const [kept, setKept] = useState<Kept>(readKept);
     const [chat, setChat] = useState<Chat>(() => { const saved = kept.chats.find(item => item.id === kept.current); return saved ? opened(saved) : empty(); });
     const [side, setSide] = useState(false), [menu, setMenu] = useState<string | null>(null), [renaming, setRenaming] = useState<string | null>(null);
@@ -158,6 +158,7 @@ export default function AiApp() {
     const services = useMemo(() => new CampusTools(), []);
     useEffect(() => () => services.dispose(), [services]);
     const latest = useRef(loaded?.line); latest.current = loaded?.line;
+    const latestTerm = useRef(term); latestTerm.current = term;
     useEffect(() => {
         if (opening.current) { opening.current = false; return; }
         if (!chat.thread.nodes.length) return;
@@ -242,8 +243,8 @@ export default function AiApp() {
     });
     /** The moment and who is asking, as this device knows them now. */
     const situation = (): Situation => {
-        const line = latest.current, today = momentNow().date;
-        return { week: line ? weekOfDate(line.term, today) : null, class: prefs.class ?? null, campus: prefs.campus ?? PRODUCT_CONFIG.CAMPUS.id,
+        const term = latestTerm.current, today = momentNow().date;
+        return { week: term ? weekOfDate(term, today) ?? 0 : null, class: prefs.class ?? null, campus: prefs.campus ?? PRODUCT_CONFIG.CAMPUS.id,
             name: account ? account.realName || account.nickname || null : null, student: account?.studentId || null, memory: memoryNow.current.on ? memoryNow.current.text : null };
     };
     /** Answering after `at` in `base`: each message said grows the branch from there, and is the one shown. */

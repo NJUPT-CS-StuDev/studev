@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { Completion, completionRequest } from './assistant.mjs';
+import { Completion, completionRequest, instructions, situationError } from './assistant.mjs';
 import { stepsLine, stepsOf } from '../ai/steps';
 
 const frame = (delta: Record<string, unknown>, finish_reason?: string) => `data: ${JSON.stringify({ choices: [{ delta, ...(finish_reason ? { finish_reason } : {}) }] })}`;
 const situation = { week: 12, class: 'B240402', campus: '仙林', name: null, student: null, memory: null };
+
+it('keeps public teaching time independent of a class and distinguishes unavailable time from outside term', () => {
+    const withoutClass = { ...situation, class: null };
+    expect(instructions(withoutClass, 0)).toContain('本学期第 12 周');
+    expect(instructions(withoutClass, 0)).toContain('还没选班级');
+    expect(instructions({ ...withoutClass, week: null }, 0)).toContain('当前教学周尚未取得');
+    expect(instructions({ ...withoutClass, week: null }, 0)).not.toContain('现在不在教学周内');
+    expect(instructions({ ...withoutClass, week: 0 }, 0)).toContain('现在不在教学周内');
+    for (const week of [null, 0, 1, 12, 30]) expect(situationError({ ...withoutClass, week })).toBeNull();
+    for (const week of [-1, 0.5, 31, '12', undefined]) expect(situationError({ ...withoutClass, week })).toBe('教学周无效。');
+});
 
 describe('the model response protocol', () => {
     it('ends lookup rounds without advertising tools, retaining the actual tool results as evidence', () => {

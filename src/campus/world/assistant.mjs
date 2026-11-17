@@ -11,7 +11,7 @@ export const DIAGRAMS = assistant.diagrams;
 const names = new Set(tools.map(tool => tool.function.name));
 
 /**
- * Who is asking and when, as far as this device knows: the teaching week (null outside one), the class and campus
+ * Who is asking and when, as far as this device knows: the teaching week (null unknown, 0 outside one), the class and campus
  * chosen in “我”, the name and student number of the account signed in (null when not), and the memory one keeps
  * (null when it is turned off). Through the platform, the name and number are the platform's own, not the device's.
  * @typedef {{ week: number | null, class: string | null, campus: string, name: string | null, student: string | null, memory: string | null }} Situation
@@ -37,7 +37,7 @@ function who(situation) {
 
 /** What the model is told before the conversation. */
 export function instructions(situation, now = Date.now()) {
-    const week = situation.week === null ? assistant.week.out : fill(assistant.week.in, situation);
+    const week = situation.week === null ? assistant.week.unknown : situation.week === 0 ? assistant.week.out : fill(assistant.week.in, situation);
     const lines = assistant.prompt.map(line => fill(line, { now: nanjingNow(now), week, me: who(situation), diagrams: DIAGRAMS.join('、') }));
     if (situation.memory !== null) lines.push(...assistant.memory.map(line => fill(line, { memory: situation.memory.trim() || '（还没有）' })));
     return lines.join('\n');
@@ -57,7 +57,7 @@ export const completionRequest = (model, messages, situation, now = Date.now(), 
 export function situationError(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return '缺少当前情况。';
     const { week, campus, memory } = value, cls = value.class;
-    if (!(week === null || (Number.isInteger(week) && week >= 1 && week <= 30))) return '教学周无效。';
+    if (!(week === null || (Number.isInteger(week) && week >= 0 && week <= 30))) return '教学周无效。';
     if (!(cls === null || (typeof cls === 'string' && /^[A-Za-z0-9]{2,16}$/.test(cls)))) return '班级无效。';
     if (typeof campus !== 'string' || !/^[\u4e00-\u9fa5]{1,8}$/.test(campus)) return '校区无效。';
     if (!(memory === null || (typeof memory === 'string' && memory.length <= 4000))) return '记忆太长了，删掉一些再问。';

@@ -29,7 +29,8 @@
  },
  "week": {
   "in": "本学期第 {week} 周",
-  "out": "现在不在教学周内"
+  "out": "现在不在教学周内",
+  "unknown": "当前教学周尚未取得"
  },
  "runtimeErrors": {
   "provider_unavailable": "模型网站暂时不可用，请稍后再试。",

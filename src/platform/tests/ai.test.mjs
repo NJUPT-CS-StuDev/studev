@@ -48,6 +48,19 @@ test('AI streams the fixed model through the gateway, passing on what it says an
   await assert.rejects(denied({ request }, '/api/platform/ai'), error => error.status === 401);
 });
 
+test('Public teaching week does not depend on choosing a class and preserves unknown versus outside-term state', async () => {
+  const prompts = [];
+  const handler = createAiService({ identity: { async authenticate() { return { user: { id: 'u' } }; } }, repo: { async throttle() {} }, env: { MAKERS_MODELS_KEY: 'k', NVIDIA_API_KEY: 'n' },
+    fetcher: async (_url, init) => { prompts.push(JSON.parse(init.body).messages[0].content); return sse(frame({ delta: { content: '好' }, finish_reason: 'stop' }) + 'data: [DONE]\n\n'); } });
+  for (const week of [null, 0, 12]) {
+    const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '现在是第几周？' }], situation: { ...situation, class: null, week } }) });
+    assert.equal((await events(await handler({ request }, '/api/platform/ai'))).at(-1).event, 'message');
+  }
+  assert.match(prompts[0], /当前教学周尚未取得/); assert.doesNotMatch(prompts[0], /现在不在教学周内/);
+  assert.match(prompts[1], /现在不在教学周内/);
+  assert.match(prompts[2], /本学期第 12 周/); assert.match(prompts[2], /还没选班级/);
+});
+
 test('A person who has used up the day of the free quota is told so, and that their own key goes on', async () => {
   const handler = createAiService({ identity: { async authenticate() { return { user: { id: 'u' } }; } }, repo: { async throttle(scope, client, limit) { if (scope === 'ai-day') { assert.equal(limit, DAILY); throw Object.assign(new Error('limited'), { status: 429 }); } } }, env: { MAKERS_MODELS_KEY: 'k', NVIDIA_API_KEY: 'n' }, fetcher: () => { throw new Error('must not infer'); } });
   const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'x' }], situation }) });

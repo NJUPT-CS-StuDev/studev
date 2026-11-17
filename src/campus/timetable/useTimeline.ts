@@ -73,8 +73,8 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         return () => { live = false; };
     }, [edits.added, needAll, needMeetings, prefs.labs?.classes, preview]);
 
-    return useMemo<{ loaded: Loaded | null; error: string | null; previewRows: TeachingMeeting[] }>(() => {
-        if (!base || !source || source.key !== key) return { loaded: null, error, previewRows };
+    return useMemo<{ loaded: Loaded | null; term: TeachingTerm | null; error: string | null; previewRows: TeachingMeeting[] }>(() => {
+        if (!base || !source || source.key !== key) return { loaded: null, term: base?.term ?? null, error, previewRows };
         const hidden = new Set(edits.hidden);
         const own = source.meetings.filter(meeting => !hidden.has(meeting.teaching_class.id));
         const added = catalogRows.filter(meeting => !own.some(row => row.id === meeting.id));
@@ -91,6 +91,6 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         const line: Timeline = { term: base.term, periods: base.periods, meetings, labs, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null, tasks: who.type === 'me' ? tasks : [], names: edits.names };
         line.preferences = who.type === 'me' ? prefs.events : undefined;
         line.courseMeetings = distinct([...source.meetings, ...plain]);
-        return { loaded: { ...base, line, own, added, classInfo }, error, previewRows };
+        return { loaded: { ...base, line, own, added, classInfo }, term: base.term, error, previewRows };
     }, [base, catalogLabs, catalogRows, classId, prefs.labs, prefs.events, tasks, edits, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);
 }
