@@ -109,12 +109,23 @@ try {
       assert.equal(search.height,36);assert(search.x+search.width<=avatar.x);
     }
     await shot(visual.page,`${name}-search-shared-components`);
+    await visual.page.evaluate(()=>{
+      localStorage.setItem('studev_auth_user',JSON.stringify({nickname:'测试最长显示昵称',role:'user',qq:'',verifiedAt:Date.now()}));
+      window.dispatchEvent(new Event('studev:account'));
+    });
+    await visual.page.getByText('测试最长显示昵称',{exact:true}).waitFor();
+    assert.equal(await visual.page.locator('[data-me-face]').innerText(),'测','the account cache drives the avatar fallback');
     if(name==='phone') {
-      await visual.page.locator('[data-me-name]').evaluate(element=>{element.textContent='测试最长显示昵称';});
       const search=await visual.page.locator('.sfield').boundingBox(), avatar=await visual.page.locator('[data-me]').boundingBox();
       assert(search.x+search.width<=avatar.x,'the longest displayed nickname still has its own header space');
       await shot(visual.page,`${name}-search-long-name`);
     }
+    await visual.page.evaluate(()=>{
+      localStorage.removeItem('studev_auth_user');
+      window.dispatchEvent(new Event('studev:account'));
+    });
+    await visual.page.getByText('未登录',{exact:true}).waitFor();
+    assert.equal(await visual.page.locator('[data-me-face] svg').count(),1,'sign-out restores the anonymous face');
     assert.deepEqual(visual.errors,[]);await visual.context.close();
     record(`${name}: search geometry and shared component visual evidence`);
   }

@@ -157,6 +157,45 @@ async function headerAligned(page, selector) {
     assert(Math.abs(delta) <= 1, `the campus header and account entry share a centre line: ${selector}, difference ${delta}px`);
 }
 
+async function coldAvatar(viewport, name) {
+    const context = await browser.newContext({ viewport, colorScheme: 'dark', locale: 'zh-CN', serviceWorkers: 'block' });
+    const page = await context.newPage();
+    const previous = active; active = page;
+    page.setDefaultTimeout(timeout);
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    let release;
+    const ready = new Promise(resolve => { release = resolve; });
+    const component = /\/_astro\/MeApp\.[^/]+\.js$/;
+    await context.route(component, async route => { await ready; await route.continue(); });
+    try {
+        await goto(page, '/');
+        const placeholder = page.getByRole('status', { name: '正在加载个人菜单', exact: true });
+        await placeholder.waitFor({ state: 'visible' });
+        assert.equal(await page.locator('[data-me]').count(), 0, 'an unloaded account entry does not pretend to be interactive');
+        assert.equal(await placeholder.locator('button,a').count(), 0);
+        const before = await placeholder.boundingBox();
+        await screenshot(page, `${name}-cold-avatar-loading`);
+        release();
+        const avatar = page.locator('[data-me]');
+        await avatar.waitFor({ state: 'visible' });
+        const after = await avatar.boundingBox();
+        for (const dimension of ['x', 'y', 'width', 'height']) assert(Math.abs(before[dimension] - after[dimension]) <= 1, `avatar loading preserves its ${dimension}`);
+        await avatar.click();
+        await heading(page, '我');
+        assert.equal(await page.getByRole('dialog').evaluate(element => element.parentElement === document.body), true, 'the menu portal escapes the header stacking context');
+        await screenshot(page, `${name}-cold-avatar-menu`);
+        await closeSheet(page);
+        await page.getByRole('dialog').waitFor({ state: 'detached' });
+        await page.waitForFunction(() => !history.state?.sheet);
+        assert.deepEqual(errors, [], 'loading and first account interaction cause no JavaScript errors');
+        log(`${name}: cold avatar loading keeps its geometry, first interactive click opens a body-level menu`);
+    } finally {
+        release();
+        await context.close(); active = previous;
+    }
+}
+
 async function sheetHistory(page, name) {
     const baseLength = await page.evaluate(() => history.length);
     await openCourses(page);
@@ -305,6 +344,7 @@ async function mapAvailability(name, viewport) {
 
 try {
     for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]]) {
+        await coldAvatar(viewport, name);
         const context = await browser.newContext({ viewport, colorScheme: 'dark', locale: 'zh-CN', timezoneId: 'Asia/Shanghai' });
         await context.addInitScript(() => {
             if (!localStorage.getItem('studev_prefs')) localStorage.setItem('studev_prefs', JSON.stringify({ class: 'B240402', appearance: 'dark' }));

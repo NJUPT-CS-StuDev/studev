@@ -1,5 +1,8 @@
 // The one place for personal settings, reached from the avatar on every page.
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { avatarUrl } from '../../platform/client/api';
+import { readCachedAccount, type CachedAccount } from '../../platform/client/auth-status';
 import { DATA_RELEASE } from '@/world/config';
 import { formLink, PRODUCT_CONFIG } from '@/world/product';
 import { writePreferences } from '@/world/preferences';
@@ -19,10 +22,38 @@ import '../campus.css';
 
 export default function MeApp() {
     const [open, setOpen] = useState(false);
+    const [account, setAccount] = useState(readCachedAccount);
+    useEffect(() => {
+        const refresh = () => setAccount(readCachedAccount());
+        refresh();
+        window.addEventListener('storage', refresh);
+        window.addEventListener('studev:account', refresh);
+        return () => { window.removeEventListener('storage', refresh); window.removeEventListener('studev:account', refresh); };
+    }, []);
+    const name = account?.nickname || '未登录';
+    return <>
+        <button className="avatar" type="button" data-me aria-label={`${name}，打开我`} onClick={() => setOpen(true)}>
+            <AccountFace account={account} /><span className="avatar-name" data-me-name>{name}</span>
+        </button>
+        {open && createPortal(<MePanel account={account} onClose={() => setOpen(false)} />, document.body)}
+    </>;
+}
+
+function AccountFace({ account }: { account: CachedAccount | null }) {
+    const picture = account ? avatarUrl(account, 100) : '';
+    const [failed, setFailed] = useState('');
+    return <span className="avatar-face" data-me-face>
+        {picture && failed !== picture ? <img src={picture} alt="" referrerPolicy="no-referrer" onError={() => setFailed(picture)} />
+            : account ? account.nickname?.slice(0, 1) || '我'
+            : <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg>}
+    </span>;
+}
+
+function MePanel({ account, onClose }: { account: CachedAccount | null; onClose: () => void }) {
     const [section, setSection] = useState<'home' | 'timetable' | 'about'>('home');
     const [factsError, setFactsError] = useState(false);
     const [retry, setRetry] = useState(0);
-    const { prefs } = usePreferences(open);
+    const { prefs } = usePreferences(true);
     const [appearance, setLook] = useState<Appearance>(() => typeof document === 'undefined' ? 'auto' : readAppearance());
     const [picking, setPicking] = useState(false);
     const [layering, setLayering] = useState(false);
@@ -32,37 +63,22 @@ export default function MeApp() {
     const [extraClass, setExtraClass] = useState('');
     const [coursesOpen, setCoursesOpen] = useState(false);
     const [periods, setPeriods] = useState<TeachingPeriod[]>([]);
-    useEffect(() => { let live = true; setClassLabs(null); setLabsError(false); if (open && prefs.class) void Promise.all([loadClassLabs(prefs.class), prefs.labs?.classes?.length ? loadLabs() : Promise.resolve([] as Lab[])]).then(([own, all]) => { if (live) setClassLabs(personalLabs(own, prefs.labs?.classes ?? [], all)); }).catch(() => { if (live) setLabsError(true); }); return () => { live = false; }; }, [open, prefs.class, prefs.labs?.classes, retry]);
+    useEffect(() => { let live = true; setClassLabs(null); setLabsError(false); if (prefs.class) void Promise.all([loadClassLabs(prefs.class), prefs.labs?.classes?.length ? loadLabs() : Promise.resolve([] as Lab[])]).then(([own, all]) => { if (live) setClassLabs(personalLabs(own, prefs.labs?.classes ?? [], all)); }).catch(() => { if (live) setLabsError(true); }); return () => { live = false; }; }, [prefs.class, prefs.labs?.classes, retry]);
     const [facts, setFacts] = useState<{ term: TeachingTerm; classes: TeachingClass[]; run: MorningRun | null } | null>(null);
     useEffect(() => {
-        const button = document.querySelector<HTMLElement>('[data-me]');
-        const show = () => { setSection('home'); setOpen(true); };
-        button?.addEventListener('click', show);
-        return () => button?.removeEventListener('click', show);
-    }, []);
-    useEffect(() => {
-        if (!open || facts) return;
+        if (facts) return;
         let live = true; setFactsError(false);
         void Promise.all([loadTerm(), loadClasses(), loadRuns(), loadPeriods()]).then(([term, classes, runs, times]) => { if (live) { setFacts({ term, classes, run: runs[term.term] ?? null }); setPeriods(times); } }, () => { if (live) setFactsError(true); });
         return () => { live = false; };
-    }, [facts, open, retry]);
+    }, [facts, retry]);
     const info = useMemo(() => facts?.classes.find(item => item.name === prefs.class) ?? null, [facts, prefs.class]);
     const [shared, setShared] = useState(false);
-    const [account, setAccount] = useState<{ nickname: string } | null>(null);
-    useEffect(() => {
-        const refresh = () => { try { setAccount(JSON.parse(localStorage.getItem('studev_auth_user') ?? 'null')); } catch { setAccount(null); } };
-        refresh();
-        window.addEventListener('storage', refresh);
-        window.addEventListener('studev:account', refresh);
-        return () => { window.removeEventListener('storage', refresh); window.removeEventListener('studev:account', refresh); };
-    }, [open]);
     const share = async () => {
         const url = `${PRODUCT_CONFIG.ORIGIN}/`;
         if (navigator.share) { await navigator.share({ title: 'StuDev', url }).catch(() => undefined); return; }
         await navigator.clipboard.writeText(url);
         setShared(true);
     };
-    if (!open) return null;
     const order = prefs.layers ?? LAYER_ORDER;
     const KIND_NAMES: Record<EventKind, string> = { exam: '考试', task: '任务', lab: '实验', class: '课程', run: '早锻炼' };
     // Moving one up a step swaps it with the one before: the whole order is always written.
@@ -121,7 +137,7 @@ export default function MeApp() {
     const runOn = run.on ?? (grade !== null && grade <= 2);
     const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { days: [], adjust: 0, ...current.run, ...patch } }));
     return (
-        <Sheet title={section === 'timetable' ? '课表设置' : section === 'about' ? '帮助与关于' : '我'} top={section !== 'home' ? <button className="back" onClick={() => setSection('home')}>‹ 返回</button> : undefined} onClose={() => setOpen(false)}>
+        <Sheet title={section === 'timetable' ? '课表设置' : section === 'about' ? '帮助与关于' : '我'} top={section !== 'home' ? <button className="back" onClick={() => setSection('home')}>‹ 返回</button> : undefined} onClose={onClose}>
             {section === 'home' && <>
             <a className="kv me-account" href="/account/"><span className="v"><strong>{account?.nickname || '未登录'}</strong><small>{account ? '管理账号 · 任务和课表设置自动同步' : '登录后同步任务和课表设置'}</small></span><Chevron /></a>
             <button className="kv" onClick={() => setSection('timetable')}><span className="v">课表设置<small>{[prefs.class, info?.major].filter(Boolean).join(' · ') || '选择班级、管理课程与实验'}</small></span><Chevron /></button>
