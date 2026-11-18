@@ -60,6 +60,7 @@ login.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<
       try {
         if (data.user) {
           localStorage.setItem('studev_auth_user', JSON.stringify({
+            id: data.user.id,
             nickname: data.user.nickname || data.user.studentId,
             role: data.user.role || 'user',
             qq: data.user.qq,

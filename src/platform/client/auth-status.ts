@@ -2,7 +2,7 @@ import { api, PlatformError, type Session } from './api';
 
 const CACHE_KEY = 'studev_auth_user';
 
-export interface CachedAccount { nickname: string; role?: string; qq?: string; verifiedAt?: number }
+export interface CachedAccount { nickname: string; id?: string; role?: string; qq?: string; verifiedAt?: number }
 let cachedText: string | null | undefined;
 let cachedAccount: CachedAccount | null = null;
 export function readCachedAccount(): CachedAccount | null {
@@ -36,7 +36,7 @@ if (typeof window !== 'undefined') {
 const cached = readCachedAccount();
 const hasCachedUser = Boolean(cached);
 // Page changes within a minute share the cached verification.
-const shouldVerify = cached && (!cached.verifiedAt || Date.now() - cached.verifiedAt > 60_000);
+const shouldVerify = cached && (!cached.id || !cached.verifiedAt || Date.now() - cached.verifiedAt > 60_000);
 updateNavLinks(hasCachedUser);
 
 // 多标签页实时同步登录状态
@@ -59,6 +59,7 @@ if (hasCachedUser && shouldVerify && !isPlatformManagedPage) {
       if (data?.user) {
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
+            id: data.user.id,
             nickname: data.user.nickname,
             role: data.user.role || 'user',
             qq: data.user.qq,

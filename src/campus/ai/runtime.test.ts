@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { askRuntime, closeRuntimeChat, runtimeModels, runtimeRequest, runtimeErrorMessage } from './runtime';
 import { LocalRuntimeError } from '@local-runtime-mcp/browser-extension/sdk';
-import { readModelSettings, selectedProvider, STARTING_OWN } from './model';
+import { FREE_MODEL, readModelSettings, runtimeProvider, selectedProvider, STARTING_OWN, visibleModelProviders, writeModelSettings } from './model';
 import { append, choose, conversationId, emptyThread } from './thread';
 
 const bridge = vi.hoisted(() => ({ listModels: vi.fn(), chat: vi.fn(), closeConversation: vi.fn() }));
@@ -63,9 +63,37 @@ it('migrates the runtime selection and the existing personal provider into the c
     expect(settings.selection).toEqual({ provider: 'runtime', model: 'deepseek-web' });
     expect(settings.providers).toMatchObject([{ kind: 'api', key: 'test-only-old-key', models: [{ id: STARTING_OWN.model, enabled: true }] }, { kind: 'runtime', key: '' }]);
     expect(JSON.parse(values.get('studev_ai_model')!)).toEqual(settings);
+    expect(settings.runtimeEnabled).toBe(false);
+    expect(selectedProvider(settings, settings.selection)).toBeUndefined();
+    expect(visibleModelProviders(settings).map(provider => provider.id)).toEqual(['personal']);
+    settings.runtimeEnabled = true;
     expect(selectedProvider(settings, settings.selection)).toMatchObject({ id: 'runtime' });
     settings.providers[1]!.models[0]!.enabled = false;
     expect(selectedProvider(settings, settings.selection)).toBeUndefined();
+});
+
+it('keeps previously configured browser models dormant by default and restores the same choice after explicit opt-in', () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() });
+    const initial = readModelSettings();
+    expect(initial).toMatchObject({ selection: FREE_MODEL, runtimeEnabled: false });
+    expect(selectedProvider(initial, FREE_MODEL)).toMatchObject({ kind: 'free' });
+    const selection = { provider: 'runtime', model: 'deepseek-web' };
+    const providers = [{ ...runtimeProvider, models: [{ id: selection.model, name: 'DeepSeek 网页', enabled: true }] }];
+    values.set('studev_ai_model', JSON.stringify({ providers, selection }));
+    const before = readModelSettings();
+    expect(before).toEqual({ providers, selection, runtimeEnabled: false });
+    expect(selectedProvider(before, selection)).toBeUndefined();
+    writeModelSettings({ ...before, runtimeEnabled: true });
+    const enabled = readModelSettings();
+    expect(visibleModelProviders(enabled)).toEqual(providers);
+    expect(selectedProvider(enabled, selection)).toEqual(providers[0]);
+    writeModelSettings({ ...enabled, runtimeEnabled: false });
+    const disabled = readModelSettings();
+    expect(disabled).toEqual(before);
+    expect(selectedProvider(disabled, selection)).toBeUndefined();
+    expect(selectedProvider(disabled, FREE_MODEL)).toMatchObject({ kind: 'free' });
 });
 
 it('keeps all dialogue, and explicitly retries the same accepted request without repeating completed tools', async () => {

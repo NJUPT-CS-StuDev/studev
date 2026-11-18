@@ -25,6 +25,7 @@ test('AI checks the signed-in quota, sends campus context without account identi
     const body = JSON.parse(init.body); assert.equal(body.model, '@makers/deepseek-v4.1-flash'); assert.equal(body.stream, true);
     assert.ok(body.tools.some(tool => tool.function.name === 'suggest_slots')); assert.equal(body.messages[0].role, 'system'); assert.match(body.messages[0].content, /“做的时间”和“截止时间”是两回事/); assert.match(body.messages[0].content, /绝不对用户提工具名/);
     assert.match(body.messages[0].content, /2026年11月12日 周四 08:00，本学期第 11 周/); assert.match(body.messages[0].content, /仙林校区 B240402 班的同学/);
+    assert.match(body.messages[0].content, /在回答中先给出要点/);
     assert.doesNotMatch(init.body, /测试同学|TEST000001|test-user|冒充|FORGED0001/); assert.ok(!body.tools.some(tool => tool.function.name === 'remember'));
     // A frame split across chunks, thinking that must not pass, and a tool call in pieces.
     const first = frame({ delta: { reasoning_content: 'not-returned' } }) + frame({ delta: { content: '我来' } });
@@ -32,7 +33,7 @@ test('AI checks the signed-in quota, sends campus context without account identi
     const third = frame({ delta: { tool_calls: [{ index: 0, function: { name: 'rooms', arguments: '"2026-11-14","minute":840,"minutes":120}' } }] } }) + frame({ delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n';
     return sse(first, second.slice(0, 20), second.slice(20), third);
   } });
-  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '帮我找空教室' }], situation: { ...situation, name: '冒充', student: 'FORGED0001' }, model: 'ignored-client-model', tools: ['ignored'] }) });
+  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '帮我找空教室' }], situation: { ...situation, instructions: '在回答中先给出要点。', name: '冒充', student: 'FORGED0001' }, model: 'ignored-client-model', tools: ['ignored'] }) });
   const result = await handler({ request }, '/api/platform/ai'); assert.equal(result.status, 200);
   assert.match(result.headers.get('content-type'), /text\/event-stream/);
   const got = await events(result);

@@ -280,6 +280,7 @@ async function loadSession(): Promise<Session | null> {
             if (currentSession?.user) {
                 try {
                     localStorage.setItem('studev_auth_user', JSON.stringify({
+                        id: currentSession.user.id,
                         nickname: currentSession.user.nickname,
                         role: currentSession.user.role || 'user',
                         qq: currentSession.user.qq,

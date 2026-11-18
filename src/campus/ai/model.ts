@@ -8,7 +8,7 @@ export interface Own { base: string; model: string; key: string }
 export interface ModelSelection { provider: string; model: string }
 export interface ModelOption { id: string; name: string; enabled: boolean }
 export interface ModelProvider { id: string; kind: 'api' | 'runtime'; name: string; base: string; key: string; enabled: boolean; models: ModelOption[] }
-export interface ModelSettings { providers: ModelProvider[]; selection: ModelSelection }
+export interface ModelSettings { providers: ModelProvider[]; selection: ModelSelection; runtimeEnabled: boolean }
 
 
 /** DeepSeek, filled in to start from. */
@@ -17,17 +17,19 @@ const KEY = 'studev_ai_model';
 export const MODEL_SETTINGS_CHANGED = 'studev:model-settings';
 export const FREE_MODEL: ModelSelection = { provider: 'free', model: 'auto' };
 export const RUNTIME_PROVIDER = 'runtime';
+export const RUNTIME_EXPERIMENT = '本机浏览器模型（实验）';
+export const RUNTIME_DISABLED = '本机浏览器模型已关闭。可在「我 → 模型服务」重新开启，也可以选择其他模型。';
 export { freeService };
 export const freeProvider = { id: FREE_MODEL.provider, kind: 'free' as const, name: freeService.providerName, models: [{ id: FREE_MODEL.model, name: freeService.modelName, enabled: true }] };
 export const runtimeProvider: ModelProvider = { id: RUNTIME_PROVIDER, kind: 'runtime', name: 'Local Runtime MCP', base: '', key: '', enabled: true, models: [] };
 type PreviousChoice = { use?: 'free' | 'own' | 'runtime'; own?: Own; runtime?: { model?: string } };
 
 export function readModelSettings(): ModelSettings {
-    const defaults: ModelSettings = { providers: [], selection: FREE_MODEL };
+    const defaults: ModelSettings = { providers: [], selection: FREE_MODEL, runtimeEnabled: false };
     try {
         const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as (Partial<ModelSettings> & PreviousChoice) | null;
         if (!raw) return defaults;
-        if (Array.isArray(raw.providers) && raw.selection) return { providers: raw.providers, selection: raw.selection };
+        if (Array.isArray(raw.providers) && raw.selection) return { providers: raw.providers, selection: raw.selection, runtimeEnabled: raw.runtimeEnabled === true };
         const providers: ModelProvider[] = [];
         const legacy = raw.own;
         let selection = FREE_MODEL;
@@ -40,7 +42,7 @@ export function readModelSettings(): ModelSettings {
             providers.push({ ...runtimeProvider, models: [{ id: raw.runtime.model, name: raw.runtime.model, enabled: true }] });
             if (raw.use === 'runtime') selection = { provider: RUNTIME_PROVIDER, model: raw.runtime.model };
         }
-        const settings = { providers, selection };
+        const settings: ModelSettings = { providers, selection, runtimeEnabled: false };
         try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* This page can still use the old settings. */ }
         return settings;
     } catch { /* Nothing chosen yet. */ }
@@ -51,9 +53,13 @@ export function writeModelSettings(settings: ModelSettings) {
     window.dispatchEvent(new Event(MODEL_SETTINGS_CHANGED));
 }
 
+export function visibleModelProviders(settings: ModelSettings) {
+    return settings.runtimeEnabled ? settings.providers : settings.providers.filter(provider => provider.kind !== 'runtime');
+}
+
 export function selectedProvider(settings: ModelSettings, selection: ModelSelection) {
     if (selection.provider === FREE_MODEL.provider && selection.model === FREE_MODEL.model) return freeProvider;
-    return settings.providers.find(provider => provider.id === selection.provider && provider.enabled && provider.models.some(model => model.id === selection.model && model.enabled));
+    return visibleModelProviders(settings).find(provider => provider.id === selection.provider && provider.enabled && provider.models.some(model => model.id === selection.model && model.enabled));
 }
 
 /** Where a provider's chat completions are, from the address one gives: its root, or its /v1, or the endpoint itself. */

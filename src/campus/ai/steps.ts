@@ -2,14 +2,11 @@
 // and each call with what it asked and what came back (搜索资料 “补考报名” · 6 条), including failed attempts and retries.
 // The same words are android/.../ai/Steps.kt.
 import { dateLabel, hm } from '@/world/time';
+import { campusToolLabels } from './toolCatalog';
 
 export interface Step { name: string; label: string; detail: string; failed: boolean; pending: boolean }
 export interface Call { id: string; name: string; arguments: string }
 
-const LABELS: Record<string, string> = {
-    search: '搜索资料', read: '读原文', course: '看课程', schedule: '查上课安排', curriculum: '查培养方案', find_place: '找地点', nearby: '找附近', route: '规划路线', timeline: '查看安排', exams: '查考试', list_tasks: '读取任务',
-    suggest_slots: '找空闲时间', free_rooms: '查空教室', propose_task: '起草任务', remember: '记住',
-};
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 const count = (value: unknown) => Array.isArray(value) ? value.length : 0;
 const field = (value: unknown, key: string): unknown => value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>)[key] : undefined;
@@ -46,7 +43,8 @@ export function stepsOf(calls: readonly Call[], results: ReadonlyMap<string, unk
         try { args = JSON.parse(call.arguments) as Record<string, unknown>; } catch { /* Said badly: shown by its name alone. */ }
         const done = results.has(call.id), result = results.get(call.id);
         const error = text(field(result, 'error'));
-        steps.push({ name: call.name, label: LABELS[call.name] ?? call.name, detail: error ? `${detail(call.name, args, undefined, false)}：${error}`.replace(/^：/, '') : detail(call.name, args, result, done), failed: Boolean(error), pending: !done });
+        const label = campusToolLabels[call.name] ?? (call.name.startsWith('web_') ? text(field(result, 'tool')) || '网页工具' : call.name);
+        steps.push({ name: call.name, label, detail: error ? `${detail(call.name, args, undefined, false)}：${error}`.replace(/^：/, '') : detail(call.name, args, result, done), failed: Boolean(error), pending: !done });
     }
     return steps;
 }

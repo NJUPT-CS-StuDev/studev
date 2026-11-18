@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { addressError, fetchModels, freeService, readModelSettings, runtimeProvider, writeModelSettings, type ModelOption, type ModelProvider } from './model';
+import { addressError, fetchModels, freeService, MODEL_SETTINGS_CHANGED, readModelSettings, RUNTIME_EXPERIMENT, runtimeProvider, visibleModelProviders, writeModelSettings, type ModelOption, type ModelProvider, type ModelSettings as Settings } from './model';
 import { FreeServiceAvatar } from './FreeServiceAvatar';
 import { runtimeModels } from './runtime';
-import { Chevron } from '@/world/ui';
+import { Chevron, Toggle } from '@/world/ui';
 
 const newProvider = (): ModelProvider => ({ id: crypto.randomUUID(), kind: 'api', name: '', base: '', key: '', enabled: true, models: [] });
 
@@ -11,24 +11,44 @@ export default function ModelSettings() {
     const [settings, setSettings] = useState(readModelSettings);
     const [editing, setEditing] = useState<ModelProvider | null>(null);
     const [error, setError] = useState('');
+    useEffect(() => {
+        const sync = () => {
+            const current = readModelSettings();
+            setSettings(current);
+            if (!current.runtimeEnabled) setEditing(editor => editor?.kind === 'runtime' ? null : editor);
+        };
+        window.addEventListener(MODEL_SETTINGS_CHANGED, sync);
+        window.addEventListener('storage', sync);
+        return () => { window.removeEventListener(MODEL_SETTINGS_CHANGED, sync); window.removeEventListener('storage', sync); };
+    }, []);
+    function saveSettings(next: Settings) {
+        try { writeModelSettings(next); setSettings(next); setEditing(null); setError(''); }
+        catch { setError('无法保存模型设置，请检查浏览器存储权限。'); }
+    }
     function update(id: string, provider?: ModelProvider) {
         const current = readModelSettings();
+        if (provider?.kind === 'runtime' && !current.runtimeEnabled) return;
         const providers = current.providers.some(item => item.id === id)
             ? current.providers.flatMap(item => item.id === id ? provider ? [provider] : [] : [item])
             : provider ? [...current.providers, provider] : current.providers;
-        const next = { ...current, providers };
-        try { writeModelSettings(next); setSettings(next); setEditing(null); setError(''); }
-        catch { setError('无法保存模型设置，请检查浏览器存储权限。'); }
+        saveSettings({ ...current, providers });
+    }
+    function toggleRuntime() {
+        const current = readModelSettings();
+        saveSettings({ ...current, runtimeEnabled: !current.runtimeEnabled });
     }
     return <div className="model-settings">
         {editing ? <ProviderEditor initial={editing} saved={settings.providers.some(item => item.id === editing.id)} onBack={() => { setEditing(null); setError(''); }} save={value => update(value.id, value)} remove={() => update(editing.id)} /> : <>
             <div className="kv"><span className="model-service-identity v"><FreeServiceAvatar /><span>{freeService.modelName}<small>{freeService.description}</small></span></span></div>
-            {settings.providers.map(provider => <button key={provider.id} type="button" className="kv" onClick={() => setEditing(provider)}>
+            {visibleModelProviders(settings).map(provider => <button key={provider.id} type="button" className="kv" onClick={() => setEditing(provider)}>
                 <span className="v">{provider.name}<small>{provider.enabled ? `${provider.models.filter(item => item.enabled).length} 个模型已启用` : '已停用'}</small></span><Chevron />
             </button>)}
+            <button type="button" className="kv" role="switch" aria-label={RUNTIME_EXPERIMENT} aria-checked={settings.runtimeEnabled} onClick={toggleRuntime}>
+                <span className="v">{RUNTIME_EXPERIMENT}<small>通过 Local Runtime MCP 使用这台电脑上的浏览器模型</small></span><Toggle on={settings.runtimeEnabled} />
+            </button>
             <div className="model-actions">
                 <button type="button" className="btn" onClick={() => setEditing(newProvider())}>添加服务商</button>
-                {!settings.providers.some(item => item.kind === 'runtime') && <button type="button" className="btn" onClick={() => setEditing(runtimeProvider)}>连接 Local Runtime MCP</button>}
+                {settings.runtimeEnabled && !settings.providers.some(item => item.kind === 'runtime') && <button type="button" className="btn" onClick={() => setEditing(runtimeProvider)}>连接 Local Runtime MCP</button>}
             </div>
         </>}
         {error && <p role="alert" className="fine">{error}</p>}

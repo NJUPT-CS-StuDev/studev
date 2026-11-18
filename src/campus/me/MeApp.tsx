@@ -20,6 +20,7 @@ import type { Lab, TeachingClass, TeachingPeriod, TeachingTerm } from '@/world/f
 import { APPEARANCES, readAppearance, setAppearance, type Appearance } from '@/world/appearance';
 import { useWide } from '@/world/useUrl';
 import ModelSettings from '@/ai/ModelSettings';
+import InstructionSettings from '@/ai/InstructionSettings';
 import '../campus.css';
 
 const noSubscription = () => () => {};
@@ -55,7 +56,7 @@ function AccountFace({ account }: { account: CachedAccount | null }) {
 }
 
 function MePanel({ account, onClose }: { account: CachedAccount | null; onClose: () => void }) {
-    const [section, setSection] = useState<'home' | 'timetable' | 'models' | 'about'>('home');
+    const [section, setSection] = useState<'home' | 'timetable' | 'models' | 'instructions' | 'about'>('home');
     const [factsError, setFactsError] = useState(false);
     const [retry, setRetry] = useState(0);
     const { prefs } = usePreferences(true);
@@ -142,12 +143,13 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
     const runOn = run.on ?? (grade !== null && grade <= 2);
     const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { days: [], adjust: 0, ...current.run, ...patch } }));
     return (
-        <Sheet title={section === 'timetable' ? '课表设置' : section === 'models' ? '模型服务' : section === 'about' ? '帮助与关于' : '我'} top={section !== 'home' ? <button className="back" onClick={() => setSection('home')}>‹ 返回</button> : undefined} onClose={onClose}>
+        <Sheet title={section === 'timetable' ? '课表设置' : section === 'models' ? '模型服务' : section === 'instructions' ? '个人指令' : section === 'about' ? '帮助与关于' : '我'} top={section !== 'home' ? <button className="back" onClick={() => setSection('home')}>‹ 返回</button> : undefined} onClose={onClose}>
             {section === 'home' && <>
             <a className="kv me-account" href="/account/"><span className="v"><strong>{account?.nickname || '未登录'}</strong><small>{account ? '管理账号 · 任务和课表设置自动同步' : '登录后同步任务和课表设置'}</small></span><Chevron /></a>
             {account && <a className="kv" href="/members/"><span className="v">成员<small>查看头像、昵称与签名</small></span><Chevron /></a>}
             <button className="kv" onClick={() => setSection('timetable')}><span className="v">课表设置<small>{[prefs.class, info?.major].filter(Boolean).join(' · ') || '选择班级、管理课程与实验'}</small></span><Chevron /></button>
             <button className="kv" onClick={() => setSection('models')}><span className="v">模型服务<small>管理服务商和启用的模型</small></span><Chevron /></button>
+            <button className="kv" onClick={() => setSection('instructions')}><span className="v">个人指令<small>设置此浏览器里的 AI 协作方式</small></span><Chevron /></button>
             <div className="kv"><span className="v">外观</span><div className="choice">{APPEARANCES.map(([value, label]) => <button key={value} className={value === appearance ? 'on' : ''} onClick={() => { setLook(value); setAppearance(value); }}>{value === 'auto' ? '跟随系统' : label}</button>)}</div></div>
             <button className="kv" onClick={() => setSection('about')}><span className="v">帮助与关于</span><Chevron /></button>
             </>}
@@ -163,6 +165,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
             <button className="kv" onClick={() => setLayering(true)}><span className="v">冲突时的显示顺序</span><Chevron /></button>
             </>}
             {section === 'models' && <ModelSettings />}
+            {section === 'instructions' && <InstructionSettings />}
             {section === 'about' && <>
             <a className="kv" href={formLink('feedback', { where: '网页 · 我' })}><span className="v">意见反馈</span><Chevron /></a>
             <a className="kv" href={formLink('data')}><span className="v">提供校园资料<small>实验课表、讲座、校车、营业时间等</small></span><Chevron /></a>

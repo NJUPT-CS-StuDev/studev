@@ -12,7 +12,7 @@ const names = new Set(tools.map(tool => tool.function.name));
 
 /**
  * Teaching week (null unknown, 0 outside one), the chosen class and campus, and memory when the person enables it.
- * @typedef {{ week: number | null, class: string | null, campus: string, memory: string | null }} Situation
+ * @typedef {{ week: number | null, class: string | null, campus: string, memory: string | null, instructions?: string }} Situation
  */
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -36,6 +36,8 @@ function campusContext(situation) {
 export function instructions(situation, now = Date.now()) {
     const week = situation.week === null ? assistant.week.unknown : situation.week === 0 ? assistant.week.out : fill(assistant.week.in, situation);
     const lines = assistant.prompt.map(line => fill(line, { now: nanjingNow(now), week, me: campusContext(situation), diagrams: DIAGRAMS.join('、') }));
+    if (situation.instructions?.trim()) lines.push(assistant.instructionIntro, situation.instructions.trim());
+    else lines.push(assistant.style);
     if (situation.memory !== null) lines.push(...assistant.memory.map(line => fill(line, { memory: situation.memory.trim() || '（还没有）' })));
     return lines.join('\n');
 }
@@ -47,8 +49,16 @@ export const toolsFor = situation => situation.memory === null ? tools.filter(to
 export const ROUNDS = 8;
 
 /** The request a provider is sent, OpenAI's chat completions as every provider speaks it; `last`, it may call no more tools. */
-export const completionRequest = (model, messages, situation, now = Date.now(), last = false) =>
-    ({ model, stream: true, max_tokens: 4096, temperature: 0.2, ...(!last ? { tools: toolsFor(situation) } : {}), messages: [{ role: 'system', content: instructions(situation, now) + (last ? `\n${assistant.finish}` : '') }, ...messages] });
+/** @typedef {{type:'function',function:{name:string,description:string,parameters:object}}} ModelTool */
+/** @typedef {{tools?: ModelTool[], preferred?: string}} ToolContext */
+/** @param {ToolContext} context */
+export const completionRequest = (model, messages, situation, now = Date.now(), last = false, context = {}) => {
+    const available = context.tools ?? toolsFor(situation);
+    const preference = !last && available.some(tool => tool.function.name === context.preferred)
+        ? `\n本轮用户已选择工具 ${context.preferred}。参数齐全时优先调用；缺少必要信息时先向用户提问。` : '';
+    return { model, stream: true, max_tokens: 4096, temperature: 0.2, ...(!last ? { tools: available } : {}),
+        messages: [{ role: 'system', content: instructions(situation, now) + (last ? `\n${assistant.finish}` : preference) }, ...messages] };
+};
 
 /** Why the campus context is invalid, or null if it can be used. */
 export function situationError(value) {
@@ -58,6 +68,7 @@ export function situationError(value) {
     if (!(cls === null || (typeof cls === 'string' && /^[A-Za-z0-9]{2,16}$/.test(cls)))) return '班级无效。';
     if (typeof campus !== 'string' || !/^[\u4e00-\u9fa5]{1,8}$/.test(campus)) return '校区无效。';
     if (!(memory === null || (typeof memory === 'string' && memory.length <= 4000))) return '记忆太长了，删掉一些再问。';
+    if (value.instructions !== undefined && (typeof value.instructions !== 'string' || value.instructions.length > 12000)) return '指令太长了，请缩短后再问。';
     return null;
 }
 
@@ -66,6 +77,8 @@ export function situationError(value) {
  * turn with its tool calls put together, or why it is not one. What the model thinks before answering is dropped.
  */
 export class Completion {
+    /** @param {Iterable<string>} [allowed] */
+    constructor(allowed) { this.names = allowed ? new Set(allowed) : names; }
     content = ''; finish = null; calls = [];
     pending = ''; protocolError = false;
     /** One line of the stream; the piece of the answer it adds, or ''. */
@@ -111,7 +124,7 @@ export class Completion {
         const made = this.calls.filter(Boolean);
         // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
         const whole = ['stop', 'tool_calls'].includes(this.finish) || (this.finish === 'length' && !made.length && this.content);
-        if (!whole || made.some(call => !call.id || !names.has(call.function.name))) return { error: 'AI 回答未完成，请缩短问题后重试。' };
+        if (!whole || made.some(call => !call.id || !this.names.has(call.function.name))) return { error: 'AI 回答未完成，请缩短问题后重试。' };
         return { message: { role: 'assistant', content: this.content || null, ...(made.length ? { tool_calls: made } : {}) } };
     }
 }

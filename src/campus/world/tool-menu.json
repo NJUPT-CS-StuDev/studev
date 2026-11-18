@@ -1,0 +1,5 @@
+[
+  {"label":"资料与课程","tools":{"search":"搜索资料","read":"读原文","course":"看课程","curriculum":"查培养方案"}},
+  {"label":"课表与任务","tools":{"schedule":"查上课安排","timeline":"查看安排","exams":"查考试","list_tasks":"读取任务","suggest_slots":"找空闲时间","propose_task":"起草任务","remember":"记住"}},
+  {"label":"地图与教室","tools":{"find_place":"找地点","nearby":"找附近","route":"规划路线","free_rooms":"查空教室"}}
+]

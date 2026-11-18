@@ -2,7 +2,7 @@
 // it says), then `message` (the whole turn, tool calls put together) or `error`. With one's own key, the provider is
 // asked straight from this device and its stream read the same way the platform reads it (assistant.mjs).
 import { session } from '../../platform/client/api';
-import { Completion, completionRequest, type Situation } from '@/world/assistant.mjs';
+import { Completion, completionRequest, type Situation, type ToolContext } from '@/world/assistant.mjs';
 import { addressError, endpoint, type Own } from './model';
 
 export interface Call { id: string; type: 'function'; function: { name: string; arguments: string } }
@@ -11,12 +11,13 @@ export interface Message { role: 'user' | 'assistant' | 'tool'; content: string 
 export class AskError extends Error {}
 
 /** The platform checks the session and quota. Only the campus context goes to the model. */
-export async function ask(messages: Message[], situation: Situation, last: boolean, onDelta: (text: string) => void, signal: AbortSignal): Promise<Message> {
+export async function ask(messages: Message[], situation: Situation, last: boolean, onDelta: (text: string) => void, signal: AbortSignal, context: ToolContext = {}): Promise<Message> {
     // Reading the session also renews it when its short-lived pass has run out.
     const current = await session();
     if (!current) throw new AskError('请先登录。');
     const response = await fetch('/api/platform/ai', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-CSRF-Token': current.csrfToken }, body: JSON.stringify({ messages, last, situation: { week: situation.week, class: situation.class, campus: situation.campus, memory: situation.memory } }) });
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-CSRF-Token': current.csrfToken }, body: JSON.stringify({ messages, last, situation: { week: situation.week, class: situation.class, campus: situation.campus, memory: situation.memory },
+            toolNames: context.tools?.map(tool => tool.function.name), preferredTool: context.preferred }) });
     if (!response.ok || !response.body) {
         const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
         throw new AskError(body?.error?.message ?? 'AI 暂时无法响应，请稍后重试。');
@@ -40,13 +41,13 @@ export async function ask(messages: Message[], situation: Situation, last: boole
 }
 
 /** Asking with one's own key, straight from this device: no sign-in, nothing through the platform. */
-export async function askOwn(own: Own, messages: Message[], situation: Situation, last: boolean, onDelta: (text: string) => void, signal: AbortSignal): Promise<Message> {
+export async function askOwn(own: Own, messages: Message[], situation: Situation, last: boolean, onDelta: (text: string) => void, signal: AbortSignal, context: ToolContext = {}): Promise<Message> {
     const invalid = addressError(own.base);
     if (invalid) throw new AskError(invalid);
     let response: Response;
     try {
         response = await fetch(endpoint(own.base), { method: 'POST', signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
-            headers: { Authorization: `Bearer ${own.key}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(completionRequest(own.model, messages, situation, Date.now(), last)) });
+            headers: { Authorization: `Bearer ${own.key}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(completionRequest(own.model, messages, situation, Date.now(), last, context)) });
     } catch (failure) {
         if (signal.aborted) throw failure;
         throw new AskError('连不上你填的接口地址，检查一下地址和网络。');
@@ -58,7 +59,7 @@ export async function askOwn(own: Own, messages: Message[], situation: Situation
             : response.status === 404 ? `接口或模型不存在${detail ? `：${detail}` : '，检查地址和模型名。'}` : response.status === 429 ? '你的 API 请求太频繁，稍后再试。' : `你的 API 没有回答（${response.status}）${detail ? `：${detail}` : ''}`);
     }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    const completion = new Completion();
+    const completion = new Completion(last ? [] : context.tools?.map(tool => tool.function.name));
     let pending = '';
     let event = '';
     const take = (line: string) => {

@@ -1,4 +1,4 @@
-import { Completion, completionRequest, situationError, tools } from '../../campus/world/assistant.mjs';
+import { Completion, completionRequest, situationError, tools, toolsFor } from '../../campus/world/assistant.mjs';
 import { fail, readJson, response } from './common.mjs';
 
 /**
@@ -54,8 +54,11 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     const invalid = situationError(body.situation);
     if (invalid) fail(400, 'AI_SITUATION_INVALID', invalid);
     if (body.last !== undefined && typeof body.last !== 'boolean') fail(400, 'AI_MESSAGES_INVALID', '对话格式无效。');
-    const { week, campus, memory } = body.situation;
-    const situation = { week, class: body.situation.class, campus, memory };
+    const { week, campus, memory, instructions } = body.situation;
+    const situation = { week, class: body.situation.class, campus, memory, instructions };
+    if (body.toolNames !== undefined && (!Array.isArray(body.toolNames) || body.toolNames.length > names.size || body.toolNames.some(name => !names.has(name)))) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
+    if (body.preferredTool !== undefined && !names.has(body.preferredTool)) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
+    const available = toolsFor(situation).filter(tool => body.toolNames === undefined || body.toolNames.includes(tool.function.name));
     await repo.throttle('ai-minute', session.user.id, 12);
     // The free quota is shared by everyone; each person has a fair part of it a day, said only once it is used up.
     try { await repo.throttle('ai-day', session.user.id, DAILY, 86400); }
@@ -68,8 +71,8 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
         const upstream = await fetcher(member.url, { method: 'POST',
           headers: { Authorization: `Bearer ${env[member.key]}`, 'Content-Type': 'application/json' },
           signal: AbortSignal.any([begun.signal, AbortSignal.timeout(FINISH), ...asked]),
-          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true)) });
-        if (upstream.ok && upstream.body) return response.stream(relay(upstream.body));
+          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true, { tools: available, preferred: body.preferredTool })) });
+        if (upstream.ok && upstream.body) return response.stream(relay(upstream.body, body.last ? [] : available.map(tool => tool.function.name)));
         if (upstream.status === 429) limited++;
       } catch { if (context.request.signal?.aborted) throw new Error('asked no more'); }
       finally { clearTimeout(wait); }
@@ -84,12 +87,12 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
  * piece of what it says, then `message` with the whole turn, its tool calls put together, or `error`. What the model
  * thinks before answering is not passed on.
  */
-export function relay(body) {
+export function relay(body, allowed) {
   const encoder = new TextEncoder();
   return new ReadableStream({
     async start(controller) {
       const send = (event, data) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      const completion = new Completion();
+      const completion = new Completion(allowed);
       const take = (line) => { const piece = completion.take(line); if (piece) send('delta', { content: piece }); };
       let pending = '';
       try {

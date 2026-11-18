@@ -1,5 +1,5 @@
 import { createLRMCPClient } from '@local-runtime-mcp/browser-extension/sdk';
-import { Completion, completionRequest, type Situation } from '@/world/assistant.mjs';
+import { Completion, completionRequest, type Situation, type ToolContext } from '@/world/assistant.mjs';
 import { AskError, type Message } from './stream';
 import assistant from '@/world/assistant.json';
 
@@ -28,9 +28,9 @@ export async function runtimeModels(signal?: AbortSignal): Promise<RuntimeModel[
 }
 
 /** Same conversation and tools, without claiming control over a website model's sampling or token limits. */
-export function runtimeRequest(model: string, messages: Message[], situation: Situation, last: boolean, conversation_id: string) {
+export function runtimeRequest(model: string, messages: Message[], situation: Situation, last: boolean, conversation_id: string, context: ToolContext = {}) {
     if (!conversation_id) throw new AskError('本次对话缺少会话标识。');
-    const request = completionRequest(model, messages, situation, Date.now(), last);
+    const request = completionRequest(model, messages, situation, Date.now(), last, context);
     return { model: request.model, stream: request.stream, conversation_id, messages: request.messages, ...(request.tools ? { tools: request.tools } : {}) };
 }
 export type RuntimeRequest = ReturnType<typeof runtimeRequest>;
@@ -69,7 +69,7 @@ export async function askRuntime(request: RuntimeRequest, onDelta: (text: string
             throw new AskError('Local Runtime 未返回完整的模型回答。');
         }
         // Reuse the product's current validated tool-call decoder rather than a second tool protocol.
-        const completion = new Completion();
+        const completion = new Completion((request.tools ?? []).map(tool => tool.function.name));
         completion.take(`data: ${JSON.stringify({ choices: [{ delta: answer, finish_reason: choice?.finish_reason }] })}`);
         const result = completion.result();
         if (!result.message) throw new AskError(result.error);
