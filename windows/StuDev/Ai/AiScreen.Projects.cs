@@ -293,45 +293,62 @@ public sealed partial class AiScreen
     {
         if (busy) return;
         var resolved = existing is not null && existing.Id == projectFolder?.Id ? projectFolder : null;
-        var name = Kit.Field(resolved?.Name ?? existing?.Name ?? "", "项目名称", "项目名称");
+        var name = Kit.Field(resolved?.Name ?? existing?.Name ?? "", "填写项目名称", "项目名称");
         name.MaxLength = 100;
-        var course = Kit.Field(resolved?.Course ?? existing?.Course ?? "", "课程名称或代码（可选）", "关联课程");
+        var course = Kit.Field(resolved?.Course ?? existing?.Course ?? "", "选填，课程名称或代码", "关联课程");
         course.MaxLength = 120;
         var status = Kit.Text("", Role.Caption, "danger", wrap: true);
-        var body = Kit.Column(10, Pages.SheetHead(Pages.SheetTitle(existing is null ? "新建项目" : "项目设置"), () => App.Window?.Close()), name, course);
+        var body = Kit.Column(10, Pages.SheetHead(Pages.SheetTitle(existing is null ? "新建项目" : "项目设置"), () => App.Window?.Close()),
+            Kit.Column(4, Kit.Text("项目名称", Role.Caption, "muted"), name),
+            Kit.Column(4, Kit.Text("关联课程", Role.Caption, "muted"), course));
         body.Padding = new Thickness(22, 20, 22, 18);
         if (existing is not null)
         {
+            body.Children.Add(Kit.Hairline());
+            var folders = Kit.Column(4, Kit.Text("文件夹", Role.Label, bold: true));
+            var folderActions = new WrapRow { Gap = 14 };
             if (existing.Folder is { } path)
             {
-                body.Children.Add(Kit.Text(path, Role.Caption, "muted", wrap: true));
-                body.Children.Add(Kit.TextAction("重读项目文件", () =>
+                folders.Children.Add(Kit.Text("主目录 · " + path, Role.Caption, "muted", wrap: true));
+                if (resolved is not null) folderActions.Children.Add(Kit.TextAction("项目文件",
+                    () => new ProjectFiles(resolved, true, () => EditProject(existing)).Show(), colour: "ink"));
+                folderActions.Children.Add(Kit.TextAction("重读项目文件", () =>
                 {
                     App.Window?.Close();
                     var openChat = current;
                     ReadProject(); Open(openChat);
-                }));
-                if (resolved is not null) body.Children.Add(Kit.TextAction("项目文件", () => new ProjectFiles(resolved, true, () => EditProject(existing)).Show()));
+                }, colour: "muted"));
             }
-            else body.Children.Add(Kit.TextAction("绑定文件夹", () => App.Watch(BindProject(existing))));
-            body.Children.Add(Kit.TextAction("编辑项目指令", () => EditProjectInstructions(existing)));
-            body.Children.Add(Kit.TextAction("项目记忆", MemorySheet));
-            body.Children.Add(Kit.TextAction("附加文件夹", () => App.Watch(AttachFolder(existing))));
+            else
+            {
+                folders.Children.Add(Kit.Text("尚未绑定主目录", Role.Caption, "muted"));
+                folderActions.Children.Add(Kit.TextAction("绑定文件夹", () => App.Watch(BindProject(existing)), colour: "ink"));
+            }
+            folderActions.Children.Add(Kit.TextAction("附加文件夹", () => App.Watch(AttachFolder(existing)), colour: "ink"));
+            folders.Children.Add(folderActions);
+            if (existing.Attachments.Count > 0) folders.Children.Add(Kit.Text("参考目录", Role.Caption, "muted"));
             foreach (var attachment in existing.Attachments)
             {
-                var row = Kit.Column(0, Kit.Text(attachment, Role.Caption, "muted", wrap: true),
+                var referenceActions = new WrapRow { Gap = 14 };
+                referenceActions.Children.Add(
                     Kit.TextAction("查看参考文件", () =>
                     {
                         try { new ProjectFiles(ProjectFolder.OpenReference(attachment), false, () => EditProject(existing)).Show(); }
                         catch (Exception failure) when (ProjectFolder.IsProblem(failure)) { status.Text = "暂时无法读取参考文件夹。"; }
-                    }, colour: "ink"),
+                    }, colour: "ink"));
+                referenceActions.Children.Add(
                     Kit.TextAction("取消授权", () =>
                     {
                         var updated = existing with { Attachments = existing.Attachments.Where(item => item != attachment).ToList() };
                         projects.Put(updated); EditProject(updated);
                     }, colour: "muted"));
-                body.Children.Add(row);
+                folders.Children.Add(Kit.Column(1, Kit.Text(attachment, Role.Caption, wrap: true), referenceActions));
             }
+            body.Children.Add(folders);
+            body.Children.Add(Kit.Hairline());
+            body.Children.Add(Kit.Column(2, Kit.Text("指令与记忆", Role.Label, bold: true),
+                Kit.Line(14, Kit.TextAction("编辑项目指令", () => EditProjectInstructions(existing), colour: "ink"),
+                    Kit.TextAction("项目记忆", MemorySheet, colour: "ink"))));
         }
         body.Children.Add(status);
         var save = Kit.Action("保存", () =>

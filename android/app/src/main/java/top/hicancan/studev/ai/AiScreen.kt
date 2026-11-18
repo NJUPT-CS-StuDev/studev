@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
@@ -377,17 +378,23 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             val chat = chats.firstOrNull { it.id == current }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 if (chat != null && openedProject != null) Plain(openedProject.name, 11.sp, Ink.muted, maxLines = 1)
-                Plain(chat?.let { Chats.titleOf(it.title, it.thread) } ?: openedProject?.name ?: "AI", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                Plain(chat?.let { Chats.titleOf(it.title, it.thread) } ?: "AI", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
             }
             if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null, activeProject) }
         }
         if (shown.isEmpty()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
-                Plain(openedProject?.name ?: "有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
+                Plain(openedProject?.name ?: "有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).semantics { heading() })
                 composer()
                 if (openedProject == null) {
-                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        EXAMPLES.forEach { example ->
+                            Box(Modifier.heightIn(min = 34.dp).clip(RoundedCornerShape(10.dp)).background(Ink.sunken)
+                                .clickable { ask(example) }.padding(horizontal = 11.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                                Plain(example, 13.5.sp, Ink.muted)
+                            }
+                        }
                     }
                     Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
                 }
@@ -548,12 +555,15 @@ private data class OfferedService(val id: String?, val name: String, val models:
                                 val choice = if (group.id == null) ModelSelection() else ModelSelection(group.id, model.id)
                                 val on = choice == selected
                                 DropdownMenuItem({
-                                    Column {
-                                        Plain(model.id, 14.sp)
-                                        if (group.id == null) Plain(freeService.description, 12.sp, Ink.muted)
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            if (group.id == null) FreeServiceAvatar(Modifier.size(23.dp))
+                                            Plain(model.id, 14.sp, modifier = Modifier.weight(1f))
+                                            if (on) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand)
+                                        }
+                                        if (group.id == null) Plain(freeService.description, 12.sp, Ink.muted, modifier = Modifier.padding(top = 3.dp))
                                     }
-                                }, { opened = false; choose(choice) }, leadingIcon = if (group.id == null) { { FreeServiceAvatar(Modifier.size(23.dp)) } } else null,
-                                    trailingIcon = { if (on) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
+                                }, { opened = false; choose(choice) })
                             }
                         }
                         if (visible.isEmpty()) item { Plain("没有匹配的模型", 13.sp, Ink.muted, modifier = Modifier.padding(12.dp)) }

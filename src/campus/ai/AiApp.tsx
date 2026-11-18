@@ -29,6 +29,7 @@ import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
 import { invokeBrowserTool, listBrowserTools, needsToolConfirmation, readToolPreferences, toolCatalog, toolHistory, toolPermissionModes, TOOL_SETTINGS_CHANGED, writeToolPreferences, type BrowserTool, type PermissionMode, type ToolItem } from './toolCatalog';
 import ToolSettings from './ToolSettings';
+import InstructionSettings from './InstructionSettings';
 import { activeRemoteTools, invokeRemoteTool, REMOTE_MCP_CHANGED, type RemoteTool } from './remoteMcp';
 import ProjectSettings from './ProjectSettings';
 import { combinedInstructions, usePersonalInstructions } from './instructions';
@@ -347,7 +348,7 @@ export default function AiApp() {
     const [toolPreferences, setTools] = useState(readToolPreferences);
     const [browserTools, setBrowserTools] = useState<BrowserTool[]>([]);
     const [remoteTools, setRemoteTools] = useState<RemoteTool[]>([]);
-    const [mcpOpen, setMcpOpen] = useState(false);
+    const [utility, setUtility] = useState<'mcp' | 'instructions'>();
     const [approval, setApproval] = useState<{ label: string; detail: string; finish: (allow: boolean) => void } | null>(null);
     const canUseBrowser = Boolean(own || runtime);
     useEffect(() => {
@@ -878,7 +879,10 @@ export default function AiApp() {
                 </section>}
             </nav>
             <footer className="ai-side-footer">
-                <button className="ai-side-tools" type="button" onClick={() => { setMcpOpen(true); setSide(false); }}>MCP<Chevron /></button>
+                <div className="ai-side-utilities">
+                    <button type="button" onClick={() => { setUtility('mcp'); setSide(false); }}>MCP</button>
+                    <button type="button" onClick={() => { setUtility('instructions'); setSide(false); }}>个人指令</button>
+                </div>
                 <button className="ai-side-memory" type="button" onClick={() => { setMinding(true); setSide(false); }}><b>{project ? '项目记忆' : '记忆'}</b><small>{!memory.on ? '已关闭' : scopedMemory.current.text.trim() ? `记着 ${scopedMemory.current.text.split('\n').filter(line => line.trim()).length} 件事` : '还没有'}</small></button>
             </footer>
         </aside>
@@ -910,7 +914,9 @@ export default function AiApp() {
             {projects.filter(item => item.id !== projectId).map(item => <button type="button" className="kv" key={item.id} disabled={locked} onClick={() => void projectAction(() => moveChats(item))}><span className="v">{item.name}</span><Chevron /></button>)}
             <div className="ai-project-actions"><button className="btn go" disabled={locked} onClick={() => setNewProject('')}>新建项目</button></div>
         </Sheet>}
-        {mcpOpen && <Sheet title="MCP" onClose={() => setMcpOpen(false)}><ToolSettings /></Sheet>}
+        {utility && <Sheet title={utility === 'mcp' ? 'MCP' : '个人指令'} onClose={() => setUtility(undefined)}>
+            {utility === 'mcp' ? <ToolSettings /> : <InstructionSettings />}
+        </Sheet>}
         {approval && <Sheet title={`允许${approval.label}？`} onClose={() => approval.finish(false)}>
             <p className="fine lead">{approval.detail}</p>
             <div className="ai-tool-actions"><button type="button" className="btn" onClick={() => approval.finish(false)}>跳过</button><button type="button" className="btn primary" onClick={() => approval.finish(true)}>允许本次</button></div>

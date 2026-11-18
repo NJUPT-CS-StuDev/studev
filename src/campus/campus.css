@@ -487,7 +487,7 @@
 .ai .ai-main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
 /* The conversations, at the side: newest first, by when; a drawer on a narrow screen. */
 .ai .ai-side{flex:none;width:260px;display:flex;flex-direction:column;gap:6px;padding:12px 10px;background:color-mix(in srgb,var(--surface-sunken) 55%,var(--paper));border-right:1px solid var(--line);overflow:hidden}
-.ai .ai-side-new{display:flex;align-items:center;gap:8px;height:38px;padding:0 10px;border-radius:10px;color:var(--ink);font-size:14px;font-weight:500}.ai .ai-side-new:hover:not(:disabled){background:var(--surface-sunken)}.ai .ai-side-new svg{width:18px;height:18px}
+.ai .ai-side-new{align-self:flex-start;display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:var(--radius-control);background:color-mix(in srgb,var(--brand) 9%,transparent);color:var(--brand);font-size:14px;font-weight:600}.ai .ai-side-new:hover:not(:disabled){background:color-mix(in srgb,var(--brand) 15%,transparent)}.ai .ai-side-new svg{width:18px;height:18px}
 .ai .ai-side-list{flex:1;overflow-y:auto;margin:0 -4px;padding:0 4px}.ai .ai-side-list h4{margin:14px 10px 4px;font-size:12px;font-weight:500;color:var(--faint)}
 .ai .ai-chat{position:relative;display:flex;align-items:center;border-radius:10px}.ai .ai-chat:hover,.ai .ai-chat.menu{background:var(--surface-sunken)}.ai .ai-chat.on{background:color-mix(in srgb,var(--ink) 8%,transparent)}
 .ai .ai-chat-t{flex:1;min-width:0;height:36px;padding:0 10px;text-align:left;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
@@ -536,9 +536,10 @@
 .ai .ai-chat-t{mask-image:none}
 .ai .ai-chat-more:focus-visible{opacity:1}
 .ai .ai-side-footer{border-top:1px solid var(--line);padding-top:5px}
-.ai .ai-side-footer>button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:39px;padding:6px 10px;border:0;border-radius:8px;text-align:start;font-size:13.5px}
-.ai .ai-side-footer>button:hover{background:var(--surface-sunken)}
-.ai .ai-side-tools svg{height:15px;width:15px;color:var(--muted)}
+.ai .ai-side-footer button{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;padding:6px 10px;border:0;border-radius:8px;text-align:start;font-size:13.5px}
+.ai .ai-side-footer button:hover{background:var(--surface-sunken)}
+.ai .ai-side-utilities{display:flex;gap:4px;color:var(--muted)}
+.ai .ai-side-memory{width:100%}
 .ai .ai-hello h1{overflow-wrap:anywhere}
 .remote-mcp-name{text-align:start;min-width:0;overflow-wrap:anywhere}
 .remote-mcp-switch{display:grid;place-content:center;min-width:44px;min-height:40px}

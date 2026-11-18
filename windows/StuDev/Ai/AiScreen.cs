@@ -527,6 +527,8 @@ public sealed partial class AiScreen : Screen
         {
             Content = Kit.Line(8, Kit.Icon(Icons.Compose, 18, "brand", 20), Kit.Text("新对话", Role.Label, "brand", bold: true)),
             Height = 38, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy,
+            HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Stretch,
+            MinWidth = compact ? 116 : 0,
         };
         ((StackPanel)top.Content).VerticalAlignment = VerticalAlignment.Center;
         AutomationProperties.SetName(top, "新对话");
