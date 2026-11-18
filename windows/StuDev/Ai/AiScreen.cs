@@ -24,12 +24,12 @@ namespace StuDev.Ai;
 
 public sealed partial class AiScreen : Screen
 {
-    private static readonly string[] Examples = ["这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？"];
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     private readonly Campus campus = Campus.Shared;
     private readonly ModelProviders providers = ModelProviders.Shared;
     private readonly Assistant assistant = Assistant.Shared;
     private readonly ToolAccess toolAccess = ToolAccess.Shared;
+    private readonly ExternalMcp externalMcp = ExternalMcp.Shared;
     private readonly Grid side = new() { Width = 260 };
     private readonly Grid main = new();
     private StackPanel turns = new() { Spacing = 30 };
@@ -86,12 +86,14 @@ public sealed partial class AiScreen : Screen
             Draw();
         });
         toolAccess.Changed += () => DispatcherQueue.TryEnqueue(Draw);
+        externalMcp.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Draw();
     }
     public override void Shown(object? argument)
     {
         Draw();
         App.Watch(toolAccess.Refresh());
+        App.Watch(externalMcp.Refresh());
     }
 
     // ——— what is kept on this device ———
@@ -211,9 +213,12 @@ public sealed partial class AiScreen : Screen
 
     private List<JsonObject> ToolsFor(Situation situation, Own? provider) =>
         [.. assistant.ToolsFor(situation).Where(tool => toolAccess.CampusAllowed(Assistant.ToolName(tool))),
-         .. provider is null ? [] : toolAccess.BrowserAvailable.Select(tool => tool.Definition())];
+         .. provider is null ? [] : toolAccess.BrowserAvailable.Select(tool => tool.Definition()),
+         .. externalMcp.Available.Select(tool => tool.Definition())];
 
-    private static List<JsonObject> CampusHistory(IEnumerable<JsonObject> history)
+    private static bool IsExternal(string name) => name.StartsWith("mcp_", StringComparison.Ordinal);
+
+    private static List<JsonObject> HostedHistory(IEnumerable<JsonObject> history, HashSet<string> available)
     {
         var omitted = new HashSet<string>(StringComparer.Ordinal);
         var messages = new List<JsonObject>();
@@ -224,7 +229,8 @@ public sealed partial class AiScreen : Screen
             var campus = new JsonArray();
             foreach (var call in calls)
             {
-                if (((string)call!["function"]!["name"]!).StartsWith("web_", StringComparison.Ordinal))
+                var name = (string)call!["function"]!["name"]!;
+                if (name.StartsWith("web_", StringComparison.Ordinal) || IsExternal(name) && !available.Contains(name))
                     omitted.Add((string)call["id"]!);
                 else campus.Add(call.DeepClone());
             }
@@ -268,6 +274,8 @@ public sealed partial class AiScreen : Screen
         var available = ToolsFor(situation, provider);
         var names = available.Select(Assistant.ToolName).ToHashSet(StringComparer.Ordinal);
         var browser = toolAccess.BrowserAvailable.Where(tool => names.Contains(tool.Alias)).ToDictionary(tool => tool.Alias, StringComparer.Ordinal);
+        var external = externalMcp.Available.Where(tool => names.Contains(tool.Alias)).ToDictionary(tool => tool.Alias, StringComparer.Ordinal);
+        var externalTools = available.Where(tool => IsExternal(Assistant.ToolName(tool))).ToList();
         var lineage = start.Lineage(at);
         var preferredTool = lineage.LastOrDefault(node => (string?)node.Message["role"] == "user")?.PreferredTool;
         if (preferredTool is not null && !names.Contains(preferredTool))
@@ -309,7 +317,7 @@ public sealed partial class AiScreen : Screen
         }
         var history = lineage.Select(n => n.Message).ToList();
         if (!runtime) history = Recent(history);
-        if (provider is null) history = CampusHistory(history);
+        if (provider is null) history = HostedHistory(history, names);
         stop = new CancellationTokenSource(); var cancel = stop.Token;
         using var tools = new CampusTools(campus, available, Remember, proposal => { proposals = [.. proposals, proposal]; });
         var declined = new HashSet<string>(StringComparer.Ordinal);
@@ -327,7 +335,7 @@ public sealed partial class AiScreen : Screen
                 {
                     answer = provider is not null
                         ? await AskOwn(provider, history, situation, offered, preferred, last, cancel, conversationId, round == 0 ? retryRequest : null)
-                        : await AskFree(history, situation, offered, preferred, last, cancel);
+                        : await AskFree(history, situation, offered, externalTools, preferred, last, cancel);
                 }
                 finally { stream.Dispose(); stream = null; live.Child = null; }
                 history = [.. history, answer]; Grow(answer);
@@ -341,20 +349,24 @@ public sealed partial class AiScreen : Screen
                     {
                         var args = JsonNode.Parse((string)function["arguments"]!) as JsonObject ?? throw new ArgumentException("工具参数无效。");
                         var webpage = browser.GetValueOrDefault(name);
-                        if (!names.Contains(name) || (webpage is null ? !toolAccess.CampusAllowed(name) : !toolAccess.BrowserAllowed(webpage.Name)))
+                        var remote = external.GetValueOrDefault(name);
+                        if (!names.Contains(name) || (webpage is not null ? !toolAccess.BrowserAllowed(webpage.Name) : remote is null && !toolAccess.CampusAllowed(name)))
                             throw new ArgumentException("这个工具未启用。");
                         var confirm =
-                            webpage is not null && toolAccess.AskForBrowser ||
+                            (webpage is not null || remote is not null) && toolAccess.AskForBrowser ||
                             name == "remember" && toolAccess.AskForMemory(campus.Preferences.Part("memory")?["on"]?.GetValue<bool>() == true);
-                        if (declined.Contains(name) || (confirm && !await ConfirmTool(webpage is null ? "是否写入记忆？" : $"是否读取「{webpage.Title}」？",
-                            webpage is null ? (string?)args["fact"] ?? "" : webpage.Description, cancel)))
+                        var label = remote?.Title ?? webpage?.Title;
+                        var detail = remote is null
+                            ? webpage?.Description ?? (string?)args["fact"] ?? ""
+                            : $"{remote.Server.Name} · {remote.Server.Endpoint.Host}\n{remote.Description}\n\n{CallText(args)}";
+                        if (declined.Contains(name) || (confirm && !await ConfirmTool(label is null ? "是否写入记忆？" : $"是否使用「{label}」？", detail, cancel)))
                         {
                             declined.Add(name);
                             result = new JsonObject { ["error"] = "本轮未批准使用这个工具。", ["code"] = "tool_declined" };
                         }
-                        else result = webpage is null
-                            ? await tools.Execute(name, args, (string)call["id"]!)
-                            : await toolAccess.Invoke(webpage, args, cancel);
+                        else if (remote is not null) result = await externalMcp.Invoke(remote, args, cancel);
+                        else if (webpage is not null) result = await toolAccess.Invoke(webpage, args, cancel);
+                        else result = await tools.Execute(name, args, (string)call["id"]!);
                     }
                     // A tool that fails tells the model why, as the web and Android do; the answer goes on.
                     catch (UnknownReference failure) { result = new JsonObject { ["error"] = failure.Message, ["code"] = "unknown-reference" }; }
@@ -431,10 +443,11 @@ public sealed partial class AiScreen : Screen
     }
 
     private async Task<JsonObject> AskFree(List<JsonObject> history, Situation situation, List<JsonObject> available,
-        string? preferredTool, bool last, CancellationToken cancel)
+        List<JsonObject> external, string? preferredTool, bool last, CancellationToken cancel)
     {
         JsonObject? answer = null; string? failed = null;
         var body = new JsonObject { ["messages"] = new JsonArray([.. history.Select(m => m.DeepClone())]), ["last"] = last, ["situation"] = situation.ToJson() };
+        if (external.Count > 0) body["externalTools"] = new JsonArray([.. external.Select(tool => tool.DeepClone())]);
         if (!last) body["toolNames"] = new JsonArray([.. available.Select(tool => (JsonNode)JsonValue.Create(Assistant.ToolName(tool))!)]);
         if (!last && preferredTool is not null) body["preferredTool"] = preferredTool;
         await Account.Shared.Stream("/ai", body, (kind, data) =>
@@ -510,30 +523,65 @@ public sealed partial class AiScreen : Screen
     {
         side.Children.Clear(); side.RowDefinitions.Clear();
         side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); side.RowDefinitions.Add(new RowDefinition()); side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var top = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = Kit.Line(8, Kit.Icon(Icons.Compose, 18, "ink", 20), Kit.Text("新对话", Role.Label, bold: true)), Height = 38, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), Margin = new Thickness(10, 12, 10, 4), IsEnabled = !busy };
-        ((StackPanel)top.Content).VerticalAlignment = VerticalAlignment.Center;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(top, "新对话");
-        top.Click += (_, _) => Open(null);
-        var sideHeading = new StackPanel();
-        if (compact) sideHeading.Children.Add(Kit.TextAction("返回对话", () => { conversationsOpen = false; Draw(); }, Icons.Back));
-        ProjectPicker(sideHeading);
-        sideHeading.Children.Add(top);
-        var toolsEntry = Kit.TextAction("MCP", () => App.Open("me", "tools"), colour: "ink");
-        toolsEntry.Padding = new Thickness(10, 0, 10, 0);
-        toolsEntry.Margin = new Thickness(10, 0, 10, 0);
-        var personal = Kit.TextAction("个人指令", () => App.Open("me", "instructions"), colour: "ink");
-        personal.Margin = new Thickness(4, 0, 10, 0);
-        sideHeading.Children.Add(Kit.Line(4, toolsEntry, personal));
-        side.Children.Add(sideHeading);
-        var list = new StackPanel { Padding = new Thickness(10, 0, 10, 8) };
-        var visible = chats.Where(chat => chat.ProjectId == activeProject && chat.Archived == showArchived).ToList();
-        foreach (var (name, group) in Chats.Groups(visible, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
+        var top = new Tap(Paint.Faded("brand", .1), Paint.Faded("brand", .16))
         {
-            var h = Kit.Text(name, Role.Caption, "faint"); h.Margin = new Thickness(10, 14, 0, 4); list.Children.Add(h);
+            Content = Kit.Line(8, Kit.Icon(Icons.Compose, 18, "brand", 20), Kit.Text("新对话", Role.Label, "brand", bold: true)),
+            Height = 38, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy,
+        };
+        ((StackPanel)top.Content).VerticalAlignment = VerticalAlignment.Center;
+        AutomationProperties.SetName(top, "新对话");
+        top.Click += (_, _) =>
+        {
+            draft = ""; showArchived = false; organizing = false; selectedChats.Clear();
+            if (activeProject is null) projectsOpen = false;
+            Open(null);
+        };
+        var newRow = new Grid { Margin = new Thickness(12, 12, 12, 6), ColumnSpacing = compact ? 8 : 0 };
+        newRow.ColumnDefinitions.Add(new ColumnDefinition());
+        newRow.Children.Add(top);
+        if (compact)
+        {
+            newRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var close = Icon("收起侧栏", Icons.Cross, () => { conversationsOpen = false; Draw(); }, 16);
+            close.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(close, 1); newRow.Children.Add(close);
+        }
+        var sideHeading = new StackPanel();
+        sideHeading.Children.Add(newRow);
+        SideNavigation(sideHeading);
+        side.Children.Add(sideHeading);
+        var list = new StackPanel { Padding = new Thickness(12, 4, 12, 8), Spacing = 2 };
+        if (projectsOpen && activeProject is null) ProjectList(list);
+        else ChatList(list);
+        var scroll = new ScrollViewer { Content = list, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetRow(scroll, 1); side.Children.Add(scroll);
+        var footer = new Grid { Padding = new Thickness(14, 4, 14, 6), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
+        footer.ColumnDefinitions.Add(new ColumnDefinition());
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        footer.Children.Add(Kit.Line(14, Kit.TextAction("MCP", () => App.Open("me", "tools"), colour: "muted"),
+            Kit.TextAction("个人指令", () => App.Open("me", "instructions"), colour: "muted")));
+        if (activeProject is null)
+        {
+            var mind = Kit.TextAction("记忆", MemorySheet, colour: "muted");
+            Grid.SetColumn(mind, 1); footer.Children.Add(mind);
+        }
+        Grid.SetRow(footer, 2); side.Children.Add(footer);
+    }
+
+    private void ChatList(StackPanel list)
+    {
+        var visible = chats.Where(chat => chat.ProjectId == activeProject && chat.Archived == showArchived).ToList();
+        var pinned = visible.Where(chat => chat.Pinned).OrderByDescending(chat => chat.Updated).ToList();
+        var groups = Chats.Groups(visible.Where(chat => !chat.Pinned).ToList(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        if (pinned.Count > 0) groups.Insert(0, ("置顶", pinned));
+        foreach (var (name, group) in groups)
+        {
+            var h = Kit.Text(name, Role.Caption, "muted"); h.Margin = new Thickness(10, 12, 0, 4); list.Children.Add(h);
             foreach (var chat in group)
             {
                 var on = chat.Id == current;
-                var title = Kit.Text(Chats.TitleOf(chat.Title, chat.Thread), Role.Label); title.FontSize = 14; title.VerticalAlignment = VerticalAlignment.Center;
+                var title = Kit.Text(Chats.TitleOf(chat.Title, chat.Thread), Role.Label);
+                title.FontSize = 14; title.VerticalAlignment = VerticalAlignment.Center; title.TextTrimming = TextTrimming.CharacterEllipsis;
                 var row = new Tap(on ? Paint.Faded("ink", .08) : Paint.Clear, on ? null : Paint.Brush("surfaceSunken")) { Content = title, Height = 36, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10) };
                 AutomationProperties.SetName(row, Chats.TitleOf(chat.Title, chat.Thread));
                 var id = chat.Id;
@@ -564,22 +612,10 @@ public sealed partial class AiScreen : Screen
         }
         if (visible.Count == 0)
         {
-            var empty = showArchived ? "暂无归档对话。" : activeProject is null ? "问过的对话会列在这里。" : "这个项目还没有对话。";
-            var none = Kit.Text(empty, Role.Label, "faint", wrap: true);
+            var empty = showArchived ? "暂无归档对话" : "暂无对话";
+            var none = Kit.Text(empty, Role.Label, "muted", wrap: true);
             none.Margin = new Thickness(10, 14, 10, 0); list.Children.Add(none);
         }
-        var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetRow(scroll, 1); side.Children.Add(scroll);
-        var count = ActiveMemory.Split('\n').Count(l => l.Trim().Length > 0);
-        var memoryLabel = activeProject is null ? "记忆" : "项目记忆";
-        var mind = new Grid { Padding = new Thickness(12) };
-        mind.ColumnDefinitions.Add(new ColumnDefinition()); mind.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        mind.Children.Add(Kit.Text(memoryLabel, Role.Body, bold: true));
-        var state = Kit.Text(!memory.On ? "已关闭" : count > 0 ? $"记着 {count} 件事" : "还没有", Role.Caption, "muted"); state.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(state, 1); mind.Children.Add(state);
-        var mindTap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = mind, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mindTap, memoryLabel);
-        mindTap.Click += (_, _) => MemorySheet();
-        Grid.SetRow(mindTap, 2); side.Children.Add(mindTap);
     }
 
     private void Rename(string id)
@@ -625,7 +661,7 @@ public sealed partial class AiScreen : Screen
         // The bar gives the conversation its name. The picker stays with the question below.
         var bar = new Grid { Padding = new Thickness(14, 8, 14, 0), ColumnSpacing = 6, MinHeight = 48 };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
-        if (compact) bar.Children.Add(Icon("对话", Icons.Note, () => { conversationsOpen = true; Draw(); }, 16));
+        if (compact) bar.Children.Add(Icon("打开侧栏", Icons.Note, () => { conversationsOpen = true; Draw(); }, 16));
         if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); bar.Children.Add(title); }
         main.Children.Add(bar);
 
@@ -633,21 +669,11 @@ public sealed partial class AiScreen : Screen
         var composer = Composer();
         if (blank)
         {
-            var hello = new StackPanel { Spacing = 16, Padding = new Thickness(18, 0, 18, 80) };
-            var h = Kit.Text("有什么可以帮你？", Role.Title); h.FontSize = 28; h.HorizontalAlignment = HorizontalAlignment.Center; h.Margin = new Thickness(0, 0, 0, 6);
+            var hello = new StackPanel { Spacing = 18, Padding = new Thickness(18, 0, 18, 60) };
+            var name = projectFolder?.Name ?? projects.Find(activeProject)?.Name ?? "有什么可以帮你？";
+            var h = Kit.Text(name, Role.Title, wrap: true);
+            h.FontSize = 28; h.HorizontalAlignment = HorizontalAlignment.Center; h.TextAlignment = TextAlignment.Center;
             hello.Children.Add(h); hello.Children.Add(composer);
-            var examples = new WrapRow { Gap = 8, HorizontalAlignment = HorizontalAlignment.Center };
-            foreach (var example in Examples)
-            {
-                var words = Kit.Text(example, Role.Label, "muted"); words.FontSize = 13.5;
-                var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = words, Padding = new Thickness(14, 8, 14, 9), CornerRadius = new CornerRadius(18), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1) };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, example);
-                var asked = example; tap.Click += (_, _) => Send(asked);
-                examples.Children.Add(tap);
-            }
-            hello.Children.Add(examples);
-            if (campus.Preferences.Class is null) hello.Children.Add(Fine("先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。"));
-            hello.Children.Add(Fine("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。"));
             if (error.Length > 0) hello.Children.Add(Kit.Text(error, Role.Body, "danger", wrap: true));
             var centred = Pages.Centre(hello, 768); centred.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(centred, 1); main.Children.Add(centred);
@@ -673,7 +699,6 @@ public sealed partial class AiScreen : Screen
         DispatcherQueue.TryEnqueue(() => scroller.ChangeView(null, scroller.ScrollableHeight, null, true));
     }
 
-    private static TextBlock Fine(string text) { var t = Kit.Text(text, Role.Label, "muted", wrap: true); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; return t; }
 
     private Tap ModelPicker()
     {
@@ -815,7 +840,7 @@ public sealed partial class AiScreen : Screen
             {
                 if (providers.Resolve(choice, out var provider) is null)
                 {
-                    foreach (var (group, items) in ToolMenu.For(ToolsFor(SituationNow(), provider), toolAccess.BrowserAvailable))
+                    foreach (var (group, items) in ToolMenu.For(ToolsFor(SituationNow(), provider), toolAccess.BrowserAvailable, externalMcp.Available))
                     {
                         var matches = items.Where(item => item.Label.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                             item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -903,7 +928,8 @@ public sealed partial class AiScreen : Screen
             var calls = messages.SelectMany(m => m["tool_calls"]?.AsArray().Select(c => c!) ?? []).ToList();
             var answer = messages.LastOrDefault(m => (string?)m["role"] == "assistant" && m["content"] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 && m["tool_calls"] is null)?["content"]?.GetValue<string>();
             var steps = Steps.Of(calls.Select(c => new Call((string)c["id"]!, (string)c["function"]!["name"]!, (string)c["function"]!["arguments"]!)).ToList(), results,
-                name => toolAccess.Catalogue.FirstOrDefault(tool => tool.Alias == name)?.Title);
+                name => toolAccess.Catalogue.FirstOrDefault(tool => tool.Alias == name)?.Title ??
+                    externalMcp.Servers.SelectMany(externalMcp.Catalogue).FirstOrDefault(tool => tool.Alias == name)?.Title);
             var text = (string?)question.Message["content"] ?? "";
             var answering = last && busy;
             // The question, on the right.

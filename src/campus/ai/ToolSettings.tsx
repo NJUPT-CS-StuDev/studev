@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Toggle, TextAction } from '@/world/ui';
 import { campusToolGroups, listBrowserTools, readToolPreferences, writeToolPreferences, type BrowserTool } from './toolCatalog';
+import RemoteMcpSettings from './RemoteMcpSettings';
 
 export default function ToolSettings() {
     const [preferences, setPreferences] = useState(readToolPreferences);
@@ -42,6 +43,7 @@ export default function ToolSettings() {
         {browser.map(tool => <button type="button" className="kv" key={tool.capability} role="switch" aria-checked={preferences.enabledBrowser.includes(tool.capability)} onClick={() => toggle('enabledBrowser', tool.capability)}>
             <span className="v">{tool.label}</span><Toggle on={preferences.enabledBrowser.includes(tool.capability)} />
         </button>)}
+        <RemoteMcpSettings />
         {error && <p role="alert" className="fine">{error}</p>}
     </>;
 }

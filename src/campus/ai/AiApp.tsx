@@ -27,8 +27,9 @@ import { FreeServiceAvatar } from './FreeServiceAvatar';
 import { append, chain, choose, conversationId, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
-import { campusHistory, invokeBrowserTool, listBrowserTools, needsToolConfirmation, readToolPreferences, toolCatalog, toolPermissionModes, TOOL_SETTINGS_CHANGED, writeToolPreferences, type BrowserTool, type PermissionMode, type ToolItem } from './toolCatalog';
+import { invokeBrowserTool, listBrowserTools, needsToolConfirmation, readToolPreferences, toolCatalog, toolHistory, toolPermissionModes, TOOL_SETTINGS_CHANGED, writeToolPreferences, type BrowserTool, type PermissionMode, type ToolItem } from './toolCatalog';
 import ToolSettings from './ToolSettings';
+import { activeRemoteTools, invokeRemoteTool, REMOTE_MCP_CHANGED, type RemoteTool } from './remoteMcp';
 import ProjectSettings from './ProjectSettings';
 import { combinedInstructions, usePersonalInstructions } from './instructions';
 import { dropFolder, folderAvailable, newProjectFolder, openWorkspace, pickFolder, readProjects, saveFolder, saveProjectChat, saveProjects, savedFolder, workspaceRevisions, writeProjectInstructions, writeProjectMemory, type ChatRevision, type Folder, type Project, type Workspace } from './projects';
@@ -301,6 +302,8 @@ export default function AiApp() {
     const [projects, setProjects] = useState(readProjects);
     const restore = useRef(rememberedProject());
     const [projectId, setProjectId] = useState(() => kept.chats.find(item => item.id === kept.current)?.project);
+    const [sideView, setSideView] = useState<'chats' | 'projects' | 'project'>(() => projectId || restore.current ? 'project' : 'chats');
+    const [listMenu, setListMenu] = useState(false);
     const [workspace, setWorkspace] = useState<Workspace<Proposal>>();
     const [projectSettings, setProjectSettings] = useState(false);
     const [pendingProject, setPendingProject] = useState<{ project: Project; folder: Folder; view?: ProjectView }>();
@@ -343,6 +346,7 @@ export default function AiApp() {
     const free = choice.provider === FREE_MODEL.provider;
     const [toolPreferences, setTools] = useState(readToolPreferences);
     const [browserTools, setBrowserTools] = useState<BrowserTool[]>([]);
+    const [remoteTools, setRemoteTools] = useState<RemoteTool[]>([]);
     const [mcpOpen, setMcpOpen] = useState(false);
     const [approval, setApproval] = useState<{ label: string; detail: string; finish: (allow: boolean) => void } | null>(null);
     const canUseBrowser = Boolean(own || runtime);
@@ -358,6 +362,20 @@ export default function AiApp() {
         void listBrowserTools(controller.signal).then(tools => { if (!controller.signal.aborted) setBrowserTools(tools); }, () => {});
         return () => controller.abort();
     }, [canUseBrowser, toolPreferences]);
+    useEffect(() => {
+        let loading: AbortController | undefined;
+        function refresh() {
+            loading?.abort();
+            const controller = new AbortController(); loading = controller;
+            setRemoteTools([]);
+            void activeRemoteTools(AbortSignal.any([controller.signal, AbortSignal.timeout(8000)])).then(tools => {
+                if (!controller.signal.aborted) setRemoteTools(tools);
+            });
+        }
+        refresh();
+        window.addEventListener(REMOTE_MCP_CHANGED, refresh);
+        return () => { loading?.abort(); window.removeEventListener(REMOTE_MCP_CHANGED, refresh); };
+    }, []);
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     const opening = useRef(true);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -419,11 +437,15 @@ export default function AiApp() {
         diskDirty.current = next;
         setChat(next); failedRuntime.current = null;
         rememberProject(inProject, found?.id, revision?.name);
-        setProjectId(inProject); setWorkspace(work ?? undefined); setMulti(null); setSkill(undefined);
+        setProjectId(inProject); setSideView(inProject ? 'project' : 'chats'); setWorkspace(work ?? undefined); setMulti(null); setSkill(undefined); setListMenu(false);
         setKept(all => ({ ...all, current: found && !work ? found.id : null }));
         setError(''); setEditing(null); setDraft(''); setWaiting(null); setSide(false); setMenu(null); stuck.current = true;
     };
     const ordinary = () => { setProjectError(''); open(null, '', null); };
+    function showList(view: 'chats' | 'projects') {
+        if (view === 'chats' && projectId) { ordinary(); if (side) setSide(true); }
+        setSideView(view); setListMenu(false); setArchived(false); setSearch(''); setMulti(null);
+    }
     function keepProject(next: Project) {
         setProjects(current => {
             const all = [next, ...current.filter(item => item.id !== next.id)];
@@ -654,11 +676,12 @@ export default function AiApp() {
         return { week: term ? weekOfDate(term, today) ?? 0 : null, class: prefs.class ?? null, campus: prefs.campus ?? PRODUCT_CONFIG.CAMPUS.id,
             memory: memoryNow.current.on ? scopedMemory.current.text : null, instructions: combinedInstructions(personal, note) };
     };
-    const availableTools = toolCatalog(situation(), toolPreferences, canUseBrowser ? browserTools : []);
+    const availableTools = toolCatalog(situation(), toolPreferences, canUseBrowser ? browserTools : [], remoteTools);
     function approve(tool: ToolItem, args: unknown, signal: AbortSignal): Promise<boolean> {
         if (signal.aborted) return Promise.resolve(false);
         const fact = (args as { fact?: unknown } | null)?.fact;
-        const detail = tool.browser ? '读取结果会交给当前模型。' : typeof fact === 'string' ? fact : '把一条信息写入你的记忆。';
+        const detail = tool.remote ? `将以下参数发送给 ${tool.remote.connection.name}，并把返回的内容交给当前模型。\n${JSON.stringify(args).slice(0, 480)}`
+            : tool.browser ? '读取结果会交给当前模型。' : typeof fact === 'string' ? fact : '把一条信息写入你的记忆。';
         return new Promise(resolve => {
             const cancel = () => finish(false);
             const finish = (allow: boolean) => { signal.removeEventListener('abort', cancel); setApproval(null); resolve(allow); };
@@ -684,26 +707,32 @@ export default function AiApp() {
         const turn = lineage(thread, at);
         const preferred = turn.findLast(node => node.message.role === 'user')?.preferredTool;
         let history = turn.map(node => node.message);
-        if (!runtime) history = recent(free ? campusHistory(history) : history);
         setChat(current => ({ ...current, thread, model: choice })); setBusy(true); setError(''); setEditing(null); stuck.current = true;
         const controller = new AbortController(); stop.current = controller;
         let said = '';
         try {
             await docReady();
             const preferences = readToolPreferences();
-            const granted = canUseBrowser && preferences.enabledBrowser.length ? await listBrowserTools(controller.signal).catch(() => []) : [];
+            const [granted, external] = await Promise.all([
+                canUseBrowser && preferences.enabledBrowser.length ? listBrowserTools(controller.signal).catch(() => []) : [],
+                activeRemoteTools(AbortSignal.any([controller.signal, AbortSignal.timeout(4500)])),
+            ]);
             if (controller.signal.aborted) return;
-            const catalog = toolCatalog(situation(), preferences, granted);
+            setRemoteTools(external);
+            const catalog = toolCatalog(situation(), preferences, granted, external);
             const modelTools = catalog.map(tool => tool.definition);
             const byName = new Map(catalog.map(tool => [tool.definition.function.name, tool]));
+            history = toolHistory(history, new Set(byName.keys()), free);
+            if (!runtime) history = recent(history);
             const denied = new Set<string>();
             if (preferred && !byName.has(preferred)) throw new Error('所选工具暂不可用，请重新选择。');
+            if (retried?.request.tools?.some(tool => !byName.has(tool.function.name))) throw new Error('工具授权已变化，请生成新的回答。');
             for (let round = 0; round < ROUNDS; round++) {
                 const last = round === ROUNDS - 1;
                 said = ''; setStreaming(''); setLive(null); setModelStage('');
                 const doc = new DocStream();
                 const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); };
-                const context = { tools: modelTools, preferred: round === 0 ? preferred : undefined };
+                const context = { tools: modelTools.filter(tool => !denied.has(tool.function.name)), external: external.map(tool => tool.definition), preferred: round === 0 ? preferred : undefined };
                 const request = runtime ? round === 0 && retried ? retried.request : runtimeRequest(choice.model, history, situation(), last, cid, context) : null;
                 if (request) {
                     failedRuntime.current = { request, firstId };
@@ -727,8 +756,9 @@ export default function AiApp() {
                         }
                         if (controller.signal.aborted) return;
                         if (readToolPreferences().disabledCampus.includes(call.function.name)) throw new Error('这个工具已停用。');
-                        value = tool.browser ? { tool: tool.label, data: await invokeBrowserTool(tool.browser, args, controller.signal) } : await execute(call.function.name, args, call.id);
-                    } catch (failure) { value = { error: failure instanceof Error ? failure.message : '工具执行失败。', ...(tool?.browser ? { tool: tool.label } : {}), ...(failure instanceof UnknownReference ? { code: failure.code } : {}) }; }
+                        value = tool.browser ? { tool: tool.label, data: await invokeBrowserTool(tool.browser, args, controller.signal) }
+                            : tool.remote ? await invokeRemoteTool(tool.remote, args, controller.signal) : await execute(call.function.name, args, call.id);
+                    } catch (failure) { value = { error: failure instanceof Error ? failure.message : '工具执行失败。', ...(tool?.browser || tool?.remote ? { tool: tool.label } : {}), ...(failure instanceof UnknownReference ? { code: failure.code } : {}) }; }
                     const result: Message = { role: 'tool', tool_call_id: call.id, content: JSON.stringify(value) };
                     history = [...history, result]; grow(result);
                 }
@@ -812,35 +842,45 @@ export default function AiApp() {
         </div>;
     }
     return <div className={`sd ai campus-entry ${blank ? 'blank' : ''} ${side ? 'side-open' : ''}`}>
-        <aside className="ai-side" aria-label="对话">
+        <aside className="ai-side" aria-label="对话与项目">
             <button className="ai-side-new" disabled={locked || unavailableProject} onClick={() => open(null)}><Compose />新对话</button>
-            <button className="ai-side-new ai-side-tools" onClick={() => { setMcpOpen(true); setSide(false); }}>MCP</button>
-            <label className="ai-history-search"><Magnifier /><input type="search" placeholder="搜索对话" aria-label="搜索对话" value={search} onChange={event => setSearch(event.target.value)} /></label>
+            <div className="ai-side-tabs" role="tablist" aria-label="浏览">
+                <button type="button" role="tab" aria-selected={sideView === 'chats'} disabled={locked} onClick={() => showList('chats')}>对话</button>
+                <button type="button" role="tab" aria-selected={sideView !== 'chats'} disabled={locked} onClick={() => showList('projects')}>项目</button>
+            </div>
+            {sideView !== 'projects' && <label className="ai-history-search"><Magnifier /><input type="search" placeholder="搜索对话" aria-label="搜索对话" value={search} onChange={event => setSearch(event.target.value)} /></label>}
             <nav className="ai-side-list">
-                <section className="ai-project-nav" aria-label="项目">
-                    <div className="ai-project-heading"><h4>项目</h4><button type="button" className="ai-icon" aria-label="新建项目" title="新建项目" disabled={locked} onClick={() => setNewProject('')}>＋</button></div>
+                {sideView === 'projects' ? <section className="ai-project-nav" aria-label="项目">
+                    <div className="ai-project-heading"><h4>全部项目</h4><button type="button" className="ai-icon" aria-label="新建项目" title="新建项目" disabled={locked} onClick={() => setNewProject('')}>＋</button></div>
                     {projects.map(item => <button key={item.id} className={`ai-project-link${projectId === item.id ? ' on' : ''}`} disabled={locked} onClick={() => void projectAction(() => chooseProject(item))}>{item.name}</button>)}
                     {courseProjects.length > 0 && <details className="ai-course-projects"><summary>课程</summary>{courseProjects.map(item => <button key={item.course} className="ai-project-link" disabled={locked} onClick={() => {
                         const next = { ...item, id: newId(), instructions: `以《${item.name}》为当前课程。优先查阅本课程的讲解和资料，给出相关出处。` };
                         keepProject(next); enter(next);
                     }}>{item.name}</button>)}</details>}
                     {folderAvailable() && <button className="ai-project-link" disabled={locked} onClick={() => void projectAction(selectLocal)}>打开本地项目…</button>}
-                </section>
-                <section className="ai-history" aria-label="对话">
-                    <div className="ai-project-heading"><h4>{project?.name ?? '对话'}</h4>{project && <button className="ai-link" disabled={locked} onClick={ordinary}>全部对话</button>}</div>
-                    <div className="ai-project-controls">
-                        {project && <button className="ai-link" disabled={locked} onClick={() => setProjectSettings(true)}>项目设置</button>}
-                        {workspace && <button className="ai-link" disabled={locked} onClick={() => void projectAction(() => chooseProject(project!))}>刷新</button>}
-                        <button className="ai-link" disabled={locked} onClick={() => { setArchived(!archived); setMulti(null); }}>{archived ? '返回近期' : '归档'}</button>
-                        {!workspace && shownChats.length > 0 && <button className="ai-link" disabled={locked} onClick={() => setMulti(multi ? null : [])}>{multi ? '取消选择' : '多选'}</button>}
-                        {multi && multi.length > 0 && <button className="ai-link" disabled={locked} onClick={() => setMoving(multi)}>移入项目 · {multi.length}</button>}
+                </section> : <section className="ai-history" aria-label="对话">
+                    <div className="ai-project-heading ai-list-heading">
+                        <div>{project && <button className="ai-icon" type="button" aria-label="返回项目列表" disabled={locked} onClick={() => showList('projects')}><Back /></button>}
+                        <h4>{project?.name ?? (archived ? '已归档' : '最近')}</h4></div>
+                        <button className="ai-icon" type="button" aria-label={project ? '项目选项' : '对话选项'} aria-haspopup="menu" aria-expanded={listMenu} disabled={locked} onClick={() => { setMenu(null); setListMenu(!listMenu); }}><Dots /></button>
+                        {listMenu && <div className="ai-menu" role="menu">
+                            {project && <button role="menuitem" onClick={() => { setProjectSettings(true); setListMenu(false); }}>项目设置</button>}
+                            {project && workspace && <button role="menuitem" onClick={() => { setListMenu(false); void projectAction(() => openBound(project, workspace.folder, { id: project.id, chat: chat.id, revision: diskBase.current?.name })); }}>刷新项目</button>}
+                            <button role="menuitem" onClick={() => { setArchived(!archived); setMulti(null); setListMenu(false); }}>{archived ? '返回近期' : '查看归档'}</button>
+                            {!workspace && shownChats.length > 0 && <button role="menuitem" onClick={() => { setMulti(multi ? null : []); setListMenu(false); }}>{multi ? '取消选择' : '多选对话'}</button>}
+                        </div>}
                     </div>
+                    {multi && <div className="ai-project-controls"><button className="ai-link" onClick={() => setMulti(null)}>取消</button>
+                        <button className="ai-link" disabled={locked || !multi.length} onClick={() => setMoving(multi)}>移入项目 · {multi.length}</button></div>}
                     {shownChats.some(item => item.pinned) && <section><h4>置顶</h4>{shownChats.filter(item => item.pinned).sort((a, b) => b.updated - a.updated).map(row)}</section>}
                     {chatGroups(shownChats.filter(item => !item.pinned), Date.now()).map(group => <section key={group.name}><h4>{group.name}</h4>{group.chats.map(row)}</section>)}
                     {!shownChats.length && <p className="ai-side-none">{search.trim() ? '没有找到对话' : archived ? '没有归档对话' : '暂无对话'}</p>}
-                </section>
+                </section>}
             </nav>
-            <button className="ai-side-memory" onClick={() => { setMinding(true); setSide(false); }}><b>{project ? '项目记忆' : '记忆'}</b><small>{!memory.on ? '已关闭' : scopedMemory.current.text.trim() ? `记着 ${scopedMemory.current.text.split('\n').filter(line => line.trim()).length} 件事` : '还没有'}</small></button>
+            <footer className="ai-side-footer">
+                <button className="ai-side-tools" type="button" onClick={() => { setMcpOpen(true); setSide(false); }}>MCP<Chevron /></button>
+                <button className="ai-side-memory" type="button" onClick={() => { setMinding(true); setSide(false); }}><b>{project ? '项目记忆' : '记忆'}</b><small>{!memory.on ? '已关闭' : scopedMemory.current.text.trim() ? `记着 ${scopedMemory.current.text.split('\n').filter(line => line.trim()).length} 件事` : '还没有'}</small></button>
+            </footer>
         </aside>
         {side && <div className="ai-scrim" onClick={() => setSide(false)} />}
         {projectError && <div className="ai-project-error" role="alert"><span>{projectError}</span><button className="ai-link" onClick={() => setProjectError('')}>关闭</button></div>}
@@ -879,7 +919,7 @@ export default function AiApp() {
         <div className="ai-main">
         <CampusHeader className="ai-bar">
             <button className="ai-icon ai-menu-btn" aria-label="对话列表" onClick={() => setSide(true)}><Bars /></button>
-            <span className="ai-title">{blank ? project?.name ?? '' : titleOf(current ?? { title: '', thread: chat.thread })}</span>
+            <span className="ai-title">{blank ? '' : titleOf(current ?? { title: '', thread: chat.thread })}</span>
             {!blank && <button className="ai-icon ai-bar-new" aria-label="新对话" title="新对话" disabled={locked} onClick={() => open(null)}><Compose /></button>}
         </CampusHeader>
         <div className="ai-scroll" ref={scroller}><div className="ai-col">
@@ -887,8 +927,7 @@ export default function AiApp() {
             <h1>{project?.name ?? '有什么可以帮你？'}</h1>
             {composer}
             {!waiting && !project && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} disabled={runtimeOff} onClick={() => void send(example)}>{example}</button>)}</div>}
-            {!prefs.class && <p className="fine">先在“我”里选好班级，AI 才能看到你的课表；搜索和空教室现在就能问。</p>}
-            {!project && <p className="fine">可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。普通对话保存在当前设备。</p>}
+            {!project && !prefs.class && <p className="fine">在「我」里选好班级后，即可询问个人课表。</p>}
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
         <div className="ai-turns" aria-live="polite">{turns.map(turn => {

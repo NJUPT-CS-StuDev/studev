@@ -142,7 +142,7 @@ val packageCampusData = tasks.register<CampusDataTask>("packageCampusData") {
     assetDir.set(layout.buildDirectory.dir("generated/campus/assets"))
 }
 val packageWorld = tasks.register<WorldTask>("packageWorld") {
-    sources.from(listOf("tools.json", "assistant.json", "channels.json").map { rootProject.layout.projectDirectory.file("../src/campus/world/$it") })
+    sources.from(listOf("tools.json", "assistant.json", "tool-menu.json", "channels.json").map { rootProject.layout.projectDirectory.file("../src/campus/world/$it") })
     assetDir.set(layout.buildDirectory.dir("generated/world/assets"))
 }
 val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtures") {

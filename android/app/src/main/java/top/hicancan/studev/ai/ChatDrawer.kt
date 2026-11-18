@@ -25,7 +25,7 @@ internal data class CourseProject(val code: String, val name: String)
     chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean, memory: Memory,
     openChat: (String) -> Unit, newChat: (String?) -> Unit, openProject: (String) -> Unit,
     saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject?) -> Unit,
-    rename: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit,
+    rename: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit,
 ) {
     var view by remember(activeProject) { mutableStateOf(if (activeProject == null) "chats" else "projects") }
     var projectId by remember(activeProject) { mutableStateOf(activeProject) }
@@ -113,6 +113,7 @@ internal data class CourseProject(val code: String, val name: String)
             }
         }
         HorizontalDivider(color = Ink.line)
+        KeyRow(null, "MCP", "管理 AI 可用的校园工具", chevron = true, onClick = configureTools)
         KeyRow(null, "个人指令", chevron = true, onClick = { editInstructions(null) })
         KeyRow(null, if (activeProject == null) "记忆" else "项目记忆", if (!memory.on) "已关闭" else memory.text.lines().count { it.isNotBlank() }.let { if (it > 0) "记着 $it 件事" else "还没有" }, chevron = true, onClick = mind)
     }

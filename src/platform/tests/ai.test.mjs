@@ -18,6 +18,74 @@ async function events(result) {
 
 const situation = { week: 11, class: 'B240402', campus: '仙林', memory: null };
 
+const resolveLibrary = 'mcp_1234567890ab_resolve-library-id';
+const queryDocs = 'mcp_1234567890ab_query-docs';
+const externalTool = (name = resolveLibrary, description = '查文档') => ({ type: 'function', function: {
+  name, description, parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false },
+} });
+const freeRequest = body => ({ request: new Request('https://studev.test/api/platform/ai', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '找框架文档' }], situation, ...body }),
+}) });
+const aiService = fetcher => createAiService({ identity: { async authenticate() { return { user: { id: 'u' } }; } },
+  repo: { async throttle() {} }, env: { MAKERS_MODELS_KEY: 'k', NVIDIA_API_KEY: 'n' }, fetcher });
+
+test('AI relays active external definitions and matching history while keeping provider-only transport', async () => {
+  const calls = [];
+  const handler = aiService(async (url, init) => {
+    assert.equal(url, POOL[0].url);
+    assert.equal(init.headers.Authorization, 'Bearer k');
+    calls.push(JSON.parse(init.body));
+    assert.doesNotMatch(init.body, /private-endpoint|private-credential/);
+    const choice = calls.length === 1
+      ? { delta: { tool_calls: [{ index: 0, id: 'call-docs', function: { name: queryDocs, arguments: '{"query":"docs"}' } }] }, finish_reason: 'tool_calls' }
+      : { delta: { content: '资料已查到。' }, finish_reason: 'stop' };
+    return sse(frame(choice) + 'data: [DONE]\n\n');
+  });
+  const definition = externalTool(queryDocs, '查阅\u0000  文档\u202e\n  指南');
+  definition.transport = 'https://private-endpoint.example';
+  definition.function.authorization = 'private-credential';
+  definition.function.parameters.$schema = 'https://json-schema.org/draft/2020-12/schema';
+  definition.function.parameters.properties.query.description = '请求\u0000  内容';
+  const externalTools = [externalTool(), definition];
+  const first = await events(await handler(freeRequest({ externalTools, preferredTool: queryDocs, situation: { ...situation, memory: '' } }), '/api/platform/ai'));
+  const emitted = first.at(-1).data.message;
+  assert.equal(emitted.tool_calls[0].function.name, queryDocs);
+  assert.equal(calls[0].tools.length, 17);
+  assert.deepEqual(calls[0].tools.at(-1), { type: 'function', function: { name: queryDocs, description: '查阅 文档 指南', parameters: {
+    type: 'object', properties: { query: { type: 'string', description: '请求 内容' } }, required: ['query'], additionalProperties: false,
+  } } });
+  assert.match(calls[0].messages[0].content, new RegExp(queryDocs));
+
+  const history = [{ role: 'user', content: '查文档' }, emitted, { role: 'tool', tool_call_id: 'call-docs', content: '文档片段' }];
+  await events(await handler(freeRequest({ messages: history, externalTools, toolNames: ['search', resolveLibrary], preferredTool: queryDocs }), '/api/platform/ai'));
+  assert.deepEqual(calls[1].tools.map(tool => tool.function.name), ['search', resolveLibrary]);
+  assert.deepEqual(calls[1].messages.slice(1), history);
+  assert.doesNotMatch(calls[1].messages[0].content, new RegExp(queryDocs));
+  const final = await events(await handler(freeRequest({ messages: history, externalTools, last: true }), '/api/platform/ai'));
+  assert.equal(final.at(-1).data.message.content, '资料已查到。');
+  assert.equal(calls[2].tools, undefined);
+  assert.deepEqual(calls[2].messages.slice(1), history);
+  await assert.rejects(handler(freeRequest({ messages: history, externalTools: [externalTool()] }), '/api/platform/ai'), error => error.status === 400 && error.code === 'AI_MESSAGES_INVALID');
+  await assert.rejects(handler(freeRequest({ externalTools: [externalTool()], toolNames: [queryDocs] }), '/api/platform/ai'), error => error.status === 400 && error.code === 'AI_TOOLS_INVALID');
+  await assert.rejects(handler(freeRequest({ preferredTool: queryDocs }), '/api/platform/ai'), error => error.status === 400 && error.code === 'AI_TOOLS_INVALID');
+  assert.equal(calls.length, 3);
+});
+
+test('AI rejects duplicate, oversized or invalid external catalogs before inference', async () => {
+  const invalid = [{ ...externalTool(), type: 'mcp' }, externalTool('timeline'), externalTool(resolveLibrary + '\n'), externalTool(resolveLibrary, '字'.repeat(601))];
+  for (const parameters of [[], { type: 'string' }, { type: 'object', $ref: 'https://outside.example/remote-schema' }, { type: 'object', default: '字'.repeat(2800) }]) {
+    const candidate = externalTool(); candidate.function.parameters = parameters; invalid.push(candidate);
+  }
+  const nested = externalTool();
+  nested.function.parameters.properties.query = Array.from({ length: 13 }).reduce(schema => ({ not: schema }), { type: 'string' });
+  invalid.push(nested);
+  const tooMany = Array.from({ length: 17 }, (_, i) => externalTool(`mcp_1234567890ab_tool_${i}`));
+  const handler = aiService(() => { throw new Error('invalid tools must not reach inference'); });
+  for (const externalTools of [...invalid.map(tool => [tool]), null, [externalTool(), externalTool()], tooMany]) {
+    await assert.rejects(handler(freeRequest({ externalTools }), '/api/platform/ai'), error => error.status === 400 && error.code === 'AI_TOOLS_INVALID');
+  }
+});
+
 test('AI checks the signed-in quota, sends campus context without account identity, and streams the model turn', async () => {
   let calls = 0; const limits = [], auth = [];
   const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user', realName: '测试同学', studentId: 'TEST000001' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { MAKERS_MODELS_KEY: 'test-provider-secret', NVIDIA_API_KEY: 'test-nvidia-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {

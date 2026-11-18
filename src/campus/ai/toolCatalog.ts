@@ -3,9 +3,10 @@ import { toolsFor, type ModelTool, type Situation } from '@/world/assistant.mjs'
 import groups from '@/world/tool-menu.json';
 import permissionModes from '@/world/permission-modes.json';
 import type { Message } from './stream';
+import type { RemoteTool } from './remoteMcp';
 
 export type BrowserTool = { capability: string; label: string; definition: ModelTool };
-export type ToolItem = { label: string; group: string; definition: ModelTool; browser?: BrowserTool };
+export type ToolItem = { label: string; group: string; definition: ModelTool; browser?: BrowserTool; remote?: RemoteTool };
 export type PermissionMode = 'review' | 'read' | 'approved';
 export type ToolPreferences = { disabledCampus: string[]; enabledBrowser: string[]; mode?: PermissionMode };
 const STORAGE = 'studev_ai_tools';
@@ -23,9 +24,8 @@ export function readToolPreferences(): ToolPreferences {
         return { disabledCampus: names(saved?.disabledCampus), enabledBrowser: names(saved?.enabledBrowser), mode };
     } catch { return { disabledCampus: [], enabledBrowser: [] }; }
 }
-
 export function needsToolConfirmation(mode: PermissionMode, item: ToolItem): boolean {
-    return item.definition.function.name === 'remember' && mode !== 'approved' || Boolean(item.browser && mode === 'review');
+    return item.definition.function.name === 'remember' && mode !== 'approved' || Boolean((item.browser || item.remote) && mode === 'review');
 }
 
 export function writeToolPreferences(preferences: ToolPreferences) {
@@ -77,24 +77,26 @@ export async function invokeBrowserTool(tool: BrowserTool, input: unknown, signa
     }
 }
 
-export function toolCatalog(situation: Situation, preferences: ToolPreferences, browser: readonly BrowserTool[]): ToolItem[] {
+export function toolCatalog(situation: Situation, preferences: ToolPreferences, browser: readonly BrowserTool[], remote: readonly RemoteTool[] = []): ToolItem[] {
     const available = new Map((toolsFor(situation) as ModelTool[]).map(tool => [tool.function.name, tool]));
     const campus = groups.flatMap(group => Object.entries(group.tools).flatMap(([name, label]) => {
         const definition = available.get(name);
         return definition && label && !preferences.disabledCampus.includes(name) ? [{ label, group: group.label, definition }] : [];
     }));
     return [...campus, ...browser.filter(tool => preferences.enabledBrowser.includes(tool.capability))
-        .map(tool => ({ label: tool.label, group: BROWSER_GROUP, definition: tool.definition, browser: tool }))];
+        .map(tool => ({ label: tool.label, group: BROWSER_GROUP, definition: tool.definition, browser: tool })),
+        ...remote.map(tool => ({ label: tool.label, group: tool.connection.name, definition: tool.definition, remote: tool }))];
 }
 
-/** The hosted quota has the fixed campus contract. Keep prior browser calls and raw results off that transport. */
-export function campusHistory(messages: Message[]): Message[] {
+/** Strip earlier calls and their results together when this model will not have the corresponding capability. */
+export function toolHistory(messages: Message[], available: ReadonlySet<string>, hosted: boolean): Message[] {
     const removed = new Set<string>();
     return messages.flatMap(message => {
         if (message.role === 'tool' && message.tool_call_id && removed.has(message.tool_call_id)) return [];
         if (!message.tool_calls) return [message];
         const tool_calls = message.tool_calls.filter(call => {
-            if (!call.function.name.startsWith('web_')) return true;
+            const name = call.function.name;
+            if (!(name.startsWith('mcp_') || name.startsWith('web_')) || available.has(name) && !(hosted && name.startsWith('web_'))) return true;
             removed.add(call.id);
             return false;
         });

@@ -305,6 +305,7 @@ public static class Icons
     public const string Chevron = "M6,3.5 L10.5,8 L6,12.5";
     public const string Back = "M10,3.5 L5.5,8 L10,12.5";
     public const string Cross = "M4,4 L12,12 M12,4 L4,12";
+    public const string More = "M3.6,8 H4.2 M7.7,8 H8.3 M11.8,8 H12.4";
     public const string Bell = "M4.5,11 V7.5 A3.5,3.5 0 0 1 11.5,7.5 V11 L12.5,12.5 H3.5 Z M6.8,14 H9.2";
     public const string Note = "M3.5,4.5 H12.5 M3.5,8 H12.5 M3.5,11.5 H8.5";
     /** 20-unit icons. */
@@ -313,6 +314,7 @@ public static class Icons
     public const string Magnifier = "M14.5,9 A5.5,5.5 0 1 1 3.5,9 A5.5,5.5 0 1 1 14.5,9 Z M13.2,13.2 L16.5,16.5";
     public const string Compose = "M9,4 H5.5 A2,2 0 0 0 3.5,6 V14.5 A2,2 0 0 0 5.5,16.5 H14 A2,2 0 0 0 16,14.5 V11 M14.5,3.5 L16.5,5.5 L10,12 H8 V10 Z";
     public const string Plus = "M10,4.5 V15.5 M4.5,10 H15.5";
+    public const string Folder = "M2.5,6 A1.5,1.5 0 0 1 4,4.5 H8 L10,6.5 H16 A1.5,1.5 0 0 1 17.5,8 V14.5 A1.5,1.5 0 0 1 16,16 H4 A1.5,1.5 0 0 1 2.5,14.5 Z";
     public const string Again = "M15.5,10 A5.5,5.5 0 1 1 13.9,6.1 M14.5,3.5 V6.5 H11.5";
     public const string Copy = "M9,7 H14.5 A2,2 0 0 1 16.5,9 V14.5 A2,2 0 0 1 14.5,16.5 H9 A2,2 0 0 1 7,14.5 V9 A2,2 0 0 1 9,7 Z M13,7 V5.5 A2,2 0 0 0 11,3.5 H5.5 A2,2 0 0 0 3.5,5.5 V11 A2,2 0 0 0 5.5,13 H7";
     public const string Up = "M10,15.5 V4.5 M5.5,9 L10,4.5 L14.5,9";

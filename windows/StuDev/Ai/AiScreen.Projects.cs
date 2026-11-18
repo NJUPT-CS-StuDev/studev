@@ -18,6 +18,7 @@ public sealed partial class AiScreen
     private string? projectStatus;
     private bool showArchived;
     private bool organizing;
+    private bool projectsOpen;
     private readonly HashSet<string> selectedChats = new(StringComparer.Ordinal);
     private (string Label, string Text)? draftSkill;
 
@@ -175,13 +176,33 @@ public sealed partial class AiScreen
         return (await picker.PickSingleFolderAsync())?.Path;
     }
 
-    private void ProjectPicker(StackPanel heading)
+    private void SideNavigation(StackPanel heading)
     {
         var currentProject = projects.Find(activeProject);
-        var name = projectFolder?.Name ?? currentProject?.Name ?? "普通对话";
-        var picker = Kit.TextAction(name, () => { }, Icons.Chevron, "ink");
-        picker.Margin = new Thickness(10, 2, 10, 0);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(picker, $"切换项目，当前 {name}");
+        var row = new Grid { ColumnSpacing = 5, Margin = new Thickness(12, 0, 12, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        if (currentProject is null)
+        {
+            var tabs = Kit.Tabs([("chats", "对话"), ("projects", "项目")], projectsOpen ? "projects" : "chats", selected =>
+            {
+                projectsOpen = selected == "projects";
+                organizing = false; selectedChats.Clear(); showArchived = false;
+                DrawSide();
+            }, gap: 24);
+            Grid.SetColumnSpan(tabs, 2); row.Children.Add(tabs);
+        }
+        else
+        {
+            var back = Icon("返回项目列表", Icons.Back, () => { projectsOpen = true; EnterProject(null); }, 16, !busy);
+            row.Children.Add(back);
+            var title = Kit.Text(projectFolder?.Name ?? currentProject.Name, Role.Body, bold: true);
+            title.TextTrimming = TextTrimming.CharacterEllipsis;
+            title.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(title, 1); row.Children.Add(title);
+        }
+
         var menu = new MenuFlyout();
         void Option(string label, Action pick)
         {
@@ -189,41 +210,66 @@ public sealed partial class AiScreen
             item.Click += (_, _) => pick();
             menu.Items.Add(item);
         }
-        Option("普通对话", () => EnterProject(null));
-        foreach (var project in projects.All) Option(project.Name, () => EnterProject(project.Id));
-        menu.Items.Add(new MenuFlyoutSeparator());
-        Option("新建项目", () => EditProject(null));
-        Option("打开项目文件夹", () => App.Watch(OpenProjectFolder()));
-        picker.Click += (_, _) => menu.ShowAt(picker);
-        picker.IsEnabled = !busy;
-        heading.Children.Add(picker);
-        var operations = Kit.Line(10);
-        operations.Margin = new Thickness(10, 0, 10, 0);
+        if (currentProject is null && projectsOpen)
+            Option("打开项目文件夹", () => App.Watch(OpenProjectFolder()));
         if (currentProject is not null)
-            operations.Children.Add(Kit.TextAction("项目设置", () => EditProject(currentProject), colour: "muted"));
+            Option("项目设置", () => EditProject(currentProject));
         if (projectFolder is not null || currentProject?.Attachments.Count > 0)
-            operations.Children.Add(Kit.TextAction("选择技能", PickSkill, colour: "muted"));
-        if (!Bound(activeProject))
-            operations.Children.Add(Kit.TextAction(organizing ? "完成整理" : "批量移动", () =>
-            {
-                if (busy) return;
-                organizing = !organizing; selectedChats.Clear(); DrawSide();
-            }, colour: "muted"));
-        heading.Children.Add(operations);
-        var listTools = Kit.Line(10, Kit.TextAction(showArchived ? "返回对话" : "已归档", () =>
+            Option("选择技能", PickSkill);
+        if (currentProject is not null || !projectsOpen)
         {
-            showArchived = !showArchived; organizing = false; selectedChats.Clear(); DrawSide();
-        }, colour: "muted"));
-        listTools.Margin = new Thickness(10, 0, 10, 0);
-        if (organizing && selectedChats.Count > 0)
-            listTools.Children.Add(Kit.TextAction($"移动 {selectedChats.Count} 项", () => MoveChats([.. selectedChats]), colour: "ink"));
-        heading.Children.Add(listTools);
+            if (!Bound(activeProject) && !showArchived && chats.Any(chat => chat.ProjectId == activeProject && !chat.Archived))
+                Option("批量移动", () => { organizing = true; selectedChats.Clear(); DrawSide(); });
+            Option(showArchived ? "查看对话" : "已归档", () =>
+            {
+                showArchived = !showArchived; organizing = false; selectedChats.Clear(); DrawSide();
+            });
+        }
+        Tap? more = null;
+        more = Icon(currentProject is null ? projectsOpen ? "更多项目操作" : "更多对话操作" : "更多项目操作",
+            Icons.More, () => menu.ShowAt(more!), 16, !busy);
+        more.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(more, 2); row.Children.Add(more);
+        heading.Children.Add(row);
+
+        if (organizing || showArchived)
+        {
+            var tools = Kit.Line(12, Kit.TextAction(organizing ? "取消选择" : "返回对话",
+                () => { showArchived = false; organizing = false; selectedChats.Clear(); DrawSide(); }, colour: "muted"));
+            tools.Margin = new Thickness(16, 0, 12, 0);
+            if (organizing && selectedChats.Count > 0)
+                tools.Children.Add(Kit.TextAction($"移动 {selectedChats.Count} 项", () => MoveChats([.. selectedChats]), colour: "brand"));
+            heading.Children.Add(tools);
+        }
         if (projectStatus is { } status)
         {
             var feedback = Kit.Text(status, Role.Caption, "muted", wrap: true);
-            feedback.Margin = new Thickness(12, 4, 12, 8);
+            feedback.Margin = new Thickness(16, 4, 12, 8);
             heading.Children.Add(feedback);
         }
+    }
+
+    private void ProjectList(StackPanel list)
+    {
+        foreach (var project in projects.All)
+        {
+            var label = Kit.Text(project.Name, Role.Label);
+            label.VerticalAlignment = VerticalAlignment.Center; label.TextTrimming = TextTrimming.CharacterEllipsis;
+            var body = new Grid { ColumnSpacing = 9 };
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            body.ColumnDefinitions.Add(new ColumnDefinition());
+            body.Children.Add(Kit.Icon(Icons.Folder, 16, project.Folder is null ? "muted" : "brand", 20));
+            Grid.SetColumn(label, 1); body.Children.Add(label);
+            var row = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
+            { Content = body, Height = 36, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(9), IsEnabled = !busy };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, project.Name);
+            row.Click += (_, _) => EnterProject(project.Id);
+            list.Children.Add(row);
+        }
+        var add = Kit.TextAction("新建项目", () => EditProject(null), Icons.Plus);
+        add.Margin = new Thickness(8, 2, 0, 4);
+        add.IsEnabled = !busy;
+        list.Children.Add(add);
     }
 
     private async Task OpenProjectFolder()

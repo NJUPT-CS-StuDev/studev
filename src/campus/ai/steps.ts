@@ -43,7 +43,8 @@ export function stepsOf(calls: readonly Call[], results: ReadonlyMap<string, unk
         try { args = JSON.parse(call.arguments) as Record<string, unknown>; } catch { /* Said badly: shown by its name alone. */ }
         const done = results.has(call.id), result = results.get(call.id);
         const error = text(field(result, 'error'));
-        const label = campusToolLabels[call.name] ?? (call.name.startsWith('web_') ? text(field(result, 'tool')) || '网页工具' : call.name);
+        const label = campusToolLabels[call.name] ?? (call.name.startsWith('web_') ? text(field(result, 'tool')) || '网页工具'
+            : call.name.startsWith('mcp_') ? text(field(result, 'tool')) || '外部 MCP' : call.name);
         steps.push({ name: call.name, label, detail: error ? `${detail(call.name, args, undefined, false)}：${error}`.replace(/^：/, '') : detail(call.name, args, result, done), failed: Boolean(error), pending: !done });
     }
     return steps;

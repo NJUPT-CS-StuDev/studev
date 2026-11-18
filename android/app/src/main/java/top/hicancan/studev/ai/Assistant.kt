@@ -36,7 +36,7 @@ private fun JsonObject.freeService(): FreeService {
  * the web's own files.
  */
 class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
-    private val names = tools.map { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content }.toSet()
+    private val names = tools.map(::toolName).toSet()
     private fun lines(key: String) = contract.getValue(key).jsonArray.map { it.jsonPrimitive.content }
     private fun phrase(group: String, key: String) = contract.getValue(group).jsonObject.getValue(key).jsonPrimitive.content
     private fun fill(text: String, values: Map<String, Any?>) = Regex("\\{(\\w+)\\}").replace(text) { values[it.groupValues[1]].toString() }
@@ -63,17 +63,21 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     }
 
     /** The tools offered: all of them, but `remember` only to someone who keeps a memory. */
-    fun toolsFor(s: Situation) = if (s.memory == null) tools.filter { it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content != "remember" } else tools
+    fun toolsFor(s: Situation, disabled: Set<String> = emptySet()) = tools.filter {
+        val name = toolName(it)
+        name !in disabled && (name != "remember" || s.memory != null)
+    }
 
     /** The request a provider is sent, OpenAI's chat completions as every provider speaks it. */
-    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now(), last: Boolean = false) = buildJsonObject {
+    fun request(model: String, messages: List<JsonObject>, s: Situation, now: Instant = Instant.now(), last: Boolean = false,
+        available: List<JsonObject> = toolsFor(s)) = buildJsonObject {
         put("model", model); put("stream", true); put("max_tokens", 4096); put("temperature", 0.2)
-        if (!last) put("tools", JsonArray(toolsFor(s)))
+        if (!last && available.isNotEmpty()) put("tools", JsonArray(available))
         put("messages", JsonArray(listOf(buildJsonObject { put("role", "system"); put("content", instructions(s, now) + if (last) "\n${contract.getValue("finish").jsonPrimitive.content}" else "") }) + messages))
     }
 
     /** A streamed answer read line by line, as Completion in assistant.mjs. */
-    inner class Completion {
+    inner class Completion(private val allowed: Set<String> = names) {
         private val content = StringBuilder()
         private var finish: String? = null
         private val calls = sortedMapOf<Int, Triple<StringBuilder, StringBuilder, StringBuilder>>()
@@ -129,7 +133,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
             val made = calls.values.map { (id, name, arguments) -> buildJsonObject { put("id", id.toString()); put("type", "function"); put("function", buildJsonObject { put("name", name.toString()); put("arguments", arguments.toString()) }) } }
             // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
             val whole = finish in setOf("stop", "tool_calls") || (finish == "length" && made.isEmpty() && content.isNotEmpty())
-            if (!whole || made.any { it.getValue("id").jsonPrimitive.content.isEmpty() || it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content !in names })
+            if (!whole || made.any { it.getValue("id").jsonPrimitive.content.isEmpty() || it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content !in allowed })
                 return Result.failure(IllegalStateException("AI 回答未完成，请缩短问题后重试。"))
             return Result.success(buildJsonObject {
                 put("role", "assistant"); put("content", content.takeIf { it.isNotEmpty() }?.toString()?.let(::JsonPrimitive) ?: JsonNull)
@@ -139,7 +143,8 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     }
 
     /** Asking with one's own key, straight from this device: no sign-in, nothing through the platform. */
-    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, last: Boolean, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
+    suspend fun askOwn(own: Own, messages: List<JsonObject>, situation: Situation, last: Boolean,
+        available: List<JsonObject>, onDelta: (String) -> Unit): JsonObject = withContext(Dispatchers.IO) {
         Models.addressError(own.base)?.let { throw IllegalStateException(it) }
         val connection = try { URI(Models.endpoint(own.base)).toURL().openConnection() as HttpURLConnection } catch (e: Exception) { throw IllegalStateException("你填的接口地址无效。") }
         // A separate suspended child reacts while readLine is blocked on the IO thread.
@@ -151,7 +156,9 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
             connection.setRequestProperty("Accept", "text/event-stream"); connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer ${own.key}")
             val status = try {
-                connection.outputStream.use { it.write(request(own.model, messages, situation, last = last).toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use {
+                    it.write(request(own.model, messages, situation, last = last, available = available).toString().toByteArray(Charsets.UTF_8))
+                }
                 connection.responseCode
             } catch (e: java.io.IOException) { currentCoroutineContext().ensureActive(); throw IllegalStateException("连不上你填的接口地址，检查一下地址和网络。") }
             if (status !in 200..299) {
@@ -164,7 +171,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
                     else -> "你的 API 没有回答（$status）" + (detail?.let { "：$it" } ?: "")
                 })
             }
-            val completion = Completion()
+            val completion = Completion(available.map(::toolName).toSet())
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                 while (true) { currentCoroutineContext().ensureActive(); val line = reader.readLine() ?: break; completion.take(line).takeIf { it.isNotEmpty() }?.let { piece -> withContext(Dispatchers.Main) { onDelta(piece) } } }
             }

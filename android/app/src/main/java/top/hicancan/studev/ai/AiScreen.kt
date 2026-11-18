@@ -96,6 +96,11 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var moving by remember { mutableStateOf<Set<String>?>(null) }
     var personalInstructions by remember { mutableStateOf(false) }
     var projectInstructions by remember { mutableStateOf<String?>(null) }
+    var configuringTools by remember { mutableStateOf(false) }
+    val toolPrefs = remember(context) { CampusToolPreferences.store(context) }
+    val remotePrefs = remember(context) { RemoteMcpPreferences.store(context) }
+    var configuredRemote by remember(remotePrefs) { mutableStateOf(RemoteMcpPreferences.read(remotePrefs)) }
+    val remoteLabels = remember(configuredRemote) { RemoteMcp.known(configuredRemote).associate { it.id to it.label } }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val assistant = remember(context) { Assistant.load(context) }
     val freeService = remember(assistant) { assistant.freeService }
@@ -152,7 +157,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             fresh += id; recordThread(thread.append(tipId, id, message)); tipId = id
         }
         recordThread(base); fresh.clear(); from = at; editing = null
-        var history = recent(base.lineage(at).map { it.message })
+        val remote = RemoteMcp.active(RemoteMcpPreferences.read(remotePrefs)).associateBy { it.id }
+        var history = recent(RemoteMcp.history(base.lineage(at).map { it.message }, remote.keys))
         val settings = model.settings.state.value
         val week = model.state.value.term?.let { top.hicancan.studev.world.CampusDay.weekOf(it.weeks, top.hicancan.studev.world.CampusDay.now().toLocalDate())?.week ?: 0 }
         val owner = Instructions.owner(client.current()?.id)
@@ -160,7 +166,12 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         val instructionText = Instructions.forChat(Instructions.read(context, owner), project)
         val remembered = settings.memory.takeIf { it.on }?.let { project?.memory ?: it.text }
         val situation = Situation(week, settings.klass, settings.campus, remembered, instructionText)
-        tools.definitions = assistant.toolsFor(situation)
+        val campus = assistant.toolsFor(situation, CampusToolPreferences.disabled(toolPrefs))
+        val names = campus.map(::toolName).toSet()
+        val external = remote.values.map { it.definition() }
+        val offered = names + remote.keys
+        val available = campus + external
+        tools.definitions = campus
         var said = ""
         try {
             repeat(Assistant.ROUNDS) { round ->
@@ -171,8 +182,12 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 val doc = top.hicancan.docstream.DocStream()
                 fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                 try {
-                    if (mine != null) answer = assistant.askOwn(mine, history, situation, last, onDelta = ::onDelta)
-                    else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)); put("last", last); put("situation", situation.toJson()) }) { event, data ->
+                    if (mine != null) answer = assistant.askOwn(mine, history, situation, last, available, onDelta = ::onDelta)
+                    else client.stream("/ai", buildJsonObject {
+                        put("messages", JsonArray(history)); put("last", last); put("situation", situation.toJson())
+                        put("toolNames", JsonArray(offered.map(::JsonPrimitive)))
+                        if (external.isNotEmpty()) put("externalTools", JsonArray(external))
+                    }) { event, data ->
                         when (event) {
                             "delta" -> onDelta(data["content"]?.jsonPrimitive?.contentOrNull.orEmpty())
                             "message" -> answer = data["message"]?.jsonObject
@@ -192,9 +207,16 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                         val name = function.getValue("name").jsonPrimitive.content
                         val args = Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject
                         val callId = call.getValue("id").jsonPrimitive.content
-                        // Remember updates the active project's UI state. Network and index tools stay on IO.
-                        if (name == "remember") tools.execute(name, args, callId)
-                        else withContext(Dispatchers.IO) { tools.execute(name, args, callId) }
+                        val callTarget = remote[name]
+                        if (callTarget != null) {
+                            check(callTarget in RemoteMcp.active(RemoteMcpPreferences.read(remotePrefs))) { "这个远程工具已停用。" }
+                            RemoteMcp.call(callTarget, args)
+                        } else {
+                            check(name in names && name !in CampusToolPreferences.disabled(toolPrefs)) { "这个工具已停用或不在本轮授权中。" }
+                            // Remember updates the active project's UI state. Index tools stay on IO.
+                            if (name == "remember") tools.execute(name, args, callId)
+                            else withContext(Dispatchers.IO) { tools.execute(name, args, callId) }
+                        }
                     }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { buildJsonObject { put("error", if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "工具执行失败。" else "校园数据暂不可读，请重试。"); if (e is top.hicancan.studev.world.UnknownReference) put("code", "unknown-reference") } }
@@ -306,6 +328,10 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             }
         }
     }
+    if (configuringTools) CampusToolsSheet(toolPrefs, remotePrefs) {
+        configuredRemote = RemoteMcpPreferences.read(remotePrefs)
+        configuringTools = false
+    }
     projects.firstOrNull { it.id == projectInstructions && it.course == null }?.let { project ->
         key(project.id) {
             InstructionSheet("项目指令", "只用于「${project.name}」里的对话。", project.instructions, Instructions.PROJECT_LIMIT,
@@ -341,7 +367,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 openProject = { id -> open(chats.filter { it.projectId == id }.maxByOrNull { it.updated }?.id, id) }, saveProject = ::saveProject,
                 editInstructions = { project -> scope.launch { drawer.close(); if (project == null) personalInstructions = true else projectInstructions = project.id } },
                 rename = { renaming = it }, remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
-                mind = { scope.launch { drawer.close(); minding = true } })
+                mind = { scope.launch { drawer.close(); minding = true } },
+                configureTools = { scope.launch { drawer.close(); configuringTools = true } })
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
@@ -386,7 +413,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 if (calls.isNotEmpty()) {
                     var open by remember(question.id) { mutableStateOf(false) }
                     val steps = Steps.of(calls.map { call -> val function = call.getValue("function").jsonObject; Steps.Call(call.getValue("id").jsonPrimitive.content, function.getValue("name").jsonPrimitive.content, function.getValue("arguments").jsonPrimitive.content) },
-                        results.filterValues { it != null }.mapValues { it.value!! })
+                        results.filterValues { it != null }.mapValues { it.value!! }, remoteLabels)
                     Plain(Steps.line(steps) + if (open) "  ⌃" else "  ›", 13.5.sp, Ink.muted, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("ai-steps:${question.id}").clickable { open = !open })
                     if (open) Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         steps.forEachIndexed { index, step ->

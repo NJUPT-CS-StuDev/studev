@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { Completion, completionRequest } from '@/world/assistant.mjs';
-import { browserToolCatalog, browserToolId, campusHistory, needsToolConfirmation, toolCatalog } from './toolCatalog';
+import { browserToolCatalog, browserToolId, needsToolConfirmation, toolCatalog, toolHistory } from './toolCatalog';
 
 const outline = { name: 'icourse.outline', description: 'Read the open course outline.',
     annotations: { readOnlyHint: true, destructiveHint: false }, inputSchema: { type: 'object', properties: {}, additionalProperties: false } };
@@ -48,10 +48,10 @@ describe('one available catalog for the picker and the model', () => {
     test('keeps paired campus calls while omitting raw browser results from the free transport', () => {
         const lookup = { id: 'keep', type: 'function' as const, function: { name: 'search', arguments: '{}' } };
         const external = { ...lookup, id: 'drop', function: { ...lookup.function, name: browserToolId(outline.name) } };
-        expect(campusHistory([
+        expect(toolHistory([
             { role: 'user', content: '课表资料' }, { role: 'assistant', content: null, tool_calls: [lookup, external] },
             { role: 'tool', content: '可展示', tool_call_id: 'keep' }, { role: 'tool', content: '课程目录', tool_call_id: 'drop' },
-        ])).toEqual([
+        ], new Set(), true)).toEqual([
             { role: 'user', content: '课表资料' }, { role: 'assistant', content: null, tool_calls: [lookup] },
             { role: 'tool', content: '可展示', tool_call_id: 'keep' },
         ]);

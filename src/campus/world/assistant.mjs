@@ -50,7 +50,7 @@ export const ROUNDS = 8;
 
 /** The request a provider is sent, OpenAI's chat completions as every provider speaks it; `last`, it may call no more tools. */
 /** @typedef {{type:'function',function:{name:string,description:string,parameters:object}}} ModelTool */
-/** @typedef {{tools?: ModelTool[], preferred?: string}} ToolContext */
+/** @typedef {{tools?: ModelTool[], preferred?: string, external?: ModelTool[]}} ToolContext */
 /** @param {ToolContext} context */
 export const completionRequest = (model, messages, situation, now = Date.now(), last = false, context = {}) => {
     const available = context.tools ?? toolsFor(situation);

@@ -48,7 +48,7 @@ public static class Steps
     }
 
     /** Every call in order; a retry never overwrites an earlier attempt. */
-    public static List<Step> Of(List<Call> calls, Dictionary<string, JsonNode?> results, Func<string, string?>? webLabel = null)
+    public static List<Step> Of(List<Call> calls, Dictionary<string, JsonNode?> results, Func<string, string?>? integrationLabel = null)
     {
         var steps = new List<Step>();
         foreach (var call in calls)
@@ -59,8 +59,12 @@ public static class Steps
             var error = Text(Field(result, "error"));
             var detail = error.Length > 0 ? $"{Detail(call.Name, args, null, false)}：{error}" : Detail(call.Name, args, result, done);
             if (error.Length > 0 && detail.StartsWith('：')) detail = detail[1..];
-            var label = ToolMenu.Label(call.Name) ?? webLabel?.Invoke(call.Name) ??
-                (call.Name.StartsWith("web_", StringComparison.Ordinal) ? "读取网页" : call.Name);
+            var label = ToolMenu.Label(call.Name) ?? integrationLabel?.Invoke(call.Name) ?? (call.Name switch
+            {
+                var name when name.StartsWith("web_", StringComparison.Ordinal) => "读取网页",
+                var name when name.StartsWith("mcp_", StringComparison.Ordinal) => "外部工具",
+                _ => call.Name,
+            });
             var step = new Step(call.Name, label, detail, error.Length > 0, !done);
             steps.Add(step);
         }

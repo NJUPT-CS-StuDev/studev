@@ -5,6 +5,7 @@ import java.time.LocalDate
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
+import top.hicancan.studev.ai.toolName
 import top.hicancan.studev.data.*
 import top.hicancan.studev.map.Labels
 import top.hicancan.studev.map.Recommendations
@@ -462,6 +463,14 @@ class ParityTest {
             assertEquals(given, situation.toJson())
             assertEquals(case.getValue("request"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }), situation, java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long)))
         }
+        val menu = json.parseToJsonElement(File(root, "src/campus/world/tool-menu.json").readText()).jsonArray
+        val listed = menu.flatMap { it.jsonObject.getValue("tools").jsonObject.keys }.toSet()
+        val situation = top.hicancan.studev.ai.Situation(1, null, "仙林", null)
+        val enabled = assistant.toolsFor(situation, setOf("search"))
+        val names = enabled.map(::toolName).toSet()
+        assertEquals(listed - setOf("remember", "search"), names)
+        assertEquals(JsonArray(enabled), assistant.request("deepseek-flash", emptyList(), situation, available = enabled)["tools"])
+        assertEquals(null, assistant.request("deepseek-flash", emptyList(), situation, available = emptyList())["tools"])
     }
     @Test fun placesAreFoundByWhatPeopleCallThem() {
         val finding = golden.getValue("finding").jsonObject

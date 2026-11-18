@@ -46,13 +46,14 @@ object Steps {
     }
 
     /** Every call in order; a retry never overwrites an earlier attempt. */
-    fun of(calls: List<Call>, results: Map<String, JsonElement>): List<Step> {
+    fun of(calls: List<Call>, results: Map<String, JsonElement>, remoteLabels: Map<String, String> = emptyMap()): List<Step> {
         val steps = mutableListOf<Step>()
         for (call in calls) {
             val args = runCatching { Json.parseToJsonElement(call.arguments).jsonObject }.getOrDefault(JsonObject(emptyMap()))
             val done = call.id in results; val result = results[call.id]
             val error = text(field(result, "error"))
-            steps += Step(call.name, LABELS[call.name] ?: call.name, if (error.isNotEmpty()) "${detail(call.name, args, null, false)}：$error".removePrefix("：") else detail(call.name, args, result, done), error.isNotEmpty(), !done)
+            val label = LABELS[call.name] ?: remoteLabels[call.name] ?: if (call.name.startsWith("mcp_")) "远程工具" else call.name
+            steps += Step(call.name, label, if (error.isNotEmpty()) "${detail(call.name, args, null, false)}：$error".removePrefix("：") else detail(call.name, args, result, done), error.isNotEmpty(), !done)
         }
         return steps
     }

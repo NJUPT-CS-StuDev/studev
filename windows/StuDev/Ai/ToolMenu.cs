@@ -24,7 +24,7 @@ internal static class ToolMenu
     }
 
     public static IEnumerable<(string Group, List<ToolMenuItem> Items)> For(IEnumerable<JsonObject> offered,
-        IEnumerable<BrowserCapability>? browser = null)
+        IEnumerable<BrowserCapability>? browser = null, IEnumerable<ExternalMcpTool>? external = null)
     {
         var available = offered.ToDictionary(Assistant.ToolName, StringComparer.Ordinal);
         foreach (var (group, labels) in Presentation.Value)
@@ -40,5 +40,8 @@ internal static class ToolMenu
         var web = browser?.Where(tool => available.ContainsKey(tool.Alias))
             .Select(tool => new ToolMenuItem(tool.Alias, tool.Title, tool.InputSchema["required"] is not JsonArray { Count: > 0 })).ToList();
         if (web is { Count: > 0 }) yield return ("Web MCP", web);
+        var other = external?.Where(tool => available.ContainsKey(tool.Alias))
+            .Select(tool => new ToolMenuItem(tool.Alias, tool.Title, tool.InputSchema["required"] is not JsonArray { Count: > 0 })).ToList();
+        if (other is { Count: > 0 }) yield return ("外部 MCP", other);
     }
 }

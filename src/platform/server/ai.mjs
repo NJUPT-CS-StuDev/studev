@@ -1,4 +1,5 @@
 import { Completion, completionRequest, situationError, tools, toolsFor } from '../../campus/world/assistant.mjs';
+import { externalAlias, externalDescription, externalParameters, externalSchemaBudget, externalToolLimit } from '../../campus/world/external-tools.mjs';
 import { fail, readJson, response } from './common.mjs';
 
 /**
@@ -17,7 +18,26 @@ const BEGIN = 15000, FINISH = 90000;
 export const DAILY = 30;
 const names = new Set(tools.map(tool => tool.function.name));
 const bounded = (value, max) => typeof value === 'string' && value.length <= max;
-export function aiMessages(input) {
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function externalCatalog(input = []) {
+  const invalid = () => fail(400, 'AI_TOOLS_INVALID', '外部工具定义无效。');
+  if (!Array.isArray(input) || input.length > externalToolLimit) invalid();
+  const externalNames = new Set();
+  let bytes = 0;
+  const definitions = input.map(tool => {
+    const fn = tool?.function;
+    if (tool?.type !== 'function' || !object(fn) || typeof fn.name !== 'string' || !externalAlias.test(fn.name) ||
+        externalNames.has(fn.name) || (fn.description !== undefined && !bounded(fn.description, 600))) invalid();
+    const schema = externalParameters(fn.parameters);
+    if (!schema || (bytes += schema.bytes) > externalSchemaBudget) invalid();
+    externalNames.add(fn.name);
+    return { type: 'function', function: { name: fn.name, description: externalDescription(fn.description ?? ''), parameters: schema.parameters } };
+  });
+  return { definitions, externalNames };
+}
+
+export function aiMessages(input, externalNames = new Set()) {
   if (!Array.isArray(input) || !input.length || input.length > 32) fail(400, 'AI_MESSAGES_INVALID', '对话过长，请新建对话。');
   const pending = new Set();
   const messages = input.map(item => {
@@ -31,7 +51,8 @@ export function aiMessages(input) {
     if (item.role === 'assistant' && item.tool_calls !== undefined) {
       if (!Array.isArray(item.tool_calls) || !item.tool_calls.length || item.tool_calls.length > 8) fail(400, 'AI_MESSAGES_INVALID', '工具调用无效。');
       message.tool_calls = item.tool_calls.map(call => {
-        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(call.id) || pending.has(call.id) || call.type !== 'function' || !names.has(call.function?.name) || !bounded(call.function?.arguments, 4096)) fail(400, 'AI_MESSAGES_INVALID', '工具调用无效。');
+        if (!call || typeof call.id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(call.id) || pending.has(call.id) || call.type !== 'function' ||
+            !(names.has(call.function?.name) || externalNames.has(call.function?.name)) || !bounded(call.function?.arguments, 4096)) fail(400, 'AI_MESSAGES_INVALID', '工具调用无效。');
         pending.add(call.id);
         return { id: call.id, type: 'function', function: { name: call.function.name, arguments: call.function.arguments } };
       });
@@ -50,15 +71,17 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     if (context.request.method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
     if (POOL.some(member => !env[member.key])) fail(503, 'AI_NOT_CONFIGURED', 'AI 服务尚未配置。');
     const body = await readJson(context.request, 131072);
-    const messages = aiMessages(body.messages);
+    const { definitions, externalNames } = externalCatalog(body.externalTools);
+    const messages = aiMessages(body.messages, externalNames);
     const invalid = situationError(body.situation);
     if (invalid) fail(400, 'AI_SITUATION_INVALID', invalid);
     if (body.last !== undefined && typeof body.last !== 'boolean') fail(400, 'AI_MESSAGES_INVALID', '对话格式无效。');
     const { week, campus, memory, instructions } = body.situation;
     const situation = { week, class: body.situation.class, campus, memory, instructions };
-    if (body.toolNames !== undefined && (!Array.isArray(body.toolNames) || body.toolNames.length > names.size || body.toolNames.some(name => !names.has(name)))) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
-    if (body.preferredTool !== undefined && !names.has(body.preferredTool)) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
-    const available = toolsFor(situation).filter(tool => body.toolNames === undefined || body.toolNames.includes(tool.function.name));
+    const known = name => names.has(name) || externalNames.has(name);
+    if (body.toolNames !== undefined && (!Array.isArray(body.toolNames) || body.toolNames.length > names.size + externalNames.size || body.toolNames.some(name => !known(name)))) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
+    if (body.preferredTool !== undefined && !known(body.preferredTool)) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
+    const available = [...toolsFor(situation), ...definitions].filter(tool => body.toolNames === undefined || body.toolNames.includes(tool.function.name));
     await repo.throttle('ai-minute', session.user.id, 12);
     // The free quota is shared by everyone; each person has a fair part of it a day, said only once it is used up.
     try { await repo.throttle('ai-day', session.user.id, DAILY, 86400); }
