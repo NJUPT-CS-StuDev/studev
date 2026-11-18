@@ -289,9 +289,11 @@ public sealed partial class AiScreen
         { projectStatus = ProjectMessage(failure, "未能打开项目文件夹。"); Draw(); }
     }
 
-    private void EditProject(AiProject? existing)
+    private void EditProject(AiProject? project)
     {
         if (busy) return;
+        var existing = project is null ? null : projects.Find(project.Id);
+        if (project is not null && existing is null) return;
         var resolved = existing is not null && existing.Id == projectFolder?.Id ? projectFolder : null;
         var name = Kit.Field(resolved?.Name ?? existing?.Name ?? "", "填写项目名称", "项目名称");
         name.MaxLength = 100;
