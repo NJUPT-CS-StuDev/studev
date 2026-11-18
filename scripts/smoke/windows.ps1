@@ -100,8 +100,8 @@ if ($RoutesOnly) {
         @{ label='错误起点'; from='仙林/不存在的起点'; to='仙林/教1-101' },
         @{ label='跨楼骑行'; from='仙林/教1-101'; to='仙林/教2-101'; mode='bike' }
     ) | ForEach-Object { "[$($_.label)](/map/?from=$([uri]::EscapeDataString($_.from))&nav=$([uri]::EscapeDataString($_.to))$(if($_.mode){'&mode='+$_.mode}))" }
-    $traceNodes = @(@{ id='route-links'; parent=''; message=@{ role='assistant'; content=$links -join "`n`n" } })
-    $traceChosen = @{ ''='route-links' }
+    $traceNodes = @(@{ id='route-links-question'; parent=''; message=@{ role='user'; content='查看这些校园地点的路线与楼层。' } }, @{ id='route-links'; parent='route-links-question'; message=@{ role='assistant'; content=$links -join "`n`n" } })
+    $traceChosen = @{ ''='route-links-question'; 'route-links-question'='route-links' }
 }
 $traceSeed = @{ current = 'ai-replay'; chats = @(@{ id = 'ai-replay'; title = ''; updated = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); proposals = @(); thread = @{ nodes = $traceNodes; chosen = $traceChosen } }) }
 New-Item -ItemType Directory -Path (Join-Path $home_ 'ai') -Force | Out-Null
