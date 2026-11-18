@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import MeApp from '../me/MeApp';
 
 export const Chevron = () => <svg viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>;
@@ -95,6 +95,7 @@ function sheetKey(event: KeyboardEvent) {
 /** A sheet from the bottom on phones, a centred card on wide screens. Back closes it. */
 /** A sheet over the page. `top` sits above the title; `className` and `style` dress the sheet, as a tile's colour does. */
 export function Sheet({ title, top, className, style, onClose, children }: { title?: ReactNode; top?: ReactNode; className?: string; style?: CSSProperties; onClose: () => void; children: ReactNode }) {
+    const titleId = useId();
     const closing = useRef(onClose);
     closing.current = onClose;
     const panel = useRef<HTMLElement>(null);
@@ -131,7 +132,7 @@ export function Sheet({ title, top, className, style, onClose, children }: { tit
     // A Back or Escape may move from a detail to its list without unmounting this Sheet.
     useEffect(() => { if (owner.current === sheetOwners.at(-1)) ensureSheetEntry(); });
     return (
-        <div className="sd sheet-wrap" role="dialog" aria-modal="true">
+        <div className="sd sheet-wrap" role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}>
             <button className="scrim" aria-label="关闭" onClick={onClose} />
             <section className={`sheet ${className ?? ''}`} style={style} ref={panel} tabIndex={-1} onClick={event => {
                 const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
@@ -139,7 +140,7 @@ export function Sheet({ title, top, className, style, onClose, children }: { tit
                 if (consumeSheetEntry()) { event.preventDefault(); location.replace(link.href); }
             }}>
                 {top}
-                <div className="card-h"><h2>{title}</h2><button className="x" aria-label="关闭" onClick={onClose}><Cross /></button></div>
+                <div className="card-h"><h2 id={titleId}>{title}</h2><button className="x" aria-label="关闭" onClick={onClose}><Cross /></button></div>
                 {children}
             </section>
         </div>
