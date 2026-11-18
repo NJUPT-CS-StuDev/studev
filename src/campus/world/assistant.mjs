@@ -1,5 +1,5 @@
 // The AI's one contract, the same through the platform's free quota or one's own key: what the model is told
-// (assistant.json, filled in with the moment and who is asking), the tools it may call (tools.json), and how its streamed
+// (assistant.json, filled in with the campus and teaching context), the tools it may call (tools.json), and how its streamed
 // answer is read into the turn it makes. The platform relays with it (src/platform/server/ai.mjs); a browser with its
 // own key talks to the provider with it directly (src/campus/ai/stream.ts). Android reads the same two files from its
 // assets and does the same (android/.../ai/Assistant.kt).
@@ -11,10 +11,8 @@ export const DIAGRAMS = assistant.diagrams;
 const names = new Set(tools.map(tool => tool.function.name));
 
 /**
- * Who is asking and when, as far as this device knows: the teaching week (null unknown, 0 outside one), the class and campus
- * chosen in “我”, the name and student number of the account signed in (null when not), and the memory one keeps
- * (null when it is turned off). Through the platform, the name and number are the platform's own, not the device's.
- * @typedef {{ week: number | null, class: string | null, campus: string, name: string | null, student: string | null, memory: string | null }} Situation
+ * Teaching week (null unknown, 0 outside one), the chosen class and campus, and memory when the person enables it.
+ * @typedef {{ week: number | null, class: string | null, campus: string, memory: string | null }} Situation
  */
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -28,17 +26,16 @@ export function nanjingNow(now = Date.now()) {
 
 const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => String(values[key]));
 
-/** Who the model is talking to, in a phrase: 仙林校区 B240402 班的测试同学（学号 TEST000001）. */
-function who(situation) {
+/** The person's campus and class, in a phrase. */
+function campusContext(situation) {
     const me = assistant.me;
-    const where = fill(situation.class ? me.class : me.noClass, situation);
-    return where + (situation.name ? fill(me.named, { name: situation.name, student: situation.student ?? '未知' }) : me.anyone);
+    return fill(situation.class ? me.class : me.noClass, situation) + me.anyone;
 }
 
 /** What the model is told before the conversation. */
 export function instructions(situation, now = Date.now()) {
     const week = situation.week === null ? assistant.week.unknown : situation.week === 0 ? assistant.week.out : fill(assistant.week.in, situation);
-    const lines = assistant.prompt.map(line => fill(line, { now: nanjingNow(now), week, me: who(situation), diagrams: DIAGRAMS.join('、') }));
+    const lines = assistant.prompt.map(line => fill(line, { now: nanjingNow(now), week, me: campusContext(situation), diagrams: DIAGRAMS.join('、') }));
     if (situation.memory !== null) lines.push(...assistant.memory.map(line => fill(line, { memory: situation.memory.trim() || '（还没有）' })));
     return lines.join('\n');
 }
@@ -53,7 +50,7 @@ export const ROUNDS = 8;
 export const completionRequest = (model, messages, situation, now = Date.now(), last = false) =>
     ({ model, stream: true, max_tokens: 4096, temperature: 0.2, ...(!last ? { tools: toolsFor(situation) } : {}), messages: [{ role: 'system', content: instructions(situation, now) + (last ? `\n${assistant.finish}` : '') }, ...messages] });
 
-/** Why what a device says about its situation cannot be taken, or null. The platform fills in name and number itself. */
+/** Why the campus context is invalid, or null if it can be used. */
 export function situationError(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return '缺少当前情况。';
     const { week, campus, memory } = value, cls = value.class;

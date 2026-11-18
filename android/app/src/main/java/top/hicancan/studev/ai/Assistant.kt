@@ -13,13 +13,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
-/**
- * Who is asking and when, as far as this device knows, as Situation in src/campus/world/assistant.mjs: the teaching week
- * (null outside one), the class and campus chosen in “我”, the account's name and student number (null when not signed
- * in), and the memory one keeps (null when it is turned off).
- */
-data class Situation(val week: Int?, val klass: String?, val campus: String, val name: String?, val student: String?, val memory: String?) {
-    /** What the platform is told; it says who is asking itself. */
+/** The campus context and the memory the user has enabled, as in src/campus/world/assistant.mjs. */
+data class Situation(val week: Int?, val klass: String?, val campus: String, val memory: String?) {
     fun toJson() = buildJsonObject { put("week", week); put("class", klass); put("campus", campus); put("memory", memory) }
 }
 
@@ -35,10 +30,10 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private fun fill(text: String, values: Map<String, Any?>) = Regex("\\{(\\w+)\\}").replace(text) { values[it.groupValues[1]].toString() }
     val diagrams = contract.getValue("diagrams").jsonArray.map { it.jsonPrimitive.content }
 
-    /** Who the model is talking to, in a phrase: 仙林校区 TEST000001 班的测试同学. */
+    /** The reader's campus and class, for example 仙林校区 TEST000001 班的同学. */
     private fun who(s: Situation): String {
         val where = fill(phrase("me", if (s.klass != null) "class" else "noClass"), mapOf("campus" to s.campus, "class" to s.klass))
-        return where + if (s.name != null) fill(phrase("me", "named"), mapOf("name" to s.name, "student" to (s.student ?: "未知"))) else phrase("me", "anyone")
+        return where + phrase("me", "anyone")
     }
 
     /** What the model is told before the conversation. */

@@ -10,7 +10,7 @@ export interface Message { role: 'user' | 'assistant' | 'tool'; content: string 
 
 export class AskError extends Error {}
 
-/** Through the platform, which says who is asking itself: the device sends only what it knows of the moment. */
+/** The platform checks the session and quota. Only the campus context goes to the model. */
 export async function ask(messages: Message[], situation: Situation, last: boolean, onDelta: (text: string) => void, signal: AbortSignal): Promise<Message> {
     // Reading the session also renews it when its short-lived pass has run out.
     const current = await session();

@@ -288,11 +288,11 @@ const streams = [
 const askAt = Date.parse('2026-11-13T16:30:00Z');
 // Public teaching time is independent of the chosen class; unknown and known outside term remain distinct.
 const situations: Situation[] = [
-    { week: 11, class: 'B240402', campus: '仙林', name: '测试同学', student: 'TEST000001', memory: '- 在准备考研\n- 喜欢早上学习' },
-    { week: null, class: null, campus: '三牌楼', name: null, student: null, memory: '' },
-    { week: 0, class: null, campus: '仙林', name: null, student: null, memory: null },
-    { week: 12, class: null, campus: '仙林', name: null, student: null, memory: null },
-    { week: 3, class: 'B260424', campus: '仙林', name: '同学', student: null, memory: null },
+    { week: 11, class: 'B240402', campus: '仙林', memory: '- 在准备考研\n- 喜欢早上学习' },
+    { week: null, class: null, campus: '三牌楼', memory: '' },
+    { week: 0, class: null, campus: '仙林', memory: null },
+    { week: 12, class: null, campus: '仙林', memory: null },
+    { week: 3, class: 'B260424', campus: '仙林', memory: null },
 ];
 const assistantCases = { streams, at: askAt, last: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], situations[0]!, askAt, true), situations: situations.map(situation => ({ situation, request: completionRequest('deepseek-flash', [{ role: 'user', content: '明天有课吗' }], situation, askAt) })),
     addresses: ['https://api.deepseek.com', 'https://example.org/v1/', ' https://example.org/v1/chat/completions ', 'http://example.org', 'https://user:pass@example.org', 'https://example.org?token=x', 'not a URL'].map(base => ({ base, endpoint: endpoint(base), invalid: addressError(base) !== null })) };

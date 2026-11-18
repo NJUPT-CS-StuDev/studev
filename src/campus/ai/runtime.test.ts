@@ -7,7 +7,7 @@ import { append, choose, conversationId, emptyThread } from './thread';
 const bridge = vi.hoisted(() => ({ listModels: vi.fn(), chat: vi.fn(), closeConversation: vi.fn() }));
 vi.mock('@local-runtime-mcp/browser-extension/sdk', async (importOriginal) => ({ ...await importOriginal<typeof import('@local-runtime-mcp/browser-extension/sdk')>(), createLRMCPClient: () => bridge }));
 const messages = [{ role: 'user' as const, content: '明天有什么考试？' }];
-const situation = { week: 12, class: 'B240402', campus: '仙林', name: null, student: null, memory: null };
+const situation = { week: 12, class: 'B240402', campus: '仙林', memory: null };
 const completion = (content: string | null, tool_calls?: unknown[]) => ({ object: 'chat.completion', conversation_id: 'chat-one', choices: [{ message: { role: 'assistant', content, ...(tool_calls ? { tool_calls } : {}) }, finish_reason: tool_calls ? 'tool_calls' : 'stop' }] });
 function stream(result: unknown, events: unknown[] = []) { return { result: Promise.resolve(result), async *[Symbol.asyncIterator]() { for (const event of events) yield event; } }; }
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); });

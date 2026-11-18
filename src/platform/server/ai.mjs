@@ -54,10 +54,8 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     const invalid = situationError(body.situation);
     if (invalid) fail(400, 'AI_SITUATION_INVALID', invalid);
     if (body.last !== undefined && typeof body.last !== 'boolean') fail(400, 'AI_MESSAGES_INVALID', '对话格式无效。');
-    // Who is asking is the account's own, not what the device says.
-    const user = session.user;
-    const situation = { week: body.situation.week, class: body.situation.class, campus: body.situation.campus, memory: body.situation.memory,
-      name: user.realName || user.nickname || null, student: user.studentId || null };
+    const { week, campus, memory } = body.situation;
+    const situation = { week, class: body.situation.class, campus, memory };
     await repo.throttle('ai-minute', session.user.id, 12);
     // The free quota is shared by everyone; each person has a fair part of it a day, said only once it is used up.
     try { await repo.throttle('ai-day', session.user.id, DAILY, 86400); }

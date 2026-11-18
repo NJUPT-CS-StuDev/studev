@@ -18,22 +18,21 @@ async function events(result) {
 
 const situation = { week: 11, class: 'B240402', campus: '仙林', memory: null };
 
-test('AI streams the fixed model through the gateway, passing on what it says and its whole turn, never its thinking or the key', async () => {
+test('AI checks the signed-in quota, sends campus context without account identity, and streams the model turn', async () => {
   let calls = 0; const limits = [], auth = [];
   const handler = createAiService({ identity: { async authenticate(request, options) { auth.push(options); return { user: { id: 'test-user', realName: '测试同学', studentId: 'TEST000001' } }; } }, repo: { async throttle(...args) { limits.push(args); } }, env: { MAKERS_MODELS_KEY: 'test-provider-secret', NVIDIA_API_KEY: 'test-nvidia-secret' }, now: () => Date.parse('2026-11-12T00:00:00Z'), fetcher: async (url, init) => {
     calls++; assert.equal(url, 'https://ai-gateway.edgeone.link/v1/chat/completions');
     const body = JSON.parse(init.body); assert.equal(body.model, '@makers/deepseek-v4.1-flash'); assert.equal(body.stream, true);
     assert.ok(body.tools.some(tool => tool.function.name === 'suggest_slots')); assert.equal(body.messages[0].role, 'system'); assert.match(body.messages[0].content, /“做的时间”和“截止时间”是两回事/); assert.match(body.messages[0].content, /绝不对用户提工具名/);
-    // When and who: the moment is the platform's, the name the account's; the device cannot claim another.
-    assert.match(body.messages[0].content, /2026年11月12日 周四 08:00，本学期第 11 周/); assert.match(body.messages[0].content, /仙林校区 B240402 班的测试同学（学号 TEST000001）/);
-    assert.doesNotMatch(body.messages[0].content, /冒充/); assert.ok(!body.tools.some(tool => tool.function.name === 'remember'));
+    assert.match(body.messages[0].content, /2026年11月12日 周四 08:00，本学期第 11 周/); assert.match(body.messages[0].content, /仙林校区 B240402 班的同学/);
+    assert.doesNotMatch(init.body, /测试同学|TEST000001|test-user|冒充|FORGED0001/); assert.ok(!body.tools.some(tool => tool.function.name === 'remember'));
     // A frame split across chunks, thinking that must not pass, and a tool call in pieces.
     const first = frame({ delta: { reasoning_content: 'not-returned' } }) + frame({ delta: { content: '我来' } });
     const second = frame({ delta: { content: '查一下。' } }) + frame({ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'free_', arguments: '{"date":' } }] } });
     const third = frame({ delta: { tool_calls: [{ index: 0, function: { name: 'rooms', arguments: '"2026-11-14","minute":840,"minutes":120}' } }] } }) + frame({ delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n';
     return sse(first, second.slice(0, 20), second.slice(20), third);
   } });
-  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '帮我找空教室' }], situation: { ...situation, name: '冒充' }, model: 'ignored-client-model', tools: ['ignored'] }) });
+  const request = new Request('https://studev.test/api/platform/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: '帮我找空教室' }], situation: { ...situation, name: '冒充', student: 'FORGED0001' }, model: 'ignored-client-model', tools: ['ignored'] }) });
   const result = await handler({ request }, '/api/platform/ai'); assert.equal(result.status, 200);
   assert.match(result.headers.get('content-type'), /text\/event-stream/);
   const got = await events(result);

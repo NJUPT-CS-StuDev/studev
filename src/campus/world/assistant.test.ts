@@ -3,7 +3,7 @@ import { Completion, completionRequest, instructions, situationError } from './a
 import { stepsLine, stepsOf } from '../ai/steps';
 
 const frame = (delta: Record<string, unknown>, finish_reason?: string) => `data: ${JSON.stringify({ choices: [{ delta, ...(finish_reason ? { finish_reason } : {}) }] })}`;
-const situation = { week: 12, class: 'B240402', campus: '仙林', name: null, student: null, memory: null };
+const situation = { week: 12, class: 'B240402', campus: '仙林', memory: null };
 
 it('keeps public teaching time independent of a class and distinguishes unavailable time from outside term', () => {
     const withoutClass = { ...situation, class: null };

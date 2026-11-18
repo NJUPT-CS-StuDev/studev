@@ -256,11 +256,11 @@ foreach (var address in new[] { "http://localhost:9316/v1", "http://127.0.0.1:93
 }
 foreach (var address in new[] { "http://localhost.example.com/v1", "http://192.168.1.4/v1", "http://user@localhost/v1", "http://127.0.0.1/v1?key=value", "file:///tmp/model" })
     Equal("runtime rejects nonlocal cleartext and credentials in URL", StuDev.Ai.Models.AddressError(address, true) is not null, JsonValue.Create(true));
-var runtimeRequest = assistant.Request("deepseek-web", [], new(null, null, "仙林", null, null, null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat");
+var runtimeRequest = assistant.Request("deepseek-web", [], new(null, null, "仙林", null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat");
 Equal("runtime omits unsupported sampling", runtimeRequest.ContainsKey("max_tokens") || runtimeRequest.ContainsKey("temperature"), JsonValue.Create(false));
 Equal("runtime sends its stable conversation", (string?)runtimeRequest["conversation_id"], JsonValue.Create("owned-chat"));
 Equal("runtime does not retry automatically", runtimeRequest.ContainsKey("retry"), JsonValue.Create(false));
-var runtimeRetry = assistant.Request("deepseek-web", [], new(null, null, "仙林", null, null, null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat", retry: true);
+var runtimeRetry = assistant.Request("deepseek-web", [], new(null, null, "仙林", null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat", retry: true);
 Equal("explicit runtime retry", (bool?)runtimeRetry["retry"], JsonValue.Create(true));
 var stableThread = StuDev.Ai.ChatThread.Empty.Append("", "question", new() { ["role"] = "user" }).Append("question", "original", new() { ["role"] = "assistant" }).Append("original", "continued", new() { ["role"] = "assistant" }).Append("question", "fork", new() { ["role"] = "assistant" }).Append("fork", "tool", new() { ["role"] = "tool" }).Append("tool", "fork-answer", new() { ["role"] = "assistant" });
 var stableChat = new StuDev.Ai.SavedChat("chat", "", 0, stableThread, ["fork"], ["web-a", "web-b"]);
@@ -283,7 +283,7 @@ foreach (var test in assistantCases["streams"]!.AsArray())
     try { var turn = completion.Result(); checks++; if (!JsonNode.DeepEquals(turn, expected["message"])) failures.Add($"stream turn: expected {expected["message"]?.ToJsonString()}, got {turn.ToJsonString()}"); }
     catch (InvalidOperationException error) { Equal("stream error", error.Message, expected["error"]); }
 }
-StuDev.Ai.Situation SituationOf(JsonNode given) => new(given["week"] is JsonValue w && w.TryGetValue<int>(out var week) ? week : null, given["class"]?.GetValue<string>(), (string)given["campus"]!, given["name"]?.GetValue<string>(), given["student"]?.GetValue<string>(), given["memory"]?.GetValue<string>());
+StuDev.Ai.Situation SituationOf(JsonNode given) => new(given["week"] is JsonValue w && w.TryGetValue<int>(out var week) ? week : null, given["class"]?.GetValue<string>(), (string)given["campus"]!, given["memory"]?.GetValue<string>());
 var asked = DateTimeOffset.FromUnixTimeMilliseconds((long)assistantCases["at"]!);
 var question = new List<JsonObject> { new() { ["role"] = "user", ["content"] = "明天有课吗" } };
 void Same(string label, JsonNode actual, JsonNode? expected) { checks++; if (!JsonNode.DeepEquals(actual, expected)) failures.Add($"{label}: expected {expected?.ToJsonString()[..Math.Min(400, expected.ToJsonString().Length)]}, got {actual.ToJsonString()[..Math.Min(400, actual.ToJsonString().Length)]}"); }

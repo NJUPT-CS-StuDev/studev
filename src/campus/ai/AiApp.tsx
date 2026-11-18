@@ -3,10 +3,10 @@
 // rooms and routes it finds are things to tap; a task it drafts is saved only when confirmed. A question can be
 // changed where it stands and an answer asked again: each grows a branch beside the old one (thread.ts), and one goes
 // back and forth between them. Conversations are kept on this device and listed at the side (chats.ts), and so is what it
-// keeps in mind about the person (memory.ts). It is told the moment and who is asking (assistant.mjs). The model is the
+// keeps in mind about the person (memory.ts). It is told the moment and campus context (assistant.mjs). The model is the
 // free quota, one's own key, or an owner-authorized Local Runtime model source (model.ts).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { session, type Session } from '../../platform/client/api';
+import { session } from '../../platform/client/api';
 import { usePreferences } from '@/world/usePreferences';
 import { useTasks } from '@/world/useTasks';
 import { newTaskId, readTasks, saveTask } from '@/world/tasks';
@@ -135,9 +135,6 @@ export default function AiApp() {
     const [memory, setMemory] = useState<Memory>(readMemory), [minding, setMinding] = useState(false);
     useEffect(() => writeMemory(memory), [memory]);
     const memoryNow = useRef(memory); memoryNow.current = memory;
-    // Who is signed in, if anyone: one's own key tells the model their name as the platform would.
-    const [account, setAccount] = useState<Session['user'] | null>(null);
-    useEffect(() => { void session().then(current => setAccount(current?.user ?? null), () => setAccount(null)); }, []);
     useEffect(() => writeChoice(choice), [choice]);
     const own = choice.use === 'own' && choice.own.key ? choice.own : null;
     const runtime = choice.use === 'runtime';
@@ -243,11 +240,11 @@ export default function AiApp() {
         window.addEventListener('focus', back); document.addEventListener('visibilitychange', back);
         return () => { window.removeEventListener('focus', back); document.removeEventListener('visibilitychange', back); };
     });
-    /** The moment and who is asking, as this device knows them now. */
+    /** The moment and campus context, as this device knows them now. */
     const situation = (): Situation => {
         const term = latestTerm.current, today = momentNow().date;
         return { week: term ? weekOfDate(term, today) ?? 0 : null, class: prefs.class ?? null, campus: prefs.campus ?? PRODUCT_CONFIG.CAMPUS.id,
-            name: account ? account.realName || account.nickname || null : null, student: account?.studentId || null, memory: memoryNow.current.on ? memoryNow.current.text : null };
+            memory: memoryNow.current.on ? memoryNow.current.text : null };
     };
     /** Answering after `at` in `base`: each message said grows the branch from there, and is the one shown. */
     async function run(base: Thread, at: string, options: { fork?: boolean; retry?: boolean } = {}) {

@@ -5,24 +5,25 @@ import { STARTING_OWN } from './model';
 afterEach(() => vi.unstubAllGlobals());
 const own = { ...STARTING_OWN, key: 'test-only-provider-key' };
 const messages = [{ role: 'user' as const, content: '你好' }];
-const situation = { week: 11, class: 'B240402', campus: '仙林', name: '测试同学', student: 'TEST000001', memory: null };
+const situation = { week: 11, class: 'B240402', campus: '仙林', memory: null };
 
-it('uses only the explicitly chosen provider, without platform credentials, and reads a split event stream', async () => {
+it('sends campus context without account identity to the chosen provider and reads a split event stream', async () => {
     const encoder = new TextEncoder();
     const pieces = ['data: {"choices":[{"delta":{"content":"你"}}]}\r\n', '\r\ndata: {"choices":[{"delta":{"content":"好"},"finish_reason":"stop"}]}\r\n\r\ndata: [DONE]\r\n\r\n'];
     const fetch = vi.fn(async () => new Response(new ReadableStream({ start(controller) { pieces.forEach(piece => controller.enqueue(encoder.encode(piece))); controller.close(); } })));
     vi.stubGlobal('fetch', fetch);
     let shown = '';
-    const answer = await askOwn(own, messages, situation, false, (piece: string) => { shown += piece; }, new AbortController().signal);
+    const previousContext = { ...situation, name: '测试同学', student: 'TEST000001' };
+    const answer = await askOwn(own, messages, previousContext, false, (piece: string) => { shown += piece; }, new AbortController().signal);
     expect(answer).toEqual({ role: 'assistant', content: '你好' });
     expect(shown).toBe('你好');
     expect(fetch).toHaveBeenCalledOnce();
     const [url, init] = fetch.mock.calls[0]! as unknown as [string, RequestInit];
     expect(url).toBe('https://api.deepseek.com/chat/completions');
     expect(init).toMatchObject({ credentials: 'omit', redirect: 'error', headers: { Authorization: 'Bearer test-only-provider-key' } });
-    // Told the moment and who is asking, as the platform tells it; no memory kept, so nothing to remember with.
     const body = JSON.parse(String(init.body)) as { messages: { content: string }[]; tools: { function: { name: string } }[] };
-    expect(body.messages[0]!.content).toMatch(/本学期第 11 周。你在和仙林校区 B240402 班的测试同学（学号 TEST000001）说话/);
+    expect(body.messages[0]!.content).toMatch(/本学期第 11 周。你在和仙林校区 B240402 班的同学说话/);
+    expect(String(init.body)).not.toMatch(/测试同学|TEST000001/);
     expect(body.tools.map(tool => tool.function.name)).not.toContain('remember');
 });
 

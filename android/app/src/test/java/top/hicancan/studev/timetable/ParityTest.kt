@@ -453,12 +453,13 @@ class ParityTest {
         }
         val first = cases.getValue("situations").jsonArray[0].jsonObject.getValue("situation").jsonObject
         assertEquals(cases.getValue("last"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }),
-            top.hicancan.studev.ai.Situation(first["week"]?.jsonPrimitive?.intOrNull, first["class"]?.jsonPrimitive?.contentOrNull, first.getValue("campus").jsonPrimitive.content, first["name"]?.jsonPrimitive?.contentOrNull, first["student"]?.jsonPrimitive?.contentOrNull, first["memory"]?.jsonPrimitive?.contentOrNull),
+            top.hicancan.studev.ai.Situation(first["week"]?.jsonPrimitive?.intOrNull, first["class"]?.jsonPrimitive?.contentOrNull, first.getValue("campus").jsonPrimitive.content, first["memory"]?.jsonPrimitive?.contentOrNull),
             java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long), last = true))
         cases.getValue("situations").jsonArray.forEach { item ->
             val case = item.jsonObject; val given = case.getValue("situation").jsonObject
             fun text(key: String) = given[key]?.jsonPrimitive?.contentOrNull
-            val situation = top.hicancan.studev.ai.Situation(given["week"]?.jsonPrimitive?.intOrNull, text("class"), text("campus")!!, text("name"), text("student"), text("memory"))
+            val situation = top.hicancan.studev.ai.Situation(given["week"]?.jsonPrimitive?.intOrNull, text("class"), text("campus")!!, text("memory"))
+            assertEquals(given, situation.toJson())
             assertEquals(case.getValue("request"), assistant.request("deepseek-flash", listOf(buildJsonObject { put("role", "user"); put("content", "明天有课吗") }), situation, java.time.Instant.ofEpochMilli(cases.getValue("at").jsonPrimitive.long)))
         }
     }

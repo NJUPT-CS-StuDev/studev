@@ -133,10 +133,8 @@ public sealed partial class AiScreen : Screen
 
     private Situation SituationNow()
     {
-        var user = Account.Shared.User;
         int? week = campus.Term is { } term ? CampusLine.WeekOf(term, CampusDay.Today()) ?? 0 : null;
-        return new(week, campus.Preferences.Class, campus.Preferences.Campus,
-            user is null ? null : user.RealName.Length > 0 ? user.RealName : user.Nickname.Length > 0 ? user.Nickname : null, user?.StudentId is { Length: > 0 } s ? s : null, memory.On ? memory.Text : null);
+        return new(week, campus.Preferences.Class, campus.Preferences.Campus, memory.On ? memory.Text : null);
     }
 
     // ——— asking ———

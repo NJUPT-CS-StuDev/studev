@@ -1,5 +1,5 @@
 // The AI's one contract, as src/campus/world/assistant.mjs and Android's Assistant.kt: what the model is told
-// (assistant.json, filled in with the moment and who is asking), the tools it may call (tools.json), the request a
+// (assistant.json, filled in with the campus situation), the tools it may call (tools.json), the request a
 // provider is sent, and a streamed answer read into one turn. The parity golden locks all of it.
 using System.Text;
 using System.Text.Json.Nodes;
@@ -10,8 +10,8 @@ namespace StuDev.Ai;
 /** A task drafted, to be confirmed; `Call` is the tool call that drafted it, so it shows in that answer. */
 public sealed record TaskProposal(World.PersonalTask Task, string? Id, string? Expected, string Key, string Call, bool Saved = false);
 
-/** Who is asking and when, as far as this device knows. */
-public sealed record Situation(int? Week, string? Klass, string Campus, string? Name, string? Student, string? Memory)
+/** The campus situation shared with the model. */
+public sealed record Situation(int? Week, string? Klass, string Campus, string? Memory)
 {
     public JsonObject ToJson() => new() { ["week"] = Week, ["class"] = Klass, ["campus"] = Campus, ["memory"] = Memory };
 }
@@ -39,17 +39,17 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         return $"{at.Year}年{at.Month}月{at.Day}日 {Weekdays[at.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)at.DayOfWeek]} {at.Hour:00}:{at.Minute:00}";
     }
 
-    private string Who(Situation s)
+    private string CampusContext(Situation s)
     {
         var where = Fill(Phrase("me", s.Klass is not null ? "class" : "noClass"), new() { ["campus"] = s.Campus, ["class"] = s.Klass });
-        return where + (s.Name is not null ? Fill(Phrase("me", "named"), new() { ["name"] = s.Name, ["student"] = s.Student ?? "未知" }) : Phrase("me", "anyone"));
+        return where + Phrase("me", "anyone");
     }
 
     /** What the model is told before the conversation. */
     public string Instructions(Situation s, DateTimeOffset now)
     {
         var week = s.Week switch { null => Phrase("week", "unknown"), 0 => Phrase("week", "out"), _ => Fill(Phrase("week", "in"), new() { ["week"] = s.Week }) };
-        var values = new Dictionary<string, object?> { ["now"] = NanjingNow(now), ["week"] = week, ["me"] = Who(s), ["diagrams"] = string.Join("、", Diagrams) };
+        var values = new Dictionary<string, object?> { ["now"] = NanjingNow(now), ["week"] = week, ["me"] = CampusContext(s), ["diagrams"] = string.Join("、", Diagrams) };
         var all = Lines("prompt").Select(l => Fill(l, values)).ToList();
         if (s.Memory is not null) all.AddRange(Lines("memory").Select(l => Fill(l, new() { ["memory"] = s.Memory.Trim() is { Length: > 0 } m ? m : "（还没有）" })));
         return string.Join("\n", all);
