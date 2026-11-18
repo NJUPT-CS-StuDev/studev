@@ -88,6 +88,14 @@ public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, 
                 if (e.Kind == "class" && e.Meeting is { } m && CourseTones.Identity(m.Course.Code, m.Course.Name) == course && (i > 0 || e.Start > now.Min)) return e;
         return null;
     }
+    /** The next teaching event to start, including a selected lab. */
+    public LineEvent? NextClass(Moment now, int horizon = 140)
+    {
+        for (var i = 0; i < horizon; i++)
+            foreach (var e in On(now.Date.AddDays(i)))
+                if (e.Kind is "class" or "lab" && (i > 0 || e.Start > now.Min)) return e;
+        return null;
+    }
     public DateOnly WeekShown(Moment now)
     {
         for (var i = 0; i < 60; i++)

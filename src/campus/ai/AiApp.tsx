@@ -5,7 +5,7 @@
 // back and forth between them. Conversations are kept on this device and listed at the side (chats.ts), and so is what it
 // keeps in mind about the person (memory.ts). It is told the moment and campus context (assistant.mjs). The model is the
 // free quota, one's own key, or an owner-authorized Local Runtime model source (model.ts).
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { session } from '../../platform/client/api';
 import { usePreferences } from '@/world/usePreferences';
 import { useTasks } from '@/world/useTasks';
@@ -21,8 +21,8 @@ import { roomLabel } from '@/world/names';
 import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, Tick, Up, TextAction, CampusHeader } from '@/world/ui';
 import { definitions, readExams, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, askOwn, type Message } from './stream';
-import { askRuntime, closeRuntimeChat, runtimeModels, runtimeRequest, type RuntimeModel, type RuntimeRequest } from './runtime';
-import { addressError, endpoint, fetchModels, OWNER_AVATAR, ownName, readChoice, writeChoice, type Choice, type Own } from './model';
+import { askRuntime, closeRuntimeChat, runtimeRequest, type RuntimeRequest } from './runtime';
+import { FREE_MODEL, MODEL_SETTINGS_CHANGED, RUNTIME_PROVIDER, freeProvider, readModelSettings, selectedProvider, writeModelSettings, type ModelSelection, type ModelSettings } from './model';
 import { append, chain, choose, conversationId, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
@@ -37,12 +37,12 @@ const KEY = 'studev_ai_chats';
 
 interface ModelContext { registerTool(tool: { name: string; description: string; inputSchema: object; execute(args: unknown): Promise<unknown> }, options: { signal: AbortSignal }): Promise<void> }
 type Proposal = TaskProposal & { key: string; call: string; saved?: boolean };
-interface Chat { id: string; thread: Thread; proposals: Proposal[]; forks: string[]; runtimeModels: string[] }
+interface Chat { id: string; thread: Thread; proposals: Proposal[]; forks: string[]; runtimeModels: string[]; model?: ModelSelection; resetRuntime?: boolean }
 /** Every conversation kept, and the one open (none: a new one, kept once something is asked in it). */
 interface Kept { chats: Saved<Proposal>[]; current: string | null }
 const newId = () => crypto.randomUUID();
 const empty = (): Chat => ({ id: newId(), thread: emptyThread(), proposals: [], forks: [], runtimeModels: [] });
-const opened = (saved: Saved<Proposal>): Chat => ({ id: saved.id, thread: saved.thread, proposals: saved.proposals, forks: saved.forks ?? [], runtimeModels: saved.runtimeModels ?? [] });
+const opened = (saved: Saved<Proposal>): Chat => ({ id: saved.id, thread: saved.thread, proposals: saved.proposals, forks: saved.forks ?? [], runtimeModels: saved.runtimeModels ?? [], model: saved.model, resetRuntime: saved.resetRuntime });
 function readKept(): Kept {
     try {
         const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Kept | null;
@@ -102,13 +102,40 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** The box one writes in: grows with what is written, sends on Enter, stops while answering. */
-function Composer({ value, onChange, onSend, onStop, busy }: { value: string; onChange: (text: string) => void; onSend: () => void; onStop: () => void; busy: boolean }) {
+function Composer({ value, onChange, onSend, onStop, busy, picker }: { value: string; onChange: (text: string) => void; onSend: () => void; onStop: () => void; busy: boolean; picker: ReactNode }) {
     return <form className="ai-compose" onSubmit={event => { event.preventDefault(); onSend(); }}>
         <textarea aria-label="问点什么" value={value} maxLength={4000} rows={1} placeholder="问点什么" onChange={event => onChange(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); onSend(); } }} />
+        {picker}
         {busy ? <button type="button" className="ai-send" aria-label="停止" onClick={onStop}><Square /></button>
             : <button className="ai-send" aria-label="发送" disabled={!value.trim()}><Up /></button>}
     </form>;
+}
+
+function ModelPicker({ settings, choice, disabled, select }: { settings: ModelSettings; choice: ModelSelection; disabled: boolean; select: (model: ModelSelection) => void }) {
+    const [open, setOpen] = useState(false);
+    const [providerId, setProviderId] = useState<string | null>(null);
+    const menu = useRef<HTMLDivElement>(null);
+    const sources = [freeProvider, ...settings.providers.filter(provider => provider.enabled && provider.models.some(model => model.enabled))];
+    const provider = sources.find(source => source.id === providerId);
+    const chosen = selectedProvider(settings, choice);
+    const name = chosen?.models.find(model => model.id === choice.model)?.name;
+    const title = chosen && name ? chosen.kind === 'free' ? name : `${chosen.name} · ${name}` : '选择模型';
+    useEffect(() => { if (open) menu.current?.querySelector('button')?.focus(); }, [open, providerId]);
+    function close() { setOpen(false); setProviderId(null); }
+    return <div className="ai-model" onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }} onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.querySelector('button')?.focus(); close(); } }}>
+        <button type="button" aria-label="选择服务商和模型" title={title} aria-expanded={open} className={`ai-model-b ${open ? 'on' : ''}`} disabled={disabled} onClick={() => open ? close() : setOpen(true)}><span>{title}</span><Chevron /></button>
+        {open && <div ref={menu} className="ai-menu ai-model-menu" role="group" aria-label={provider ? '选择模型' : '选择服务商'}>
+            {provider ? <>
+                <button type="button" className="ai-model-back" onClick={() => setProviderId(null)}>‹ {provider.name}</button>
+                {provider.models.filter(model => model.enabled).map(model => <button key={model.id} type="button" aria-pressed={choice.provider === provider.id && choice.model === model.id} onClick={() => { select({ provider: provider.id, model: model.id }); close(); }}><b>{model.name}</b>{choice.provider === provider.id && choice.model === model.id && <Tick />}</button>)}
+            </> : <>
+                <p className="fine">选择服务商</p>
+                {sources.map(source => <button key={source.id} type="button" onClick={() => setProviderId(source.id)}><b>{source.name}</b><Chevron /></button>)}
+                <p className="fine">在「我 → 模型服务」管理服务商</p>
+            </>}
+        </div>}
+    </div>;
 }
 
 /** A question one has asked, changed where it stands. */
@@ -130,17 +157,24 @@ export default function AiApp() {
     const [kept, setKept] = useState<Kept>(readKept);
     const [chat, setChat] = useState<Chat>(() => { const saved = kept.chats.find(item => item.id === kept.current); return saved ? opened(saved) : empty(); });
     const [side, setSide] = useState(false), [menu, setMenu] = useState<string | null>(null), [renaming, setRenaming] = useState<string | null>(null);
-    const [choice, setChoice] = useState<Choice>(readChoice), [picking, setPicking] = useState(false), [setting, setSetting] = useState(false);
-    const [runtimeSetting, setRuntimeSetting] = useState(false);
+    const [modelSettings, setModelSettings] = useState(readModelSettings);
+    useEffect(() => {
+        const update = () => setModelSettings(readModelSettings());
+        window.addEventListener(MODEL_SETTINGS_CHANGED, update); window.addEventListener('storage', update);
+        return () => { window.removeEventListener(MODEL_SETTINGS_CHANGED, update); window.removeEventListener('storage', update); };
+    }, []);
     const [memory, setMemory] = useState<Memory>(readMemory), [minding, setMinding] = useState(false);
     useEffect(() => writeMemory(memory), [memory]);
     const memoryNow = useRef(memory); memoryNow.current = memory;
-    useEffect(() => writeChoice(choice), [choice]);
-    const own = choice.use === 'own' && choice.own.key ? choice.own : null;
-    const runtime = choice.use === 'runtime';
+    const choice = chat.model ?? modelSettings.selection;
+    const provider = selectedProvider(modelSettings, choice);
+    const own = provider?.kind === 'api' ? { base: provider.base, key: provider.key, model: choice.model } : null;
+    const runtime = provider?.kind === 'runtime';
+    const free = choice.provider === FREE_MODEL.provider;
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     const opening = useRef(true);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
+    const [modelStage, setModelStage] = useState('');
     const [waiting, setWaiting] = useState<string | null>(null), [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
     // While answering after a message, only what this answer says shows after it, not the answer it had before.
     const [from, setFrom] = useState<string | null>(null);
@@ -152,7 +186,7 @@ export default function AiApp() {
     const stop = useRef<AbortController | null>(null);
     // Only the failed request is kept in memory, so an explicit retry keeps its accepted dialogue and completed tools.
     const failedRuntime = useRef<{ request: RuntimeRequest; firstId?: string } | null>(null);
-    useEffect(() => { failedRuntime.current = null; }, [choice]);
+    useEffect(() => { failedRuntime.current = null; }, [choice.provider, choice.model]);
     const end = useRef<HTMLDivElement>(null), scroller = useRef<HTMLDivElement>(null), stuck = useRef(true);
     const services = useMemo(() => new CampusTools(), []);
     useEffect(() => () => services.dispose(), [services]);
@@ -163,7 +197,7 @@ export default function AiApp() {
         if (!chat.thread.nodes.length) return;
         setKept(all => {
             const id = chat.id, before = all.chats.find(item => item.id === id);
-            const saved = { id, title: before?.title ?? '', updated: Date.now(), thread: chat.thread, proposals: chat.proposals, forks: chat.forks, runtimeModels: chat.runtimeModels };
+            const saved = { ...chat, title: before?.title ?? '', updated: Date.now() };
             return { chats: [saved, ...all.chats.filter(item => item.id !== id)], current: id };
         });
     }, [chat]);
@@ -184,6 +218,14 @@ export default function AiApp() {
         if (removed?.runtimeModels?.length) void closeRuntimeChat(removed.id, removed.forks ?? [], removed.runtimeModels).catch(failure => setError(failure instanceof Error ? failure.message : '部分模型页面尚未关闭。'));
     };
     const rename = (id: string, title: string) => { setKept(all => ({ ...all, chats: all.chats.map(item => item.id === id ? { ...item, title: title.trim().slice(0, 60) } : item) })); setRenaming(null); };
+    function setModel(next: ModelSelection) {
+        if (next.provider === choice.provider && next.model === choice.model) return;
+        const settings = { ...readModelSettings(), selection: next };
+        try { writeModelSettings(settings); }
+        catch { setError('无法保存模型设置，请检查浏览器存储权限。'); return; }
+        setChat(current => ({ ...current, model: next, resetRuntime: next.provider === RUNTIME_PROVIDER && current.thread.nodes.length > 0 }));
+        setError('');
+    }
     // The view follows the answer down unless one has scrolled up to read; then a button brings it back.
     useEffect(() => {
         const box = scroller.current; if (!box) return;
@@ -232,10 +274,10 @@ export default function AiApp() {
 
     // Only the shared quota waits for sign-in. Switching source never silently sends that pending question elsewhere.
     useEffect(() => {
-        if (choice.use !== 'free' && waiting) { setDraft(current => current || waiting); setWaiting(null); }
-    }, [choice.use, waiting]);
+        if (!free && waiting) { setDraft(current => current || waiting); setWaiting(null); }
+    }, [free, waiting]);
     useEffect(() => {
-        if (!waiting || choice.use !== 'free') return;
+        if (!waiting || !free) return;
         const back = async () => { if (document.visibilityState === 'visible' && await session()) { const question = waiting; setWaiting(null); void send(question, true); } };
         window.addEventListener('focus', back); document.addEventListener('visibilitychange', back);
         return () => { window.removeEventListener('focus', back); document.removeEventListener('visibilitychange', back); };
@@ -248,33 +290,35 @@ export default function AiApp() {
     };
     /** Answering after `at` in `base`: each message said grows the branch from there, and is the one shown. */
     async function run(base: Thread, at: string, options: { fork?: boolean; retry?: boolean } = {}) {
+        if (!provider) { setError('所选模型已停用或移除，请重新选择。'); return; }
         let thread = base, tipId = at;
         const retried = runtime && options.retry ? failedRuntime.current : null;
         const pending = runtime && !options.fork ? failedRuntime.current : null;
         let firstId = options.fork ? newId() : pending?.firstId && !base.nodes.some(node => node.id === pending.firstId) ? pending.firstId : undefined;
-        const cid = firstId ?? retried?.request.conversation_id ?? conversationId(base, at, chat.id, chat.forks);
-        if (options.fork) setChat(current => ({ ...current, forks: [...current.forks, cid] }));
+        const reset = runtime && chat.resetRuntime && !options.fork && !retried;
+        const cid = firstId ?? retried?.request.conversation_id ?? (reset ? at : conversationId(base, at, chat.id, chat.forks));
+        if (options.fork || reset) setChat(current => ({ ...current, forks: [...current.forks, cid], resetRuntime: false }));
         if (!options.retry) failedRuntime.current = null;
         const grow = (message: Message) => { const id = message.role === 'assistant' && firstId ? firstId : newId(); if (message.role === 'assistant') firstId = undefined; fresh.current.add(id); thread = append(thread, tipId, id, message); tipId = id; setChat(current => ({ ...current, thread })); };
         fresh.current = new Set(); setFrom(at);
         let history = lineage(thread, at).map(node => node.message);
         if (!runtime) history = recent(history);
-        setChat(current => ({ ...current, thread })); setBusy(true); setError(''); setEditing(null); stuck.current = true;
+        setChat(current => ({ ...current, thread, model: choice })); setBusy(true); setError(''); setEditing(null); stuck.current = true;
         const controller = new AbortController(); stop.current = controller;
         let said = '';
         try {
             await docReady();
             for (let round = 0; round < ROUNDS; round++) {
                 const last = round === ROUNDS - 1;
-                said = ''; setStreaming(''); setLive(null);
+                said = ''; setStreaming(''); setLive(null); setModelStage('');
                 const doc = new DocStream();
                 const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); };
-                const request = runtime ? round === 0 && retried ? retried.request : runtimeRequest(choice.runtime.model, history, situation(), last, cid) : null;
+                const request = runtime ? round === 0 && retried ? retried.request : runtimeRequest(choice.model, history, situation(), last, cid) : null;
                 if (request) {
                     failedRuntime.current = { request, firstId };
                     setChat(current => current.runtimeModels.includes(request.model) ? current : { ...current, runtimeModels: [...current.runtimeModels, request.model] });
                 }
-                const answer = await (request ? askRuntime(request, onDelta, controller.signal, options.retry === true && round === 0)
+                const answer = await (request ? askRuntime(request, onDelta, controller.signal, options.retry === true && round === 0, setModelStage)
                     : own ? askOwn(own, history, situation(), last, onDelta, controller.signal) : ask(history, situation(), last, onDelta, controller.signal)).finally(() => doc.free());
                 failedRuntime.current = null;
                 setStreaming(null); setLive(null);
@@ -291,14 +335,15 @@ export default function AiApp() {
             // Stopped: what was said so far stays, as an answer cut short.
             if (controller.signal.aborted) { if (said) grow({ role: 'assistant', content: said }); return; }
             setError(failure instanceof Error ? failure.message : 'AI 暂时无法响应。');
-        } finally { setStreaming(null); setLive(null); setBusy(false); setFrom(null); stop.current = null; }
+        } finally { setStreaming(null); setLive(null); setModelStage(''); setBusy(false); setFrom(null); stop.current = null; }
     }
     /** A question asked after `parent` (the end of the conversation, or before a question being changed). */
     async function send(question: string, signedIn = false, parent = tip(chat.thread)) {
         const asked = question.trim();
         if (!asked || busy) return;
+        if (!provider) { setError('所选模型已停用或移除，请重新选择。'); return; }
         // The shared quota requires sign-in. Other sources keep their own authorization boundary.
-        if (choice.use === 'free' && !signedIn && !await session()) { setWaiting(asked); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
+        if (free && !signedIn && !await session()) { setWaiting(asked); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
         if (parent === tip(chat.thread)) setDraft('');
         const id = newId();
         void run(append(chat.thread, parent, id, { role: 'user', content: asked }), id, { fork: parent !== tip(chat.thread) });
@@ -327,7 +372,8 @@ export default function AiApp() {
     });
     if (turns.length) turns.at(-1)!.last = true;
     const blank = !shown.length;
-    const composer = <Composer value={draft} onChange={setDraft} onSend={() => void send(draft)} onStop={() => stop.current?.abort()} busy={busy} />;
+    const composer = <Composer value={draft} onChange={setDraft} onSend={() => void send(draft)} onStop={() => stop.current?.abort()} busy={busy}
+        picker={<ModelPicker settings={modelSettings} choice={choice} disabled={busy} select={setModel} />} />;
     const current = kept.chats.find(item => item.id === kept.current);
     return <div className={`sd ai campus-entry ${blank ? 'blank' : ''} ${side ? 'side-open' : ''}`}>
         <aside className="ai-side" aria-label="对话">
@@ -350,27 +396,10 @@ export default function AiApp() {
             <button className="ai-side-memory" onClick={() => { setMinding(true); setSide(false); }}><b>记忆</b><small>{!memory.on ? '已关闭' : memory.text.trim() ? `记着 ${memory.text.split('\n').filter(line => line.trim()).length} 件事` : '还没有'}</small></button>
         </aside>
         {side && <div className="ai-scrim" onClick={() => setSide(false)} />}
-        {picking && <div className="ai-catch" onClick={() => setPicking(false)} />}
         {minding && <MemorySettings memory={memory} onClose={() => setMinding(false)} onSave={next => { memoryNow.current = next; setMemory(next); setMinding(false); }} />}
-        {setting && <OwnSettings own={choice.own} onClose={() => setSetting(false)} onSave={next => { setChoice(current => ({ ...current, use: next.key ? 'own' : current.use === 'own' ? 'free' : current.use, own: next })); setSetting(false); }} />}
-        {runtimeSetting && <RuntimeSettings model={choice.runtime.model} onClose={() => setRuntimeSetting(false)} onSave={model => { setChoice(current => ({ ...current, use: 'runtime', runtime: { model } })); setRuntimeSetting(false); }} />}
         <div className="ai-main">
         <CampusHeader className="ai-bar">
             <button className="ai-icon ai-menu-btn" aria-label="对话列表" onClick={() => setSide(true)}><Bars /></button>
-            <div className="ai-model">
-                <button className={`ai-model-b ${picking ? 'on' : ''}`} disabled={busy} onClick={() => setPicking(!picking)}>
-                    {choice.use === 'free' && <img className="ai-quota-avatar" src={OWNER_AVATAR} referrerPolicy="no-referrer" alt="" />}
-                    {runtime ? choice.runtime.model || 'Local Runtime' : own ? ownName(own) : '免费额度'}<Chevron /></button>
-                {picking && <div className="ai-menu ai-model-menu" role="menu">
-                    <button role="menuitemradio" aria-checked={choice.use === 'free'} onClick={() => { setChoice(current => ({ ...current, use: 'free' })); setPicking(false); }}>
-                        <b><img className="ai-quota-avatar" src={OWNER_AVATAR} referrerPolicy="no-referrer" alt="hicancan" />免费额度</b><small>hicancan 为爱发电提供 · 登录后可用</small>{choice.use === 'free' && <Tick />}</button>
-                    <button role="menuitemradio" aria-checked={Boolean(own)} onClick={() => { if (choice.own.key) setChoice(current => ({ ...current, use: 'own' })); else setSetting(true); setPicking(false); }}>
-                        <b>我的 API</b><small>{choice.own.key ? `${ownName(choice.own)} · 存在这台设备上` : '填上自己的 Key 就能用'}</small>{own && <Tick />}</button>
-                    <button role="menuitemradio" aria-checked={runtime} onClick={() => { setRuntimeSetting(true); setPicking(false); }}>
-                        <b>Local Runtime</b><small>{choice.runtime.model || '连接这台电脑上的模型，无需填写 Key'}</small>{runtime && <Tick />}</button>
-                    <button role="menuitem" className="ai-model-set" onClick={() => { setSetting(true); setPicking(false); }}>设置我的 API…</button>
-                </div>}
-            </div>
             <span className="ai-title">{blank ? '' : titleOf(current ?? { title: '', thread: chat.thread })}</span>
             {!blank && <button className="ai-icon ai-bar-new" aria-label="新对话" title="新对话" disabled={busy} onClick={() => open(null)}><Compose /></button>}
         </CampusHeader>
@@ -408,7 +437,7 @@ export default function AiApp() {
                 </details>}
                 {answer && drawn && <div className="ai-a"><DocText text={answer} /></div>}
                 {turn.last && live && <div className="ai-a"><Doc blocks={live.blocks} live /></div>}
-                {answering && !live && !doing && <p className="ai-think">正在想</p>}
+                {answering && !live && !doing && <p className="ai-think">{modelStage || '正在想'}</p>}
                 {found.size > 0 && [...found.values()].map(item => <Found key={item.name} name={item.name} result={item.result} />)}
                 {drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
                 {!answering && turn.replies.length > 0 && <div className="ai-tools">
@@ -425,44 +454,6 @@ export default function AiApp() {
         {below && !blank && <button className="ai-down" aria-label="回到底部" onClick={() => { stuck.current = true; end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }}><Down /></button>}
         {!blank && <div className="ai-dock">{composer}</div>}
         </div>
-    </div>;
-}
-
-/** A local source discovers only the models its owner granted to this site. */
-function RuntimeSettings({ model, onClose, onSave }: { model: string; onClose: () => void; onSave: (model: string) => void }) {
-    const [models, setModels] = useState<RuntimeModel[]>([]), [selected, setSelected] = useState(model);
-    const [loading, setLoading] = useState(false), [error, setError] = useState('');
-    const pending = useRef<AbortController | null>(null);
-    const connect = async () => {
-        pending.current?.abort();
-        const controller = new AbortController(); pending.current = controller;
-        setLoading(true); setError('');
-        try {
-            const list = await runtimeModels(controller.signal);
-            if (controller.signal.aborted) return;
-            setModels(list); setSelected(current => list.some(item => item.id === current) ? current : list[0]!.id);
-        } catch (failure) { if (!controller.signal.aborted) { setModels([]); setError(failure instanceof Error ? failure.message : 'Local Runtime 未能连接。'); } }
-        finally { if (pending.current === controller) setLoading(false); }
-    };
-    useEffect(() => { void connect(); return () => pending.current?.abort(); }, []);
-    return <div className="ai-modal" role="dialog" aria-label="Local Runtime" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-        <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); if (models.some(item => item.id === selected)) onSave(selected); }}>
-            <h2>Local Runtime</h2>
-            <p className="fine">连接这台电脑上的模型，不需要在这里填写密钥。请先启动 Local Runtime，并允许 StuDev 连接。</p>
-            <label className="ai-model-field"><span>模型</span>
-                <select className="ai-model-select" aria-label="Local Runtime 模型" value={models.some(item => item.id === selected) ? selected : ''} disabled={loading || !models.length} onChange={event => setSelected(event.target.value)}>
-                    {!models.length && <option value="">{loading ? '正在连接…' : '尚未连接'}</option>}
-                    {models.map(item => <option key={item.id} value={item.id}>{item.name === item.id ? item.id : `${item.name} · ${item.id}`}</option>)}
-                </select>
-            </label>
-            {error && <p role="alert" className="ai-error">{error}</p>}
-            <div className="ai-modal-btns">
-                <span />
-                <button type="button" className="ai-pill" onClick={onClose}>取消</button>
-                <button type="button" className="ai-pill" disabled={loading} onClick={() => void connect()}>{loading ? '正在连接…' : '重新连接'}</button>
-                <button className="ai-pill go" disabled={loading || !models.some(item => item.id === selected)}>使用此模型</button>
-            </div>
-        </form>
     </div>;
 }
 
@@ -493,51 +484,6 @@ function MemorySettings({ memory, onClose, onSave }: { memory: Memory; onClose: 
                 <span />
                 <button type="button" className="ai-pill" onClick={onClose}>取消</button>
                 <button className="ai-pill go">保存</button>
-            </div>
-        </form>
-    </div>;
-}
-
-/** One's own provider: where, which model, and the key, kept only on this device. */
-function OwnSettings({ own, onClose, onSave }: { own: Own; onClose: () => void; onSave: (own: Own) => void }) {
-    const [value, setValue] = useState(own);
-    const [models, setModels] = useState<string[]>([]);
-    const [fetching, setFetching] = useState(false);
-    const [fetchNote, setFetchNote] = useState('');
-    const invalid = addressError(value.base);
-    const set = (part: Partial<Own>) => setValue(current => ({ ...current, ...part }));
-    const pull = async () => {
-        setFetching(true); setFetchNote('');
-        try {
-            const list = await fetchModels(value.base, value.key);
-            setModels(list);
-            if (list.length && !list.includes(value.model.trim())) set({ model: list[0]! });
-            setFetchNote(`已获取 ${list.length} 个模型`);
-        } catch (err) {
-            setFetchNote(err instanceof Error ? err.message : '拉取模型失败');
-        } finally { setFetching(false); }
-    };
-    return <div className="ai-modal" role="dialog" aria-label="我的 API" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-        <form className="ai-modal-box" onSubmit={event => { event.preventDefault(); onSave({ base: value.base.trim(), model: value.model.trim(), key: value.key.trim() }); }}>
-            <h2>我的 API</h2>
-            <p className="fine">填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。</p>
-            <label>接口地址<input value={value.base} onChange={event => set({ base: event.target.value })} placeholder="https://api.deepseek.com" required /></label>
-            <small className="fine">{invalid ?? `会请求 ${endpoint(value.base)}`}</small>
-            <label>API Key<input type="password" value={value.key} onChange={event => set({ key: event.target.value })} placeholder="sk-…" autoComplete="off" /></label>
-            <div className="ai-model-field">
-                <div className="ai-model-head"><span>模型</span><button type="button" className="ai-fetch-btn" disabled={fetching || Boolean(invalid) || !value.key.trim()} onClick={() => void pull()}>{fetching ? '拉取中…' : '拉取模型'}</button></div>
-                {models.length > 0 && <select className="ai-model-select" aria-label="从已拉取列表选择模型" value={models.includes(value.model) ? value.model : ''} onChange={event => { if (event.target.value) set({ model: event.target.value }); }}>
-                    {!models.includes(value.model) && <option value="">手动填的模型：{value.model}</option>}
-                    {models.map(id => <option key={id} value={id}>{id}</option>)}
-                </select>}
-                <input value={value.model} onChange={event => set({ model: event.target.value })} placeholder="deepseek-chat" required />
-                {fetchNote && <small className="fine">{fetchNote}</small>}
-            </div>
-            <div className="ai-modal-btns">
-                {own.key && <button type="button" className="ai-pill" onClick={() => onSave({ ...value, key: '' })}>清除 Key</button>}
-                <span />
-                <button type="button" className="ai-pill" onClick={onClose}>取消</button>
-                <button className="ai-pill go" disabled={!!invalid || !value.key.trim() || !value.model.trim()}>保存并使用</button>
             </div>
         </form>
     </div>;

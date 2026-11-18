@@ -57,8 +57,19 @@ public sealed record ChatThread(List<ChatNode> Nodes, Dictionary<string, string>
     }
 }
 
+public sealed record ModelChoice(string ProviderId, string ModelId)
+{
+    public static readonly ModelChoice Free = new("free", "auto");
+    public JsonObject ToJson() => new() { ["providerId"] = ProviderId, ["modelId"] = ModelId };
+    public static ModelChoice? Of(JsonNode? node) =>
+        node is JsonObject value && value["providerId"] is JsonValue provider && provider.TryGetValue<string>(out var providerId)
+                               && value["modelId"] is JsonValue model && model.TryGetValue<string>(out var modelId)
+        ? new(providerId, modelId) : null;
+}
+
 /** A conversation kept on this device. */
-public sealed record SavedChat(string Id, string Title, long Updated, ChatThread Thread, List<string>? Forks = null, List<string>? RuntimeModels = null)
+public sealed record SavedChat(string Id, string Title, long Updated, ChatThread Thread, List<string>? Forks = null,
+    List<string>? RuntimeModels = null, ModelChoice? Choice = null, bool StartsRuntime = false)
 {
     public string ConversationId(string at, ChatThread? from = null) => (from ?? Thread).Lineage(at).LastOrDefault(node => Forks?.Contains(node.Id) == true)?.Id ?? Id;
     public JsonObject ToJson()
@@ -66,9 +77,13 @@ public sealed record SavedChat(string Id, string Title, long Updated, ChatThread
         var json = new JsonObject { ["id"] = Id, ["title"] = Title, ["updated"] = Updated, ["thread"] = Thread.ToJson() };
         if (Forks is { Count: > 0 }) json["forks"] = new JsonArray([.. Forks.Select(id => (JsonNode)JsonValue.Create(id)!)]);
         if (RuntimeModels is { Count: > 0 }) json["runtimeModels"] = new JsonArray([.. RuntimeModels.Select(id => (JsonNode)JsonValue.Create(id)!)]);
+        if (Choice is not null) json["modelChoice"] = Choice.ToJson();
+        if (StartsRuntime) json["startsRuntime"] = true;
         return json;
     }
-    public static SavedChat Of(JsonObject json) => new((string)json["id"]!, json["title"]?.GetValue<string>() ?? "", (long)json["updated"]!, ChatThread.Of(json["thread"]!.AsObject()), json["forks"]?.AsArray().Select(id => (string)id!).ToList(), json["runtimeModels"]?.AsArray().Select(id => (string)id!).Distinct().ToList());
+    public static SavedChat Of(JsonObject json) => new((string)json["id"]!, json["title"]?.GetValue<string>() ?? "",
+        (long)json["updated"]!, ChatThread.Of(json["thread"]!.AsObject()), json["forks"]?.AsArray().Select(id => (string)id!).ToList(),
+        json["runtimeModels"]?.AsArray().Select(id => (string)id!).Distinct().ToList(), ModelChoice.Of(json["modelChoice"]), (bool?)json["startsRuntime"] == true);
 }
 
 public static class Chats

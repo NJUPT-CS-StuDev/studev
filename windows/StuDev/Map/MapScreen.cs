@@ -82,7 +82,7 @@ public sealed partial class MapScreen : Screen
         var search = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = Kit.Line(8, Kit.Icon(Icons.Magnifier, 16, "muted", 20), Kit.Text("搜地点或教室", Role.Label, "muted")), Padding = new Thickness(14, 9, 18, 9), CornerRadius = new CornerRadius(20),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16), Translation = new System.Numerics.Vector3(0, 0, 8), Shadow = new ThemeShadow() };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "搜地点或教室");
-        search.Click += (_, _) => App.Open("search", ("channel", "place"));
+        search.Click += (_, _) => App.OpenLink("/search/?scope=place");
         stage.Children.Add(search);
         var credit = Kit.Text("© OpenStreetMap 贡献者 · njupt-map", Role.Caption, "faint"); credit.FontSize = 10.5; credit.HorizontalAlignment = HorizontalAlignment.Right; credit.VerticalAlignment = VerticalAlignment.Bottom; credit.Margin = new Thickness(0, 0, 10, 6);
         stage.Children.Add(credit);

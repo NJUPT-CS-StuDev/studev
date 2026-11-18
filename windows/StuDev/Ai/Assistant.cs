@@ -70,6 +70,7 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     }
 
     public string RuntimeError(string? code, string fallback) => code is not null && contract["runtimeErrors"]?[code] is JsonValue value && value.TryGetValue<string>(out var text) ? text : fallback;
+    public string? RuntimeStage(string stage) => contract["runtimeStages"]?[stage]?.GetValue<string>();
     public Completion Read(bool runtime = false) => new(names, runtime ? RuntimeError : null);
 
     /** A streamed answer read line by line. */
@@ -163,7 +164,7 @@ public static class Models
         var first = root + "/models";
         return Regex.IsMatch(root, @"/v\d+$") ? [first] : [first, root + "/v1/models"];
     }
-    public static async Task<List<string>> FetchModelsAsync(HttpClient http, string @base, string key, bool runtime = false)
+    public static async Task<List<string>> FetchModelsAsync(HttpClient http, string @base, string key, bool runtime = false, CancellationToken cancel = default)
     {
         if (AddressError(@base, runtime) is not null) throw new InvalidOperationException("接口地址格式不对");
         var trimmed = key.Trim();
@@ -172,10 +173,10 @@ public static class Models
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", trimmed);
-            using var res = await http.SendAsync(req);
+            using var res = await http.SendAsync(req, cancel);
             if ((int)res.StatusCode == 404) continue;
             if (!res.IsSuccessStatusCode) throw new InvalidOperationException((int)res.StatusCode == 401 ? "API Key 无效或无权限" : $"请求失败（{(int)res.StatusCode}）");
-            var root = JsonNode.Parse(await res.Content.ReadAsStringAsync())?.AsObject();
+            var root = JsonNode.Parse(await res.Content.ReadAsStringAsync(cancel))?.AsObject();
             var ids = root?["data"]?.AsArray().Select(item => (string?)item?["id"]).Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id!.Trim()).Distinct().ToList() ?? [];
             if (ids.Count > 0) return ids;
         }
@@ -183,12 +184,11 @@ public static class Models
     }
     public static string? AddressError(string @base, bool runtime = false)
     {
-        var said = runtime ? "Local Runtime 使用 HTTPS，或 http://localhost / http://127.0.0.1。" : "接口地址以 https:// 开头，只写地址本身。";
+        var said = runtime ? "Local Runtime MCP 地址须指向这台电脑，例如 http://127.0.0.1:9316/v1。" : "接口地址以 https:// 开头，只写地址本身。";
         if (!Uri.TryCreate(@base.Trim(), UriKind.Absolute, out var uri)) return said;
-        var transport = uri.Scheme == "https" || runtime && uri.Scheme == "http" && uri.Host is "localhost" or "127.0.0.1";
+        var transport = runtime ? (uri.Host is "localhost" or "127.0.0.1" or "[::1]") && (uri.Scheme is "https" or "http") : uri.Scheme == "https";
         return transport && uri.Host.Length > 0 && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? null : said;
     }
-    public static string Name(Own own) => own.Model.Trim().Length > 0 ? own.Model : "我的 API";
     public static async Task CloseConversationsAsync(HttpClient http, Own own, IEnumerable<string> models, IEnumerable<string> ids)
     {
         if (!own.Runtime || own.Key.Length == 0) return;

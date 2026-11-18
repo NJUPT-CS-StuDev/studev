@@ -40,6 +40,15 @@ beforeAll(async () => {
 });
 afterAll(() => { engine?.dispose(); vi.unstubAllGlobals(); });
 
+it('finds both a classroom and a building through the map search channel', async () => {
+    const channel = channels.find(channel => channel.id === 'place')!;
+    const search = (query: string) => engine.search({ query, offset: 0, limit: 10, sort: 'relevance', filters: { sourceIds: channel.sources } }, () => {});
+    const classroom = await search('教1-101');
+    expect(classroom.results).toContainEqual(expect.objectContaining({ source: 'rooms', id: 'rooms/仙林/教1-101' }));
+    const building = await search('教1');
+    expect(building.results).toContainEqual(expect.objectContaining({ source: 'places', id: 'places/仙林/教1' }));
+});
+
 it('uses released building access for real room routes and retains the requested room destinations', async () => {
     const tools = new CampusTools();
     try {

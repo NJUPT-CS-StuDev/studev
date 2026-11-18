@@ -32,6 +32,12 @@
   "unknown": "当前教学周尚未取得"
  },
  "runtimeErrors": {
+  "model_queue_timeout": "本机模型正在处理其他请求，请稍后重试。",
+  "browser_ready_timeout": "模型页面迟迟未就绪，请在浏览器中查看。",
+  "browser_composer_not_ready": "模型输入框尚未就绪，问题未发送。可以重试。",
+  "model_first_output_timeout": "模型页面迟迟没有返回内容，你可以重试本轮。",
+  "model_output_stalled": "模型暂停输出，未完成的回答可继续重试。",
+  "model_timeout": "本轮等待超时，请查看模型页面或重试。",
   "provider_unavailable": "模型网站暂时不可用，请稍后再试。",
   "browser_login_required": "请先在本机浏览器中登录模型网站，再重新提问。",
   "browser_interaction_required": "模型网站需要你完成页面操作，请在浏览器中查看。",
@@ -49,6 +55,12 @@
   "conversation_browser_conflict": "提供此会话的浏览器已经改变，请重新连接。",
   "conversation_closed": "此模型会话已经关闭，请新建对话。",
   "conversation_capacity": "本机模型会话已满，请先关闭不用的会话。"
+ },
+ "runtimeStages": {
+  "queued": "等待本机模型空闲",
+  "preparing": "正在打开模型页面",
+  "waiting": "等待模型回复",
+  "generating": "模型正在回复"
  },
  "diagrams": [
   "flowchart",

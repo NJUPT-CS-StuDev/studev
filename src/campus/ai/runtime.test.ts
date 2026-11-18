@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { askRuntime, closeRuntimeChat, runtimeModels, runtimeRequest, runtimeErrorMessage } from './runtime';
 import { LocalRuntimeError } from '@local-runtime-mcp/browser-extension/sdk';
-import { readChoice, writeChoice, STARTING_OWN } from './model';
+import { readModelSettings, selectedProvider, STARTING_OWN } from './model';
 import { append, choose, conversationId, emptyThread } from './thread';
 
 const bridge = vi.hoisted(() => ({ listModels: vi.fn(), chat: vi.fn(), closeConversation: vi.fn() }));
@@ -56,12 +56,16 @@ it('discovers only owner-granted models and rejects an empty or malformed result
     bridge.listModels.mockResolvedValue({ models: ['invented'] }); await expect(runtimeModels()).rejects.toThrow('模型列表无效');
 });
 
-it('keeps the runtime selection explicit without losing the existing personal provider choice', () => {
+it('migrates the runtime selection and the existing personal provider into the current settings', () => {
     const values = new Map<string, string>(); vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) });
-    writeChoice({ use: 'runtime', own: { ...STARTING_OWN, key: 'test-only-old-key' }, runtime: { model: 'deepseek-web' } });
-    expect(readChoice()).toMatchObject({ use: 'runtime', own: { key: 'test-only-old-key' }, runtime: { model: 'deepseek-web' } });
-    values.set('studev_ai_model', JSON.stringify({ use: 'own', own: { ...STARTING_OWN, key: 'test-only-old-key' } }));
-    expect(readChoice()).toMatchObject({ use: 'own', runtime: { model: '' } });
+    values.set('studev_ai_model', JSON.stringify({ use: 'runtime', own: { ...STARTING_OWN, key: 'test-only-old-key' }, runtime: { model: 'deepseek-web' } }));
+    const settings = readModelSettings();
+    expect(settings.selection).toEqual({ provider: 'runtime', model: 'deepseek-web' });
+    expect(settings.providers).toMatchObject([{ kind: 'api', key: 'test-only-old-key', models: [{ id: STARTING_OWN.model, enabled: true }] }, { kind: 'runtime', key: '' }]);
+    expect(JSON.parse(values.get('studev_ai_model')!)).toEqual(settings);
+    expect(selectedProvider(settings, settings.selection)).toMatchObject({ id: 'runtime' });
+    settings.providers[1]!.models[0]!.enabled = false;
+    expect(selectedProvider(settings, settings.selection)).toBeUndefined();
 });
 
 it('keeps all dialogue, and explicitly retries the same accepted request without repeating completed tools', async () => {

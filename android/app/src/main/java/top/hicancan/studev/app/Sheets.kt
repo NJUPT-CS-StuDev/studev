@@ -303,6 +303,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
 
 @Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: () -> Unit, onClose: () -> Unit) {
     var section by remember { mutableStateOf("home") }
+    if (section == "models") { top.hicancan.studev.ai.ModelServicesSheet { section = "home" }; return }
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
     if (layering) { LayerSheet(settings, model) { layering = false }; return }
@@ -332,6 +333,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 Spacer(Modifier.height(12.dp))
                 KeyRow(null, "成员", "查看头像、昵称和签名", chevron = true, onClick = { onClose(); onMembers() })
                 KeyRow(null, "课表设置", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "选择班级、调整课程与实验" }, chevron = true, onClick = { section = "timetable" })
+                KeyRow(null, "模型服务", "管理 API Key 和启用的模型", chevron = true, onClick = { section = "models" })
                 KeyRow(null, "外观", "跟随系统、浅色或深色", chevron = true, onClick = { section = "appearance" })
                 KeyRow(null, "桌面小组件", "把课表和任务放到桌面", chevron = true, onClick = { section = "widgets" })
                 KeyRow(null, "提醒与权限", "课前提醒、通知和后台导航", chevron = true, onClick = { section = "permissions" })

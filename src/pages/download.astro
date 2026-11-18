@@ -1,49 +1,138 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
-const version = PRODUCT_CONFIG.ANDROID_APP.VERSION;
+
+const android = PRODUCT_CONFIG.ANDROID_APP;
+const runtimeRelease = 'https://github.com/hicancan/local-runtime-mcp/releases/latest';
+const clients = [
+  {
+    name: '网页版',
+    description: '在手机或电脑的浏览器打开即用。',
+    detail: '可添加到主屏幕',
+    action: '打开网页版',
+    href: '/',
+  },
+  {
+    name: 'Android',
+    description: '课表与地图支持离线查看，桌面小组件能显示下一节课。',
+    detail: `APK · ${android.VERSION}`,
+    action: '下载 Android 版',
+    href: android.PACKAGE_URL,
+    package: true,
+  },
+  {
+    name: 'Windows',
+    description: '支持自动更新，解压后打开 StuDev.exe。',
+    detail: `x64 · ${android.VERSION}`,
+    action: '下载 Windows 版',
+    href: `/download/windows/studev-${android.VERSION}-windows.zip`,
+    package: true,
+  },
+];
 ---
-<SiteLayout title="下载 StuDev" noPwa>
-  <section class="download-page">
-    <h1>下载 StuDev</h1>
-    <p class="download-summary">安卓手机：{PRODUCT_CONFIG.ANDROID_APP.SUMMARY}</p>
-    <a class="download-button" href={PRODUCT_CONFIG.ANDROID_APP.PACKAGE_URL} data-astro-prefetch="false" rel="nofollow">下载 Android 版 {version}</a>
-    <p class="download-help">下载后在浏览器的下载列表中打开，按系统提示安装。微信、QQ 内请先选择“在浏览器打开”。</p>
-    {/* Each other way is a row of its own: what it is, why one would take it, and a chevron to say it opens. */}
-    <h2 class="download-more">下载不动时换一个</h2>
-    <a class="download-route" href={PRODUCT_CONFIG.ANDROID_APP.BACKUP_URL} rel="nofollow" data-astro-prefetch="false">
-      <span><b>备用下载</b><small>另一条线路，同一个安装包</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
-    </a>
-    <a class="download-route" href={PRODUCT_CONFIG.ANDROID_APP.RELEASES_URL}>
-      <span><b>GitHub</b><small>所有版本和更新说明</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
-    </a>
-    <h2 class="download-more">电脑和 iPhone</h2>
-    <a class="download-route" href={`/download/windows/studev-${version}-windows.zip`} rel="nofollow" data-astro-prefetch="false">
-      <span><b>Windows 版（解压即用）</b><small>原生应用，课表、三维地图、搜索和 AI 都在本机运行，自动更新；Windows 10 和 11。解压后打开 StuDev.exe，第一次若被拦下，点“更多信息”再点“仍要运行”</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
-    </a>
-    <a class="download-route" href="/">
-      <span><b>使用网页版</b><small>iPhone、Mac 和任何浏览器都能用，可以添加到主屏幕</small></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>
-    </a>
+<SiteLayout title="获取 StuDev" description="在浏览器、Android 或 Windows 上使用 StuDev。还可以下载 Local Runtime MCP，连接这台电脑上的浏览器模型。" active="download" noPwa>
+  <div class="download-page">
+    <header class="download-heading">
+      <h1>获取 StuDev</h1>
+      <p>课表、地图、知识、搜索和 AI 随时可用。</p>
+    </header>
+
+    <div class="download-clients">
+      {clients.map(client => <article class="download-client">
+        <h2>{client.name}</h2>
+        <p>{client.description}</p>
+        <small>{client.detail}</small>
+        <a class="download-action" href={client.href} rel={client.package ? 'nofollow' : undefined} data-astro-prefetch={client.package ? 'false' : undefined}>{client.action}</a>
+      </article>)}
+    </div>
+
+    <div class="download-support">
+      <p>微信或 QQ 内下载 Android 版时，请先选择「在浏览器打开」。</p>
+      <a href={android.BACKUP_URL} rel="nofollow" data-astro-prefetch="false">Android 备用下载</a>
+      <a href={android.RELEASES_URL}>版本记录</a>
+    </div>
+
+    <section class="desktop-tools" aria-labelledby="desktop-tools-title">
+      <h2 id="desktop-tools-title">桌面工具</h2>
+      <div class="desktop-tool">
+        <div>
+          <h3>Local Runtime MCP</h3>
+          <p>让 StuDev 网页版和 Windows 版使用这台电脑浏览器里的模型。下载包含运行时和浏览器扩展，解压后按包内说明配置。</p>
+        </div>
+        <a class="download-action tool-action" href={runtimeRelease}>获取 Local Runtime MCP</a>
+      </div>
+    </section>
+
     <p class="download-filing">App 备案号 <a href={PRODUCT_CONFIG.FILINGS.APP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.APP.TEXT}</a></p>
-  </section>
+  </div>
 </SiteLayout>
 <style>
-  .download-page { max-width: 560px; margin: 0 auto; padding: 72px 20px; }
-  h1 { font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
-  .download-summary { color: var(--muted); margin: 0 0 28px; }
-  .download-page .download-button { display: inline-block; padding: 10px 20px; border-radius: 8px; background: var(--brand); color: var(--on-brand); font-weight: 500; }
-  .download-page .download-button:hover { color: var(--on-brand); }
-  .download-help { color: var(--muted); font-size: 13.5px; margin: 20px 0 0; }
-  .download-filing { color: var(--faint); font-size: 12.5px; margin: 40px 0 0; text-align: center; }
+  .download-page {
+    width: min(920px, calc(100% - 2 * var(--space-xl)));
+    margin-inline: auto;
+    padding-block: clamp(54px, 6vw, 88px) var(--space-xxl);
+  }
+  .download-heading { margin-block-end: var(--space-xxl); }
+  h1 { margin: 0; font-size: clamp(30px, 4vw, 42px); font-weight: 650; letter-spacing: -.04em; line-height: 1.25; }
+  .download-heading p { margin: var(--space-s) 0 0; color: var(--muted); font-size: 16px; }
+  .download-clients { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-l); }
+  .download-client {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-xl);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .download-client h2, .desktop-tool h3 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.025em; line-height: 1.35; }
+  .download-client p, .desktop-tool p { margin: var(--space-s) 0 0; color: var(--muted); font-size: 14px; }
+  .download-client p { flex: 1; }
+  .download-client small { margin: var(--space-l) 0 var(--space-s); color: var(--muted); font-size: 12px; }
+  .download-action {
+    display: grid;
+    place-items: center;
+    min-height: var(--size-target);
+    padding: var(--space-s) var(--space-l);
+    border-radius: var(--radius-control);
+    background: var(--brand-container);
+    color: var(--on-brand-container);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .download-action:hover { background: color-mix(in srgb, var(--brand) 14%, var(--brand-container)); color: var(--on-brand-container); }
+  .download-support {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-l);
+    margin-block-start: var(--space-l);
+    font-size: 13px;
+  }
+  .download-support p { margin: 0; color: var(--muted); flex: 1 0 min(100%, 330px); }
+  .download-support a { color: var(--brand); }
+  .download-support a:hover, .download-filing a:hover { text-decoration: underline; }
+  .desktop-tools { margin-block-start: 44px; }
+  .desktop-tools h2 { margin: 0 0 var(--space-m); color: var(--muted); font-size: 14px; font-weight: 600; }
+  .desktop-tool {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-l) var(--space-xl);
+    padding-block: var(--space-xl);
+    border-block: 1px solid var(--line);
+  }
+  .desktop-tool h3 { font-size: 18px; }
+  .desktop-tool p { max-width: 52ch; }
+  .tool-action { flex: none; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+  .tool-action:hover { background: var(--surface); color: var(--ink); }
+  .download-filing { margin: var(--space-xl) 0 0; color: var(--muted); font-size: 12px; }
   .download-filing a { color: inherit; }
-  .download-more { margin: 40px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
-  .download-route { display: flex; align-items: center; gap: 12px; margin: 0 -12px; padding: 12px; border-radius: 10px; color: var(--ink); text-decoration: none; }
-  .download-route { position: relative; }
-  .download-route + .download-route::before { content: ""; position: absolute; left: 12px; right: 12px; top: 0; border-top: 1px solid var(--line); }
-  .download-route:hover { background: var(--surface-sunken); color: var(--ink); }
-  .download-route:hover::before, .download-route:hover + .download-route::before { border-color: transparent; }
-  .download-route span { flex: 1; min-width: 0; }
-  .download-route b { display: block; font-size: 15px; font-weight: 500; }
-  .download-route small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
-  .download-route svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  @media (max-width: 720px) {
+    .download-page { width: calc(100% - 2 * var(--space-l)); }
+    .download-heading { margin-block-end: var(--space-xl); }
+    .download-clients { grid-template-columns: 1fr; gap: var(--space-m); }
+    .download-client { padding: var(--space-l); }
+    .desktop-tool { flex-wrap: wrap; }
+  }
 </style>

@@ -34,7 +34,6 @@ import top.hicancan.studev.app.Chip
 import top.hicancan.studev.app.Ink
 import top.hicancan.studev.app.Plain
 import top.hicancan.studev.app.PlainSheet
-import top.hicancan.studev.app.QqAvatarImage
 import top.hicancan.studev.app.Route
 import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.CampusTools
@@ -71,25 +70,21 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     val client = remember { Accounts.get(context) }
     val scope = rememberCoroutineScope()
     val kept = remember { context.getSharedPreferences("ai_chat", android.content.Context.MODE_PRIVATE) }
+    val modelPrefs = remember(context) { ModelPreferences.get(context) }
+    val catalog by rememberModelCatalog(modelPrefs)
     var draft by remember { mutableStateOf("") }
-    val start = remember { readChats(kept) }
+    val start = remember { readChats(kept, catalog.preferred) }
     var chats by remember { mutableStateOf(start.first) }
     var current by remember { mutableStateOf<String?>(start.second ?: java.util.UUID.randomUUID().toString()) }
     var thread by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.thread ?: ChatThread()) }
+    var selection by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.selection ?: catalog.forNewChat()) }
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     var opening by remember { mutableStateOf(true) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val assistant = remember { Assistant.load(context) }
-    val modelPrefs = remember { context.getSharedPreferences("ai_model", android.content.Context.MODE_PRIVATE) }
-    val initialModel = remember(modelPrefs) { Models.read(modelPrefs) }
-    var useOwn by remember { mutableStateOf(initialModel.first) }
-    var own by remember { mutableStateOf(initialModel.second) }
-    var picking by remember { mutableStateOf(false) }
-    var setting by remember { mutableStateOf(false) }
     val memory = model.settings.state.collectAsState().value.memory
     var minding by remember { mutableStateOf(false) }
-    val asking = own.takeIf { useOwn && it.key.isNotBlank() }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
     var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
@@ -115,7 +110,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         if (thread.nodes.isEmpty()) return@LaunchedEffect
         val id = current ?: java.util.UUID.randomUUID().toString()
         val before = chats.firstOrNull { it.id == id }
-        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), thread)) + chats.filter { it.id != id }
+        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), thread, selection)) + chats.filter { it.id != id }
         current = id
     }
     LaunchedEffect(chats, current) { kept.edit().putString("chats", buildJsonObject { put("chats", JsonArray(chats.map { it.toJson() })); current?.let { put("current", it) } }.toString()).remove("thread").remove("messages").apply() }
@@ -124,7 +119,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     LaunchedEffect(thread.nodes.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
 
     /** Answering after [at] in [base]: each message said grows the branch from there, and is the one shown. */
-    suspend fun run(base: ChatThread, at: String) {
+    suspend fun run(base: ChatThread, at: String, mine: Own?) {
         var tipId = at
         fun grow(message: JsonObject) {
             val id = java.util.UUID.randomUUID().toString()
@@ -146,7 +141,6 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 val doc = top.hicancan.docstream.DocStream()
                 fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
                 try {
-                    val mine = asking
                     if (mine != null) answer = assistant.askOwn(mine, history, situation, last, onDelta = ::onDelta)
                     else client.stream("/ai", buildJsonObject { put("messages", JsonArray(history)); put("last", last); put("situation", situation.toJson()) }) { event, data ->
                         when (event) {
@@ -177,24 +171,33 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             throw e
         } finally { streaming = null; live = null }
     }
-    fun start(base: ChatThread, at: String) {
+    fun start(base: ChatThread, at: String, selected: ModelSelection = selection): Boolean {
+        val mine = ModelPreferences.read(modelPrefs).direct(selected)
+        if (selected.provider != null && mine == null) {
+            error = "当前模型已停用或移除，请重新选择。"
+            return false
+        }
         error = ""
         job = scope.launch {
-            try { run(base, at) }
+            try { run(base, at, mine) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalStateException) e.message.orEmpty() else "AI 暂不可用，请稍后重试。" }
             finally { job = null; from = null }
         }
+        return true
     }
     /** A question asked after [parent] (the end of the conversation, or before a question being changed). */
     fun ask(question: String, parent: String = thread.tip()) {
         if (question.isBlank() || busy) return
+        val selected = selection
+        val chat = current
         scope.launch {
             // One's own key needs no sign-in; the free quota is shared, so it is asked when signed in.
-            if (asking == null && client.current() == null) { waiting = question; return@launch }
-            if (parent == thread.tip()) draft = ""
+            if (selected.provider == null && client.current() == null) { waiting = question; return@launch }
+            if (current != chat || job != null) return@launch
             val id = java.util.UUID.randomUUID().toString()
-            start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id)
+            val fromTip = parent == thread.tip()
+            if (start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id, selected) && fromTip) draft = ""
         }
     }
     /** The answer to a question asked again, beside the answer it had. */
@@ -203,8 +206,10 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     fun open(id: String?) {
         if (busy) return
         opening = true
-        thread = chats.firstOrNull { it.id == id }?.thread ?: ChatThread()
-        current = chats.firstOrNull { it.id == id }?.id ?: java.util.UUID.randomUUID().toString()
+        val chat = chats.firstOrNull { it.id == id }
+        thread = chat?.thread ?: ChatThread()
+        current = chat?.id ?: java.util.UUID.randomUUID().toString()
+        selection = chat?.selection ?: catalog.forNewChat()
         proposals = emptyList(); saved = emptySet(); error = ""; editing = null
         scope.launch { drawer.close() }
     }
@@ -223,14 +228,26 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     // One turn: a question, and everything that answered it, however many rounds of looking up it took.
     val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
-    val composer: @Composable () -> Unit = { Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy) }
+    val composer: @Composable () -> Unit = {
+        val unavailable = selection.provider != null && catalog.direct(selection) == null
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (unavailable) Plain("当前模型已停用或移除，请重新选择。", 12.sp, marks().danger, modifier = Modifier.padding(horizontal = 8.dp))
+            Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy, canSend = !unavailable) {
+                ChatModelPicker(catalog, selection, enabled = !busy) { next ->
+                    selection = next
+                    chats = chats.map { if (it.id == current) it.copy(selection = next) else it }
+                    ModelPreferences.update(modelPrefs) { it.copy(preferred = next) }
+                    error = ""
+                }
+            }
+        }
+    }
     if (minding) MemorySettings(memory, onClose = { minding = false }) { next -> model.settings.update { it.copy(memory = next) }; minding = false }
     inspectingCall?.let { (title, body) -> PlainSheet(title, { inspectingCall = null }) {
         androidx.compose.foundation.text.selection.SelectionContainer {
             Column(Modifier.verticalScroll(rememberScrollState())) { Plain(body, 13.sp, Ink.muted) }
         }
     } }
-    if (setting) OwnSettings(own, onClose = { setting = false }) { next -> own = next; useOwn = next.key.isNotBlank(); Models.write(modelPrefs, useOwn, next); setting = false }
     renaming?.let { chat ->
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text("重命名") },
@@ -275,28 +292,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         CampusHeader(Modifier.padding(start = 6.dp, end = 14.dp)) {
             IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
-            Box(Modifier.weight(1f)) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (asking == null) QqAvatarImage(Models.OWNER_QQ, Modifier.size(18.dp).clip(CircleShape))
-                    Plain(asking?.let(Models::name) ?: "免费额度", 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                    Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp), tint = Ink.muted)
-                }
-                DropdownMenu(picking, { picking = false }, containerColor = Ink.paper) {
-                    DropdownMenuItem({ Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            QqAvatarImage(Models.OWNER_QQ, Modifier.size(18.dp).clip(CircleShape))
-                            Text("免费额度")
-                        }
-                        Plain("hicancan 为爱发电提供 · 登录后可用", 12.sp, Ink.muted)
-                    } }, { if (!busy) { useOwn = false; Models.write(modelPrefs, false, own) }; picking = false }, enabled = !busy,
-                        trailingIcon = { if (asking == null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
-                    DropdownMenuItem({ Column { Text("我的 API"); Plain(if (own.key.isNotBlank()) "${Models.name(own)} · 存在这台设备上" else "填上自己的 Key 就能用", 12.sp, Ink.muted) } },
-                        { picking = false; if (own.key.isNotBlank()) { useOwn = true; Models.write(modelPrefs, true, own) } else setting = true }, enabled = !busy,
-                        trailingIcon = { if (asking != null) Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)) })
-                    HorizontalDivider(color = Ink.line)
-                    DropdownMenuItem({ Text("设置我的 API…", color = Ink.muted) }, { picking = false; setting = true }, enabled = !busy)
-                }
-            }
+            Plain(chats.firstOrNull { it.id == current }?.let { Chats.titleOf(it.title, it.thread) } ?: "AI", 15.sp,
+                weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
             if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null) }
         }
         if (shown.isEmpty()) {
@@ -382,54 +379,14 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     }
 }
 
-/** One's own provider: where, which model, and the key, kept only on this device, as OwnSettings in AiApp.tsx. */
-@Composable private fun OwnSettings(own: Own, onClose: () -> Unit, onSave: (Own) -> Unit) {
-    var base by remember { mutableStateOf(own.base) }
-    var model by remember { mutableStateOf(own.model) }
-    var key by remember { mutableStateOf(own.key) }
-    var models by remember { mutableStateOf<List<String>>(emptyList()) }
-    var pickingModel by remember { mutableStateOf(false) }
-    var fetching by remember { mutableStateOf(false) }
-    var fetchNote by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
-    val invalid = Models.addressError(base)
-    AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper, title = { Text("我的 API") },
-        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Plain("填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台手机上，提问从这里直接发给服务商。", 13.sp, Ink.muted, lineHeight = 20.sp)
-            OutlinedTextField(base, { base = it }, label = { Text("接口地址") }, singleLine = true)
-            if (invalid != null) Plain(invalid, 12.sp, marks().danger)
-            OutlinedTextField(key, { key = it }, label = { Text("API Key") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                if (models.isNotEmpty()) Box {
-                    Chip("选模型 (${models.size}) ▾", { pickingModel = true })
-                    DropdownMenu(pickingModel, { pickingModel = false }, containerColor = Ink.paper, modifier = Modifier.heightIn(max = 280.dp)) {
-                        models.forEach { id -> DropdownMenuItem({ Plain(id, 13.5.sp) }, { pickingModel = false; model = id }) }
-                    }
-                } else Spacer(Modifier.width(1.dp))
-                Chip(if (fetching) "拉取中…" else "拉取模型列表", {
-                    if (fetching || invalid != null || key.isBlank()) return@Chip
-                    fetching = true; fetchNote = ""
-                    scope.launch {
-                        runCatching { Models.fetchModels(base, key) }
-                            .onSuccess { list -> models = list; if (list.isNotEmpty() && model.trim() !in list) model = list.first(); fetchNote = "已获取 ${list.size} 个模型" }
-                            .onFailure { fetchNote = it.message ?: "拉取模型失败" }
-                        fetching = false
-                    }
-                })
-            }
-            OutlinedTextField(model, { model = it }, label = { Text("模型") }, singleLine = true)
-            if (fetchNote.isNotEmpty()) Plain(fetchNote, 12.sp, Ink.muted)
-        } },
-        confirmButton = { TextButton({ onSave(Own(base.trim(), model.trim(), key.trim())) }, enabled = invalid == null && model.isNotBlank() && key.isNotBlank()) { Text("保存并使用") } },
-        dismissButton = { Row { if (own.key.isNotBlank()) TextButton({ onSave(own.copy(key = "")) }) { Text("清除 Key", color = marks().danger) }; TextButton(onClose) { Text("取消") } } })
-}
-
 /** The conversations kept on this device, and the one open; one kept before there could be many becomes the first. */
-private fun readChats(kept: android.content.SharedPreferences): Pair<List<SavedChat>, String?> = runCatching {
-    kept.getString("chats", null)?.let { text -> Json.parseToJsonElement(text).jsonObject.let { json -> json.getValue("chats").jsonArray.map { SavedChat.of(it.jsonObject) } to json["current"]?.jsonPrimitive?.contentOrNull } }
+private fun readChats(kept: android.content.SharedPreferences, imported: ModelSelection): Pair<List<SavedChat>, String?> = runCatching {
+    kept.getString("chats", null)?.let { text -> Json.parseToJsonElement(text).jsonObject.let { json ->
+        json.getValue("chats").jsonArray.map { SavedChat.of(it.jsonObject).let { chat -> if (chat.selection == null) chat.copy(selection = imported) else chat } } to json["current"]?.jsonPrimitive?.contentOrNull
+    } }
         ?: (kept.getString("thread", null)?.let { ChatThread.of(Json.parseToJsonElement(it).jsonObject) }
             ?: kept.getString("messages", null)?.let { old -> Json.parseToJsonElement(old).jsonArray.map { it.jsonObject }.let { ChatThread.chain(it, it.map { java.util.UUID.randomUUID().toString() }) } })
-            ?.takeIf { it.nodes.isNotEmpty() }?.let { thread -> val id = java.util.UUID.randomUUID().toString(); listOf(SavedChat(id, "", System.currentTimeMillis(), thread)) to id }
+            ?.takeIf { it.nodes.isNotEmpty() }?.let { thread -> val id = java.util.UUID.randomUUID().toString(); listOf(SavedChat(id, "", System.currentTimeMillis(), thread, imported)) to id }
 }.getOrNull() ?: (emptyList<SavedChat>() to null)
 
 /** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
@@ -460,17 +417,56 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
     }
 }
 
-/** The box one writes in: round and lifted, one round button that sends, or stops while answering. */
-@Composable private fun Composer(value: String, onChange: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit, busy: Boolean) {
+@Composable private fun ChatModelPicker(catalog: ModelCatalog, selected: ModelSelection, enabled: Boolean, choose: (ModelSelection) -> Unit) {
+    var opened by remember { mutableStateOf(false) }
+    var stage by remember { mutableStateOf<String?>(null) }
+    val selectedService = catalog.service(selected.provider)?.name ?: "服务商已删除"
+    val label = if (selected.provider == null) FREE_MODEL else "$selectedService · ${selected.model.orEmpty()}"
+    fun dismiss() { opened = false; stage = null }
+    Box {
+        Row(Modifier.widthIn(max = 230.dp).clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { opened = true }
+            .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Plain(label, 12.sp, if (enabled) Ink.text else Ink.muted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+            Icon(Icons.Outlined.KeyboardArrowDown, "选择服务商和模型", Modifier.size(16.dp), tint = Ink.muted)
+        }
+        DropdownMenu(opened && enabled, ::dismiss, modifier = Modifier.heightIn(max = 320.dp), containerColor = Ink.paper) {
+            val provider = stage
+            if (provider == null) {
+                DropdownMenuItem({ Plain("选择服务商", 12.sp, Ink.muted) }, {}, enabled = false)
+                DropdownMenuItem({ Plain(FREE_SERVICE, 14.sp) }, { stage = "" })
+                val options = catalog.services.filter { service -> service.enabled && service.key.isNotBlank() && service.models.any { it.enabled } }
+                options.forEach { service -> DropdownMenuItem({ Plain(service.name, 14.sp) }, { stage = service.id }) }
+                if (options.isEmpty()) {
+                    DropdownMenuItem({ Plain("在「我 → 模型服务」添加服务商", 12.sp, Ink.muted) }, {}, enabled = false)
+                }
+            } else {
+                DropdownMenuItem({ Plain("选择模型", 12.sp, Ink.muted) }, { stage = null },
+                    leadingIcon = { Icon(Icons.Outlined.ChevronLeft, "返回服务商列表", Modifier.size(18.dp), tint = Ink.muted) })
+                val options = if (provider.isEmpty()) listOf(FREE_MODEL to ModelSelection())
+                    else catalog.service(provider)?.models.orEmpty().filter { it.enabled }.map { it.id to ModelSelection(provider, it.id) }
+                options.forEach { (name, model) ->
+                    DropdownMenuItem({ Plain(name, 14.sp) }, { dismiss(); choose(model) },
+                        trailingIcon = { if (model == selected) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
+                }
+            }
+        }
+    }
+}
+
+/** The composer keeps the model choice next to the send control. */
+@Composable private fun Composer(value: String, onChange: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit, busy: Boolean, canSend: Boolean, model: @Composable () -> Unit) {
     val shape = RoundedCornerShape(28.dp)
-    Row(Modifier.fillMaxWidth().shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = .08f), spotColor = Color.Black.copy(alpha = .08f)).clip(shape).background(Ink.paper).border(1.dp, Ink.line.copy(alpha = .6f), shape)
-        .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = .08f), spotColor = Color.Black.copy(alpha = .08f)).clip(shape).background(Ink.paper).border(1.dp, Ink.line.copy(alpha = .6f), shape)
+        .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
         val ink = Ink.text
-        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.weight(1f).heightIn(max = 160.dp).padding(vertical = 8.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 24.sp, color = ink),
+        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.fillMaxWidth().heightIn(max = 128.dp).padding(top = 5.dp, bottom = 2.dp, end = 8.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 24.sp, color = ink),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(ink), decorationBox = { inner -> if (value.isEmpty()) Plain("问点什么", 16.sp, Ink.faint); inner() })
-        val enabled = busy || value.isNotBlank()
-        Box(Modifier.size(38.dp).clip(CircleShape).background(if (enabled) ink else ink.copy(alpha = .18f)).clickable(enabled = enabled) { if (busy) onStop() else onSend() }, contentAlignment = Alignment.Center) {
-            Icon(if (busy) Icons.Filled.Stop else Icons.Filled.ArrowUpward, if (busy) "停止" else "发送", Modifier.size(20.dp), tint = Ink.paper)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+            model()
+            val enabled = busy || canSend && value.isNotBlank()
+            Box(Modifier.size(38.dp).clip(CircleShape).background(if (enabled) ink else ink.copy(alpha = .18f)).clickable(enabled = enabled) { if (busy) onStop() else onSend() }, contentAlignment = Alignment.Center) {
+                Icon(if (busy) Icons.Filled.Stop else Icons.Filled.ArrowUpward, if (busy) "停止" else "发送", Modifier.size(20.dp), tint = Ink.paper)
+            }
         }
     }
 }

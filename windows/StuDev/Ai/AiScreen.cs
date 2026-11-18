@@ -2,7 +2,7 @@
 // three, run on this device. The answer shows as it comes, drawn by docstream; what was looked up shows as steps one
 // can open; rooms, places and routes it finds are things to tap; a task it drafts is saved only when confirmed. A
 // question can be changed and an answer asked again, each growing a branch beside the old one. Conversations and what
-// it keeps in mind are kept on this device. The model is the free quota (signed in) or one's own key. AiApp.tsx.
+// it keeps in mind are kept on this device. Each conversation chooses a model service and model. AiApp.tsx.
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -27,6 +27,7 @@ public sealed partial class AiScreen : Screen
     private static readonly string[] Examples = ["这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？"];
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     private readonly Campus campus = Campus.Shared;
+    private readonly ModelProviders providers = ModelProviders.Shared;
     private readonly Assistant assistant = Assistant.Load(Path.Combine(AppContext.BaseDirectory, "world"));
     private readonly Grid side = new() { Width = 260 };
     private readonly Grid main = new();
@@ -46,7 +47,8 @@ public sealed partial class AiScreen : Screen
         get => Campus.Shared.Preferences.Part("memory") is JsonObject kept ? ((bool)kept["on"]!, (string)kept["text"]!) : (true, "");
         set => Campus.Shared.Preferences.Change("memory", new JsonObject { ["on"] = value.On, ["text"] = value.Text });
     }
-    private (bool Own, Own Mine) choice = (false, Models.Starting);
+    private ModelChoice choice = ModelChoice.Free;
+    private bool startsRuntime;
     private bool busy;
     private string error = "";
     private string? editing;
@@ -55,6 +57,7 @@ public sealed partial class AiScreen : Screen
     private CancellationTokenSource? stop;
     private DocStream? stream;
     private string said = "";
+    private string? runtimeStage;
     private string draft = "";
     private bool compact, conversationsOpen;
     private bool liveDirty;
@@ -74,6 +77,7 @@ public sealed partial class AiScreen : Screen
         SizeChanged += (_, change) => { var narrow = change.NewSize.Width < 760; if (compact != narrow) { compact = narrow; conversationsOpen = false; Draw(); } };
         Paint.Turned += Draw;
         Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Draw);
+        providers.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Draw();
     }
     public override void Shown(object? argument) => Draw();
@@ -86,29 +90,39 @@ public sealed partial class AiScreen : Screen
             var kept = JsonNode.Parse(text)!;
             foreach (var item in kept["chats"]!.AsArray())
             {
-                chats.Add(SavedChat.Of(item!.AsObject()));
+                var chat = SavedChat.Of(item!.AsObject());
+                chats.Add(chat with { Choice = chat.Choice ?? providers.PreviousChoice ?? ModelChoice.Free });
                 keptProposals[(string)item["id"]!] = item["proposals"] is JsonArray list ? list.Deserialize(StorageJson.Default.ListTaskProposal)! : [];
             }
             current = (string?)kept["current"];
-            if (chats.FirstOrDefault(c => c.Id == current) is { } open) { thread = open.Thread; proposals = keptProposals.GetValueOrDefault(open.Id) ?? []; } else current = null;
+            if (chats.FirstOrDefault(c => c.Id == current) is { } open)
+            {
+                thread = open.Thread; proposals = keptProposals.GetValueOrDefault(open.Id) ?? [];
+                choice = open.Choice ?? ModelChoice.Free; startsRuntime = open.StartsRuntime;
+            }
+            else current = null;
+            if (providers.PreviousChoice is not null) WriteChats();
         }
-        if (Storage.Read("ai/model.json") is { } c)
-        {
-            var node = JsonNode.Parse(c)!;
-            var mine = new Own((string)node["base"]!, (string)node["model"]!, Secure.Read("ai/key.bin") ?? "", (bool?)node["runtime"] ?? false);
-            choice = ((string)node["use"]! == "own" && mine.Key.Length > 0, mine);
-        }
+        providers.CompleteImport();
     }
     private void WriteChats() => Storage.Write(Storage.PathFor("ai/chats.json"), new JsonObject
     {
         ["chats"] = new JsonArray([.. chats.Select(c => { var o = c.ToJson(); o["proposals"] = JsonSerializer.SerializeToNode(keptProposals.GetValueOrDefault(c.Id) ?? [], StorageJson.Default.ListTaskProposal); return (JsonNode)o; })]),
         ["current"] = current,
     }.ToJsonString());
-    private void WriteChoice()
+    private void Choose(ModelChoice next)
     {
+        if (busy || choice == next) return;
+        startsRuntime = next.ProviderId == ModelProviders.RuntimeId && thread.Nodes.Count > 0;
+        choice = next;
         runtimeRequest = null; runtimeFirstAssistant = null;
-        Storage.Write(Storage.PathFor("ai/model.json"), new JsonObject { ["use"] = choice.Own && choice.Mine.Key.Length > 0 ? "own" : "free", ["base"] = choice.Mine.Base, ["model"] = choice.Mine.Model, ["runtime"] = choice.Mine.Runtime }.ToJsonString());
-        Secure.Write("ai/key.bin", choice.Mine.Key.Length > 0 ? choice.Mine.Key : null);
+        error = "";
+        if (chats.FirstOrDefault(chat => chat.Id == current) is { } open)
+        {
+            chats = chats.Select(chat => chat.Id == open.Id ? chat with { Choice = choice, StartsRuntime = startsRuntime } : chat).ToList();
+            WriteChats();
+        }
+        Draw();
     }
     /** What is said in a conversation moves it to the top of the list and keeps it. */
     private void Keep()
@@ -116,7 +130,7 @@ public sealed partial class AiScreen : Screen
         if (thread.Nodes.Count == 0) return;
         var id = current ?? Guid.NewGuid().ToString();
         var before = chats.FirstOrDefault(c => c.Id == id);
-        chats = [new SavedChat(id, before?.Title ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), thread, before?.Forks, before?.RuntimeModels), .. chats.Where(c => c.Id != id)];
+        chats = [new SavedChat(id, before?.Title ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), thread, before?.Forks, before?.RuntimeModels, choice, startsRuntime), .. chats.Where(c => c.Id != id)];
         keptProposals[id] = proposals; current = id;
         WriteChats();
     }
@@ -125,6 +139,7 @@ public sealed partial class AiScreen : Screen
         if (busy) return;
         var found = chats.FirstOrDefault(c => c.Id == id);
         thread = found?.Thread ?? ChatThread.Empty; proposals = found is null ? [] : keptProposals.GetValueOrDefault(found.Id) ?? [];
+        choice = found?.Choice ?? ModelChoice.Free; startsRuntime = found?.StartsRuntime == true;
         current = found?.Id ?? Guid.NewGuid().ToString(); error = ""; editing = null; openSteps.Clear();
         runtimeRequest = null; runtimeFirstAssistant = null;
         conversationsOpen = false;
@@ -146,11 +161,13 @@ public sealed partial class AiScreen : Screen
         return all;
     }
 
-    private void Send(string question, string? parent = null)
+    private void Send(string question, string? parent = null, bool clearDraft = false)
     {
         var asked = question.Trim();
         if (asked.Length == 0 || busy) return;
-        if (!(choice.Own && choice.Mine.Key.Length > 0) && Account.Shared.User is null) { SignIn(asked); return; }
+        if (providers.Resolve(choice, out var provider) is { } unavailable) { error = unavailable; Draw(); return; }
+        if (clearDraft) draft = "";
+        if (provider is null && Account.Shared.User is null) { SignIn(asked); return; }
         parent ??= thread.Tip();
         var fork = parent != thread.Tip();
         var id = Guid.NewGuid().ToString();
@@ -159,10 +176,10 @@ public sealed partial class AiScreen : Screen
 
     private async Task Run(ChatThread start, string at, bool fork = false, JsonObject? retryRequest = null, string? firstAssistant = null)
     {
+        if (providers.Resolve(choice, out var provider) is { } unavailable) { error = unavailable; Draw(); return; }
         thread = start; var tip = at;
         fresh = []; from = at;
         busy = true; error = ""; editing = null; Keep(); Draw();
-        var provider = choice.Own && choice.Mine.Key.Length > 0 ? choice.Mine : null;
         var runtime = provider?.Runtime == true;
         var chat = chats.First(c => c.Id == current);
         if (runtime && chat.RuntimeModels?.Contains(provider!.Model) != true)
@@ -170,7 +187,7 @@ public sealed partial class AiScreen : Screen
             chat = chat with { RuntimeModels = [.. chat.RuntimeModels ?? [], provider!.Model] };
             chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList(); WriteChats();
         }
-        firstAssistant ??= runtime && fork ? Guid.NewGuid().ToString() : null;
+        firstAssistant ??= runtime && (fork || startsRuntime) ? Guid.NewGuid().ToString() : null;
         if (firstAssistant is not null && chat.Forks?.Contains(firstAssistant) != true)
         {
             chat = chat with { Forks = [.. chat.Forks ?? [], firstAssistant] };
@@ -181,7 +198,7 @@ public sealed partial class AiScreen : Screen
         void Grow(JsonObject message)
         {
             var id = (string?)message["role"] == "assistant" && firstAssistant is not null ? firstAssistant : Guid.NewGuid().ToString();
-            if (id == firstAssistant) { firstAssistant = null; runtimeFirstAssistant = null; }
+            if (id == firstAssistant) { firstAssistant = null; runtimeFirstAssistant = null; startsRuntime = false; }
             fresh.Add(id); thread = thread.Append(tip, id, message); tip = id; Keep(); Draw();
         }
         var history = thread.Lineage(at).Select(n => n.Message).ToList();
@@ -195,7 +212,7 @@ public sealed partial class AiScreen : Screen
             for (var round = 0; round < Assistant.Rounds; round++)
             {
                 var last = round == Assistant.Rounds - 1;
-                said = ""; stream = new DocStream(); liveDirty = true;
+                said = ""; lastUpdate = null; runtimeStage = null; stream = new DocStream(); liveDirty = true;
                 JsonObject answer;
                 try { answer = provider is not null ? await AskOwn(provider, history, situation, last, cancel, conversationId, round == 0 ? retryRequest : null) : await AskFree(history, situation, last, cancel); }
                 finally { stream.Dispose(); stream = null; live.Child = null; }
@@ -258,14 +275,22 @@ public sealed partial class AiScreen : Screen
                 if (mine.Runtime) throw new InvalidOperationException(assistant.RuntimeError(code, detail ?? $"本地模型未能完成请求（{(int)response.StatusCode}）。"));
                 throw new InvalidOperationException((int)response.StatusCode switch
                 {
-                    401 => "API Key 不对，在“我的 API”里改一下。", 402 => "你的 API 余额不足。", 429 => "你的 API 请求太频繁，稍后再试。",
+                    401 => "API Key 不对，请在「模型服务」里修改。", 402 => "你的 API 余额不足。", 429 => "你的 API 请求太频繁，稍后再试。",
                     404 => "接口或模型不存在" + (detail is not null ? $"：{detail}" : "，检查地址和模型名。"),
                     var status => $"你的 API 没有回答（{status}）" + (detail is not null ? $"：{detail}" : ""),
                 });
             }
             var completion = assistant.Read(mine.Runtime);
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(cancel), Encoding.UTF8);
-            while (await reader.ReadLineAsync(cancel) is { } line) OnDelta(completion.Take(line));
+            while (await reader.ReadLineAsync(cancel) is { } line)
+            {
+                if (mine.Runtime && line.StartsWith(": stage ", StringComparison.Ordinal))
+                {
+                    runtimeStage = assistant.RuntimeStage(line[8..]);
+                    liveDirty = true;
+                }
+                OnDelta(completion.Take(line));
+            }
             return completion.Result();
         }
     }
@@ -397,11 +422,12 @@ public sealed partial class AiScreen : Screen
     private void Remove(string id)
     {
         var removed = chats.FirstOrDefault(chat => chat.Id == id);
-        var provider = choice.Mine;
+        var provider = providers.Find(ModelProviders.RuntimeId);
         chats = chats.Where(c => c.Id != id).ToList(); keptProposals.Remove(id);
         if (current == id) Open(null);
         else { WriteChats(); Draw(); }
-        if (removed is not null && provider.Runtime && provider.Key.Length > 0) App.Watch(CloseModelPages(removed, provider));
+        if (removed?.RuntimeModels is { Count: > 0 } && provider is { Key.Length: > 0 })
+            App.Watch(CloseModelPages(removed, new(provider.Address, "", provider.Key, true)));
     }
     private async Task CloseModelPages(SavedChat removed, Own provider)
     {
@@ -418,29 +444,12 @@ public sealed partial class AiScreen : Screen
     {
         main.Children.Clear(); main.RowDefinitions.Clear();
         main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var own = choice.Own && choice.Mine.Key.Length > 0;
         var blank = thread.Path().Count == 0;
-        // The bar: which model answers, and the conversation's name.
+        // The bar gives the conversation its name. The picker stays with the question below.
         var bar = new Grid { Padding = new Thickness(14, 8, 14, 0), ColumnSpacing = 6, MinHeight = 48 };
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
         if (compact) bar.Children.Add(Icon("对话", Icons.Note, () => { conversationsOpen = true; Draw(); }, 16));
-        var modelFace = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Child = new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(Models.OwnerAvatar)) } };
-        var modelContent = own ? Kit.Line(4, Kit.Text(Models.Name(choice.Mine), Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted"))
-            : Kit.Line(6, modelFace, Kit.Text("免费额度", Role.Body, bold: true), Kit.Icon(Icons.Chevron, 14, "muted"));
-        var model = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = modelContent, Height = 34, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10) };
-        ((StackPanel)model.Content).VerticalAlignment = VerticalAlignment.Center;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(model, "选择模型");
-        var pick = new MenuFlyout();
-        var free = new ToggleMenuFlyoutItem { Text = "免费额度 · hicancan 为爱发电提供", IsChecked = !own }; ToolTipService.SetToolTip(free, "登录后可用");
-        free.Click += (_, _) => { choice = (false, choice.Mine); WriteChoice(); Draw(); };
-        var mine = new ToggleMenuFlyoutItem { Text = choice.Mine.Key.Length > 0 ? $"我的 API · {Models.Name(choice.Mine)}" : "我的 API · 填上自己的 Key 就能用", IsChecked = own };
-        mine.Click += (_, _) => { if (choice.Mine.Key.Length > 0) { choice = (true, choice.Mine); WriteChoice(); Draw(); } else OwnSheet(); };
-        var set = new MenuFlyoutItem { Text = "设置我的 API…" }; set.Click += (_, _) => OwnSheet();
-        pick.Items.Add(free); pick.Items.Add(mine); pick.Items.Add(new MenuFlyoutSeparator()); pick.Items.Add(set);
-        model.IsEnabled = !busy;
-        model.Click += (_, _) => pick.ShowAt(model, new FlyoutShowOptions { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft });
-        Grid.SetColumn(model, 1); bar.Children.Add(model);
-        if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 2); bar.Children.Add(title); }
+        if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); bar.Children.Add(title); }
         main.Children.Add(bar);
 
         var column = new StackPanel { Padding = new Thickness(18, 12, 18, 28) };
@@ -489,6 +498,47 @@ public sealed partial class AiScreen : Screen
 
     private static TextBlock Fine(string text) { var t = Kit.Text(text, Role.Label, "muted", wrap: true); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; return t; }
 
+    private Tap ModelPicker()
+    {
+        var selected = providers.Find(choice.ProviderId);
+        var picked = selected?.ModelName(choice.ModelId) ?? choice.ModelId;
+        var label = Kit.Text($"{selected?.Name ?? "服务商已移除"} · {picked}", Role.Label);
+        label.MaxWidth = compact ? 168 : 285;
+        label.TextTrimming = TextTrimming.CharacterEllipsis;
+        var content = Kit.Line(6, label, Kit.Icon(Icons.Chevron, 13, "muted"));
+        if (selected?.IsFree == true)
+        {
+            var avatar = new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(Models.OwnerAvatar)) };
+            content.Children.Insert(0, new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(8), Child = avatar });
+        }
+        content.VerticalAlignment = VerticalAlignment.Center;
+        var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
+        { Content = content, MinHeight = 36, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy };
+        AutomationProperties.SetName(button, $"选择服务商，当前 {label.Text}");
+        AutomationProperties.SetAutomationId(button, "ai-provider");
+        var menu = new MenuFlyout();
+        menu.Items.Add(new MenuFlyoutItem { Text = "选择服务商", IsEnabled = false });
+        foreach (var provider in providers.Available)
+        {
+            var service = new MenuFlyoutSubItem { Text = provider.Name };
+            service.Items.Add(new MenuFlyoutItem { Text = "选择模型", IsEnabled = false });
+            foreach (var model in provider.Models.Where(model => model.Enabled))
+            {
+                var next = new ModelChoice(provider.Id, model.Id);
+                var item = new ToggleMenuFlyoutItem { Text = provider.ModelName(model.Id), IsChecked = next == choice };
+                item.Click += (_, _) => Choose(next);
+                service.Items.Add(item);
+            }
+            menu.Items.Add(service);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var settings = new MenuFlyoutItem { Text = "管理模型服务" };
+        settings.Click += (_, _) => App.Open("me", "models");
+        menu.Items.Add(settings);
+        button.Click += (_, _) => menu.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.TopEdgeAlignedLeft });
+        return button;
+    }
+
     private FrameworkElement Composer()
     {
         var box = new TextBox { Text = draft, PlaceholderText = "问点什么", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
@@ -497,7 +547,7 @@ public sealed partial class AiScreen : Screen
         var send = new Tap(Paint.Brush("ink")) { Width = 36, Height = 36, CornerRadius = new CornerRadius(18), VerticalAlignment = VerticalAlignment.Bottom, Content = Kit.Icon(busy ? Icons.Square : Icons.Up, 20, "paper", 20, 2) };
         ((FrameworkElement)send.Content).HorizontalAlignment = HorizontalAlignment.Center; ((FrameworkElement)send.Content).VerticalAlignment = VerticalAlignment.Center;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(send, busy ? "停止" : "发送");
-        void Go() { if (busy) { stop?.Cancel(); return; } var text = box.Text; box.Text = ""; Send(text); }
+        void Go() { if (busy) { stop?.Cancel(); return; } Send(box.Text, clearDraft: true); }
         send.Click += (_, _) => Go();
         void Shade() { send.Opacity = busy || box.Text.Trim().Length > 0 ? 1 : .18; }
         box.TextChanged += (_, _) => { draft = box.Text; Shade(); }; Shade();
@@ -506,9 +556,12 @@ public sealed partial class AiScreen : Screen
             var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
             if (e.Key == Windows.System.VirtualKey.Enter && !shift) { e.Handled = true; Go(); }
         };
-        var grid = new Grid { ColumnSpacing = 8 };
+        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 4 };
         grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.Children.Add(box); Grid.SetColumn(send, 1); grid.Children.Add(send);
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetColumnSpan(box, 2); grid.Children.Add(box);
+        var model = ModelPicker(); Grid.SetRow(model, 1); grid.Children.Add(model);
+        Grid.SetRow(send, 1); Grid.SetColumn(send, 1); grid.Children.Add(send);
         var shell = new Border { Child = grid, Padding = new Thickness(20, 9, 9, 9), CornerRadius = new CornerRadius(28), Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), Translation = new System.Numerics.Vector3(0, 0, 8) };
         shell.Shadow = new ThemeShadow();
         box.Loaded += (_, _) => { if (!busy) box.Focus(FocusState.Programmatic); };
@@ -624,7 +677,12 @@ public sealed partial class AiScreen : Screen
 
     private void DrawLive()
     {
-        if (stream is null || lastUpdate is null) { live.Child = null; return; }
+        if (stream is null) { live.Child = null; return; }
+        if (lastUpdate is null)
+        {
+            live.Child = runtimeStage is { } stage ? Kit.Text(stage, Role.Caption, "muted", wrap: true) : null;
+            return;
+        }
         live.Child = Doc.Make(Doc.BlocksOf(lastUpdate), true, Link);
         scroller.ChangeView(null, scroller.ScrollableHeight, null, true);
     }
@@ -788,81 +846,6 @@ public sealed partial class AiScreen : Screen
         }, true);
         Grid.SetColumn(save, 3); buttons.Children.Add(save);
         column.Children.Add(buttons);
-        App.Window?.Sheet(column, 460);
-    }
-
-    private void OwnSheet()
-    {
-        var mine = choice.Mine;
-        var runtime = mine.Runtime;
-        var address = Kit.Field(mine.Base, "https://api.deepseek.com", "接口地址");
-        var model = Kit.Field(mine.Model, "deepseek-flash", "模型");
-        var key = new PasswordBox { Password = mine.Key, PlaceholderText = runtime ? "模型专用密钥" : "sk-…", MinHeight = 40, FontSize = 14.5 };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(key, runtime ? "模型密钥" : "API Key");
-        var keyLabel = Kit.Text(runtime ? "模型密钥" : "API Key", Role.Label, "muted"); keyLabel.Margin = new Thickness(0, 4, 0, -6);
-        var hint = Kit.Text("", Role.Caption, "muted", wrap: true);
-        var modelPick = new ComboBox { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var fetchStatus = Kit.Text("", Role.Caption, "muted", wrap: true);
-        Tap? save = null;
-        void Check()
-        {
-            var wrong = Models.AddressError(address.Text, runtime);
-            hint.Text = wrong ?? $"会请求 {Models.Endpoint(address.Text)}"; hint.Foreground = Paint.Brush(wrong is null ? "muted" : "danger");
-            if (save is not null) { var ok = wrong is null && key.Password.Trim().Length > 0 && model.Text.Trim().Length > 0; save.IsEnabled = ok; save.Opacity = ok ? 1 : .5; }
-        }
-        TextBlock Label(string t) { var l = Kit.Text(t, Role.Label, "muted"); l.Margin = new Thickness(0, 4, 0, -6); return l; }
-        var column = new StackPanel { Spacing = 12, Padding = new Thickness(22, 20, 22, 18) };
-        column.Children.Add(Pages.SheetHead(Pages.SheetTitle("我的 API"), () => App.Window?.Close()));
-        string Note() => runtime ? "通过 Local Runtime 使用网页模型。填写它提供的地址与模型密钥，校园查询仍在应用内执行。" : "填一个兼容 OpenAI 接口的模型服务，比如 DeepSeek。Key 存在这台设备上，提问从这里直接发给服务商。";
-        var providerNote = Kit.Text(Note(), Role.Label, "muted", wrap: true); column.Children.Add(providerNote);
-        var runtimeRow = new Grid { ColumnSpacing = 12 };
-        runtimeRow.ColumnDefinitions.Add(new ColumnDefinition()); runtimeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        runtimeRow.Children.Add(Kit.Column(4, Kit.Text("Local Runtime", Role.Label), Kit.Text("连接你运行的网页模型服务，填写模型专用密钥。", Role.Caption, "muted", wrap: true)));
-        var switchHost = new Border(); Grid.SetColumn(switchHost, 1); runtimeRow.Children.Add(switchHost);
-        void SwitchRuntime() => switchHost.Child = Kit.Switch(runtime, on => {
-            runtime = on;
-            var defaults = runtime ? Models.Runtime : Models.Starting;
-            address.Text = defaults.Base; model.Text = defaults.Model; key.Password = "";
-            modelPick.ItemsSource = null; modelPick.Visibility = Visibility.Collapsed; fetchStatus.Text = "";
-            keyLabel.Text = runtime ? "模型密钥" : "API Key";
-            key.PlaceholderText = runtime ? "模型专用密钥" : "sk-…";
-            providerNote.Text = Note();
-            AutomationProperties.SetName(key, keyLabel.Text); SwitchRuntime(); Check();
-        }, "Local Runtime");
-        SwitchRuntime(); column.Children.Add(runtimeRow);
-        column.Children.Add(Label("接口地址")); column.Children.Add(address); column.Children.Add(hint);
-        column.Children.Add(keyLabel); column.Children.Add(key);
-        var fetchBtn = Kit.Action("拉取模型列表", async () =>
-        {
-            fetchStatus.Text = "正在拉取模型列表…";
-            fetchStatus.Foreground = Paint.Brush("muted");
-            try
-            {
-                var source = new Own(address.Text, model.Text, key.Password, runtime);
-                var ids = await Models.FetchModelsAsync(Http, source.Base, source.Key, source.Runtime);
-                if (address.Text != source.Base || key.Password != source.Key || runtime != source.Runtime) return;
-                modelPick.ItemsSource = ids;
-                modelPick.Visibility = Visibility.Visible;
-                if (ids.Contains(model.Text.Trim())) modelPick.SelectedItem = model.Text.Trim();
-                else if (ids.Count > 0) { modelPick.SelectedIndex = 0; model.Text = ids[0]; }
-                fetchStatus.Text = $"已获取 {ids.Count} 个模型";
-            }
-            catch (Exception ex) { fetchStatus.Text = ex.Message; fetchStatus.Foreground = Paint.Brush("danger"); }
-        });
-        modelPick.SelectionChanged += (_, _) => { if (modelPick.SelectedItem is string picked) model.Text = picked; };
-        var modelRow = new Grid { ColumnSpacing = 8 };
-        modelRow.ColumnDefinitions.Add(new ColumnDefinition()); modelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        modelRow.Children.Add(model); Grid.SetColumn(fetchBtn, 1); modelRow.Children.Add(fetchBtn);
-        column.Children.Add(Label("模型")); column.Children.Add(modelPick); column.Children.Add(modelRow); column.Children.Add(fetchStatus);
-        var buttons = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 6, 0, 0) };
-        buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (mine.Key.Length > 0) buttons.Children.Add(Pill("清除 Key", () => { choice = (false, mine with { Key = "" }); WriteChoice(); App.Window?.Close(); Draw(); }));
-        var cancel = Pill("取消", () => App.Window?.Close()); Grid.SetColumn(cancel, 2); buttons.Children.Add(cancel);
-        save = Pill("保存并使用", () => { choice = (true, new Own(address.Text.Trim(), model.Text.Trim(), key.Password.Trim(), runtime)); WriteChoice(); App.Window?.Close(); Draw(); }, true);
-        Grid.SetColumn(save, 3); buttons.Children.Add(save);
-        column.Children.Add(buttons);
-        address.TextChanged += (_, _) => Check(); model.TextChanged += (_, _) => Check(); key.PasswordChanged += (_, _) => Check();
-        Check();
         App.Window?.Sheet(column, 460);
     }
 

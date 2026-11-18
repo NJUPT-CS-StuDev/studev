@@ -11,6 +11,11 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args is ["--next-class"])
+        {
+            Console.WriteLine(Timetable.NextClassCommand.Read().GetAwaiter().GetResult().ToJsonString());
+            return;
+        }
         VelopackApp.Build().OnFirstRun(_ => Me.Updates.RetireTauri()).Run();
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Application.Start(start =>

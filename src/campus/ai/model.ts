@@ -4,26 +4,55 @@
 
 /** One's own provider: where its chat completions are, which model, and the key, which never leaves this device. */
 export interface Own { base: string; model: string; key: string }
-export interface Choice { use: 'free' | 'own' | 'runtime'; own: Own; runtime: { model: string } }
+export interface ModelSelection { provider: string; model: string }
+export interface ModelOption { id: string; name: string; enabled: boolean }
+export interface ModelProvider { id: string; kind: 'api' | 'runtime'; name: string; base: string; key: string; enabled: boolean; models: ModelOption[] }
+export interface ModelSettings { providers: ModelProvider[]; selection: ModelSelection }
 
-export const OWNER_QQ = '2366522877';
-export const OWNER_AVATAR = `https://q1.qlogo.cn/g?b=qq&nk=${OWNER_QQ}&s=100`;
 
 /** DeepSeek, filled in to start from. */
 export const STARTING_OWN: Own = { base: 'https://api.deepseek.com', model: 'deepseek-chat', key: '' };
 const KEY = 'studev_ai_model';
+export const MODEL_SETTINGS_CHANGED = 'studev:model-settings';
+export const FREE_MODEL: ModelSelection = { provider: 'free', model: 'auto' };
+export const RUNTIME_PROVIDER = 'runtime';
+export const freeProvider = { id: FREE_MODEL.provider, kind: 'free' as const, name: 'hicancan', models: [{ id: FREE_MODEL.model, name: '免费额度', enabled: true }] };
+export const runtimeProvider: ModelProvider = { id: RUNTIME_PROVIDER, kind: 'runtime', name: 'Local Runtime MCP', base: '', key: '', enabled: true, models: [] };
+type PreviousChoice = { use?: 'free' | 'own' | 'runtime'; own?: Own; runtime?: { model?: string } };
 
-export function readChoice(): Choice {
+export function readModelSettings(): ModelSettings {
+    const defaults: ModelSettings = { providers: [], selection: FREE_MODEL };
     try {
-        const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Choice | null;
-        if (raw && ['free', 'own', 'runtime'].includes(raw.use) && raw.own) return {
-            use: raw.use === 'runtime' ? 'runtime' : raw.use === 'own' && raw.own.key ? 'own' : 'free',
-            own: { ...STARTING_OWN, ...raw.own }, runtime: { model: typeof raw.runtime?.model === 'string' ? raw.runtime.model : '' },
-        };
+        const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as (Partial<ModelSettings> & PreviousChoice) | null;
+        if (!raw) return defaults;
+        if (Array.isArray(raw.providers) && raw.selection) return { providers: raw.providers, selection: raw.selection };
+        const providers: ModelProvider[] = [];
+        const legacy = raw.own;
+        let selection = FREE_MODEL;
+        if (legacy?.key && legacy.model && !addressError(legacy.base)) {
+            const id = 'personal';
+            providers.push({ id, kind: 'api', name: new URL(legacy.base).hostname, base: legacy.base, key: legacy.key, enabled: true, models: [{ id: legacy.model, name: legacy.model, enabled: true }] });
+            if (raw.use === 'own') selection = { provider: id, model: legacy.model };
+        }
+        if (raw.runtime?.model) {
+            providers.push({ ...runtimeProvider, models: [{ id: raw.runtime.model, name: raw.runtime.model, enabled: true }] });
+            if (raw.use === 'runtime') selection = { provider: RUNTIME_PROVIDER, model: raw.runtime.model };
+        }
+        const settings = { providers, selection };
+        try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* This page can still use the old settings. */ }
+        return settings;
     } catch { /* Nothing chosen yet. */ }
-    return { use: 'free', own: STARTING_OWN, runtime: { model: '' } };
+    return defaults;
 }
-export function writeChoice(choice: Choice) { try { localStorage.setItem(KEY, JSON.stringify(choice)); } catch { /* Kept for this page only. */ } }
+export function writeModelSettings(settings: ModelSettings) {
+    localStorage.setItem(KEY, JSON.stringify(settings));
+    window.dispatchEvent(new Event(MODEL_SETTINGS_CHANGED));
+}
+
+export function selectedProvider(settings: ModelSettings, selection: ModelSelection) {
+    if (selection.provider === FREE_MODEL.provider && selection.model === FREE_MODEL.model) return freeProvider;
+    return settings.providers.find(provider => provider.id === selection.provider && provider.enabled && provider.models.some(model => model.id === selection.model && model.enabled));
+}
 
 /** Where a provider's chat completions are, from the address one gives: its root, or its /v1, or the endpoint itself. */
 export const endpoint = (base: string) => {
@@ -36,11 +65,11 @@ export function modelsEndpoints(base: string): string[] {
     const first = `${root}/models`;
     return /\/v\d+$/.test(root) ? [first] : [first, `${root}/v1/models`];
 }
-export async function fetchModels(base: string, key: string): Promise<string[]> {
+export async function fetchModels(base: string, key: string, signal?: AbortSignal): Promise<string[]> {
     if (addressError(base)) throw new Error('接口地址格式不对');
     if (!key.trim()) throw new Error('请先填写 API Key');
     for (const url of modelsEndpoints(base)) {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${key.trim()}` } });
+        const res = await fetch(url, { credentials: 'omit', redirect: 'error', headers: { Authorization: `Bearer ${key.trim()}` }, signal });
         if (res.status === 404) continue;
         if (!res.ok) throw new Error(res.status === 401 ? 'API Key 无效或无权限' : `请求失败（${res.status}）`);
         const body = await res.json() as { data?: { id?: string }[] };
@@ -57,5 +86,3 @@ export function addressError(base: string): string | null {
     } catch { /* The settings form says what is missing. */ }
     return '接口地址以 https:// 开头，只写地址本身。';
 }
-/** What one's own model is called in the picker. */
-export const ownName = (own: Own) => own.model || '我的 API';

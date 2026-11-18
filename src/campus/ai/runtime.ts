@@ -48,13 +48,18 @@ export async function closeRuntimeChat(chatId: string, forks: readonly string[],
     if (failed) throw new AskError('本机对话已删除，部分模型页面尚未关闭，请在浏览器中查看。');
 }
 
-export async function askRuntime(request: RuntimeRequest, onDelta: (text: string) => void, signal: AbortSignal, retry = false): Promise<Message> {
+export async function askRuntime(request: RuntimeRequest, onDelta: (text: string) => void, signal: AbortSignal, retry = false, onStage?: (text: string) => void): Promise<Message> {
     if (!request.model) throw new AskError('先连接 Local Runtime 并选择一个模型。');
     const call = createLRMCPClient().chat({ ...request, ...(retry ? { retry: true } : {}) }, { signal });
     try {
         for await (const event of call) {
             if (event.type !== 'delta') continue;
-            const delta = event.data as { content?: unknown } | undefined;
+            const delta = event.data as { content?: unknown; stage?: unknown } | undefined;
+            if (typeof delta?.stage === 'string') {
+                const stages: Record<string, string> = assistant.runtimeStages;
+                const stage = stages[delta.stage];
+                if (stage) onStage?.(stage);
+            }
             if (typeof delta?.content === 'string' && delta.content) onDelta(delta.content);
         }
         const value = await call.result as { object?: string; conversation_id?: string; choices?: { message?: unknown; finish_reason?: unknown }[] } | null;

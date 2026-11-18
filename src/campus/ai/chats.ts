@@ -1,9 +1,10 @@
 // The conversations kept on this device, as ChatGPT lists them: each named by its first question until renamed, the
 // newest first, grouped by when they were last spoken in. The same rules are android/.../ai/Chats.kt.
 import { path, type Thread } from './thread';
+import type { ModelSelection } from './model';
 
 /** One conversation: its name (empty until one is given, then its first question names it) and when it last changed. */
-export interface Saved<P> { id: string; title: string; updated: number; thread: Thread; proposals: P[]; forks?: string[]; runtimeModels?: string[] }
+export interface Saved<P> { id: string; title: string; updated: number; thread: Thread; proposals: P[]; forks?: string[]; runtimeModels?: string[]; model?: ModelSelection; resetRuntime?: boolean }
 
 /** What a conversation is called: the name given it, else its first question, cut to a line. */
 export function titleOf(chat: { title: string; thread: Thread }): string {

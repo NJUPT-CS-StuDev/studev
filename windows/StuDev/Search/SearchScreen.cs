@@ -70,7 +70,6 @@ public sealed partial class SearchScreen : Screen
         else if (argument is "course") { channel = Channels.First(item => item.Id == "academic"); within = sourceOnly = category = null; since = ""; byDate = false; box.Text = ""; page = 1; Run(); Draw(); }
         else if (argument is ValueTuple<string, Moment> { Item1: "rooms" } rooms) { channel = Channels.First(c => c.Id == "room"); within = sourceOnly = category = null; since = ""; byDate = false; box.Text = ""; roomsAt = rooms.Item2; Draw(); }
         else if (argument is ValueTuple<string, string> { Item1: "query" } query) { box.Text = query.Item2; }
-        else if (argument is ValueTuple<string, string> { Item1: "channel" } scope && Channels.FirstOrDefault(c => c.Id == scope.Item2) is { } chosen) { channel = chosen; page = 1; Run(); Draw(); }
         // Opened with nothing typed, it shows what is newest, as the web and Android do.
         else if (answer is null && failure is null) Run();
         DispatcherQueue.TryEnqueue(() => box.Focus(FocusState.Programmatic));

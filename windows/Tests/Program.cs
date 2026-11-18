@@ -254,8 +254,8 @@ foreach (var address in new[] { "http://localhost:9316/v1", "http://127.0.0.1:93
     Equal("ordinary API rejects cleartext", StuDev.Ai.Models.AddressError(address) is not null, JsonValue.Create(true));
     Equal("explicit runtime accepts loopback", StuDev.Ai.Models.AddressError(address, true) is null, JsonValue.Create(true));
 }
-foreach (var address in new[] { "http://localhost.example.com/v1", "http://192.168.1.4/v1", "http://user@localhost/v1", "http://127.0.0.1/v1?key=value", "file:///tmp/model" })
-    Equal("runtime rejects nonlocal cleartext and credentials in URL", StuDev.Ai.Models.AddressError(address, true) is not null, JsonValue.Create(true));
+foreach (var address in new[] { "http://localhost.example.com/v1", "http://192.168.1.4/v1", "https://models.example.com/v1", "http://user@localhost/v1", "http://127.0.0.1/v1?key=value", "file:///tmp/model" })
+    Equal("runtime rejects nonlocal addresses and credentials in URL", StuDev.Ai.Models.AddressError(address, true) is not null, JsonValue.Create(true));
 var runtimeRequest = assistant.Request("deepseek-web", [], new(null, null, "仙林", null), DateTimeOffset.UtcNow, runtime: true, conversationId: "owned-chat");
 Equal("runtime omits unsupported sampling", runtimeRequest.ContainsKey("max_tokens") || runtimeRequest.ContainsKey("temperature"), JsonValue.Create(false));
 Equal("runtime sends its stable conversation", (string?)runtimeRequest["conversation_id"], JsonValue.Create("owned-chat"));
@@ -268,6 +268,11 @@ Equal("main conversation survives adding another branch", stableChat.Conversatio
 Equal("tool rounds keep their fork conversation", stableChat.ConversationId("tool"), JsonValue.Create("fork"));
 Equal("conversation fork survives save and reopen", StuDev.Ai.SavedChat.Of(stableChat.ToJson()).ConversationId("fork-answer"), JsonValue.Create("fork"));
 Equal("models used by the conversation survive save and reopen", StuDev.Ai.SavedChat.Of(stableChat.ToJson()).RuntimeModels, new JsonArray("web-a", "web-b"));
+var providerChoice = new StuDev.Ai.ModelChoice("runtime", "web-a");
+var switchedChat = StuDev.Ai.SavedChat.Of((stableChat with { Choice = providerChoice, StartsRuntime = true }).ToJson());
+Equal("selected provider and model survive save and reopen", switchedChat.Choice == providerChoice, JsonValue.Create(true));
+Equal("an explicit return to runtime keeps its new-session marker", switchedChat.StartsRuntime, JsonValue.Create(true));
+Equal("runtime switch preserves existing branch anchors", switchedChat.ConversationId("fork-answer"), JsonValue.Create("fork"));
 var partialThread = stableThread.Append("continued", "next-question", new() { ["role"] = "user" }).Append("next-question", "partial", new() { ["role"] = "assistant", ["content"] = "partial answer" });
 Equal("a stopped partial answer stays in its conversation", (stableChat with { Thread = partialThread }).ConversationId("partial"), JsonValue.Create("chat"));
 try { assistant.Read().Take("data: {\"error\":{\"message\":\"请先打开模型网页\",\"code\":\"provider_not_ready\"}}"); failures.Add("runtime SSE error was ignored"); }

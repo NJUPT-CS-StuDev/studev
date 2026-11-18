@@ -37,6 +37,7 @@ import kotlinx.serialization.json.Json
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
+import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.app.*
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.data.*
@@ -256,7 +257,10 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
             Row(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, top = 12.dp, end = 68.dp).height(40.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(46.dp).fillMaxHeight().clickable { campusOpen = true }, contentAlignment = Alignment.Center) { Plain("仙林", 13.sp, weight = FontWeight.SemiBold) }
                 Box(Modifier.fillMaxHeight().width(1.dp).background(Ink.line))
-                Box(Modifier.weight(1f).fillMaxHeight().clickable { route.scope = "place"; route.searchFocus = true; route.tab = "search" }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) { Plain("搜地点或教室", 14.sp, Ink.faint) }
+                Box(Modifier.weight(1f).fillMaxHeight().clickable {
+                    route.open("/search/?scope=place", BuildConfig.SITE_ORIGIN)
+                    route.searchFocus = true
+                }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) { Plain("搜地点或教室", 14.sp, Ink.faint) }
             }
             if (hinting) Box(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 64.dp, end = 12.dp).clip(RoundedCornerShape(8.dp)).background(Ink.text).padding(horizontal = 10.dp, vertical = 6.dp)) {
                 Column { Plain("拖动小球旋转视角 · 点按回正", 12.5.sp, Ink.paper); Plain("双指也能旋转，上下滑动调俯仰", 12.5.sp, Ink.paper) }

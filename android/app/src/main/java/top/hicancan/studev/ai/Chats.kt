@@ -9,14 +9,18 @@ import kotlinx.serialization.json.*
  * The conversations kept on this device, as src/campus/ai/chats.ts: each named by its first question until renamed,
  * the newest first, grouped by when they were last spoken in.
  */
-data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread) {
-    fun toJson() = buildJsonObject { put("id", id); put("title", title); put("updated", updated); put("thread", thread.toJson()) }
+internal data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread, val selection: ModelSelection? = null) {
+    fun toJson() = buildJsonObject {
+        put("id", id); put("title", title); put("updated", updated); put("thread", thread.toJson())
+        selection?.let { put("selection", Json.encodeToJsonElement(it)) }
+    }
     companion object {
-        fun of(json: JsonObject) = SavedChat(json.getValue("id").jsonPrimitive.content, json["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), json.getValue("updated").jsonPrimitive.long, ChatThread.of(json.getValue("thread").jsonObject))
+        fun of(json: JsonObject) = SavedChat(json.getValue("id").jsonPrimitive.content, json["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), json.getValue("updated").jsonPrimitive.long,
+            ChatThread.of(json.getValue("thread").jsonObject), json["selection"]?.let { runCatching { Json.decodeFromJsonElement<ModelSelection>(it) }.getOrNull() })
     }
 }
 
-object Chats {
+internal object Chats {
     /** What a conversation is called: the name given it, else its first question, cut to a line. */
     fun titleOf(title: String, thread: ChatThread): String {
         if (title.isNotBlank()) return title.trim()

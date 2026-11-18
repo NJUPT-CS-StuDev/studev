@@ -141,7 +141,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
                 val providerError = runCatching { Json.parseToJsonElement(said).jsonObject["error"]?.jsonObject }.getOrNull()
                 val detail = providerError?.get("message")?.jsonPrimitive?.contentOrNull
                 throw IllegalStateException(when (status) {
-                    401 -> "API Key 不对，在“我的 API”里改一下。"; 402 -> "你的 API 余额不足。"
+                    401 -> "API Key 无效或无权限，请在“模型服务”里检查。"; 402 -> "你的 API 余额不足。"
                     404 -> "接口或模型不存在" + (detail?.let { "：$it" } ?: "，检查地址和模型名。"); 429 -> "你的 API 请求太频繁，稍后再试。"
                     else -> "你的 API 没有回答（$status）" + (detail?.let { "：$it" } ?: "")
                 })
@@ -176,8 +176,6 @@ data class Own(val base: String, val model: String, val key: String)
 
 /** Which model answers, as src/campus/ai/model.ts: the free quota, or one's own key. */
 object Models {
-    const val OWNER_QQ = "2366522877"
-    val STARTING = Own("https://api.deepseek.com", "deepseek-chat", "")
     fun endpoint(base: String): String { val root = base.trim().trimEnd('/'); return if (root.endsWith("/chat/completions")) root else "$root/chat/completions" }
     fun modelsEndpoints(base: String): List<String> {
         val root = base.trim().trimEnd('/').removeSuffix("/chat/completions").removeSuffix("/models")
@@ -213,20 +211,4 @@ object Models {
         return if (uri?.scheme == "https" && !uri.host.isNullOrEmpty() && uri.userInfo == null && uri.rawQuery == null && uri.rawFragment == null) null
         else "接口地址以 https:// 开头，只写地址本身。"
     }
-    fun name(own: Own) = own.model.ifBlank { "我的 API" }
-    fun read(prefs: android.content.SharedPreferences): Pair<Boolean, Own> {
-        // Retire the browser provider in place, even if its saved endpoint used HTTPS.
-        if (prefs.contains("runtime")) {
-            val edit = prefs.edit().remove("runtime")
-            if (prefs.getBoolean("runtime", false)) {
-                edit.putString("use", "free").remove("base").remove("model").remove("key").apply()
-                return false to STARTING
-            }
-            edit.apply()
-        }
-        val own = Own(prefs.getString("base", null) ?: STARTING.base, prefs.getString("model", null) ?: STARTING.model, prefs.getString("key", null).orEmpty())
-        return (prefs.getString("use", "free") == "own" && own.key.isNotBlank()) to own
-    }
-    fun write(prefs: android.content.SharedPreferences, useOwn: Boolean, own: Own) =
-        prefs.edit().putString("use", if (useOwn && own.key.isNotBlank()) "own" else "free").putString("base", own.base).putString("model", own.model).putString("key", own.key).apply()
 }

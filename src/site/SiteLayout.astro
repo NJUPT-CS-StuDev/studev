@@ -96,7 +96,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
         </nav>
         <button class="share-entry text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/`} title={`复制 ${PRODUCT_CONFIG.APP_NAME} 的网址`}><span aria-live="polite" data-copy-label>分享</span></button>
         <a class:list={['about-entry', { active: active === 'about' }]} href="/about/">关于</a>
-        <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}>App</a>
+        <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL} aria-current={active === 'download' ? 'page' : undefined}>下载</a>
         {personalMenu && <span class:list={['site-account', { 'campus-site-account': campusHeader }]}><MeApp campus={campusHeader} client:only="react"><span slot="fallback" class="avatar avatar-loading" role="status" aria-label="正在加载个人菜单" aria-busy="true"><span class="avatar-face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></span><span class="avatar-name">加载中</span></span></MeApp></span>}
       </div>
       {clubKeys.includes(active) && <nav class="club-nav" aria-label="学生发展中心栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
