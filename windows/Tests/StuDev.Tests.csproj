@@ -10,7 +10,7 @@
     <Compile Include="../StuDev/Data/*.cs" Link="Data/%(Filename)%(Extension)" />
     <Compile Include="../StuDev/Me/Preferences.cs;../StuDev/Me/Choices.cs;../StuDev/Me/Courses.cs;../StuDev/Me/Account.cs" Link="Me/%(Filename)%(Extension)" />
     <Compile Include="../StuDev/Map/MapData.cs;../StuDev/Map/Find.cs;../StuDev/Map/Labels.cs;../StuDev/Map/Hours.cs;../StuDev/Map/Places.cs;../StuDev/Map/Routing.cs" Link="Map/%(Filename)%(Extension)" />
-    <Compile Include="../StuDev/Ai/Assistant.cs;../StuDev/Ai/Steps.cs;../StuDev/Ai/Thread.cs;../StuDev/Ai/Answers.cs" Link="Ai/%(Filename)%(Extension)" />
+    <Compile Include="../StuDev/Ai/Assistant.cs;../StuDev/Ai/Steps.cs;../StuDev/Ai/Thread.cs;../StuDev/Ai/Answers.cs;../StuDev/Ai/ToolMenu.cs;../StuDev/Ai/ToolAccess.cs" Link="Ai/%(Filename)%(Extension)" />
     <Compile Include="../kernels/bindings/wayfind_native.cs" Link="Kernels/wayfind_native.cs" />
     <None Include="../kernels/wayfind_native.dll" Link="wayfind_native.dll" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../StuDev/Search/NativeSearch.cs;../kernels/bindings/wasm_search_native.cs" Link="Search/%(Filename)%(Extension)" />
@@ -18,6 +18,8 @@
     <Compile Include="../StuDev/World/*.cs" Exclude="../StuDev/World/Campus.cs" Link="World/%(Filename)%(Extension)" />
     <Compile Include="../StuDev/App/Product.cs" Link="App/Product.cs" />
     <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\campus\world\tool-menu.json" Link="world\tool-menu.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\campus\world\permission-modes.json" Link="world\permission-modes.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/campus/world/parity/golden.json" Link="golden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

@@ -11,9 +11,14 @@ namespace StuDev.Ai;
 public sealed record TaskProposal(World.PersonalTask Task, string? Id, string? Expected, string Key, string Call, bool Saved = false);
 
 /** The campus situation shared with the model. */
-public sealed record Situation(int? Week, string? Klass, string Campus, string? Memory)
+public sealed record Situation(int? Week, string? Klass, string Campus, string? Memory, string? Instructions = null)
 {
-    public JsonObject ToJson() => new() { ["week"] = Week, ["class"] = Klass, ["campus"] = Campus, ["memory"] = Memory };
+    public JsonObject ToJson()
+    {
+        var value = new JsonObject { ["week"] = Week, ["class"] = Klass, ["campus"] = Campus, ["memory"] = Memory };
+        if (Instructions is { Length: > 0 }) value["instructions"] = Instructions;
+        return value;
+    }
 }
 
 public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
@@ -26,6 +31,7 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     private readonly HashSet<string> names = tools.Select(t => (string)t["function"]!["name"]!).ToHashSet();
     public List<JsonObject> Tools => tools;
     public List<string> Diagrams => contract["diagrams"]!.AsArray().Select(d => (string)d!).ToList();
+    public string DefaultStyle => (string)contract["style"]!;
     internal static Assistant Shared => BuiltIn.Value;
     internal (string ProviderName, string ModelName, string Description) FreeService =>
         (Phrase("freeService", "providerName"), Phrase("freeService", "modelName"), Phrase("freeService", "description"));
@@ -55,27 +61,41 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         var week = s.Week switch { null => Phrase("week", "unknown"), 0 => Phrase("week", "out"), _ => Fill(Phrase("week", "in"), new() { ["week"] = s.Week }) };
         var values = new Dictionary<string, object?> { ["now"] = NanjingNow(now), ["week"] = week, ["me"] = CampusContext(s), ["diagrams"] = string.Join("、", Diagrams) };
         var all = Lines("prompt").Select(l => Fill(l, values)).ToList();
+        if (s.Instructions?.Trim() is { Length: > 0 } instructions)
+        {
+            all.Add((string)contract["instructionIntro"]!);
+            all.Add(instructions);
+        }
+        else all.Add(DefaultStyle);
         if (s.Memory is not null) all.AddRange(Lines("memory").Select(l => Fill(l, new() { ["memory"] = s.Memory.Trim() is { Length: > 0 } m ? m : "（还没有）" })));
         return string.Join("\n", all);
     }
 
     /** The tools offered: all of them, but `remember` only to someone who keeps a memory. */
     public List<JsonObject> ToolsFor(Situation s) => s.Memory is null ? tools.Where(t => (string)t["function"]!["name"]! != "remember").ToList() : tools;
+    internal static string ToolName(JsonObject tool) => (string)tool["function"]!["name"]!;
 
     /** The request a provider is sent: OpenAI's chat completions, as every provider speaks it. */
-    public JsonObject Request(string model, List<JsonObject> messages, Situation s, DateTimeOffset now, bool last = false, bool runtime = false, string? conversationId = null, bool retry = false)
+    public JsonObject Request(string model, List<JsonObject> messages, Situation s, DateTimeOffset now, bool last = false, bool runtime = false,
+        string? conversationId = null, bool retry = false, IReadOnlyList<JsonObject>? offered = null, string? preferredTool = null)
     {
         var request = new JsonObject { ["model"] = model, ["stream"] = true };
         if (!runtime) { request["max_tokens"] = 4096; request["temperature"] = 0.2; }
         else { if (string.IsNullOrWhiteSpace(conversationId)) throw new InvalidOperationException("对话尚未初始化，请重新打开对话。"); request["conversation_id"] = conversationId; if (retry) request["retry"] = true; }
-        if (!last) request["tools"] = new JsonArray([.. ToolsFor(s).Select(t => t.DeepClone())]);
-        request["messages"] = new JsonArray([new JsonObject { ["role"] = "system", ["content"] = Instructions(s, now) + (last ? "\n" + (string)contract["finish"]! : "") }, .. messages.Select(m => m.DeepClone())]);
+        var available = offered ?? ToolsFor(s);
+        if (!last) request["tools"] = new JsonArray([.. available.Select(t => t.DeepClone())]);
+        var finish = last ? "\n" + (string)contract["finish"]! : "";
+        var preference = !last && preferredTool is not null && available.Any(tool => ToolName(tool) == preferredTool)
+            ? $"\n本轮用户已选择工具 {preferredTool}。参数齐全时优先调用；缺少必要信息时先向用户提问。"
+            : "";
+        request["messages"] = new JsonArray([new JsonObject { ["role"] = "system", ["content"] = Instructions(s, now) + finish + preference }, .. messages.Select(m => m.DeepClone())]);
         return request;
     }
 
     public string RuntimeError(string? code, string fallback) => code is not null && contract["runtimeErrors"]?[code] is JsonValue value && value.TryGetValue<string>(out var text) ? text : fallback;
     public string? RuntimeStage(string stage) => contract["runtimeStages"]?[stage]?.GetValue<string>();
-    public Completion Read(bool runtime = false) => new(names, runtime ? RuntimeError : null);
+    public Completion Read(bool runtime = false, IEnumerable<string>? offered = null) =>
+        new(offered?.ToHashSet(StringComparer.Ordinal) ?? names, runtime ? RuntimeError : null);
 
     /** A streamed answer read line by line. */
     public sealed class Completion(HashSet<string> names, Func<string?, string, string>? runtimeError = null)

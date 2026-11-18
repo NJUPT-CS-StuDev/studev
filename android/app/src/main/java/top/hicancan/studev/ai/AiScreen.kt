@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,8 +20,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,23 +78,36 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
 @Composable fun AiScreen(model: CampusModel, route: Route) {
     val context = LocalContext.current
     val client = remember { Accounts.get(context) }
+    val account by client.user.collectAsState()
+    LaunchedEffect(client) { client.current() }
     val scope = rememberCoroutineScope()
     val kept = remember { context.getSharedPreferences("ai_chat", android.content.Context.MODE_PRIVATE) }
     val modelPrefs = remember(context) { ModelPreferences.get(context) }
     val catalog by rememberModelCatalog(modelPrefs)
     var draft by remember { mutableStateOf("") }
     val start = remember { readChats(kept, catalog.preferred) }
-    var chats by remember { mutableStateOf(start.first) }
-    var current by remember { mutableStateOf<String?>(start.second ?: java.util.UUID.randomUUID().toString()) }
+    var chats by remember { mutableStateOf(start.chats) }
+    var projects by remember { mutableStateOf(start.projects) }
+    var current by remember { mutableStateOf<String?>(start.current ?: java.util.UUID.randomUUID().toString()) }
+    var activeProject by remember { mutableStateOf(start.currentProject) }
     var thread by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.thread ?: ChatThread()) }
     var selection by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.selection ?: catalog.forNewChat()) }
-    // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
-    var opening by remember { mutableStateOf(true) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
+    var moving by remember { mutableStateOf<Set<String>?>(null) }
+    var personalInstructions by remember { mutableStateOf(false) }
+    var projectInstructions by remember { mutableStateOf<String?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val assistant = remember(context) { Assistant.load(context) }
     val freeService = remember(assistant) { assistant.freeService }
-    val memory = model.settings.state.collectAsState().value.memory
+    val preferences by model.settings.state.collectAsState()
+    val academic by model.state.collectAsState()
+    val openedProject = projects.firstOrNull { it.id == activeProject }
+    val memory = openedProject?.let { preferences.memory.copy(text = it.memory) } ?: preferences.memory
+    val courses = remember(academic.schedule) {
+        academic.schedule?.meetings.orEmpty().mapNotNull { meeting ->
+            meeting.course.code?.takeIf(String::isNotBlank)?.let { CourseProject(it, Names.course(meeting.course.name)) }
+        }.distinctBy { it.code }.sortedBy { it.name }
+    }
     var minding by remember { mutableStateOf(false) }
     var streaming by remember { mutableStateOf<String?>(null) }
     var live by remember { mutableStateOf<List<JsonObject>?>(null) }
@@ -102,19 +125,21 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         remember = { fact ->
             val now = model.settings.state.value.memory
             check(now.on) { "记忆已关闭。" }
-            val text = Memory.remembered(now.text, fact)
-            model.settings.update { it.copy(memory = it.memory.copy(text = text)) }
+            val id = activeProject
+            if (id == null) model.settings.update { it.copy(memory = it.memory.copy(text = Memory.remembered(it.memory.text, fact))) }
+            else projects = projects.map { if (it.id == id) it.copy(memory = Memory.remembered(it.memory, fact)) else it }
         }) { proposal -> proposals = proposals + proposal } }
     DisposableEffect(tools) { onDispose { tools.close() } }
-    LaunchedEffect(thread) {
-        if (opening) { opening = false; return@LaunchedEffect }
-        if (thread.nodes.isEmpty()) return@LaunchedEffect
+    fun recordThread(next: ChatThread) {
+        thread = next
         val id = current ?: java.util.UUID.randomUUID().toString()
         val before = chats.firstOrNull { it.id == id }
-        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), thread, selection)) + chats.filter { it.id != id }
+        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), next, selection, activeProject)) + chats.filter { it.id != id }
         current = id
     }
-    LaunchedEffect(chats, current) { kept.edit().putString("chats", buildJsonObject { put("chats", JsonArray(chats.map { it.toJson() })); current?.let { put("current", it) } }.toString()).remove("thread").remove("messages").apply() }
+    LaunchedEffect(chats, current, projects, activeProject) {
+        kept.edit().putString("chats", KeptChats(chats, current, projects, activeProject).toJson().toString()).remove("thread").remove("messages").apply()
+    }
     var waiting by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
     LaunchedEffect(thread.nodes.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
@@ -124,13 +149,17 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         var tipId = at
         fun grow(message: JsonObject) {
             val id = java.util.UUID.randomUUID().toString()
-            fresh += id; thread = thread.append(tipId, id, message); tipId = id
+            fresh += id; recordThread(thread.append(tipId, id, message)); tipId = id
         }
-        thread = base; fresh.clear(); from = at; editing = null
+        recordThread(base); fresh.clear(); from = at; editing = null
         var history = recent(base.lineage(at).map { it.message })
         val settings = model.settings.state.value
         val week = model.state.value.term?.let { top.hicancan.studev.world.CampusDay.weekOf(it.weeks, top.hicancan.studev.world.CampusDay.now().toLocalDate())?.week ?: 0 }
-        val situation = Situation(week, settings.klass, settings.campus, memory.takeIf { it.on }?.text)
+        val owner = Instructions.owner(client.current()?.id)
+        val project = projects.firstOrNull { it.id == activeProject }
+        val instructionText = Instructions.forChat(Instructions.read(context, owner), project)
+        val remembered = settings.memory.takeIf { it.on }?.let { project?.memory ?: it.text }
+        val situation = Situation(week, settings.klass, settings.campus, remembered, instructionText)
         tools.definitions = assistant.toolsFor(situation)
         var said = ""
         try {
@@ -159,7 +188,14 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 if (calls.isEmpty()) return
                 for (item in calls) {
                     val call = item.jsonObject; val function = call.getValue("function").jsonObject
-                    val result = try { withContext(Dispatchers.IO) { tools.execute(function.getValue("name").jsonPrimitive.content, Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject, call.getValue("id").jsonPrimitive.content) } }
+                    val result = try {
+                        val name = function.getValue("name").jsonPrimitive.content
+                        val args = Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject
+                        val callId = call.getValue("id").jsonPrimitive.content
+                        // Remember updates the active project's UI state. Network and index tools stay on IO.
+                        if (name == "remember") tools.execute(name, args, callId)
+                        else withContext(Dispatchers.IO) { tools.execute(name, args, callId) }
+                    }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { buildJsonObject { put("error", if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "工具执行失败。" else "校园数据暂不可读，请重试。"); if (e is top.hicancan.studev.world.UnknownReference) put("code", "unknown-reference") } }
                     val message = buildJsonObject { put("role", "tool"); put("tool_call_id", call.getValue("id")); put("content", result.toString()) }
@@ -203,20 +239,27 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     }
     /** The answer to a question asked again, beside the answer it had. */
     fun again(question: String) { if (!busy) start(thread, question) }
-    fun pick(id: String) { if (!busy) { thread = thread.choose(id); error = "" } }
-    fun open(id: String?) {
+    fun pick(id: String) { if (!busy) { recordThread(thread.choose(id)); error = "" } }
+    fun open(id: String?, projectId: String? = null) {
         if (busy) return
-        opening = true
         val chat = chats.firstOrNull { it.id == id }
+        if (id == null || id != current) draft = ""
         thread = chat?.thread ?: ChatThread()
         current = chat?.id ?: java.util.UUID.randomUUID().toString()
+        activeProject = if (chat == null) projectId else chat.projectId
         selection = chat?.selection ?: catalog.forNewChat()
         proposals = emptyList(); saved = emptySet(); error = ""; editing = null
         scope.launch { drawer.close() }
     }
     fun removeChat(chat: SavedChat) {
         chats = chats.filter { it.id != chat.id }
-        if (current == chat.id) open(null)
+        if (current == chat.id) open(null, chat.projectId)
+    }
+    fun saveProject(project: ChatProject?, name: String, course: String?): ChatProject {
+        if (course != null) projects.firstOrNull { it.course == course }?.let { return it }
+        val next = project?.copy(name = name) ?: ChatProject(java.util.UUID.randomUUID().toString(), name, course)
+        projects = if (project == null) listOf(next) + projects else projects.map { if (it.id == next.id) next else it }
+        return next
     }
     waiting?.let { question ->
         BackHandler { waiting = null }
@@ -243,7 +286,42 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             }
         }
     }
-    if (minding) MemorySettings(memory, onClose = { minding = false }) { next -> model.settings.update { it.copy(memory = next) }; minding = false }
+    if (minding) MemorySettings(memory, openedProject?.name, onClose = { minding = false }) { next ->
+        val id = openedProject?.id
+        if (id == null) model.settings.update { it.copy(memory = next) }
+        else {
+            projects = projects.map { if (it.id == id) it.copy(memory = next.text) else it }
+            model.settings.update { it.copy(memory = it.memory.copy(on = next.on)) }
+        }
+        minding = false
+    }
+    if (personalInstructions) {
+        val owner = Instructions.owner(account?.id)
+        key(owner) {
+            val value = remember(owner) { Instructions.read(context, owner) }
+            InstructionSheet("个人指令", "影响当前设备上此账号的 AI 对话。", value, Instructions.PERSONAL_LIMIT,
+                onClose = { personalInstructions = false }) { edited ->
+                if (owner == Instructions.owner(client.user.value?.id)) Instructions.save(context, owner, edited)
+                personalInstructions = false
+            }
+        }
+    }
+    projects.firstOrNull { it.id == projectInstructions && it.course == null }?.let { project ->
+        key(project.id) {
+            InstructionSheet("项目指令", "只用于「${project.name}」里的对话。", project.instructions, Instructions.PROJECT_LIMIT,
+                onClose = { projectInstructions = null }) { edited ->
+                projects = projects.map { if (it.id == project.id) it.copy(instructions = edited) else it }
+                projectInstructions = null
+            }
+        }
+    }
+    moving?.let { ids ->
+        MoveChatsSheet(chats.filter { it.id in ids }, projects, onClose = { moving = null }) { target ->
+            chats = chats.map { if (it.id in ids) it.copy(projectId = target) else it }
+            if (current?.let(ids::contains) == true) activeProject = target
+            moving = null
+        }
+    }
     inspectingCall?.let { (title, body) -> PlainSheet(title, { inspectingCall = null }) {
         androidx.compose.foundation.text.selection.SelectionContainer {
             Column(Modifier.verticalScroll(rememberScrollState())) { Plain(body, 13.sp, Ink.muted) }
@@ -258,53 +336,34 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     }
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = Ink.paper) {
-            Column(Modifier.fillMaxHeight().statusBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp)) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !busy) { open(null) }.padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.EditNote, null, Modifier.size(20.dp), tint = Ink.text); Spacer(Modifier.width(10.dp)); Plain("新对话", 15.sp, weight = FontWeight.Medium)
-                }
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    Chats.groups(chats, System.currentTimeMillis()).forEach { (name, list) ->
-                        Plain(name, 12.sp, Ink.faint, modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 4.dp))
-                        list.forEach { chat ->
-                            var more by remember(chat.id) { mutableStateOf(false) }
-                            val on = chat.id == current
-                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (on) Ink.text.copy(alpha = .08f) else Color.Transparent).clickable(enabled = !busy || on) { open(chat.id) }.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Plain(Chats.titleOf(chat.title, chat.thread), 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
-                                Box {
-                                    IconAction(Icons.Outlined.MoreHoriz, "更多") { more = true }
-                                    DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
-                                        DropdownMenuItem({ Text("重命名") }, { more = false; renaming = chat })
-                                        DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; removeChat(chat) }, enabled = !(busy && on))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (chats.isEmpty()) Plain("问过的对话会列在这里，只存在这台设备上。", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp))
-                }
-                HorizontalDivider(color = Ink.line)
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { minding = true; scope.launch { drawer.close() } }.padding(horizontal = 10.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Plain("记忆", 15.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    Plain(if (!memory.on) "已关闭" else memory.text.lines().count { it.isNotBlank() }.let { if (it > 0) "记着 $it 件事" else "还没有" }, 13.sp, Ink.muted)
-                }
-            }
+            ChatDrawer(chats, projects, courses, current, activeProject, busy, memory,
+                openChat = { open(it) }, newChat = { open(null, it) },
+                openProject = { id -> open(chats.filter { it.projectId == id }.maxByOrNull { it.updated }?.id, id) }, saveProject = ::saveProject,
+                editInstructions = { project -> scope.launch { drawer.close(); if (project == null) personalInstructions = true else projectInstructions = project.id } },
+                rename = { renaming = it }, remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
+                mind = { scope.launch { drawer.close(); minding = true } })
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         CampusHeader(Modifier.padding(start = 6.dp, end = 14.dp)) {
             IconAction(Icons.Outlined.Menu, "对话列表") { scope.launch { drawer.open() } }
-            Plain(chats.firstOrNull { it.id == current }?.let { Chats.titleOf(it.title, it.thread) } ?: "AI", 15.sp,
-                weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
-            if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null) }
+            val chat = chats.firstOrNull { it.id == current }
+            Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                if (chat != null && openedProject != null) Plain(openedProject.name, 11.sp, Ink.muted, maxLines = 1)
+                Plain(chat?.let { Chats.titleOf(it.title, it.thread) } ?: openedProject?.name ?: "AI", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+            }
+            if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null, activeProject) }
         }
         if (shown.isEmpty()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
-                Plain("有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
+                Plain(openedProject?.name ?: "有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
                 composer()
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
+                if (openedProject == null) {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        EXAMPLES.forEach { example -> Box(Modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Ink.line, RoundedCornerShape(18.dp)).clickable { ask(example) }.padding(horizontal = 14.dp, vertical = 9.dp)) { Plain(example, 13.5.sp, Ink.muted) } }
+                    }
+                    Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
                 }
-                Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
             }
             return@Column
         }
@@ -381,14 +440,12 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
 }
 
 /** The conversations kept on this device, and the one open; one kept before there could be many becomes the first. */
-private fun readChats(kept: android.content.SharedPreferences, imported: ModelSelection): Pair<List<SavedChat>, String?> = runCatching {
-    kept.getString("chats", null)?.let { text -> Json.parseToJsonElement(text).jsonObject.let { json ->
-        json.getValue("chats").jsonArray.map { SavedChat.of(it.jsonObject).let { chat -> if (chat.selection == null) chat.copy(selection = imported) else chat } } to json["current"]?.jsonPrimitive?.contentOrNull
-    } }
+private fun readChats(kept: android.content.SharedPreferences, imported: ModelSelection): KeptChats = runCatching {
+    kept.getString("chats", null)?.let { text -> KeptChats.of(Json.parseToJsonElement(text).jsonObject, imported) }
         ?: (kept.getString("thread", null)?.let { ChatThread.of(Json.parseToJsonElement(it).jsonObject) }
             ?: kept.getString("messages", null)?.let { old -> Json.parseToJsonElement(old).jsonArray.map { it.jsonObject }.let { ChatThread.chain(it, it.map { java.util.UUID.randomUUID().toString() }) } })
-            ?.takeIf { it.nodes.isNotEmpty() }?.let { thread -> val id = java.util.UUID.randomUUID().toString(); listOf(SavedChat(id, "", System.currentTimeMillis(), thread, imported)) to id }
-}.getOrNull() ?: (emptyList<SavedChat>() to null)
+            ?.takeIf { it.nodes.isNotEmpty() }?.let { thread -> val id = java.util.UUID.randomUUID().toString(); KeptChats(listOf(SavedChat(id, "", System.currentTimeMillis(), thread, imported)), id) }
+}.getOrNull() ?: KeptChats()
 
 /** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
 private fun recent(history: List<JsonObject>): List<JsonObject> {
@@ -418,51 +475,62 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
     }
 }
 
+private data class OfferedService(val id: String?, val name: String, val models: List<OfferedModel>)
+
 @Composable private fun ChatModelPicker(catalog: ModelCatalog, selected: ModelSelection, freeService: FreeService, enabled: Boolean, choose: (ModelSelection) -> Unit) {
     var opened by remember { mutableStateOf(false) }
-    var stage by remember { mutableStateOf<String?>(null) }
-    val selectedService = catalog.service(selected.provider)?.name ?: "服务商已删除"
-    val label = if (selected.provider == null) freeService.modelName else "$selectedService · ${selected.model.orEmpty()}"
-    fun dismiss() { opened = false; stage = null }
+    var query by remember { mutableStateOf("") }
+    val label = if (selected.provider == null) freeService.modelName else selected.model.orEmpty().ifBlank { "选择模型" }
+    val gap = with(LocalDensity.current) { 8.dp.roundToPx() }
+    val position = remember(gap) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                val above = anchorBounds.top - gap
+                val below = windowSize.height - anchorBounds.bottom - gap
+                val x = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.right - popupContentSize.width else anchorBounds.left
+                val y = if (popupContentSize.height <= above || above >= below) anchorBounds.top - popupContentSize.height - gap else anchorBounds.bottom + gap
+                return IntOffset(x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                    y.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0)))
+            }
+        }
+    }
     Box {
-        Row(Modifier.widthIn(max = 230.dp).clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { opened = true }
+        Row(Modifier.widthIn(max = 200.dp).clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { query = ""; opened = true }
             .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             if (selected.provider == null) FreeServiceAvatar(Modifier.size(16.dp))
             Plain(label, 12.sp, if (enabled) Ink.text else Ink.muted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-            Icon(Icons.Outlined.KeyboardArrowDown, "选择服务商和模型", Modifier.size(16.dp), tint = Ink.muted)
+            Icon(Icons.Outlined.KeyboardArrowDown, "选择模型", Modifier.size(16.dp), tint = Ink.muted)
         }
-        DropdownMenu(opened && enabled, ::dismiss, modifier = Modifier.heightIn(max = 320.dp), containerColor = Ink.paper) {
-            val provider = stage
-            if (provider == null) {
-                DropdownMenuItem({ Plain("选择服务商", 12.sp, Ink.muted) }, {}, enabled = false)
-                DropdownMenuItem({
-                    Column {
-                        Plain(freeService.providerName, 14.sp)
-                        Plain(freeService.modelName, 12.sp, Ink.muted)
-                    }
-                }, { stage = "" }, leadingIcon = { FreeServiceAvatar(Modifier.size(24.dp)) })
-                val options = catalog.services.filter { service -> service.enabled && service.key.isNotBlank() && service.models.any { it.enabled } }
-                options.forEach { service -> DropdownMenuItem({ Plain(service.name, 14.sp) }, { stage = service.id }) }
-                if (options.isEmpty()) {
-                    DropdownMenuItem({ Plain("在「我 → 模型服务」添加服务商", 12.sp, Ink.muted) }, {}, enabled = false)
-                }
-            } else {
-                DropdownMenuItem({ Plain("选择模型", 12.sp, Ink.muted) }, { stage = null },
-                    leadingIcon = { Icon(Icons.Outlined.ChevronLeft, "返回服务商列表", Modifier.size(18.dp), tint = Ink.muted) })
-                if (provider.isEmpty()) {
-                    val free = ModelSelection()
-                    DropdownMenuItem({
-                        Column {
-                            Plain(freeService.modelName, 14.sp)
-                            Plain(freeService.description, 12.sp, Ink.muted)
+        if (opened && enabled) Popup(position, { opened = false }, PopupProperties(focusable = true)) {
+            val words = query.trim().split(Regex("\\s+"))
+            val services = listOf(OfferedService(null, freeService.providerName, listOf(OfferedModel(freeService.modelName)))) +
+                catalog.services.filter { it.enabled && it.key.isNotBlank() }.map { OfferedService(it.id, it.name, it.models) }
+            val visible = services.map { group -> group.copy(models = group.models.filter { model ->
+                model.enabled && words.all { "${group.name} ${model.id}".contains(it, ignoreCase = true) }
+            }) }.filter { it.models.isNotEmpty() }
+            Surface(Modifier.width(270.dp).heightIn(max = 350.dp), shape = RoundedCornerShape(14.dp), color = Ink.paper, shadowElevation = 8.dp) {
+                Column(Modifier.padding(8.dp)) {
+                    OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
+                        placeholder = { Text("搜索模型或服务商") }, shape = RoundedCornerShape(10.dp))
+                    LazyColumn(Modifier.heightIn(max = 263.dp).padding(top = 4.dp)) {
+                        for (group in visible) {
+                            item(key = "provider:${group.id}") {
+                                Plain(group.name, 12.sp, Ink.muted, modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp))
+                            }
+                            items(group.models, key = { "${group.id}/${it.id}" }) { model ->
+                                val choice = if (group.id == null) ModelSelection() else ModelSelection(group.id, model.id)
+                                val on = choice == selected
+                                DropdownMenuItem({
+                                    Column {
+                                        Plain(model.id, 14.sp)
+                                        if (group.id == null) Plain(freeService.description, 12.sp, Ink.muted)
+                                    }
+                                }, { opened = false; choose(choice) }, leadingIcon = if (group.id == null) { { FreeServiceAvatar(Modifier.size(23.dp)) } } else null,
+                                    trailingIcon = { if (on) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
+                            }
                         }
-                    }, { dismiss(); choose(free) }, leadingIcon = { FreeServiceAvatar(Modifier.size(24.dp)) },
-                        trailingIcon = { if (free == selected) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
-                }
-                catalog.service(provider)?.models.orEmpty().filter { it.enabled }.forEach { offer ->
-                    val model = ModelSelection(provider, offer.id)
-                    DropdownMenuItem({ Plain(offer.id, 14.sp) }, { dismiss(); choose(model) },
-                        trailingIcon = { if (model == selected) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
+                        if (visible.isEmpty()) item { Plain("没有匹配的模型", 13.sp, Ink.muted, modifier = Modifier.padding(12.dp)) }
+                    }
                 }
             }
         }
@@ -554,14 +622,17 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
 }
 
 /** What the AI keeps in mind, as MemorySettings in AiApp.tsx: to read, change, empty or turn off. */
-@Composable private fun MemorySettings(memory: Memory, onClose: () -> Unit, onSave: (Memory) -> Unit) {
+@Composable private fun MemorySettings(memory: Memory, project: String?, onClose: () -> Unit, onSave: (Memory) -> Unit) {
     var on by remember { mutableStateOf(memory.on) }
     // Shown as plain lines; kept as a list, one `- ` item a line, as the AI reads and writes it.
     var text by remember { mutableStateOf(memory.text.replace(Regex("(?m)^- "), "")) }
     val count = text.lines().count { it.isNotBlank() }
     AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper,
         title = { Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) { Text("记忆"); Plain("AI 记下你的专业、习惯和偏好，回答会越来越贴合你。", 13.sp, Ink.muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp)) }
+            Column(Modifier.weight(1f)) {
+                Text(if (project == null) "记忆" else "项目记忆")
+                Plain(if (project == null) "AI 记下你的专业、习惯和偏好，回答会越来越贴合你。" else "记在「$project」里的信息。", 13.sp, Ink.muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp))
+            }
             Switch(on, { on = it }, modifier = Modifier.padding(start = 12.dp))
         } },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -578,9 +649,10 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
                     Plain("记忆已关闭，AI 看不到这些内容，也不再记新的。" + if (count > 0) "记着的 $count 件事还在，打开就接着用。" else "", 13.5.sp, Ink.muted, lineHeight = 21.sp)
                 }
             }
-            Plain("未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。", 12.sp, Ink.faint)
+            Plain(if (project == null) "未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。"
+                else "保存在这台设备上，只在这个项目里使用。开关对所有对话生效。", 12.sp, Ink.faint)
         } },
-        confirmButton = { TextButton({ onSave(Memory(on, text.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n") { "- $it" })) }) { Text("保存") } },
+        confirmButton = { TextButton({ onSave(Memory(on, text.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n") { "- $it" }.take(Memory.LIMIT))) }) { Text("保存") } },
         dismissButton = { Row { if (on && text.isNotEmpty()) TextButton({ text = "" }) { Text("全部清空", color = Ink.muted) }; TextButton(onClose) { Text("取消") } } })
 }
 

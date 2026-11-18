@@ -23,12 +23,12 @@ export interface Folder extends FileSystemDirectoryHandle {
 export interface ChatRevision<P> { name: string; chat: Saved<P>; previous?: string }
 export interface Workspace<P> { folder: Folder; project: Project; instructions: string; memory: string; revisions: ChatRevision<P>[] }
 
-const picker = () => (window as Window & { showDirectoryPicker?: (options: { mode: 'read' | 'readwrite' }) => Promise<Folder> }).showDirectoryPicker;
+const picker = () => (window as Window & { showDirectoryPicker?: (options: { mode: 'read' | 'readwrite'; id: string }) => Promise<Folder> }).showDirectoryPicker;
 export const folderAvailable = () => typeof window !== 'undefined' && Boolean(picker());
 export function pickFolder(writable = true): Promise<Folder> {
     const pick = picker();
     if (!pick) throw new Error('此浏览器不能打开本地项目目录。');
-    return pick.call(window, { mode: writable ? 'readwrite' : 'read' });
+    return pick.call(window, { mode: writable ? 'readwrite' : 'read', id: writable ? 'studev-projects' : 'studev-references' });
 }
 
 export function readProjects(): Project[] {

@@ -3,20 +3,61 @@ package top.hicancan.studev.ai
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 /**
  * The conversations kept on this device, as src/campus/ai/chats.ts: each named by its first question until renamed,
  * the newest first, grouped by when they were last spoken in.
  */
-internal data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread, val selection: ModelSelection? = null) {
+internal data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread, val selection: ModelSelection? = null, val projectId: String? = null) {
     fun toJson() = buildJsonObject {
         put("id", id); put("title", title); put("updated", updated); put("thread", thread.toJson())
         selection?.let { put("selection", Json.encodeToJsonElement(it)) }
+        projectId?.let { put("projectId", it) }
     }
     companion object {
         fun of(json: JsonObject) = SavedChat(json.getValue("id").jsonPrimitive.content, json["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), json.getValue("updated").jsonPrimitive.long,
-            ChatThread.of(json.getValue("thread").jsonObject), json["selection"]?.let { runCatching { Json.decodeFromJsonElement<ModelSelection>(it) }.getOrNull() })
+            ChatThread.of(json.getValue("thread").jsonObject), json["selection"]?.let { runCatching { Json.decodeFromJsonElement<ModelSelection>(it) }.getOrNull() },
+            json["projectId"]?.jsonPrimitive?.contentOrNull)
+    }
+}
+
+@Serializable internal data class ChatProject(val id: String, val name: String, val course: String? = null, val instructions: String = "", val memory: String = "", val version: Int = 1) {
+    fun toJson() = buildJsonObject {
+        put("version", version); put("id", id); put("name", name)
+        course?.let { put("course", it) }
+        if (instructions.isNotEmpty()) put("instructions", instructions)
+        if (memory.isNotEmpty()) put("memory", memory)
+    }
+}
+
+internal data class KeptChats(
+    val chats: List<SavedChat> = emptyList(), val current: String? = null,
+    val projects: List<ChatProject> = emptyList(), val currentProject: String? = null,
+) {
+    fun toJson() = buildJsonObject {
+        put("chats", JsonArray(chats.map(SavedChat::toJson)))
+        current?.let { put("current", it) }
+        put("projects", JsonArray(projects.map(ChatProject::toJson)))
+        currentProject?.let { put("currentProject", it) }
+    }
+
+    companion object {
+        fun of(json: JsonObject, imported: ModelSelection): KeptChats {
+            val projects = json["projects"]?.jsonArray.orEmpty().mapNotNull { item ->
+                runCatching { Json.decodeFromJsonElement<ChatProject>(item) }.getOrNull()?.takeIf { it.version == 1 && it.id.isNotBlank() && it.name.isNotBlank() }
+            }
+            val ids = projects.mapTo(mutableSetOf()) { it.id }
+            val chats = json.getValue("chats").jsonArray.map {
+                val chat = SavedChat.of(it.jsonObject)
+                chat.copy(selection = chat.selection ?: imported, projectId = chat.projectId?.takeIf(ids::contains))
+            }
+            val current = json["current"]?.jsonPrimitive?.contentOrNull
+            val open = chats.firstOrNull { it.id == current }
+            val project = if (open != null) open.projectId else json["currentProject"]?.jsonPrimitive?.contentOrNull?.takeIf(ids::contains)
+            return KeptChats(chats, current, projects, project)
+        }
     }
 }
 

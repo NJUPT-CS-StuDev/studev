@@ -42,7 +42,7 @@ export default function ProjectSettings({ project, folder, instructions, activeS
             <h3>{project.name}</h3>
             <p className="fine">{folder ? `本地主目录 · ${folder.name}` : project.folder ? `等待重新定位 · ${project.folder}` : '尚未绑定主目录'}</p>
             {supported && <div className="ai-project-actions">
-                {!folder && <button className="btn" disabled={running} onClick={() => void run(() => bind(false))}>{project.folder ? '重新定位' : '绑定主目录'}</button>}
+                <button className="btn" disabled={running} onClick={() => void run(() => bind(false))}>{project.folder ? '重新定位' : '绑定主目录'}</button>
                 {!project.folder && !folder && <button className="btn" disabled={running} onClick={() => void run(() => bind(true))}>新建本地文件夹</button>}
                 {folder && <button className="btn" disabled={running} onClick={() => setBrowser({ folder, writable: true })}>查看项目文件</button>}
                 <button className="btn" disabled={running} onClick={() => void run(attach)}>添加资料目录</button>

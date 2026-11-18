@@ -14,9 +14,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
-/** The campus context and the memory the user has enabled, as in src/campus/world/assistant.mjs. */
-data class Situation(val week: Int?, val klass: String?, val campus: String, val memory: String?) {
-    fun toJson() = buildJsonObject { put("week", week); put("class", klass); put("campus", campus); put("memory", memory) }
+/** The campus context, instructions and enabled memory, as in src/campus/world/assistant.mjs. */
+data class Situation(val week: Int?, val klass: String?, val campus: String, val memory: String?, val instructions: String? = null) {
+    fun toJson() = buildJsonObject {
+        put("week", week); put("class", klass); put("campus", campus); put("memory", memory)
+        instructions?.let { put("instructions", it) }
+    }
 }
 
 internal data class FreeService(val providerName: String, val modelName: String, val description: String)
@@ -50,8 +53,13 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     fun instructions(s: Situation, now: Instant = Instant.now()): String {
         val week = when (s.week) { null -> phrase("week", "unknown"); 0 -> phrase("week", "out"); else -> fill(phrase("week", "in"), mapOf("week" to s.week)) }
         val values = mapOf("now" to nanjingNow(now), "week" to week, "me" to who(s), "diagrams" to diagrams.joinToString("、"))
-        val all = lines("prompt").map { fill(it, values) } + if (s.memory != null) lines("memory").map { fill(it, mapOf("memory" to s.memory.trim().ifEmpty { "（还没有）" })) } else emptyList()
-        return all.joinToString("\n")
+        return buildList {
+            addAll(lines("prompt").map { fill(it, values) })
+            val custom = s.instructions?.trim().orEmpty()
+            if (custom.isEmpty()) add(contract.getValue("style").jsonPrimitive.content)
+            else { add(contract.getValue("instructionIntro").jsonPrimitive.content); add(custom) }
+            if (s.memory != null) addAll(lines("memory").map { fill(it, mapOf("memory" to s.memory.trim().ifEmpty { "（还没有）" })) })
+        }.joinToString("\n")
     }
 
     /** The tools offered: all of them, but `remember` only to someone who keeps a memory. */

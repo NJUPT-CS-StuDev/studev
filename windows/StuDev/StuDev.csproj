@@ -46,7 +46,7 @@
     <!-- The kernels and the contracts every client reads, taken from where they are made, never copied by hand. -->
     <Compile Include="..\kernels\bindings\*.cs" Link="Kernels\%(Filename)%(Extension)" />
     <None Include="..\kernels\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\..\src\campus\world\tools.json;..\..\src\campus\world\assistant.json;..\..\src\campus\world\channels.json" Link="world\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\campus\world\tools.json;..\..\src\campus\world\tool-menu.json;..\..\src\campus\world\permission-modes.json;..\..\src\campus\world\assistant.json;..\..\src\campus\world\channels.json" Link="world\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\design\tokens.json" Link="design\tokens.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\public\assets\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />

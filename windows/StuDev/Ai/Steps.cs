@@ -10,11 +10,6 @@ public sealed record Call(string Id, string Name, string Arguments);
 
 public static class Steps
 {
-    private static readonly Dictionary<string, string> Labels = new()
-    {
-        ["search"] = "搜索资料", ["read"] = "读原文", ["course"] = "看课程", ["schedule"] = "查上课安排", ["curriculum"] = "查培养方案", ["find_place"] = "找地点", ["nearby"] = "找附近", ["route"] = "规划路线", ["timeline"] = "查看安排",
-        ["exams"] = "查考试", ["list_tasks"] = "读取任务", ["suggest_slots"] = "找空闲时间", ["free_rooms"] = "查空教室", ["propose_task"] = "起草任务", ["remember"] = "记住",
-    };
     private static string Text(JsonNode? value) => value is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
     private static int Count(JsonNode? value) => value is JsonArray a ? a.Count : 0;
     private static JsonNode? Field(JsonNode? value, string key) => value is JsonObject o ? o[key] : null;
@@ -53,7 +48,7 @@ public static class Steps
     }
 
     /** Every call in order; a retry never overwrites an earlier attempt. */
-    public static List<Step> Of(List<Call> calls, Dictionary<string, JsonNode?> results)
+    public static List<Step> Of(List<Call> calls, Dictionary<string, JsonNode?> results, Func<string, string?>? webLabel = null)
     {
         var steps = new List<Step>();
         foreach (var call in calls)
@@ -64,7 +59,9 @@ public static class Steps
             var error = Text(Field(result, "error"));
             var detail = error.Length > 0 ? $"{Detail(call.Name, args, null, false)}：{error}" : Detail(call.Name, args, result, done);
             if (error.Length > 0 && detail.StartsWith('：')) detail = detail[1..];
-            var step = new Step(call.Name, Labels.GetValueOrDefault(call.Name) ?? call.Name, detail, error.Length > 0, !done);
+            var label = ToolMenu.Label(call.Name) ?? webLabel?.Invoke(call.Name) ??
+                (call.Name.StartsWith("web_", StringComparison.Ordinal) ? "读取网页" : call.Name);
+            var step = new Step(call.Name, label, detail, error.Length > 0, !done);
             steps.Add(step);
         }
         return steps;

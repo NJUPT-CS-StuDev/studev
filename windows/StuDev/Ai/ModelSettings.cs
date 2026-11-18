@@ -2,7 +2,6 @@ using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
@@ -21,14 +20,23 @@ internal static class ModelSettings
         var providers = ModelProviders.Shared;
         var free = Assistant.Shared.FreeService;
         page.Children.Add(Kit.Row("", Kit.Line(10, FreeAvatar(32), Summary(free.ModelName, free.Description))));
-        foreach (var provider in providers.Configured)
+        foreach (var provider in providers.Visible)
         {
             var count = provider.Models.Count(model => model.Enabled);
             page.Children.Add(Kit.Row("", Summary(provider.Name, $"{(provider.Enabled ? "已启用" : "已停用")} · {count} 个模型已启用"),
                 () => Edit(provider, provider.Runtime, refresh)));
         }
         page.Children.Add(Kit.TextAction("添加 API 服务商", () => Edit(null, false, refresh)));
-        if (providers.Find(ModelProviders.RuntimeId) is null)
+        var experiment = new Grid { ColumnSpacing = 16 };
+        experiment.ColumnDefinitions.Add(new ColumnDefinition());
+        experiment.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        experiment.Children.Add(Summary(ModelProviders.RuntimeExperiment, "通过 Local Runtime MCP 使用这台电脑上的浏览器模型"));
+        var toggle = Kit.Switch(providers.RuntimeEnabled, on => { providers.SetRuntimeEnabled(on); refresh(); }, ModelProviders.RuntimeExperiment);
+        toggle.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(toggle, 1);
+        experiment.Children.Add(toggle);
+        page.Children.Add(Kit.Row("", experiment));
+        if (providers.RuntimeEnabled && providers.Find(ModelProviders.RuntimeId) is null)
             page.Children.Add(Kit.TextAction("连接 Local Runtime MCP", () => Edit(null, true, refresh)));
     }
 
@@ -43,21 +51,10 @@ internal static class ModelSettings
         Fill = new ImageBrush { ImageSource = FreeAvatarImage(), Stretch = Stretch.UniformToFill },
     };
 
-    internal static ImageIcon FreeAvatarIcon()
-    {
-        const float size = 16;
-        var icon = new ImageIcon { Width = size, Height = size, Source = FreeAvatarImage() };
-        var visual = ElementCompositionPreview.GetElementVisual(icon);
-        var circle = visual.Compositor.CreateEllipseGeometry();
-        circle.Center = new(size / 2);
-        circle.Radius = new(size / 2);
-        visual.Clip = visual.Compositor.CreateGeometricClip(circle);
-        return icon;
-    }
-
     private static void Edit(ModelProvider? provider, bool runtime, Action refresh)
     {
         var service = ModelProviders.Shared;
+        if (runtime && !service.RuntimeEnabled) return;
         var title = provider?.Name ?? (runtime ? ModelProviders.RuntimeName : "添加 API 服务商");
         var name = Kit.Field(provider?.Name ?? "", "例如 DeepSeek、腾讯云", "服务商名称");
         var address = Kit.Field(provider?.Address ?? (runtime ? Models.Runtime.Base : ""), "https://api.deepseek.com", "接口地址");
@@ -152,6 +149,7 @@ internal static class ModelSettings
 
         void Save()
         {
+            if (runtime && !service.RuntimeEnabled) return;
             var label = runtime ? ModelProviders.RuntimeName : name.Text.Trim();
             var root = address.Text.Trim();
             var key = secret.Password.Trim();

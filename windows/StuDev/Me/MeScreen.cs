@@ -30,6 +30,8 @@ public sealed partial class MeScreen : Screen
         accountPage?.Leave(); membersPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
         if (argument is "account") Go("account");
         if (argument is "models") Go("models");
+        if (argument is "tools") Go("tools");
+        if (argument is "instructions") Go("instructions");
         if (argument is Uri address)
         {
             if (address.AbsolutePath.TrimEnd('/') == "/members") Go("members", memberAddress: address);
@@ -85,8 +87,12 @@ public sealed partial class MeScreen : Screen
         }
         Children.Clear();
         var page = new StackPanel();
-        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型服务", _ => "我" };
-        page.Children.Add(Pages.Header(title, "", section == "home" ? [] : [Kit.TextAction("返回", () => Go(section is "courses" or "labs" ? "timetable" : "home"), Icons.Back)]));
+        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型服务", "tools" => "MCP", "instructions" => "个人指令", _ => "我" };
+        page.Children.Add(Pages.Header(title, "", section == "home" ? [] : [Kit.TextAction("返回", () =>
+        {
+            if (section is "tools" or "instructions") App.Open("ai");
+            else Go(section is "courses" or "labs" ? "timetable" : "home");
+        }, Icons.Back)]));
         void Row(string key, UIElement value, Action? open = null) => page.Children.Add(Kit.Row(key, value, open));
         var user = Account.Shared.User;
         var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);
@@ -124,6 +130,8 @@ public sealed partial class MeScreen : Screen
         if (section == "courses") CoursesPage(page);
         if (section == "labs") LabsPage(page);
         if (section == "models") ModelSettings.Fill(page, Draw);
+        if (section == "tools") ToolSettings.Fill(page);
+        if (section == "instructions") PersonalInstructions.Fill(page);
         if (section == "appearance") Row("主题", ChoiceField("主题", [("0", "跟随系统"), ("1", "浅色"), ("2", "深色")], Appearance.Current.ToString(), value => Appearance.Set(int.Parse(value))));
         if (section == "device")
         {

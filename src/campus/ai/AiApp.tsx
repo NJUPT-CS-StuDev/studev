@@ -467,6 +467,15 @@ export default function AiApp() {
     async function bindProject(child: boolean) {
         if (!project) return;
         const parent = await pickFolder();
+        if (project.folder) {
+            const work = await openWorkspace<Proposal>(parent);
+            if (work.project.id !== project.id) throw new Error('请选择此项目移动后的目录。');
+            await saveFolder(project.id, parent);
+            const next = { ...work.project, references: project.references };
+            keepProject(next);
+            await openBound(next, parent, { id: project.id, chat: chat.id, revision: diskBase.current?.name });
+            return;
+        }
         const root = child ? await newProjectFolder(parent, project.name) : parent;
         const work = await openWorkspace<Proposal>(root, project);
         const leaving = kept.chats.filter(item => item.project === project.id);

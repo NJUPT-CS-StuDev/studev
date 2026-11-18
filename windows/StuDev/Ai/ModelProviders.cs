@@ -30,6 +30,8 @@ internal sealed class ModelProviders
 {
     public const string RuntimeId = "runtime";
     public const string RuntimeName = "Local Runtime MCP";
+    public const string RuntimeExperiment = "本机浏览器模型（实验）";
+    public const string RuntimeDisabled = "本机浏览器模型已关闭。可在「我 → 模型服务」重新开启，也可以选择其他模型。";
     private const string FileName = "ai/providers.bin";
     private const string OldChoice = "ai/model.json";
     private const string OldKey = "ai/key.bin";
@@ -37,14 +39,16 @@ internal sealed class ModelProviders
     public static readonly ModelProviders Shared = Read();
     private List<ModelProvider> configured;
     public ModelChoice? PreviousChoice { get; private set; }
-    public IReadOnlyList<ModelProvider> Configured => configured;
-    public IEnumerable<ModelProvider> Available => configured.Where(provider => provider.Enabled && provider.Key.Length > 0 && provider.Models.Any(model => model.Enabled)).Prepend(Free);
+    public bool RuntimeEnabled { get; private set; }
+    public IEnumerable<ModelProvider> Visible => configured.Where(provider => !provider.Runtime || RuntimeEnabled);
+    public IEnumerable<ModelProvider> Available => Visible.Where(provider => provider.Enabled && provider.Key.Length > 0 && provider.Models.Any(model => model.Enabled)).Prepend(Free);
     public event Action? Changed;
 
-    private ModelProviders(List<ModelProvider> configured, ModelChoice? previousChoice)
+    private ModelProviders(List<ModelProvider> configured, ModelChoice? previousChoice, bool runtimeEnabled = false)
     {
         this.configured = configured;
         PreviousChoice = previousChoice;
+        RuntimeEnabled = runtimeEnabled;
     }
 
     public ModelProvider? Find(string id) => id == Free.Id ? Free : configured.FirstOrDefault(provider => provider.Id == id);
@@ -53,6 +57,7 @@ internal sealed class ModelProviders
     {
         connection = null;
         if (selection == ModelChoice.Free) return null;
+        if (selection.ProviderId == RuntimeId && !RuntimeEnabled) return RuntimeDisabled;
         var provider = Find(selection.ProviderId);
         if (provider is null || !provider.Enabled || provider.IsFree) return "原服务商已停用或移除。请先选择服务商和模型。";
         if (!provider.Models.Any(model => model.Id == selection.ModelId && model.Enabled)) return "所选模型已停用或移除。请先选择一个模型。";
@@ -68,29 +73,35 @@ internal sealed class ModelProviders
         var next = configured.ToList();
         if (index < 0) next.Add(provider);
         else next[index] = provider;
-        Save(next);
+        Save(next, RuntimeEnabled);
     }
 
-    public void Remove(string id) => Save([.. configured.Where(provider => provider.Id != id)]);
+    public void Remove(string id) => Save([.. configured.Where(provider => provider.Id != id)], RuntimeEnabled);
+    public void SetRuntimeEnabled(bool enabled)
+    {
+        if (enabled != RuntimeEnabled) Save(configured, enabled);
+    }
 
     public void CompleteImport()
     {
         if (PreviousChoice is null) return;
         var before = PreviousChoice;
         PreviousChoice = null;
-        try { Save(configured); }
+        try { Save(configured, RuntimeEnabled); }
         catch { PreviousChoice = before; throw; }
     }
 
-    private void Save(List<ModelProvider> providers)
+    private void Save(List<ModelProvider> providers, bool runtimeEnabled)
     {
         var record = new JsonObject
         {
             ["providers"] = new JsonArray([.. providers.Select(provider => (JsonNode)provider.ToJson())]),
+            ["runtimeEnabled"] = runtimeEnabled,
         };
         if (PreviousChoice is not null) record["previousChoice"] = PreviousChoice.ToJson();
         Secure.Write(FileName, record.ToJsonString());
         configured = providers;
+        RuntimeEnabled = runtimeEnabled;
         Changed?.Invoke();
     }
 
@@ -101,7 +112,7 @@ internal sealed class ModelProviders
             var kept = JsonNode.Parse(protectedText)!.AsObject();
             RemoveOld();
             return new([.. kept["providers"]!.AsArray().Select(provider => ModelProvider.Of(provider!.AsObject()))],
-                ModelChoice.Of(kept["previousChoice"]));
+                ModelChoice.Of(kept["previousChoice"]), (bool?)kept["runtimeEnabled"] == true);
         }
         if (Storage.Read(OldChoice) is not { } old) return new([], null);
         var settings = JsonNode.Parse(old)!.AsObject();
@@ -115,9 +126,9 @@ internal sealed class ModelProviders
         if (key.Length > 0 || address != Models.Starting.Base || model != Models.Starting.Model)
         {
             var name = runtime ? RuntimeName : address == Models.Starting.Base ? "DeepSeek" : "我的 API";
-            oldState.Save([new(id, name, address, key, Models.AddressError(address, runtime) is null, model.Length > 0 ? [new(model)] : [])]);
+            oldState.Save([new(id, name, address, key, Models.AddressError(address, runtime) is null, model.Length > 0 ? [new(model)] : [])], false);
         }
-        else oldState.Save([]);
+        else oldState.Save([], false);
         RemoveOld();
         return oldState;
     }

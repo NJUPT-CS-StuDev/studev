@@ -4,7 +4,15 @@ using System.Text.Json.Nodes;
 
 namespace StuDev.Ai;
 
-public sealed record ChatNode(string Id, string Parent, JsonObject Message);
+public sealed record ChatNode(string Id, string Parent, JsonObject Message, string? PreferredTool = null)
+{
+    internal JsonObject ToJson()
+    {
+        var value = new JsonObject { ["id"] = Id, ["parent"] = Parent, ["message"] = Message.DeepClone() };
+        if (PreferredTool is not null) value["preferredTool"] = PreferredTool;
+        return value;
+    }
+}
 public sealed record Siblings(int Index, int Count, string? Previous, string? Next);
 
 public sealed record ChatThread(List<ChatNode> Nodes, Dictionary<string, string> Chosen)
@@ -33,7 +41,8 @@ public sealed record ChatThread(List<ChatNode> Nodes, Dictionary<string, string>
         for (var at = byId.GetValueOrDefault(id); at is not null; at = byId.GetValueOrDefault(at.Parent)) line.Add(at);
         line.Reverse(); return line;
     }
-    public ChatThread Append(string parent, string id, JsonObject message) => new([.. Nodes, new ChatNode(id, parent, message)], new(Chosen) { [parent] = id });
+    public ChatThread Append(string parent, string id, JsonObject message, string? preferredTool = null) =>
+        new([.. Nodes, new ChatNode(id, parent, message, preferredTool)], new(Chosen) { [parent] = id });
     public ChatThread Choose(string id) => Nodes.FirstOrDefault(n => n.Id == id) is { } node ? this with { Chosen = new(Chosen) { [node.Parent] = id } } : this;
     public Siblings SiblingsOf(string id)
     {
@@ -43,11 +52,11 @@ public sealed record ChatThread(List<ChatNode> Nodes, Dictionary<string, string>
     }
     public JsonObject ToJson() => new()
     {
-        ["nodes"] = new JsonArray([.. Nodes.Select(n => (JsonNode)new JsonObject { ["id"] = n.Id, ["parent"] = n.Parent, ["message"] = n.Message.DeepClone() })]),
+        ["nodes"] = new JsonArray([.. Nodes.Select(n => (JsonNode)n.ToJson())]),
         ["chosen"] = new JsonObject(Chosen.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, kv.Value))),
     };
     public static ChatThread Of(JsonObject json) => new(
-        json["nodes"]!.AsArray().Select(n => new ChatNode((string)n!["id"]!, (string)n["parent"]!, n["message"]!.DeepClone().AsObject())).ToList(),
+        json["nodes"]!.AsArray().Select(n => new ChatNode((string)n!["id"]!, (string)n["parent"]!, n["message"]!.DeepClone().AsObject(), (string?)n["preferredTool"])).ToList(),
         (json["chosen"] as JsonObject ?? []).ToDictionary(kv => kv.Key, kv => (string)kv.Value!));
     public static ChatThread Chain(List<JsonObject> messages, List<string> ids)
     {
@@ -69,7 +78,8 @@ public sealed record ModelChoice(string ProviderId, string ModelId)
 
 /** A conversation kept on this device. */
 public sealed record SavedChat(string Id, string Title, long Updated, ChatThread Thread, List<string>? Forks = null,
-    List<string>? RuntimeModels = null, ModelChoice? Choice = null, bool StartsRuntime = false)
+    List<string>? RuntimeModels = null, ModelChoice? Choice = null, bool StartsRuntime = false,
+    string? ProjectId = null, bool Pinned = false, bool Archived = false)
 {
     public string ConversationId(string at, ChatThread? from = null) => (from ?? Thread).Lineage(at).LastOrDefault(node => Forks?.Contains(node.Id) == true)?.Id ?? Id;
     public JsonObject ToJson()
@@ -79,11 +89,42 @@ public sealed record SavedChat(string Id, string Title, long Updated, ChatThread
         if (RuntimeModels is { Count: > 0 }) json["runtimeModels"] = new JsonArray([.. RuntimeModels.Select(id => (JsonNode)JsonValue.Create(id)!)]);
         if (Choice is not null) json["modelChoice"] = Choice.ToJson();
         if (StartsRuntime) json["startsRuntime"] = true;
+        if (ProjectId is not null) json["projectId"] = ProjectId;
+        if (Pinned) json["pinned"] = true;
+        if (Archived) json["archived"] = true;
         return json;
     }
     public static SavedChat Of(JsonObject json) => new((string)json["id"]!, json["title"]?.GetValue<string>() ?? "",
         (long)json["updated"]!, ChatThread.Of(json["thread"]!.AsObject()), json["forks"]?.AsArray().Select(id => (string)id!).ToList(),
-        json["runtimeModels"]?.AsArray().Select(id => (string)id!).Distinct().ToList(), ModelChoice.Of(json["modelChoice"]), (bool?)json["startsRuntime"] == true);
+        json["runtimeModels"]?.AsArray().Select(id => (string)id!).Distinct().ToList(), ModelChoice.Of(json["modelChoice"]), (bool?)json["startsRuntime"] == true,
+        (string?)json["projectId"], (bool?)json["pinned"] == true, (bool?)json["archived"] == true);
+
+    internal JsonObject ToProjectJson(JsonArray proposals)
+    {
+        var document = ToJson();
+        document.Remove("modelChoice"); document.Remove("startsRuntime"); document.Remove("projectId");
+        if (Choice is { } selected) document["model"] = new JsonObject { ["provider"] = selected.ProviderId, ["model"] = selected.ModelId };
+        if (StartsRuntime) document["resetRuntime"] = true;
+        document["proposals"] = proposals;
+        return document;
+    }
+
+    internal static SavedChat OfProject(JsonObject json, string project)
+    {
+        ModelChoice? choice = null;
+        if (json["model"] is JsonObject selected)
+        {
+            if ((string?)selected["provider"] is not { Length: > 0 } provider || (string?)selected["model"] is not { Length: > 0 } model)
+                throw new IOException("对话里的模型设置格式有误，原文件已保留。");
+            choice = new(provider, model);
+        }
+        var chat = Of(json);
+        var seen = new HashSet<string>(StringComparer.Ordinal) { ChatThread.Start };
+        foreach (var node in chat.Thread.Nodes)
+            if (!seen.Contains(node.Parent) || !seen.Add(node.Id) || (string?)node.Message["role"] is not ("user" or "assistant" or "tool"))
+                throw new IOException("对话里的消息关系格式有误，原文件已保留。");
+        return chat with { ProjectId = project, Choice = choice, StartsRuntime = (bool?)json["resetRuntime"] == true };
+    }
 }
 
 public static class Chats
@@ -104,7 +145,7 @@ public static class Chats
         DateOnly DayOf(long ms) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(ms), zone).DateTime);
         var today = DayOf(now);
         var groups = new List<(string, List<SavedChat>)>();
-        foreach (var chat in chats.OrderByDescending(c => c.Updated))
+        foreach (var chat in chats.OrderByDescending(c => c.Pinned).ThenByDescending(c => c.Updated))
         {
             var day = DayOf(chat.Updated); var days = today.DayNumber - day.DayNumber;
             var name = days <= 0 ? "今天" : days == 1 ? "昨天" : days <= 7 ? "前 7 天" : days <= 30 ? "前 30 天" : $"{day.Year}年{day.Month}月";

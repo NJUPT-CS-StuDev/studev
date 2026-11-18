@@ -29,6 +29,7 @@ public sealed partial class AiScreen : Screen
     private readonly Campus campus = Campus.Shared;
     private readonly ModelProviders providers = ModelProviders.Shared;
     private readonly Assistant assistant = Assistant.Shared;
+    private readonly ToolAccess toolAccess = ToolAccess.Shared;
     private readonly Grid side = new() { Width = 260 };
     private readonly Grid main = new();
     private StackPanel turns = new() { Spacing = 30 };
@@ -59,6 +60,7 @@ public sealed partial class AiScreen : Screen
     private string said = "";
     private string? runtimeStage;
     private string draft = "";
+    private ToolMenuItem? draftTool;
     private bool compact, conversationsOpen;
     private bool liveDirty;
     private readonly DispatcherTimer frame = new() { Interval = TimeSpan.FromMilliseconds(40) };
@@ -77,10 +79,20 @@ public sealed partial class AiScreen : Screen
         SizeChanged += (_, change) => { var narrow = change.NewSize.Width < 760; if (compact != narrow) { compact = narrow; conversationsOpen = false; Draw(); } };
         Paint.Turned += Draw;
         Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Draw);
-        providers.Changed += () => DispatcherQueue.TryEnqueue(Draw);
+        providers.Changed += () => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (choice.ProviderId == ModelProviders.RuntimeId && !providers.RuntimeEnabled) stop?.Cancel();
+            if (providers.RuntimeEnabled && error == ModelProviders.RuntimeDisabled) error = "";
+            Draw();
+        });
+        toolAccess.Changed += () => DispatcherQueue.TryEnqueue(Draw);
         Draw();
     }
-    public override void Shown(object? argument) => Draw();
+    public override void Shown(object? argument)
+    {
+        Draw();
+        App.Watch(toolAccess.Refresh());
+    }
 
     // ——— what is kept on this device ———
     private void ReadKept()
@@ -88,14 +100,16 @@ public sealed partial class AiScreen : Screen
         if (Storage.Read("ai/chats.json") is { } text)
         {
             var kept = JsonNode.Parse(text)!;
+            activeProject = projects.Find((string?)kept["project"])?.Id;
             foreach (var item in kept["chats"]!.AsArray())
             {
                 var chat = SavedChat.Of(item!.AsObject());
                 chats.Add(chat with { Choice = chat.Choice ?? providers.PreviousChoice ?? ModelChoice.Free });
-                keptProposals[(string)item["id"]!] = item["proposals"] is JsonArray list ? list.Deserialize(StorageJson.Default.ListTaskProposal)! : [];
+                keptProposals[chat.Id] = ReadProposals(item.AsObject());
             }
+            ReadProject();
             current = (string?)kept["current"];
-            if (chats.FirstOrDefault(c => c.Id == current) is { } open)
+            if (chats.FirstOrDefault(c => c.Id == current && c.ProjectId == activeProject) is { } open)
             {
                 thread = open.Thread; proposals = keptProposals.GetValueOrDefault(open.Id) ?? [];
                 choice = open.Choice ?? ModelChoice.Free; startsRuntime = open.StartsRuntime;
@@ -107,49 +121,67 @@ public sealed partial class AiScreen : Screen
     }
     private void WriteChats() => Storage.Write(Storage.PathFor("ai/chats.json"), new JsonObject
     {
-        ["chats"] = new JsonArray([.. chats.Select(c => { var o = c.ToJson(); o["proposals"] = JsonSerializer.SerializeToNode(keptProposals.GetValueOrDefault(c.Id) ?? [], StorageJson.Default.ListTaskProposal); return (JsonNode)o; })]),
+        ["chats"] = new JsonArray([.. chats.Where(c => !Bound(c.ProjectId)).Select(c =>
+        {
+            var o = c.ToJson();
+            o["proposals"] = JsonSerializer.SerializeToNode(keptProposals.GetValueOrDefault(c.Id) ?? [], StorageJson.Default.ListTaskProposal);
+            return (JsonNode)o;
+        })]),
         ["current"] = current,
+        ["project"] = activeProject,
     }.ToJsonString());
     private void Choose(ModelChoice next)
     {
         if (busy || choice == next) return;
-        startsRuntime = next.ProviderId == ModelProviders.RuntimeId && thread.Nodes.Count > 0;
+        var resetRuntime = next.ProviderId == ModelProviders.RuntimeId && thread.Nodes.Count > 0;
+        if (chats.FirstOrDefault(chat => chat.Id == current) is { } open)
+        {
+            var updated = open with { Choice = next, StartsRuntime = resetRuntime };
+            if (!PersistProjectChat(updated)) { Draw(); return; }
+            chats = chats.Select(chat => chat.Id == open.Id ? updated : chat).ToList();
+            if (!Bound(updated.ProjectId)) WriteChats();
+        }
+        startsRuntime = resetRuntime;
         choice = next;
         runtimeRequest = null; runtimeFirstAssistant = null;
         error = "";
-        if (chats.FirstOrDefault(chat => chat.Id == current) is { } open)
-        {
-            chats = chats.Select(chat => chat.Id == open.Id ? chat with { Choice = choice, StartsRuntime = startsRuntime } : chat).ToList();
-            WriteChats();
-        }
         Draw();
     }
     /** What is said in a conversation moves it to the top of the list and keeps it. */
-    private void Keep()
+    private bool Keep()
     {
-        if (thread.Nodes.Count == 0) return;
+        if (thread.Nodes.Count == 0) return true;
+        var first = current is null;
         var id = current ?? Guid.NewGuid().ToString();
         var before = chats.FirstOrDefault(c => c.Id == id);
-        chats = [new SavedChat(id, before?.Title ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), thread, before?.Forks, before?.RuntimeModels, choice, startsRuntime), .. chats.Where(c => c.Id != id)];
         keptProposals[id] = proposals; current = id;
-        WriteChats();
+        var updated = new SavedChat(id, before?.Title ?? "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), thread,
+            before?.Forks, before?.RuntimeModels, choice, startsRuntime, activeProject, before?.Pinned == true, before?.Archived == true);
+        if (!PersistProjectChat(updated)) return false;
+        chats = [updated, .. chats.Where(c => c.Id != id)];
+        if (first || !Bound(updated.ProjectId)) WriteChats();
+        return true;
     }
     private void Open(string? id)
     {
         if (busy) return;
-        var found = chats.FirstOrDefault(c => c.Id == id);
+        var found = chats.FirstOrDefault(c => c.Id == id && c.ProjectId == activeProject);
         thread = found?.Thread ?? ChatThread.Empty; proposals = found is null ? [] : keptProposals.GetValueOrDefault(found.Id) ?? [];
         choice = found?.Choice ?? ModelChoice.Free; startsRuntime = found?.StartsRuntime == true;
         current = found?.Id ?? Guid.NewGuid().ToString(); error = ""; editing = null; openSteps.Clear();
+        draftTool = null;
+        draftSkill = null;
         runtimeRequest = null; runtimeFirstAssistant = null;
         conversationsOpen = false;
         WriteChats(); Draw();
     }
 
-    private Situation SituationNow()
+    private Situation SituationNow(bool instructions = false, string? skill = null)
     {
         int? week = campus.Term is { } term ? CampusLine.WeekOf(term, CampusDay.Today()) ?? 0 : null;
-        return new(week, campus.Preferences.Class, campus.Preferences.Campus, memory.On ? memory.Text : null);
+        if (instructions && memory.On) ReloadProjectMemory();
+        return new(week, campus.Preferences.Class, campus.Preferences.Campus, memory.On ? BoundText(ActiveMemory, Memory.Limit) : null,
+            instructions ? CombinedInstructions(skill) : null);
     }
 
     // ——— asking ———
@@ -161,37 +193,109 @@ public sealed partial class AiScreen : Screen
         return all;
     }
 
-    private void Send(string question, string? parent = null, bool clearDraft = false)
+    private void Send(string question, string? parent = null, bool clearDraft = false, string? preferredTool = null, string? skill = null)
     {
         var asked = question.Trim();
         if (asked.Length == 0 || busy) return;
+        if (Bound(activeProject) && projectFolder is null) { error = "请重新打开这个项目文件夹。"; Draw(); return; }
         if (providers.Resolve(choice, out var provider) is { } unavailable) { error = unavailable; Draw(); return; }
-        if (clearDraft) draft = "";
-        if (provider is null && Account.Shared.User is null) { SignIn(asked); return; }
+        if (preferredTool is not null && !ToolsFor(SituationNow(), provider).Any(tool => Assistant.ToolName(tool) == preferredTool))
+        { error = "所选工具当前不可用，请重新选择。"; Draw(); return; }
+        if (provider is null && Account.Shared.User is null) { Me.SignIn.Show(() => Send(asked, parent, clearDraft, preferredTool, skill)); return; }
+        if (clearDraft) { draft = ""; draftTool = null; draftSkill = null; }
         parent ??= thread.Tip();
         var fork = parent != thread.Tip();
         var id = Guid.NewGuid().ToString();
-        App.Watch(Run(thread.Append(parent, id, new JsonObject { ["role"] = "user", ["content"] = asked }), id, fork));
+        App.Watch(Run(thread.Append(parent, id, new JsonObject { ["role"] = "user", ["content"] = asked }, preferredTool), id, fork, skill: skill));
     }
 
-    private async Task Run(ChatThread start, string at, bool fork = false, JsonObject? retryRequest = null, string? firstAssistant = null)
+    private List<JsonObject> ToolsFor(Situation situation, Own? provider) =>
+        [.. assistant.ToolsFor(situation).Where(tool => toolAccess.CampusAllowed(Assistant.ToolName(tool))),
+         .. provider is null ? [] : toolAccess.BrowserAvailable.Select(tool => tool.Definition())];
+
+    private static List<JsonObject> CampusHistory(IEnumerable<JsonObject> history)
+    {
+        var omitted = new HashSet<string>(StringComparer.Ordinal);
+        var messages = new List<JsonObject>();
+        foreach (var message in history)
+        {
+            if ((string?)message["role"] == "tool" && omitted.Contains((string)message["tool_call_id"]!)) continue;
+            if (message["tool_calls"] is not JsonArray calls) { messages.Add(message); continue; }
+            var campus = new JsonArray();
+            foreach (var call in calls)
+            {
+                if (((string)call!["function"]!["name"]!).StartsWith("web_", StringComparison.Ordinal))
+                    omitted.Add((string)call["id"]!);
+                else campus.Add(call.DeepClone());
+            }
+            if (campus.Count == calls.Count) { messages.Add(message); continue; }
+            if (campus.Count == 0 && message["content"] is null) continue;
+            var copy = message.DeepClone().AsObject();
+            if (campus.Count > 0) copy["tool_calls"] = campus;
+            else copy.Remove("tool_calls");
+            messages.Add(copy);
+        }
+        return messages;
+    }
+
+    private async Task<bool> ConfirmTool(string label, string detail, CancellationToken cancel)
+    {
+        if (App.Window is not { } window) return false;
+        var approved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var buttons = Kit.Line(8, Pill("跳过", () => window.Close()), Pill("允许这一次", () =>
+        {
+            approved.TrySetResult(true);
+            window.Close();
+        }, true));
+        buttons.HorizontalAlignment = HorizontalAlignment.Right;
+        var sheet = Kit.Column(12, Pages.SheetHead(Pages.SheetTitle(label), () => window.Close()), Kit.Text(detail, Role.Body, "muted", wrap: true), buttons);
+        sheet.Padding = new Thickness(22, 20, 22, 18);
+        window.Sheet(sheet, 460, () => approved.TrySetResult(false));
+        using var registration = cancel.Register(() => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (approved.TrySetCanceled(cancel)) window.Close();
+        }));
+        return await approved.Task;
+    }
+
+    private async Task Run(ChatThread start, string at, bool fork = false, JsonObject? retryRequest = null, string? firstAssistant = null, string? skill = null)
     {
         if (providers.Resolve(choice, out var provider) is { } unavailable) { error = unavailable; Draw(); return; }
+        Situation situation;
+        try { situation = SituationNow(instructions: true, skill); }
+        catch (Exception failure) when (ProjectFolder.IsProblem(failure))
+        { error = ProjectMessage(failure, "未能读取本轮指令。"); Draw(); return; }
+        var available = ToolsFor(situation, provider);
+        var names = available.Select(Assistant.ToolName).ToHashSet(StringComparer.Ordinal);
+        var browser = toolAccess.BrowserAvailable.Where(tool => names.Contains(tool.Alias)).ToDictionary(tool => tool.Alias, StringComparer.Ordinal);
+        var lineage = start.Lineage(at);
+        var preferredTool = lineage.LastOrDefault(node => (string?)node.Message["role"] == "user")?.PreferredTool;
+        if (preferredTool is not null && !names.Contains(preferredTool))
+        { error = "所选工具当前不可用，请重新选择。"; Draw(); return; }
+        if (retryRequest?["tools"] is JsonArray previous && previous.OfType<JsonObject>().Any(tool => !names.Contains(Assistant.ToolName(tool))))
+        { error = "可用工具已更新，请重新发送本轮。"; Draw(); return; }
+        var priorThread = thread;
         thread = start; var tip = at;
         fresh = []; from = at;
-        busy = true; error = ""; editing = null; Keep(); Draw();
+        busy = true; error = ""; editing = null;
+        if (!Keep()) { thread = priorThread; from = null; busy = false; Draw(); return; }
+        Draw();
         var runtime = provider?.Runtime == true;
         var chat = chats.First(c => c.Id == current);
         if (runtime && chat.RuntimeModels?.Contains(provider!.Model) != true)
         {
             chat = chat with { RuntimeModels = [.. chat.RuntimeModels ?? [], provider!.Model] };
-            chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList(); WriteChats();
+            if (!PersistProjectChat(chat)) { busy = false; from = null; Draw(); return; }
+            chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList();
+            if (!Bound(chat.ProjectId)) WriteChats();
         }
         firstAssistant ??= runtime && (fork || startsRuntime) ? Guid.NewGuid().ToString() : null;
         if (firstAssistant is not null && chat.Forks?.Contains(firstAssistant) != true)
         {
             chat = chat with { Forks = [.. chat.Forks ?? [], firstAssistant] };
-            chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList(); WriteChats();
+            if (!PersistProjectChat(chat)) { busy = false; from = null; Draw(); return; }
+            chats = chats.Select(saved => saved.Id == chat.Id ? chat : saved).ToList();
+            if (!Bound(chat.ProjectId)) WriteChats();
         }
         var conversationId = retryRequest?["conversation_id"]?.GetValue<string>() ?? firstAssistant ?? chat.ConversationId(at, start);
         runtimeFirstAssistant = firstAssistant;
@@ -199,13 +303,16 @@ public sealed partial class AiScreen : Screen
         {
             var id = (string?)message["role"] == "assistant" && firstAssistant is not null ? firstAssistant : Guid.NewGuid().ToString();
             if (id == firstAssistant) { firstAssistant = null; runtimeFirstAssistant = null; startsRuntime = false; }
-            fresh.Add(id); thread = thread.Append(tip, id, message); tip = id; Keep(); Draw();
+            fresh.Add(id); thread = thread.Append(tip, id, message); tip = id;
+            if (!Keep()) throw new InvalidOperationException(projectStatus ?? "未能保存项目对话。");
+            Draw();
         }
-        var history = thread.Lineage(at).Select(n => n.Message).ToList();
+        var history = lineage.Select(n => n.Message).ToList();
         if (!runtime) history = Recent(history);
+        if (provider is null) history = CampusHistory(history);
         stop = new CancellationTokenSource(); var cancel = stop.Token;
-        var situation = SituationNow();
-        using var tools = new CampusTools(campus, assistant.ToolsFor(situation), Remember, proposal => { proposals = [.. proposals, proposal]; });
+        using var tools = new CampusTools(campus, available, Remember, proposal => { proposals = [.. proposals, proposal]; });
+        var declined = new HashSet<string>(StringComparer.Ordinal);
         frame.Start();
         try
         {
@@ -214,15 +321,41 @@ public sealed partial class AiScreen : Screen
                 var last = round == Assistant.Rounds - 1;
                 said = ""; lastUpdate = null; runtimeStage = null; stream = new DocStream(); liveDirty = true;
                 JsonObject answer;
-                try { answer = provider is not null ? await AskOwn(provider, history, situation, last, cancel, conversationId, round == 0 ? retryRequest : null) : await AskFree(history, situation, last, cancel); }
+                var preferred = round == 0 ? preferredTool : null;
+                var offered = declined.Count == 0 ? available : available.Where(tool => !declined.Contains(Assistant.ToolName(tool))).ToList();
+                try
+                {
+                    answer = provider is not null
+                        ? await AskOwn(provider, history, situation, offered, preferred, last, cancel, conversationId, round == 0 ? retryRequest : null)
+                        : await AskFree(history, situation, offered, preferred, last, cancel);
+                }
                 finally { stream.Dispose(); stream = null; live.Child = null; }
                 history = [.. history, answer]; Grow(answer);
                 if (answer["tool_calls"] is not JsonArray calls || calls.Count == 0) { runtimeRequest = null; runtimeFirstAssistant = null; return; }
                 foreach (var item in calls)
                 {
                     var call = item!; var function = call["function"]!;
+                    var name = (string)function["name"]!;
                     JsonNode? result;
-                    try { result = await tools.Execute((string)function["name"]!, JsonNode.Parse((string)function["arguments"]!)!.AsObject(), (string)call["id"]!); }
+                    try
+                    {
+                        var args = JsonNode.Parse((string)function["arguments"]!) as JsonObject ?? throw new ArgumentException("工具参数无效。");
+                        var webpage = browser.GetValueOrDefault(name);
+                        if (!names.Contains(name) || (webpage is null ? !toolAccess.CampusAllowed(name) : !toolAccess.BrowserAllowed(webpage.Name)))
+                            throw new ArgumentException("这个工具未启用。");
+                        var confirm =
+                            webpage is not null && toolAccess.AskForBrowser ||
+                            name == "remember" && toolAccess.AskForMemory(campus.Preferences.Part("memory")?["on"]?.GetValue<bool>() == true);
+                        if (declined.Contains(name) || (confirm && !await ConfirmTool(webpage is null ? "是否写入记忆？" : $"是否读取「{webpage.Title}」？",
+                            webpage is null ? (string?)args["fact"] ?? "" : webpage.Description, cancel)))
+                        {
+                            declined.Add(name);
+                            result = new JsonObject { ["error"] = "本轮未批准使用这个工具。", ["code"] = "tool_declined" };
+                        }
+                        else result = webpage is null
+                            ? await tools.Execute(name, args, (string)call["id"]!)
+                            : await toolAccess.Invoke(webpage, args, cancel);
+                    }
                     // A tool that fails tells the model why, as the web and Android do; the answer goes on.
                     catch (UnknownReference failure) { result = new JsonObject { ["error"] = failure.Message, ["code"] = "unknown-reference" }; }
                     catch (Exception failure) when (failure is ArgumentException or InvalidOperationException or InvalidDataException) { result = new JsonObject { ["error"] = failure.Message }; }
@@ -242,7 +375,7 @@ public sealed partial class AiScreen : Screen
         }
         catch (Exception failure) when (failure is InvalidOperationException or HttpRequestException or IOException or PlatformFailure or JsonException)
         { error = failure is HttpRequestException or IOException ? "连不上 AI，检查一下网络。" : failure.Message; }
-        finally { frame.Stop(); busy = false; from = null; stop = null; Keep(); Draw(); }
+        finally { frame.Stop(); busy = false; from = null; stop = null; Draw(); }
     }
 
     private void OnDelta(string piece)
@@ -254,10 +387,12 @@ public sealed partial class AiScreen : Screen
     }
     private string? lastUpdate;
 
-    private async Task<JsonObject> AskOwn(Own mine, List<JsonObject> history, Situation situation, bool last, CancellationToken cancel, string conversationId, JsonObject? retryRequest = null)
+    private async Task<JsonObject> AskOwn(Own mine, List<JsonObject> history, Situation situation, List<JsonObject> available,
+        string? preferredTool, bool last, CancellationToken cancel, string conversationId, JsonObject? retryRequest = null)
     {
         if (Models.AddressError(mine.Base, mine.Runtime) is { } wrong) throw new InvalidOperationException(wrong);
-        var payload = retryRequest?.DeepClone().AsObject() ?? assistant.Request(mine.Model, history, situation, DateTimeOffset.UtcNow, last, mine.Runtime, conversationId);
+        var payload = retryRequest?.DeepClone().AsObject() ?? assistant.Request(mine.Model, history, situation, DateTimeOffset.UtcNow,
+            last, mine.Runtime, conversationId, offered: available, preferredTool: preferredTool);
         if (mine.Runtime) { if (retryRequest is not null) payload["retry"] = true; runtimeRequest = payload.DeepClone().AsObject(); }
         using var request = new HttpRequestMessage(HttpMethod.Post, Models.Endpoint(mine.Base))
         { Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json") };
@@ -280,7 +415,7 @@ public sealed partial class AiScreen : Screen
                     var status => $"你的 API 没有回答（{status}）" + (detail is not null ? $"：{detail}" : ""),
                 });
             }
-            var completion = assistant.Read(mine.Runtime);
+            var completion = assistant.Read(mine.Runtime, last ? [] : available.Select(Assistant.ToolName));
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(cancel), Encoding.UTF8);
             while (await reader.ReadLineAsync(cancel) is { } line)
             {
@@ -295,10 +430,13 @@ public sealed partial class AiScreen : Screen
         }
     }
 
-    private async Task<JsonObject> AskFree(List<JsonObject> history, Situation situation, bool last, CancellationToken cancel)
+    private async Task<JsonObject> AskFree(List<JsonObject> history, Situation situation, List<JsonObject> available,
+        string? preferredTool, bool last, CancellationToken cancel)
     {
         JsonObject? answer = null; string? failed = null;
         var body = new JsonObject { ["messages"] = new JsonArray([.. history.Select(m => m.DeepClone())]), ["last"] = last, ["situation"] = situation.ToJson() };
+        if (!last) body["toolNames"] = new JsonArray([.. available.Select(tool => (JsonNode)JsonValue.Create(Assistant.ToolName(tool))!)]);
+        if (!last && preferredTool is not null) body["preferredTool"] = preferredTool;
         await Account.Shared.Stream("/ai", body, (kind, data) =>
         {
             switch (kind)
@@ -315,7 +453,14 @@ public sealed partial class AiScreen : Screen
     private bool Remember(string fact)
     {
         if (!memory.On) throw new ArgumentException("记忆已关闭。");
-        memory = (true, Memory.Remembered(memory.Text, fact));
+        var next = Memory.Remembered(ActiveMemory, fact);
+        if (activeProject is null) memory = (true, next);
+        else
+        {
+            try { WriteProjectMemory(next, projectMemory); }
+            catch (Exception failure) when (ProjectFolder.IsProblem(failure))
+            { throw new InvalidOperationException(ProjectMessage(failure, "未能保存项目记忆。")); }
+        }
         DispatcherQueue.TryEnqueue(DrawSide);
         return true;
     }
@@ -369,15 +514,20 @@ public sealed partial class AiScreen : Screen
         ((StackPanel)top.Content).VerticalAlignment = VerticalAlignment.Center;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(top, "新对话");
         top.Click += (_, _) => Open(null);
-        if (compact)
-        {
-            var heading = new StackPanel();
-            heading.Children.Add(Kit.TextAction("返回对话", () => { conversationsOpen = false; Draw(); }, Icons.Back));
-            heading.Children.Add(top); side.Children.Add(heading);
-        }
-        else side.Children.Add(top);
+        var sideHeading = new StackPanel();
+        if (compact) sideHeading.Children.Add(Kit.TextAction("返回对话", () => { conversationsOpen = false; Draw(); }, Icons.Back));
+        ProjectPicker(sideHeading);
+        sideHeading.Children.Add(top);
+        var toolsEntry = Kit.TextAction("MCP", () => App.Open("me", "tools"), colour: "ink");
+        toolsEntry.Padding = new Thickness(10, 0, 10, 0);
+        toolsEntry.Margin = new Thickness(10, 0, 10, 0);
+        var personal = Kit.TextAction("个人指令", () => App.Open("me", "instructions"), colour: "ink");
+        personal.Margin = new Thickness(4, 0, 10, 0);
+        sideHeading.Children.Add(Kit.Line(4, toolsEntry, personal));
+        side.Children.Add(sideHeading);
         var list = new StackPanel { Padding = new Thickness(10, 0, 10, 8) };
-        foreach (var (name, group) in Chats.Groups(chats, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
+        var visible = chats.Where(chat => chat.ProjectId == activeProject && chat.Archived == showArchived).ToList();
+        foreach (var (name, group) in Chats.Groups(visible, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
         {
             var h = Kit.Text(name, Role.Caption, "faint"); h.Margin = new Thickness(10, 14, 0, 4); list.Children.Add(h);
             foreach (var chat in group)
@@ -385,34 +535,59 @@ public sealed partial class AiScreen : Screen
                 var on = chat.Id == current;
                 var title = Kit.Text(Chats.TitleOf(chat.Title, chat.Thread), Role.Label); title.FontSize = 14; title.VerticalAlignment = VerticalAlignment.Center;
                 var row = new Tap(on ? Paint.Faded("ink", .08) : Paint.Clear, on ? null : Paint.Brush("surfaceSunken")) { Content = title, Height = 36, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10) };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, Chats.TitleOf(chat.Title, chat.Thread));
-                var id = chat.Id; row.Click += (_, _) => Open(id);
+                AutomationProperties.SetName(row, Chats.TitleOf(chat.Title, chat.Thread));
+                var id = chat.Id;
+                if (organizing)
+                {
+                    var marked = selectedChats.Contains(id);
+                    if (marked) { title.Text = "✓  " + title.Text; row.Ground(Paint.Brush("surfaceSunken")); }
+                    AutomationProperties.SetItemStatus(row, marked ? "已选择" : "未选择");
+                    row.Click += (_, _) => { if (!selectedChats.Add(id)) selectedChats.Remove(id); DrawSide(); };
+                    list.Children.Add(row);
+                    continue;
+                }
+                row.Click += (_, _) => Open(id);
                 var menu = new MenuFlyout();
                 var rename = new MenuFlyoutItem { Text = "重命名" }; rename.Click += (_, _) => Rename(id); menu.Items.Add(rename);
-                var remove = new MenuFlyoutItem { Text = "删除", Foreground = Paint.Brush("danger") }; remove.Click += (_, _) => Remove(id); menu.Items.Add(remove);
+                var pin = new MenuFlyoutItem { Text = chat.Pinned ? "取消置顶" : "置顶" };
+                pin.Click += (_, _) => UpdateChat(chat with { Pinned = !chat.Pinned }); menu.Items.Add(pin);
+                var archive = new MenuFlyoutItem { Text = chat.Archived ? "取消归档" : "归档" };
+                archive.Click += (_, _) => UpdateChat(chat with { Archived = !chat.Archived }); menu.Items.Add(archive);
+                if (!Bound(chat.ProjectId))
+                {
+                    var move = new MenuFlyoutItem { Text = "移动到项目" }; move.Click += (_, _) => MoveChats([id]); menu.Items.Add(move);
+                    var remove = new MenuFlyoutItem { Text = "删除", Foreground = Paint.Brush("danger") }; remove.Click += (_, _) => Remove(id); menu.Items.Add(remove);
+                }
                 row.ContextFlyout = menu;
                 list.Children.Add(row);
             }
         }
-        if (chats.Count == 0) { var none = Kit.Text("问过的对话会列在这里，只存在这台设备上。", Role.Label, "faint", wrap: true); none.Margin = new Thickness(10, 14, 10, 0); list.Children.Add(none); }
+        if (visible.Count == 0)
+        {
+            var empty = showArchived ? "暂无归档对话。" : activeProject is null ? "问过的对话会列在这里。" : "这个项目还没有对话。";
+            var none = Kit.Text(empty, Role.Label, "faint", wrap: true);
+            none.Margin = new Thickness(10, 14, 10, 0); list.Children.Add(none);
+        }
         var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroll, 1); side.Children.Add(scroll);
-        var count = memory.Text.Split('\n').Count(l => l.Trim().Length > 0);
+        var count = ActiveMemory.Split('\n').Count(l => l.Trim().Length > 0);
+        var memoryLabel = activeProject is null ? "记忆" : "项目记忆";
         var mind = new Grid { Padding = new Thickness(12) };
         mind.ColumnDefinitions.Add(new ColumnDefinition()); mind.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        mind.Children.Add(Kit.Text("记忆", Role.Body, bold: true));
+        mind.Children.Add(Kit.Text(memoryLabel, Role.Body, bold: true));
         var state = Kit.Text(!memory.On ? "已关闭" : count > 0 ? $"记着 {count} 件事" : "还没有", Role.Caption, "muted"); state.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(state, 1); mind.Children.Add(state);
         var mindTap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = mind, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mindTap, "记忆");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(mindTap, memoryLabel);
         mindTap.Click += (_, _) => MemorySheet();
         Grid.SetRow(mindTap, 2); side.Children.Add(mindTap);
     }
 
     private void Rename(string id)
     {
+        if (busy) return;
         var chat = chats.First(c => c.Id == id);
         var box = Kit.Field(Chats.TitleOf(chat.Title, chat.Thread), "对话名称", "对话名称");
-        void Save() { chats = chats.Select(c => c.Id == id ? c with { Title = box.Text.Trim()[..Math.Min(60, box.Text.Trim().Length)] } : c).ToList(); WriteChats(); App.Window?.Close(); DrawSide(); }
+        void Save() { App.Window?.Close(); UpdateChat(chat with { Title = BoundText(box.Text, 60) }); }
         box.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Save(); };
         var column = Kit.Column(14, Pages.SheetHead(Pages.SheetTitle("重命名"), () => App.Window?.Close()), box, Kit.Line(8, Pill("取消", () => App.Window?.Close()), Pill("保存", Save, true)));
         ((StackPanel)column.Children[2]).HorizontalAlignment = HorizontalAlignment.Right;
@@ -421,12 +596,14 @@ public sealed partial class AiScreen : Screen
     }
     private void Remove(string id)
     {
+        if (busy) return;
         var removed = chats.FirstOrDefault(chat => chat.Id == id);
+        if (removed is null || Bound(removed.ProjectId)) return;
         var provider = providers.Find(ModelProviders.RuntimeId);
         chats = chats.Where(c => c.Id != id).ToList(); keptProposals.Remove(id);
         if (current == id) Open(null);
         else { WriteChats(); Draw(); }
-        if (removed?.RuntimeModels is { Count: > 0 } && provider is { Key.Length: > 0 })
+        if (providers.RuntimeEnabled && removed?.RuntimeModels is { Count: > 0 } && provider is { Key.Length: > 0 })
             App.Watch(CloseModelPages(removed, new(provider.Address, "", provider.Key, true)));
     }
     private async Task CloseModelPages(SavedChat removed, Own provider)
@@ -502,8 +679,9 @@ public sealed partial class AiScreen : Screen
     {
         var selected = providers.Find(choice.ProviderId);
         var picked = selected?.ModelName(choice.ModelId) ?? choice.ModelId;
-        var selection = $"{selected?.Name ?? "服务商已移除"} · {picked}";
-        var label = Kit.Text(selected?.IsFree == true ? picked : selection, Role.Label);
+        var runtimeOff = choice.ProviderId == ModelProviders.RuntimeId && !providers.RuntimeEnabled;
+        var selection = runtimeOff ? "本机浏览器模型已关闭" : $"{selected?.Name ?? "服务商已移除"} · {picked}";
+        var label = Kit.Text(runtimeOff ? selection : picked, Role.Label);
         label.MaxWidth = compact ? 168 : 285;
         label.TextTrimming = TextTrimming.CharacterEllipsis;
         var content = Kit.Line(6, label, Kit.Icon(Icons.Chevron, 13, "muted"));
@@ -512,41 +690,84 @@ public sealed partial class AiScreen : Screen
         content.VerticalAlignment = VerticalAlignment.Center;
         var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
         { Content = content, MinHeight = 36, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy };
-        AutomationProperties.SetName(button, $"选择服务商，当前 {selection}");
+        AutomationProperties.SetName(button, $"选择模型，当前 {selection}");
         AutomationProperties.SetAutomationId(button, "ai-provider");
         var description = assistant.FreeService.Description;
-        var menu = new MenuFlyout();
-        menu.Items.Add(new MenuFlyoutItem { Text = "选择服务商", IsEnabled = false });
-        foreach (var provider in providers.Available)
+        var query = Kit.Field("", "搜索模型或服务商", "搜索模型或服务商");
+        var rows = new StackPanel { Spacing = 2 };
+        var list = new ScrollViewer { Content = rows, MaxHeight = 310, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var menu = new Flyout { Placement = FlyoutPlacementMode.TopEdgeAlignedRight };
+        var settings = Kit.TextAction("管理模型服务", () => { menu.Hide(); App.Open("me", "models"); }, colour: "ink");
+        var panel = Kit.Column(6, Kit.SearchField(query), list, settings);
+        panel.Width = compact ? 228 : 292;
+        menu.Content = panel;
+
+        void Update()
         {
-            var service = new MenuFlyoutSubItem { Text = provider.Name };
-            if (provider.IsFree) service.Icon = ModelSettings.FreeAvatarIcon();
-            service.Items.Add(new MenuFlyoutItem { Text = "选择模型", IsEnabled = false });
-            foreach (var model in provider.Models.Where(model => model.Enabled))
+            rows.Children.Clear();
+            var text = query.Text.Trim();
+            foreach (var provider in providers.Available)
             {
-                var next = new ModelChoice(provider.Id, model.Id);
-                var modelName = provider.ModelName(model.Id);
-                var item = new ToggleMenuFlyoutItem
+                var matches = provider.Models.Where(model => model.Enabled &&
+                    (provider.Name.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+                        provider.ModelName(model.Id).Contains(text, StringComparison.OrdinalIgnoreCase))).ToList();
+                if (matches.Count == 0) continue;
+                var providerName = Kit.Text(provider.Name, Role.Caption, "muted");
+                var header = provider.IsFree ? Kit.Line(6, ModelSettings.FreeAvatar(16), providerName) : Kit.Line(0, providerName);
+                providerName.VerticalAlignment = VerticalAlignment.Center;
+                header.Margin = new Thickness(8, 8, 8, 4);
+                rows.Children.Add(header);
+                foreach (var model in matches)
                 {
-                    Text = provider.IsFree ? $"{modelName} · {description}" : modelName,
-                    IsChecked = next == choice,
-                };
-                if (provider.IsFree)
-                {
-                    item.Icon = ModelSettings.FreeAvatarIcon();
+                    var next = new ModelChoice(provider.Id, model.Id);
+                    var modelName = provider.ModelName(model.Id);
+                    var words = Kit.Column(1, Kit.Text(modelName, Role.Label));
+                    if (provider.IsFree) words.Children.Add(Kit.Text(description, Role.Caption, "muted", wrap: true));
+                    var values = new Grid { ColumnSpacing = 8 };
+                    values.ColumnDefinitions.Add(new ColumnDefinition());
+                    values.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    values.Children.Add(provider.IsFree ? Kit.Line(8, ModelSettings.FreeAvatar(16), words) : words);
+                    if (next == choice)
+                    {
+                        var tick = Kit.Text("✓", Role.Label); tick.VerticalAlignment = VerticalAlignment.Center;
+                        Grid.SetColumn(tick, 1); values.Children.Add(tick);
+                    }
+                    var item = new Tap(next == choice ? Paint.Brush("surfaceSunken") : Paint.Clear, Paint.Brush("surfaceSunken"))
+                    { Content = values, Padding = new Thickness(8, 5, 8, 5), MinHeight = 36, CornerRadius = new CornerRadius(8) };
                     AutomationProperties.SetName(item, modelName);
-                    AutomationProperties.SetHelpText(item, description);
+                    AutomationProperties.SetHelpText(item, provider.IsFree ? description : provider.Name);
+                    if (next == choice) AutomationProperties.SetItemStatus(item, "已选择");
+                    item.Click += (_, _) => { menu.Hide(); Choose(next); };
+                    rows.Children.Add(item);
                 }
-                item.Click += (_, _) => Choose(next);
-                service.Items.Add(item);
             }
-            menu.Items.Add(service);
+            if (rows.Children.Count == 0) rows.Children.Add(Kit.Text("没有匹配的模型", Role.Caption, "muted"));
         }
-        menu.Items.Add(new MenuFlyoutSeparator());
-        var settings = new MenuFlyoutItem { Text = "管理模型服务" };
-        settings.Click += (_, _) => App.Open("me", "models");
-        menu.Items.Add(settings);
-        button.Click += (_, _) => menu.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.TopEdgeAlignedLeft });
+        query.TextChanged += (_, _) => Update();
+        menu.Opened += (_, _) => query.Focus(FocusState.Programmatic);
+        button.Click += (_, _) => { Update(); menu.ShowAt(button); };
+        return button;
+    }
+
+    private Tap PermissionPicker()
+    {
+        var currentMode = ToolMenu.Modes.First(mode => mode.Id == toolAccess.Mode);
+        var words = Kit.Text(currentMode.Label, Role.Label);
+        words.VerticalAlignment = VerticalAlignment.Center;
+        var caption = Kit.Line(6, words, Kit.Icon(Icons.Chevron, 13, "muted"));
+        var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
+        { Content = caption, MinHeight = 36, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, IsEnabled = !busy };
+        AutomationProperties.SetName(button, $"工具权限，当前 {currentMode.Label}");
+        AutomationProperties.SetHelpText(button, currentMode.Description);
+        var menu = new MenuFlyout { Placement = FlyoutPlacementMode.TopEdgeAlignedLeft };
+        foreach (var mode in ToolMenu.Modes)
+        {
+            var item = new ToggleMenuFlyoutItem { Text = mode.Label, IsChecked = mode.Id == currentMode.Id };
+            AutomationProperties.SetHelpText(item, mode.Description);
+            item.Click += (_, _) => toolAccess.SetMode(mode.Id);
+            menu.Items.Add(item);
+        }
+        button.Click += (_, _) => menu.ShowAt(button);
         return button;
     }
 
@@ -558,21 +779,105 @@ public sealed partial class AiScreen : Screen
         var send = new Tap(Paint.Brush("ink")) { Width = 36, Height = 36, CornerRadius = new CornerRadius(18), VerticalAlignment = VerticalAlignment.Bottom, Content = Kit.Icon(busy ? Icons.Square : Icons.Up, 20, "paper", 20, 2) };
         ((FrameworkElement)send.Content).HorizontalAlignment = HorizontalAlignment.Center; ((FrameworkElement)send.Content).VerticalAlignment = VerticalAlignment.Center;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(send, busy ? "停止" : "发送");
-        void Go() { if (busy) { stop?.Cancel(); return; } Send(box.Text, clearDraft: true); }
+        var rows = new StackPanel { Padding = new Thickness(8, 3, 8, 6) };
+        var scroll = new ScrollViewer { Content = rows, MaxHeight = 230, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var menu = new Border { Child = scroll, CornerRadius = new CornerRadius(12), Background = Paint.Brush("surfaceSunken"), Visibility = Visibility.Collapsed };
+        var preferred = new ContentControl { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
+        var suggestions = new List<ToolMenuItem>();
+        bool dismissed = false;
+        string? Query()
+        {
+            var text = box.Text.TrimStart();
+            return !busy && !dismissed && text.StartsWith('/') && !text.Any(char.IsWhiteSpace) ? text[1..] : null;
+        }
+        void Go()
+        {
+            if (busy) { stop?.Cancel(); return; }
+            if (menu.Visibility == Visibility.Visible) return;
+            var question = box.Text.Trim().Length == 0 && draftTool is { AllowsEmpty: true } item ? item.Label : box.Text;
+            Send(question, clearDraft: true, preferredTool: draftTool?.Name, skill: draftSkill?.Text);
+        }
         send.Click += (_, _) => Go();
-        void Shade() { send.Opacity = busy || box.Text.Trim().Length > 0 ? 1 : .18; }
-        box.TextChanged += (_, _) => { draft = box.Text; Shade(); }; Shade();
+        void ChooseTool(ToolMenuItem item)
+        {
+            draftTool = item;
+            box.Text = "";
+            RefreshTools();
+            box.Focus(FocusState.Programmatic);
+        }
+        void RefreshTools()
+        {
+            rows.Children.Clear();
+            suggestions.Clear();
+            var query = Query();
+            menu.Visibility = query is null ? Visibility.Collapsed : Visibility.Visible;
+            if (query is not null)
+            {
+                if (providers.Resolve(choice, out var provider) is null)
+                {
+                    foreach (var (group, items) in ToolMenu.For(ToolsFor(SituationNow(), provider), toolAccess.BrowserAvailable))
+                    {
+                        var matches = items.Where(item => item.Label.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                            item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (matches.Count == 0) continue;
+                        var heading = Kit.Text(group, Role.Caption, "muted"); heading.Margin = new Thickness(6, 6, 6, 0);
+                        rows.Children.Add(heading);
+                        foreach (var item in matches)
+                        {
+                            suggestions.Add(item);
+                            var action = Kit.TextAction(item.Label, () => ChooseTool(item), colour: "ink");
+                            action.HorizontalAlignment = HorizontalAlignment.Stretch;
+                            action.Padding = new Thickness(6, 2, 6, 2);
+                            rows.Children.Add(action);
+                        }
+                    }
+                }
+                if (suggestions.Count == 0) rows.Children.Add(Kit.Text("没有可用的工具", Role.Caption, "muted"));
+            }
+            var selections = new WrapRow { Gap = 6 };
+            if (draftTool is { } chosen)
+            {
+                var clear = Pill($"{chosen.Label}  ×", () => { draftTool = null; RefreshTools(); box.Focus(FocusState.Programmatic); });
+                AutomationProperties.SetName(clear, $"移除已选工具 {chosen.Label}");
+                selections.Children.Add(clear);
+            }
+            if (draftSkill is { } skill)
+            {
+                var clear = Pill($"{skill.Label}  ×", () => { draftSkill = null; RefreshTools(); box.Focus(FocusState.Programmatic); });
+                AutomationProperties.SetName(clear, $"移除已选技能 {skill.Label}");
+                selections.Children.Add(clear);
+            }
+            preferred.Visibility = selections.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            preferred.Content = selections;
+            send.Opacity = busy || query is null && (box.Text.Trim().Length > 0 || draftTool is { AllowsEmpty: true }) ? 1 : .18;
+        }
+        box.TextChanged += (_, _) => { draft = box.Text; dismissed = false; RefreshTools(); };
+        RefreshTools();
         box.PreviewKeyDown += (_, e) =>
         {
             var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            if (e.Key == Windows.System.VirtualKey.Enter && !shift) { e.Handled = true; Go(); }
+            if (menu.Visibility == Visibility.Visible && e.Key == Windows.System.VirtualKey.Escape)
+            { e.Handled = true; dismissed = true; RefreshTools(); return; }
+            if (e.Key != Windows.System.VirtualKey.Enter || shift) return;
+            e.Handled = true;
+            if (menu.Visibility == Visibility.Visible && suggestions.Count > 0) ChooseTool(suggestions[0]);
+            else Go();
         };
         var grid = new Grid { ColumnSpacing = 8, RowSpacing = 4 };
         grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Grid.SetColumnSpan(box, 2); grid.Children.Add(box);
-        var model = ModelPicker(); Grid.SetRow(model, 1); grid.Children.Add(model);
-        Grid.SetRow(send, 1); Grid.SetColumn(send, 1); grid.Children.Add(send);
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetColumnSpan(menu, 2); grid.Children.Add(menu);
+        Grid.SetRow(box, 1); Grid.SetColumnSpan(box, 2); grid.Children.Add(box);
+        Grid.SetRow(preferred, 2); Grid.SetColumnSpan(preferred, 2); grid.Children.Add(preferred);
+        var toolbar = new Grid { ColumnSpacing = 6 };
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition());
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        toolbar.Children.Add(PermissionPicker());
+        var model = ModelPicker(); Grid.SetColumn(model, 1); toolbar.Children.Add(model);
+        Grid.SetColumn(send, 2); toolbar.Children.Add(send);
+        Grid.SetRow(toolbar, 3); Grid.SetColumnSpan(toolbar, 2); grid.Children.Add(toolbar);
         var shell = new Border { Child = grid, Padding = new Thickness(20, 9, 9, 9), CornerRadius = new CornerRadius(28), Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), Translation = new System.Numerics.Vector3(0, 0, 8) };
         shell.Shadow = new ThemeShadow();
         box.Loaded += (_, _) => { if (!busy) box.Focus(FocusState.Programmatic); };
@@ -597,7 +902,8 @@ public sealed partial class AiScreen : Screen
             var messages = replies.Select(r => r.Message).ToList();
             var calls = messages.SelectMany(m => m["tool_calls"]?.AsArray().Select(c => c!) ?? []).ToList();
             var answer = messages.LastOrDefault(m => (string?)m["role"] == "assistant" && m["content"] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 && m["tool_calls"] is null)?["content"]?.GetValue<string>();
-            var steps = Steps.Of(calls.Select(c => new Call((string)c["id"]!, (string)c["function"]!["name"]!, (string)c["function"]!["arguments"]!)).ToList(), results);
+            var steps = Steps.Of(calls.Select(c => new Call((string)c["id"]!, (string)c["function"]!["name"]!, (string)c["function"]!["arguments"]!)).ToList(), results,
+                name => toolAccess.Catalogue.FirstOrDefault(tool => tool.Alias == name)?.Title);
             var text = (string?)question.Message["content"] ?? "";
             var answering = last && busy;
             // The question, on the right.
@@ -814,11 +1120,18 @@ public sealed partial class AiScreen : Screen
     // ——— settings ———
     private void MemorySheet()
     {
+        if (busy) return;
+        try { ReloadProjectMemory(); }
+        catch (Exception failure) when (ProjectFolder.IsProblem(failure))
+        { App.Window?.Close(); projectStatus = ProjectMessage(failure, "未能读取项目记忆。"); Draw(); return; }
+        var project = activeProject is not null;
+        var observed = projectMemory;
+        var label = project ? "项目记忆" : "记忆";
         var on = memory.On;
-        var text = new TextBox { Text = System.Text.RegularExpressions.Regex.Replace(memory.Text, "^- ", "", System.Text.RegularExpressions.RegexOptions.Multiline), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 140, MaxLength = Memory.Limit,
+        var text = new TextBox { Text = System.Text.RegularExpressions.Regex.Replace(ActiveMemory, "^- ", "", System.Text.RegularExpressions.RegexOptions.Multiline), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 140, MaxLength = Memory.Limit,
             FontSize = 14.5, PlaceholderText = "一行一件，比如：\n通信工程专业，在准备考研\n喜欢早上学习", BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(14, 12, 14, 4) };
         text.Resources["TextControlBackgroundFocused"] = Paint.Clear; text.Resources["TextControlBorderBrushFocused"] = Paint.Clear; text.Resources["TextControlBackgroundPointerOver"] = Paint.Clear;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(text, "记忆");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(text, label);
         var column = new StackPanel { Spacing = 14, Padding = new Thickness(22, 20, 22, 18) };
         var body = new StackPanel();
         void Fill()
@@ -832,19 +1145,24 @@ public sealed partial class AiScreen : Screen
             }
             else
             {
-                var count = memory.Text.Split('\n').Count(l => l.Trim().Length > 0);
+                var count = ActiveMemory.Split('\n').Count(l => l.Trim().Length > 0);
                 body.Children.Add(new Border { CornerRadius = new CornerRadius(12), Background = Paint.Brush("surfaceSunken"), Padding = new Thickness(16), Child = Kit.Text($"记忆已关闭，AI 看不到这些内容，也不再记新的。{(count > 0 ? $"记着的 {count} 件事还在，打开就接着用。" : "")}", Role.Label, "muted", wrap: true) });
             }
         }
         var head = new Grid { ColumnSpacing = 16 };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(Kit.Column(4, Pages.SheetTitle("记忆"), Kit.Text("AI 记下你的专业、习惯和偏好，回答会越来越贴合你。", Role.Label, "muted", wrap: true)));
+        var summary = project ? "AI 在这个项目里用这里的记忆。" : "AI 记下你的专业、习惯和偏好，回答会越来越贴合你。";
+        head.Children.Add(Kit.Column(4, Pages.SheetTitle(label), Kit.Text(summary, Role.Label, "muted", wrap: true)));
         var switchHost = new Border(); Grid.SetColumn(switchHost, 1); head.Children.Add(switchHost);
         void Switch() { switchHost.Child = Kit.Switch(on, next => { on = next; Switch(); Fill(); }, "使用记忆"); }
         Switch();
         column.Children.Add(head); column.Children.Add(body); Fill();
         text.TextChanged += (_, _) => { if (body.Children.FirstOrDefault() is Border b && b.Child is StackPanel s && s.Children[1] is TextBlock foot) { var n = text.Text.Split('\n').Count(l => l.Trim().Length > 0); foot.Text = n > 0 ? $"记着 {n} 件事" : "聊天时说“记住……”，AI 也会写进来"; } };
-        column.Children.Add(Kit.Text("未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。", Role.Caption, "muted"));
+        column.Children.Add(Kit.Text(project
+            ? "项目记忆从本机编辑，绑定文件夹后随项目文件保存。开启记忆后，提问时会发送给所选模型。"
+            : "未登录时保存在本机；登录后记忆随账号同步。开启记忆后，提问时会发送给所选模型。", Role.Caption, "muted", wrap: true));
+        var status = Kit.Text("", Role.Caption, "danger", wrap: true);
+        column.Children.Add(status);
         var buttons = new Grid { ColumnSpacing = 8 };
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var clear = new Tap { Content = Kit.Text("全部清空", Role.Label, "muted"), VerticalAlignment = VerticalAlignment.Center }; clear.Click += (_, _) => text.Text = "";
@@ -853,7 +1171,14 @@ public sealed partial class AiScreen : Screen
         var save = Pill("保存", () =>
         {
             var kept = string.Join("\n", text.Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Select(l => $"- {l}"));
-            memory = (on, on ? kept : memory.Text); App.Window?.Close(); DrawSide();
+            if (kept.Length > Memory.Limit) { status.Text = "记忆太长，请先删减。"; return; }
+            try
+            {
+                if (project && on && kept != ActiveMemory) WriteProjectMemory(kept, observed);
+                if (!project || on != memory.On) memory = (on, on && !project ? kept : memory.Text);
+                App.Window?.Close(); DrawSide();
+            }
+            catch (Exception failure) when (ProjectFolder.IsProblem(failure)) { status.Text = ProjectMessage(failure, "未能保存记忆。"); }
         }, true);
         Grid.SetColumn(save, 3); buttons.Children.Add(save);
         column.Children.Add(buttons);
@@ -861,5 +1186,4 @@ public sealed partial class AiScreen : Screen
     }
 
     /** Signing in for the free quota; the question waits and is asked once signed in. */
-    private void SignIn(string question) => Me.SignIn.Show(() => Send(question));
 }
