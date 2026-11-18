@@ -1,7 +1,6 @@
 // A widget's surface: pressed anywhere that is not a control, the widget keeps exactly under the pointer at every move: no
 // easing behind it, no snapping while it is held. Only when it is let go does it settle onto an edge or a neighbour
-// close by, in a short glide. The move cursor belongs only to a captured drag; hovering keeps the normal cursor of
-// the content underneath, so the surface and its buttons never compete to set a move cursor.
+// close by, in a short glide. Windows owns the pointer shape while the surface owns the captured movement.
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,8 +15,6 @@ public sealed partial class Surface : Grid
 {
     /** How long the settle onto an edge takes. */
     private const double Settle = .12;
-    private static readonly InputCursor Arrow = InputSystemCursor.Create(InputSystemCursorShape.Arrow);
-    private static readonly InputCursor Move = InputSystemCursor.Create(InputSystemCursorShape.SizeAll);
     private readonly nint hwnd;
     private bool movable = true;
     private (double X, double Y) from, to;
@@ -32,7 +29,6 @@ public sealed partial class Surface : Grid
         this.hwnd = hwnd;
         // Clear rather than none, so the empty parts between its rows are the surface too and take the press.
         Background = StuDev.Ui.Paint.Clear;
-        ProtectedCursor = Arrow;
         PointerPressed += Pressed;
         PointerMoved += Moved;
         PointerReleased += (_, e) => Let(e.Pointer);
@@ -41,7 +37,7 @@ public sealed partial class Surface : Grid
         Unloaded += (_, _) => { EndDrag(); CompositionTarget.Rendering -= Step; };
     }
 
-    /** Locking during a drag releases it too; idle hover never advertises an in-progress move. */
+    /** Locking during a drag releases the captured pointer. */
     public bool Movable
     {
         get => movable;
@@ -65,7 +61,6 @@ public sealed partial class Surface : Grid
         if (!CapturePointer(e.Pointer)) return;
         held = e.Pointer;
         dragging = true;
-        ProtectedCursor = Move;
         e.Handled = true;
     }
 
@@ -93,7 +88,6 @@ public sealed partial class Surface : Grid
         var pointer = held;
         held = null;
         dragging = false;
-        ProtectedCursor = Arrow;
         if (pointer is not null) ReleasePointerCapture(pointer);
     }
 
