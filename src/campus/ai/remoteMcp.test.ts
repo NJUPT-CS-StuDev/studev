@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { discoverRemoteTools, invokeRemoteTool, remoteAlias, remoteUrl, type RemoteConnection } from './remoteMcp';
+import type { Message } from './stream';
 import { toolHistory } from './toolCatalog';
 
 const server: RemoteConnection = { id: 'edade626-1494-48d8-ad2b-483f8084bf9a', name: '文档', url: 'https://docs.example/mcp', token: 'fixture', enabled: true };
@@ -44,12 +45,11 @@ test('External aliases and history preserve distinct names and carry paired resu
     expect(name).not.toBe(remoteAlias(server.id, 'docs_dlookup'));
     expect(() => remoteUrl('http://docs.example/mcp')).toThrow();
     expect(() => remoteUrl('https://secret@docs.example/mcp')).toThrow();
-    const history = [
+    const history: Message[] = [
         { role: 'user', content: '文档' },
         { role: 'assistant', content: null, tool_calls: [{ id: 'doc', type: 'function', function: { name, arguments: '{}' } }] },
         { role: 'tool', content: '示例', tool_call_id: 'doc' },
-    ] as const;
-    const messages = history.map(message => ({ ...message, ...('tool_calls' in message ? { tool_calls: [...message.tool_calls] } : {}) }));
-    expect(toolHistory(messages, new Set([name]), true)).toHaveLength(3);
-    expect(toolHistory(messages, new Set(), true)).toEqual([history[0]]);
+    ];
+    expect(toolHistory(history, new Set([name]), true)).toHaveLength(3);
+    expect(toolHistory(history, new Set(), true)).toEqual([history[0]]);
 });

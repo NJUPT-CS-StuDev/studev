@@ -686,7 +686,11 @@ try {
 
         log(`${name}: ${await inspectAiTrace(page, { root, output, name })}`);
         await noAvatarOverlap(page, '.ai-bar button');
-        await headerAligned(page, '.ai-model-b');
+        await headerAligned(page, '.ai-menu-btn');
+        const model = await page.locator('.ai-compose .ai-model-b').boundingBox();
+        const send = await page.locator('.ai-compose .ai-send').boundingBox();
+        assert(model && send && model.x + model.width <= send.x + 1 && Math.abs(model.y + model.height / 2 - send.y - send.height / 2) <= 2,
+            'the model picker and send button share the right-hand composer row');
 
         await mapAvailability(name, viewport);
 
