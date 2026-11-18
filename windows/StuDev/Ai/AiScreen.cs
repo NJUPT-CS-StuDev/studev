@@ -520,7 +520,7 @@ public sealed partial class AiScreen : Screen
         foreach (var provider in providers.Available)
         {
             var service = new MenuFlyoutSubItem { Text = provider.Name };
-            if (provider.IsFree) service.Icon = FreeIcon();
+            if (provider.IsFree) service.Icon = ModelSettings.FreeAvatarIcon();
             service.Items.Add(new MenuFlyoutItem { Text = "选择模型", IsEnabled = false });
             foreach (var model in provider.Models.Where(model => model.Enabled))
             {
@@ -533,7 +533,7 @@ public sealed partial class AiScreen : Screen
                 };
                 if (provider.IsFree)
                 {
-                    item.Icon = FreeIcon();
+                    item.Icon = ModelSettings.FreeAvatarIcon();
                     AutomationProperties.SetName(item, modelName);
                     AutomationProperties.SetHelpText(item, description);
                 }
@@ -548,8 +548,6 @@ public sealed partial class AiScreen : Screen
         menu.Items.Add(settings);
         button.Click += (_, _) => menu.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.TopEdgeAlignedLeft });
         return button;
-
-        static ImageIcon FreeIcon() => new() { Source = ModelSettings.FreeAvatarImage() };
     }
 
     private FrameworkElement Composer()

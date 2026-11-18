@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
@@ -34,13 +35,25 @@ internal static class ModelSettings
     private static StackPanel Summary(string name, string description) =>
         Kit.Column(3, Kit.Text(name, Role.Label, wrap: true), Kit.Text(description, Role.Caption, "muted", wrap: true));
 
-    internal static BitmapImage FreeAvatarImage() => new(new Uri("ms-appx:///Assets/hicancan-avatar.png"));
+    private static BitmapImage FreeAvatarImage() => new(new Uri("ms-appx:///Assets/hicancan-avatar.png"));
 
     internal static Ellipse FreeAvatar(double size) => new()
     {
         Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center,
         Fill = new ImageBrush { ImageSource = FreeAvatarImage(), Stretch = Stretch.UniformToFill },
     };
+
+    internal static ImageIcon FreeAvatarIcon()
+    {
+        const float size = 16;
+        var icon = new ImageIcon { Width = size, Height = size, Source = FreeAvatarImage() };
+        var visual = ElementCompositionPreview.GetElementVisual(icon);
+        var circle = visual.Compositor.CreateEllipseGeometry();
+        circle.Center = new(size / 2);
+        circle.Radius = new(size / 2);
+        visual.Clip = visual.Compositor.CreateGeometricClip(circle);
+        return icon;
+    }
 
     private static void Edit(ModelProvider? provider, bool runtime, Action refresh)
     {
