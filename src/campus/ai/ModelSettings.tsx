@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { addressError, fetchModels, freeProvider, readModelSettings, runtimeProvider, writeModelSettings, type ModelOption, type ModelProvider } from './model';
+import { addressError, fetchModels, freeService, readModelSettings, runtimeProvider, writeModelSettings, type ModelOption, type ModelProvider } from './model';
+import { FreeServiceAvatar } from './FreeServiceAvatar';
 import { runtimeModels } from './runtime';
 import { Chevron } from '@/world/ui';
 
@@ -21,7 +22,7 @@ export default function ModelSettings() {
     }
     return <div className="model-settings">
         {editing ? <ProviderEditor initial={editing} saved={settings.providers.some(item => item.id === editing.id)} onBack={() => { setEditing(null); setError(''); }} save={value => update(value.id, value)} remove={() => update(editing.id)} /> : <>
-            <div className="kv"><span className="v">{freeProvider.name}<small>免费额度 · 登录后可用</small></span></div>
+            <div className="kv"><span className="model-service-identity v"><FreeServiceAvatar /><span>{freeService.modelName}<small>{freeService.description}</small></span></span></div>
             {settings.providers.map(provider => <button key={provider.id} type="button" className="kv" onClick={() => setEditing(provider)}>
                 <span className="v">{provider.name}<small>{provider.enabled ? `${provider.models.filter(item => item.enabled).length} 个模型已启用` : '已停用'}</small></span><Chevron />
             </button>)}

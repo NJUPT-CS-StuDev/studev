@@ -20,11 +20,15 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
 {
     /** How many times the model may look things up for one question. */
     public const int Rounds = 8;
+    private static readonly Lazy<Assistant> BuiltIn = new(() => Load(Path.Combine(AppContext.BaseDirectory, "world")));
     private static readonly TimeZoneInfo Nanjing = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
     private static readonly string[] Weekdays = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
     private readonly HashSet<string> names = tools.Select(t => (string)t["function"]!["name"]!).ToHashSet();
     public List<JsonObject> Tools => tools;
     public List<string> Diagrams => contract["diagrams"]!.AsArray().Select(d => (string)d!).ToList();
+    internal static Assistant Shared => BuiltIn.Value;
+    internal (string ProviderName, string ModelName, string Description) FreeService =>
+        (Phrase("freeService", "providerName"), Phrase("freeService", "modelName"), Phrase("freeService", "description"));
     private List<string> Lines(string key) => contract[key]!.AsArray().Select(l => (string)l!).ToList();
     private string Phrase(string group, string key) => (string)contract[group]![key]!;
     private static string Fill(string text, Dictionary<string, object?> values) => Regex.Replace(text, @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v?.ToString() ?? "null" : "null");
@@ -152,7 +156,6 @@ public sealed record Own(string Base, string Model, string Key, bool Runtime = f
 /** Which model answers, as src/campus/ai/model.ts. */
 public static class Models
 {
-    public const string OwnerAvatar = "https://q1.qlogo.cn/g?b=qq&nk=2366522877&s=100";
     public static readonly Own Starting = new("https://api.deepseek.com", "deepseek-chat", "");
     public static readonly Own Runtime = new("http://127.0.0.1:9316/v1", "deepseek-web", "", true);
     public static string Endpoint(string @base) { var root = @base.Trim().TrimEnd('/'); return root.EndsWith("/chat/completions") ? root : root + "/chat/completions"; }

@@ -7,8 +7,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.URI
 
-internal const val FREE_SERVICE = "hicancan"
-internal const val FREE_MODEL = "免费额度"
 private const val CATALOG = "catalog"
 
 /** Missing IDs represent the built-in model; a configured selection carries no credentials. */

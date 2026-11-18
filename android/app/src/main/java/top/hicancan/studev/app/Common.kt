@@ -58,10 +58,11 @@ val LocalMeAction = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /** A plain row under a hairline, the one list item used everywhere. A trailing lambda is what a tap does; a control
  * at its end is passed by name (trailing = …). */
-@Composable fun KeyRow(key: String?, value: String, note: String? = null, color: Color = Ink.text, chevron: Boolean = false, trailing: @Composable (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
+@Composable fun KeyRow(key: String?, value: String, note: String? = null, color: Color = Ink.text, chevron: Boolean = false, leading: @Composable (() -> Unit)? = null, trailing: @Composable (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
     val base = Modifier.fillMaxWidth().topHairline(Ink.line)
     Row((if (onClick != null) base.clickable(onClick = onClick) else base).padding(vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (key != null) Plain(key, 12.5.sp, Ink.faint, maxLines = 1, modifier = Modifier.width(56.dp))
+        leading?.invoke()
         Column(Modifier.weight(1f)) { Plain(value, 14.sp, color); if (note != null) Plain(note, 12.sp, Ink.muted) }
         trailing?.invoke()
         if (chevron) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(16.dp), tint = Ink.faint)

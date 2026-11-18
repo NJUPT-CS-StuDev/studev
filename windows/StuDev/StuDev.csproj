@@ -50,6 +50,7 @@
     <Content Include="..\..\product.json" Link="product.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\design\tokens.json" Link="design\tokens.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\public\assets\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\public\assets\hicancan-avatar.png" Link="Assets\hicancan-avatar.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\StuDev.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

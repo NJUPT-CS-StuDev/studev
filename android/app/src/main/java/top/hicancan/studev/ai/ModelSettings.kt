@@ -1,14 +1,19 @@
 package top.hicancan.studev.ai
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -16,19 +21,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import top.hicancan.studev.R
 import top.hicancan.studev.app.*
 import java.util.UUID
+
+@Composable internal fun FreeServiceAvatar(modifier: Modifier) {
+    Image(painterResource(R.drawable.hicancan_avatar), null, modifier.clip(CircleShape), contentScale = ContentScale.Crop)
+}
 
 @Composable internal fun ModelServicesSheet(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember(context) { ModelPreferences.get(context) }
+    val freeService = remember(context) { Assistant.loadFreeService(context) }
     val catalog by rememberModelCatalog(prefs)
     var editing by remember { mutableStateOf<ModelService?>(null) }
     val current = editing
     if (current == null) {
         PlainSheet("模型服务", onBack, top = { TextAction("返回", onBack) }) {
             LazyColumn(Modifier.heightIn(max = 440.dp), contentPadding = PaddingValues(top = 8.dp)) {
-                item { KeyRow(null, FREE_SERVICE, "$FREE_MODEL · 登录后可用") }
+                item {
+                    KeyRow(null, "${freeService.providerName} · ${freeService.modelName}", freeService.description,
+                        leading = { FreeServiceAvatar(Modifier.size(32.dp)) })
+                }
                 items(catalog.services, key = { it.id }) { service ->
                     val note = if (!service.enabled) "已停用" else "已启用 ${service.models.count { it.enabled }} 个模型"
                     KeyRow(null, service.name, note, chevron = true, onClick = { editing = service })

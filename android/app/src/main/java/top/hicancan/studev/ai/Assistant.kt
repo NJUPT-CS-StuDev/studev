@@ -1,5 +1,6 @@
 package top.hicancan.studev.ai
 
+import android.content.Context
 import java.net.HttpURLConnection
 import java.net.URI
 import java.time.Instant
@@ -18,6 +19,14 @@ data class Situation(val week: Int?, val klass: String?, val campus: String, val
     fun toJson() = buildJsonObject { put("week", week); put("class", klass); put("campus", campus); put("memory", memory) }
 }
 
+internal data class FreeService(val providerName: String, val modelName: String, val description: String)
+
+private fun JsonObject.freeService(): FreeService {
+    val art = getValue("freeService").jsonObject
+    return FreeService(art.getValue("providerName").jsonPrimitive.content,
+        art.getValue("modelName").jsonPrimitive.content, art.getValue("description").jsonPrimitive.content)
+}
+
 /**
  * The AI's one contract, as src/campus/world/assistant.mjs: what the model is told (assistant.json, filled in with the
  * moment and who is asking) and the tools it may call (tools.json), both read from the assets the build copies from
@@ -29,6 +38,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private fun phrase(group: String, key: String) = contract.getValue(group).jsonObject.getValue(key).jsonPrimitive.content
     private fun fill(text: String, values: Map<String, Any?>) = Regex("\\{(\\w+)\\}").replace(text) { values[it.groupValues[1]].toString() }
     val diagrams = contract.getValue("diagrams").jsonArray.map { it.jsonPrimitive.content }
+    internal val freeService get() = contract.freeService()
 
     /** The reader's campus and class, for example 仙林校区 TEST000001 班的同学. */
     private fun who(s: Situation): String {
@@ -165,8 +175,11 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
         /** The moment in Nanjing, as people say it: 2026年11月13日 周五 16:40. */
         fun nanjingNow(now: Instant): String { val at = now.atZone(NANJING); return "%d年%d月%d日 %s %02d:%02d".format(at.year, at.monthValue, at.dayOfMonth, WEEKDAYS[at.dayOfWeek.value], at.hour, at.minute) }
         fun of(contract: JsonObject, tools: JsonArray) = Assistant(contract, tools.map { it.jsonObject })
-        fun load(context: android.content.Context) = of(
-            Json.parseToJsonElement(context.assets.open("world/assistant.json").bufferedReader().use { it.readText() }).jsonObject,
+        private fun loadContract(context: Context) =
+            Json.parseToJsonElement(context.assets.open("world/assistant.json").bufferedReader().use { it.readText() }).jsonObject
+        internal fun loadFreeService(context: Context) = loadContract(context).freeService()
+        fun load(context: Context) = of(
+            loadContract(context),
             Json.parseToJsonElement(context.assets.open("world/tools.json").bufferedReader().use { it.readText() }).jsonArray)
     }
 }

@@ -2,6 +2,9 @@ using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using StuDev.Ui;
 
 namespace StuDev.Ai;
@@ -15,7 +18,8 @@ internal static class ModelSettings
     public static void Fill(StackPanel page, Action refresh)
     {
         var providers = ModelProviders.Shared;
-        page.Children.Add(Kit.Row("", Summary("hicancan", "免费额度 · 登录后可用")));
+        var free = Assistant.Shared.FreeService;
+        page.Children.Add(Kit.Row("", Kit.Line(10, FreeAvatar(32), Summary(free.ModelName, free.Description))));
         foreach (var provider in providers.Configured)
         {
             var count = provider.Models.Count(model => model.Enabled);
@@ -29,6 +33,14 @@ internal static class ModelSettings
 
     private static StackPanel Summary(string name, string description) =>
         Kit.Column(3, Kit.Text(name, Role.Label, wrap: true), Kit.Text(description, Role.Caption, "muted", wrap: true));
+
+    internal static BitmapImage FreeAvatarImage() => new(new Uri("ms-appx:///Assets/hicancan-avatar.png"));
+
+    internal static Ellipse FreeAvatar(double size) => new()
+    {
+        Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center,
+        Fill = new ImageBrush { ImageSource = FreeAvatarImage(), Stretch = Stretch.UniformToFill },
+    };
 
     private static void Edit(ModelProvider? provider, bool runtime, Action refresh)
     {

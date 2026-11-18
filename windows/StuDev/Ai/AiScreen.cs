@@ -28,7 +28,7 @@ public sealed partial class AiScreen : Screen
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     private readonly Campus campus = Campus.Shared;
     private readonly ModelProviders providers = ModelProviders.Shared;
-    private readonly Assistant assistant = Assistant.Load(Path.Combine(AppContext.BaseDirectory, "world"));
+    private readonly Assistant assistant = Assistant.Shared;
     private readonly Grid side = new() { Width = 260 };
     private readonly Grid main = new();
     private StackPanel turns = new() { Spacing = 30 };
@@ -502,30 +502,41 @@ public sealed partial class AiScreen : Screen
     {
         var selected = providers.Find(choice.ProviderId);
         var picked = selected?.ModelName(choice.ModelId) ?? choice.ModelId;
-        var label = Kit.Text($"{selected?.Name ?? "服务商已移除"} · {picked}", Role.Label);
+        var selection = $"{selected?.Name ?? "服务商已移除"} · {picked}";
+        var label = Kit.Text(selected?.IsFree == true ? picked : selection, Role.Label);
         label.MaxWidth = compact ? 168 : 285;
         label.TextTrimming = TextTrimming.CharacterEllipsis;
         var content = Kit.Line(6, label, Kit.Icon(Icons.Chevron, 13, "muted"));
         if (selected?.IsFree == true)
-        {
-            var avatar = new Image { Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(Models.OwnerAvatar)) };
-            content.Children.Insert(0, new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(8), Child = avatar });
-        }
+            content.Children.Insert(0, ModelSettings.FreeAvatar(16));
         content.VerticalAlignment = VerticalAlignment.Center;
         var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
         { Content = content, MinHeight = 36, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy };
-        AutomationProperties.SetName(button, $"选择服务商，当前 {label.Text}");
+        AutomationProperties.SetName(button, $"选择服务商，当前 {selection}");
         AutomationProperties.SetAutomationId(button, "ai-provider");
+        var description = assistant.FreeService.Description;
         var menu = new MenuFlyout();
         menu.Items.Add(new MenuFlyoutItem { Text = "选择服务商", IsEnabled = false });
         foreach (var provider in providers.Available)
         {
             var service = new MenuFlyoutSubItem { Text = provider.Name };
+            if (provider.IsFree) service.Icon = FreeIcon();
             service.Items.Add(new MenuFlyoutItem { Text = "选择模型", IsEnabled = false });
             foreach (var model in provider.Models.Where(model => model.Enabled))
             {
                 var next = new ModelChoice(provider.Id, model.Id);
-                var item = new ToggleMenuFlyoutItem { Text = provider.ModelName(model.Id), IsChecked = next == choice };
+                var modelName = provider.ModelName(model.Id);
+                var item = new ToggleMenuFlyoutItem
+                {
+                    Text = provider.IsFree ? $"{modelName} · {description}" : modelName,
+                    IsChecked = next == choice,
+                };
+                if (provider.IsFree)
+                {
+                    item.Icon = FreeIcon();
+                    AutomationProperties.SetName(item, modelName);
+                    AutomationProperties.SetHelpText(item, description);
+                }
                 item.Click += (_, _) => Choose(next);
                 service.Items.Add(item);
             }
@@ -537,6 +548,8 @@ public sealed partial class AiScreen : Screen
         menu.Items.Add(settings);
         button.Click += (_, _) => menu.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.TopEdgeAlignedLeft });
         return button;
+
+        static ImageIcon FreeIcon() => new() { Source = ModelSettings.FreeAvatarImage() };
     }
 
     private FrameworkElement Composer()

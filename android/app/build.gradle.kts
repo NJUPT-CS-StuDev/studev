@@ -22,6 +22,7 @@ val compileSdkVersion = providers.gradleProperty("studev.compileSdk").orNull?.to
 
 abstract class DesignTokensTask : DefaultTask() {
     @get:InputFile abstract val tokensFile: RegularFileProperty
+    @get:InputFile abstract val freeServiceAvatar: RegularFileProperty
     @get:OutputDirectory abstract val kotlinDir: DirectoryProperty
     @get:OutputDirectory abstract val resourceDir: DirectoryProperty
     @TaskAction fun generate() {
@@ -58,6 +59,7 @@ abstract class DesignTokensTask : DefaultTask() {
                 writeText("<resources><color name=\"studev_paper\">${palette["paper"]}</color><color name=\"studev_brand\">${palette["brand"]}</color><color name=\"studev_on_brand\">${palette["onBrand"]}</color></resources>")
             }
         }
+        freeServiceAvatar.get().asFile.copyTo(resourceDir.file("drawable-nodpi/hicancan_avatar.png").get().asFile, overwrite = true)
     }
 }
 /** The AI's contract, the same files the web and the platform read: what the model is told and the tools it may call. */
@@ -129,6 +131,7 @@ abstract class VerifyMapInputsTask : DefaultTask() {
 }
 val generateDesignTokens = tasks.register<DesignTokensTask>("generateDesignTokens") {
     tokensFile.set(rootProject.layout.projectDirectory.file("../design/tokens.json"))
+    freeServiceAvatar.set(rootProject.layout.projectDirectory.file("../public/assets/hicancan-avatar.png"))
     kotlinDir.set(layout.buildDirectory.dir("generated/design/kotlin"))
     resourceDir.set(layout.buildDirectory.dir("generated/design/res"))
 }

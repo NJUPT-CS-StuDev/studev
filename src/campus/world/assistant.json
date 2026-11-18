@@ -31,6 +31,11 @@
   "out": "现在不在教学周内",
   "unknown": "当前教学周尚未取得"
  },
+ "freeService": {
+  "providerName": "hicancan",
+  "modelName": "免费额度",
+  "description": "hicancan 为爱发电，登录后可用"
+ },
  "runtimeErrors": {
   "model_queue_timeout": "本机模型正在处理其他请求，请稍后重试。",
   "browser_ready_timeout": "模型页面迟迟未就绪，请在浏览器中查看。",

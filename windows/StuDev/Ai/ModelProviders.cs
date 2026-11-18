@@ -9,7 +9,7 @@ internal sealed record ModelProvider(string Id, string Name, string Address, str
 {
     public bool Runtime => Id == ModelProviders.RuntimeId;
     public bool IsFree => Id == ModelChoice.Free.ProviderId;
-    public string ModelName(string id) => IsFree && id == ModelChoice.Free.ModelId ? "免费额度" : id;
+    public string ModelName(string id) => IsFree && id == ModelChoice.Free.ModelId ? Assistant.Shared.FreeService.ModelName : id;
 
     public JsonObject ToJson() => new()
     {
@@ -33,7 +33,7 @@ internal sealed class ModelProviders
     private const string FileName = "ai/providers.bin";
     private const string OldChoice = "ai/model.json";
     private const string OldKey = "ai/key.bin";
-    private static readonly ModelProvider Free = new(ModelChoice.Free.ProviderId, "hicancan", "", "", true, [new(ModelChoice.Free.ModelId)]);
+    private static readonly ModelProvider Free = new(ModelChoice.Free.ProviderId, Assistant.Shared.FreeService.ProviderName, "", "", true, [new(ModelChoice.Free.ModelId)]);
     public static readonly ModelProviders Shared = Read();
     private List<ModelProvider> configured;
     public ModelChoice? PreviousChoice { get; private set; }

@@ -22,7 +22,8 @@ import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Pencil, Square, 
 import { definitions, readExams, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, askOwn, type Message } from './stream';
 import { askRuntime, closeRuntimeChat, runtimeRequest, type RuntimeRequest } from './runtime';
-import { FREE_MODEL, MODEL_SETTINGS_CHANGED, RUNTIME_PROVIDER, freeProvider, readModelSettings, selectedProvider, writeModelSettings, type ModelSelection, type ModelSettings } from './model';
+import { FREE_MODEL, MODEL_SETTINGS_CHANGED, RUNTIME_PROVIDER, freeProvider, freeService, readModelSettings, selectedProvider, writeModelSettings, type ModelSelection, type ModelSettings } from './model';
+import { FreeServiceAvatar } from './FreeServiceAvatar';
 import { append, chain, choose, conversationId, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
@@ -124,14 +125,22 @@ function ModelPicker({ settings, choice, disabled, select }: { settings: ModelSe
     useEffect(() => { if (open) menu.current?.querySelector('button')?.focus(); }, [open, providerId]);
     function close() { setOpen(false); setProviderId(null); }
     return <div className="ai-model" onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(); }} onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.querySelector('button')?.focus(); close(); } }}>
-        <button type="button" aria-label="选择服务商和模型" title={title} aria-expanded={open} className={`ai-model-b ${open ? 'on' : ''}`} disabled={disabled} onClick={() => open ? close() : setOpen(true)}><span>{title}</span><Chevron /></button>
+        <button type="button" aria-label="选择服务商和模型" title={title} aria-expanded={open} className={`ai-model-b ${open ? 'on' : ''}`} disabled={disabled} onClick={() => open ? close() : setOpen(true)}>
+            {chosen?.kind === 'free' && <FreeServiceAvatar />}<span>{title}</span><Chevron />
+        </button>
         {open && <div ref={menu} className="ai-menu ai-model-menu" role="group" aria-label={provider ? '选择模型' : '选择服务商'}>
             {provider ? <>
                 <button type="button" className="ai-model-back" onClick={() => setProviderId(null)}>‹ {provider.name}</button>
-                {provider.models.filter(model => model.enabled).map(model => <button key={model.id} type="button" aria-pressed={choice.provider === provider.id && choice.model === model.id} onClick={() => { select({ provider: provider.id, model: model.id }); close(); }}><b>{model.name}</b>{choice.provider === provider.id && choice.model === model.id && <Tick />}</button>)}
+                {provider.models.filter(model => model.enabled).map(model => <button key={model.id} type="button" aria-pressed={choice.provider === provider.id && choice.model === model.id} onClick={() => { select({ provider: provider.id, model: model.id }); close(); }}>
+                    {provider.kind === 'free' ? <span className="model-service-identity"><FreeServiceAvatar /><span><b>{model.name}</b><small>{freeService.description}</small></span></span> : <b>{model.name}</b>}
+                    {choice.provider === provider.id && choice.model === model.id && <Tick />}
+                </button>)}
             </> : <>
                 <p className="fine">选择服务商</p>
-                {sources.map(source => <button key={source.id} type="button" onClick={() => setProviderId(source.id)}><b>{source.name}</b><Chevron /></button>)}
+                {sources.map(source => <button key={source.id} type="button" onClick={() => setProviderId(source.id)}>
+                    {source.kind === 'free' ? <span className="model-service-identity"><FreeServiceAvatar /><span><b>{source.name}</b><small>{freeService.modelName}</small></span></span> : <b>{source.name}</b>}
+                    <Chevron />
+                </button>)}
                 <p className="fine">在「我 → 模型服务」管理服务商</p>
             </>}
         </div>}

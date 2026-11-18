@@ -1,6 +1,7 @@
 // Which model answers: the free quota, kept going for love by hicancan and the student development centre, reached
 // through the platform and asked when signed in; or one's own key to a provider that speaks OpenAI's chat completions,
 // kept only on this device and used straight from it, with no sign-in. The same choice is android/.../ai/Assistant.kt.
+import { freeService } from '@/world/assistant.json';
 
 /** One's own provider: where its chat completions are, which model, and the key, which never leaves this device. */
 export interface Own { base: string; model: string; key: string }
@@ -16,7 +17,8 @@ const KEY = 'studev_ai_model';
 export const MODEL_SETTINGS_CHANGED = 'studev:model-settings';
 export const FREE_MODEL: ModelSelection = { provider: 'free', model: 'auto' };
 export const RUNTIME_PROVIDER = 'runtime';
-export const freeProvider = { id: FREE_MODEL.provider, kind: 'free' as const, name: 'hicancan', models: [{ id: FREE_MODEL.model, name: '免费额度', enabled: true }] };
+export { freeService };
+export const freeProvider = { id: FREE_MODEL.provider, kind: 'free' as const, name: freeService.providerName, models: [{ id: FREE_MODEL.model, name: freeService.modelName, enabled: true }] };
 export const runtimeProvider: ModelProvider = { id: RUNTIME_PROVIDER, kind: 'runtime', name: 'Local Runtime MCP', base: '', key: '', enabled: true, models: [] };
 type PreviousChoice = { use?: 'free' | 'own' | 'runtime'; own?: Own; runtime?: { model?: string } };
 

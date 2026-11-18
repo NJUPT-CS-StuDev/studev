@@ -82,7 +82,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var opening by remember { mutableStateOf(true) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
-    val assistant = remember { Assistant.load(context) }
+    val assistant = remember(context) { Assistant.load(context) }
+    val freeService = remember(assistant) { assistant.freeService }
     val memory = model.settings.state.collectAsState().value.memory
     var minding by remember { mutableStateOf(false) }
     var streaming by remember { mutableStateOf<String?>(null) }
@@ -233,7 +234,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (unavailable) Plain("当前模型已停用或移除，请重新选择。", 12.sp, marks().danger, modifier = Modifier.padding(horizontal = 8.dp))
             Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy, canSend = !unavailable) {
-                ChatModelPicker(catalog, selection, enabled = !busy) { next ->
+                ChatModelPicker(catalog, selection, freeService, enabled = !busy) { next ->
                     selection = next
                     chats = chats.map { if (it.id == current) it.copy(selection = next) else it }
                     ModelPreferences.update(modelPrefs) { it.copy(preferred = next) }
@@ -417,15 +418,16 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
     }
 }
 
-@Composable private fun ChatModelPicker(catalog: ModelCatalog, selected: ModelSelection, enabled: Boolean, choose: (ModelSelection) -> Unit) {
+@Composable private fun ChatModelPicker(catalog: ModelCatalog, selected: ModelSelection, freeService: FreeService, enabled: Boolean, choose: (ModelSelection) -> Unit) {
     var opened by remember { mutableStateOf(false) }
     var stage by remember { mutableStateOf<String?>(null) }
     val selectedService = catalog.service(selected.provider)?.name ?: "服务商已删除"
-    val label = if (selected.provider == null) FREE_MODEL else "$selectedService · ${selected.model.orEmpty()}"
+    val label = if (selected.provider == null) freeService.modelName else "$selectedService · ${selected.model.orEmpty()}"
     fun dismiss() { opened = false; stage = null }
     Box {
         Row(Modifier.widthIn(max = 230.dp).clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { opened = true }
             .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (selected.provider == null) FreeServiceAvatar(Modifier.size(16.dp))
             Plain(label, 12.sp, if (enabled) Ink.text else Ink.muted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
             Icon(Icons.Outlined.KeyboardArrowDown, "选择服务商和模型", Modifier.size(16.dp), tint = Ink.muted)
         }
@@ -433,7 +435,12 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
             val provider = stage
             if (provider == null) {
                 DropdownMenuItem({ Plain("选择服务商", 12.sp, Ink.muted) }, {}, enabled = false)
-                DropdownMenuItem({ Plain(FREE_SERVICE, 14.sp) }, { stage = "" })
+                DropdownMenuItem({
+                    Column {
+                        Plain(freeService.providerName, 14.sp)
+                        Plain(freeService.modelName, 12.sp, Ink.muted)
+                    }
+                }, { stage = "" }, leadingIcon = { FreeServiceAvatar(Modifier.size(24.dp)) })
                 val options = catalog.services.filter { service -> service.enabled && service.key.isNotBlank() && service.models.any { it.enabled } }
                 options.forEach { service -> DropdownMenuItem({ Plain(service.name, 14.sp) }, { stage = service.id }) }
                 if (options.isEmpty()) {
@@ -442,10 +449,19 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
             } else {
                 DropdownMenuItem({ Plain("选择模型", 12.sp, Ink.muted) }, { stage = null },
                     leadingIcon = { Icon(Icons.Outlined.ChevronLeft, "返回服务商列表", Modifier.size(18.dp), tint = Ink.muted) })
-                val options = if (provider.isEmpty()) listOf(FREE_MODEL to ModelSelection())
-                    else catalog.service(provider)?.models.orEmpty().filter { it.enabled }.map { it.id to ModelSelection(provider, it.id) }
-                options.forEach { (name, model) ->
-                    DropdownMenuItem({ Plain(name, 14.sp) }, { dismiss(); choose(model) },
+                if (provider.isEmpty()) {
+                    val free = ModelSelection()
+                    DropdownMenuItem({
+                        Column {
+                            Plain(freeService.modelName, 14.sp)
+                            Plain(freeService.description, 12.sp, Ink.muted)
+                        }
+                    }, { dismiss(); choose(free) }, leadingIcon = { FreeServiceAvatar(Modifier.size(24.dp)) },
+                        trailingIcon = { if (free == selected) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
+                }
+                catalog.service(provider)?.models.orEmpty().filter { it.enabled }.forEach { offer ->
+                    val model = ModelSelection(provider, offer.id)
+                    DropdownMenuItem({ Plain(offer.id, 14.sp) }, { dismiss(); choose(model) },
                         trailingIcon = { if (model == selected) Icon(Icons.Outlined.Check, "当前模型", Modifier.size(18.dp), tint = Ink.brand) })
                 }
             }
