@@ -131,15 +131,18 @@ public sealed partial class MapScreen : Screen
             case ValueTuple<string, string> { Item1: "place" } place: placeId = place.Item2; navId = null; origin = null; floor = null; break;
             case ValueTuple<string, string> { Item1: "nav" } nav: navId = nav.Item2; placeId = null; origin = null; mode = "walk"; break;
         }
-        Draw(); _ = Scene();
+        Draw(); _ = Load(); _ = Scene();
     }
 
     // ——— the world ———
     private bool loading;
+    private bool mapLoadFailed;
     private async Task Load()
     {
         if (loading || campus.Repository is not { } repo || snapshot?.Release.Version == repo.Release.Version) return;
         loading = true;
+        mapLoadFailed = false;
+        Draw();
         var complete = false;
         try
         {
@@ -151,7 +154,7 @@ public sealed partial class MapScreen : Screen
             roomById = roomIndex.Rooms.Where(r => Names.Placed(r.Id)).ToDictionary(r => r.Id);
             reader = new World.Rooms(campus.Periods);
             dayDate = null; day = null; ++dayRequest;
-            if (!mapChanged) { snapshot = repo; await LoadDay(repo); Labels(); await Scene(); complete = true; return; }
+            if (!mapChanged) { await LoadDay(repo); Labels(); await Scene(); snapshot = repo; complete = true; return; }
             router?.Dispose(); router = nextRouter;
             styled = false; shadeKey = null; night = -1; openBuilding = null; modelled.Clear();
             await surface.Ready;
@@ -186,7 +189,7 @@ public sealed partial class MapScreen : Screen
             await Scene();
             snapshot = repo; complete = true;
         }
-        catch (Exception error) when (error is HttpRequestException or IOException or JsonException or MaplibreException) { notice = "地图暂时打不开，请稍后重试。"; }
+        catch (Exception error) when (error is HttpRequestException or IOException or JsonException or MaplibreException) { mapLoadFailed = true; }
         finally { loading = false; Draw(); if (complete && campus.Repository?.Release.Version != snapshot?.Release.Version) _ = Load(); }
     }
 
@@ -737,7 +740,13 @@ public sealed partial class MapScreen : Screen
         sheet.Children.Add(RulerBox());
         var body = new StackPanel { Padding = new Thickness(20, 6, 20, 24) };
         sheet.Children.Add(body);
-        if (space is null || model is null) { body.Children.Add(Kit.Text(notice ?? "正在打开校园…", Role.Label, "muted")); return; }
+        if (mapLoadFailed)
+        {
+            body.Children.Add(Kit.Text(styled ? "地图更新未完成。" : "地图暂时无法加载。", Role.Label, "muted"));
+            body.Children.Add(Kit.TextAction("重试", () => _ = Load(), Icons.Again));
+            if (!styled) return;
+        }
+        if (!styled || space is null || model is null) { body.Children.Add(Kit.Text("正在打开校园…", Role.Label, "muted")); return; }
         void Row(string key, UIElement value, Action? open = null) => body.Children.Add(Kit.Row(key, value, open));
         UIElement Value(string text, string? small = null) { var v = Kit.Column(2, Kit.Text(text, Role.Label, wrap: true)); ((TextBlock)v.Children[0]).FontSize = 14; if (small is not null) v.Children.Add(Kit.Text(small, Role.Caption, "muted", wrap: true)); return v; }
         void Title(string text) { var t = Pages.SheetTitle(text); t.Margin = new Thickness(0, 10, 0, 4); body.Children.Add(t); }
