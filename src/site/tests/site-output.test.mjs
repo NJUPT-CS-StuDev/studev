@@ -49,7 +49,8 @@ test('every built page has valid local links and complete rendering', async () =
   let captions = 0;
   for (const file of files) {
     const html = await readFile(file, 'utf8');
-    assert.doesNotMatch(html, /cdn\.jsdelivr\.net|Painting Diagram|data-language="mermaid"|Syntax error in text/, file);
+    // Every diagram and formula drawn at build time; nothing written in an article shown as raw markup.
+    assert.doesNotMatch(html, /cdn\.jsdelivr\.net|data-language="(?:mermaid|math)"|class="raw-html"/, file);
     assert.match(html, /data-local-fonts/, file);
     assert.match(html, /rel="canonical"/, file);
     walk(parse(html), (node) => {
@@ -72,9 +73,11 @@ test('every built page has valid local links and complete rendering', async () =
         assert.ok('alt' in attr, `${file}: missing alt`);
       }
       if (node.tagName === 'figcaption') captions++;
-      if (attr.class?.includes('diagram-static')) {
+      if (node.tagName === 'figure' && attr.class === 'diagram') {
         diagrams++;
-        assert.ok(attr['aria-label'] && attr['aria-label'] !== '图表', `${file}: diagram needs a meaningful label`);
+        const svg = node.childNodes.find((child) => child.tagName === 'svg');
+        const title = svg?.childNodes.find((child) => child.tagName === 'title')?.childNodes[0]?.value ?? '';
+        assert.ok(attributes(svg ?? {}).role === 'img' && title && !/^(?:flowchart|graph|sequenceDiagram|stateDiagram|quadrantChart)\b/.test(title), `${file}: diagram needs a meaningful name, not ${title}`);
       }
     });
   }

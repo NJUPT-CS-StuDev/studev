@@ -144,7 +144,7 @@ flowchart TB
 | **3D GIS & Map** | MapLibre GL · PMTiles · Blender 3D · QGIS | 129 3D campus buildings, 564 indoor room geometries, real-time floor cutaway coloring tied to the timeline |
 | **On-Device Compute** | Rust · WebAssembly · Android NDK (CMake / JNI) | [`wasm-search`](https://github.com/hicancan/wasm-search) client-side BM25 search & [`wayfind`](https://github.com/hicancan/wayfind) offline pedestrian routing |
 | **Identity & Forms** | Edge Functions · KV / Blob · `@noble/hashes` (`scrypt`) | Optimistic concurrency control (OCC), single-use refresh token rotation, TOTP 2FA, campus NAT-aware rate limiting |
-| **Publishing Pipeline** | MathJax 3 SVG · Dual-Theme Static Mermaid · `subset-font` | Build-time light/dark SVG diagrams and physics math rendering, per-page glyph extraction into lightweight WOFF2 subsets |
+| **Publishing Pipeline** | docstream · Shiki · `subset-font` | Articles drawn as HTML at build time by docstream, the kernel the AI answers, the knowledge board and the blog share: formulas and Mermaid diagrams as SVG in the colour of the text, per-page glyph extraction into lightweight WOFF2 subsets |
 
 ### Three Engineering Invariants
 
@@ -227,7 +227,7 @@ npm run dev
 npm run typecheck      # Strict Astro & TypeScript type checking
 npm run test:campus    # Domain model, 36 cross-platform golden vectors & PWA tests (76 tests)
 npm run test:platform  # Zero-trust auth, concurrency quotas, TOTP & replay tests (83 tests)
-npm run test:site      # Built HTML, dual-theme Mermaid, MathJax & link integrity tests (18 tests)
+npm run test:site      # Article drawing, built HTML, diagrams, formulas & link integrity tests (19 tests)
 ```
 
 ---

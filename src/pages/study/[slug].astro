@@ -1,12 +1,13 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
+import { renderArticle } from '../../site/article';
 import SiteLayout from '../../site/SiteLayout.astro';
 export async function getStaticPaths() {
   const entries = await getCollection('study', ({ data }) => data.status === 'published');
   return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 const { entry } = Astro.props;
-const { Content } = await render(entry);
+const body = await renderArticle(entry);
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="study">
   <article class="detail-wrap">
@@ -37,6 +38,6 @@ const { Content } = await render(entry);
         </audio>
       </div>
     )}
-    <div class="prose"><Content /></div>
+    <div class="prose" set:html={body} />
   </article>
 </SiteLayout>

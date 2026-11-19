@@ -8,7 +8,7 @@ import subsetFont from 'subset-font';
 const source = new URL('../../assets/fonts/WenKaiGBScreen-v1.522.woff2', import.meta.url);
 const license = new URL('../../assets/fonts/OFL.txt', import.meta.url);
 const family = 'StuDev WenKai';
-const excluded = new Set(['head', 'script', 'style', 'noscript', 'pre', 'code', 'svg', 'mjx-container']);
+const excluded = new Set(['head', 'script', 'style', 'noscript', 'pre', 'code', 'svg']);
 
 function characters(text) {
   return new Set([...text.replace(/\s+/gu, ' ')]);

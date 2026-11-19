@@ -144,7 +144,7 @@ flowchart TB
 | **三维空间与地图** | MapLibre GL · PMTiles · Blender 3D · QGIS | 129 栋校园建筑三维模型、564 间教室室内剖面、楼层与时间轴联动染色 |
 | **端侧检索与寻路** | Rust · WebAssembly · Android NDK (CMake / JNI) | [`wasm-search`](https://github.com/hicancan/wasm-search) 无后端 BM25 全文检索与 [`wayfind`](https://github.com/hicancan/wayfind) 离线步行寻路 |
 | **社团协作平台** | Edge Functions · KV / Blob · `@noble/hashes` (`scrypt`) | 乐观并发控制、防重放单次轮转刷新令牌、TOTP 双因素认证、校园网共享 NAT 精细化限流 |
-| **出版与编译工具链** | MathJax 3 SVG · Mermaid 双主题预渲染 · `subset-font` | 构建期静态生成亮/暗双色矢量图表与数学公式，按页提取字符集生成轻量 WebFont |
+| **出版与编译工具链** | docstream · Shiki · `subset-font` | 文章在构建期由 docstream 排成 HTML，公式与 Mermaid 图表直出随主题变色的 SVG，与 AI 回答、知识板块和博客同一个内核；按页提取字符集生成轻量 WebFont |
 
 ### 核心工程设计
 
@@ -225,7 +225,7 @@ npm run dev
 npm run typecheck      # Astro & TypeScript 全量严格类型检查
 npm run test:campus    # 校园时空模型、36 组跨端黄金测试向量与 PWA 单元测试 (76 项)
 npm run test:platform  # 身份安全、并发配额、TOTP 与防重放攻击测试集 (83 项)
-npm run test:site      # 静态构建产物、双主题图表、数学公式与全站链接契约校验 (18 项)
+npm run test:site      # 文章排版、静态构建产物、图表与公式、全站链接契约校验 (19 项)
 ```
 
 ---

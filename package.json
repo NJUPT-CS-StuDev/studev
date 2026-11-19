@@ -34,46 +34,27 @@
     "@aws-sdk/client-s3": "^3.1161.0",
     "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@edgeone/pages-blob": "^0.0.17",
-    "@hackmd/js-sequence-diagrams": "^0.0.1-alpha.3",
     "@local-runtime-mcp/browser-extension": "https://github.com/hicancan/local-runtime-mcp/releases/download/v14.2.0/local-runtime-mcp-web-sdk-14.2.0.tgz",
     "@noble/hashes": "^2.4.0",
     "astro": "^7.4.12",
-    "docstream": "https://github.com/hicancan/docstream/releases/download/v0.5.1/docstream-0.5.1.tgz",
-    "flowchart.js": "^1.18.1",
+    "docstream": "https://github.com/hicancan/docstream/releases/download/v0.9.1/docstream-0.9.1.tgz",
     "lucide-react": "^1.66.0",
     "maplibre-gl": "^6.16.0",
-    "mathjax-full": "^3.2.1",
     "pmtiles": "^4.5.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "rehype-github-alerts": "^4.2.0",
-    "rehype-mathjax": "^7.1.0",
-    "remark-gfm": "^4.0.1",
-    "remark-math-extended": "^6.1.1",
     "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v5.0.2/wasm-search-5.0.2.tgz",
     "wayfind": "https://github.com/hicancan/wayfind/releases/download/v0.3.1/wayfind-0.3.1.tgz"
   },
-  "overrides": {
-    "@xmldom/xmldom": "^0.9.12",
-    "@mermaid-js/mermaid-cli": {
-      "katex": "^0.18.10"
-    },
-    "micromark-extension-math-extended": {
-      "katex": "^0.18.10"
-    }
-  },
   "allowScripts": {
-    "esbuild": true,
-    "puppeteer": true
+    "esbuild": true
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
-    "@mermaid-js/mermaid-cli": "12.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
-    "@types/raphael": "^2.3.10",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "esbuild": "^0.28.2",

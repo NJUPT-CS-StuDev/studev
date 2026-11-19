@@ -1,5 +1,6 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
+import { renderArticle } from '../../site/article';
 import SiteLayout from '../../site/SiteLayout.astro';
 
 export async function getStaticPaths() {
@@ -8,7 +9,7 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
-const { Content } = await render(entry);
+const body = await renderArticle(entry);
 ---
 <SiteLayout title={`${entry.data.title} — StuDev`} description={entry.data.description} active="develop">
   <article class="detail-wrap">
@@ -42,6 +43,6 @@ const { Content } = await render(entry);
       )}
       <a class="project-btn project-btn-secondary" href={entry.data.repository} target="_blank" rel="noopener noreferrer">GitHub 源码 ↗</a>
     </div>
-    <div class="prose"><Content /></div>
+    <div class="prose" set:html={body} />
   </article>
 </SiteLayout>

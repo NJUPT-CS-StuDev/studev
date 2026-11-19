@@ -136,7 +136,6 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .prose .article-figure img { margin: 0 auto; }
 .prose figcaption { max-width: 640px; margin: 12px auto 0; color: var(--muted); font-size: .88rem; line-height: 1.65; text-align: center; }
 .prose mark { padding: 0 2px; color: inherit; background: var(--mark); }
-.prose kbd { padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--kbd); font: .83em ui-monospace, Consolas, monospace; }
 .prose blockquote {
   margin: 28px 0;
   padding: 12px 20px;
@@ -153,18 +152,10 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .prose .markdown-alert-important { border-left-color: var(--shop); background: var(--alert-important); }
 .prose .task-list-item { list-style: none; margin-left: -22px; }
 .prose .task-list-item input { margin-right: 8px; accent-color: var(--blue); }
-.prose mjx-container { display: inline-block; vertical-align: -0.22ex; line-height: 0; margin: 0 0.15em; max-width: 100%; }
-.prose mjx-container svg { vertical-align: middle; }
-.prose mjx-container[display="true"] { display: block; text-align: center; margin: 1.6em auto; overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; -webkit-overflow-scrolling: touch; }
-.prose mjx-container[display="true"] > svg { display: inline-block; margin: auto; max-width: none; }
-.prose .diagram-panel { margin: 30px 0; padding: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--diagram-bg); }
-.prose .diagram-panel svg { margin: auto; max-width: none; }
-.diagram-static .diagram-dark { display: none; }
-.diagram-static { letter-spacing: normal; font-synthesis: none; }
-.prose .diagram-static p { text-align: center; overflow-wrap: normal; letter-spacing: normal; }
-html[data-theme='dark'] .diagram-static .diagram-light { display: none; }
-html[data-theme='dark'] .diagram-static .diagram-dark { display: block; }
-html[data-theme='dark'] .prose .diagram-panel[data-diagram='sequence'] svg { filter: invert(1) hue-rotate(180deg); }
+.prose .math svg { display: inline; max-width: none; height: auto; overflow: visible; }
+.prose .math-display { display: block; margin: 1.6em 0; padding: .4em 0; overflow-x: auto; overflow-y: hidden; text-align: center; -webkit-overflow-scrolling: touch; }
+.prose figure.diagram { margin: 30px 0; padding: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--diagram-bg); text-align: center; }
+.prose figure.diagram svg { display: inline-block; max-width: none; height: auto; width: max(min(100%, calc(var(--w) * 1px)), calc(var(--w) * .72px)); }
 .prose code { padding: 2px 5px; border-radius: 3px; background: var(--inline-code); font-family: var(--font-mono); font-size: .9em; }
 .prose pre { overflow-x: auto; padding: 18px 20px; background: var(--code-block) !important; border: 1px solid var(--line); border-radius: 4px; }
 .prose pre code { padding: 0; background: transparent; }

@@ -1,14 +1,15 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
+import { renderArticle } from '../site/article';
 import SiteLayout from '../site/SiteLayout.astro';
 const entry = (await getCollection('about')).find((e) => e.id === 'studev');
 if (!entry) throw new Error('src/content/about/studev.md is missing');
-const { Content } = await render(entry);
+const body = await renderArticle(entry);
 ---
 <SiteLayout title="关于 — StuDev" description={entry.data.description} active="about">
   <article class="detail-wrap static-page">
     <p class="eyebrow">认识我们</p>
     <h1>About</h1>
-    <div class="prose"><Content /></div>
+    <div class="prose" set:html={body} />
   </article>
 </SiteLayout>

@@ -7,7 +7,7 @@ const kebab = name => name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}
 export function renderWebTokens(tokens) {
   const aliases = {
     blue: 'var(--brand)', mark: 'color-mix(in srgb, var(--brand) 10%, var(--paper))',
-    kbd: 'var(--surface)', 'inline-code': 'var(--surface-sunken)', 'code-block': 'var(--surface)',
+    'inline-code': 'var(--surface-sunken)', 'code-block': 'var(--surface)',
     'alert-note': 'color-mix(in srgb, var(--brand) 3%, var(--paper))',
     'alert-tip': 'color-mix(in srgb, var(--success) 4%, var(--paper))',
     'alert-warning': 'color-mix(in srgb, var(--warning) 5%, var(--paper))',
