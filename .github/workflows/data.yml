@@ -35,7 +35,7 @@ jobs:
           path: .data/${{ steps.inputs.outputs.map }}
       - uses: actions/cache@v5
         with:
-          key: campus-knowledge-${{ steps.inputs.outputs.knowledge }}-docstream-0.5.1
+          key: campus-knowledge-${{ steps.inputs.outputs.knowledge }}-docstream-${{ steps.inputs.outputs.docstream }}
           path: |
             .data/knowledge-${{ steps.inputs.outputs.knowledge }}
             .data/knowledge-search/${{ steps.inputs.outputs.knowledge }}
@@ -46,7 +46,7 @@ jobs:
           path: public/space/${{ steps.inputs.outputs.previous_map }}
       - uses: actions/cache/restore@v5
         with:
-          key: campus-search-${{ steps.inputs.outputs.previous_search }}-wasm-search-5.0.2
+          key: campus-search-${{ steps.inputs.outputs.previous_search }}-wasm-search-${{ steps.inputs.outputs.wasm_search }}
           path: |
             .data/search
             public/search/${{ steps.inputs.outputs.previous_search }}
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/cache/save@v5
         if: steps.built.outputs.search != steps.inputs.outputs.previous_search
         with:
-          key: campus-search-${{ steps.built.outputs.search }}-wasm-search-5.0.2
+          key: campus-search-${{ steps.built.outputs.search }}-wasm-search-${{ steps.inputs.outputs.wasm_search }}
           path: |
             .data/search
             public/search/${{ steps.built.outputs.search }}

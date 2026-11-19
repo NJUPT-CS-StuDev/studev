@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import product from '../../product.json' with { type: 'json' };
+import manifest from '../../package.json' with { type: 'json' };
 import { validRelease } from '../../src/campus/world/release.ts';
 
 const token = process.env.DATA_TOKEN || spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' }).stdout?.trim();
@@ -15,7 +16,10 @@ const [map, knowledge, data] = await Promise.all([
     latest(process.env.MAP_REPOSITORY || 'hicancan/njupt-map'), latest(process.env.KNOWLEDGE_REPOSITORY || 'hicancan/njupt-knowledge'),
     latest(process.env.DATA_REPOSITORY || (() => { throw new Error('DATA_REPOSITORY is required'); })()),
 ]);
-const values: Record<string, string> = { map, knowledge: knowledge.replace(/^knowledge-/, ''), data: data.replace(/^data-/, ''), previous_map: 'none', previous_search: 'none' };
+// The kernels that make derived files from the releases, by the release tag the dependencies pin: a new kernel makes
+// its files anew.
+const kernel = (name: 'docstream' | 'wasm-search') => /\/releases\/download\/v([^/]+)\//.exec(manifest.dependencies[name])?.[1] ?? (() => { throw new Error(`${name} must be pinned to a release`); })();
+const values: Record<string, string> = { map, knowledge: knowledge.replace(/^knowledge-/, ''), data: data.replace(/^data-/, ''), docstream: kernel('docstream'), wasm_search: kernel('wasm-search'), previous_map: 'none', previous_search: 'none' };
 const response = await fetch(`${product.campusOrigin}/campus-release.json`, { cache: 'no-cache', signal: AbortSignal.timeout(15_000) });
 if (response.ok) {
     const previous: unknown = await response.json();
