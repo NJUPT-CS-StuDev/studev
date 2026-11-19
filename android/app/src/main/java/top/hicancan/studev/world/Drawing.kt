@@ -33,7 +33,10 @@ import top.hicancan.studev.app.Ink
  */
 object Drawings {
     class Formula(val width: Float, val height: Float, val depth: Float, val items: List<JsonObject>, val glyphs: Map<Int, Path>)
-    class Diagram(val x: Float, val y: Float, val width: Float, val height: Float, val items: List<JsonObject>)
+    /** A laid-out diagram, and what it is called and shows for someone who cannot see it. */
+    class Diagram(val x: Float, val y: Float, val width: Float, val height: Float, val items: List<JsonObject>, val title: String, val description: String?) {
+        val said: String get() = listOfNotNull(title, description).joinToString("。")
+    }
 
     private val formulas = LruCache<String, Formula>(300)
     // A one-element array, so that "not a kind laid out" is remembered too.
@@ -56,7 +59,7 @@ object Drawings {
         diagrams.get(source)?.let { return it[0] }
         val laid = top.hicancan.docstream.diagram(source)?.let { text ->
             val json = Json.parseToJsonElement(text).jsonObject
-            Diagram(json.f("x"), json.f("y"), json.f("width"), json.f("height"), json.getValue("items").jsonArray.map { it.jsonObject })
+            Diagram(json.f("x"), json.f("y"), json.f("width"), json.f("height"), json.getValue("items").jsonArray.map { it.jsonObject }, json.s("title"), json["description"]?.jsonPrimitive?.content)
         }
         diagrams.put(source, arrayOf(laid))
         return laid
@@ -117,14 +120,14 @@ fun DrawScope.drawFormula(f: Drawings.Formula, em: Float, baseline: Float, color
  * A diagram, drawn to fit the page's width, never larger than laid out and never so small its words cannot be read:
  * past [SMALLEST] of its size it scrolls sideways instead, as .doc-diagram does on the web.
  */
-@Composable fun DiagramView(d: Drawings.Diagram, source: String, color: Color = Ink.text) {
+@Composable fun DiagramView(d: Drawings.Diagram, color: Color = Ink.text) {
     val density = LocalDensity.current.density
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         val fit = (maxWidth.value / d.width).coerceIn(SMALLEST, 1f)
         val clipped = d.width * fit > maxWidth.value
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(if (clipped) Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()) else Modifier) {
-        Canvas(Modifier.size((d.width * fit).dp, (d.height * fit).dp).semantics { contentDescription = source }) {
+        Canvas(Modifier.size((d.width * fit).dp, (d.height * fit).dp).semantics { contentDescription = d.said }) {
             val unit = density * fit
             val canvas = drawContext.canvas.nativeCanvas
             val ink = color.toArgb()

@@ -170,7 +170,7 @@ public static class Doc
             case "code":
             {
                 var source = Str(block, "text");
-                if (Str(block, "language") == "mermaid" && !writing && Diagram(source) is { } drawn) return DiagramView(drawn, source);
+                if (Str(block, "language") == "mermaid" && !writing && Diagram(source) is { } drawn) return DiagramView(drawn);
                 var head = new Grid { Background = Paint.Brush("surfaceSunken"), Padding = new Thickness(12, 4, 8, 4) };
                 head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 head.Children.Add(Kit.Text(Str(block, "language") is { Length: > 0 } language ? language : "代码", Role.Caption, "muted"));
@@ -324,11 +324,13 @@ public static class Doc
     }
 
     /** A diagram fitted to the width, never larger than laid out, never smaller than `Smallest`; past that it scrolls. */
-    private static FrameworkElement DiagramView(JsonObject d, string source)
+    private static FrameworkElement DiagramView(JsonObject d)
     {
         double x = (double)d["x"]!, y = (double)d["y"]!, width = (double)d["width"]!, height = (double)d["height"]!;
         var canvas = new Canvas { Width = width, Height = height };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(canvas, source);
+        // What the diagram is called and shows, for someone who cannot see it; never its source read aloud.
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(canvas, Str(d, "title"));
+        if (d["description"]?.GetValue<string>() is { } description) Microsoft.UI.Xaml.Automation.AutomationProperties.SetFullDescription(canvas, description);
         foreach (var item in d["items"]!.AsArray())
         {
             if ((string)item!["type"]! == "path")

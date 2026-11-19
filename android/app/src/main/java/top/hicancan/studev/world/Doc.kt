@@ -277,7 +277,7 @@ private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): 
             // The block still being written shows a diagram as its source until it is whole, as Doc in doc.tsx.
             val drawing = if (block.str("language") == "mermaid" && !caret) Drawings.diagram(block.str("text")) else null
             if (drawing != null) {
-                DiagramView(drawing, source = block.str("text"))
+                DiagramView(drawing)
             } else {
                 val clipboard = LocalClipboardManager.current
                 var copied by remember { mutableStateOf(false) }
