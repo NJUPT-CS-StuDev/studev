@@ -103,8 +103,8 @@ graph TD
 
 ### 任务清单
 
-- [ ] **★ 阶梯一 · 观星者（0 门槛）**：注册个人 GitHub Handle，在 StuDev 仓库物理溯源并点亮第一颗 <kbd>Star ⭐️</kbd>
-- [ ] **★★ 阶梯二 · 记录者（动手级）**：新建云端 `my-first-repo`，编写首篇 `README.md` 并完成人生首个 <kbd>Commit</kbd> 提交
+- [ ] **★ 阶梯一 · 观星者（0 门槛）**：注册个人 GitHub Handle，在 StuDev 仓库物理溯源并点亮第一颗 `Star ⭐️`
+- [ ] **★★ 阶梯二 · 记录者（动手级）**：新建云端 `my-first-repo`，编写首篇 `README.md` 并完成人生首个 `Commit` 提交
 - [ ] **★★★ 阶梯三 · 共建者（进阶级）**：审查 StuDev 网站与源码，在 Discussions 发起讨论、提交 Issue 反馈或发起 PR
 
 ---
@@ -116,7 +116,7 @@ graph TD
 #### 步骤 1：注册你的 GitHub Handle
 
 1. 访问 [GitHub 官网 (github.com)](https://github.com)；
-2. 点击右上角 <kbd>Sign up</kbd> 注册账号；
+2. 点击右上角 `Sign up` 注册账号；
 3. **认真选取你的用户名（Username）**：建议使用你的真实英文名、拼音缩写或具有长期辨识度的代号。这个用户名将在未来陪伴你四年的技术成长，成为你在技术社区的终身名片。
 
 ![GitHub 官网首页与注册入口](./images/first-star/01-github-home.png)
@@ -142,7 +142,7 @@ graph TD
 #### 步骤 3：点亮你的第一颗 Star ⭐️
 
 1. 回到 [StuDev 仓库主页](https://github.com/NJUPT-CS-StuDev/studev)；
-2. 找到页面右上角的 <kbd>Star ⭐️</kbd> 按钮，点击点亮。
+2. 找到页面右上角的 `Star ⭐️` 按钮，点击点亮。
 
 ![在 StuDev 仓库主页右上角找到 Star 按钮](./images/first-star/03-repo-explore-and-star.png)
 
@@ -159,10 +159,10 @@ graph TD
 
 #### 步骤 1：创建你的第一个云端仓库
 
-1. 登录你的 GitHub，点击页面右上角头像旁的 <kbd>+</kbd> 按钮，选择 <kbd>New repository</kbd>；
+1. 登录你的 GitHub，点击页面右上角头像旁的 `+` 按钮，选择 `New repository`；
 2. 将仓库命名为 `my-first-repo`（或者任何你想取的英文名称）；
 3. 将可见性设为 **Public**（公开），并务必勾选 **Add a README file**；
-4. 点击绿色的 <kbd>Create repository</kbd> 按钮。
+4. 点击绿色的 `Create repository` 按钮。
 
 ![点击页面右上角加号展开新建仓库菜单](./images/first-star/04-new-repo-entry.png)
 
@@ -170,9 +170,9 @@ graph TD
 
 #### 步骤 2：撰写你的思考，完成首个 Commit
 
-1. 打开自动生成的 `README.md` 文件，点击右上角的 **小铅笔图标**（<kbd>Edit this file</kbd>）；
+1. 打开自动生成的 `README.md` 文件，点击右上角的 **小铅笔图标**（`Edit this file`）；
 2. 在编辑框内，用 Markdown 语法写下一段真诚的大学探索思考；
-3. 滑动到页面底部，点击 <kbd>Commit changes...</kbd> 按钮，留下简短的提交说明（例如：`docs: create my first learning log`），点击确认提交。
+3. 滑动到页面底部，点击 `Commit changes...` 按钮，留下简短的提交说明（例如：`docs: create my first learning log`），点击确认提交。
 
 > [!TIP]
 > **关于首个 Commit 的写作建议**  
@@ -222,7 +222,7 @@ graph TD
 > [!TIP]
 > **进阶极客挑战**  
 > 
-> 如果你本身已有前端或 Markdown 写作经验，更欢迎直接 <kbd>Fork</kbd> 本仓库，修改后向我们提交你的第一个 **Pull Request（PR）**！你的名字将永久留在 StuDev 的贡献者列表里。
+> 如果你本身已有前端或 Markdown 写作经验，更欢迎直接 `Fork` 本仓库，修改后向我们提交你的第一个 **Pull Request（PR）**！你的名字将永久留在 StuDev 的贡献者列表里。
 
 ---
 
