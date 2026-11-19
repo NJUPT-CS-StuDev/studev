@@ -93,6 +93,11 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         kotlinx.coroutines.delay(3600); hinting = false
     }
     var status by remember { mutableStateOf(LocationStatus.Waiting) }
+    // Campus activities marked on this phone or received in a link; a long press starts one, a pin opens one.
+    var events by remember { mutableStateOf(CampusEvents.load(context)) }
+    fun keep(list: List<CampusEvent>) { events = list; CampusEvents.save(context, list) }
+    var draft by remember { mutableStateOf<LatLng?>(null) }
+    var openEvent by remember { mutableStateOf<CampusEvent?>(null) }
     val (access, requestLocation) = rememberLocationPermission { }
     val moment = route.moment?.let { Moment(it.first, it.second) } ?: now
     val isNow = route.moment == null
@@ -160,6 +165,11 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         }
     }
     LaunchedEffect(navigation.open) { if (!navigation.open) { route.nav = null; route.from = null } }
+    LaunchedEffect(route.event, mapRef) {
+        val event = route.event ?: return@LaunchedEffect
+        openEvent = events.firstOrNull { it.id == event.id } ?: event
+        mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(LatLng(event.lat, event.lng), 17.5))
+    }
     val labels = remember(model, scene, classrooms) {
         val active = model ?: return@remember emptyList<LabelInfo>()
         val teaching = classrooms.mapTo(HashSet()) { "${it.campus}/${it.building}" }
@@ -193,11 +203,13 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                         else -> false
                     }
                 },
+                onLongPress = { draft = it },
                 onCamera = { cameraTick++ }, routeState = navigation, onRoute = runtime::choose, modifier = Modifier.fillMaxSize())
             LaunchedEffect(model, mapRef) { val map = mapRef; val data = model; if (map != null && data != null && scene == null) map.style?.let { scene = Scene(map, it, data) } }
             LaunchedEffect(scene, campus.repository.release.map_base) { scene?.let { active -> active.showModels(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Models.load(campus.repository) }) } }
             // Labels are placed over the model at their real height, so they stay on the roofs when the view tilts.
-            val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas, day) {
+            val visible = remember(events, route.event, now.date) { (events + listOfNotNull(route.event?.takeIf { e -> events.none { it.id == e.id } })).filter { !it.over(now.date) } }
+            val placed = remember(cameraTick, scene, labels, freeBy, paints, canvas, day, visible) {
                 val map = mapRef; val active = scene
                 if (map == null || active == null || canvas.width == 0) emptyList() else buildList<Placed> {
                     val camera = map.cameraPosition
@@ -242,6 +254,12 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                             val (x, y) = project(box.centre, active.roomTop)
                             add(Placed(core.kind + box.west, mapOf("stairs" to "楼梯", "wc" to "卫生间", "lift" to "电梯")[core.kind].orEmpty(), null, x.toInt(), y.toInt(), "core", null))
                         }
+                    }
+                    // Activity pins stand on the ground where they were marked, above every other label.
+                    for (event in visible) {
+                        val (x, y) = project(doubleArrayOf(event.lng, event.lat), 0.0)
+                        if (x < -40 || x > canvas.width + 40 || y < 0 || y > canvas.height) continue
+                        add(Placed("event-" + event.id, event.title, null, x.toInt(), y.toInt(), "event") { openEvent = event })
                     }
                 }
             }
@@ -318,7 +336,8 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                         Ruler(state.periods, moment, now) { route.moment = moment.date to it }
                     }
                     Box(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                        Panel(route, state, campus, selected, openBuilding, picked, floor, floors, inBuilding, classrooms, roomById, day, moment, reader, freeBy, runtime, scene, onForm) { snap = it }
+                        Panel(route, state, campus, selected, openBuilding, picked, floor, floors, inBuilding, classrooms, roomById, day, moment, reader, freeBy, runtime, scene, onForm,
+                            events.filter { !it.over(now.date) }.sortedBy { it.at ?: "~" }, onEvent = { event -> openEvent = event; mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(LatLng(event.lat, event.lng), 17.5)) }) { snap = it }
                     }
                 }
             }
@@ -334,6 +353,45 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 if (origin) item { KeyRow(null, "我的位置", onClick = { runtime.origin(null); picker = null }) }
                 items(hits, key = { it.id }) { place -> KeyRow(null, if (place.kind == "room") Names.room(place.id) else place.displayName(campus.byId), place.category, onClick = { if (origin) runtime.origin(place) else runtime.destination(place); picker = null }) }
             }
+        }
+    }
+    draft?.let { at ->
+        val near = remember(at) { CampusEvents.nearest(campus.byId.values, at.longitude, at.latitude) }
+        var title by remember(at) { mutableStateOf("") }
+        var note by remember(at) { mutableStateOf("") }
+        var dayOffset by remember(at) { mutableIntStateOf(0) }
+        var clock by remember(at) { mutableStateOf("19:00") }
+        PlainSheet("标记校园活动", { draft = null }) {
+            Plain(near?.let { "位置：${it.displayName(campus.byId)} 附近" } ?: "位置：地图上长按的地方", 13.5.sp, Ink.muted, modifier = Modifier.padding(bottom = 10.dp))
+            top.hicancan.studev.timetable.Field(title, "活动名称，如：人工智能前沿讲座", Modifier.padding(bottom = 10.dp), big = true) { title = it }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                Choice(listOf("0" to "今天", "1" to "明天", "2" to "后天", "-1" to "不定"), dayOffset.toString()) { dayOffset = it.toInt() }
+                if (dayOffset >= 0) top.hicancan.studev.timetable.Field(clock, "19:00", Modifier.width(96.dp)) { clock = it.filter { c -> c.isDigit() || c == ':' }.take(5) }
+            }
+            top.hicancan.studev.timetable.Field(note, "说明（可选）：报告人、主办方、需要带什么", Modifier.padding(bottom = 14.dp), single = false) { note = it }
+            val time = if (dayOffset < 0) null else Regex("^(\\d{1,2}):(\\d{2})$").find(clock)?.destructured?.let { (h, m) -> h.toInt().takeIf { it < 24 }?.let { hour -> m.toInt().takeIf { it < 60 }?.let { minute -> now.date.plusDays(dayOffset.toLong()).atTime(hour, minute) } } }
+            ActionButton("标记在地图上", go = true, enabled = title.isNotBlank() && (dayOffset < 0 || time != null), modifier = Modifier.fillMaxWidth()) {
+                val event = CampusEvent(java.util.UUID.randomUUID().toString(), title.trim().take(40), at.longitude, at.latitude, near?.id, time?.toString(), note.trim().take(200))
+                keep(events + event); draft = null; openEvent = event
+            }
+        }
+    }
+    openEvent?.let { event ->
+        val kept = events.any { it.id == event.id }
+        val nearPlace = event.near?.let(campus.byId::get)
+        val nearName = nearPlace?.displayName(campus.byId)
+        PlainSheet(event.title, { openEvent = null; if (!kept && route.event?.id == event.id) route.event = null }) {
+            Plain(listOfNotNull(event.time?.let(::eventTime), nearName?.let { "$it 附近" }).joinToString(" · ").ifEmpty { "时间未定" }, 14.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+            if (event.note.isNotBlank()) Plain(event.note, 14.5.sp, modifier = Modifier.padding(bottom = 12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                if (nearPlace != null) ActionButton("去这里", go = true, modifier = Modifier.weight(1f)) { openEvent = null; route.nav = nearPlace.id }
+                ActionButton("分享", modifier = Modifier.weight(1f)) {
+                    val text = CampusEvents.message(BuildConfig.SITE_ORIGIN, event, nearName)
+                    context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text), "分享活动地点"))
+                }
+            }
+            if (kept) KeyRow(null, "删除这个标记", color = marks().danger, onClick = { keep(events.filter { it.id != event.id }); openEvent = null })
+            else KeyRow(null, "收下这个活动", "保存在我的地图上，到时间前都能看到", chevron = true, onClick = { keep(events + event); route.event = null; openEvent = event })
         }
     }
     if (campusOpen) PlainSheet("校区", { campusOpen = false }) {
@@ -357,7 +415,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
 @Composable private fun MapLabel(item: Placed, night: Boolean, free: Color) {
     val text = when {
         item.kind == "teach" -> Ink.text
-        item.kind == "room-picked" -> Ink.paper
+        item.kind == "room-picked" || item.kind == "event" -> Ink.paper
         item.kind == "room-long" -> if (night) Color(0xFF052A23) else Color.White
         item.kind.startsWith("room-busy") || item.kind == "room-other" -> if (night) Color(0xFF7D8186) else Color(0xFF7E8389)
         item.kind.startsWith("room") -> if (night) Color(0xFFC9F4EA) else Color(0xFF0B5C4C)
@@ -370,11 +428,13 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     }.then(when (item.kind) {
         "teach" -> Modifier.clip(RoundedCornerShape(6.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
         "room-picked" -> Modifier.clip(RoundedCornerShape(5.dp)).background(Ink.text).padding(horizontal = 7.dp, vertical = 3.dp)
+        "event" -> Modifier.clip(RoundedCornerShape(12.dp)).background(Ink.brand).padding(horizontal = 9.dp, vertical = 4.dp)
         else -> Modifier
     }).then(if (item.tap != null) Modifier.clickable(onClick = item.tap) else Modifier)
     Row(base) {
-        val size = when { item.kind == "teach" || item.kind == "room-picked" -> 12.sp; item.kind == "core" -> 9.5.sp; item.kind.startsWith("room") || item.kind == "minor" -> 10.5.sp; else -> 11.5.sp }
-        Plain(item.text, size, text, if (item.kind == "teach" || item.kind == "room-picked") FontWeight.SemiBold else FontWeight.Medium, maxLines = 1)
+        if (item.kind == "event") Plain("● ", 10.sp, Ink.paper)
+        val size = when { item.kind == "teach" || item.kind == "room-picked" || item.kind == "event" -> 12.sp; item.kind == "core" -> 9.5.sp; item.kind.startsWith("room") || item.kind == "minor" -> 10.5.sp; else -> 11.5.sp }
+        Plain(item.text, size, text, if (item.kind == "teach" || item.kind == "room-picked" || item.kind == "event") FontWeight.SemiBold else FontWeight.Medium, maxLines = 1)
         item.count?.let { Plain(" $it", 12.sp, if (it > 0) free else Ink.faint, FontWeight.SemiBold) }
     }
 }
@@ -405,7 +465,8 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
 }
 
 @Composable private fun Panel(route: Route, state: AcademicState, campus: CampusPackage, selected: Place?, building: Place?, picked: Place?, floor: Int?, floors: List<Int>, inBuilding: List<Room>, classrooms: List<Room>, roomById: Map<String, Room>,
-                              day: RoomDay?, moment: Moment, reader: RoomReader?, freeBy: Map<String, Pair<Int, Int>>, runtime: NavigationRuntime, scene: Scene?, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onSnap: (Int) -> Unit) {
+                              day: RoomDay?, moment: Moment, reader: RoomReader?, freeBy: Map<String, Pair<Int, Int>>, runtime: NavigationRuntime, scene: Scene?, onForm: (top.hicancan.studev.account.FormRequest) -> Unit,
+                              events: List<CampusEvent>, onEvent: (CampusEvent) -> Unit, onSnap: (Int) -> Unit) {
     val mark = marks()
     fun openRoom(id: String) { route.place = id; route.floor = null; onSnap(1) }
     if (reader == null) return
@@ -501,6 +562,10 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
         }
         if (free != null) item { KeyRow(null, "$free 间空教室", chevron = true, onClick = { route.query = ""; route.scope = "room"; route.within = null; route.tab = "search" }) }
         else item { Plain("暂无这一天的排课数据", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
+        item { Plain(if (events.isEmpty()) "校园活动 · 长按地图任意位置，标记讲座、社团活动的地点" else "校园活动", 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp)) }
+        items(events, key = { "event-" + it.id }) { event ->
+            KeyRow(null, event.title, listOfNotNull(event.time?.let(::eventTime), event.near?.let(campus.byId::get)?.displayName(campus.byId)?.let { "$it 附近" }).joinToString(" · ").ifEmpty { null }, chevron = true, onClick = { onEvent(event) })
+        }
     }
 }
 
@@ -542,4 +607,11 @@ private fun opening(campus: top.hicancan.studev.data.CampusPackage): LatLng {
     val opens = top.hicancan.studev.BuildConfig.CAMPUS_OPENS
     val centre = checkNotNull(campus.byId[opens]?.centre) { "the map data has no $opens" }
     return LatLng(centre[1] - .0002, centre[0] + .0006)
+}
+
+/** When an activity starts, as people say it: 今天 19:00, 明天 14:30, 11月25日 19:00. */
+private fun eventTime(time: java.time.LocalDateTime): String {
+    val days = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), time.toLocalDate())
+    val day = when (days) { 0L -> "今天"; 1L -> "明天"; 2L -> "后天"; else -> "${time.monthValue}月${time.dayOfMonth}日" }
+    return "%s %02d:%02d".format(day, time.hour, time.minute)
 }

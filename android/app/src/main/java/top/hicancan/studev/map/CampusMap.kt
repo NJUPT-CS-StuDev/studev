@@ -105,6 +105,8 @@ internal fun CampusMap(
     onLocationStatus: (LocationStatus) -> Unit,
     onReady: (MapLibreMap, Style) -> Unit,
     onTap: (android.graphics.PointF) -> Boolean,
+    /** A long press on the map, where nothing else takes it: marking an activity there. */
+    onLongPress: (LatLng) -> Unit,
     onCamera: () -> Unit,
     routeState: PlannerState,
     onRoute: (Int) -> Unit,
@@ -116,6 +118,7 @@ internal fun CampusMap(
     val statusCallback by rememberUpdatedState(onLocationStatus)
     val readyCallback by rememberUpdatedState(onReady)
     val tapCallback by rememberUpdatedState(onTap)
+    val longPressCallback by rememberUpdatedState(onLongPress)
     val cameraCallback by rememberUpdatedState(onCamera)
     val currentRoute by rememberUpdatedState(routeState)
     val routeCallback by rememberUpdatedState(onRoute)
@@ -155,6 +158,10 @@ internal fun CampusMap(
                         return@addOnMapClickListener routeHit != null
                     }
                     tapCallback(point)
+                }
+                ready.addOnMapLongClickListener { coordinate ->
+                    if (loadedStyle == null || holder.destroyed || currentRoute.open) return@addOnMapLongClickListener false
+                    longPressCallback(coordinate); true
                 }
             }
         }

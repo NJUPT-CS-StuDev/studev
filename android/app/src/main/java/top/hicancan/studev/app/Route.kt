@@ -24,6 +24,8 @@ class Route {
     var nav by mutableStateOf<String?>(null)
     var from by mutableStateOf<String?>(null)
     var navMode by mutableStateOf("walk")
+    /** A campus activity a shared map link carries, shown until it is kept or dismissed. */
+    var event by mutableStateOf<top.hicancan.studev.map.CampusEvent?>(null)
     var moment by mutableStateOf<Pair<LocalDate, Int>?>(null)
     var query by mutableStateOf("")
     var scope by mutableStateOf("all")
@@ -56,6 +58,7 @@ class Route {
             "/map" -> {
                 place = param("place"); nav = param("nav"); from = param("from"); floor = param("f")?.toIntOrNull()
                 navMode = param("mode")?.takeIf { it == "bike" } ?: "walk"
+                event = top.hicancan.studev.map.CampusEvents.parse(param("event"), param("ll"), param("near"), param("at"), param("note"))
                 moment = param("t")?.let { text -> runCatching { LocalDate.parse(text.take(10)) to (text.drop(11).take(2).toInt() * 60 + text.drop(14).take(2).toInt()) }.getOrNull() }
                 tab = "map"
             }
