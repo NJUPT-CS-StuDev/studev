@@ -103,27 +103,28 @@ public static class Doc
         return null;
     }
 
+    /** Inline content: its text, with display formulas and, when images can be loaded, images on lines of their own. */
+    private static FrameworkElement Content(List<JsonNode> inlines, double size, bool bold, Action<string>? link, Func<string, Task<byte[]?>>? image, bool caret = false)
+    {
+        var hasMedia = inlines.Any(i => (Type(i) == "math" && i["display"]?.GetValue<bool>() == true) || (image is not null && Type(i) == "image"));
+        if (!hasMedia) return Text(inlines, size, bold, link, caret);
+        var column = new StackPanel { Spacing = 6 }; var run = new List<JsonNode>();
+        void Flush() { if (run.Any(r => Type(r) != "text" || Str(r, "text").Trim().Length > 0)) column.Children.Add(Text(run, size, bold, link)); run = []; }
+        foreach (var inline in inlines)
+        {
+            if (Type(inline) == "math" && inline["display"]?.GetValue<bool>() == true) { Flush(); column.Children.Add(MathBlock(Str(inline, "tex"))); }
+            else if (image is not null && Type(inline) == "image") { Flush(); column.Children.Add(PictureBlock(Str(inline, "src"), Str(inline, "alt"), image)); }
+            else run.Add(inline);
+        }
+        Flush();
+        return column;
+    }
+
     private static FrameworkElement Block(JsonNode block, Action<string>? link, bool writing, Func<string, Task<byte[]?>>? image = null)
     {
         switch (Type(block))
         {
-            case "paragraph":
-            {
-                var inlines = List(block, "inlines");
-                var hasMedia = inlines.Any(i => (Type(i) == "math" && i["display"]?.GetValue<bool>() == true) || (image is not null && Type(i) == "image"));
-                if (!hasMedia) return Text(inlines, 16, link: link, caret: writing);
-                // Display math or images amid the text are set on lines of their own.
-                var column = new StackPanel { Spacing = 6 }; var run = new List<JsonNode>();
-                void Flush() { if (run.Any(r => Type(r) != "text" || Str(r, "text").Trim().Length > 0)) column.Children.Add(Text(run, 16, link: link)); run = []; }
-                foreach (var inline in inlines)
-                {
-                    if (Type(inline) == "math" && inline["display"]?.GetValue<bool>() == true) { Flush(); column.Children.Add(MathBlock(Str(inline, "tex"))); }
-                    else if (image is not null && Type(inline) == "image") { Flush(); column.Children.Add(PictureBlock(Str(inline, "src"), Str(inline, "alt"), image)); }
-                    else run.Add(inline);
-                }
-                Flush();
-                return column;
-            }
+            case "paragraph": return Content(List(block, "inlines"), 16, false, link, image, writing);
             case "heading":
             {
                 var heading = Text(List(block, "inlines"), (int)block["level"]! switch { 1 => 20, 2 => 18, _ => 16.5 }, true, link, writing);
@@ -188,24 +189,43 @@ public static class Doc
             case "math": return MathBlock(Str(block, "tex"));
             case "table":
             {
-                var head = block["head"]!.AsArray().Select(c => c!.AsArray().Select(x => x!).ToList()).ToList();
-                var rows = block["rows"]!.AsArray().Select(r => r!.AsArray().Select(c => c!.AsArray().Select(x => x!).ToList()).ToList()).ToList();
-                var align = block["align"]!.AsArray().Select(a => (string)a! switch { "center" => TextAlignment.Center, "right" => TextAlignment.Right, _ => TextAlignment.Left }).ToList();
-                string Plain(List<JsonNode> cell) => string.Concat(cell.Select(i => Type(i) switch { "text" or "code" => Str(i, "text"), "math" => Str(i, "tex"), _ => Plain(List(i, "children")) }));
-                var all = new List<List<List<JsonNode>>> { head }; all.AddRange(rows);
-                var grid = new Grid();
-                for (var c = 0; c < head.Count; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Clamp(all.Max(r => c < r.Count ? Plain(r[c]).Length : 0) * 15 + 28, 72, 240)) });
-                for (var r = 0; r < all.Count; r++)
+                // Every cell at the column docstream gives, spanning its rows and columns. Each column as wide as its widest
+                // cell within reason, a spanning cell widening the columns it covers when they are too narrow for it.
+                var head = block["head"]!.AsArray().Count;
+                var rows = block["head"]!.AsArray().Concat(block["body"]!.AsArray()).Select(r => r!.AsArray().Select(c => c!).ToList()).ToList();
+                var columns = block["columns"]!.GetValue<int>();
+                int Span(JsonNode cell, string key) => cell[key]?.GetValue<int>() ?? 1;
+                string Plain(List<JsonNode> inlines) => string.Concat(inlines.Select(i => Type(i) switch { "text" or "code" => Str(i, "text"), "math" => Str(i, "tex"), "break" => "\n", _ => Plain(List(i, "children")) }));
+                int Wants(JsonNode cell)
                 {
-                    grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    var ground = new Border { Background = r == 0 ? Paint.Brush("surfaceSunken") : Paint.Clear, BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, r < rows.Count ? 1 : 0) };
-                    Grid.SetRow(ground, r); Grid.SetColumnSpan(ground, Math.Max(1, head.Count)); grid.Children.Add(ground);
-                    for (var c = 0; c < head.Count; c++)
+                    var inlines = List(cell, "inlines");
+                    var text = (Plain(inlines).Split('\n').Max(l => (int?)l.Length) ?? 0) * 15 + 28;
+                    return image is not null && inlines.Any(i => Type(i) == "image") ? Math.Max(text, 200) : text;
+                }
+                var cells = rows.SelectMany((row, r) => row.Select(cell => (cell, row: r, column: cell["column"]!.GetValue<int>(), down: Span(cell, "rowSpan"), across: Span(cell, "colSpan")))).ToList();
+                var widths = Enumerable.Repeat(72, columns).ToArray();
+                foreach (var c in cells.Where(c => c.across == 1)) widths[c.column] = Math.Max(widths[c.column], Math.Clamp(Wants(c.cell), 72, 240));
+                foreach (var c in cells.Where(c => c.across > 1))
+                {
+                    var end = Math.Min(columns, c.column + c.across);
+                    var shortBy = Math.Min(Wants(c.cell), 240 * c.across) - Enumerable.Range(c.column, end - c.column).Sum(i => widths[i]);
+                    if (shortBy > 0) for (var i = c.column; i < end; i++) widths[i] += shortBy / c.across;
+                }
+                var grid = new Grid();
+                foreach (var width in widths) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+                foreach (var _ in rows) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                foreach (var c in cells)
+                {
+                    var header = c.cell["header"]?.GetValue<bool>() == true || c.row < head;
+                    var content = Content(List(c.cell, "inlines"), 14, header, link, image);
+                    if (content is RichTextBlock text) text.TextAlignment = (string?)c.cell["align"] switch { "center" => TextAlignment.Center, "right" => TextAlignment.Right, _ => TextAlignment.Left };
+                    var ground = new Border
                     {
-                        var text = Text(c < all[r].Count ? all[r][c] : [], 14, r == 0, link);
-                        text.TextAlignment = c < align.Count ? align[c] : TextAlignment.Left; text.Margin = new Thickness(12, 8, 12, 8);
-                        Grid.SetRow(text, r); Grid.SetColumn(text, c); grid.Children.Add(text);
-                    }
+                        Background = header ? Paint.Brush("surfaceSunken") : Paint.Clear, BorderBrush = Paint.Brush("line"), Padding = new Thickness(12, 8, 12, 8), Child = content,
+                        BorderThickness = new Thickness(0, 0, c.column + c.across < columns ? 1 : 0, c.row + c.down < rows.Count ? 1 : 0),
+                    };
+                    Grid.SetRow(ground, c.row); Grid.SetColumn(ground, c.column); Grid.SetRowSpan(ground, c.down); Grid.SetColumnSpan(ground, c.across);
+                    grid.Children.Add(ground);
                 }
                 var scroll = new ScrollViewer { Content = grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
                 return new Border { CornerRadius = new CornerRadius(10), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), Child = scroll, HorizontalAlignment = HorizontalAlignment.Left };

@@ -3,12 +3,12 @@
 // kept while its key is the same, so text streaming in redraws only the block being written. Formulas are typeset and
 // Mermaid diagrams laid out by the same kernel, as SVG in the colour of the text around them.
 import { createContext, memo, useContext, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
-import { diagram, initialize, math, read, Stream, type Block, type Inline, type Keyed, type Update } from 'docstream';
+import { diagram, initialize, math, read, Stream, type Block, type Cell, type Inline, type Keyed, type Update } from 'docstream';
 
 let ready: Promise<void> | undefined;
 /** The kernel, loaded once. */
 export const docReady = () => ready ??= initialize().catch(error => { ready = undefined; throw error; });
-export { read as readDoc, Stream as DocStream, type Block, type Inline, type Keyed, type Update };
+export { read as readDoc, Stream as DocStream, type Block, type Cell, type Inline, type Keyed, type Update };
 
 /** What the kernel drew, kept by what it was drawn from: a streamed answer draws the same formula many times over. */
 const drawn = new Map<string, string | undefined>();
@@ -104,10 +104,13 @@ function BlockView({ block, writing = false }: { block: Block; writing?: boolean
         }
         case 'code': return block.language === 'mermaid' && !writing ? <Diagram text={block.text} /> : <CodeView language={block.language} text={block.text} />;
         case 'math': return <Tex tex={block.tex} display />;
-        case 'table': return <div className="doc-table"><table>
-            <thead><tr>{block.head.map((cell, at) => <th key={at} style={{ textAlign: block.align[at] === 'none' ? undefined : block.align[at] }}><Inlines inlines={cell} /></th>)}</tr></thead>
-            <tbody>{block.rows.map((row, r) => <tr key={r}>{row.map((cell, at) => <td key={at} style={{ textAlign: block.align[at] === 'none' ? undefined : block.align[at] }}><Inlines inlines={cell} /></td>)}</tr>)}</tbody>
-        </table></div>;
+        case 'table': {
+            const rows = (rows: Cell[][]) => rows.map((row, r) => <tr key={r}>{row.map((cell, at) => {
+                const Tag = cell.header ? 'th' : 'td';
+                return <Tag key={at} rowSpan={cell.rowSpan} colSpan={cell.colSpan} style={cell.align && cell.align !== 'none' ? { textAlign: cell.align } : undefined}><Inlines inlines={cell.inlines} /></Tag>;
+            })}</tr>);
+            return <div className="doc-table"><table>{block.head.length > 0 && <thead>{rows(block.head)}</thead>}<tbody>{rows(block.body)}</tbody></table></div>;
+        }
         case 'rule': return <hr />;
         case 'html': return <pre className="doc-html">{block.text}</pre>;
     }

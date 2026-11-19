@@ -63,10 +63,17 @@ describe('documents drawn from the released kernel', () => {
     });
 
     it('keeps unsupported diagrams and raw HTML readable without executing them', () => {
-        const html = renderToStaticMarkup(<DocText text={'```mermaid\ngitGraph\n  commit\n```\n\n<img src=x onerror="alert(1)">'} />);
+        const html = renderToStaticMarkup(<DocText text={'```mermaid\ngitGraph\n  commit\n```\n\n<img src=x onerror="alert(1)">\n\n<script>alert(1)</script>'} />);
         expect(html).toContain('gitGraph');
         expect(html).not.toContain('<figure');
-        expect(html).not.toContain('<img');
-        expect(html).toContain('&lt;img');
+        expect(html).not.toContain('onerror');
+        expect(html).not.toContain('<script');
+        expect(html).toContain('&lt;script&gt;');
+    });
+
+    it('draws HTML tables with cells spanning rows and columns', () => {
+        const html = renderToStaticMarkup(<DocText text={'<table><tr><th>项</th><th>值</th></tr><tr><td rowSpan="2">H<sub>2</sub>O</td><td>$x$</td></tr><tr><td>b</td></tr></table>'} />);
+        expect(html).toContain('<thead><tr><th>项</th><th>值</th></tr></thead>');
+        expect(html).toContain('<td rowSpan="2">H<sub>2</sub>O</td>');
     });
 });

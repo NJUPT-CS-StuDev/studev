@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -28,6 +29,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -39,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -217,6 +220,85 @@ private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): 
     }
 }
 
+/** One table cell's content: its text, with display formulas and, when images can be loaded, images on lines of their own. */
+@Composable private fun CellContent(inlines: List<JsonObject>, header: Boolean, align: TextAlign?, onLink: (String) -> Unit, imageBytes: (suspend (String) -> ByteArray?)?) {
+    val weight = if (header) FontWeight.SemiBold else FontWeight.Normal
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        displayRuns(inlines, imageBytes != null).forEach { run ->
+            when (run) {
+                is Run.Display -> MathBlock(run.tex, 14.sp)
+                is Run.Picture -> PictureBlock(run.src, run.alt, imageBytes!!)
+                is Run.Text -> InlineText(run.inlines, size = 14f, weight = weight, onLink = onLink, align = align)
+            }
+        }
+    }
+}
+
+/**
+ * A table as docstream gives it: every cell at the column it starts in, spanning its rows and columns. Each column is as
+ * wide as its widest cell within reason, a spanning cell widening the columns it covers when they are too narrow for it;
+ * each row as tall as its tallest cell, a cell spanning rows lengthening the last of them. A wide table scrolls sideways.
+ */
+@Composable private fun TableBlock(block: JsonObject, onLink: (String) -> Unit, imageBytes: (suspend (String) -> ByteArray?)?) {
+    val shape = RoundedCornerShape(10.dp)
+    class Placed(val cell: JsonObject, val row: Int, val column: Int, val rows: Int, val columns: Int)
+    val head = block.getValue("head").jsonArray.size
+    val all = (block.getValue("head").jsonArray + block.getValue("body").jsonArray).map { row -> row.jsonArray.map { it.jsonObject } }
+    val count = block.getValue("columns").jsonPrimitive.int
+    val cells = all.flatMapIndexed { r, row -> row.map { cell ->
+        fun span(key: String) = cell[key]?.jsonPrimitive?.intOrNull ?: 1
+        Placed(cell, r, cell.getValue("column").jsonPrimitive.int, span("rowSpan"), span("colSpan"))
+    } }
+    fun plain(inlines: List<JsonObject>): String = inlines.joinToString("") { inline -> when (inline.type) { "text", "code" -> inline.str("text"); "math" -> inline.str("tex"); else -> plain(inline.list("children")) } }
+    fun wants(cell: JsonObject): Int {
+        val inlines = cell.list("inlines")
+        val text = (plain(inlines).lines().maxOfOrNull { it.length } ?: 0) * 15 + 28
+        return if (imageBytes != null && inlines.any { it.type == "image" }) maxOf(text, 200) else text
+    }
+    val widths = IntArray(count) { 72 }
+    cells.filter { it.columns == 1 }.forEach { widths[it.column] = maxOf(widths[it.column], wants(it.cell).coerceIn(72, 240)) }
+    cells.filter { it.columns > 1 }.forEach { placed ->
+        val covered = placed.column until minOf(count, placed.column + placed.columns)
+        val short = wants(placed.cell).coerceAtMost(240 * placed.columns) - covered.sumOf { widths[it] }
+        if (short > 0) covered.forEach { widths[it] += short / placed.columns }
+    }
+    val line = Ink.line; val sunken = Ink.sunken
+    Layout(
+        content = {
+            cells.forEach { placed ->
+                val header = placed.cell["header"]?.jsonPrimitive?.booleanOrNull == true
+                val align = when (placed.cell["align"]?.jsonPrimitive?.content) { "center" -> TextAlign.Center; "right" -> TextAlign.End; "left" -> TextAlign.Start; else -> null }
+                val bottom = placed.row + placed.rows < all.size; val right = placed.column + placed.columns < count
+                Box(Modifier
+                    .then(if (header || placed.row < head) Modifier.background(sunken) else Modifier)
+                    .drawBehind {
+                        val stroke = 1.dp.toPx()
+                        if (bottom) drawLine(line, Offset(0f, size.height - stroke / 2), Offset(size.width, size.height - stroke / 2), stroke)
+                        if (right) drawLine(line, Offset(size.width - stroke / 2, 0f), Offset(size.width - stroke / 2, size.height), stroke)
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    CellContent(placed.cell.list("inlines"), header || placed.row < head, align, onLink, imageBytes)
+                }
+            }
+        },
+        modifier = Modifier.clip(shape).border(1.dp, line, shape).horizontalScroll(rememberScrollState()),
+    ) { measurables, _ ->
+        val x = IntArray(count + 1).also { for (c in 0 until count) it[c + 1] = it[c] + widths[c].dp.roundToPx() }
+        fun width(p: Placed) = x[minOf(count, p.column + p.columns)] - x[p.column]
+        val heights = IntArray(all.size)
+        val wanted = measurables.mapIndexed { i, m -> m.minIntrinsicHeight(width(cells[i])) }
+        cells.forEachIndexed { i, p -> if (p.rows == 1) heights[p.row] = maxOf(heights[p.row], wanted[i]) }
+        cells.forEachIndexed { i, p ->
+            val last = p.row + p.rows - 1
+            val short = wanted[i] - (p.row..last).sumOf { heights[it] }
+            if (p.rows > 1 && short > 0) heights[last] += short
+        }
+        val y = IntArray(all.size + 1).also { for (r in all.indices) it[r + 1] = it[r] + heights[r] }
+        val placeables = measurables.mapIndexed { i, m -> val p = cells[i]; m.measure(Constraints.fixed(width(p), y[p.row + p.rows] - y[p.row])) }
+        layout(x[count], y[all.size]) { placeables.forEachIndexed { i, placeable -> placeable.place(x[cells[i].column], y[cells[i].row]) } }
+    }
+}
+
 @Composable private fun BlockView(block: JsonObject, onLink: (String) -> Unit, caret: Boolean = false, imageBytes: (suspend (String) -> ByteArray?)? = null) {
     val shape = RoundedCornerShape(10.dp)
     when (block.type) {
@@ -291,26 +373,7 @@ private fun displayRuns(inlines: List<JsonObject>, hasImages: Boolean = false): 
             }
         }
         "math" -> MathBlock(block.str("tex"), 16.sp)
-        "table" -> {
-            val head = block.getValue("head").jsonArray.map { cell -> cell.jsonArray.map { it.jsonObject } }
-            val rows = block.getValue("rows").jsonArray.map { row -> row.jsonArray.map { cell -> cell.jsonArray.map { it.jsonObject } } }
-            val align = block.getValue("align").jsonArray.map { when (it.jsonPrimitive.content) { "center" -> TextAlign.Center; "right" -> TextAlign.End; else -> TextAlign.Start } }
-            fun plain(cell: List<JsonObject>): String = cell.joinToString("") { inline -> when (inline.type) { "text", "code" -> inline.str("text"); "math" -> inline.str("tex"); else -> plain(inline.list("children")) } }
-            // Each column as wide as its widest cell, within reason; a wide table scrolls sideways.
-            val widths = head.indices.map { column -> ((listOf(head) + rows).maxOf { row -> row.getOrNull(column)?.let(::plain)?.length ?: 0 } * 15 + 28).coerceIn(72, 240).dp }
-            Column(Modifier.clip(shape).border(1.dp, Ink.line, shape).horizontalScroll(rememberScrollState())) {
-                (listOf(head) + rows).forEachIndexed { r, row ->
-                    Row(Modifier.then(if (r == 0) Modifier.background(Ink.sunken) else Modifier)) {
-                        head.indices.forEach { column ->
-                            Box(Modifier.width(widths[column]).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                                InlineText(row.getOrNull(column).orEmpty(), size = 14f, weight = if (r == 0) FontWeight.SemiBold else FontWeight.Normal, onLink = onLink, align = align.getOrNull(column))
-                            }
-                        }
-                    }
-                    if (r < rows.size) HorizontalDivider(color = Ink.line)
-                }
-            }
-        }
+        "table" -> TableBlock(block, onLink, imageBytes)
         "rule" -> HorizontalDivider(color = Ink.line)
         "html" -> Plain(block.str("text"), 13.sp, Ink.muted)
     }

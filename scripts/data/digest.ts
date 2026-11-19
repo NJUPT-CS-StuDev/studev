@@ -287,7 +287,7 @@ async function knowledgeDocuments(dir: string, index: KnowledgeIndex): Promise<{
         if ('inlines' in block) return (block.type === 'heading' && markdown ? '#'.repeat(block.level) + ' ' : '') + inlines(block.inlines, markdown);
         if (block.type === 'math') return markdown ? `$$\n${block.tex}\n$$` : block.tex;
         if (block.type === 'code') return markdown ? `\`\`\`${block.language}\n${block.text}\n\`\`\`` : block.text;
-        if (block.type === 'table') return [block.head, ...block.rows].map(row => row.map(cell => inlines(cell, markdown)).join(' | ')).join('\n');
+        if (block.type === 'table') return [...block.head, ...block.body].map(row => row.map(cell => inlines(cell.inlines, markdown)).join(' | ')).join('\n');
         if ('blocks' in block) return text(block.blocks, markdown);
         if (block.type === 'list') return block.items.map(item => text(item.blocks, markdown)).join('\n');
         return 'text' in block ? block.text : '';
