@@ -37,7 +37,7 @@
     "@local-runtime-mcp/browser-extension": "https://github.com/hicancan/local-runtime-mcp/releases/download/v14.2.0/local-runtime-mcp-web-sdk-14.2.0.tgz",
     "@noble/hashes": "^2.4.0",
     "astro": "^7.4.12",
-    "docstream": "https://github.com/hicancan/docstream/releases/download/v0.9.1/docstream-0.9.1.tgz",
+    "docstream": "https://github.com/hicancan/docstream/releases/download/v0.11.0/docstream-0.11.0.tgz",
     "lucide-react": "^1.66.0",
     "maplibre-gl": "^6.16.0",
     "pmtiles": "^4.5.0",

@@ -63,8 +63,8 @@ describe('documents drawn from the released kernel', () => {
     });
 
     it('keeps unsupported diagrams and raw HTML readable without executing them', () => {
-        const html = renderToStaticMarkup(<DocText text={'```mermaid\nclassDiagram\n  class Animal\n```\n\n<img src=x onerror="alert(1)">'} />);
-        expect(html).toContain('classDiagram');
+        const html = renderToStaticMarkup(<DocText text={'```mermaid\ngitGraph\n  commit\n```\n\n<img src=x onerror="alert(1)">'} />);
+        expect(html).toContain('gitGraph');
         expect(html).not.toContain('<figure');
         expect(html).not.toContain('<img');
         expect(html).toContain('&lt;img');
