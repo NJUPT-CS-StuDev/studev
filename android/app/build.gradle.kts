@@ -148,9 +148,12 @@ val packageWorld = tasks.register<WorldTask>("packageWorld") {
 val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtures") {
     val manifest = rootProject.layout.projectDirectory.file("../src/data/campus-release.json")
     inputs.file(manifest)
-    from(provider {
-        val metadata = JsonSlurper().parse(manifest.asFile) as Map<*, *>
-        rootProject.file("../public/data/${metadata["version"]}")
+    // Read through providers.fileContents so a reused configuration cache follows a newly pulled snapshot
+    // instead of copying from the release it was configured with.
+    val releases = rootProject.file("../public/data")
+    from(providers.fileContents(manifest).asText.map { text ->
+        val metadata = JsonSlurper().parseText(text) as Map<*, *>
+        releases.resolve(metadata["version"].toString())
     }) {
         include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/*.json")
         include("knowledge/knowledge.json", "curriculum/courses.json")
