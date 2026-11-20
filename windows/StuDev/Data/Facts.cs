@@ -23,7 +23,7 @@ public sealed record ExamCourse(string? Code, string Name);
 public sealed record Exam(string Id, List<string> Classes, ExamCourse Course, string? Teacher, string? Campus, string Location, string? Room, string Date, string Start, string End,
     int? Students, string? Note, string Source, string Kind, string Subtype);
 public sealed record ExamSource(string File, string Url, string Notice, string Title, string? Published = null);
-public sealed record ExamVersion(string Id, string? Observed, string? Published, bool Baseline, List<ExamSource> Files);
+public sealed record ExamVersion(string Id, string? Observed, string Published, bool Baseline, List<ExamSource> Files);
 public sealed record ExamSlot(string Date, string Start, string End, string? Campus, string? Location, string? Teacher, int? Students, string? Note = null);
 public sealed record ExamChange(string Version, string? Observed, ExamCourse Course, string Change, List<ExamSlot>? Before, List<ExamSlot>? After);
 public sealed record ClassExams(List<Exam> Exams, List<ExamChange> Changes);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ExamRecord } from '@/world/data';
 import type { ExamSource } from '@/world/facts';
-import { CHANGE_NAMES, changeLines, examFileName, examHistory, examImpact, examTime, examVersionTime } from '@/world/exams';
+import { CHANGE_NAMES, changeLines, examFileName, examHistory, examImpact, examTime, examVersionSeen, examVersionTime } from '@/world/exams';
 import { courseName } from '@/world/names';
 
 export function ExamSources({ files }: { files: ExamSource[] }) {
@@ -44,7 +44,7 @@ export function ExamHistory({ record }: { record: ExamRecord }) {
                 <span className="xversion-node" aria-hidden="true" />
                 <div className="xversion-card">
                     <button className="xversion-head" aria-expanded={open} onClick={() => choose({ record, id: version.id })}>
-                        <span><strong>{examVersionTime(version)}</strong>{current && <span className="xcurrent">当前版本</span>}<small>{examImpact(version.baseline, version.changes)}</small></span>
+                        <span><strong>{examVersionTime(version)}</strong>{current && <span className="xcurrent">当前版本</span>}<small>{[examImpact(version.baseline, version.changes), examVersionSeen(version)].filter(Boolean).join(' · ')}</small></span>
                         <span className="xversion-chevron" aria-hidden="true">{open ? '⌃' : '⌄'}</span>
                     </button>
                     {open && <div className="xversion-detail">

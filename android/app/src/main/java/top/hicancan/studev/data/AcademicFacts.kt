@@ -56,7 +56,7 @@ internal fun appRuntime(text: String): AppRuntime = kotlinx.serialization.json.J
 @Serializable data class LabIndex(val classes: List<String>)
 @Serializable data class ClassLabs(val labs: List<Lab>)
 @Serializable data class ExamSource(val file: String, val url: String, val notice: String, val title: String, val published: String? = null)
-@Serializable data class ExamVersion(val id: String, val observed: String?, val published: String?, val baseline: Boolean, val files: List<ExamSource>)
+@Serializable data class ExamVersion(val id: String, val observed: String?, val published: String, val baseline: Boolean, val files: List<ExamSource>)
 @Serializable data class ExamIndex(val classes: List<String>, val sources: List<ExamSource>, val checked: String?, val history: List<ExamVersion>)
 @Serializable data class ExamSlot(val date: String, val start: String, val end: String, val campus: String? = null, val location: String? = null, val teacher: String? = null, val students: Int? = null, val note: String? = null)
 @Serializable data class ExamChange(val version: String, val observed: String?, @SerialName("class") val klass: String, val course: ExamCourse, val change: String, val before: List<ExamSlot>? = null, val after: List<ExamSlot>? = null)

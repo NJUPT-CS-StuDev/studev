@@ -5,7 +5,7 @@ namespace StuDev.World;
 /** Public exam versions and their selected class's impact; the TypeScript implementation owns the answers. */
 public static class Exams
 {
-    public sealed record Version(string Id, string? Observed, string? Published, bool Baseline, List<ExamSource> Files, List<ExamChange> Changes);
+    public sealed record Version(string Id, string? Observed, string Published, bool Baseline, List<ExamSource> Files, List<ExamChange> Changes);
     public static List<Version> History(ExamRecord record) => record.History.Select(version => new Version(version.Id, version.Observed, version.Published, version.Baseline, version.Files, record.Changes.Where(change => change.Version == version.Id).ToList())).Reverse().ToList();
     public static string Impact(bool baseline, List<ExamChange> changes) => baseline ? "首次记录" : changes.Count > 0 ? $"本班 {changes.Count} 门考试有变动" : "本次更新未影响本班";
     public static string Time(string value)
@@ -14,8 +14,10 @@ public static class Exams
         var local = CampusDay.At(DateTimeOffset.Parse(value, System.Globalization.CultureInfo.InvariantCulture));
         return $"{local.Month}月{local.Day}日 {local:HH:mm}";
     }
-    public static string VersionTime(ExamVersion version) => version.Observed is { } at ? $"{Time(at)} 发现" : $"{Time(version.Published!)} 官方发布";
-    public static string VersionTime(Version version) => version.Observed is { } at ? $"{Time(at)} 发现" : $"{Time(version.Published!)} 官方发布";
+    // Every version is named the same way, by the office's publication; when it was first seen is a second line.
+    public static string VersionTime(ExamVersion version) => $"{Time(version.Published)} 官方发布";
+    public static string VersionTime(Version version) => $"{Time(version.Published)} 官方发布";
+    public static string? VersionSeen(Version version) => version.Observed is { } at ? $"{Time(at)} 收录" : null;
     public static string FileName(string file) => System.Text.RegularExpressions.Regex.Replace(file, @"^\d{4}-\d{2}-\d{2}-", "");
     public static List<ExamChange> ChangesOf(ExamRecord? record, Exam exam) => record?.Changes.Where(change => change.Change != "removed" && (change.Course.Code ?? change.Course.Name) == (exam.Course.Code ?? exam.Course.Name) && (change.After?.Any(slot => slot.Date == exam.Date && slot.Start == exam.Start) ?? false)).ToList() ?? [];
     private static readonly (string Label, Func<ExamSlot, string?> Read)[] Fields = [

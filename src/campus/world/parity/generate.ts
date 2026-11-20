@@ -32,7 +32,7 @@ import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
-import { changeLines, examHistory, examImpact, examTime, examVersionTime } from '@/world/exams';
+import { changeLines, examHistory, examImpact, examTime, examVersionSeen, examVersionTime } from '@/world/exams';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, nextLesson, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { compactPlace, courseName, courseShort, roomLabel } from '@/world/names';
 import { buildingWord, isClassroom, makeRoomReader } from '@/world/rooms';
@@ -65,7 +65,7 @@ const examHistoryCases = {
     times: ['2026-11-04', '2026-11-17T00:01:00+00:00', '2026-11-16T16:01:00+00:00'].map(value => ({ value, text: examTime(value) })),
     classes: [...new Set(['B240402', ...examChanges.slice(0, 1).map(change => change.class)])].map(klass => {
         const record: ExamRecord = { ...examIndex, changes: examChanges.filter(change => change.class === klass) };
-        return { klass, record, versions: examHistory(record).map(version => ({ id: version.id, time: examVersionTime(version), impact: examImpact(version.baseline, version.changes), changes: version.changes.map(change => ({ course: change.course.name, kind: change.change, lines: changeLines(change) })) })) };
+        return { klass, record, versions: examHistory(record).map(version => ({ id: version.id, time: examVersionTime(version), seen: examVersionSeen(version), impact: examImpact(version.baseline, version.changes), changes: version.changes.map(change => ({ course: change.course.name, kind: change.change, lines: changeLines(change) })) })) };
     }),
 };
 const term = read<TeachingTerm>(`${base}/teaching/${release.teaching}/term.json`);

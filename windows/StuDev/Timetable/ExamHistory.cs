@@ -38,7 +38,7 @@ public static class ExamHistory
                 var content = new StackPanel();
                 var title = Kit.Column(4, Kit.Text(Exams.VersionTime(version), Role.Body, bold: true, wrap: true));
                 if (current) title.Children.Add(new Border { Child = Kit.Text("当前版本", Role.Caption, "onBrandContainer", bold: true), Background = Paint.Brush("brandContainer"), Padding = new Thickness(7, 2, 7, 2), CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left });
-                title.Children.Add(Kit.Text(Exams.Impact(version.Baseline, version.Changes), Role.Caption, "muted", wrap: true));
+                title.Children.Add(Kit.Text(string.Join(" · ", new[] { Exams.Impact(version.Baseline, version.Changes), Exams.VersionSeen(version) }.OfType<string>()), Role.Caption, "muted", wrap: true));
                 var header = new Grid { Padding = new Thickness(16), ColumnSpacing = 12 };
                 header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 header.Children.Add(title);

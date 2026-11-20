@@ -18,7 +18,8 @@ export interface Lab { id: string; classes: string[]; group: number | null; cour
 export interface ExamSlot { date: string; start: string; end: string; campus: string | null; location: string | null; teacher: string | null; students: number | null; note?: string | null }
 export interface ExamChange { version: string; observed: string | null; class: string; course: { code: string | null; name: string }; change: 'added' | 'removed' | 'changed'; before: ExamSlot[] | null; after: ExamSlot[] | null }
 export interface ExamSource { file: string; url: string; notice: string; title: string; published?: string | null }
-export interface ExamVersion { id: string; observed: string | null; published: string | null; baseline: boolean; files: ExamSource[] }
+/** A version is named by the office's publication (the newest sheet it adopts); `observed` is when it was first seen. */
+export interface ExamVersion { id: string; observed: string | null; published: string; baseline: boolean; files: ExamSource[] }
 export interface Room { id: string; building: string; floor: string; number: string; campus: string; kinds: string[]; names: string[]; listed?: boolean; seats?: number }
 export interface RoomDay { date: string; observed_at?: string; week: number; weekday: number; free?: Record<string, string[]>; occupied: Record<string, RoomOccupant[]> }
 

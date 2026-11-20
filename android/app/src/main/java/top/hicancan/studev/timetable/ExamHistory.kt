@@ -81,7 +81,7 @@ import top.hicancan.studev.world.Names
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Plain(Exams.versionTime(version), 15.sp, weight = FontWeight.SemiBold)
                             if (current) SmallTag("当前版本", colors.primaryContainer, colors.onPrimaryContainer)
-                            Plain(Exams.impact(version.baseline, version.changes), 12.5.sp, Ink.muted)
+                            Plain(listOfNotNull(Exams.impact(version.baseline, version.changes), Exams.versionSeen(version)).joinToString(" · "), 12.5.sp, Ink.muted)
                         }
                         Plain(if (open) "⌃" else "⌄", 17.sp, Ink.muted)
                     }

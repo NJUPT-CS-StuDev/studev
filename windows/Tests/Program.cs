@@ -43,12 +43,18 @@ foreach (var item in golden["campusTimes"]!.AsArray())
     Equal("campus time", new { date = Clock.Text(DateOnly.FromDateTime(at)), min = at.Hour * 60 + at.Minute }, item["now"]);
 }
 var periods = Read<List<TeachingPeriod>>(golden["periods"]!);
+foreach (var marker in new[] { "<｜DSML｜", "<｜｜DSML｜｜", "< | | DSML | | " })
+{
+    var close = "</" + marker[1..];
+    var spelled = StuDev.Ai.Assistant.NativeCalls($"{marker}function_calls>{marker}invoke name=\"read\">{marker}parameter name=\"id\" string=\"true\">a.md{close}parameter>{marker}parameter name=\"ids\" string=\"false\">[\"x\"]{close}parameter>{close}invoke>{close}function_calls>");
+    Equal("native tool markup", spelled.Select(call => new { name = (string)call["function"]!["name"]!, arguments = JsonNode.Parse((string)call["function"]!["arguments"]!) }), JsonNode.Parse("""[{"name":"read","arguments":{"id":"a.md","ids":["x"]}}]"""));
+}
 foreach (var test in golden["examHistory"]!["times"]!.AsArray()) Equal("exam time", Exams.Time((string)test!["value"]!), test["text"]);
 foreach (var test in golden["examHistory"]!["comparisons"]!.AsArray()) Equal("exam before and after", Exams.ChangeLines(Read<ExamChange>(test!["change"]!)), test["lines"]);
 foreach (var test in golden["examHistory"]!["classes"]!.AsArray())
 {
     var record = Read<ExamRecord>(test!["record"]!);
-    Equal("class exam history", Exams.History(record).Select(version => new { id = version.Id, time = Exams.VersionTime(version), impact = Exams.Impact(version.Baseline, version.Changes), changes = version.Changes.Select(change => new { course = change.Course.Name, kind = change.Change, lines = Exams.ChangeLines(change) }) }), test["versions"]);
+    Equal("class exam history", Exams.History(record).Select(version => new { id = version.Id, time = Exams.VersionTime(version), seen = Exams.VersionSeen(version), impact = Exams.Impact(version.Baseline, version.Changes), changes = version.Changes.Select(change => new { course = change.Course.Name, kind = change.Change, lines = Exams.ChangeLines(change) }) }), test["versions"]);
 }
 var holidays = CampusLine.HolidaysOf(Read<List<CalendarTerm>>(golden["calendar"]!));
 var meetings = Read<List<TeachingMeeting>>(golden["schedules"]![0]!["meetings"]!);

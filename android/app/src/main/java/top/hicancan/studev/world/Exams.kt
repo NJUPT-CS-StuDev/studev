@@ -5,7 +5,7 @@ import java.time.LocalDate
 
 /** What is known about exams beyond the timetable; same answers as src/campus/world/exams.ts. */
 object Exams {
-    data class Version(val id: String, val observed: String?, val published: String?, val baseline: Boolean, val files: List<ExamSource>, val changes: List<ExamChange>)
+    data class Version(val id: String, val observed: String?, val published: String, val baseline: Boolean, val files: List<ExamSource>, val changes: List<ExamChange>)
     fun history(record: ExamRecord) = record.history.map { Version(it.id, it.observed, it.published, it.baseline, it.files, record.changes.filter { change -> change.version == it.id }) }.reversed()
     fun impact(baseline: Boolean, changes: List<ExamChange>) = if (baseline) "首次记录" else if (changes.isEmpty()) "本次更新未影响本班" else "本班 ${changes.size} 门考试有变动"
     fun time(value: String): String {
@@ -13,8 +13,10 @@ object Exams {
         val local = java.time.OffsetDateTime.parse(value).atZoneSameInstant(CampusDay.zone)
         return "${local.monthValue}月${local.dayOfMonth}日 ${hm(local.hour * 60 + local.minute)}"
     }
-    fun versionTime(version: ExamVersion) = version.observed?.let { "${time(it)} 发现" } ?: "${time(requireNotNull(version.published))} 官方发布"
-    fun versionTime(version: Version) = version.observed?.let { "${time(it)} 发现" } ?: "${time(requireNotNull(version.published))} 官方发布"
+    /** Every version is named the same way, by the office's publication; when it was first seen is a second line. */
+    fun versionTime(version: ExamVersion) = "${time(version.published)} 官方发布"
+    fun versionTime(version: Version) = "${time(version.published)} 官方发布"
+    fun versionSeen(version: Version) = version.observed?.let { "${time(it)} 收录" }
     fun fileName(file: String) = file.replace(Regex("^\\d{4}-\\d{2}-\\d{2}-"), "")
     /** When an exam reminds; same keys and minutes as src/campus/timetable/model/calendar.ts. */
     val REMINDERS = listOf("week" to "一周前", "days" to "三天前", "eve" to "前一天 20:00", "early" to "两小时前", "hour" to "一小时前")

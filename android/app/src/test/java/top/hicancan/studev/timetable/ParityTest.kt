@@ -49,7 +49,7 @@ class ParityTest {
             val test = item.jsonObject
             val record = json.decodeFromJsonElement<ExamRecord>(test.getValue("record"))
             val actual = JsonArray(Exams.history(record).map { version -> buildJsonObject {
-                put("id", version.id); put("time", Exams.versionTime(version)); put("impact", Exams.impact(version.baseline, version.changes))
+                put("id", version.id); put("time", Exams.versionTime(version)); put("seen", Exams.versionSeen(version)); put("impact", Exams.impact(version.baseline, version.changes))
                 put("changes", JsonArray(version.changes.map { change -> buildJsonObject {
                     put("course", change.course.name); put("kind", change.change); put("lines", JsonArray(Exams.changeLines(change).map(::JsonPrimitive)))
                 } }))

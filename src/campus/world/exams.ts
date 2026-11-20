@@ -16,7 +16,9 @@ export const examImpact = (baseline: boolean, changes: ExamChange[]) => baseline
 export const examTime = (iso: string) => iso.length === 10
     ? `${Number(iso.slice(5, 7))}月${Number(iso.slice(8, 10))}日`
     : new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace('/', '月').replace(' ', '日 ');
-export const examVersionTime = (version: ExamVersion) => version.observed ? `${examTime(version.observed)} 发现` : `${examTime(version.published!)} 官方发布`;
+/** Every version is named the same way, by the office's publication; when it was first seen is a second line. */
+export const examVersionTime = (version: ExamVersion) => `${examTime(version.published)} 官方发布`;
+export const examVersionSeen = (version: ExamVersion) => version.observed ? `${examTime(version.observed)} 收录` : null;
 export const examFileName = (file: string) => file.replace(/^\d{4}-\d{2}-\d{2}-/, '');
 
 const sameCourse = (change: ExamChange, exam: Exam) => (change.course.code ?? change.course.name) === (exam.course.code ?? exam.course.name);

@@ -18,7 +18,7 @@ import { append as threadAppend, choose as threadChoose, emptyThread, lineage, p
 import type { CalendarTerm, MorningRun } from '@/world/data';
 import type { Exam, ExamChange, Lab, RoomDay, TeachingMeeting, TeachingPeriod, TeachingTerm } from '../facts';
 import { momentNow } from '../time';
-import { changeLines, examHistory, examImpact, examTime, examVersionTime } from '../exams';
+import { changeLines, examHistory, examImpact, examTime, examVersionSeen, examVersionTime } from '../exams';
 import type { ExamRecord } from '../data';
 
 const holidays = holidayMap(golden.calendar as CalendarTerm[]);
@@ -31,7 +31,7 @@ describe('the shared web / Android real-data contract', () => {
         for (const item of golden.examHistory.comparisons) expect(changeLines(item.change as ExamChange)).toEqual(item.lines);
         for (const item of golden.examHistory.classes) {
             const record = item.record as ExamRecord;
-            expect(examHistory(record).map(version => ({ id: version.id, time: examVersionTime(version), impact: examImpact(version.baseline, version.changes), changes: version.changes.map(change => ({ course: change.course.name, kind: change.change, lines: changeLines(change) })) }))).toEqual(item.versions);
+            expect(examHistory(record).map(version => ({ id: version.id, time: examVersionTime(version), seen: examVersionSeen(version), impact: examImpact(version.baseline, version.changes), changes: version.changes.map(change => ({ course: change.course.name, kind: change.change, lines: changeLines(change) })) }))).toEqual(item.versions);
         }
     });
     it('uses campus time across midnight, the year boundary and a device daylight-saving transition', () => {
