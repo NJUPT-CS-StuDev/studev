@@ -771,6 +771,8 @@ async function main() {
         knowledge_base: `/knowledge/${knowledge.version}`,
         map_base: mapPath,
         search_base: `/search/${searchVersion}`,
+        // The bundle format, as its compiler wrote it: an app whose engine reads another asks to be updated.
+        search_format: (await read<{ format: string }>(join(out, 'search', 'manifest.json'))).format,
         texts_base: `/texts/${searchVersion}`,
         version,
         base: `/data/${version}`,
