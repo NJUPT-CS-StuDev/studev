@@ -19,6 +19,8 @@ const PAGE_SIZE = 10;
 const CHANNELS = campusConfig.search.channels as readonly { id: string; label: string; sources?: readonly string[]; excluded?: readonly string[]; dated?: boolean }[];
 const ENTITIES = new Set(Object.keys(campusConfig.search.entities));
 const CATEGORIES: Record<string, string> = { notice_article: '通知', policy: '政策制度', workflow: '办事流程', download: '下载资源', exam: '考试信息', news: '新闻动态', external: '站外链接' };
+/** Labels a crawl carries over from list pages that name no section of the site. */
+const NOT_SECTIONS = new Set(['Direct detail links', '显示更多', '更多', '查看更多', 'More']);
 const SINCE = [['', '全部时间'], ['3', '近三天'], ['7', '近一周'], ['30', '近一月'], ['365', '近一年']] as const;
 /** A filter belongs to the dimension that shows it: time only where things have dates. */
 const hasTime = (channel: { id: string; dated?: boolean }) => Boolean(channel.dated) || channel.id === 'all';
@@ -60,17 +62,41 @@ function Result({ result, roomState, onCourse }: { result: SearchResult; roomSta
             : <a className="hit entity" href={result.url}>{body}</a>;
     }
     const date = result.publishedAt ?? result.updatedAt;
-    const section = result.section && result.section !== 'Direct detail links' ? result.section : null;
-    const crumbs = [result.sourceName, section].filter(Boolean).join(' › ');
+    const section = result.section && !NOT_SECTIONS.has(result.section) ? result.section : null;
+    const internal = result.url.startsWith('/');
+    const link = (children: React.ReactNode, className?: string) => internal
+        ? <a className={className} href={result.url}>{children}</a>
+        : <a className={className} href={result.url} target="_blank" rel="noopener noreferrer">{children}</a>;
+    const file = result.kind === 'file' ? extensionOf(result.url) : null;
     return (
         <article className="hit doc">
-            <div className="crumb">{crumbs}{date ? <time> · {date.slice(0, 10)}</time> : null}{result.kind === 'file' ? ' · 文件' : result.kind === 'link' ? ' · 站外' : ''}</div>
-            <h3>{result.url.startsWith('/') ? <a href={result.url}>{title}</a> : <a href={result.url} target="_blank" rel="noopener noreferrer">{title}</a>}</h3>
-            {snippet ? <p>{snippet}</p> : result.snippet === null ? <p className="wait" aria-hidden="true" /> : null}
-            {result.attachments.length > 0 && <div className="files">{result.attachments.slice(0, 4).map(file => <a key={file.url} href={file.url} target="_blank" rel="noopener noreferrer">{file.name}</a>)}{result.attachments.length > 4 && <span>等 {result.attachments.length} 个附件</span>}</div>}
+            {link(<>
+                <SiteMark name={internal ? 'StuDev' : result.sourceName} studev={internal} />
+                <span className="site-text">
+                    <span className="site-name">{internal ? 'StuDev' : result.sourceName}</span>
+                    <span className="site-url">{[hostOf(result.url), section].filter(Boolean).join(' › ')}</span>
+                </span>
+            </>, 'site')}
+            <h3>{file && <span className="file-type">{file}</span>}{link(title)}</h3>
+            {snippet ? <p>{date && <span className="when">{dateText(date)} — </span>}{snippet}</p> : result.snippet === null ? <p className="wait" aria-hidden="true" /> : date ? <p><span className="when">{dateText(date)}</span></p> : null}
+            {result.attachments.length > 0 && <div className="files">{result.attachments.slice(0, 4).map(file => <a key={file.url} href={file.url} target="_blank" rel="noopener noreferrer"><span className="file-type">{(file.extension ?? extensionOf(file.url) ?? '文件').toUpperCase()}</span>{says(file.name)}</a>)}{result.attachments.length > 4 && <span>等 {result.attachments.length} 个附件</span>}</div>}
         </article>
     );
 }
+
+/** A source's mark: the first character of its own name on a tone of its own, so one site always looks the same. */
+function SiteMark({ name, studev }: { name: string; studev: boolean }) {
+    if (studev) return <span className="site-mark studev" aria-hidden="true"><img src="/favicon.svg" alt="" /></span>;
+    const short = name.split(/\s*\/\s*/).at(-1) ?? name;
+    let hash = 0;
+    for (const char of short) hash = (hash * 31 + char.codePointAt(0)!) % 360;
+    return <span className="site-mark" style={{ '--hue': hash } as React.CSSProperties} aria-hidden="true">{Array.from(short)[0]}</span>;
+}
+
+const hostOf = (url: string) => { try { return url.startsWith('/') ? null : new URL(url).host; } catch { return null; } };
+const extensionOf = (url: string) => /\.([a-z0-9]{2,5})(?:$|[?#])/i.exec(url)?.[1]?.toUpperCase() ?? null;
+/** The day as people say it, leading the snippet the way a search page does. */
+const dateText = (iso: string) => `${Number(iso.slice(0, 4))}年${Number(iso.slice(5, 7))}月${Number(iso.slice(8, 10))}日`;
 
 function Pages({ page, total, onPage }: { page: number; total: number; onPage: (page: number) => void }) {
     const last = Math.ceil(total / PAGE_SIZE);
