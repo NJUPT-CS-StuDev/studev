@@ -98,7 +98,9 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val term = repo.term(); val periods = repo.periods(); val classes = repo.classes(); val coursePlans = repo.coursePlans(); val rooms = repo.rooms()
         val examClasses = repo.examIndex()?.classes.orEmpty()
         val calendar = repo.calendar(); val run = repo.runs()[term.term]
+        val previous = _state.value.repository
         _state.value = AcademicState(repo, term, periods, classes, coursePlans, examClasses, rooms = rooms, busy = false, calendar = calendar, run = run)
+        if (previous !== repo) previous?.closeSearch()
         loadClass(settings.state.value.klass)
     }
     fun chooseClass(id: String) {

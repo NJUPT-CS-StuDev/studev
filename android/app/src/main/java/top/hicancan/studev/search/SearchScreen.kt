@@ -78,8 +78,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val context = LocalContext.current
     val channels = remember(context) { Channel.load(context) }
     val repository = state.repository
-    val engine = remember(repository) { repository?.let { repo -> NativeSearch({ path -> repo.bytes("search/$path") }, { pack, offset, bytes -> repo.block("search/$pack", offset, bytes) }) } }
-    DisposableEffect(engine) { onDispose { engine?.close() } }
+    val engine = repository?.search
     var page by remember { mutableIntStateOf(1) }
     var source by remember { mutableStateOf<String?>(null) }
     var since by remember { mutableStateOf("") }
@@ -119,10 +118,8 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
             route.within?.let { put("within", it) }
         }
         try {
-            val done = engine.page(query, PAGE, if (byDate || browsing) "date_desc" else "relevance", filters, (page - 1) * PAGE) { ranked ->
-                answer = Answer(key, ranked.results.map(::Hit), ranked.total, (System.nanoTime() - started) / 1e9)
-            }
-            answer = Answer(key, done.results.map(::Hit), done.total, answer?.takeIf { it.key == key }?.seconds ?: ((System.nanoTime() - started) / 1e9))
+            val done = engine.page(query, PAGE, if (byDate || browsing) "date_desc" else "relevance", filters, (page - 1) * PAGE)
+            answer = Answer(key, done.results.map(::Hit), done.total, (System.nanoTime() - started) / 1e9)
         } catch (_: java.io.IOException) {
             answer = null
             failure = key to "搜索需要联网，请稍后重试"

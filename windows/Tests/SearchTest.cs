@@ -58,13 +58,15 @@ internal static class SearchTest
         Directory.CreateDirectory(cachedSearch);
         foreach (var file in Directory.EnumerateFiles(searchFolder)) File.Copy(file, Path.Combine(cachedSearch, Path.GetFileName(file)), true);
         using var search = new NativeSearch(repository);
-        var answer = await search.Page("101", 10, "relevance", new JsonObject(), 0, _ => search.Dispose(), CancellationToken.None);
-        equal("disposing during ranking finishes the active query", answer.Results.Any(r => r["title"]?.GetValue<string>() == "教1-101"), JsonValue.Create(true));
+        var running = search.Page("101", 10, "relevance", new JsonObject(), 0, CancellationToken.None);
+        search.Dispose();
+        var answer = await running;
+        equal("disposing during a query finishes the active query", answer.Results.Any(r => r["title"]?.GetValue<string>() == "教1-101"), JsonValue.Create(true));
         var closed = false;
         try { await search.Options(); } catch (ObjectDisposedException) { closed = true; }
         equal("a closed search rejects a new query", closed, JsonValue.Create(true));
         using var reopened = new NativeSearch(repository);
-        var again = await reopened.Page("101", 10, "relevance", new JsonObject(), 0, _ => { }, CancellationToken.None);
+        var again = await reopened.Page("101", 10, "relevance", new JsonObject(), 0, CancellationToken.None);
         equal("a new engine reads the cached release", again.Results.Select(r => r["url"]!.GetValue<string>()), new JsonArray(answer.Results.Select(r => (JsonNode?)r["url"]!.DeepClone()).ToArray()));
     }
 

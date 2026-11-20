@@ -91,23 +91,46 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         } finally { pending.delete() }
         bytes
     } }
-    /** One byte range of an immutable file, kept on disk so a query works offline next time. */
-    suspend fun block(path: String, offset: Long, length: Int): ByteArray = withContext(Dispatchers.IO) {
-        require(offset >= 0 && length > 0 && offset <= Long.MAX_VALUE - length)
-        val file = File(local(path).absolutePath + ".$offset")
-        val lock = locks[(file.absolutePath.hashCode() and Int.MAX_VALUE) % locks.size]
-        lock.withLock {
-        coroutineContext.ensureActive()
-        if (file.isFile) return@withLock file.readBytes().also { if (it.size != length) throw DataCorruptionException("离线搜索数据不完整") }
+    private val engine = lazy { top.hicancan.studev.search.NativeSearch({ bytes("search/$it") }, { pack, spans -> blocks("search/$pack", spans) }) }
+    /** This release's search engine, shared by the search page and the assistant; [closeSearch] lets it go when a
+     * newer reader takes over (the native bindings free nothing on their own). */
+    internal val search by engine
+    fun closeSearch() { if (engine.isInitialized()) engine.value.close() }
+    /** Byte ranges of an immutable file, each kept on disk so a query works offline next time. The ones not yet kept
+     * are read from the network together: neighbours (within [GAP_BYTES]) share one range request. */
+    suspend fun blocks(path: String, spans: List<Pair<Long, Int>>): List<ByteArray> = withContext(Dispatchers.IO) {
+        require(spans.all { (offset, length) -> offset >= 0 && length > 0 && offset <= Long.MAX_VALUE - length })
+        val files = spans.map { (offset, _) -> File(local(path).absolutePath + ".$offset") }
+        val out = arrayOfNulls<ByteArray>(spans.size)
+        spans.forEachIndexed { i, (_, length) ->
+            if (files[i].isFile) out[i] = files[i].readBytes().also { if (it.size != length) throw DataCorruptionException("离线搜索数据不完整") }
+        }
+        val missing = spans.indices.filter { out[it] == null }.sortedBy { spans[it].first }
+        val groups = mutableListOf<MutableList<Int>>()
+        for (i in missing) {
+            val last = groups.lastOrNull()?.let { group -> group.maxOf { spans[it].first + spans[it].second } }
+            if (last != null && spans[i].first <= last + GAP_BYTES) groups.last().add(i) else groups.add(mutableListOf(i))
+        }
         val address = address(path)
-        val bytes = try { download(address, offset, length) }
-        catch (e: FileNotFoundException) { missing(); throw e }
-        catch (e: IOException) { throw DataUnavailableException(e) }
-        file.parentFile!!.mkdirs()
-        val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
-        try { pending.writeBytes(bytes); check(pending.renameTo(file)) { "无法保存离线数据" } } finally { pending.delete() }
-        bytes
-    } }
+        coroutineScope { groups.map { group -> async {
+            coroutineContext.ensureActive()
+            val start = spans[group.first()].first
+            val end = group.maxOf { spans[it].first + spans[it].second }
+            val bytes = try { download(address, start, (end - start).toInt()) }
+            catch (e: FileNotFoundException) { missing(); throw e }
+            catch (e: IOException) { throw DataUnavailableException(e) }
+            for (i in group) {
+                val (offset, length) = spans[i]
+                val part = bytes.copyOfRange((offset - start).toInt(), (offset - start).toInt() + length)
+                val file = files[i]
+                file.parentFile!!.mkdirs()
+                val pending = File(file.parentFile, "${file.name}.${java.util.UUID.randomUUID()}.pending")
+                try { pending.writeBytes(part); check(pending.renameTo(file) || file.isFile) { "无法保存离线数据" } } finally { pending.delete() }
+                out[i] = part
+            }
+        } }.awaitAll() }
+        out.map { it!! }
+    }
     suspend inline fun <reified T> read(path: String): T = withContext(Dispatchers.Default) { Json.decodeFromString(bytes(path).decodeToString()) }
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
@@ -210,6 +233,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     companion object {
         internal val retired = kotlinx.coroutines.flow.MutableSharedFlow<DataRelease>(extraBufferCapacity = 1)
         private val locks = Array(64) { Mutex() }
+        /** A gap between two wanted blocks this small is cheaper to read through than to ask for twice. */
+        private const val GAP_BYTES = 16L * 1024
         private fun activeRelease(context: Context) = File(context.filesDir, "campus/release.json")
         private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         fun download(address: String, offset: Long? = null, length: Int = 0, connectTimeoutMs: Int = 8_000): ByteArray {

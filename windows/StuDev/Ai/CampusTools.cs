@@ -88,7 +88,7 @@ public sealed class CampusTools(Campus campus, List<JsonObject> definitions, Fun
                 var filters = new JsonObject();
                 if (channel.Sources is { Count: > 0 } sources) filters["sourceIds"] = new JsonArray([.. sources.Select(x => (JsonNode)x)]);
                 if (channel.Excluded is { Count: > 0 } excluded) filters["excludedSourceIds"] = new JsonArray([.. excluded.Select(x => (JsonNode)x)]);
-                var page = await search.Page(Text("query"), 6, "relevance", filters, 0, _ => { }, CancellationToken.None);
+                var page = await search.Page(Text("query"), 6, "relevance", filters, 0, CancellationToken.None);
                 return new JsonArray([.. page.Results.Select(r =>
                 {
                     var id = (string)r["id"]!;

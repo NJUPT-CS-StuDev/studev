@@ -114,10 +114,9 @@ public sealed partial class SearchScreen : Screen
         {
             await Task.Delay(120, cancel);
             // Nothing typed lists the newest first; a query, the best match first.
-            var done = await search.Page(query, PageSize, byDate || query.Length == 0 ? "date_desc" : "relevance", Filters(), (page - 1) * PageSize,
-                ranked => { if (!cancel.IsCancellationRequested) { answer = (ranked.Results, ranked.Total, started.Elapsed.TotalSeconds); Draw(); } }, cancel);
+            var done = await search.Page(query, PageSize, byDate || query.Length == 0 ? "date_desc" : "relevance", Filters(), (page - 1) * PageSize, cancel);
             if (cancel.IsCancellationRequested) return;
-            answer = (done.Results, done.Total, answer?.Seconds ?? started.Elapsed.TotalSeconds);
+            answer = (done.Results, done.Total, started.Elapsed.TotalSeconds);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested) { return; }
         catch (Exception error) when (error is InvalidDataException or System.Text.Json.JsonException or Kernels.Search.SearchException)

@@ -1,14 +1,14 @@
 // The one way in. Everything searchable is one document in one index, so a query has one
 // ranking, one set of highlights and one way to page, here and in the app.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SearchClient, type FilterOptions, type SearchFilters, type SearchResult, type SortMode } from 'wasm-search';
+import { type SearchClient, type FilterOptions, type SearchFilters, type SearchResult, type SortMode } from 'wasm-search';
 import type { TeachingMeeting } from '@/world/facts';
-import { APP_CONFIG, releaseReady } from '@/world/config';
 import { loadMeetings, loadPeriods, loadRoomDay } from '@/world/data';
 import { courseName, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
 import { hm, momentNow, WEEKDAYS } from '@/world/time';
 import { reloadIfGone } from '@/world/stale';
+import { searchClient } from '@/world/search';
 import { useUrl } from '@/world/useUrl';
 import { Back, Chevron, Magnifier, Sheet, WeekGlyph, CampusHeader } from '@/world/ui';
 import { campusConfig } from '../../../campus.config';
@@ -105,9 +105,9 @@ export default function SearchApp() {
     const input = useRef<HTMLInputElement>(null);
     const [client, setClient] = useState<SearchClient | null>(null);
     useEffect(() => {
-        let current = true; let reader: SearchClient | undefined;
-        void releaseReady.then(() => { if (current) { reader = new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH }); setClient(reader); } });
-        return () => { current = false; reader?.dispose(); };
+        let current = true;
+        void searchClient().then(shared => { if (current) setClient(shared); });
+        return () => { current = false; };
     }, []);
     useEffect(() => {
         const scope = params.get('scope');
@@ -136,11 +136,9 @@ export default function SearchApp() {
         let current = true;
         const started = performance.now();
         setFailed(false);
-        const pending = client.search({ query: trimmed, offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, sort, filters }, ranked => {
-            if (current) setAnswer({ key, results: ranked.results, total: ranked.totalCandidates, seconds: (performance.now() - started) / 1000 });
-        });
+        const pending = client.search({ query: trimmed, offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE, sort, filters });
         pending.response.then(done => {
-            if (current) setAnswer(previous => ({ key, results: done.results, total: done.totalCandidates, seconds: previous?.key === key ? previous.seconds : (performance.now() - started) / 1000 }));
+            if (current) setAnswer({ key, results: done.results, total: done.totalCandidates, seconds: (performance.now() - started) / 1000 });
         }).catch(error => { if (current && !(error instanceof DOMException && error.name === 'AbortError')) { setFailed(true); void reloadIfGone(); } });
         return () => { current = false; client.cancel(pending.requestId); };
     }, [client, filters, key, live, page, query, sort]);

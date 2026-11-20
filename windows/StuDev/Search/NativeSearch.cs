@@ -1,5 +1,6 @@
-// Drives one wasm-search engine through the bundle protocol, fetching only the blocks it names: the same steps as
-// Android's NativeSearch.kt and the web's worker, over the same Rust kernel.
+// Drives one wasm-search engine through the bundle protocol, fetching only the blocks it names, a query's postings
+// and then the pages of the results it shows: the same steps as Android's NativeSearch.kt and the web's worker, over
+// the same Rust kernel.
 using System.Text.Json.Nodes;
 using StuDev.Data;
 using StuDev.Kernels.Search;
@@ -49,7 +50,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
         }
     }
 
-    public async Task<SearchPage> Page(string query, int limit, string sort, JsonObject filters, int offset, Action<SearchPage> ranked, CancellationToken cancel)
+    public async Task<SearchPage> Page(string query, int limit, string sort, JsonObject filters, int offset, CancellationToken cancel)
     {
         await gate.WaitAsync(cancel);
         try
@@ -59,18 +60,11 @@ public sealed class NativeSearch(Repository repository) : IDisposable
             var search = await Ready();
             var request = new JsonObject { ["query"] = query.Trim(), ["offset"] = offset, ["limit"] = limit, ["sort"] = sort, ["filters"] = filters.DeepClone() };
             var options = JsonNode.Parse(search.FilterOptions())!.AsObject();
-            SearchPage Read(string response) { var value = JsonNode.Parse(response)!; return new(value["results"]!.AsArray().Select(r => r!.AsObject()).ToList(), (int)value["totalCandidates"]!, options); }
-            await Load(search.BeginSearch(request.ToJsonString()), search.LoadLexiconBlock, cancel);
-            await Load(search.RequiredPostingChunks(), search.LoadPostingsChunk, cancel);
-            await Load(search.PlanSearch(), search.LoadDocumentBlock, cancel);
+            await Load(search.BeginSearch(request.ToJsonString()), search.LoadPostingsChunk, cancel);
+            await Load(search.PlanSearch(), search.LoadPage, cancel);
             cancel.ThrowIfCancellationRequested();
-            ranked(Read(search.RankedResults()));
-            search.ClearContent();
-            var before = loaded;
-            await Load(search.RequiredContentChunks(), search.LoadContentChunk, cancel);
-            loaded = before;
-            cancel.ThrowIfCancellationRequested();
-            return Read(search.HydrateSearch());
+            var value = JsonNode.Parse(search.HydrateSearch())!;
+            return new(value["results"]!.AsArray().Select(r => r!.AsObject()).ToList(), (int)value["totalCandidates"]!, options);
         }
         finally { gate.Release(); if (closed) Dispose(); }
     }

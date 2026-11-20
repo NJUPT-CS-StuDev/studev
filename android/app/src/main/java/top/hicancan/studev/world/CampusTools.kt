@@ -5,7 +5,6 @@ import java.time.LocalDate
 import top.hicancan.studev.data.AcademicRepository
 import top.hicancan.studev.me.TaskStore
 import top.hicancan.studev.navigation.*
-import top.hicancan.studev.search.NativeSearch
 import top.hicancan.studev.map.Find
 
 /** A task drafted, to be confirmed; [call] is the tool call that drafted it, so it shows in that answer. */
@@ -28,7 +27,6 @@ data class Channel(val id: String, val label: String, val sources: List<String> 
 class CampusTools(private val context: android.content.Context, private val repository: () -> AcademicRepository?, private val line: () -> CampusLine?, private val tasks: TaskStore,
     private val remember: (String) -> Unit, private val propose: (TaskProposal) -> Unit) : AutoCloseable {
     private val channels by lazy { Channel.load(context) }
-    private var search: NativeSearch? = null
     private var wayfind: Wayfind? = null
     private var places: top.hicancan.studev.data.CampusPackage? = null
     private suspend fun campus(): top.hicancan.studev.data.CampusPackage {
@@ -61,7 +59,7 @@ class CampusTools(private val context: android.content.Context, private val repo
         if (name == "search") {
             val repo = repository() ?: error("校园数据还没准备好。")
             val channel = channels.firstOrNull { it.label == (args["in"]?.jsonPrimitive?.content ?: "全部") } ?: error("没有这个搜索范围。")
-            val engine = search ?: NativeSearch({ path -> repo.bytes("search/$path") }, { pack, offset, length -> repo.block("search/$pack", offset, length) }).also { search = it }
+            val engine = repo.search
             val filters = buildJsonObject { if (channel.sources.isNotEmpty()) put("sourceIds", JsonArray(channel.sources.map(::JsonPrimitive))); if (channel.excluded.isNotEmpty()) put("excludedSourceIds", JsonArray(channel.excluded.map(::JsonPrimitive))) }
             return JsonArray(engine.page(args.getValue("query").jsonPrimitive.content, 6, filters = filters).results.map { result -> buildJsonObject {
                 val id = result.getValue("id").jsonPrimitive.content
@@ -162,7 +160,7 @@ class CampusTools(private val context: android.content.Context, private val repo
             else if (hours.open != top.hicancan.studev.map.Recommendations.Open.Unknown) { put("today", hours.today); put("now", when (hours.open) { top.hicancan.studev.map.Recommendations.Open.Closed -> "已关闭"; top.hicancan.studev.map.Recommendations.Open.Closing -> "快关门了，${hours.closesAt} 关"; else -> "开着，${hours.closesAt} 关" }) }
         }
     }
-    override fun close() { search?.close(); wayfind?.close() }
+    override fun close() { wayfind?.close() }
     companion object {
         /** How much of an article the model reads at once, as READ in src/campus/world/campusTools.ts. */
         private const val READ = 8000

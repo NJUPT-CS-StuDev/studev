@@ -42,7 +42,7 @@ afterAll(() => { engine?.dispose(); vi.unstubAllGlobals(); });
 
 it('finds both a classroom and a building through the map search channel', async () => {
     const channel = channels.find(channel => channel.id === 'place')!;
-    const search = (query: string) => engine.search({ query, offset: 0, limit: 10, sort: 'relevance', filters: { sourceIds: channel.sources } }, () => {});
+    const search = (query: string) => engine.search({ query, offset: 0, limit: 10, sort: 'relevance', filters: { sourceIds: channel.sources } });
     const classroom = await search('教1-101');
     expect(classroom.results).toContainEqual(expect.objectContaining({ source: 'rooms', id: 'rooms/仙林/教1-101' }));
     const building = await search('教1');
@@ -68,7 +68,7 @@ it('uses released building access for real room routes and retains the requested
 
 it('finds the released TCP past-paper passages in exam materials and reads their exact search IDs', async () => {
     const channel = channels.find(channel => channel.label === '考试资料')!;
-    const answer = await engine.search({ query: '拥塞控制', offset: 0, limit: 6, sort: 'relevance', filters: { sourceIds: channel.sources } }, () => {});
+    const answer = await engine.search({ query: '拥塞控制', offset: 0, limit: 6, sort: 'relevance', filters: { sourceIds: channel.sources } });
     const compiled = answer.results.filter(result => result.source === 'sections');
     expect(compiled.length).toBeGreaterThan(0);
     const tools = new CampusTools();

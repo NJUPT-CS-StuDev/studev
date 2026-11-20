@@ -1,4 +1,3 @@
-import { SearchClient } from 'wasm-search';
 import { initialize, Router, type Mode } from 'wayfind';
 import { APP_CONFIG, releaseReady } from './config';
 import { loadPeriods, loadRoomDay, loadRoomIndex } from './data';
@@ -11,6 +10,7 @@ import { toolDate } from './tools';
 import { loadMaterials, loadMeetings } from './data';
 import { courseSaid, curriculumSaid, scheduleSaid, UnknownReference } from './answers';
 import { textKey } from './texts';
+import { searchClient } from './search';
 import { loadCurriculum, loadKnowledge } from './knowledge';
 import { campusConfig } from '../../../campus.config';
 import { placeFloor, routeContext } from './routes';
@@ -21,15 +21,13 @@ const CHANNELS = campusConfig.search.channels as readonly { label: string; sourc
 const READ = 8000;
 /** Adapters call the same released search/routing kernels and room interpreter as the visual entries. */
 export class CampusTools {
-    private search?: SearchClient;
     private space?: Promise<Space>;
     private router?: Promise<Router>;
     private places() { return this.space ??= loadSpace(); }
     async query(query: string, within = '全部') {
         const channel = CHANNELS.find(item => item.label === within);
         if (!channel) throw new Error('没有这个搜索范围。');
-        await releaseReady;
-        const search = this.search ??= new SearchClient({ baseUrl: APP_CONFIG.DATA_URLS.SEARCH });
+        const search = await searchClient();
         await search.initialize();
         const filters = { ...(channel.sources ? { sourceIds: [...channel.sources] } : {}), ...(channel.excluded ? { excludedSourceIds: [...channel.excluded] } : {}) };
         const answer = await search.search({ query, offset: 0, limit: 6, sort: 'relevance', filters }).response;
@@ -96,5 +94,5 @@ export class CampusTools {
             distance_m: Math.round(route.distance_m), duration_s: Math.round(route.duration_s),
             steps: [...route.maneuvers.map(step => step.type === 'arrive' && context.access.kind === 'building' ? `到达${context.arrival}` : step.instruction), ...(context.continuation ? [context.continuation] : [])] };
     }
-    dispose() { this.search?.dispose(); void this.router?.then(router => router.free()); }
+    dispose() { void this.router?.then(router => router.free()); }
 }
