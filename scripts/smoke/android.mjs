@@ -163,7 +163,7 @@ async function scrollFind(match, step, attempts = 12, direction = 1) {
         adb('shell', 'input', 'swipe', String(Math.round(width * .55)), String(Math.round(height * (direction > 0 ? .78 : .28))), String(Math.round(width * .55)), String(Math.round(height * (direction > 0 ? .28 : .78))), '300');
         await sleep(300);
     }
-    throw new Error(`not found while scrolling: ${step}`);
+    throw new Error(`not found while scrolling: ${step}; on screen: ${screen().map(node => node.text).filter(Boolean).join(' | ')}`);
 }
 async function scrollTap(match, step, attempts, direction) {
     const hit = await scrollFind(match, step, attempts, direction);
@@ -491,9 +491,17 @@ async function personalViews() {
     await tap('课表设置', 'the timetable settings');
     await find(node => node.text.includes('B240402'), 'the selected class is retained');
     await tap('返回', 'back from timetable settings');
-    await tap('帮助与关于', 'the about and update settings');
+    // 检查更新 stands on the first page of 我, with the installed app and the data it reads.
     const currentRelease = JSON.parse(adb('exec-out', 'cat', `/data/user/0/${app}/files/campus/release.json`));
     await scrollFind(node => node.text.includes(`App ${product.android.versionName} · 数据 ${currentRelease.data_version}`), 'the installed app and current cached campus data versions');
+    // The check answers in a dialog over the page it was asked from.
+    await tap('检查更新', 'check for updates');
+    const answers = ['已是最新', '校园数据已更新', '暂时连不上', '新数据暂时无法读取'];
+    await find(node => answers.includes(node.text) || node.text.startsWith('发现新版本'), 'the update check answers over 我');
+    await tap(node => node.text === '好' || node.text === '稍后', 'close the update answer');
+    await find('帮助与关于', 'the update answer closes back to 我');
+    await tap('帮助与关于', 'the about settings');
+    await find('意见反馈', 'feedback in the about settings');
     healthy('personal settings show the selected class, account and released version');
     capture('personal-settings');
     adb('shell', 'input', 'keyevent', '4');
