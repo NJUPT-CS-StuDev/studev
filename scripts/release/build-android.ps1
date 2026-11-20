@@ -26,8 +26,10 @@ $start.Environment['JAVA_HOME'] = $java; $start.Environment['ANDROID_HOME'] = $s
 $start.Environment['ORG_GRADLE_PROJECT_studev.keystore'] = $keystore
 $start.Environment['ORG_GRADLE_PROJECT_studev.keyAlias'] = 'studev'
 $start.Environment['ORG_GRADLE_PROJECT_studev.storePassword'] = $password
+# Kotlin compiles inside the build: its own daemon would stay resident (about 2 GB) into the emulator smoke test that
+# follows, and on this machine the emulator then runs out of memory and drops offline mid-test.
 foreach ($value in @('-Xmx64m','-Xms64m','-classpath',(Join-Path $android 'gradle/wrapper/gradle-wrapper.jar'),'org.gradle.wrapper.GradleWrapperMain',
-    'assembleRelease','testDebugUnitTest','lint','--no-daemon','--no-configuration-cache','--console=plain') + $GradleArgs) { $start.ArgumentList.Add($value) }
+    'assembleRelease','testDebugUnitTest','lint','--no-daemon','--no-configuration-cache','--console=plain','-Pkotlin.compiler.execution.strategy=in-process') + $GradleArgs) { $start.ArgumentList.Add($value) }
 $process = [Diagnostics.Process]::Start($start)
 Write-Output "Android signed build started (PID $($process.Id))"
 $stdout = $process.StandardOutput.ReadToEndAsync(); $stderr = $process.StandardError.ReadToEndAsync()
