@@ -511,6 +511,15 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 }
                 Plain(if (inFloor.isNotEmpty()) if (day == null) "暂无这一天的排课数据" else "${free.size} / ${inFloor.size} 间空闲" + (if (floor != null) " · 全楼 ${freeBy[building.id]?.first ?: 0} 间" else "") else "楼层布局", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp))
             }
+            // A building with opening hours (the library) says whether it is open, and can be gone to, as any place can.
+            building.hours?.let { hours ->
+                item {
+                    val today = hours.week[moment.date.dayOfWeek.value.toString()].orEmpty()
+                    val open = Recommendations.status(hours, moment.date.dayOfWeek.value, moment.min)
+                    Plain(open.label + " · 今日 " + (today.joinToString(" · ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }), 14.sp, if (open == Recommendations.Open.Open) mark.free else Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+                }
+            }
+            item { ActionButton("去这里", go = true, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { route.nav = building.id } }
             item { KeyRow(null, "整栋楼的安排", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = building.id; route.tab = "search" }) }
             if (inFloor.isNotEmpty()) items(free, key = { it.first.id }) { (room, status) -> RoomRow(room, status) { openRoom(room.id) } }
             else if (floor != null) items(scene?.roomsOf(building.id, floor).orEmpty(), key = { it.id }) { row ->
