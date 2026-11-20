@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
 import product from '../../product.json' with { type: 'json' };
 import { resourceAt, validRelease, type CampusRelease } from '../../src/campus/world/release.ts';
 
@@ -23,6 +24,20 @@ async function currentSnapshot(entry: string, publicRoot: string): Promise<Campu
             || !resolve(publicRoot, '.' + path).startsWith(publicRoot + sep)) throw new Error(`invalid published resource path: ${path}`);
     }
     return snapshot;
+}
+
+/** The snapshot a build can ship: one in the search format its engine reads. A build for a new engine that starts
+ * while the data site is still being republished for it waits for that publication instead of shipping data its
+ * engine cannot read (as a deployment once did). */
+async function readableSnapshot(entry: string, publicRoot: string, wait = 20 * 60_000): Promise<CampusRelease> {
+    const deadline = Date.now() + wait;
+    for (;;) {
+        const snapshot = await currentSnapshot(entry, publicRoot);
+        if (snapshot.search_format === SEARCH_BUNDLE_FORMAT) return snapshot;
+        if (Date.now() >= deadline) throw new Error(`the data site serves search format ${snapshot.search_format}; this build's engine reads ${SEARCH_BUNDLE_FORMAT}`);
+        console.log(`waiting for the data site to publish ${SEARCH_BUNDLE_FORMAT} (it serves ${snapshot.search_format})`);
+        await delay(30_000);
+    }
 }
 
 const components = (snapshot: CampusRelease) => JSON.stringify([snapshot.version, snapshot.base, snapshot.map_version, snapshot.data_version,
@@ -82,15 +97,17 @@ async function downloadSnapshot(snapshot: CampusRelease, entry: string, publicRo
     return fetched;
 }
 
-export async function pullSnapshot(entry = `${product.campusOrigin}/campus-release.json`, root = process.cwd()): Promise<CampusRelease> {
+export async function pullSnapshot(entry = `${product.campusOrigin}/campus-release.json`, root = process.cwd(), settle = 30_000): Promise<CampusRelease> {
     const publicRoot = resolve(root, 'public');
-    let snapshot = await currentSnapshot(entry, publicRoot), fetched = 0;
+    let snapshot = await readableSnapshot(entry, publicRoot), fetched = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
         try { fetched = await downloadSnapshot(snapshot, entry, publicRoot); break; }
         catch (error) {
             if (!(error instanceof MissingPublishedResource) || attempt === 2) throw error;
-            const current = await currentSnapshot(entry, publicRoot);
-            if (components(current) === components(snapshot)) throw error;
+            const current = await readableSnapshot(entry, publicRoot);
+            // The same snapshot: for a minute or two after a deployment some of its files still answer 404 on the
+            // edge, then appear. A newer snapshot replaced the one being read: read that instead.
+            if (components(current) === components(snapshot)) await delay(settle);
             snapshot = current;
         }
     }

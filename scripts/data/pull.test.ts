@@ -104,7 +104,7 @@ it('drains cancelled requests and pending writes before adopting a newer complet
     expect(calls.slice(nextRead + 1).some(path => path.startsWith(old.base + '/'))).toBe(false);
 });
 
-it('fails a missing resource when re-discovery still names the same publication', async () => {
+it('reads a publication again while its files appear on the edge, and fails a resource still missing', async () => {
     const work = await workspace(), snapshot = await pointer('unchanged');
     let reads = 0;
     const fetch = vi.fn(async (input: string | URL) => {
@@ -112,9 +112,9 @@ it('fails a missing resource when re-discovery still names the same publication'
         return new Response(null, { status: 404 });
     });
     vi.stubGlobal('fetch', fetch);
-    await expect(pullSnapshot(entry, work)).rejects.toThrow('404');
-    expect(reads).toBe(2);
-    for (const path of snapshot.all) expect(fetch.mock.calls.filter(([input]) => new URL(input).pathname === path)).toHaveLength(1);
+    await expect(pullSnapshot(entry, work, 0)).rejects.toThrow('404');
+    expect(reads).toBe(3);
+    for (const path of snapshot.all) expect(fetch.mock.calls.filter(([input]) => new URL(input).pathname === path)).toHaveLength(3);
     expect(await readFile(join(work, 'src/data/campus-release.json'), 'utf8')).toBe('previous complete snapshot');
 });
 

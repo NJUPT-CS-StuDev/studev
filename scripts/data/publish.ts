@@ -36,10 +36,19 @@ const redact = (text: string) => (token ? text.split(token).join('[redacted]') :
 const child = spawn(process.execPath, args, { cwd: output, env, stdio: ['ignore', 'pipe', 'pipe'] });
 child.stdout!.on('data', chunk => stdout.push(String(chunk))); child.stderr!.on('data', chunk => stderr.push(String(chunk)));
 const code = await new Promise<number | null>((done, fail) => { child.once('error', fail); child.once('exit', done); });
-if (code !== 0) throw new Error(`data deployment failed (${code})\n${redact([...stdout, ...stderr].join('')).slice(-4000)}`);
-const result = JSON.parse(stdout.join('').trim().split(/\r?\n/).at(-1)!) as { status: string; url: string; deploymentId: string };
-if (result.status !== 'success') throw new Error('data deployment did not report success');
-deploymentId = result.deploymentId;
+const log = [...stdout, ...stderr].join('');
+// After "Deploy Success" the CLI still asks for a preview token; that call failing (it has, with 522) leaves the
+// deployment live. Whether it is live is decided below, by reading the public pointer and its resources.
+const deployed = /Deploy Success/.test(log);
+if (code !== 0 && !deployed) throw new Error(`data deployment failed (${code})\n${redact(log).slice(-4000)}`);
+if (code === 0) {
+    const result = JSON.parse(stdout.join('').trim().split(/\r?\n/).at(-1)!) as { status: string; url: string; deploymentId: string };
+    if (result.status !== 'success') throw new Error('data deployment did not report success');
+    deploymentId = result.deploymentId;
+} else {
+    deploymentId = log.match(/Deployment ID: (\w+)/)?.[1];
+    console.log(`the deployment succeeded but the CLI then failed (${code}); verifying the public entry`);
+}
 console.log(JSON.stringify({ deploymentId, entry }));
 }
 const deadline = Date.now() + 180_000;
