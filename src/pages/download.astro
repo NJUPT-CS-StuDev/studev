@@ -6,75 +6,125 @@ const android = PRODUCT_CONFIG.ANDROID_APP;
 const runtimeRelease = 'https://github.com/hicancan/local-runtime-mcp/releases/latest';
 const clients = [
   {
-    name: '网页版',
-    description: '在手机或电脑的浏览器打开即用。',
-    detail: '可添加到主屏幕',
-    action: '打开网页版',
-    href: '/',
-  },
-  {
+    id: 'android',
     name: 'Android',
-    description: '课表与地图支持离线查看，桌面小组件能显示下一节课。',
-    detail: `APK · ${android.VERSION}`,
+    description: '课表和地图离线可用，桌面小组件显示下一节课，导航时锁屏也能继续。',
+    detail: `${android.VERSION} · APK`,
     action: '下载 Android 版',
     href: android.PACKAGE_URL,
     package: true,
+    icon: 'M8.5 2.5h7a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-15a2 2 0 0 1 2-2Zm2.5 16h2',
   },
   {
+    id: 'windows',
     name: 'Windows',
-    description: '支持自动更新，解压后打开 StuDev.exe。',
-    detail: `x64 · ${android.VERSION}`,
+    description: '原生桌面客户端，常驻托盘，桌面卡片显示下一节课，新版本自动更新。',
+    detail: `${android.VERSION} · x64`,
     action: '下载 Windows 版',
     href: `/download/windows/studev-${android.VERSION}-windows.zip`,
     package: true,
+    icon: 'M3.5 5.5 10.5 4.5v7h-7Zm9-1.3 8-1.2v8.5h-8Zm-9 8.3h7v7l-7-1Zm9 0h8V21l-8-1.2Z',
+  },
+  {
+    id: 'web',
+    name: '网页版',
+    description: '在手机或电脑的浏览器里打开即用，也可以添加到主屏幕。',
+    detail: '始终是最新版',
+    action: '打开网页版',
+    href: '/',
+    package: false,
+    icon: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-9-9h18M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z',
   },
 ];
 ---
-<SiteLayout title="获取 StuDev" description="在浏览器、Android 或 Windows 上使用 StuDev。下载 Local Runtime MCP，连接这台电脑上的网页工具。" active="download" noPwa>
+<SiteLayout title="获取 StuDev" description="在 Android、Windows 或浏览器上使用 StuDev。下载 Local Runtime MCP，连接这台电脑上的网页工具。" active="download" noPwa>
   <div class="download-page">
-    <header class="download-heading">
-      <h1>获取 StuDev</h1>
-      <p>课表、地图、知识、搜索和 AI 随时可用。</p>
+    <header class="download-hero">
+      <img class="download-icon" src="/pwa-icons/192.png" width="72" height="72" alt="" />
+      <h1>StuDev</h1>
+      <p>南邮的课表、地图、知识、搜索和 AI，放在一起。</p>
+      <div class="download-primary" data-download-primary>
+        <a class="download-button primary" href={clients[0]!.href} rel="nofollow" data-astro-prefetch="false" data-for="android">{clients[0]!.action}</a>
+        <span class="download-version">版本 {android.VERSION}</span>
+      </div>
     </header>
 
     <div class="download-clients">
-      {clients.map(client => <article class="download-client">
+      {clients.map(client => <article class="download-client" data-client={client.id}>
+        <svg class="client-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={client.icon} /></svg>
         <h2>{client.name}</h2>
         <p>{client.description}</p>
-        <small>{client.detail}</small>
-        <a class="download-action" href={client.href} rel={client.package ? 'nofollow' : undefined} data-astro-prefetch={client.package ? 'false' : undefined}>{client.action}</a>
+        <div class="client-foot">
+          <small>{client.detail}</small>
+          <a class="download-button" href={client.href} rel={client.package ? 'nofollow' : undefined} data-astro-prefetch={client.package ? 'false' : undefined}>{client.action}</a>
+        </div>
       </article>)}
     </div>
 
     <div class="download-support">
-      <p>微信或 QQ 内下载 Android 版时，请先选择「在浏览器打开」。</p>
-      <a href={android.BACKUP_URL} rel="nofollow" data-astro-prefetch="false">Android 备用下载</a>
-      <a href={android.RELEASES_URL}>版本记录</a>
+      <p>在微信或 QQ 里下载 Android 版，请先点右上角，选择「在浏览器打开」。</p>
+      <div class="support-links">
+        <a href={android.BACKUP_URL} rel="nofollow" data-astro-prefetch="false">Android 备用下载</a>
+        <a href={android.RELEASES_URL}>版本记录</a>
+        <button class="text-copy" type="button" data-copy-link data-copy-text={`${PRODUCT_CONFIG.ORIGIN}/download/`}><span aria-live="polite" data-copy-label>复制下载页链接</span></button>
+      </div>
     </div>
 
-    <section class="desktop-tools" aria-labelledby="desktop-tools-title">
-      <h2 id="desktop-tools-title">桌面工具</h2>
-      <div class="desktop-tool">
-        <div>
-          <h3>Local Runtime MCP</h3>
-          <p>在 StuDev 网页版和 Windows 版使用这台电脑上已授权的网页工具，也能体验浏览器模型。下载包含运行时和浏览器扩展。</p>
-        </div>
-        <a class="download-action tool-action" href={runtimeRelease}>获取 Local Runtime MCP</a>
+    <section class="desktop-tool" aria-labelledby="desktop-tool-title">
+      <div>
+        <h2 id="desktop-tool-title">Local Runtime MCP</h2>
+        <p>让 StuDev 网页版和 Windows 版用上这台电脑里你授权的网页工具，也能体验在浏览器里运行的模型。下载包含运行时和浏览器扩展。</p>
       </div>
+      <a class="download-button" href={runtimeRelease}>获取</a>
     </section>
 
     <p class="download-filing">App 备案号 <a href={PRODUCT_CONFIG.FILINGS.APP.URL} target="_blank" rel="noopener noreferrer">{PRODUCT_CONFIG.FILINGS.APP.TEXT}</a></p>
   </div>
 </SiteLayout>
+<script>
+  // The big button is for the system one is on; the cards below keep every other way.
+  const ua = navigator.userAgent;
+  const id = /Android/i.test(ua) ? 'android' : /Windows/i.test(ua) ? 'windows' : 'web';
+  const card = document.querySelector<HTMLElement>(`[data-client="${id}"]`);
+  const source = card?.querySelector<HTMLAnchorElement>('.download-button');
+  const primary = document.querySelector<HTMLAnchorElement>('[data-download-primary] .download-button');
+  if (card && source && primary) {
+    primary.href = source.href;
+    primary.textContent = source.textContent;
+    primary.rel = source.rel;
+    card.classList.add('current');
+    card.parentElement?.prepend(card);
+  }
+</script>
 <style>
   .download-page {
-    width: min(920px, calc(100% - 2 * var(--space-xl)));
+    width: min(960px, calc(100% - 2 * var(--space-xl)));
     margin-inline: auto;
-    padding-block: clamp(54px, 6vw, 88px) var(--space-xxl);
+    padding-block: clamp(48px, 7vw, 96px) var(--space-xxl);
   }
-  .download-heading { margin-block-end: var(--space-xxl); }
-  h1 { margin: 0; font-size: clamp(30px, 4vw, 42px); font-weight: 650; letter-spacing: -.04em; line-height: 1.25; }
-  .download-heading p { margin: var(--space-s) 0 0; color: var(--muted); font-size: 16px; }
+  .download-hero { display: flex; flex-direction: column; align-items: center; text-align: center; margin-block-end: clamp(40px, 6vw, 64px); }
+  .download-icon { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 6px 24px color-mix(in srgb, var(--brand) 22%, transparent); }
+  h1 { margin: var(--space-l) 0 0; font-size: clamp(34px, 5vw, 48px); font-weight: 700; letter-spacing: -.04em; line-height: 1.15; }
+  .download-hero > p { margin: var(--space-s) 0 0; color: var(--muted); font-size: clamp(15px, 1.6vw, 18px); }
+  .download-primary { display: flex; flex-direction: column; align-items: center; gap: var(--space-s); margin-block-start: var(--space-xl); }
+  .download-version { color: var(--faint); font-size: 12.5px; }
+  .download-button {
+    display: inline-grid;
+    place-items: center;
+    min-height: 40px;
+    padding: 0 var(--space-l);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s;
+  }
+  .download-button:hover { background: var(--surface-sunken); color: var(--ink); }
+  .download-button.primary { min-height: 48px; padding: 0 32px; border-color: transparent; background: var(--brand); color: var(--on-brand); font-size: 16px; }
+  .download-button.primary:hover { background: color-mix(in srgb, var(--brand) 88%, var(--ink)); color: var(--on-brand); }
   .download-clients { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-l); }
   .download-client {
     display: flex;
@@ -84,55 +134,35 @@ const clients = [
     border-radius: var(--radius-card);
     background: var(--surface);
   }
-  .download-client h2, .desktop-tool h3 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.025em; line-height: 1.35; }
-  .download-client p, .desktop-tool p { margin: var(--space-s) 0 0; color: var(--muted); font-size: 14px; }
-  .download-client p { flex: 1; }
-  .download-client small { margin: var(--space-l) 0 var(--space-s); color: var(--muted); font-size: 12px; }
-  .download-action {
-    display: grid;
-    place-items: center;
-    min-height: var(--size-target);
-    padding: var(--space-s) var(--space-l);
-    border-radius: var(--radius-control);
-    background: var(--brand-container);
-    color: var(--on-brand-container);
-    font-size: 14px;
-    font-weight: 600;
-    text-align: center;
-  }
-  .download-action:hover { background: color-mix(in srgb, var(--brand) 14%, var(--brand-container)); color: var(--on-brand-container); }
-  .download-support {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-xs) var(--space-l);
-    margin-block-start: var(--space-l);
-    font-size: 13px;
-  }
-  .download-support p { margin: 0; color: var(--muted); flex: 1 0 min(100%, 330px); }
-  .download-support a { color: var(--brand); }
-  .download-support a:hover, .download-filing a:hover { text-decoration: underline; }
-  .desktop-tools { margin-block-start: 44px; }
-  .desktop-tools h2 { margin: 0 0 var(--space-m); color: var(--muted); font-size: 14px; font-weight: 600; }
+  .download-client.current { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); }
+  .client-icon { width: 28px; height: 28px; fill: none; stroke: var(--brand); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .download-client h2 { margin: var(--space-m) 0 0; font-size: 19px; font-weight: 650; letter-spacing: -.02em; }
+  .download-client p { flex: 1; margin: var(--space-xs) 0 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .client-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); margin-block-start: var(--space-l); }
+  .client-foot small { color: var(--faint); font-size: 12.5px; }
+  .download-support { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-s) var(--space-l); margin-block-start: var(--space-l); font-size: 13px; }
+  .download-support p { margin: 0; color: var(--muted); }
+  .support-links { display: flex; flex-wrap: wrap; gap: var(--space-l); }
+  .support-links a, .support-links .text-copy { padding: 0; border: 0; background: none; color: var(--brand); font: inherit; cursor: pointer; }
+  .support-links a:hover, .support-links .text-copy:hover { text-decoration: underline; }
   .desktop-tool {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-l) var(--space-xl);
-    padding-block: var(--space-xl);
-    border-block: 1px solid var(--line);
+    margin-block-start: clamp(40px, 6vw, 56px);
+    padding: var(--space-l) var(--space-xl);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
   }
-  .desktop-tool h3 { font-size: 18px; }
-  .desktop-tool p { max-width: 52ch; }
-  .tool-action { flex: none; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
-  .tool-action:hover { background: var(--surface); color: var(--ink); }
-  .download-filing { margin: var(--space-xl) 0 0; color: var(--muted); font-size: 12px; }
+  .desktop-tool h2 { margin: 0; font-size: 16px; font-weight: 650; }
+  .desktop-tool p { max-width: 60ch; margin: var(--space-xs) 0 0; color: var(--muted); font-size: 13.5px; }
+  .download-filing { margin: var(--space-xl) 0 0; color: var(--faint); font-size: 12px; text-align: center; }
   .download-filing a { color: inherit; }
-  @media (max-width: 720px) {
+  @media (max-width: 760px) {
     .download-page { width: calc(100% - 2 * var(--space-l)); }
-    .download-heading { margin-block-end: var(--space-xl); }
     .download-clients { grid-template-columns: 1fr; gap: var(--space-m); }
     .download-client { padding: var(--space-l); }
-    .desktop-tool { flex-wrap: wrap; }
+    .desktop-tool { flex-wrap: wrap; padding: var(--space-l); }
   }
 </style>

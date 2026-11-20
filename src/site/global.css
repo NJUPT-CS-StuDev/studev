@@ -17,7 +17,7 @@
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 html { scroll-behavior: smooth; scrollbar-gutter: stable; }
 body { margin: 0; min-width: 320px; line-height: 1.65; }
 a { color: inherit; text-decoration: none; }
@@ -43,10 +43,10 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .avatar-name { max-width: var(--size-account-name-max); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.share-entry.text-copy, .about-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); }
-.share-entry.text-copy, .about-entry { margin-right: -10px; }
-.app-entry { margin-right: 18px; }
-.share-entry.text-copy:hover, .about-entry:hover, .app-entry:hover, .about-entry.active { color: var(--ink); }
+.about-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); flex: none; }
+.app-entry { height: 32px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-pill); margin-right: 4px; }
+.about-entry:hover, .about-entry.active { color: var(--ink); }
+.app-entry:hover, .app-entry[aria-current='page'] { color: var(--ink); background: var(--surface-sunken); }
 .about-entry.active { font-weight: 600; }
 .app-offer { position: fixed; left: 0; right: 0; bottom: calc(50px + env(safe-area-inset-bottom, 0px)); z-index: 49; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 40px; background: var(--paper); border-top: 1px solid var(--line); font-size: 13px; }
 .app-offer[hidden] { display: none; }
@@ -62,7 +62,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 999.98px) {
   .site-header { position: static; border-bottom: 0; }
-  .site-nav, .wordmark, .share-entry, .about-entry, .app-entry { display: none; }
+  .site-nav, .wordmark, .about-entry, .app-entry { display: none; }
   .header-inner { height: 0; padding: 0; }
   .header-inner .avatar { position: absolute; top: calc(6px + env(safe-area-inset-top, 0px)); right: 16px; z-index: 45; }
   .campus-site-account { display: none; }
