@@ -1,4 +1,5 @@
-import { api, avatarImg, el, errorText, message, PlatformError, q, session, type MemberPage, type MemberProfile } from './api';
+import { api, avatarImg, el, errorText, message, PlatformError, q, session, type MemberPage, type MemberProfile, type Session } from './api';
+import { showManage } from './manage';
 
 const status = q<HTMLElement>('[data-members-status]');
 const list = q<HTMLElement>('[data-members-list]');
@@ -15,6 +16,27 @@ let debounce: ReturnType<typeof setTimeout> | undefined;
 let offset = 0;
 let loadMoreFailed = false;
 let authorized = false;
+let who: Session | null = null;
+type View = 'cards' | 'manage' | 'audit';
+
+/** One page for everyone in the organization: the cards anyone signed in sees, and for admins the management view. */
+function viewOf(): View {
+    const wanted = new URL(location.href).searchParams.get('view');
+    if (wanted === 'manage' && who && who.user.role !== 'user') return 'manage';
+    if (wanted === 'audit' && who?.user.role === 'owner') return 'audit';
+    return 'cards';
+}
+function show(view: View) {
+    q('[data-members-shell]').dataset.wide = String(view !== 'cards');
+    document.querySelectorAll<HTMLElement>('[data-members-view]').forEach(node => node.hidden = node.dataset.membersView !== view);
+    document.querySelectorAll<HTMLButtonElement>('[data-members-tab]').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.membersTab === view)));
+    if (view !== 'cards' && who) void showManage(view, who);
+}
+document.querySelectorAll<HTMLButtonElement>('[data-members-tab]').forEach(tab => tab.addEventListener('click', () => {
+    const url = listUrl(); const view = tab.dataset.membersTab as View;
+    if (view === 'cards') url.searchParams.delete('view'); else url.searchParams.set('view', view);
+    history.replaceState(null, '', url.pathname + url.search); show(viewOf());
+}));
 
 function listUrl(): URL { const url = new URL(location.href); url.searchParams.delete('id'); return url; }
 function avatar(member: MemberProfile) { return avatarImg(member, { width:44, className:'p-member-avatar', lazy:true }); }
@@ -77,7 +99,17 @@ back.addEventListener('click',event=>{ if(event.button||event.metaKey||event.ctr
 window.addEventListener('popstate',()=>void load());
 async function start() {
     retry.hidden=true; message(status,'正在读取成员…');
-    try { if (await session(true)) { authorized=true; await load(); } }
+    try {
+        who = await session(true);
+        if (who) {
+            authorized=true;
+            const staff = who.user.role !== 'user';
+            q('[data-members-tabs]').hidden = !staff;
+            document.querySelectorAll<HTMLElement>('[data-owner-only]').forEach(node => node.hidden = who!.user.role !== 'owner');
+            show(viewOf());
+            await load();
+        }
+    }
     catch (error) { message(status,errorText(error),'error'); retry.hidden=false; }
 }
 void start();

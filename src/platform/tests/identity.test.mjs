@@ -424,10 +424,9 @@ test('every password change or reset mails the account, and a mail failure never
   assert.equal((await broken.call('/auth/config')).emailDeliveryEnabled, true);
 });
 
-test('admin role requires department and title, while owner can update full identity without resetting password', async () => {
+test('admin role is independent of position, and owner can update full identity without resetting password', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member('10000888');
-  await rejects(f.call('/admin/users', 'POST', { studentId: 'NODEPT01', realName: '缺部门', qq: '10008881', role: 'admin' }, owner), 'STAFF_PROFILE_REQUIRED', 400);
-  await rejects(f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin' }, owner), 'STAFF_PROFILE_REQUIRED', 400);
+  assert.equal((await f.call('/admin/users', 'POST', { studentId: 'NODEPT01', realName: '无职务', qq: '10008881', role: 'admin' }, owner)).user.role, 'admin');
   const updated = await f.call(`/admin/users/${member.user.id}`, 'POST', {
     revision: member.user.revision,
     studentId: 'NEWID0888',
@@ -445,7 +444,8 @@ test('admin role requires department and title, while owner can update full iden
   const relogin = await f.call('/auth/login', 'POST', { studentId: 'NEWID0888', password: MEMBER_PASSWORD });
   assert.equal(relogin.status, 200);
   assert.equal(relogin.passwordChangeRequired, false);
-  await rejects(f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, department: '' }, owner), 'STAFF_PROFILE_REQUIRED', 400);
-  const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, role: 'user', department: '', title: '' }, owner);
+  const unplaced = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, department: '', title: '' }, owner);
+  assert.equal(unplaced.user.role, 'admin');
+  const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: unplaced.user.revision, role: 'user' }, owner);
   assert.equal(demoted.user.role, 'user');
 });
