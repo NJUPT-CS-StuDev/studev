@@ -19,7 +19,8 @@ const config = { headers: [
         { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
         { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
     ] },
-    { source: '/campus-release.json', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
+    // Revalidated on every read; "no-cache" would also keep the edge from compressing it (500 KB instead of 60 KB).
+    { source: '/campus-release.json', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
 ] };
 
 /** The current pointer and its resources become public in one atomic deployment.
