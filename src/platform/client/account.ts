@@ -76,7 +76,7 @@ function renderIdCard(user: User) {
   linksRow.style.marginTop = '8px';
   if (user.term && user.department) {
     const archiveLink = el('a', '在历届档案中查看我的名片 ↗', 'p-link');
-    const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
+    const anchor = `#member-${user.id}`;
     archiveLink.href = user.term === '2026-2027' ? `/history/${anchor}` : `/history/${encodeURIComponent(user.term)}/${anchor}`;
     linksRow.append(archiveLink);
   }

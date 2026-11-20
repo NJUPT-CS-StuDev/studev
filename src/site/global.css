@@ -218,6 +218,7 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .member-avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; background: var(--surface-sunken); }
 .member-copy { min-width: 0; }
 .member h4 { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.35; }
+.member h4 .member-nickname { margin-left: 4px; color: var(--faint); font-size: 12px; font-weight: 400; }
 .member-role, .member-signature { display: block; color: var(--muted); font-size: 12px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .skeleton-circle, .skeleton-line { background: var(--surface-sunken); animation: skeleton-pulse 1.4s ease-in-out infinite; }
 .skeleton-line { border-radius: 3px; height: 10px; margin: 4px 0; }

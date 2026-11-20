@@ -107,7 +107,7 @@ test('admins may look up students and resolve identity disputes; roles and other
   assert.equal((await f.app(`/admin/users/${adminId}/reset-password`, { password: f.password }, native.body.accessToken)).status, 403);
 });
 
-test('public roster derives exclusively from admin/owner roles; forged roster fields on an ordinary user never publish their identity', async () => {
+test('public roster lists everyone holding a position, by real name, never with student ID or QQ; admin alone is not a position', async () => {
   const f = await fixture(), source = await f.repo.latest(`identity/users/${f.user.id}`);
   const ordinary = { ...source, term: '2026-2027', department: '主席团', title: '主席', signature: '保密签名', order: 0 };
   await f.repo.append(`identity/users/${f.user.id}`, ordinary, source.revision);
@@ -116,12 +116,14 @@ test('public roster derives exclusively from admin/owner roles; forged roster fi
     { ...ordinary, id: '00000000-0000-0000-0000-000000000002', role: 'admin', realName: '公开管理员', nickname: '管理员', signature: '公开签名', qq: '10000903', studentId: 'ADMIN00002' },
     { ...ordinary, id: '00000000-0000-0000-0000-000000000099', role: 'admin', department: '', title: '', realName: '未分配管理员', nickname: '未分配', qq: '10000909', studentId: 'ADMIN00009' },
   ], '2026-2027', new Date().toISOString(), f.env.PLATFORM_ORIGIN);
-  assert.equal(snapshot.totalCount, 1); assert.equal(snapshot.groups[0].people[0].nickname, '管理员');
-  assert.deepEqual(Object.keys(snapshot.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'nickname', 'role', 'signature']);
-  for (const value of ['公开管理员', '10000903', 'ADMIN00002']) assert.equal(JSON.stringify(snapshot).includes(value), false);
+  assert.equal(snapshot.totalCount, 2);
+  assert.deepEqual(snapshot.groups[0].people.map(person => person.name).sort(), [ordinary.realName, '公开管理员'].sort());
+  assert.deepEqual(Object.keys(snapshot.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'name', 'nickname', 'role', 'signature']);
+  for (const value of ['未分配管理员', '10000903', 'ADMIN00002', '10000909', ordinary.studentId, ordinary.qq]) assert.equal(JSON.stringify(snapshot).includes(value), false);
   await f.repo.put('roster/2026-2027.json', snapshot);
   const result = await f.app('/public/roster');
-  for (const value of [ordinary.realName, ordinary.studentId, ordinary.qq, ordinary.nickname, ordinary.signature]) assert.ok(!JSON.stringify(result.body).includes(value));
+  assert.ok(JSON.stringify(result.body).includes(ordinary.realName));
+  for (const value of [ordinary.studentId, ordinary.qq]) assert.ok(!JSON.stringify(result.body).includes(value));
   const selfEdit = await f.browser.call('/auth/profile', { method: 'POST', body: { revision: source.revision + 1, nickname: '', role: 'admin' } });
   assert.equal(selfEdit.status, 200);
   assert.equal(selfEdit.body.user.role, 'user');
@@ -140,9 +142,9 @@ test('old roster snapshots rebuild from existing private identities, never initi
   assert.equal(result.status, 200); assert.equal(result.body.schema, ROSTER_SCHEMA);
   assert.equal(result.body.totalCount, 1); assert.equal(result.body.activeCount, 0);
   const person = result.body.groups[0].people[0];
-  assert.equal(person.id, id); assert.equal(person.nickname, '名'); assert.equal(person.role, '部长'); assert.equal(person.signature, '一起成长');
+  assert.equal(person.id, id); assert.equal(person.name, staff.realName); assert.equal(person.nickname, '名'); assert.equal(person.role, '部长'); assert.equal(person.signature, '一起成长');
   assert.equal(person.avatarUrl, f.env.PLATFORM_ORIGIN + '/api/platform/members/' + id + '/avatar');
-  for (const value of [staff.realName, staff.studentId, staff.qq, 'passwordHash', 'securityVersion']) assert.equal(JSON.stringify(result.body).includes(value), false);
+  for (const value of [staff.studentId, staff.qq, 'passwordHash', 'securityVersion']) assert.equal(JSON.stringify(result.body).includes(value), false);
   assert.deepEqual(await f.repo.list('identity/users/'), existingUsers, 'reading a roster never creates or changes accounts');
   const read = f.store.get, keys = [];
   f.store.get = async (key, ...args) => { keys.push(key); return read(key, ...args); };
@@ -158,8 +160,9 @@ test('even current roster snapshots expose only the public field projection and 
       name: '内部真姓名', realName: '内部真姓名', studentId: 'PRIVATESTAFF', qq: '10000905', avatarUrl: 'https://q1.qlogo.cn/g?nk=10000905' }] }] };
   await f.repo.put('roster/2026-2027.json', contaminated);
   const result = await f.app('/public/roster'); assert.equal(result.status, 200);
-  for (const value of ['内部真姓名', 'PRIVATESTAFF', '10000905', 'qlogo']) assert.equal(JSON.stringify(result.body).includes(value), false);
-  assert.deepEqual(Object.keys(result.body.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'nickname', 'role', 'signature']);
+  for (const value of ['PRIVATESTAFF', '10000905', 'qlogo']) assert.equal(JSON.stringify(result.body).includes(value), false);
+  assert.equal(result.body.name, undefined); assert.equal(result.body.groups[0].realName, undefined);
+  assert.deepEqual(Object.keys(result.body.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'name', 'nickname', 'role', 'signature']);
 });
 
 test('registration and login errors match for web/app; registering cannot claim a pre-recorded administrator', async () => {

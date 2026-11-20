@@ -188,7 +188,7 @@ function openMemberCardModal(user: User) {
   mailLink.href = `mailto:${encodeURIComponent(user.email || `${user.qq}@qq.com`)}`;
   quickActions.append(mailLink);
   if (user.term && user.department) {
-    const anchor = user.realName ? `#member-${encodeURIComponent(user.realName)}` : '#people';
+    const anchor = `#member-${user.id}`;
     const archiveLink = el('a', '在历届档案中定位名片 ↗', 'p-button secondary small');
     archiveLink.href = user.term === '2026-2027' ? `/history/${anchor}` : `/history/${encodeURIComponent(user.term)}/${anchor}`;
     quickActions.append(archiveLink);

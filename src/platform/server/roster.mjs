@@ -15,7 +15,7 @@ export function qqAvatarUrl(qq) {
 }
 
 /** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
-export const ROSTER_SCHEMA = 7;
+export const ROSTER_SCHEMA = 8;
 
 
 export function normalizeDepartmentName(dept) {
@@ -48,20 +48,21 @@ export function profileNickname(user) {
   return [...new Intl.Segmenter('zh', { granularity: 'grapheme' }).segment(name)].at(-1)?.segment || '同学';
 }
 
-/** Public organization membership includes appointed staff with department and title. */
+/** Public organization membership is holding a position (department and title) that term; being an admin is separate. */
 export function isRosterMember(user, term = user?.term) {
   return Boolean(user && SUPPORTED_ROSTER_TERMS.has(term) && user.term === term
-    && ['admin', 'owner'].includes(user.role) && ['active', 'pending'].includes(user.status)
+    && ['active', 'pending'].includes(user.status)
     && normalizeDepartmentName(user.department) && normalizeRoleTitle(user.title));
 }
 
-/** Only this projection leaves the private identity store, including on cached reads. */
+/** Only this projection leaves the private identity store, including on cached reads: a member's real name, nickname,
+ * position, signature and avatar. Student ID, QQ and email never do. */
 export function publicRoster(snapshot, origin) {
   return {
     schema: ROSTER_SCHEMA, term: snapshot.term, updatedAt: snapshot.updatedAt,
     totalCount: snapshot.totalCount, activeCount: snapshot.activeCount,
     groups: snapshot.groups.map(group => ({ name: group.name, people: group.people.map(person => ({
-      id: person.id, nickname: person.nickname, role: person.role, signature: person.signature,
+      id: person.id, name: person.name, nickname: person.nickname, role: person.role, signature: person.signature,
       avatarUrl: origin + '/api/platform/members/' + person.id + '/avatar', featured: person.featured,
     })) })),
   };
@@ -77,7 +78,7 @@ export function buildRosterSnapshot(users, term, updatedAt, origin) {
   }
   const groups = departmentOrder.map(name => ({ name, people: rosterUsers
     .filter(user => normalizeDepartmentName(user.department || '学生发展中心') === name)
-    .map(user => ({ id: user.id, nickname: profileNickname(user), role: normalizeRoleTitle(user.title),
+    .map(user => ({ id: user.id, name: (user.realName || '').trim(), nickname: profileNickname(user), role: normalizeRoleTitle(user.title),
       signature: user.signature || '', featured: name === '主席团' }))
   })).filter(group => group.people.length);
   return publicRoster({ term, updatedAt, totalCount: rosterUsers.length,

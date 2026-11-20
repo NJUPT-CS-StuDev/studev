@@ -2,6 +2,7 @@ import { avatarImg } from '../../platform/client/api';
 
 interface RosterPerson {
   id: string;
+  name?: string;
   nickname: string;
   role?: string;
   avatarUrl: string;
@@ -32,7 +33,13 @@ function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement 
   copy.className = 'member-copy';
 
   const h4 = document.createElement('h4');
-  h4.textContent = person.nickname;
+  h4.textContent = person.name || person.nickname;
+  if (person.name && person.nickname && person.nickname !== person.name) {
+    const nick = document.createElement('small');
+    nick.className = 'member-nickname';
+    nick.textContent = person.nickname;
+    h4.append(' ', nick);
+  }
   copy.append(h4);
 
   if (person.role) {
