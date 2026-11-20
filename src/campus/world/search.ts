@@ -14,3 +14,12 @@ export async function searchClient(): Promise<SearchClient> {
     }
     return shared.client;
 }
+
+/** Readies the engine while the browser is idle, so the first search does not wait for the index. Skipped when the
+ * reader asked to save data; the index is kept in Cache Storage, so this reads the network once per bundle. */
+export function warmSearch() {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (connection?.saveData) return;
+    const start = () => void searchClient().then(client => client.initialize()).catch(() => undefined);
+    if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 8000 }); else setTimeout(start, 3000);
+}

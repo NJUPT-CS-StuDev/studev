@@ -22,6 +22,8 @@ export const campusConfig = {
                     prefer_sources: ['jwc'],
                 },
             ],
+            /** The job board posts dozens a day: found, but never crowding a page. */
+            quiet_sources: ['job91'],
         } satisfies Profile,
         /** Category of a page, decided by the first rule whose words appear in its title, section or tags. */
         categories: [

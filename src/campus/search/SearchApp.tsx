@@ -185,7 +185,7 @@ export default function SearchApp() {
                         {channel.dated && !browsing && <select aria-label="排序" value={sort === 'date_desc' ? 'date' : ''} onChange={event => go({ sort: event.target.value || null })}><option value="">按相关性</option><option value="date">按时间</option></select>}
                     </div>}
                     {trimmed.length === 1 ? <div className="empty">再多输入一个字</div> : <>
-                        {currentAnswer && currentAnswer.total > 0 && <div className="tally">{browsing ? `${currentAnswer.total.toLocaleString('zh-CN')} 条` : `${currentAnswer.total >= 1000 ? '超过 1000' : `约 ${currentAnswer.total.toLocaleString('zh-CN')}`} 条结果`}{currentAnswer.seconds !== null ? `（${currentAnswer.seconds.toFixed(2)} 秒）` : ''}{page > 1 ? ` · 第 ${page} 页` : ''}</div>}
+                        {currentAnswer && currentAnswer.total > 0 && <div className="tally">{browsing ? `${currentAnswer.total.toLocaleString('zh-CN')} 条，最新的在前` : `${currentAnswer.total >= 1000 ? '超过 1000' : `约 ${currentAnswer.total.toLocaleString('zh-CN')}`} 条结果`}{currentAnswer.seconds !== null ? `（${currentAnswer.seconds.toFixed(2)} 秒）` : ''}{page > 1 ? ` · 第 ${page} 页` : ''}</div>}
                         {page === 1 && intent}
                         {failed && <div className="empty">搜索暂时出了问题，请稍后重试。</div>}
                         <div className="hits">{results.map(result => <Result key={result.id} result={result} roomState={id => rooms?.(id) ?? null} onCourse={setCourse} />)}</div>
