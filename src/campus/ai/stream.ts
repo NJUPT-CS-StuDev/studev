@@ -55,7 +55,7 @@ export async function askOwn(own: Own, messages: Message[], situation: Situation
     if (!response.ok || !response.body) {
         const said = await response.text().catch(() => '');
         const detail = (() => { try { return (JSON.parse(said) as { error?: { message?: string } }).error?.message; } catch { return undefined; } })();
-        throw new AskError(response.status === 401 ? 'API Key 不对，请在「我 → 模型服务」检查。' : response.status === 402 ? '你的 API 余额不足。'
+        throw new AskError(response.status === 401 ? 'API Key 不对，请在「AI → 模型」检查。' : response.status === 402 ? '你的 API 余额不足。'
             : response.status === 404 ? `接口或模型不存在${detail ? `：${detail}` : '，检查地址和模型名。'}` : response.status === 429 ? '你的 API 请求太频繁，稍后再试。' : `你的 API 没有回答（${response.status}）${detail ? `：${detail}` : ''}`);
     }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();

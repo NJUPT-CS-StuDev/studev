@@ -1,44 +1,29 @@
-import { useSyncExternalStore } from 'react';
-import { readCachedAccount, subscribeCachedAccount } from '../../platform/client/auth-status';
 import assistant from '@/world/assistant.json';
+import { readMemory, remembered, writeMemory } from './memory';
 
-export const PERSONAL_LIMIT = 4000;
 export const PROJECT_LIMIT = 8000;
-export const DEFAULT_INSTRUCTIONS = assistant.style;
-const key = 'studev_ai_instructions:';
-const changed = 'studev:ai-instructions';
 
-export function instructionOwner(): string | null {
-    const account = readCachedAccount();
-    return account ? account.id ?? null : 'guest';
+/** What a project asks of the AI; the house style is the assistant's own, and what one asks for oneself is memory. */
+export function projectInstructions(note?: string): string | undefined {
+    return note?.trim() ? note.trim().slice(0, PROJECT_LIMIT) : undefined;
 }
 
-export function readPersonalInstructions(): string {
+// Personal instructions used to live apart from memory, in this browser only. Whatever one wrote there becomes lines
+// of memory once, so it follows the account like the rest; the house style it started from is not one's own.
+const legacy = 'studev_ai_instructions:';
+export function foldPersonalInstructions() {
     try {
-        const owner = instructionOwner();
-        return (owner ? localStorage.getItem(key + owner) : null) ?? DEFAULT_INSTRUCTIONS;
-    } catch { return DEFAULT_INSTRUCTIONS; }
-}
-
-export function writePersonalInstructions(owner: string, value: string) {
-    if (owner !== instructionOwner()) throw new Error('当前账号已切换，请重新打开个人指令。');
-    localStorage.setItem(key + owner, value.trim().slice(0, PERSONAL_LIMIT));
-    window.dispatchEvent(new Event(changed));
-}
-
-function subscribe(change: () => void) {
-    const cancel = subscribeCachedAccount(change);
-    const storage = (event: StorageEvent) => { if (!event.key || event.key.startsWith(key)) change(); };
-    window.addEventListener(changed, change);
-    window.addEventListener('storage', storage);
-    return () => { cancel(); window.removeEventListener(changed, change); window.removeEventListener('storage', storage); };
-}
-
-export const usePersonalInstructions = () => useSyncExternalStore(subscribe, readPersonalInstructions, () => DEFAULT_INSTRUCTIONS);
-export const useInstructionOwner = () => useSyncExternalStore(subscribe, instructionOwner, () => null);
-
-export function combinedInstructions(personal: string, project?: string): string {
-    const note = project?.trim();
-    if (!note) return personal.trim().slice(0, PERSONAL_LIMIT);
-    return [`个人指令\n${personal.trim().slice(0, PERSONAL_LIMIT)}`, `项目指令\n${note.slice(0, PROJECT_LIMIT)}`].join('\n\n').slice(0, 12000);
+        const keys = Object.keys(localStorage).filter(key => key.startsWith(legacy));
+        let memory = readMemory();
+        for (const key of keys) {
+            const text = localStorage.getItem(key)?.trim() ?? '';
+            if (text && text !== assistant.style.trim()) {
+                for (const line of text.split('\n').map(line => line.replace(/^[-*#\s]+/, '').trim()).filter(Boolean)) {
+                    try { memory = { ...memory, text: remembered(memory.text, line) }; } catch { break; }
+                }
+            }
+            localStorage.removeItem(key);
+        }
+        if (keys.length) writeMemory(memory);
+    } catch { /* storage unavailable: nothing was kept here */ }
 }

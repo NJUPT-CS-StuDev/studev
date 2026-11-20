@@ -95,7 +95,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var selection by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.selection ?: catalog.forNewChat()) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     var moving by remember { mutableStateOf<Set<String>?>(null) }
-    var personalInstructions by remember { mutableStateOf(false) }
+    var configuringModels by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { Instructions.fold(context, model.settings.state.value.memory.text)?.let { text -> model.settings.update { it.copy(memory = it.memory.copy(text = text)) } } }
     var projectInstructions by remember { mutableStateOf<String?>(null) }
     var configuringTools by remember { mutableStateOf(false) }
     val toolPrefs = remember(context) { CampusToolPreferences.store(context) }
@@ -162,9 +163,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         var history = recent(RemoteMcp.history(base.lineage(at).map { it.message }, remote.keys))
         val settings = model.settings.state.value
         val week = model.state.value.term?.let { top.hicancan.studev.world.CampusDay.weekOf(it.weeks, top.hicancan.studev.world.CampusDay.now().toLocalDate())?.week ?: 0 }
-        val owner = Instructions.owner(client.current()?.id)
         val project = projects.firstOrNull { it.id == activeProject }
-        val instructionText = Instructions.forChat(Instructions.read(context, owner), project)
+        val instructionText = Instructions.forChat(project)
         val remembered = settings.memory.takeIf { it.on }?.let { project?.memory ?: it.text }
         val situation = Situation(week, settings.klass, settings.campus, remembered, instructionText)
         val campus = assistant.toolsFor(situation, CampusToolPreferences.disabled(toolPrefs))
@@ -318,17 +318,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         }
         minding = false
     }
-    if (personalInstructions) {
-        val owner = Instructions.owner(account?.id)
-        key(owner) {
-            val value = remember(owner) { Instructions.read(context, owner) }
-            InstructionSheet("个人指令", "影响当前设备上此账号的 AI 对话。", value, Instructions.PERSONAL_LIMIT,
-                onClose = { personalInstructions = false }) { edited ->
-                if (owner == Instructions.owner(client.user.value?.id)) Instructions.save(context, owner, edited)
-                personalInstructions = false
-            }
-        }
-    }
+    if (configuringModels) ModelServicesSheet { configuringModels = false }
     if (configuringTools) CampusToolsSheet(toolPrefs, remotePrefs) {
         configuredRemote = RemoteMcpPreferences.read(remotePrefs)
         configuringTools = false
@@ -366,10 +356,11 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             ChatDrawer(chats, projects, courses, current, activeProject, busy, memory,
                 openChat = { open(it) }, newChat = { open(null, it) },
                 openProject = { id -> open(chats.filter { it.projectId == id }.maxByOrNull { it.updated }?.id, id) }, saveProject = ::saveProject,
-                editInstructions = { project -> scope.launch { drawer.close(); if (project == null) personalInstructions = true else projectInstructions = project.id } },
+                editInstructions = { project -> scope.launch { drawer.close(); projectInstructions = project.id } },
                 rename = { renaming = it }, remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
                 mind = { scope.launch { drawer.close(); minding = true } },
-                configureTools = { scope.launch { drawer.close(); configuringTools = true } })
+                configureTools = { scope.launch { drawer.close(); configuringTools = true } },
+                configureModels = { scope.launch { drawer.close(); configuringModels = true } })
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
@@ -668,7 +659,7 @@ private data class OfferedService(val id: String?, val name: String, val models:
         title = { Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(if (project == null) "记忆" else "项目记忆")
-                Plain(if (project == null) "AI 记下你的专业、习惯和偏好，回答会越来越贴合你。" else "记在「$project」里的信息。", 13.sp, Ink.muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp))
+                Plain(if (project == null) "你是谁、希望 AI 怎么回答，一行一件。你写的和 AI 记下的都在这里。" else "记在「$project」里的信息。", 13.sp, Ink.muted, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp))
             }
             Switch(on, { on = it }, modifier = Modifier.padding(start = 12.dp))
         } },
@@ -678,7 +669,7 @@ private data class OfferedService(val id: String?, val name: String, val models:
                     androidx.compose.foundation.text.BasicTextField(text, { text = it.take(Memory.LIMIT) }, Modifier.fillMaxWidth().heightIn(min = 140.dp).padding(horizontal = 14.dp, vertical = 12.dp),
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, lineHeight = 25.sp, color = Ink.text),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.brand),
-                        decorationBox = { inner -> Box { if (text.isEmpty()) Plain("一行一件，比如：\n通信工程专业，在准备考研\n喜欢早上学习", 15.sp, Ink.faint, lineHeight = 25.sp); inner() } })
+                        decorationBox = { inner -> Box { if (text.isEmpty()) Plain("一行一件，比如：\n回答先给结论，尽量简短\n通信工程专业，在准备考研", 15.sp, Ink.faint, lineHeight = 25.sp); inner() } })
                     Plain(if (count > 0) "记着 $count 件事" else "聊天时说“记住……”，AI 也会写进来", 12.sp, Ink.muted, modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp))
                 }
             } else {

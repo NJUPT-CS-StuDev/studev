@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,8 +27,8 @@ internal data class CourseProject(val code: String, val name: String)
 @Composable internal fun ChatDrawer(
     chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean, memory: Memory,
     openChat: (String) -> Unit, newChat: (String?) -> Unit, openProject: (String) -> Unit,
-    saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject?) -> Unit,
-    rename: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit,
+    saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject) -> Unit,
+    rename: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit, configureModels: () -> Unit,
 ) {
     var view by remember(activeProject) { mutableStateOf(if (activeProject == null) "chats" else "projects") }
     var projectId by remember(activeProject) { mutableStateOf(activeProject) }
@@ -113,9 +116,11 @@ internal data class CourseProject(val code: String, val name: String)
             }
         }
         HorizontalDivider(color = Ink.line)
-        KeyRow(null, "MCP", "管理 AI 可用的校园工具", chevron = true, onClick = configureTools)
-        KeyRow(null, "个人指令", chevron = true, onClick = { editInstructions(null) })
-        KeyRow(null, if (activeProject == null) "记忆" else "项目记忆", if (!memory.on) "已关闭" else memory.text.lines().count { it.isNotBlank() }.let { if (it > 0) "记着 $it 件事" else "还没有" }, chevron = true, onClick = mind)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            DrawerTool(Icons.Outlined.BookmarkBorder, if (activeProject == null) "记忆" else "项目记忆", mind)
+            DrawerTool(Icons.Outlined.AutoAwesome, "模型", configureModels)
+            DrawerTool(Icons.Outlined.Build, "工具", configureTools)
+        }
     }
 }
 
@@ -127,5 +132,15 @@ internal data class CourseProject(val code: String, val name: String)
             items(targets, key = { it.id }) { project -> KeyRow(null, project.name, chevron = true, onClick = { move(project.id) }) }
             if (targets.isEmpty() && chats.all { it.projectId == null }) item { Plain("先创建一个项目。", 13.sp, Ink.muted) }
         }
+    }
+}
+
+
+/** One of the three ways into what shapes the AI, as the web's sidebar footer: icon over word, a whole tile to tap. */
+@Composable private fun RowScope.DrawerTool(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Icon(icon, null, Modifier.size(20.dp), tint = Ink.muted)
+        Plain(label, 12.5.sp, Ink.muted)
     }
 }

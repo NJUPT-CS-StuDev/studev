@@ -1,5 +1,5 @@
 [
-  {"id":"review","label":"逐次确认","description":"每次使用网页工具或写入记忆前确认。"},
-  {"id":"read","label":"读取自动","description":"自动读取获授权的资料，写入记忆前确认。"},
-  {"id":"approved","label":"批准后自动","description":"自动读取资料，并在启用记忆时自动记录。"}
+  {"id":"review","label":"每次问我","description":"用网页工具、记下新内容之前，都先问你。"},
+  {"id":"read","label":"查资料不问","description":"直接查你授权过的资料；记下新内容之前先问你。"},
+  {"id":"approved","label":"全部自动","description":"直接查资料；记忆打开时，自动记下新内容。"}
 ]

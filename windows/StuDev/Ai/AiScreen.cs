@@ -69,6 +69,7 @@ public sealed partial class AiScreen : Screen
     public AiScreen()
     {
         ReadKept();
+        if (PersonalInstructions.Fold(memory.Text) is { } folded) memory = (memory.On, folded);
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         ColumnDefinitions.Add(new ColumnDefinition());
         side.Background = Paint.Faded("surfaceSunken", .55);
@@ -422,7 +423,7 @@ public sealed partial class AiScreen : Screen
                 if (mine.Runtime) throw new InvalidOperationException(assistant.RuntimeError(code, detail ?? $"本地模型未能完成请求（{(int)response.StatusCode}）。"));
                 throw new InvalidOperationException((int)response.StatusCode switch
                 {
-                    401 => "API Key 不对，请在「模型服务」里修改。", 402 => "你的 API 余额不足。", 429 => "你的 API 请求太频繁，稍后再试。",
+                    401 => "API Key 不对，请在 AI 页的「模型」里修改。", 402 => "你的 API 余额不足。", 429 => "你的 API 请求太频繁，稍后再试。",
                     404 => "接口或模型不存在" + (detail is not null ? $"：{detail}" : "，检查地址和模型名。"),
                     var status => $"你的 API 没有回答（{status}）" + (detail is not null ? $"：{detail}" : ""),
                 });
@@ -560,8 +561,8 @@ public sealed partial class AiScreen : Screen
         var footer = new Grid { Padding = new Thickness(14, 4, 14, 6), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
         footer.ColumnDefinitions.Add(new ColumnDefinition());
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        footer.Children.Add(Kit.Line(14, Kit.TextAction("MCP", () => App.Open("me", "tools"), colour: "muted"),
-            Kit.TextAction("个人指令", () => App.Open("me", "instructions"), colour: "muted")));
+        footer.Children.Add(Kit.Line(14, Kit.TextAction("模型", () => App.Open("me", "models"), colour: "muted"),
+            Kit.TextAction("工具", () => App.Open("me", "tools"), colour: "muted")));
         if (activeProject is null)
         {
             var mind = Kit.TextAction("记忆", MemorySheet, colour: "muted");
@@ -724,7 +725,7 @@ public sealed partial class AiScreen : Screen
         var rows = new StackPanel { Spacing = 2 };
         var list = new ScrollViewer { Content = rows, MaxHeight = 310, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var menu = new Flyout { Placement = FlyoutPlacementMode.TopEdgeAlignedRight };
-        var settings = Kit.TextAction("管理模型服务", () => { menu.Hide(); App.Open("me", "models"); }, colour: "ink");
+        var settings = Kit.TextAction("添加或管理模型…", () => { menu.Hide(); App.Open("me", "models"); }, colour: "ink");
         var panel = Kit.Column(6, Kit.SearchField(query), list, settings);
         panel.Width = compact ? 228 : 292;
         menu.Content = panel;
@@ -1157,7 +1158,7 @@ public sealed partial class AiScreen : Screen
         var label = project ? "项目记忆" : "记忆";
         var on = memory.On;
         var text = new TextBox { Text = System.Text.RegularExpressions.Regex.Replace(ActiveMemory, "^- ", "", System.Text.RegularExpressions.RegexOptions.Multiline), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 140, MaxLength = Memory.Limit,
-            FontSize = 14.5, PlaceholderText = "一行一件，比如：\n通信工程专业，在准备考研\n喜欢早上学习", BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(14, 12, 14, 4) };
+            FontSize = 14.5, PlaceholderText = "一行一件，比如：\n回答先给结论，尽量简短\n通信工程专业，在准备考研", BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(14, 12, 14, 4) };
         text.Resources["TextControlBackgroundFocused"] = Paint.Clear; text.Resources["TextControlBorderBrushFocused"] = Paint.Clear; text.Resources["TextControlBackgroundPointerOver"] = Paint.Clear;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(text, label);
         var column = new StackPanel { Spacing = 14, Padding = new Thickness(22, 20, 22, 18) };
@@ -1179,7 +1180,7 @@ public sealed partial class AiScreen : Screen
         }
         var head = new Grid { ColumnSpacing = 16 };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var summary = project ? "AI 在这个项目里用这里的记忆。" : "AI 记下你的专业、习惯和偏好，回答会越来越贴合你。";
+        var summary = project ? "AI 在这个项目里用这里的记忆。" : "你是谁、希望 AI 怎么回答，一行一件。你写的和 AI 记下的都在这里。";
         head.Children.Add(Kit.Column(4, Pages.SheetTitle(label), Kit.Text(summary, Role.Label, "muted", wrap: true)));
         var switchHost = new Border(); Grid.SetColumn(switchHost, 1); head.Children.Add(switchHost);
         void Switch() { switchHost.Child = Kit.Switch(on, next => { on = next; Switch(); Fill(); }, "使用记忆"); }

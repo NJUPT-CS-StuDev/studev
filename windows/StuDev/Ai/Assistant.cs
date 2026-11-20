@@ -61,12 +61,12 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         var week = s.Week switch { null => Phrase("week", "unknown"), 0 => Phrase("week", "out"), _ => Fill(Phrase("week", "in"), new() { ["week"] = s.Week }) };
         var values = new Dictionary<string, object?> { ["now"] = NanjingNow(now), ["week"] = week, ["me"] = CampusContext(s), ["diagrams"] = string.Join("、", Diagrams) };
         var all = Lines("prompt").Select(l => Fill(l, values)).ToList();
+        all.Add(DefaultStyle);
         if (s.Instructions?.Trim() is { Length: > 0 } instructions)
         {
             all.Add((string)contract["instructionIntro"]!);
             all.Add(instructions);
         }
-        else all.Add(DefaultStyle);
         if (s.Memory is not null) all.AddRange(Lines("memory").Select(l => Fill(l, new() { ["memory"] = s.Memory.Trim() is { Length: > 0 } m ? m : "（还没有）" })));
         return string.Join("\n", all);
     }

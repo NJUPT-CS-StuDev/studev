@@ -56,8 +56,8 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
         return buildList {
             addAll(lines("prompt").map { fill(it, values) })
             val custom = s.instructions?.trim().orEmpty()
-            if (custom.isEmpty()) add(contract.getValue("style").jsonPrimitive.content)
-            else { add(contract.getValue("instructionIntro").jsonPrimitive.content); add(custom) }
+            add(contract.getValue("style").jsonPrimitive.content)
+            if (custom.isNotEmpty()) { add(contract.getValue("instructionIntro").jsonPrimitive.content); add(custom) }
             if (s.memory != null) addAll(lines("memory").map { fill(it, mapOf("memory" to s.memory.trim().ifEmpty { "（还没有）" })) })
         }.joinToString("\n")
     }
@@ -166,7 +166,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
                 val providerError = runCatching { Json.parseToJsonElement(said).jsonObject["error"]?.jsonObject }.getOrNull()
                 val detail = providerError?.get("message")?.jsonPrimitive?.contentOrNull
                 throw IllegalStateException(when (status) {
-                    401 -> "API Key 无效或无权限，请在“模型服务”里检查。"; 402 -> "你的 API 余额不足。"
+                    401 -> "API Key 无效或无权限，请在 AI 页的“模型”里检查。"; 402 -> "你的 API 余额不足。"
                     404 -> "接口或模型不存在" + (detail?.let { "：$it" } ?: "，检查地址和模型名。"); 429 -> "你的 API 请求太频繁，稍后再试。"
                     else -> "你的 API 没有回答（$status）" + (detail?.let { "：$it" } ?: "")
                 })

@@ -28,23 +28,26 @@ import top.hicancan.studev.app.TextAction
 import java.io.InputStream
 import java.io.InputStreamReader
 
-/** User-authored Markdown follows the device and the active account, without entering synchronized preferences. */
+/** What a project asks of the AI. What one asks for oneself is memory, as on the web (src/campus/ai/instructions.ts). */
 internal object Instructions {
-    const val PERSONAL_LIMIT = 4000
     const val PROJECT_LIMIT = 8000
     const val TOTAL_LIMIT = 12000
 
-    fun owner(accountId: String?) = accountId?.let { "account:$it" } ?: "guest"
-
-    fun read(context: Context, owner: String): String = context.getSharedPreferences("ai_instructions", Context.MODE_PRIVATE)
-        .getString(owner, null).orEmpty()
-
-    fun save(context: Context, owner: String, value: String) {
-        context.getSharedPreferences("ai_instructions", Context.MODE_PRIVATE).edit().putString(owner, value.take(PERSONAL_LIMIT)).apply()
+    /** Personal instructions used to be kept on this device apart from memory: whatever one wrote there becomes lines of
+     * memory once, so it follows the account like the rest. */
+    fun fold(context: Context, memory: String): String? {
+        val kept = context.getSharedPreferences("ai_instructions", Context.MODE_PRIVATE)
+        val texts = kept.all.values.filterIsInstance<String>().map { it.trim() }.filter { it.isNotEmpty() }
+        if (kept.all.isEmpty()) return null
+        var next = memory
+        for (line in texts.flatMap { it.lines() }.map { it.replace(Regex("^[-*#\\s]+"), "").trim() }.filter { it.isNotEmpty() }) {
+            next = runCatching { Memory.remembered(next, line) }.getOrElse { break }
+        }
+        kept.edit().clear().apply()
+        return next
     }
 
-    fun forChat(personal: String, project: ChatProject?): String? = buildList {
-        if (personal.isNotBlank()) add("个人指令\n${personal.trim().take(PERSONAL_LIMIT)}")
+    fun forChat(project: ChatProject?): String? = buildList {
         if (project != null) {
             val text = project.instructions.takeIf { project.course == null }.orEmpty().trim().take(PROJECT_LIMIT)
             add("项目：${project.name}" + (project.course?.let { "\n课程：$it" } ?: "") + if (text.isEmpty()) "" else "\n项目指令\n$text")

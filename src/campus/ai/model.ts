@@ -18,7 +18,7 @@ export const MODEL_SETTINGS_CHANGED = 'studev:model-settings';
 export const FREE_MODEL: ModelSelection = { provider: 'free', model: 'auto' };
 export const RUNTIME_PROVIDER = 'runtime';
 export const RUNTIME_EXPERIMENT = '本机浏览器模型（实验）';
-export const RUNTIME_DISABLED = '本机浏览器模型已关闭。可在「我 → 模型服务」重新开启，也可以选择其他模型。';
+export const RUNTIME_DISABLED = '本机浏览器模型已关闭。可在「AI → 模型」重新开启，也可以选择其他模型。';
 export { freeService };
 export const freeProvider = { id: FREE_MODEL.provider, kind: 'free' as const, name: freeService.providerName, models: [{ id: FREE_MODEL.model, name: freeService.modelName, enabled: true }] };
 export const runtimeProvider: ModelProvider = { id: RUNTIME_PROVIDER, kind: 'runtime', name: 'Local Runtime MCP', base: '', key: '', enabled: true, models: [] };

@@ -31,7 +31,6 @@ public sealed partial class MeScreen : Screen
         if (argument is "account") Go("account");
         if (argument is "models") Go("models");
         if (argument is "tools") Go("tools");
-        if (argument is "instructions") Go("instructions");
         if (argument is Uri address)
         {
             if (address.AbsolutePath.TrimEnd('/') == "/members") Go("members", memberAddress: address);
@@ -87,10 +86,10 @@ public sealed partial class MeScreen : Screen
         }
         Children.Clear();
         var page = new StackPanel();
-        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型服务", "tools" => "MCP", "instructions" => "个人指令", _ => "我" };
+        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型", "tools" => "工具", _ => "我" };
         page.Children.Add(Pages.Header(title, "", section == "home" ? [] : [Kit.TextAction("返回", () =>
         {
-            if (section is "tools" or "instructions") App.Open("ai");
+            if (section is "tools" or "models") App.Open("ai");
             else Go(section is "courses" or "labs" ? "timetable" : "home");
         }, Icons.Back)]));
         void Row(string key, UIElement value, Action? open = null) => page.Children.Add(Kit.Row(key, value, open));
@@ -99,9 +98,8 @@ public sealed partial class MeScreen : Screen
         if (section == "home")
         {
             Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(() => Go("account")); else Go("account"); });
-            Row("", Value("成员", "查看头像、昵称和签名"), () => Go("members"));
+            Row("", Value("成员", user?.Role is "admin" or "owner" ? "查看成员，管理身份与角色" : "查看大家的头像、昵称和签名"), () => Go("members"));
             Row("", Value("课表设置", campus.Preferences.Class is { } klass ? $"{klass} · {info?.Major}" : "选择班级、调整课程与实验"), () => Go("timetable"));
-            Row("", Value("模型服务", "管理服务商、密钥和启用的模型"), () => Go("models"));
             Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
             Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);
             Row("", Value("提醒与后台运行", "课前提醒、托盘和开机启动"), () => Go("device"));
@@ -133,7 +131,6 @@ public sealed partial class MeScreen : Screen
         if (section == "labs") LabsPage(page);
         if (section == "models") ModelSettings.Fill(page, Draw);
         if (section == "tools") ToolSettings.Fill(page);
-        if (section == "instructions") PersonalInstructions.Fill(page);
         if (section == "appearance") Row("主题", ChoiceField("主题", [("0", "跟随系统"), ("1", "浅色"), ("2", "深色")], Appearance.Current.ToString(), value => Appearance.Set(int.Parse(value))));
         if (section == "device")
         {

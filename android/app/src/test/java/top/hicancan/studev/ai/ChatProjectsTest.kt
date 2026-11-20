@@ -24,17 +24,15 @@ class ChatProjectsTest {
         assertEquals(saved.toJson(), reopened.chats.single().copy(projectId = null).toJson())
     }
 
-    @Test fun unboundProjectAndPersonalInstructionsUseOneValidatedPayload() {
+    @Test fun projectInstructionsUseOneValidatedPayload() {
         val project = ChatProject("custom", "复习", instructions = "# 先给例子")
-        val text = Instructions.forChat("# 给结论", project)
-        assertEquals("个人指令\n# 给结论\n\n项目：复习\n项目指令\n# 先给例子", text)
+        val text = Instructions.forChat(project)
+        assertEquals("项目：复习\n项目指令\n# 先给例子", text)
         assertEquals(text, Situation(2, null, "仙林", null, text).toJson().getValue("instructions").jsonPrimitive.content)
-        assertNull(Instructions.forChat("", null))
+        assertNull(Instructions.forChat(null))
         val course = project.copy(course = "JS001")
-        assertEquals("项目：复习\n课程：JS001", Instructions.forChat("", course))
-        assertEquals(12000, Instructions.forChat("a".repeat(4000), project.copy(instructions = "b".repeat(8000)))?.length)
-        assertNotEquals(Instructions.owner(null), Instructions.owner("guest"))
-        assertNotEquals(Instructions.owner("first"), Instructions.owner("second"))
+        assertEquals("项目：复习\n课程：JS001", Instructions.forChat(course))
+        assertEquals(8000 + "项目：复习\n项目指令\n".length, Instructions.forChat(project.copy(instructions = "b".repeat(9000)))?.length)
     }
 
     @Test fun importPreservesMarkdownAndRejectsOversizedOrInvalidText() {

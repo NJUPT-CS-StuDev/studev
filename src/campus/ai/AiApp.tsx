@@ -29,10 +29,10 @@ import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
 import { invokeBrowserTool, listBrowserTools, needsToolConfirmation, readToolPreferences, toolCatalog, toolHistory, toolPermissionModes, TOOL_SETTINGS_CHANGED, writeToolPreferences, type BrowserTool, type PermissionMode, type ToolItem } from './toolCatalog';
 import ToolSettings from './ToolSettings';
-import InstructionSettings from './InstructionSettings';
+import ModelSettingsPanel from './ModelSettings';
 import { activeRemoteTools, invokeRemoteTool, REMOTE_MCP_CHANGED, type RemoteTool } from './remoteMcp';
 import ProjectSettings from './ProjectSettings';
-import { combinedInstructions, usePersonalInstructions } from './instructions';
+import { projectInstructions, foldPersonalInstructions } from './instructions';
 import { dropFolder, folderAvailable, newProjectFolder, openWorkspace, pickFolder, readProjects, saveFolder, saveProjectChat, saveProjects, savedFolder, workspaceRevisions, writeProjectInstructions, writeProjectMemory, type ChatRevision, type Folder, type Project, type Workspace } from './projects';
 import { routeDuration } from '@/world/routes';
 import { MEMORY_LIMIT, readMemory, remembered, writeMemory, type Memory } from './memory';
@@ -166,7 +166,7 @@ function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable,
                 } else if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
             }} />
         <div className="ai-tool-control">
-            <button type="button" className="ai-tool-trigger" aria-label="选择工具" aria-expanded={showing} title="选择工具（/）" disabled={busy} onClick={() => { if (showing) detach(); else { setOpen(true); setActive(0); input.current?.focus(); } }}>/</button>
+            <button type="button" className="ai-tool-trigger" aria-label="选择工具" aria-expanded={showing} title="选择工具（输入 / 也可以）" disabled={busy} onClick={() => { if (showing) detach(); else { setOpen(true); setActive(0); input.current?.focus(); } }}>工具 <Chevron /></button>
             {permission}
             {selected && <button type="button" className="ai-tool-selected" aria-label={`取消选择${chosen?.label ?? '工具'}`} onClick={() => setSelected('')}>{chosen?.label ?? '工具暂不可用'} <span aria-hidden="true">×</span></button>}
         </div>
@@ -183,7 +183,7 @@ function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable,
     </form>;
 }
 
-function ModelPicker({ settings, choice, disabled, runtimeOff, select }: { settings: ModelSettings; choice: ModelSelection; disabled: boolean; runtimeOff: boolean; select: (model: ModelSelection) => void }) {
+function ModelPicker({ settings, choice, disabled, runtimeOff, select, manage }: { settings: ModelSettings; choice: ModelSelection; disabled: boolean; runtimeOff: boolean; select: (model: ModelSelection) => void; manage: () => void }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(-1);
@@ -278,6 +278,7 @@ function ModelPicker({ settings, choice, disabled, runtimeOff, select }: { setti
                 </div>)}
             </div>
             {!options.length && <p className="fine ai-model-empty" role="status">没有匹配的模型</p>}
+            <button type="button" className="ai-model-manage" onClick={() => { close(false); manage(); }}>添加或管理模型…</button>
         </div>}
     </div>;
 }
@@ -316,7 +317,6 @@ export default function AiApp() {
     const [projectError, setProjectError] = useState('');
     const [savingProject, setSavingProject] = useState(Boolean(restore.current));
     const [skill, setSkill] = useState<{ name: string; text: string }>();
-    const personal = usePersonalInstructions();
     const activeChat = useRef(chat.id); activeChat.current = chat.id;
     const project = projects.find(item => item.id === projectId);
     const diskBase = useRef<ChatRevision<Proposal> | undefined>(undefined);
@@ -328,6 +328,7 @@ export default function AiApp() {
         return [...byCourse].map(([course, name]) => ({ course, name })).filter(course => !projects.some(saved => saved.course === course.course));
     }, [loaded, projects]);
     const [side, setSide] = useState(false), [menu, setMenu] = useState<string | null>(null), [renaming, setRenaming] = useState<string | null>(null);
+    useEffect(foldPersonalInstructions, []);
     const [modelSettings, setModelSettings] = useState(readModelSettings);
     useEffect(() => {
         const update = () => setModelSettings(readModelSettings());
@@ -348,7 +349,7 @@ export default function AiApp() {
     const [toolPreferences, setTools] = useState(readToolPreferences);
     const [browserTools, setBrowserTools] = useState<BrowserTool[]>([]);
     const [remoteTools, setRemoteTools] = useState<RemoteTool[]>([]);
-    const [utility, setUtility] = useState<'mcp' | 'instructions'>();
+    const [utility, setUtility] = useState<'tools' | 'models'>();
     const [approval, setApproval] = useState<{ label: string; detail: string; finish: (allow: boolean) => void } | null>(null);
     const canUseBrowser = Boolean(own || runtime);
     useEffect(() => {
@@ -675,7 +676,7 @@ export default function AiApp() {
         const term = latestTerm.current, today = momentNow().date;
         const note = [project?.course ? `当前课程项目是「${project.name}」。` : '', workspace?.instructions ?? project?.instructions, skill ? `本轮使用技能「${skill.name}」\n${skill.text}` : ''].filter(Boolean).join('\n\n');
         return { week: term ? weekOfDate(term, today) ?? 0 : null, class: prefs.class ?? null, campus: prefs.campus ?? PRODUCT_CONFIG.CAMPUS.id,
-            memory: memoryNow.current.on ? scopedMemory.current.text : null, instructions: combinedInstructions(personal, note) };
+            memory: memoryNow.current.on ? scopedMemory.current.text : null, instructions: projectInstructions(note) };
     };
     const availableTools = toolCatalog(situation(), toolPreferences, canUseBrowser ? browserTools : [], remoteTools);
     function approve(tool: ToolItem, args: unknown, signal: AbortSignal): Promise<boolean> {
@@ -816,7 +817,7 @@ export default function AiApp() {
         permission={<ToolPermission mode={toolPreferences.mode ?? 'read'} disabled={busy} change={mode => {
             try { writeToolPreferences({ ...readToolPreferences(), mode }); } catch { setError('工具权限暂时无法保存。'); }
         }} />}
-        picker={<ModelPicker settings={modelSettings} choice={choice} disabled={busy} runtimeOff={runtimeOff} select={setModel} />} />;
+        picker={<ModelPicker settings={modelSettings} choice={choice} disabled={busy} runtimeOff={runtimeOff} select={setModel} manage={() => setUtility('models')} />} />;
     const current = workspace ? diskBase.current?.chat : kept.chats.find(item => item.id === kept.current);
     const shownChats = (workspace ? workspace.revisions.map(revision => revision.chat) : kept.chats.filter(item => (item.project || undefined) === project?.id))
         .filter(item => Boolean(item.archived) === archived && (!search.trim() || titleOf(item).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
@@ -879,11 +880,11 @@ export default function AiApp() {
                 </section>}
             </nav>
             <footer className="ai-side-footer">
-                <div className="ai-side-utilities">
-                    <button type="button" onClick={() => { setUtility('mcp'); setSide(false); }}>MCP</button>
-                    <button type="button" onClick={() => { setUtility('instructions'); setSide(false); }}>个人指令</button>
+                <div className="ai-side-tools">
+                    <button type="button" onClick={() => { setMinding(true); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12v15l-6-3.6-6 3.6Z" /></svg>{project ? '项目记忆' : '记忆'}</button>
+                    <button type="button" onClick={() => { setUtility('models'); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1L5 10.5l5.1-1.9Z" /><path d="M18.5 16v4M16.5 18h4" /></svg>模型</button>
+                    <button type="button" onClick={() => { setUtility('tools'); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5a4 4 0 0 0-5.3 5.3L4.5 15.5v4h4l4.7-4.7a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.8-.4-.4-2.8Z" /></svg>工具</button>
                 </div>
-                <button className="ai-side-memory" type="button" onClick={() => { setMinding(true); setSide(false); }}><b>{project ? '项目记忆' : '记忆'}</b><small>{!memory.on ? '已关闭' : scopedMemory.current.text.trim() ? `记着 ${scopedMemory.current.text.split('\n').filter(line => line.trim()).length} 件事` : '还没有'}</small></button>
             </footer>
         </aside>
         {side && <div className="ai-scrim" onClick={() => setSide(false)} />}
@@ -914,8 +915,8 @@ export default function AiApp() {
             {projects.filter(item => item.id !== projectId).map(item => <button type="button" className="kv" key={item.id} disabled={locked} onClick={() => void projectAction(() => moveChats(item))}><span className="v">{item.name}</span><Chevron /></button>)}
             <div className="ai-project-actions"><button className="btn go" disabled={locked} onClick={() => setNewProject('')}>新建项目</button></div>
         </Sheet>}
-        {utility && <Sheet title={utility === 'mcp' ? 'MCP' : '个人指令'} onClose={() => setUtility(undefined)}>
-            {utility === 'mcp' ? <ToolSettings /> : <InstructionSettings />}
+        {utility && <Sheet title={utility === 'tools' ? '工具' : '模型'} onClose={() => setUtility(undefined)}>
+            {utility === 'tools' ? <ToolSettings /> : <ModelSettingsPanel />}
         </Sheet>}
         {approval && <Sheet title={`允许${approval.label}？`} onClose={() => approval.finish(false)}>
             <p className="fine lead">{approval.detail}</p>
@@ -991,7 +992,7 @@ function MemorySettings({ memory, isProject, onClose, onSave }: { memory: Memory
     return <div className="ai-modal" role="dialog" aria-label={title} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
         <form className="ai-modal-box ai-mind" onSubmit={event => { event.preventDefault(); onSave({ on: value.on, text: kept() }); }}>
             <header className="ai-mind-head">
-                <div><h2>{title}</h2><p>{isProject ? '记下这个项目的约定、结论和进展。' : 'AI 记下你的专业、习惯和偏好，回答会越来越贴合你。'}</p></div>
+                <div><h2>{title}</h2><p>{isProject ? '记下这个项目的约定、结论和进展。' : '你是谁、希望 AI 怎么回答，一行一件。你写的和 AI 记下的都在这里。'}</p></div>
                 <label className="ai-toggle" title={value.on ? '关闭记忆' : '打开记忆'}>
                     <input type="checkbox" role="switch" aria-label="使用记忆" checked={value.on} onChange={event => setValue(current => ({ ...current, on: event.target.checked }))} /><span />
                 </label>
@@ -999,7 +1000,7 @@ function MemorySettings({ memory, isProject, onClose, onSave }: { memory: Memory
             {value.on
                 ? <div className="ai-mind-body">
                     <textarea className="ai-memory" value={value.text} maxLength={MEMORY_LIMIT} rows={5} autoFocus={!value.text}
-                        placeholder={'一行一件，比如：\n通信工程专业，在准备考研\n喜欢早上学习'} onChange={event => setValue(current => ({ ...current, text: event.target.value }))} />
+                        placeholder={'一行一件，比如：\n回答先给结论，尽量简短\n通信工程专业，在准备考研'} onChange={event => setValue(current => ({ ...current, text: event.target.value }))} />
                     <div className="ai-mind-foot"><span>{count ? `记着 ${count} 件事` : '聊天时说“记住……”，AI 也会写进来'}</span>{value.text.length > MEMORY_LIMIT * 0.8 && <span>{value.text.length} / {MEMORY_LIMIT}</span>}</div>
                 </div>
                 : <div className="ai-mind-off">记忆已关闭，AI 看不到这些内容，也不再记新的。{count > 0 && `记着的 ${count} 件事还在，打开就接着用。`}</div>}

@@ -36,8 +36,8 @@ function campusContext(situation) {
 export function instructions(situation, now = Date.now()) {
     const week = situation.week === null ? assistant.week.unknown : situation.week === 0 ? assistant.week.out : fill(assistant.week.in, situation);
     const lines = assistant.prompt.map(line => fill(line, { now: nanjingNow(now), week, me: campusContext(situation), diagrams: DIAGRAMS.join('、') }));
+    lines.push(assistant.style);
     if (situation.instructions?.trim()) lines.push(assistant.instructionIntro, situation.instructions.trim());
-    else lines.push(assistant.style);
     if (situation.memory !== null) lines.push(...assistant.memory.map(line => fill(line, { memory: situation.memory.trim() || '（还没有）' })));
     return lines.join('\n');
 }

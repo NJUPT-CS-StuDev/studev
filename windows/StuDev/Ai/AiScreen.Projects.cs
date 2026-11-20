@@ -132,9 +132,6 @@ public sealed partial class AiScreen
                 : Storage.Read(LocalInstructions(id)), available);
             if (project.Length > 0) blocks.Insert(0, "项目指令\n" + project);
         }
-        var personalBudget = Math.Min(4000, 12000 - blocks.Sum(block => block.Length + 2) - "个人指令\n".Length);
-        var personal = BoundText(PersonalInstructions.Read(), personalBudget);
-        if (personal.Length > 0) blocks.Insert(0, "个人指令\n" + personal);
         return blocks.Count == 0 ? null : string.Join("\n\n", blocks);
     }
 
