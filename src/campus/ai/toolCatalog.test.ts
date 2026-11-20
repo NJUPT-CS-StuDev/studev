@@ -7,12 +7,14 @@ const outline = { name: 'icourse.outline', description: 'Read the open course ou
 const situation = { week: null, class: null, campus: '仙林', memory: null };
 
 describe('one available catalog for the picker and the model', () => {
-    test('requires a read-only listing and an explicit opt-in before offering a browser tool', () => {
-        const browser = browserToolCatalog([outline, { ...outline, name: 'mooc.submit', annotations: { destructiveHint: true, readOnlyHint: true } }, outline]);
-        expect(browser.map(tool => tool.capability)).toEqual(['icourse.outline']);
+    test('lists lent tools with their effect and requires an explicit opt-in before offering one', () => {
+        const browser = browserToolCatalog([outline, { ...outline, name: 'mooc.submit', annotations: { destructiveHint: true, readOnlyHint: true } }, outline,
+            { ...outline, name: 'filesystem_write_text', annotations: { readOnlyHint: false } }, { ...outline, name: 'no-annotations', annotations: undefined }]);
+        expect(browser.map(tool => [tool.capability, tool.readOnly, tool.machine])).toEqual([['icourse.outline', true, false], ['mooc.submit', false, false], ['filesystem_write_text', false, true]]);
+        expect(browser[2]?.label).toBe('写入文本文件');
         const disabledCampus = ['search'];
-        expect(toolCatalog(situation, { disabledCampus, enabledBrowser: [] }, browser).map(tool => tool.definition.function.name)).not.toContain(browserToolId(outline.name));
-        const catalog = toolCatalog(situation, { disabledCampus, enabledBrowser: [outline.name] }, browser);
+        expect(toolCatalog(situation, { disabledCampus, runtime: false }, browser).map(tool => tool.definition.function.name)).not.toContain(browserToolId(outline.name));
+        const catalog = toolCatalog(situation, { disabledCampus, runtime: true }, browser.slice(0, 1));
         const name = browserToolId(outline.name);
         const request = completionRequest('deepseek', [], situation, 0, false, { tools: catalog.map(tool => tool.definition), preferred: [name] });
         expect(request.tools?.map(tool => tool.function.name)).not.toContain('search');
@@ -35,7 +37,8 @@ describe('one available catalog for the picker and the model', () => {
     });
 
     test('admits the same tools while varying confirmation based on their actual effects', () => {
-        const items = toolCatalog({ ...situation, memory: '' }, { disabledCampus: [], enabledBrowser: [outline.name] }, browserToolCatalog([outline]));
+        const write = { ...outline, name: 'filesystem_write_text', annotations: { readOnlyHint: false } };
+        const items = toolCatalog({ ...situation, memory: '' }, { disabledCampus: [], runtime: true }, browserToolCatalog([outline, write]));
         const item = (name: string) => items.find(tool => tool.definition.function.name === name)!;
         expect(needsToolConfirmation('review', item('search'))).toBe(false);
         expect(needsToolConfirmation('review', item(browserToolId(outline.name)))).toBe(true);
@@ -43,6 +46,8 @@ describe('one available catalog for the picker and the model', () => {
         expect(needsToolConfirmation('read', item('remember'))).toBe(true);
         expect(needsToolConfirmation('approved', item('remember'))).toBe(false);
         expect(needsToolConfirmation('read', item('propose_task'))).toBe(false);
+        expect(needsToolConfirmation('read', item(browserToolId(write.name)))).toBe(true);
+        expect(needsToolConfirmation('approved', item(browserToolId(write.name)))).toBe(false);
     });
 
     test('keeps paired campus calls while omitting raw browser results from the free transport', () => {
@@ -59,7 +64,7 @@ describe('one available catalog for the picker and the model', () => {
 
     test('tells the model what this tab reaches, from facts, in the shared phrases', () => {
         const browser = browserToolCatalog([outline]);
-        const none = { disabledCampus: [], enabledBrowser: [] };
+        const none = { disabledCampus: [], runtime: false };
         const ready = reachOf({ state: 'ready', models: ['DeepSeek 网页'], granted: [] }, none, true, []);
         expect(ready).toEqual({ runtime: 'ready', models: ['DeepSeek 网页'], on: [], off: [], free: false, remote: [] });
         const prompt = completionRequest('deepseek', [], situation, 0, false, { reach: ready }).messages[0]?.content;

@@ -416,7 +416,7 @@ export default function AiApp() {
         void Promise.all([listBrowserTools(controller.signal), runtimeModels(controller.signal).catch(() => [])]).then(([tools, models]) => {
             if (controller.signal.aborted) return;
             setRuntimeStatus({ state: 'ready', models: models.map(model => model.name), granted: tools });
-            setBrowserTools(canUseBrowser && toolPreferences.enabledBrowser.length ? tools : []);
+            setBrowserTools(canUseBrowser && toolPreferences.runtime ? tools : []);
         }, () => {
             if (controller.signal.aborted) return;
             setRuntimeStatus({ state: 'offline', models: [], granted: [] });
@@ -850,7 +850,7 @@ export default function AiApp() {
             await docReady();
             const preferences = readToolPreferences();
             const probeRuntime = async (): Promise<LocalRuntimeSnapshot> => {
-                const needLive = runtimeStatusRef.current.state === 'unknown' || Boolean(canUseBrowser && preferences.enabledBrowser.length);
+                const needLive = runtimeStatusRef.current.state === 'unknown' || Boolean(canUseBrowser && preferences.runtime);
                 if (!needLive) return runtimeStatusRef.current;
                 const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(2500)]);
                 try {
@@ -866,7 +866,7 @@ export default function AiApp() {
             ]);
             if (controller.signal.aborted) return;
             setRuntimeStatus(runtimeNow);
-            const granted = canUseBrowser && preferences.enabledBrowser.length && runtimeNow.state === 'ready' ? runtimeNow.granted : [];
+            const granted = canUseBrowser && preferences.runtime && runtimeNow.state === 'ready' ? runtimeNow.granted : [];
             setBrowserTools(granted);
             setRemoteTools(external);
             const reach = reachOf(runtimeNow, preferences, canUseBrowser, external);

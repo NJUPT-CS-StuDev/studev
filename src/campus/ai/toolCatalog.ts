@@ -5,11 +5,14 @@ import permissionModes from '@/world/permission-modes.json';
 import type { Message } from './stream';
 import type { RemoteTool } from './remoteMcp';
 
-export type BrowserTool = { capability: string; label: string; definition: ModelTool };
+/** A tool lent through Local Runtime: a page tool another site offers (namespaced, like icourse.outline) or one of
+ * lrmcp's own machine tools. `readOnly` is its own annotation; anything else changes something and asks first. */
+export type BrowserTool = { capability: string; label: string; definition: ModelTool; readOnly: boolean; machine: boolean };
 export type ToolItem = { label: string; group: string; definition: ModelTool; browser?: BrowserTool; remote?: RemoteTool };
 export type LocalRuntimeSnapshot = { state: 'unknown' | 'ready' | 'offline'; models: string[]; granted: BrowserTool[] };
 export type PermissionMode = 'review' | 'read' | 'approved';
-export type ToolPreferences = { disabledCampus: string[]; enabledBrowser: string[]; mode?: PermissionMode };
+/** `runtime` says whether this site uses Local Runtime at all; which of its tools are lent is the extension's to decide. */
+export type ToolPreferences = { disabledCampus: string[]; runtime: boolean; mode?: PermissionMode };
 const STORAGE = 'studev_ai_tools';
 export const TOOL_SETTINGS_CHANGED = 'studev:tool-settings';
 export const BROWSER_GROUP = '网页工具';
@@ -22,11 +25,13 @@ export function readToolPreferences(): ToolPreferences {
         const saved = JSON.parse(localStorage.getItem(STORAGE) ?? 'null');
         const names = (value: unknown) => Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
         const mode = toolPermissionModes.find(item => item.id === saved?.mode)?.id ?? 'read';
-        return { disabledCampus: names(saved?.disabledCampus), enabledBrowser: names(saved?.enabledBrowser), mode };
-    } catch { return { disabledCampus: [], enabledBrowser: [] }; }
+        return { disabledCampus: names(saved?.disabledCampus), runtime: saved?.runtime !== false, mode };
+    } catch { return { disabledCampus: [], runtime: true }; }
 }
+/** 审批 asks before every outside tool; 默认 asks before anything that writes; 自动 asks for nothing. */
 export function needsToolConfirmation(mode: PermissionMode, item: ToolItem): boolean {
-    return item.definition.function.name === 'remember' && mode !== 'approved' || Boolean((item.browser || item.remote) && mode === 'review');
+    if (mode === 'approved') return false;
+    return item.definition.function.name === 'remember' || Boolean(item.browser && !item.browser.readOnly) || Boolean((item.browser || item.remote) && mode === 'review');
 }
 
 export function writeToolPreferences(preferences: ToolPreferences) {
@@ -39,18 +44,30 @@ export function browserToolId(capability: string): string {
     return `web_${capability.replaceAll('_', '__').replaceAll('.', '_d')}`;
 }
 
-/** The bridge returns only this origin's grants. The AI deliberately advertises their read-only subset. */
+/** lrmcp's own tools in StuDev's words; a page tool brings its own title. */
+const MACHINE_LABELS: Record<string, string> = {
+    filesystem_list: '列出文件夹', filesystem_stat: '查看文件信息', filesystem_read_text: '读取文本文件', filesystem_search_text: '搜索文件内容',
+    filesystem_write_text: '写入文本文件', filesystem_patch_text: '修改文本文件', image_read: '读取图片',
+    process_run: '运行程序', process_continue: '继续运行中的程序',
+    browser_status: '浏览器状态', browser_tabs: '列出浏览器标签页', browser_open: '打开新标签页', browser_close: '关闭标签页',
+    browser_navigate: '让标签页跳转', browser_snapshot: '读取网页内容', browser_screenshot: '网页截图', browser_action: '在网页上操作',
+    computer_control: '接管桌面操作', computer_targets: '列出屏幕和窗口', computer_state: '查看屏幕', computer_wait: '等待屏幕出现内容', computer_action: '在桌面上操作',
+};
+
+/** The bridge returns only this origin's grants, each with its read-only or changing annotation. */
 export function browserToolCatalog(value: unknown): BrowserTool[] {
     if (!Array.isArray(value)) throw new Error('浏览器工具列表无效。');
     const entries = new Map<string, BrowserTool>();
     for (const item of value) {
         if (!object(item) || typeof item.name !== 'string' || !/^[a-z][a-z0-9_.-]*$/.test(item.name) ||
-            !object(item.annotations) || item.annotations.readOnlyHint !== true || item.annotations.destructiveHint === true ||
+            !object(item.annotations) ||
             !object(item.inputSchema) || item.inputSchema.type !== 'object' || typeof item.description !== 'string' || !item.description.trim()) continue;
         const name = browserToolId(item.name);
         if (name.length > 64 || entries.has(name)) continue;
-        const label = typeof item.title === 'string' && item.title.trim() ? item.title.trim() : item.name === 'icourse.outline' ? '查看 MOOC 课程目录' : item.name;
-        entries.set(name, { capability: item.name, label, definition: { type: 'function', function: { name, description: `${label}。${item.description}`, parameters: item.inputSchema } } });
+        const machine = !item.name.includes('.');
+        const readOnly = item.annotations.readOnlyHint === true && item.annotations.destructiveHint !== true;
+        const label = MACHINE_LABELS[item.name] ?? (typeof item.title === 'string' && item.title.trim() ? item.title.trim() : item.name === 'icourse.outline' ? '查看 MOOC 课程目录' : item.name);
+        entries.set(name, { capability: item.name, label, readOnly, machine, definition: { type: 'function', function: { name, description: `${label}。${item.description}`, parameters: item.inputSchema } } });
     }
     return [...entries.values()];
 }
@@ -61,7 +78,7 @@ export async function listBrowserTools(signal?: AbortSignal): Promise<BrowserToo
 
 export async function invokeBrowserTool(tool: BrowserTool, input: unknown, signal: AbortSignal): Promise<unknown> {
     if (signal.aborted) throw signal.reason;
-    if (!readToolPreferences().enabledBrowser.includes(tool.capability)) throw new Error('这个网页工具已停用。');
+    if (!readToolPreferences().runtime) throw new Error('本网站已停用 Local Runtime。');
     if (!object(input)) throw new Error('模型提供的工具参数无效。');
     try {
         const value = await createLRMCPClient().invoke(tool.capability, input, { signal, timeoutMs: 15000 });
@@ -84,14 +101,14 @@ export function toolCatalog(situation: Situation, preferences: ToolPreferences, 
         const definition = available.get(name);
         return definition && label && !preferences.disabledCampus.includes(name) ? [{ label, group: group.label, definition }] : [];
     }));
-    return [...campus, ...browser.filter(tool => preferences.enabledBrowser.includes(tool.capability))
+    return [...campus, ...(preferences.runtime ? browser : [])
         .map(tool => ({ label: tool.label, group: BROWSER_GROUP, definition: tool.definition, browser: tool })),
         ...remote.map(tool => ({ label: tool.label, group: tool.connection.name, definition: tool.definition, remote: tool }))];
 }
 
 /** What this tab can reach besides the campus tools, as facts for the assistant (assistant.mjs phrases them). */
 export function reachOf(runtime: LocalRuntimeSnapshot, preferences: ToolPreferences, canUseBrowser: boolean, remote: readonly RemoteTool[]): Reach {
-    const on = runtime.granted.filter(tool => preferences.enabledBrowser.includes(tool.capability));
+    const on = preferences.runtime ? runtime.granted : [];
     return { runtime: runtime.state, models: runtime.models.slice(0, 24), on: on.map(tool => tool.label).slice(0, 24),
         off: runtime.granted.filter(tool => !on.includes(tool)).map(tool => tool.label).slice(0, 24), free: !canUseBrowser,
         remote: [...new Set(remote.map(tool => tool.connection.name))].slice(0, 24) };
