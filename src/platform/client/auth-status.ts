@@ -38,6 +38,7 @@ const hasCachedUser = Boolean(cached);
 // Page changes within a minute share the cached verification.
 const shouldVerify = cached && (!cached.id || !cached.verifiedAt || Date.now() - cached.verifiedAt > 60_000);
 updateNavLinks(hasCachedUser);
+document.addEventListener('astro:after-swap', () => updateNavLinks(Boolean(readCachedAccount())));
 
 // 多标签页实时同步登录状态
 window.addEventListener('storage', (e) => {

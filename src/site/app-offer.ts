@@ -1,5 +1,6 @@
 // An Android browser is the one place the app has something to offer: say so once, quietly.
 const KEY = 'studev_app_offer_closed';
+function offerApp() {
 const offer = document.querySelector<HTMLElement>('[data-app-offer]');
 const installed = matchMedia('(display-mode: standalone)').matches;
 let closed = true;
@@ -11,4 +12,7 @@ if (offer && /Android/i.test(navigator.userAgent) && !installed && !closed) {
         try { localStorage.setItem(KEY, '1'); } catch { /* Closed for this page at least. */ }
     });
 }
+}
+offerApp();
+document.addEventListener('astro:after-swap', offerApp);
 export {};

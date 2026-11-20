@@ -7,11 +7,14 @@ import policeEmblem from '../assets/police-emblem.png';
 import tokens from '../../design/tokens.json';
 import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
+import { ClientRouter } from 'astro:transitions';
 // fill: the page is one full-height application (the map) with no footer.
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
 const { title = PRODUCT_CONFIG.APP_NAME, description = PRODUCT_CONFIG.POSITIONING, active = '', noindex = false, fill = false, noPwa = false } = Astro.props;
 const personalMenu = active !== 'login';
 const campusHeader = ['timetable', 'knowledge', 'search', 'ai'].includes(active);
+// The five app pages swap in place, so an answer the AI is writing goes on while one looks at the timetable or map.
+const appPage = ['timetable', 'map', 'knowledge', 'search', 'ai'].includes(active);
 const tabs = [
   { href: '/', label: '课表', key: 'timetable' },
   { href: '/map/', label: '地图', key: 'map' },
@@ -71,6 +74,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {(active === 'history' || active === 'account' || active === 'forms') && <link rel="preconnect" href="https://q1.qlogo.cn" crossorigin />}
     <link rel="canonical" href={canonical} />
     <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
+    {appPage && <ClientRouter fallback="swap" />}
     <slot name="head" />
     <title>{title}</title>
     {/* What a link to this page looks like when shared, in WeChat and elsewhere: an opaque square image, since
@@ -94,6 +98,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">学生发展中心</a>
           <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
         </nav>
+        <button class="theme-entry" type="button" data-theme-toggle aria-label="切换外观"><svg class="theme-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" /></svg><svg class="theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" /><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6" /></svg><svg class="theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10Z" /></svg></button>
         <a class:list={['about-entry', { active: active === 'about' }]} href="/about/">关于</a>
         <a class="app-entry" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL} aria-current={active === 'download' ? 'page' : undefined}>下载</a>
         {personalMenu && <span class:list={['site-account', { 'campus-site-account': campusHeader }]}><MeApp campus={campusHeader} client:only="react"><span slot="fallback" class="avatar avatar-loading" role="status" aria-label="正在加载个人菜单" aria-busy="true"><span class="avatar-face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></span><span class="avatar-name">加载中</span></span></MeApp></span>}
@@ -101,6 +106,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       {clubKeys.includes(active) && <nav class="club-nav" aria-label="学生发展中心栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
     </header>
     <main class:list={[fill && 'main-fill']}><slot /></main>
+    {appPage && <div id="ai-host" class="ai-host" transition:persist="ai-host" hidden></div>}
     {!fill && <footer class="site-footer">
       <div class="footer-inner">
         <span class="footer-copy">© {new Date().getFullYear()} {PRODUCT_CONFIG.APP_NAME}</span>
@@ -124,7 +130,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {!noPwa && <PwaPanel floating={false} />}
     <script>import './app-offer';</script>
     <script>import './copy-text';</script>
+    <script>import './theme-toggle';</script>
     <script>import '../platform/client/auth-status';</script>
+    {appPage && <script>import '../campus/ai/host';</script>}
     {active !== 'download' && active !== 'login' && <script>import { warmSearch } from '../campus/world/search'; warmSearch();</script>}
   </body>
 </html>

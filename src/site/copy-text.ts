@@ -1,4 +1,7 @@
+function bind() {
 document.querySelectorAll<HTMLButtonElement>('[data-copy-text], [data-copy-link]').forEach((button) => {
+  if (button.dataset.copyBound) return;
+  button.dataset.copyBound = '';
   const label = button.querySelector<HTMLElement>('[data-copy-label]');
   if (!label) return;
   const originalLabel = label.textContent ?? '';
@@ -34,3 +37,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-copy-text], [data-copy-link]
     resetLabel = setTimeout(() => { label.textContent = originalLabel; }, 2500);
   });
 });
+}
+bind();
+// The app pages swap in place: their new buttons are bound after each swap.
+document.addEventListener('astro:after-swap', bind);

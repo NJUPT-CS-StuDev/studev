@@ -44,6 +44,10 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .about-entry, .app-entry { font-size: 14px; font-weight: 500; color: var(--muted); flex: none; }
+.theme-entry { width: 32px; height: 32px; display: inline-grid; place-items: center; margin-right: -6px; padding: 0; border: 0; border-radius: var(--radius-pill); background: none; color: var(--muted); cursor: pointer; flex: none; }
+.theme-entry:hover { color: var(--ink); background: var(--surface-sunken); }
+.theme-entry svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; display: none; }
+:root[data-appearance='auto'] .theme-auto, :root[data-appearance='light'] .theme-light, :root[data-appearance='dark'] .theme-dark { display: block; }
 .app-entry { height: 32px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-pill); margin-right: 4px; }
 .about-entry:hover, .about-entry.active { color: var(--ink); }
 .app-entry:hover, .app-entry[aria-current='page'] { color: var(--ink); background: var(--surface-sunken); }
@@ -62,7 +66,7 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 999.98px) {
   .site-header { position: static; border-bottom: 0; }
-  .site-nav, .wordmark, .about-entry, .app-entry { display: none; }
+  .site-nav, .wordmark, .about-entry, .app-entry, .theme-entry { display: none; }
   .header-inner { height: 0; padding: 0; }
   .header-inner .avatar { position: absolute; top: calc(6px + env(safe-area-inset-top, 0px)); right: 16px; z-index: 45; }
   .campus-site-account { display: none; }
@@ -257,3 +261,17 @@ main { flex: 1 0 auto; min-width: 0; }
 html[data-authenticated] .site-nav [data-account-link][hidden] { display: inline; }
 body:has(> main.main-fill) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 main.main-fill { flex: 1; min-height: 0; position: relative; }
+
+/* The AI is kept in #ai-host across the app pages; while it shows, the page's own main steps aside. */
+:root[data-ai-open] main { display: none; }
+.site-nav a[href="/ai/"], .phone-tabs a[href="/ai/"] { position: relative; }
+:root[data-ai-busy] .site-nav a[href="/ai/"]::after, :root[data-ai-done] .site-nav a[href="/ai/"]::after,
+:root[data-ai-busy] .phone-tabs a[href="/ai/"]::after, :root[data-ai-done] .phone-tabs a[href="/ai/"]::after {
+  content: ''; position: absolute; top: -2px; right: -8px; width: 6px; height: 6px; border-radius: 50%; background: var(--brand);
+}
+.phone-tabs a[href="/ai/"]::after { top: 12px; right: calc(50% - 16px); }
+:root[data-ai-busy] .site-nav a[href="/ai/"]::after, :root[data-ai-busy] .phone-tabs a[href="/ai/"]::after { animation: ai-busy 1.2s ease-in-out infinite; }
+@keyframes ai-busy { 50% { opacity: .25; } }
+body:has(> .ai-host:not([hidden])) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.ai-host:not([hidden]) { flex: 1; min-height: 0; position: relative; display: block; }
+.ai-host[hidden] { display: none; }
