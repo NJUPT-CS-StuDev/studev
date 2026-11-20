@@ -113,15 +113,12 @@ function render() {
 
   const info = q('[data-account-info]');
   info.replaceChildren();
+  // The card above already says who one is (name, nickname, student ID, position, role); here only what it does not.
   const metaRows: [string, string][] = [
-    ['学号', user.studentId || '待补充'],
-    ['姓名', user.realName || '待补充'],
-    ['昵称', nicknameOf(user) || '未设置'],
-    ['所属部门', user.department || '暂未分配'],
-    ['职务分工', user.title || (user.department ? '部门成员' : '—')],
+    ...(user.studentId ? [] : [['学号', '待补充'] as [string, string]]),
+    ...(user.realName ? [] : [['姓名', '待补充'] as [string, string]]),
     ['QQ 号', user.qq],
     ['联系邮箱', user.email || `${user.qq}@qq.com`],
-    ['群内角色', labels[user.role] ?? user.role],
     ['账号状态', labels[user.status] ?? user.status],
   ];
   for (const [key, value] of metaRows) {

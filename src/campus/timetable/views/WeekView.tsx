@@ -78,9 +78,10 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                             const layered = layers(today, order);
                             return layered.map(({ event, under }, at) => {
                                 const tone = eventTone(tones, event, line.courseMeetings ?? line.meetings);
-                                const coverEnd = layered.slice(at + 1).reduce((max, { event: upper }) =>
-                                    upper.date === event.date && upper.start <= event.start + 12 && upper.end < event.end - 16 ? Math.max(max, upper.end) : max, 0);
-                                const pushDown = coverEnd > event.start ? y(coverEnd) - y(event.start) + 4 : 0;
+                                // What lies over this tile's top, as drawn: a short tile is never drawn under 22px, so it covers more than its minutes.
+                                const coverBottom = layered.slice(at + 1).reduce((max, { event: upper }) =>
+                                    upper.date === event.date && upper.start <= event.start + 12 && upper.end < event.end - 16 ? Math.max(max, y(upper.start) + Math.max(22, y(upper.end) - y(upper.start))) : max, 0);
+                                const pushDown = coverBottom > y(event.start) ? coverBottom - y(event.start) + 4 : 0;
                                 return <button key={event.id} className={`t ${event.kind} ${!event.exam && past(event.end) ? 'past' : ''} ${event.exam && wasChanged(record, event.exam) ? 'changed' : ''} ${event.task?.done ? 'done' : ''}`}
                                     style={{ top: y(event.start) + 1, height: Math.max(22, y(event.end) - y(event.start) - 2), right: 2 + under * EDGE, ...(pushDown > 0 ? { justifyContent: 'flex-start', paddingTop: pushDown } : {}), ...(tone !== undefined ? courseToneStyle(tone) : {}) }} onClick={() => onOpen(event)}>
                                     {wide ? event.name : event.short}<small>{tileNote(event, wide)}</small>

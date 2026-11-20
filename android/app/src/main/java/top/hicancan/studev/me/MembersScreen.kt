@@ -85,7 +85,14 @@ import top.hicancan.studev.app.*
             }
             if (selected == null) {
                 OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), placeholder = { Text("搜索昵称") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true, shape = RoundedCornerShape(Tokens.Radius.pill.dp))
-                Plain("共 $total 位成员", 12.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
+                val context = androidx.compose.ui.platform.LocalContext.current
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Plain("共 $total 位成员", 12.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
+                    // Managing members (full profiles, roles, the audit log) lives on the web's members page for now.
+                    if (account?.role == "admin" || account?.role == "owner") TextAction("管理成员", {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${top.hicancan.studev.account.PLATFORM_ORIGIN}/members/?view=manage")))
+                    })
+                }
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             error?.let { Plain(it, 14.sp, MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 12.dp)); TextAction("重试", { detail = null; attempt++ }, refresh = true) }
