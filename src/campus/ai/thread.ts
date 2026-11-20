@@ -4,7 +4,7 @@
 import type { Message } from './stream';
 
 /** One message, and the one it follows ('' for the first). */
-export interface Node { id: string; parent: string; message: Message; preferredTool?: string }
+export interface Node { id: string; parent: string; message: Message; preferredTools?: string[] }
 /** Every message ever said here, and at each fork the branch last chosen. */
 export interface Thread { nodes: Node[]; chosen: Record<string, string> }
 
@@ -38,8 +38,8 @@ export function lineage(thread: Thread, id: string): Node[] {
 }
 
 /** A message said after `parent`, and its branch chosen there. */
-export const append = (thread: Thread, parent: string, id: string, message: Message, preferredTool?: string): Thread =>
-    ({ nodes: [...thread.nodes, { id, parent, message, ...(preferredTool ? { preferredTool } : {}) }], chosen: { ...thread.chosen, [parent]: id } });
+export const append = (thread: Thread, parent: string, id: string, message: Message, preferredTools?: string[]): Thread =>
+    ({ nodes: [...thread.nodes, { id, parent, message, ...(preferredTools?.length ? { preferredTools } : {}) }], chosen: { ...thread.chosen, [parent]: id } });
 
 /** A branch chosen at its fork. */
 export function choose(thread: Thread, id: string): Thread {

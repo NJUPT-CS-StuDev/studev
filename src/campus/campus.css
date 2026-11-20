@@ -499,9 +499,6 @@
 .ai .ai-history-search:focus-within{border-color:var(--brand)}
 .ai .ai-history-search svg{width:17px;height:17px;flex:none}
 .ai .ai-history-search input{min-width:0;flex:1;height:34px;background:none;border:0;font:inherit;color:var(--ink);outline:0}
-.ai .ai-side-tabs{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:3px 4px 5px;padding:3px;background:var(--surface-sunken);border-radius:var(--radius-control)}
-.ai .ai-side-tabs>button{min-height:32px;border-radius:calc(var(--radius-control) - 3px);color:var(--muted);font-size:13px;font-weight:500}
-.ai .ai-side-tabs>button[aria-selected=true]{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px #0001}
 .ai .ai-project-nav{margin-bottom:8px}
 .ai .ai-project-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0}
 .ai .ai-project-heading h4{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 0 0 10px}
@@ -511,11 +508,13 @@
 .ai .ai-list-heading>div:first-child .ai-icon{width:27px}
 .ai .ai-list-heading>div:first-child button+h4{margin-left:0;color:var(--ink);font-size:13px}
 .ai .ai-list-heading>.ai-menu{top:31px;right:3px}
-.ai .ai-project-link,.ai .ai-course-projects>summary{display:block;width:100%;overflow:hidden;padding:7px 10px;text-align:start;text-overflow:ellipsis;white-space:nowrap;border-radius:9px;color:var(--ink);font-size:14px}
-.ai .ai-project-link:hover:not(:disabled),.ai .ai-project-link.on,.ai .ai-course-projects>summary:hover{background:var(--surface-sunken)}
-.ai .ai-course-projects{padding-inline:4px}
-.ai .ai-course-projects>summary{display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer;color:var(--muted)}.ai .ai-course-projects>summary::-webkit-details-marker{display:none}.ai .ai-course-projects>summary::before{content:'';width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}.ai .ai-course-projects[open]>summary::before{transform:rotate(45deg)}
-.ai .ai-course-projects>.ai-project-link{padding-inline-start:20px}
+.ai .ai-project-link{display:block;width:100%;overflow:hidden;padding:7px 10px;text-align:start;text-overflow:ellipsis;white-space:nowrap;border-radius:9px;color:var(--ink);font-size:14px}
+.ai .ai-project-link:hover:not(:disabled),.ai .ai-project-link.on{background:var(--surface-sunken)}
+.ai .ai-side-none .btn{margin-top:8px}
+.ai .ai-project-starts{margin-top:18px}.ai .ai-project-starts h3{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
+.ai .ai-project-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ai .ai-chip{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--paper);color:var(--ink);font:inherit;font-size:13px;cursor:pointer}.ai .ai-chip:hover:not(:disabled){background:var(--surface-sunken)}
+.ai .ai-project-folder{display:block;margin-top:16px}
 .ai .ai-link{color:var(--brand);background:none;border:0;font:inherit;font-size:12px;padding:5px 7px;border-radius:7px;cursor:pointer}
 .ai .ai-link:hover:not(:disabled),.ai .ai-link:focus-visible{background:var(--surface-sunken)}
 .ai .ai-project-controls,.ai-project-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
@@ -626,12 +625,17 @@
 .ai .ai-tool-permission{position:relative;flex:none}
 .ai .ai-tool-trigger{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .ai .ai-tool-trigger svg{width:12px;height:12px;transform:rotate(-90deg)}
+.ai .ai-tool-trigger svg.ai-tool-glyph{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;transform:none}
 .ai .ai-model-manage{display:block;width:100%;margin-top:4px;padding:9px 12px;border:0;border-top:1px solid var(--line);background:none;color:var(--brand);font:inherit;font-size:13px;text-align:start;cursor:pointer}.ai .ai-model-manage:hover{background:var(--surface-sunken)}
-.ai .ai-permission-menu{top:auto;right:auto;left:0;bottom:calc(100% + 8px);width:min(260px,calc(100vw - 70px));max-height:45vh;overflow:auto}
+.ai .ai-permission-menu{top:auto;right:auto;left:0;bottom:calc(100% + 8px);width:min(320px,calc(100vw - 70px));max-height:45vh;overflow:auto}
 .ai.blank .ai-permission-menu{top:calc(100% + 8px);bottom:auto}
-.ai .ai-permission-menu button{position:relative;height:auto;min-height:42px;padding:8px 29px 8px 10px}
+.ai .ai-permission-menu button{position:relative;display:flex;align-items:flex-start;gap:10px;height:auto;min-height:42px;padding:9px 29px 9px 10px;text-align:start}
 .ai .ai-permission-menu small{display:block;margin-top:2px;color:var(--muted)}
-.ai .ai-permission-menu button svg{width:14px;height:14px;position:absolute;right:9px;top:11px}
+.ai .ai-permission-menu button>svg{width:14px;height:14px;position:absolute;right:9px;top:12px}
+.ai .ai-permission-icon{flex:none;padding-top:1px;color:var(--muted)}
+.ai .ai-permission-icon svg,.ai .ai-tool-permission>.ai-tool-trigger>svg:first-child{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;transform:none}
+.ai .ai-permission-copy{min-width:0}
+.ai .ai-permission-note{margin:4px 0 0;padding:8px 10px 4px;border-top:1px solid var(--line);color:var(--faint);font-size:12px;line-height:1.5}
 .ai .ai-tool-menu{top:auto;right:auto;bottom:calc(100% + 8px);left:0;width:min(290px,100%);max-height:min(45vh,300px);overflow:auto;overscroll-behavior:contain}
 .ai.blank .ai-tool-menu{top:calc(100% + 8px);bottom:auto}
 .ai .ai-tool-menu p{margin:5px 10px 2px}
@@ -640,7 +644,12 @@
 .tool-settings-group summary{cursor:pointer}.tool-settings-group>button{padding-inline-start:14px}
 .ai-tool-actions{display:flex;gap:8px;justify-content:flex-end}
 .ai .ai-compose:focus-within{box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 22%,transparent),0 2px 8px rgba(0,0,0,.06),0 4px 60px 6px rgba(0,0,0,.04)}
-.ai .ai-compose textarea{grid-column:1/-1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;line-height:24px;resize:none;max-height:200px;padding:6px 0;outline:none;field-sizing:content}
+.ai .ai-compose-field{grid-column:1/-1;position:relative;display:flex;min-width:0}
+.ai .ai-compose-mirror{position:absolute;inset:0;overflow:hidden;padding:6px 0;font-size:16px;line-height:24px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);pointer-events:none}
+.ai .ai-compose-mirror mark{border-radius:4px;background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand)}
+.ai .ai-compose .ai-compose-field textarea{position:relative;color:transparent;caret-color:var(--ink);overflow-wrap:anywhere}
+.ai .ai-compose .ai-compose-field textarea::placeholder{color:var(--faint)}
+.ai .ai-compose textarea{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;line-height:24px;resize:none;max-height:200px;padding:6px 0;outline:none;field-sizing:content}
 .ai .ai-send{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--paper);transition:opacity .15s}.ai .ai-send:disabled{opacity:.18}.ai .ai-send svg{width:20px;height:20px;stroke-width:2}
 .ai .ai-send svg rect{fill:currentColor}
 .ai .ai-down{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--paper);color:var(--ink);box-shadow:0 0 0 1px var(--line),0 4px 14px rgba(0,0,0,.08);animation:sd-fade .2s}.ai .ai-down svg{width:18px;height:18px}
@@ -825,3 +834,23 @@
   .kn-most button b{color:var(--k-fg)}
   .kn-rel h3{color:var(--k-fg)}
 }
+
+.ai .ai-side-group{margin-top:10px}
+.ai .ai-side-heading{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:30px;padding:0 4px 0 10px}
+.ai .ai-fold,.ai .ai-fold-label{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:var(--faint);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.ai .ai-fold-label{cursor:default}
+.ai .ai-fold svg{width:11px;height:11px;transform:rotate(90deg);transition:transform .15s}.ai .ai-fold[aria-expanded=false] svg{transform:none}
+.ai .ai-fold:hover{color:var(--muted)}
+.ai .ai-side-heading>.ai-menu{top:28px;right:3px}
+.ai .ai-folder{width:16px;height:16px;margin-right:8px;flex:none;vertical-align:-3px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;color:var(--muted)}
+.ai .ai-project-start{display:flex;align-items:center;color:var(--muted)}.ai .ai-project-start svg{width:16px;height:16px;margin-right:8px;flex:none}
+.ai .ai-side-more{display:block;width:100%;padding:6px 10px;border:0;border-radius:9px;background:none;color:var(--muted);font:inherit;font-size:13px;text-align:start;cursor:pointer}.ai .ai-side-more:hover{background:var(--surface-sunken);color:var(--ink)}
+.ai .ai-project-row>.ai-menu{top:34px;right:3px}
+.ai .ai-project-chats{margin-left:14px;padding-left:6px;border-left:1px solid var(--line)}
+.ai .ai-project-chats .ai-side-none{margin:6px 8px}
+.ai .ai-project-row .ai-chat-t{display:flex;align-items:center}
+.ai .ai-project-row.current>.ai-chat-t{color:var(--ink);font-weight:500}
+.ai .ai-project-new{margin-right:0}.ai .ai-project-new svg{width:16px;height:16px}
+.ai .ai-chat.drop,.ai .ai-history.drop{background:color-mix(in srgb,var(--brand) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 45%,transparent)}
+.ai .ai-history.drop{border-radius:10px}
+.ai .ai-chat[draggable=true]{cursor:default}

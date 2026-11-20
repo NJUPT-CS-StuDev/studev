@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { Completion, completionRequest } from '@/world/assistant.mjs';
-import { browserToolCatalog, browserToolId, needsToolConfirmation, toolCatalog, toolHistory } from './toolCatalog';
+import { browserToolCatalog, browserToolId, needsToolConfirmation, reachOf, toolCatalog, toolHistory } from './toolCatalog';
 
 const outline = { name: 'icourse.outline', description: 'Read the open course outline.',
     annotations: { readOnlyHint: true, destructiveHint: false }, inputSchema: { type: 'object', properties: {}, additionalProperties: false } };
@@ -14,11 +14,11 @@ describe('one available catalog for the picker and the model', () => {
         expect(toolCatalog(situation, { disabledCampus, enabledBrowser: [] }, browser).map(tool => tool.definition.function.name)).not.toContain(browserToolId(outline.name));
         const catalog = toolCatalog(situation, { disabledCampus, enabledBrowser: [outline.name] }, browser);
         const name = browserToolId(outline.name);
-        const request = completionRequest('deepseek', [], situation, 0, false, { tools: catalog.map(tool => tool.definition), preferred: name });
+        const request = completionRequest('deepseek', [], situation, 0, false, { tools: catalog.map(tool => tool.definition), preferred: [name] });
         expect(request.tools?.map(tool => tool.function.name)).not.toContain('search');
         expect(request.tools?.map(tool => tool.function.name)).not.toContain('remember');
         expect(request.tools?.at(-1)?.function.name).toBe(name);
-        expect(request.messages[0]?.content).toContain(`用户已选择工具 ${name}`);
+        expect(request.messages[0]?.content).toContain(`点名了这些工具：${name}`);
         expect(browserToolId('icourse.outline')).not.toBe(browserToolId('icourse_doutline'));
     });
 
@@ -55,5 +55,20 @@ describe('one available catalog for the picker and the model', () => {
             { role: 'user', content: '课表资料' }, { role: 'assistant', content: null, tool_calls: [lookup] },
             { role: 'tool', content: '可展示', tool_call_id: 'keep' },
         ]);
+    });
+
+    test('tells the model what this tab reaches, from facts, in the shared phrases', () => {
+        const browser = browserToolCatalog([outline]);
+        const none = { disabledCampus: [], enabledBrowser: [] };
+        const ready = reachOf({ state: 'ready', models: ['DeepSeek 网页'], granted: [] }, none, true, []);
+        expect(ready).toEqual({ runtime: 'ready', models: ['DeepSeek 网页'], on: [], off: [], free: false, remote: [] });
+        const prompt = completionRequest('deepseek', [], situation, 0, false, { reach: ready }).messages[0]?.content;
+        expect(prompt).toContain('lrmcp）已连接');
+        expect(prompt).toContain('DeepSeek 网页');
+        expect(prompt).toContain('还没有网页工具授权给本网站');
+        const granted = reachOf({ state: 'ready', models: [], granted: browser }, none, true, []);
+        expect(completionRequest('deepseek', [], situation, 0, false, { reach: granted }).messages[0]?.content).toContain('已授权但没打开的网页工具：查看 MOOC 课程目录');
+        const offline = reachOf({ state: 'offline', models: [], granted: [] }, none, true, []);
+        expect(completionRequest('deepseek', [], situation, 0, false, { reach: offline }).messages[0]?.content).toContain('没有连上');
     });
 });

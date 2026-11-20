@@ -1,4 +1,4 @@
-import { Completion, completionRequest, situationError, tools, toolsFor } from '../../campus/world/assistant.mjs';
+import { Completion, completionRequest, situationError, tools, toolsFor, reachError } from '../../campus/world/assistant.mjs';
 import { externalAlias, externalDescription, externalParameters, externalSchemaBudget, externalToolLimit } from '../../campus/world/external-tools.mjs';
 import { fail, readJson, response } from './common.mjs';
 
@@ -80,7 +80,8 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
     const situation = { week, class: body.situation.class, campus, memory, instructions };
     const known = name => names.has(name) || externalNames.has(name);
     if (body.toolNames !== undefined && (!Array.isArray(body.toolNames) || body.toolNames.length > names.size + externalNames.size || body.toolNames.some(name => !known(name)))) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
-    if (body.preferredTool !== undefined && !known(body.preferredTool)) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
+    if (body.preferredTools !== undefined && (!Array.isArray(body.preferredTools) || body.preferredTools.length > 16 || body.preferredTools.some(name => !known(name)))) fail(400, 'AI_TOOLS_INVALID', '工具选择无效。');
+    if (body.reach !== undefined && reachError(body.reach)) fail(400, 'AI_TOOLS_INVALID', '连接状态无效。');
     const available = [...toolsFor(situation), ...definitions].filter(tool => body.toolNames === undefined || body.toolNames.includes(tool.function.name));
     await repo.throttle('ai-minute', session.user.id, 12);
     // The free quota is shared by everyone; each person has a fair part of it a day, said only once it is used up.
@@ -94,7 +95,7 @@ export function createAiService({ identity, repo, env, now = Date.now, fetcher =
         const upstream = await fetcher(member.url, { method: 'POST',
           headers: { Authorization: `Bearer ${env[member.key]}`, 'Content-Type': 'application/json' },
           signal: AbortSignal.any([begun.signal, AbortSignal.timeout(FINISH), ...asked]),
-          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true, { tools: available, preferred: body.preferredTool })) });
+          body: JSON.stringify(completionRequest(member.model, messages, situation, now(), body.last === true, { tools: available, preferred: body.preferredTools, reach: body.reach })) });
         if (upstream.ok && upstream.body) return response.stream(relay(upstream.body, body.last ? [] : available.map(tool => tool.function.name)));
         if (upstream.status === 429) limited++;
       } catch { if (context.request.signal?.aborted) throw new Error('asked no more'); }

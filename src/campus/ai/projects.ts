@@ -14,6 +14,8 @@ export interface Project {
     memory?: string;
     folder?: string;
     references?: { id: string; name: string }[];
+    /** Where one put it by dragging; projects never dragged have none and keep their recent-first place above. */
+    rank?: number;
 }
 
 export interface Folder extends FileSystemDirectoryHandle {
@@ -143,6 +145,14 @@ export async function openWorkspace<P>(folder: Folder, project?: Project): Promi
         memory = project.memory;
     }
     return { folder, project: { id: selected.id, name: selected.name, course: selected.course, folder: folder.name }, instructions: instructions ?? '', memory: memory ?? '', revisions: await workspaceRevisions<P>(folder) };
+}
+
+/** Renames the project a folder holds, where its name is kept: .studev/project.json. */
+export async function renameWorkspace(folder: Folder, name: string): Promise<void> {
+    const state = await folder.getDirectoryHandle('.studev');
+    const saved = await readProject(state);
+    if (!saved) throw new Error('这个目录还没有 StuDev 项目。');
+    await writeFile(state, 'project.json', JSON.stringify({ version: 1, id: saved.id, name, course: saved.course }));
 }
 
 export async function workspaceRevisions<P>(folder: Folder, only?: string): Promise<ChatRevision<P>[]> {

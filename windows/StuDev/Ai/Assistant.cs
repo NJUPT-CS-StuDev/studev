@@ -77,7 +77,7 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
 
     /** The request a provider is sent: OpenAI's chat completions, as every provider speaks it. */
     public JsonObject Request(string model, List<JsonObject> messages, Situation s, DateTimeOffset now, bool last = false, bool runtime = false,
-        string? conversationId = null, bool retry = false, IReadOnlyList<JsonObject>? offered = null, string? preferredTool = null)
+        string? conversationId = null, bool retry = false, IReadOnlyList<JsonObject>? offered = null, IReadOnlyList<string>? preferredTools = null)
     {
         var request = new JsonObject { ["model"] = model, ["stream"] = true };
         if (!runtime) { request["max_tokens"] = 4096; request["temperature"] = 0.2; }
@@ -85,8 +85,9 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         var available = offered ?? ToolsFor(s);
         if (!last) request["tools"] = new JsonArray([.. available.Select(t => t.DeepClone())]);
         var finish = last ? "\n" + (string)contract["finish"]! : "";
-        var preference = !last && preferredTool is not null && available.Any(tool => ToolName(tool) == preferredTool)
-            ? $"\n本轮用户已选择工具 {preferredTool}。参数齐全时优先调用；缺少必要信息时先向用户提问。"
+        var named = (preferredTools ?? []).Where(name => available.Any(tool => ToolName(tool) == name)).ToList();
+        var preference = !last && named.Count > 0
+            ? $"\n用户在这轮问题里用“/工具名”点名了这些工具：{string.Join("、", named)}。按问题里各自对应的要求优先调用；缺少必要信息时先向用户提问。"
             : "";
         request["messages"] = new JsonArray([new JsonObject { ["role"] = "system", ["content"] = Instructions(s, now) + finish + preference }, .. messages.Select(m => m.DeepClone())]);
         return request;

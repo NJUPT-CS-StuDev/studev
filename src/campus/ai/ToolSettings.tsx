@@ -33,13 +33,12 @@ export default function ToolSettings() {
                 <span className="v">{label}</span><Toggle on={!preferences.disabledCampus.includes(name)} />
             </button>)}
         </details>)}
-        <h3 className="sh gap">Local Runtime MCP</h3>
-        <p className="fine">暂无可用于此聊天的本机工具。</p>
-        <h3 className="sh gap">Web MCP</h3>
-        <p className="fine">启用后，AI 可以调用已授权的网页工具，读取结果会交给当前模型。支持自填 API 和本机浏览器模型。</p>
-        {status === 'loading' && <p className="fine" role="status">正在查找已授权的网页工具…</p>}
-        {status === 'offline' && <p className="fine">暂时连不上 Local Runtime MCP。<TextAction onClick={() => setAttempt(value => value + 1)}>重试</TextAction></p>}
-        {status === 'ready' && !browser.length && <p className="fine">在 Local Runtime MCP 中授权本网站后，这里会显示可启用的网页工具。<TextAction onClick={() => setAttempt(value => value + 1)}>刷新</TextAction></p>}
+        <h3 className="sh gap">本机工具（Local Runtime）</h3>
+        <p className="fine">这台电脑上的 Local Runtime 借给本网站的网页工具。启用的由 AI 调用，结果交给当前模型。浏览器模型在「模型」里开启。</p>
+        {status === 'loading' && <p className="fine" role="status">正在连接 Local Runtime…</p>}
+        {status === 'offline' && <p className="fine">没有连上 Local Runtime：请确认已安装并打开它和浏览器扩展。<TextAction onClick={() => setAttempt(value => value + 1)}>重试</TextAction></p>}
+        {status === 'ready' && <p className="fine">已连接</p>}
+        {status === 'ready' && !browser.length && <p className="fine">还没有网页工具授权给本网站：在 Local Runtime 里为 {typeof location === 'undefined' ? '本网站' : location.host} 授权后，这里会列出来。<TextAction onClick={() => setAttempt(value => value + 1)}>刷新</TextAction></p>}
         {browser.map(tool => <button type="button" className="kv" key={tool.capability} role="switch" aria-checked={preferences.enabledBrowser.includes(tool.capability)} onClick={() => toggle('enabledBrowser', tool.capability)}>
             <span className="v">{tool.label}</span><Toggle on={preferences.enabledBrowser.includes(tool.capability)} />
         </button>)}

@@ -21,19 +21,19 @@ import { courseName, roomLabel } from '@/world/names';
 import { Again, Back, Bars, Chevron, Compose, Copy, Down, Dots, Magnifier, Pencil, Sheet, Square, Tick, Up, TextAction, CampusHeader } from '@/world/ui';
 import { readExams, readTimeline, schedulingTool, taskProposal, toolArguments, type TaskProposal } from '@/world/tools';
 import { ask, askOwn, type Message } from './stream';
-import { askRuntime, closeRuntimeChat, runtimeRequest, type RuntimeRequest } from './runtime';
+import { askRuntime, closeRuntimeChat, runtimeModels, runtimeRequest, type RuntimeRequest } from './runtime';
 import { FREE_MODEL, MODEL_SETTINGS_CHANGED, RUNTIME_DISABLED, RUNTIME_PROVIDER, freeProvider, freeService, readModelSettings, selectedProvider, visibleModelProviders, writeModelSettings, type ModelSelection, type ModelSettings } from './model';
 import { FreeServiceAvatar } from './FreeServiceAvatar';
 import { append, chain, choose, conversationId, emptyThread, lineage, path, siblings, tip, type Node, type Thread } from './thread';
 import { chatGroups, titleOf, type Saved } from './chats';
 import { stepsLine, stepsOf } from './steps';
-import { invokeBrowserTool, listBrowserTools, needsToolConfirmation, readToolPreferences, toolCatalog, toolHistory, toolPermissionModes, TOOL_SETTINGS_CHANGED, writeToolPreferences, type BrowserTool, type PermissionMode, type ToolItem } from './toolCatalog';
+import { reachOf, invokeBrowserTool, listBrowserTools, needsToolConfirmation, readToolPreferences, toolCatalog, toolHistory, toolPermissionModes, TOOL_SETTINGS_CHANGED, writeToolPreferences, type BrowserTool, type LocalRuntimeSnapshot, type PermissionMode, type ToolItem } from './toolCatalog';
 import ToolSettings from './ToolSettings';
 import ModelSettingsPanel from './ModelSettings';
 import { activeRemoteTools, invokeRemoteTool, REMOTE_MCP_CHANGED, type RemoteTool } from './remoteMcp';
 import ProjectSettings from './ProjectSettings';
 import { projectInstructions, foldPersonalInstructions } from './instructions';
-import { dropFolder, folderAvailable, newProjectFolder, openWorkspace, pickFolder, readProjects, saveFolder, saveProjectChat, saveProjects, savedFolder, workspaceRevisions, writeProjectInstructions, writeProjectMemory, type ChatRevision, type Folder, type Project, type Workspace } from './projects';
+import { dropFolder, folderAvailable, newProjectFolder, openWorkspace, pickFolder, readProjects, renameWorkspace, saveFolder, saveProjectChat, saveProjects, savedFolder, workspaceRevisions, writeProjectInstructions, writeProjectMemory, type ChatRevision, type Folder, type Project, type Workspace } from './projects';
 import { routeDuration } from '@/world/routes';
 import { MEMORY_LIMIT, readMemory, remembered, writeMemory, type Memory } from './memory';
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
@@ -122,56 +122,101 @@ function CopyButton({ text }: { text: string }) {
     return <button className="ai-icon" aria-label={done ? '已复制' : '复制'} title={done ? '已复制' : '复制'} onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }); }}>{done ? <Tick /> : <Copy />}</button>;
 }
 
+/** One picture per permission level: looking over each step, a lock on what is kept, a shield that lets things run. */
+const PERMISSION_ICONS: Record<string, ReactNode> = {
+    review: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.8" /></svg>,
+    read: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2" /><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" /></svg>,
+    approved: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19 6v5.5c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6Z" /></svg>,
+};
+
 function ToolPermission({ mode, disabled, change }: { mode: PermissionMode; disabled: boolean; change: (mode: PermissionMode) => void }) {
     const [open, setOpen] = useState(false);
     const current = toolPermissionModes.find(item => item.id === mode);
     return <div className="ai-tool-permission" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
         onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); event.currentTarget.querySelector('button')?.focus(); } }}>
-        <button type="button" className="ai-tool-trigger" aria-label={`工具权限，${current?.label}`} aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>{current?.label} <Chevron /></button>
+        <button type="button" className="ai-tool-trigger" aria-label={`工具权限，${current?.label}`} aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>{current && PERMISSION_ICONS[current.id]}{current?.label} <Chevron /></button>
         {open && <div className="ai-menu ai-permission-menu" role="group" aria-label="工具权限">
             {toolPermissionModes.map(item => <button type="button" aria-pressed={item.id === mode} key={item.id} onClick={() => { change(item.id); setOpen(false); }}>
-                <b>{item.label}</b><small>{item.description}</small>{item.id === mode && <Tick />}
+                <span className="ai-permission-icon">{PERMISSION_ICONS[item.id]}</span><span className="ai-permission-copy"><b>{item.label}</b><small>{item.description}</small></span>{item.id === mode && <Tick />}
             </button>)}
+            <p className="ai-permission-note">读取：查资料、看网页和文件。写入：记下记忆、添加任务、替你操作。</p>
         </div>}
     </div>;
 }
 
 /** The box one writes in: grows with what is written, sends on Enter, stops while answering. */
-function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable, picker, permission, tools }: { value: string; onChange: (text: string) => void; onSend: (text: string, preferred?: string) => void; onStop: () => void; busy: boolean; canSend: boolean; unavailable?: string; picker: ReactNode; permission: ReactNode; tools: ToolItem[] }) {
-    const [open, setOpen] = useState(false), [active, setActive] = useState(0), [selected, setSelected] = useState('');
+/** The tools a question names, as `/工具名` anywhere in it, in the order they first appear. */
+export function mentionedTools(text: string, tools: ToolItem[]): string[] {
+    const found: { at: number; name: string }[] = [];
+    for (const tool of [...tools].sort((a, b) => b.label.length - a.label.length)) {
+        const at = text.indexOf(`/${tool.label}`);
+        if (at >= 0 && !found.some(item => item.name === tool.definition.function.name)) found.push({ at, name: tool.definition.function.name });
+    }
+    return found.sort((a, b) => a.at - b.at).map(item => item.name);
+}
+
+/** The question with each named tool marked, drawn under the text box so the mentions read as part of the sentence. */
+function Mentions({ text, tools }: { text: string; tools: ToolItem[] }) {
+    const labels = tools.map(tool => tool.label).sort((a, b) => b.length - a.length);
+    const parts: ReactNode[] = [];
+    let rest = text, key = 0;
+    while (rest) {
+        let hit = -1, label = '';
+        for (const candidate of labels) { const at = rest.indexOf(`/${candidate}`); if (at >= 0 && (hit < 0 || at < hit)) { hit = at; label = candidate; } }
+        if (hit < 0) { parts.push(rest); break; }
+        if (hit) parts.push(rest.slice(0, hit));
+        parts.push(<mark key={key++}>/{label}</mark>);
+        rest = rest.slice(hit + label.length + 1);
+    }
+    return <div className="ai-compose-mirror" aria-hidden="true">{parts}{'\u200b'}</div>;
+}
+
+/** The box one writes in: grows with what is written, sends on Enter, stops while answering. Typing `/` at the start or
+ * after a space looks up a tool; the chosen one goes into the sentence as `/工具名`, as many as the question needs. */
+function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable, picker, permission, tools }: { value: string; onChange: (text: string) => void; onSend: (text: string, preferred: string[]) => void; onStop: () => void; busy: boolean; canSend: boolean; unavailable?: string; picker: ReactNode; permission: ReactNode; tools: ToolItem[] }) {
+    const [active, setActive] = useState(0), [caret, setCaret] = useState(0), [dismissed, setDismissed] = useState(-1);
     const id = useId(), input = useRef<HTMLTextAreaElement>(null), menu = useRef<HTMLDivElement>(null);
-    const query = /^\/([^\n]*)$/.exec(value)?.[1];
-    const matching = tools.filter(tool => !query || `${tool.label} ${tool.group}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-    const showing = !busy && (open || query !== undefined), at = Math.min(active, matching.length - 1);
-    const chosen = tools.find(tool => tool.definition.function.name === selected);
-    const canUseLabel = chosen && !((chosen.definition.function.parameters as { required?: unknown[] }).required?.length);
-    const question = query === undefined ? value.trim() || (canUseLabel ? chosen.label : '') : '';
+    // The `/word` being typed right before the caret, if any.
+    const typed = /(?:^|\s)\/([^\s/]*)$/.exec(value.slice(0, caret));
+    const slash = typed ? caret - typed[1]!.length - 1 : -1;
+    const query = typed?.[1];
+    const matching = tools.filter(tool => !query || `${tool.label} ${tool.group}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+    const showing = !busy && query !== undefined && slash !== dismissed && matching.length > 0, at = Math.min(active, matching.length - 1);
+    const question = value.trim();
     useEffect(() => { if (showing) menu.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' }); }, [showing, at]);
-    function detach() { setOpen(false); setActive(0); if (query !== undefined) onChange(''); }
-    function select(tool: ToolItem) { detach(); setSelected(tool.definition.function.name); input.current?.focus(); }
+    function select(tool: ToolItem) {
+        const insert = `/${tool.label} `;
+        const next = value.slice(0, slash) + insert + value.slice(caret);
+        onChange(next); setActive(0);
+        const place = slash + insert.length;
+        requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(place, place); setCaret(place); });
+    }
     function submit() {
         if (showing) { if (at >= 0) select(matching[at]!); return; }
-        if (canSend && !busy && question && (!selected || chosen)) { onSend(question, selected || undefined); setSelected(''); }
+        if (canSend && !busy && question) onSend(question, mentionedTools(question, tools));
     }
+    const track = (event: { currentTarget: HTMLTextAreaElement }) => setCaret(event.currentTarget.selectionStart);
     return <form className="ai-compose" onSubmit={event => { event.preventDefault(); submit(); }} onBlur={event => {
-        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) detach();
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setDismissed(slash);
     }}>
         {unavailable && <p id={`${id}-status`} role="status" className="fine ai-model-status">{unavailable}</p>}
-        <textarea ref={input} aria-label="问点什么" aria-describedby={unavailable ? `${id}-status` : undefined} aria-controls={showing ? id : undefined} aria-activedescendant={showing && at >= 0 ? `${id}-${at}` : undefined} value={value} maxLength={4000} rows={1} placeholder={chosen && canUseLabel ? '补充要求，或直接发送' : '问点什么'} onChange={event => { setActive(0); onChange(event.target.value); }}
+        <div className="ai-compose-field">
+        <Mentions text={value} tools={tools} />
+        <textarea ref={input} aria-label="问点什么" aria-describedby={unavailable ? `${id}-status` : undefined} aria-controls={showing ? id : undefined} aria-activedescendant={showing && at >= 0 ? `${id}-${at}` : undefined} value={value} maxLength={4000} rows={1} placeholder="问点什么，输入 / 使用工具"
+            onChange={event => { setActive(0); setDismissed(-1); onChange(event.target.value); track(event); }} onSelect={track} onClick={track}
+            onScroll={event => { const mirror = event.currentTarget.previousElementSibling as HTMLElement | null; if (mirror) mirror.scrollTop = event.currentTarget.scrollTop; }}
             onKeyDown={event => {
                 if (event.nativeEvent.isComposing) return;
-                if (showing && event.key === 'Escape') { event.preventDefault(); detach(); }
-                else if (showing && matching.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                if (showing && event.key === 'Escape') { event.preventDefault(); setDismissed(slash); }
+                else if (showing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
                     event.preventDefault(); setActive((at + (event.key === 'ArrowDown' ? 1 : matching.length - 1)) % matching.length);
-                } else if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
+                } else if ((event.key === 'Enter' && !event.shiftKey) || (showing && event.key === 'Tab')) { event.preventDefault(); submit(); }
             }} />
+        </div>
         <div className="ai-tool-control">
-            <button type="button" className="ai-tool-trigger" aria-label="选择工具" aria-expanded={showing} title="选择工具（输入 / 也可以）" disabled={busy} onClick={() => { if (showing) detach(); else { setOpen(true); setActive(0); input.current?.focus(); } }}>工具 <Chevron /></button>
             {permission}
-            {selected && <button type="button" className="ai-tool-selected" aria-label={`取消选择${chosen?.label ?? '工具'}`} onClick={() => setSelected('')}>{chosen?.label ?? '工具暂不可用'} <span aria-hidden="true">×</span></button>}
         </div>
         {showing && <div className="ai-menu ai-tool-menu" id={id} ref={menu} role="menu" aria-label="可用工具">
-            {!matching.length && <p className="fine">没有匹配的工具</p>}
             {[...new Set(matching.map(tool => tool.group))].map(group => <div role="group" aria-label={group} key={group}>
                 <p className="fine">{group}</p>
                 {matching.map((tool, index) => tool.group === group && <button type="button" role="menuitem" id={`${id}-${index}`} aria-current={index === at ? 'true' : undefined} key={tool.definition.function.name} onClick={() => select(tool)}>{tool.label}</button>)}
@@ -179,11 +224,11 @@ function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable,
         </div>}
         {picker}
         {busy ? <button type="button" className="ai-send" aria-label="停止" onClick={onStop}><Square /></button>
-            : <button className="ai-send" aria-label="发送" disabled={!canSend || !question || Boolean(selected && !chosen)}><Up /></button>}
+            : <button className="ai-send" aria-label="发送" disabled={!canSend || !question}><Up /></button>}
     </form>;
 }
 
-function ModelPicker({ settings, choice, disabled, runtimeOff, select, manage }: { settings: ModelSettings; choice: ModelSelection; disabled: boolean; runtimeOff: boolean; select: (model: ModelSelection) => void; manage: () => void }) {
+function ModelPicker({ settings, choice, disabled, answering, runtimeOff, select, manage }: { settings: ModelSettings; choice: ModelSelection; disabled: boolean; answering: boolean; runtimeOff: boolean; select: (model: ModelSelection) => void; manage: () => void }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(-1);
@@ -278,6 +323,7 @@ function ModelPicker({ settings, choice, disabled, runtimeOff, select, manage }:
                 </div>)}
             </div>
             {!options.length && <p className="fine ai-model-empty" role="status">没有匹配的模型</p>}
+            {answering && <p className="fine ai-model-empty">正在回答的这一轮用原来的模型答完，新选的从下一个问题开始。</p>}
             <button type="button" className="ai-model-manage" onClick={() => { close(false); manage(); }}>添加或管理模型…</button>
         </div>}
     </div>;
@@ -300,6 +346,7 @@ export default function AiApp() {
     const who = useMemo(() => ({ type: 'me' as const }), []);
     const { loaded, term, error: loadError } = useTimeline(who, prefs, ready, null, tasks);
     const [kept, setKept] = useState<Kept>(readKept);
+    const keptNow = useRef(kept); keptNow.current = kept;
     const [chat, setChat] = useState<Chat>(() => { const saved = kept.chats.find(item => item.id === kept.current); return saved ? opened(saved) : empty(); });
     const [projects, setProjects] = useState(readProjects);
     const restore = useRef(rememberedProject());
@@ -314,6 +361,11 @@ export default function AiApp() {
     const [multi, setMulti] = useState<string[] | null>(null);
     const [search, setSearch] = useState('');
     const [archived, setArchived] = useState(false);
+    const [folded, setFolded] = useState<{ projects?: boolean; pinned?: boolean }>({});
+    const [allProjects, setAllProjects] = useState(false);
+    const [expanded, setExpanded] = useState<string[]>([]);
+    const [dropping, setDropping] = useState<string | null>(null);
+    const [projectMenu, setProjectMenu] = useState<string | null>(null), [renamingProject, setRenamingProject] = useState<string | null>(null);
     const [projectError, setProjectError] = useState('');
     const [savingProject, setSavingProject] = useState(Boolean(restore.current));
     const [skill, setSkill] = useState<{ name: string; text: string }>();
@@ -348,6 +400,8 @@ export default function AiApp() {
     const free = choice.provider === FREE_MODEL.provider;
     const [toolPreferences, setTools] = useState(readToolPreferences);
     const [browserTools, setBrowserTools] = useState<BrowserTool[]>([]);
+    const [runtimeStatus, setRuntimeStatus] = useState<LocalRuntimeSnapshot>({ state: 'unknown', models: [], granted: [] });
+    const runtimeStatusRef = useRef(runtimeStatus); runtimeStatusRef.current = runtimeStatus;
     const [remoteTools, setRemoteTools] = useState<RemoteTool[]>([]);
     const [utility, setUtility] = useState<'tools' | 'models'>();
     const [approval, setApproval] = useState<{ label: string; detail: string; finish: (allow: boolean) => void } | null>(null);
@@ -358,12 +412,18 @@ export default function AiApp() {
         return () => { window.removeEventListener(TOOL_SETTINGS_CHANGED, refresh); window.removeEventListener('storage', refresh); };
     }, []);
     useEffect(() => {
-        setBrowserTools([]);
-        if (!canUseBrowser || !toolPreferences.enabledBrowser.length) return;
         const controller = new AbortController();
-        void listBrowserTools(controller.signal).then(tools => { if (!controller.signal.aborted) setBrowserTools(tools); }, () => {});
+        void Promise.all([listBrowserTools(controller.signal), runtimeModels(controller.signal).catch(() => [])]).then(([tools, models]) => {
+            if (controller.signal.aborted) return;
+            setRuntimeStatus({ state: 'ready', models: models.map(model => model.name), granted: tools });
+            setBrowserTools(canUseBrowser && toolPreferences.enabledBrowser.length ? tools : []);
+        }, () => {
+            if (controller.signal.aborted) return;
+            setRuntimeStatus({ state: 'offline', models: [], granted: [] });
+            setBrowserTools([]);
+        });
         return () => controller.abort();
-    }, [canUseBrowser, toolPreferences]);
+    }, [canUseBrowser, toolPreferences, utility]);
     useEffect(() => {
         let loading: AbortController | undefined;
         function refresh() {
@@ -381,14 +441,40 @@ export default function AiApp() {
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     const opening = useRef(true);
     const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
+    // Said on the page root, which outlives the app pages' swaps: the header marks the AI tab while it writes, and once
+    // it finished while one was elsewhere.
+    const wasBusy = useRef(false);
+    useEffect(() => {
+        const root = document.documentElement;
+        root.toggleAttribute('data-ai-busy', busy);
+        if (wasBusy.current && !busy && !root.hasAttribute('data-ai-open')) root.setAttribute('data-ai-done', '');
+        wasBusy.current = busy;
+    }, [busy]);
     const [modelStage, setModelStage] = useState('');
-    const [waiting, setWaiting] = useState<{ text: string; preferred?: string } | null>(null), [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
+    const [waiting, setWaiting] = useState<{ text: string; preferred?: string[] } | null>(null), [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
     // While answering after a message, only what this answer says shows after it, not the answer it had before.
     const [from, setFrom] = useState<string | null>(null);
     const fresh = useRef(new Set<string>());
     // The document kernel, loaded once; nothing is shown as raw text while it loads, and an answer waits for it.
     const [drawn, setDrawn] = useState(false);
     const [live, setLive] = useState<Update | null>(null);
+    // The answer being written, so a page closed mid-sentence keeps what was said: written straight to storage as the
+    // page goes, since nothing asynchronous runs then.
+    const writing = useRef<{ chat: string; thread: Thread; tip: string; said: string } | null>(null);
+    useEffect(() => {
+        const keep = () => {
+            const now = writing.current;
+            if (!now?.said.trim()) return;
+            try {
+                const all = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { chats?: Saved<Proposal>[]; current?: string | null };
+                const chats = all.chats?.map(item => item.id === now.chat
+                    ? { ...item, thread: append(now.thread, now.tip, newId(), { role: 'assistant', content: `${now.said}\n\n（回答没有写完，页面就关了。）` }), updated: Date.now() } : item);
+                if (chats) localStorage.setItem(KEY, JSON.stringify({ ...all, chats }));
+            } catch { /* Storage unavailable: nothing more can be kept. */ }
+        };
+        window.addEventListener('pagehide', keep);
+        return () => window.removeEventListener('pagehide', keep);
+    }, []);
     useEffect(() => { void docReady().then(() => setDrawn(true)); }, []);
     const stop = useRef<AbortController | null>(null);
     useEffect(() => { if (runtimeOff) stop.current?.abort(); }, [runtimeOff]);
@@ -429,7 +515,19 @@ export default function AiApp() {
             return { chats: [saved, ...all.chats.filter(item => item.id !== id)], current: id };
         });
     }, [chat, workspace, project?.folder, projectId, busy]);
-    useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(kept)); } catch { /* Kept for this page only. */ } }, [kept]);
+    // One record for every tab: another tab's change is read in, and a write that changes nothing is skipped, so two open
+    // tabs never overwrite each other's chats with an older copy.
+    useEffect(() => { try { const text = JSON.stringify(kept); if (localStorage.getItem(KEY) !== text) localStorage.setItem(KEY, text); } catch { /* Kept for this page only. */ } }, [kept]);
+    useEffect(() => {
+        const update = (event: StorageEvent) => {
+            if (event.key !== KEY || !event.newValue) return;
+            const theirs = readKept();
+            // Which chat is open stays each tab's own; only the chats themselves are shared.
+            if (JSON.stringify(theirs.chats) !== JSON.stringify(keptNow.current.chats)) setKept(own => ({ chats: theirs.chats, current: own.current }));
+        };
+        window.addEventListener('storage', update);
+        return () => window.removeEventListener('storage', update);
+    }, []);
     const open = (id: string | null, inProject = projectId, work: Workspace<Proposal> | null | undefined = workspace, revision?: ChatRevision<Proposal>) => {
         if (busy) return;
         const found = revision?.chat ?? kept.chats.find(item => item.id === id);
@@ -550,8 +648,43 @@ export default function AiApp() {
         keepProject({ ...project, references: project.references?.filter(item => item.id !== id) });
         await dropFolder(id);
     }
-    async function moveChats(target: Project) {
-        const ids = new Set(moving);
+    async function renameProject(target: Project, title: string) {
+        setRenamingProject(null);
+        const name = title.trim().slice(0, 60);
+        if (!name || name === target.name) return;
+        if (target.folder) {
+            const root = workspace?.project.id === target.id ? workspace.folder : await savedFolder(target.id);
+            if (!root || await root.queryPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('先打开这个项目并授权目录，然后再改名。');
+            await renameWorkspace(root, name);
+            if (workspace?.project.id === target.id) setWorkspace({ ...workspace, project: { ...workspace.project, name } });
+        }
+        keepProject({ ...target, name });
+    }
+    /** A project goes; its chats stay, back among the recent ones. A folder keeps its own files. */
+    function removeProject(target: Project) {
+        setProjectMenu(null);
+        setProjects(current => { const all = current.filter(item => item.id !== target.id); saveProjects(all); return all; });
+        setKept(all => ({ ...all, chats: all.chats.map(item => item.project === target.id ? { ...item, project: undefined } : item) }));
+        if (target.folder) void dropFolder(target.id);
+        if (projectId === target.id) ordinary();
+    }
+    /** Recent first until one drags: then the order shown is kept, and projects added later stay on top by time. */
+    const orderedProjects = [...projects.filter(item => item.rank === undefined), ...projects.filter(item => item.rank !== undefined).sort((a, b) => a.rank! - b.rank!)];
+    function placeProject(dragged: string, before: string) {
+        if (dragged === before) return;
+        const order = orderedProjects.filter(item => item.id !== dragged);
+        const moved = projects.find(item => item.id === dragged);
+        if (!moved) return;
+        order.splice(order.findIndex(item => item.id === before), 0, moved);
+        const ranked = order.map((item, rank) => ({ ...item, rank }));
+        setProjects(ranked); saveProjects(ranked);
+    }
+    function takeOutOfProject(id: string) {
+        setKept(all => ({ ...all, chats: all.chats.map(record => record.id === id ? { ...record, project: undefined } : record) }));
+        if (id === chat.id && projectId) ordinary();
+    }
+    async function moveChats(target: Project, chosen: string[] = moving) {
+        const ids = new Set(chosen);
         let next = { ...kept, chats: kept.chats.map(item => ids.has(item.id) ? { ...item, project: target.id } : item) };
         if (target.folder) {
             const root = await savedFolder(target.id);
@@ -704,10 +837,11 @@ export default function AiApp() {
         const cid = firstId ?? retried?.request.conversation_id ?? (reset ? at : conversationId(base, at, chat.id, chat.forks));
         if (options.fork || reset) setChat(current => ({ ...current, forks: [...current.forks, cid], resetRuntime: false }));
         if (!options.retry) failedRuntime.current = null;
-        const grow = (message: Message) => { const id = message.role === 'assistant' && firstId ? firstId : newId(); if (message.role === 'assistant') firstId = undefined; fresh.current.add(id); thread = append(thread, tipId, id, message); tipId = id; setChat(current => ({ ...current, thread })); };
+        const grow = (message: Message) => { const id = message.role === 'assistant' && firstId ? firstId : newId(); if (message.role === 'assistant') firstId = undefined; fresh.current.add(id); thread = append(thread, tipId, id, message); tipId = id; setChat(current => ({ ...current, thread })); writing.current = { chat: chat.id, thread, tip: tipId, said: '' }; };
+        writing.current = workspace ? null : { chat: chat.id, thread, tip: tipId, said: '' };
         fresh.current = new Set(); setFrom(at);
         const turn = lineage(thread, at);
-        const preferred = turn.findLast(node => node.message.role === 'user')?.preferredTool;
+        const preferred = turn.findLast(node => node.message.role === 'user')?.preferredTools ?? [];
         let history = turn.map(node => node.message);
         setChat(current => ({ ...current, thread, model: choice })); setBusy(true); setError(''); setEditing(null); stuck.current = true;
         const controller = new AbortController(); stop.current = controller;
@@ -715,26 +849,42 @@ export default function AiApp() {
         try {
             await docReady();
             const preferences = readToolPreferences();
-            const [granted, external] = await Promise.all([
-                canUseBrowser && preferences.enabledBrowser.length ? listBrowserTools(controller.signal).catch(() => []) : [],
+            const probeRuntime = async (): Promise<LocalRuntimeSnapshot> => {
+                const needLive = runtimeStatusRef.current.state === 'unknown' || Boolean(canUseBrowser && preferences.enabledBrowser.length);
+                if (!needLive) return runtimeStatusRef.current;
+                const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(2500)]);
+                try {
+                    const [tools, models] = await Promise.all([listBrowserTools(signal), runtimeModels(signal).catch(() => [])]);
+                    return { state: 'ready', models: models.map(model => model.name), granted: tools };
+                } catch {
+                    return { state: 'offline', models: [], granted: [] };
+                }
+            };
+            const [runtimeNow, external] = await Promise.all([
+                probeRuntime(),
                 activeRemoteTools(AbortSignal.any([controller.signal, AbortSignal.timeout(4500)])),
             ]);
             if (controller.signal.aborted) return;
+            setRuntimeStatus(runtimeNow);
+            const granted = canUseBrowser && preferences.enabledBrowser.length && runtimeNow.state === 'ready' ? runtimeNow.granted : [];
+            setBrowserTools(granted);
             setRemoteTools(external);
+            const reach = reachOf(runtimeNow, preferences, canUseBrowser, external);
             const catalog = toolCatalog(situation(), preferences, granted, external);
             const modelTools = catalog.map(tool => tool.definition);
             const byName = new Map(catalog.map(tool => [tool.definition.function.name, tool]));
             history = toolHistory(history, new Set(byName.keys()), free);
             if (!runtime) history = recent(history);
             const denied = new Set<string>();
-            if (preferred && !byName.has(preferred)) throw new Error('所选工具暂不可用，请重新选择。');
+            const missing = preferred.find(name => !byName.has(name));
+            if (missing) throw new Error('问题里点名的工具暂不可用，请换一个或去掉它。');
             if (retried?.request.tools?.some(tool => !byName.has(tool.function.name))) throw new Error('工具授权已变化，请生成新的回答。');
             for (let round = 0; round < ROUNDS; round++) {
                 const last = round === ROUNDS - 1;
                 said = ''; setStreaming(''); setLive(null); setModelStage('');
                 const doc = new DocStream();
-                const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); };
-                const context = { tools: modelTools.filter(tool => !denied.has(tool.function.name)), external: external.map(tool => tool.definition), preferred: round === 0 ? preferred : undefined };
+                const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); if (writing.current) writing.current.said = said; };
+                const context = { tools: modelTools.filter(tool => !denied.has(tool.function.name)), external: external.map(tool => tool.definition), preferred: round === 0 ? preferred : undefined, reach };
                 const request = runtime ? round === 0 && retried ? retried.request : runtimeRequest(choice.model, history, situation(), last, cid, context) : null;
                 if (request) {
                     failedRuntime.current = { request, firstId };
@@ -769,10 +919,12 @@ export default function AiApp() {
             // Stopped: what was said so far stays, as an answer cut short.
             if (controller.signal.aborted) { if (said) grow({ role: 'assistant', content: said }); return; }
             setError(failure instanceof Error ? failure.message : 'AI 暂时无法响应。');
+        // What was being written stays in `writing` past a failure: leaving the page cuts the request before `pagehide`,
+        // and that is when it is kept. A finished answer or a stop has already put it in the thread and emptied it.
         } finally { setStreaming(null); setLive(null); setModelStage(''); setBusy(false); setFrom(null); stop.current = null; }
     }
     /** A question asked after `parent` (the end of the conversation, or before a question being changed). */
-    async function send(question: string, signedIn = false, parent = tip(chat.thread), preferred?: string) {
+    async function send(question: string, signedIn = false, parent = tip(chat.thread), preferred?: string[]) {
         if (unavailableProject || activeConflict || savingProject) return;
         const asked = question.trim();
         if (!asked || busy) return;
@@ -817,7 +969,7 @@ export default function AiApp() {
         permission={<ToolPermission mode={toolPreferences.mode ?? 'read'} disabled={busy} change={mode => {
             try { writeToolPreferences({ ...readToolPreferences(), mode }); } catch { setError('工具权限暂时无法保存。'); }
         }} />}
-        picker={<ModelPicker settings={modelSettings} choice={choice} disabled={busy} runtimeOff={runtimeOff} select={setModel} manage={() => setUtility('models')} />} />;
+        picker={<ModelPicker settings={modelSettings} choice={choice} disabled={false} answering={busy} runtimeOff={runtimeOff} select={setModel} manage={() => setUtility('models')} />} />;
     const current = workspace ? diskBase.current?.chat : kept.chats.find(item => item.id === kept.current);
     const shownChats = (workspace ? workspace.revisions.map(revision => revision.chat) : kept.chats.filter(item => (item.project || undefined) === project?.id))
         .filter(item => Boolean(item.archived) === archived && (!search.trim() || titleOf(item).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
@@ -827,18 +979,20 @@ export default function AiApp() {
         const revision = workspace?.revisions.find(entry => entry.chat === item);
         const key = revision?.name ?? item.id;
         const conflicted = (counts.get(item.id) ?? 0) > 1;
-        return <div key={key} className={`ai-chat ${item === current ? 'on' : ''} ${menu === key ? 'menu' : ''}`}>
+        return <div key={key} className={`ai-chat ${item === current ? 'on' : ''} ${menu === key ? 'menu' : ''}`} draggable={!revision && !renaming}
+            onDragStart={event => { event.dataTransfer.setData('text/studev-chat', item.id); event.dataTransfer.effectAllowed = 'move'; }}>
             {multi && !workspace && <input type="checkbox" aria-label={`选择${titleOf(item)}`} checked={multi.includes(item.id)} onChange={event => setMulti(event.target.checked ? [...multi, item.id] : multi.filter(id => id !== item.id))} />}
             {renaming === key
                 ? <input className="ai-rename" autoFocus defaultValue={titleOf(item)} maxLength={60} onBlur={event => rename(item, event.target.value, revision)}
                     onKeyDown={event => { if (event.key === 'Enter') rename(item, event.currentTarget.value, revision); if (event.key === 'Escape') setRenaming(null); }} />
-                : <button className="ai-chat-t" disabled={locked} onClick={() => open(item.id, projectId, workspace ?? null, revision)} title={titleOf(item)}>{titleOf(item)}{conflicted && <small>冲突 · {revision?.name.slice(-6)}</small>}</button>}
+                : <button className="ai-chat-t" disabled={locked} onClick={() => open(item.id, revision ? projectId : item.project || '', revision ? workspace ?? null : null, revision)} title={titleOf(item)}>{titleOf(item)}{conflicted && <small>冲突 · {revision?.name.slice(-6)}</small>}</button>}
             {!multi && <button className="ai-chat-more" aria-label="更多" disabled={locked} onClick={() => setMenu(menu === key ? null : key)}><Dots /></button>}
             {menu === key && <div className="ai-menu" role="menu">
                 <button role="menuitem" disabled={conflicted} onClick={() => { setRenaming(key); setMenu(null); }}>重命名</button>
                 <button role="menuitem" disabled={conflicted} onClick={() => void projectAction(() => changeChat(item, { pinned: !item.pinned }, revision))}>{item.pinned ? '取消置顶' : '置顶'}</button>
                 <button role="menuitem" disabled={conflicted} onClick={() => void projectAction(() => changeChat(item, { archived: !item.archived }, revision))}>{item.archived ? '取消归档' : '归档'}</button>
-                {!workspace && <button role="menuitem" onClick={() => { setMoving([item.id]); setMenu(null); }}>移入项目</button>}
+                {!workspace && <button role="menuitem" onClick={() => { setMoving([item.id]); setMenu(null); }}>{item.project ? '移至其他项目' : '移至项目'}</button>}
+                {!workspace && item.project && <button role="menuitem" onClick={() => { setKept(all => ({ ...all, chats: all.chats.map(record => record.id === item.id ? { ...record, project: undefined } : record) })); setMenu(null); if (item.id === chat.id) ordinary(); }}>从项目中移除</button>}
                 {!workspace && <button role="menuitem" className="danger" onClick={() => remove(item.id)}>删除</button>}
             </div>}
         </div>;
@@ -846,38 +1000,81 @@ export default function AiApp() {
     return <div className={`sd ai campus-entry ${blank ? 'blank' : ''} ${side ? 'side-open' : ''}`}>
         <aside className="ai-side" aria-label="对话与项目">
             <button className="ai-side-new" disabled={locked || unavailableProject} onClick={() => open(null)}><Compose />新对话</button>
-            <div className="ai-side-tabs" role="tablist" aria-label="浏览">
-                <button type="button" role="tab" aria-selected={sideView === 'chats'} disabled={locked} onClick={() => showList('chats')}>对话</button>
-                <button type="button" role="tab" aria-selected={sideView !== 'chats'} disabled={locked} onClick={() => showList('projects')}>项目</button>
-            </div>
-            {sideView !== 'projects' && <label className="ai-history-search"><Magnifier /><input type="search" placeholder="搜索对话" aria-label="搜索对话" value={search} onChange={event => setSearch(event.target.value)} /></label>}
+            <label className="ai-history-search"><Magnifier /><input type="search" placeholder="搜索对话" aria-label="搜索对话" value={search} onChange={event => setSearch(event.target.value)} /></label>
             <nav className="ai-side-list">
-                {sideView === 'projects' ? <section className="ai-project-nav" aria-label="项目">
-                    <div className="ai-project-heading"><h4>全部项目</h4><button type="button" className="ai-icon" aria-label="新建项目" title="新建项目" disabled={locked} onClick={() => setNewProject('')}>＋</button></div>
-                    {projects.map(item => <button key={item.id} className={`ai-project-link${projectId === item.id ? ' on' : ''}`} disabled={locked} onClick={() => void projectAction(() => chooseProject(item))}>{item.name}</button>)}
-                    {courseProjects.length > 0 && <details className="ai-course-projects"><summary>课程</summary>{courseProjects.map(item => <button key={item.course} className="ai-project-link" disabled={locked} onClick={() => {
-                        const next = { ...item, id: newId(), instructions: `以《${item.name}》为当前课程。优先查阅本课程的讲解和资料，给出相关出处。` };
-                        keepProject(next); enter(next);
-                    }}>{item.name}</button>)}</details>}
-                    {folderAvailable() && <button className="ai-project-link" disabled={locked} onClick={() => void projectAction(selectLocal)}>打开本地项目…</button>}
-                </section> : <section className="ai-history" aria-label="对话">
-                    <div className="ai-project-heading ai-list-heading">
-                        <div>{project && <button className="ai-icon" type="button" aria-label="返回项目列表" disabled={locked} onClick={() => showList('projects')}><Back /></button>}
-                        <h4>{project?.name ?? (archived ? '已归档' : '最近')}</h4></div>
-                        <button className="ai-icon" type="button" aria-label={project ? '项目选项' : '对话选项'} aria-haspopup="menu" aria-expanded={listMenu} disabled={locked} onClick={() => { setMenu(null); setListMenu(!listMenu); }}><Dots /></button>
-                        {listMenu && <div className="ai-menu" role="menu">
-                            {project && <button role="menuitem" onClick={() => { setProjectSettings(true); setListMenu(false); }}>项目设置</button>}
-                            {project && workspace && <button role="menuitem" onClick={() => { setListMenu(false); void projectAction(() => openBound(project, workspace.folder, { id: project.id, chat: chat.id, revision: diskBase.current?.name })); }}>刷新项目</button>}
-                            <button role="menuitem" onClick={() => { setArchived(!archived); setMulti(null); setListMenu(false); }}>{archived ? '返回近期' : '查看归档'}</button>
-                            {!workspace && shownChats.length > 0 && <button role="menuitem" onClick={() => { setMulti(multi ? null : []); setListMenu(false); }}>{multi ? '取消选择' : '多选对话'}</button>}
-                        </div>}
-                    </div>
-                    {multi && <div className="ai-project-controls"><button className="ai-link" onClick={() => setMulti(null)}>取消</button>
-                        <button className="ai-link" disabled={locked || !multi.length} onClick={() => setMoving(multi)}>移入项目 · {multi.length}</button></div>}
-                    {shownChats.some(item => item.pinned) && <section><h4>置顶</h4>{shownChats.filter(item => item.pinned).sort((a, b) => b.updated - a.updated).map(row)}</section>}
-                    {chatGroups(shownChats.filter(item => !item.pinned), Date.now()).map(group => <section key={group.name}><h4>{group.name}</h4>{group.chats.map(row)}</section>)}
-                    {!shownChats.length && <p className="ai-side-none">{search.trim() ? '没有找到对话' : archived ? '没有归档对话' : '暂无对话'}</p>}
-                </section>}
+                {(() => {
+                    const query = search.trim().toLocaleLowerCase();
+                    const shown = (item: Saved<Proposal>) => Boolean(item.archived) === archived && (!query || titleOf(item).toLocaleLowerCase().includes(query));
+                    const chatsOf = (item: Project) => item.id === project?.id ? shownChats : kept.chats.filter(record => record.project === item.id && shown(record));
+                    const recent = kept.chats.filter(record => !record.project && shown(record));
+                    const carrying = (event: React.DragEvent) => event.dataTransfer.types.includes('text/studev-chat') || event.dataTransfer.types.includes('text/studev-project');
+                    const onProjectDrop = (event: React.DragEvent, target: Project) => {
+                        event.preventDefault(); setDropping(null);
+                        const chatId = event.dataTransfer.getData('text/studev-chat'), projectDragged = event.dataTransfer.getData('text/studev-project');
+                        if (chatId) void projectAction(() => moveChats(target, [chatId]));
+                        else if (projectDragged) placeProject(projectDragged, target.id);
+                    };
+                    const visible = allProjects ? orderedProjects : orderedProjects.slice(0, 8);
+                    return <>
+                        <section className="ai-side-group" aria-label="项目">
+                            <div className="ai-side-heading"><button type="button" className="ai-fold" aria-expanded={!folded.projects} onClick={() => setFolded(now => ({ ...now, projects: !now.projects }))}>项目<Chevron /></button>
+                                <button type="button" className="ai-icon" aria-label="新建项目" title="新建项目" disabled={locked} onClick={() => setNewProject('')}>＋</button></div>
+                            {!folded.projects && <>
+                                {visible.map(item => {
+                                    const open_ = expanded.includes(item.id) || item.id === project?.id || Boolean(query && chatsOf(item).length);
+                                    const chats = open_ ? chatsOf(item) : [];
+                                    return <div key={item.id} className="ai-project-branch">
+                                        <div className={`ai-chat ai-project-row ${projectMenu === item.id ? 'menu' : ''} ${dropping === item.id ? 'drop' : ''} ${item.id === project?.id ? 'current' : ''}`} draggable={renamingProject !== item.id}
+                                            onDragStart={event => { event.dataTransfer.setData('text/studev-project', item.id); event.dataTransfer.effectAllowed = 'move'; }}
+                                            onDragOver={event => { if (carrying(event)) { event.preventDefault(); setDropping(item.id); } }}
+                                            onDragLeave={() => setDropping(now => now === item.id ? null : now)} onDrop={event => onProjectDrop(event, item)}>
+                                            {renamingProject === item.id
+                                                ? <input className="ai-rename" autoFocus defaultValue={item.name} maxLength={60} onBlur={event => void projectAction(() => renameProject(item, event.target.value))}
+                                                    onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') setRenamingProject(null); }} />
+                                                : <button className="ai-chat-t" disabled={locked} title={item.name} aria-expanded={open_} onClick={() => setExpanded(now => now.includes(item.id) ? now.filter(id => id !== item.id) : [...now, item.id])}><FolderGlyph open={open_} />{item.name}</button>}
+                                            <button className="ai-chat-more ai-project-new" aria-label={`在${item.name}中新建对话`} title="在此项目中新建对话" disabled={locked} onClick={() => void projectAction(() => chooseProject(item))}><Compose /></button>
+                                            <button className="ai-chat-more" aria-label={`${item.name} 的选项`} disabled={locked} onClick={() => setProjectMenu(projectMenu === item.id ? null : item.id)}><Dots /></button>
+                                            {projectMenu === item.id && <div className="ai-menu" role="menu">
+                                                <button role="menuitem" onClick={() => { setRenamingProject(item.id); setProjectMenu(null); }}>重命名</button>
+                                                <button role="menuitem" onClick={() => { setProjectMenu(null); void projectAction(async () => { await chooseProject(item); setProjectSettings(true); }); }}>项目设置</button>
+                                                <button role="menuitem" className="danger" onClick={() => removeProject(item)}>删除项目{item.folder ? '（保留文件夹）' : ''}</button>
+                                            </div>}
+                                        </div>
+                                        {open_ && <div className="ai-project-chats">
+                                            {item.folder && item.id !== project?.id
+                                                ? <button type="button" className="ai-side-more" disabled={locked} onClick={() => void projectAction(() => chooseProject(item))}>打开文件夹，查看对话</button>
+                                                : chats.length ? [...chats.filter(record => record.pinned), ...chats.filter(record => !record.pinned)].map(row)
+                                                : <p className="ai-side-none">还没有对话，可以把对话拖到这里</p>}
+                                        </div>}
+                                    </div>;
+                                })}
+                                {orderedProjects.length > 8 && <button type="button" className="ai-side-more" onClick={() => setAllProjects(!allProjects)}>{allProjects ? '收起' : `展开显示（${orderedProjects.length - 8}）`}</button>}
+                                {!projects.length && <button type="button" className="ai-project-link ai-project-start" disabled={locked} onClick={() => setNewProject('')}><FolderGlyph />新建项目</button>}
+                            </>}
+                        </section>
+                        {recent.some(item => item.pinned) && <section className="ai-side-group" aria-label="置顶">
+                            <div className="ai-side-heading"><button type="button" className="ai-fold" aria-expanded={!folded.pinned} onClick={() => setFolded(now => ({ ...now, pinned: !now.pinned }))}>置顶<Chevron /></button></div>
+                            {!folded.pinned && recent.filter(item => item.pinned).sort((a, b) => b.updated - a.updated).map(row)}
+                        </section>}
+                        <section className={`ai-side-group ai-history ${dropping === 'recent' ? 'drop' : ''}`} aria-label="最近"
+                            onDragOver={event => { if (event.dataTransfer.types.includes('text/studev-chat')) { event.preventDefault(); setDropping('recent'); } }}
+                            onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node | null)) setDropping(now => now === 'recent' ? null : now); }}
+                            onDrop={event => { event.preventDefault(); setDropping(null); const id = event.dataTransfer.getData('text/studev-chat'); if (id) takeOutOfProject(id); }}>
+                            <div className="ai-side-heading ai-list-heading"><span className="ai-fold-label">{archived ? '已归档' : '最近'}</span>
+                                <button className="ai-icon" type="button" aria-label="对话选项" aria-haspopup="menu" aria-expanded={listMenu} disabled={locked} onClick={() => { setMenu(null); setListMenu(!listMenu); }}><Dots /></button>
+                                {listMenu && <div className="ai-menu" role="menu">
+                                    <button role="menuitem" onClick={() => { setArchived(!archived); setMulti(null); setListMenu(false); }}>{archived ? '返回最近' : '查看归档'}</button>
+                                    {recent.length > 0 && <button role="menuitem" onClick={() => { setMulti(multi ? null : []); setListMenu(false); }}>{multi ? '取消选择' : '多选对话'}</button>}
+                                    {workspace && project && <button role="menuitem" onClick={() => { setListMenu(false); void projectAction(() => openBound(project, workspace.folder, { id: project.id, chat: chat.id, revision: diskBase.current?.name })); }}>刷新当前项目</button>}
+                                </div>}
+                            </div>
+                            {multi && <div className="ai-project-controls"><button className="ai-link" onClick={() => setMulti(null)}>取消</button>
+                                <button className="ai-link" disabled={locked || !multi.length} onClick={() => setMoving(multi)}>移至项目 · {multi.length}</button></div>}
+                            {chatGroups(recent.filter(item => !item.pinned), Date.now()).map(group => <section key={group.name}><h4>{group.name}</h4>{group.chats.map(row)}</section>)}
+                            {!recent.length && <p className="ai-side-none">{query ? '没有找到对话' : archived ? '没有归档对话' : '暂无对话'}</p>}
+                        </section>
+                    </>;
+                })()}
             </nav>
             <footer className="ai-side-footer">
                 <div className="ai-side-tools">
@@ -910,6 +1107,13 @@ export default function AiApp() {
                 if (moving.length) void projectAction(() => moveChats(next)); else enter(next);
             }}><label>项目名称<input className="tf" autoFocus required maxLength={60} value={newProject} onChange={event => setNewProject(event.target.value)} /></label>
                 <div className="ai-project-actions"><button className="btn go" disabled={!newProject.trim() || locked}>创建</button></div></form>
+            {!moving.length && courseProjects.length > 0 && <section className="ai-project-starts"><h3>从本学期课程开始</h3><div className="ai-project-chips">
+                {courseProjects.map(item => <button key={item.course} type="button" className="ai-chip" disabled={locked} onClick={() => {
+                    const next = { ...item, id: newId(), instructions: `以《${item.name}》为当前课程。优先查阅本课程的讲解和资料，给出相关出处。` };
+                    keepProject(next); setNewProject(null); enter(next);
+                }}>{item.name}</button>)}
+            </div></section>}
+            {!moving.length && folderAvailable() && <button type="button" className="ai-link ai-project-folder" disabled={locked} onClick={() => { setNewProject(null); void projectAction(selectLocal); }}>打开本地文件夹作为项目…</button>}
         </Sheet>}
         {moving.length > 0 && newProject === null && <Sheet title="移入项目" onClose={() => setMoving([])}>
             {projects.filter(item => item.id !== projectId).map(item => <button type="button" className="kv" key={item.id} disabled={locked} onClick={() => void projectAction(() => moveChats(item))}><span className="v">{item.name}</span><Chevron /></button>)}
@@ -1014,6 +1218,10 @@ function MemorySettings({ memory, isProject, onClose, onSave }: { memory: Memory
         </form>
     </div>;
 }
+
+const FolderGlyph = ({ open = false }: { open?: boolean }) => <svg className="ai-folder" viewBox="0 0 24 24" aria-hidden="true">{open
+    ? <path d="M3.5 17V7a2 2 0 0 1 2-2h4l2 2.2h6a2 2 0 0 1 2 2V10M3.5 17l2.6-6.1a1.5 1.5 0 0 1 1.4-.9h12.4a1 1 0 0 1 .9 1.4L18.4 17a2 2 0 0 1-1.8 1.2H5.4a1.9 1.9 0 0 1-1.9-1.2Z" />
+    : <path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" />}</svg>;
 
 /** The tasks one turn drafted, in one card: each to tick, then added together. */
 function Drafts({ drafts, today, onAdd, onDrop }: { drafts: Proposal[]; today: string; onAdd: (keys: string[]) => void; onDrop: (key: string) => void }) {

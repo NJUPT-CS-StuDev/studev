@@ -50,14 +50,38 @@ export const ROUNDS = 8;
 
 /** The request a provider is sent, OpenAI's chat completions as every provider speaks it; `last`, it may call no more tools. */
 /** @typedef {{type:'function',function:{name:string,description:string,parameters:object}}} ModelTool */
-/** @typedef {{tools?: ModelTool[], preferred?: string, external?: ModelTool[]}} ToolContext */
+/** What this device can reach besides the campus tools, as facts the client saw; phrased here for every client.
+ * @typedef {{runtime: 'ready'|'offline'|'unknown', models: string[], on: string[], off: string[], free: boolean, remote: string[]}} Reach */
+/** @param {Reach} reach */
+export function reachText(reach) {
+    const said = assistant.reach, list = values => values.join('、');
+    const lines = [said.intro, said[reach.runtime]];
+    if (reach.runtime === 'ready') {
+        if (reach.models.length) lines.push(said.models.replace('{list}', list(reach.models)));
+        if (reach.on.length) lines.push(said.on.replace('{list}', list(reach.on)));
+        if (reach.off.length) lines.push(said.off.replace('{list}', list(reach.off)));
+        if (!reach.on.length && !reach.off.length) lines.push(said.none);
+        if (reach.free && reach.on.length) lines.push(said.free);
+    }
+    lines.push(reach.remote.length ? said.remote.replace('{list}', list(reach.remote)) : said.noRemote);
+    return lines.join('\n');
+}
+/** Why a reach is not usable, or null. */
+export function reachError(value) {
+    const names = list => Array.isArray(list) && list.length <= 24 && list.every(item => typeof item === 'string' && item.length > 0 && item.length <= 60);
+    if (!value || typeof value !== 'object' || !['ready', 'offline', 'unknown'].includes(value.runtime) || typeof value.free !== 'boolean') return '连接状态无效。';
+    return ['models', 'on', 'off', 'remote'].every(key => names(value[key])) ? null : '连接状态无效。';
+}
+/** @typedef {{tools?: ModelTool[], preferred?: string[], external?: ModelTool[], reach?: Reach}} ToolContext */
 /** @param {ToolContext} context */
 export const completionRequest = (model, messages, situation, now = Date.now(), last = false, context = {}) => {
     const available = context.tools ?? toolsFor(situation);
-    const preference = !last && available.some(tool => tool.function.name === context.preferred)
-        ? `\n本轮用户已选择工具 ${context.preferred}。参数齐全时优先调用；缺少必要信息时先向用户提问。` : '';
+    const named = (context.preferred ?? []).filter(name => available.some(tool => tool.function.name === name));
+    const reach = context.reach ? `\n${reachText(context.reach)}` : '';
+    const preference = !last && named.length
+        ? `\n用户在这轮问题里用“/工具名”点名了这些工具：${named.join('、')}。按问题里各自对应的要求优先调用；缺少必要信息时先向用户提问。` : '';
     return { model, stream: true, max_tokens: 4096, temperature: 0.2, ...(!last ? { tools: available } : {}),
-        messages: [{ role: 'system', content: instructions(situation, now) + (last ? `\n${assistant.finish}` : preference) }, ...messages] };
+        messages: [{ role: 'system', content: instructions(situation, now) + reach + (last ? `\n${assistant.finish}` : preference) }, ...messages] };
 };
 
 /** Why the campus context is invalid, or null if it can be used. */

@@ -1,5 +1,5 @@
 import { createLRMCPClient } from '@local-runtime-mcp/browser-extension/sdk';
-import { toolsFor, type ModelTool, type Situation } from '@/world/assistant.mjs';
+import { toolsFor, type ModelTool, type Reach, type Situation } from '@/world/assistant.mjs';
 import groups from '@/world/tool-menu.json';
 import permissionModes from '@/world/permission-modes.json';
 import type { Message } from './stream';
@@ -7,6 +7,7 @@ import type { RemoteTool } from './remoteMcp';
 
 export type BrowserTool = { capability: string; label: string; definition: ModelTool };
 export type ToolItem = { label: string; group: string; definition: ModelTool; browser?: BrowserTool; remote?: RemoteTool };
+export type LocalRuntimeSnapshot = { state: 'unknown' | 'ready' | 'offline'; models: string[]; granted: BrowserTool[] };
 export type PermissionMode = 'review' | 'read' | 'approved';
 export type ToolPreferences = { disabledCampus: string[]; enabledBrowser: string[]; mode?: PermissionMode };
 const STORAGE = 'studev_ai_tools';
@@ -86,6 +87,14 @@ export function toolCatalog(situation: Situation, preferences: ToolPreferences, 
     return [...campus, ...browser.filter(tool => preferences.enabledBrowser.includes(tool.capability))
         .map(tool => ({ label: tool.label, group: BROWSER_GROUP, definition: tool.definition, browser: tool })),
         ...remote.map(tool => ({ label: tool.label, group: tool.connection.name, definition: tool.definition, remote: tool }))];
+}
+
+/** What this tab can reach besides the campus tools, as facts for the assistant (assistant.mjs phrases them). */
+export function reachOf(runtime: LocalRuntimeSnapshot, preferences: ToolPreferences, canUseBrowser: boolean, remote: readonly RemoteTool[]): Reach {
+    const on = runtime.granted.filter(tool => preferences.enabledBrowser.includes(tool.capability));
+    return { runtime: runtime.state, models: runtime.models.slice(0, 24), on: on.map(tool => tool.label).slice(0, 24),
+        off: runtime.granted.filter(tool => !on.includes(tool)).map(tool => tool.label).slice(0, 24), free: !canUseBrowser,
+        remote: [...new Set(remote.map(tool => tool.connection.name))].slice(0, 24) };
 }
 
 /** Strip earlier calls and their results together when this model will not have the corresponding capability. */

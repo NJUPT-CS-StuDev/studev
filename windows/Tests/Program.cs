@@ -273,10 +273,10 @@ var switchedChat = StuDev.Ai.SavedChat.Of((stableChat with { Choice = providerCh
 Equal("selected provider and model survive save and reopen", switchedChat.Choice == providerChoice, JsonValue.Create(true));
 Equal("an explicit return to runtime keeps its new-session marker", switchedChat.StartsRuntime, JsonValue.Create(true));
 Equal("runtime switch preserves existing branch anchors", switchedChat.ConversationId("fork-answer"), JsonValue.Create("fork"));
-var preferredQuestion = StuDev.Ai.ChatThread.Empty.Append("", "tool-question", new() { ["role"] = "user", ["content"] = "查考试" }, "exams");
+var preferredQuestion = StuDev.Ai.ChatThread.Empty.Append("", "tool-question", new() { ["role"] = "user", ["content"] = "/查考试 下周的" }, ["exams"]);
 var reopenedQuestion = StuDev.Ai.ChatThread.Of(preferredQuestion.ToJson()).Path().Single();
-Equal("a preferred tool stays on its user turn outside the provider message", reopenedQuestion.PreferredTool, JsonValue.Create("exams"));
-Equal("provider message carries no local tool selection field", reopenedQuestion.Message.ContainsKey("preferredTool"), JsonValue.Create(false));
+Equal("the tools a question names stay on its user turn outside the provider message", reopenedQuestion.PreferredTools, new JsonArray("exams"));
+Equal("provider message carries no local tool selection field", reopenedQuestion.Message.ContainsKey("preferredTools"), JsonValue.Create(false));
 var webTool = new StuDev.Ai.BrowserCapability("icourse.outline", "web_icourse_doutline", "课程目录（中国大学 MOOC）", "读取课程目录。",
     new() { ["type"] = "object", ["properties"] = new JsonObject(), ["additionalProperties"] = false });
 var offeredCampus = assistant.ToolsFor(new(null, null, "仙林", null));
@@ -287,9 +287,9 @@ var browserMenu = StuDev.Ai.ToolMenu.For(offeredBrowser, [webTool]).Single();
 Equal("a granted read-only tool uses its registered label and schema", new { browserMenu.Group, browserMenu.Items[0].Label, browserMenu.Items[0].AllowsEmpty },
     new JsonObject { ["group"] = "Web MCP", ["label"] = webTool.Title, ["allowsEmpty"] = true });
 var preferredRequest = assistant.Request("own", [reopenedQuestion.Message], new(null, null, "仙林", null), DateTimeOffset.UtcNow,
-    offered: offeredCampus, preferredTool: reopenedQuestion.PreferredTool);
-Equal("the model is told about the explicit tool selected for this turn",
-    ((string)preferredRequest["messages"]![0]!["content"]!).Contains("本轮用户已选择工具 exams", StringComparison.Ordinal), JsonValue.Create(true));
+    offered: offeredCampus, preferredTools: reopenedQuestion.PreferredTools);
+Equal("the model is reminded of the tools the question names",
+    ((string)preferredRequest["messages"]![0]!["content"]!).Contains("点名了这些工具：exams", StringComparison.Ordinal), JsonValue.Create(true));
 var partialThread = stableThread.Append("continued", "next-question", new() { ["role"] = "user" }).Append("next-question", "partial", new() { ["role"] = "assistant", ["content"] = "partial answer" });
 Equal("a stopped partial answer stays in its conversation", (stableChat with { Thread = partialThread }).ConversationId("partial"), JsonValue.Create("chat"));
 try { assistant.Read().Take("data: {\"error\":{\"message\":\"请先打开模型网页\",\"code\":\"provider_not_ready\"}}"); failures.Add("runtime SSE error was ignored"); }

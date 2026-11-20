@@ -60,7 +60,6 @@ public sealed partial class AiScreen : Screen
     private string said = "";
     private string? runtimeStage;
     private string draft = "";
-    private ToolMenuItem? draftTool;
     private bool compact, conversationsOpen;
     private bool liveDirty;
     private readonly DispatcherTimer frame = new() { Interval = TimeSpan.FromMilliseconds(40) };
@@ -172,7 +171,6 @@ public sealed partial class AiScreen : Screen
         thread = found?.Thread ?? ChatThread.Empty; proposals = found is null ? [] : keptProposals.GetValueOrDefault(found.Id) ?? [];
         choice = found?.Choice ?? ModelChoice.Free; startsRuntime = found?.StartsRuntime == true;
         current = found?.Id ?? Guid.NewGuid().ToString(); error = ""; editing = null; openSteps.Clear();
-        draftTool = null;
         draftSkill = null;
         runtimeRequest = null; runtimeFirstAssistant = null;
         conversationsOpen = false;
@@ -196,20 +194,20 @@ public sealed partial class AiScreen : Screen
         return all;
     }
 
-    private void Send(string question, string? parent = null, bool clearDraft = false, string? preferredTool = null, string? skill = null)
+    private void Send(string question, string? parent = null, bool clearDraft = false, IReadOnlyList<string>? preferredTools = null, string? skill = null)
     {
         var asked = question.Trim();
         if (asked.Length == 0 || busy) return;
         if (Bound(activeProject) && projectFolder is null) { error = "请重新打开这个项目文件夹。"; Draw(); return; }
         if (providers.Resolve(choice, out var provider) is { } unavailable) { error = unavailable; Draw(); return; }
-        if (preferredTool is not null && !ToolsFor(SituationNow(), provider).Any(tool => Assistant.ToolName(tool) == preferredTool))
-        { error = "所选工具当前不可用，请重新选择。"; Draw(); return; }
-        if (provider is null && Account.Shared.User is null) { Me.SignIn.Show(() => Send(asked, parent, clearDraft, preferredTool, skill)); return; }
-        if (clearDraft) { draft = ""; draftTool = null; draftSkill = null; }
+        if (preferredTools is { Count: > 0 } && preferredTools.Any(name => !ToolsFor(SituationNow(), provider).Any(tool => Assistant.ToolName(tool) == name)))
+        { error = "问题里点名的工具暂不可用，请换一个或去掉它。"; Draw(); return; }
+        if (provider is null && Account.Shared.User is null) { Me.SignIn.Show(() => Send(asked, parent, clearDraft, preferredTools, skill)); return; }
+        if (clearDraft) { draft = ""; draftSkill = null; }
         parent ??= thread.Tip();
         var fork = parent != thread.Tip();
         var id = Guid.NewGuid().ToString();
-        App.Watch(Run(thread.Append(parent, id, new JsonObject { ["role"] = "user", ["content"] = asked }, preferredTool), id, fork, skill: skill));
+        App.Watch(Run(thread.Append(parent, id, new JsonObject { ["role"] = "user", ["content"] = asked }, preferredTools), id, fork, skill: skill));
     }
 
     private List<JsonObject> ToolsFor(Situation situation, Own? provider) =>
@@ -278,9 +276,9 @@ public sealed partial class AiScreen : Screen
         var external = externalMcp.Available.Where(tool => names.Contains(tool.Alias)).ToDictionary(tool => tool.Alias, StringComparer.Ordinal);
         var externalTools = available.Where(tool => IsExternal(Assistant.ToolName(tool))).ToList();
         var lineage = start.Lineage(at);
-        var preferredTool = lineage.LastOrDefault(node => (string?)node.Message["role"] == "user")?.PreferredTool;
-        if (preferredTool is not null && !names.Contains(preferredTool))
-        { error = "所选工具当前不可用，请重新选择。"; Draw(); return; }
+        var preferredTools = lineage.LastOrDefault(node => (string?)node.Message["role"] == "user")?.PreferredTools ?? [];
+        if (preferredTools.Any(name => !names.Contains(name)))
+        { error = "问题里点名的工具暂不可用，请换一个或去掉它。"; Draw(); return; }
         if (retryRequest?["tools"] is JsonArray previous && previous.OfType<JsonObject>().Any(tool => !names.Contains(Assistant.ToolName(tool))))
         { error = "可用工具已更新，请重新发送本轮。"; Draw(); return; }
         var priorThread = thread;
@@ -330,7 +328,7 @@ public sealed partial class AiScreen : Screen
                 var last = round == Assistant.Rounds - 1;
                 said = ""; lastUpdate = null; runtimeStage = null; stream = new DocStream(); liveDirty = true;
                 JsonObject answer;
-                var preferred = round == 0 ? preferredTool : null;
+                var preferred = round == 0 ? preferredTools : null;
                 var offered = declined.Count == 0 ? available : available.Where(tool => !declined.Contains(Assistant.ToolName(tool))).ToList();
                 try
                 {
@@ -401,11 +399,11 @@ public sealed partial class AiScreen : Screen
     private string? lastUpdate;
 
     private async Task<JsonObject> AskOwn(Own mine, List<JsonObject> history, Situation situation, List<JsonObject> available,
-        string? preferredTool, bool last, CancellationToken cancel, string conversationId, JsonObject? retryRequest = null)
+        IReadOnlyList<string>? preferredTools, bool last, CancellationToken cancel, string conversationId, JsonObject? retryRequest = null)
     {
         if (Models.AddressError(mine.Base, mine.Runtime) is { } wrong) throw new InvalidOperationException(wrong);
         var payload = retryRequest?.DeepClone().AsObject() ?? assistant.Request(mine.Model, history, situation, DateTimeOffset.UtcNow,
-            last, mine.Runtime, conversationId, offered: available, preferredTool: preferredTool);
+            last, mine.Runtime, conversationId, offered: available, preferredTools: preferredTools);
         if (mine.Runtime) { if (retryRequest is not null) payload["retry"] = true; runtimeRequest = payload.DeepClone().AsObject(); }
         using var request = new HttpRequestMessage(HttpMethod.Post, Models.Endpoint(mine.Base))
         { Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json") };
@@ -444,13 +442,13 @@ public sealed partial class AiScreen : Screen
     }
 
     private async Task<JsonObject> AskFree(List<JsonObject> history, Situation situation, List<JsonObject> available,
-        List<JsonObject> external, string? preferredTool, bool last, CancellationToken cancel)
+        List<JsonObject> external, IReadOnlyList<string>? preferredTools, bool last, CancellationToken cancel)
     {
         JsonObject? answer = null; string? failed = null;
         var body = new JsonObject { ["messages"] = new JsonArray([.. history.Select(m => m.DeepClone())]), ["last"] = last, ["situation"] = situation.ToJson() };
         if (external.Count > 0) body["externalTools"] = new JsonArray([.. external.Select(tool => tool.DeepClone())]);
         if (!last) body["toolNames"] = new JsonArray([.. available.Select(tool => (JsonNode)JsonValue.Create(Assistant.ToolName(tool))!)]);
-        if (!last && preferredTool is not null) body["preferredTool"] = preferredTool;
+        if (!last && preferredTools is { Count: > 0 }) body["preferredTools"] = new JsonArray([.. preferredTools.Select(name => (JsonNode)JsonValue.Create(name)!)]);
         await Account.Shared.Stream("/ai", body, (kind, data) =>
         {
             switch (kind)
@@ -801,7 +799,7 @@ public sealed partial class AiScreen : Screen
 
     private FrameworkElement Composer()
     {
-        var box = new TextBox { Text = draft, PlaceholderText = "问点什么", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
+        var box = new TextBox { Text = draft, PlaceholderText = "问点什么，输入 / 使用工具", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
         box.Resources["TextControlBackgroundFocused"] = Paint.Clear; box.Resources["TextControlBackgroundPointerOver"] = Paint.Clear; box.Resources["TextControlBorderBrushFocused"] = Paint.Clear;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, "问点什么");
         var send = new Tap(Paint.Brush("ink")) { Width = 36, Height = 36, CornerRadius = new CornerRadius(18), VerticalAlignment = VerticalAlignment.Bottom, Content = Kit.Icon(busy ? Icons.Square : Icons.Up, 20, "paper", 20, 2) };
@@ -813,24 +811,35 @@ public sealed partial class AiScreen : Screen
         var preferred = new ContentControl { HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
         var suggestions = new List<ToolMenuItem>();
         bool dismissed = false;
+        // The `/word` typed just before the caret, at the start or after a space: a tool being looked up.
+        int slash = -1;
         string? Query()
         {
-            var text = box.Text.TrimStart();
-            return !busy && !dismissed && text.StartsWith('/') && !text.Any(char.IsWhiteSpace) ? text[1..] : null;
+            var before = box.Text[..Math.Min(box.SelectionStart, box.Text.Length)];
+            var match = System.Text.RegularExpressions.Regex.Match(before, @"(?:^|\s)/([^\s/]*)$");
+            slash = match.Success ? before.Length - match.Groups[1].Length - 1 : -1;
+            return !busy && !dismissed && match.Success ? match.Groups[1].Value : null;
         }
+        List<ToolMenuItem> AllTools() => providers.Resolve(choice, out var p) is null
+            ? [.. ToolMenu.For(ToolsFor(SituationNow(), p), toolAccess.BrowserAvailable, externalMcp.Available).SelectMany(group => group.Items)] : [];
+        // The tools a question names as `/工具名`, in the order they first appear; a reminder to the model, not a limit.
+        List<string> Mentioned(string text) => [.. AllTools().OrderByDescending(item => item.Label.Length)
+            .Select(item => (item, at: text.IndexOf("/" + item.Label, StringComparison.Ordinal))).Where(found => found.at >= 0)
+            .GroupBy(found => found.item.Name).Select(group => group.First()).OrderBy(found => found.at).Select(found => found.item.Name)];
         void Go()
         {
             if (busy) { stop?.Cancel(); return; }
             if (menu.Visibility == Visibility.Visible) return;
-            var question = box.Text.Trim().Length == 0 && draftTool is { AllowsEmpty: true } item ? item.Label : box.Text;
-            Send(question, clearDraft: true, preferredTool: draftTool?.Name, skill: draftSkill?.Text);
+            Send(box.Text, clearDraft: true, preferredTools: Mentioned(box.Text), skill: draftSkill?.Text);
         }
         send.Click += (_, _) => Go();
         void ChooseTool(ToolMenuItem item)
         {
-            draftTool = item;
-            box.Text = "";
-            RefreshTools();
+            var caret = Math.Min(box.SelectionStart, box.Text.Length);
+            if (slash < 0) return;
+            var insert = "/" + item.Label + " ";
+            box.Text = box.Text[..slash] + insert + box.Text[caret..];
+            box.SelectionStart = slash + insert.Length;
             box.Focus(FocusState.Programmatic);
         }
         void RefreshTools()
@@ -863,12 +872,6 @@ public sealed partial class AiScreen : Screen
                 if (suggestions.Count == 0) rows.Children.Add(Kit.Text("没有可用的工具", Role.Caption, "muted"));
             }
             var selections = new WrapRow { Gap = 6 };
-            if (draftTool is { } chosen)
-            {
-                var clear = Pill($"{chosen.Label}  ×", () => { draftTool = null; RefreshTools(); box.Focus(FocusState.Programmatic); });
-                AutomationProperties.SetName(clear, $"移除已选工具 {chosen.Label}");
-                selections.Children.Add(clear);
-            }
             if (draftSkill is { } skill)
             {
                 var clear = Pill($"{skill.Label}  ×", () => { draftSkill = null; RefreshTools(); box.Focus(FocusState.Programmatic); });
@@ -877,9 +880,10 @@ public sealed partial class AiScreen : Screen
             }
             preferred.Visibility = selections.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
             preferred.Content = selections;
-            send.Opacity = busy || query is null && (box.Text.Trim().Length > 0 || draftTool is { AllowsEmpty: true }) ? 1 : .18;
+            send.Opacity = busy || query is null && box.Text.Trim().Length > 0 ? 1 : .18;
         }
         box.TextChanged += (_, _) => { draft = box.Text; dismissed = false; RefreshTools(); };
+        box.SelectionChanged += (_, _) => RefreshTools();
         RefreshTools();
         box.PreviewKeyDown += (_, e) =>
         {

@@ -4,12 +4,12 @@ using System.Text.Json.Nodes;
 
 namespace StuDev.Ai;
 
-public sealed record ChatNode(string Id, string Parent, JsonObject Message, string? PreferredTool = null)
+public sealed record ChatNode(string Id, string Parent, JsonObject Message, IReadOnlyList<string>? PreferredTools = null)
 {
     internal JsonObject ToJson()
     {
         var value = new JsonObject { ["id"] = Id, ["parent"] = Parent, ["message"] = Message.DeepClone() };
-        if (PreferredTool is not null) value["preferredTool"] = PreferredTool;
+        if (PreferredTools is { Count: > 0 }) value["preferredTools"] = new JsonArray([.. PreferredTools.Select(name => (JsonNode)JsonValue.Create(name)!)]);
         return value;
     }
 }
@@ -41,8 +41,8 @@ public sealed record ChatThread(List<ChatNode> Nodes, Dictionary<string, string>
         for (var at = byId.GetValueOrDefault(id); at is not null; at = byId.GetValueOrDefault(at.Parent)) line.Add(at);
         line.Reverse(); return line;
     }
-    public ChatThread Append(string parent, string id, JsonObject message, string? preferredTool = null) =>
-        new([.. Nodes, new ChatNode(id, parent, message, preferredTool)], new(Chosen) { [parent] = id });
+    public ChatThread Append(string parent, string id, JsonObject message, IReadOnlyList<string>? preferredTools = null) =>
+        new([.. Nodes, new ChatNode(id, parent, message, preferredTools)], new(Chosen) { [parent] = id });
     public ChatThread Choose(string id) => Nodes.FirstOrDefault(n => n.Id == id) is { } node ? this with { Chosen = new(Chosen) { [node.Parent] = id } } : this;
     public Siblings SiblingsOf(string id)
     {
@@ -56,7 +56,7 @@ public sealed record ChatThread(List<ChatNode> Nodes, Dictionary<string, string>
         ["chosen"] = new JsonObject(Chosen.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, kv.Value))),
     };
     public static ChatThread Of(JsonObject json) => new(
-        json["nodes"]!.AsArray().Select(n => new ChatNode((string)n!["id"]!, (string)n["parent"]!, n["message"]!.DeepClone().AsObject(), (string?)n["preferredTool"])).ToList(),
+        json["nodes"]!.AsArray().Select(n => new ChatNode((string)n!["id"]!, (string)n["parent"]!, n["message"]!.DeepClone().AsObject(), n["preferredTools"]?.AsArray().Select(name => (string)name!).ToList())).ToList(),
         (json["chosen"] as JsonObject ?? []).ToDictionary(kv => kv.Key, kv => (string)kv.Value!));
     public static ChatThread Chain(List<JsonObject> messages, List<string> ids)
     {

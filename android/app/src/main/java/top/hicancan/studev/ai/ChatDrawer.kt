@@ -10,6 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,25 +28,35 @@ import top.hicancan.studev.app.*
 
 internal data class CourseProject(val code: String, val name: String)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ChatDrawer(
     chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean, memory: Memory,
     openChat: (String) -> Unit, newChat: (String?) -> Unit, openProject: (String) -> Unit,
     saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject) -> Unit,
     rename: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit, configureModels: () -> Unit,
 ) {
-    var view by remember(activeProject) { mutableStateOf(if (activeProject == null) "chats" else "projects") }
-    var projectId by remember(activeProject) { mutableStateOf(activeProject) }
-    val project = projects.firstOrNull { it.id == projectId }
-    val projectList = view == "projects" && project == null
-    val shown = chats.filter { it.projectId == project?.id }
-    var marked by remember(view, projectId) { mutableStateOf<Set<String>?>(null) }
+    // One list, as on the web: projects on top, each opening in place over its own chats, then the recent chats.
+    var open by remember(activeProject) { mutableStateOf(setOfNotNull(activeProject)) }
+    var projectsShown by remember { mutableStateOf(true) }
+    var marked by remember { mutableStateOf<Set<String>?>(null) }
     var naming by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<ChatProject?>(null) }
+    val recent = chats.filter { it.projectId == null }
 
     if (naming) {
         var name by remember { mutableStateOf(renaming?.name.orEmpty()) }
+        val assigned = projects.mapNotNullTo(mutableSetOf()) { it.course }
+        val offered = suggestions.filterNot { it.code in assigned }
         AlertDialog(onDismissRequest = { naming = false }, title = { Text(if (renaming == null) "新建项目" else "重命名项目") },
-            text = { OutlinedTextField(name, { name = it.take(60) }, label = { Text("项目名称") }, singleLine = true) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(name, { name = it.take(60) }, label = { Text("项目名称") }, singleLine = true)
+                if (renaming == null && offered.isNotEmpty()) {
+                    Plain("从本学期课程开始", 12.sp, Ink.faint)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        offered.forEach { course -> Chip(course.name, { naming = false; openProject(saveProject(null, course.name, course.code).id) }) }
+                    }
+                }
+            } },
             confirmButton = { TextButton({
                 val project = saveProject(renaming, name.trim(), null)
                 if (renaming == null) openProject(project.id)
@@ -51,69 +65,78 @@ internal data class CourseProject(val code: String, val name: String)
             dismissButton = { TextButton({ naming = false }) { Text("取消") } })
     }
 
-    Column(Modifier.fillMaxHeight().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Choice(listOf("chats" to "普通对话", "projects" to "项目"), view) {
-            view = it
-            projectId = null
+    @Composable fun ChatRow(chat: SavedChat, indent: Boolean) {
+        var more by remember { mutableStateOf(false) }
+        val selection = marked
+        val on = chat.id == activeChat
+        val toggle = { if (selection != null) marked = if (chat.id in selection) selection - chat.id else selection + chat.id }
+        Row(Modifier.fillMaxWidth().padding(start = if (indent) 18.dp else 0.dp).clip(RoundedCornerShape(10.dp)).background(if (on) Ink.sunken else Color.Transparent)
+            .clickable(enabled = !busy) { if (selection == null) openChat(chat.id) else toggle() }.padding(start = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (selection != null) Checkbox(chat.id in selection, { toggle() }, enabled = !busy)
+            Plain(Chats.titleOf(chat.title, chat.thread), 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
+            if (selection == null) Box {
+                IconButton({ more = true }, Modifier.size(38.dp), enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "更多", Modifier.size(18.dp), tint = Ink.muted) }
+                DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
+                    DropdownMenuItem({ Text("重命名") }, { more = false; rename(chat) })
+                    DropdownMenuItem({ Text(if (chat.projectId == null) "移至项目" else "移至其他项目或移出") }, { more = false; move(setOf(chat.id)) })
+                    DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; remove(chat) })
+                }
+            }
         }
-        if (projectList) {
-            TextAction("新建项目", { renaming = null; naming = true }, enabled = !busy)
-            val assigned = projects.mapNotNullTo(mutableSetOf()) { it.course }
-            val offered = suggestions.filterNot { it.code in assigned }
-            LazyColumn(Modifier.weight(1f)) {
-                items(projects, key = { it.id }) { item -> KeyRow(null, item.name, chevron = true, onClick = if (busy) null else { { openProject(item.id) } }) }
-                if (offered.isNotEmpty()) item { Plain("我的课程", 12.sp, Ink.faint, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) }
-                items(offered, key = { "course:${it.code}" }) { suggestion ->
-                    KeyRow(null, suggestion.name, chevron = true, onClick = if (busy) null else { { openProject(saveProject(null, suggestion.name, suggestion.code).id) } })
+    }
+
+    Column(Modifier.fillMaxHeight().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            if (marked == null) {
+                TextAction("新对话", { newChat(null) }, enabled = !busy)
+                if (recent.isNotEmpty()) TextAction("多选", { marked = emptySet() }, enabled = !busy, muted = true)
+            } else {
+                TextAction("取消", { marked = null })
+                val selected = marked.orEmpty()
+                TextAction("移动（${selected.size}）", { move(selected); marked = null }, enabled = selected.isNotEmpty() && !busy)
+            }
+        }
+        LazyColumn(Modifier.weight(1f)) {
+            item(key = "projects") {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.clickable { projectsShown = !projectsShown }.padding(start = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Plain("项目", 12.sp, Ink.faint)
+                        Icon(if (projectsShown) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.ChevronRight, null, Modifier.size(14.dp), tint = Ink.faint)
+                    }
+                    TextAction("新建", { renaming = null; naming = true }, enabled = !busy, muted = true)
                 }
             }
-        } else {
-            if (project != null) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    TextAction("返回项目", { projectId = null }, muted = true)
-                    if (project.course == null) TextAction("项目指令", { editInstructions(project) }, enabled = !busy)
-                }
-                KeyRow(null, project.name, trailing = {
-                    TextAction("重命名", { renaming = project; naming = true }, enabled = !busy)
-                })
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                if (marked == null) {
-                    TextAction("新对话", { newChat(project?.id) }, enabled = !busy)
-                    if (shown.isNotEmpty()) TextAction("多选", { marked = emptySet() }, enabled = !busy)
-                } else {
-                    TextAction("取消", { marked = null })
-                    val selected = marked.orEmpty()
-                    TextAction("移动（${selected.size}）", { move(selected); marked = null }, enabled = selected.isNotEmpty() && !busy)
-                }
-            }
-            LazyColumn(Modifier.weight(1f)) {
-                for ((name, group) in Chats.groups(shown, System.currentTimeMillis())) {
-                    item(key = "date:$name") { Plain(name, 12.sp, Ink.faint, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)) }
-                    items(group, key = { it.id }) { chat ->
-                        var more by remember { mutableStateOf(false) }
-                        val selection = marked
-                        val on = chat.id == activeChat
-                        val shape = RoundedCornerShape(10.dp)
-                        val toggle = { if (selection != null) marked = if (chat.id in selection) selection - chat.id else selection + chat.id }
-                        Row(Modifier.fillMaxWidth().clip(shape).background(if (on) Ink.sunken else Color.Transparent)
-                            .clickable(enabled = !busy) { if (selection == null) openChat(chat.id) else toggle() }.padding(start = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            if (selection != null) Checkbox(chat.id in selection, { toggle() }, enabled = !busy)
-                            Plain(Chats.titleOf(chat.title, chat.thread), 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
-                            if (selection == null) Box {
-                                IconButton({ more = true }, Modifier.size(38.dp), enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "更多", Modifier.size(18.dp), tint = Ink.muted) }
-                                DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
-                                    DropdownMenuItem({ Text("重命名") }, { more = false; rename(chat) })
-                                    DropdownMenuItem({ Text("移动到") }, { more = false; move(setOf(chat.id)) })
-                                    DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; remove(chat) })
-                                }
+            if (projectsShown) for (project in projects) {
+                val expanded = project.id in open
+                item(key = "project:${project.id}") {
+                    var more by remember { mutableStateOf(false) }
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (project.id == activeProject) Ink.sunken else Color.Transparent)
+                        .clickable(enabled = !busy) { open = if (expanded) open - project.id else open + project.id }.padding(start = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (expanded) Icons.Outlined.FolderOpen else Icons.Outlined.Folder, null, Modifier.size(18.dp), tint = Ink.muted)
+                        Plain(project.name, 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 10.dp))
+                        Box {
+                            IconButton({ more = true }, Modifier.size(38.dp), enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "项目选项", Modifier.size(18.dp), tint = Ink.muted) }
+                            DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
+                                DropdownMenuItem({ Text("在此项目中新建对话") }, { more = false; newChat(project.id) })
+                                DropdownMenuItem({ Text("重命名") }, { more = false; renaming = project; naming = true })
+                                if (project.course == null) DropdownMenuItem({ Text("项目指令") }, { more = false; editInstructions(project) })
                             }
                         }
                     }
                 }
-                if (shown.isEmpty()) item { Plain("这里还没有对话。", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp)) }
+                if (expanded) {
+                    val inside = chats.filter { it.projectId == project.id }
+                    items(inside, key = { "in:${it.id}" }) { chat -> ChatRow(chat, indent = true) }
+                    if (inside.isEmpty()) item(key = "empty:${project.id}") { Plain("还没有对话", 13.sp, Ink.faint, modifier = Modifier.padding(start = 26.dp, top = 6.dp, bottom = 6.dp)) }
+                }
             }
+            for ((name, group) in Chats.groups(recent, System.currentTimeMillis())) {
+                item(key = "date:$name") { Plain(name, 12.sp, Ink.faint, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)) }
+                items(group, key = { it.id }) { chat -> ChatRow(chat, indent = false) }
+            }
+            if (recent.isEmpty()) item { Plain("这里还没有对话。", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp)) }
         }
         HorizontalDivider(color = Ink.line)
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

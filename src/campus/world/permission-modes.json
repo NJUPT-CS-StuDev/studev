@@ -1,5 +1,5 @@
 [
-  {"id":"review","label":"每次问我","description":"用网页工具、记下新内容之前，都先问你。"},
-  {"id":"read","label":"查资料不问","description":"直接查你授权过的资料；记下新内容之前先问你。"},
-  {"id":"approved","label":"全部自动","description":"直接查资料；记忆打开时，自动记下新内容。"}
+  {"id":"review","label":"审批","description":"读取和写入，都先经过你同意。"},
+  {"id":"read","label":"默认","description":"读取直接进行，写入先经过你同意。"},
+  {"id":"approved","label":"自动","description":"读取和写入都直接进行。"}
 ]

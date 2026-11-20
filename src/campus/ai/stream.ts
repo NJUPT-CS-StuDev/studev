@@ -17,7 +17,7 @@ export async function ask(messages: Message[], situation: Situation, last: boole
     if (!current) throw new AskError('请先登录。');
     const response = await fetch('/api/platform/ai', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-CSRF-Token': current.csrfToken }, body: JSON.stringify({ messages, last, situation,
-            toolNames: context.tools?.map(tool => tool.function.name), externalTools: (context.external ?? context.tools)?.filter(tool => tool.function.name.startsWith('mcp_')), preferredTool: context.preferred }) });
+            toolNames: context.tools?.map(tool => tool.function.name), externalTools: (context.external ?? context.tools)?.filter(tool => tool.function.name.startsWith('mcp_')), preferredTools: context.preferred, reach: context.reach }) });
     if (!response.ok || !response.body) {
         const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
         throw new AskError(body?.error?.message ?? 'AI 暂时无法响应，请稍后重试。');
