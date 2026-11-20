@@ -149,7 +149,7 @@ test('homepage recruitment entry respects recruitment toggle', async () => {
   }
 });
 
-test('every page shares the site, and keeps a clean canonical URL', async () => {
+test('a page shares StuDev at most once, and keeps a clean canonical URL', async () => {
   for (const file of await pages(output)) {
     const html = await readFile(file, 'utf8');
     let canonical;
@@ -162,8 +162,9 @@ test('every page shares the site, and keeps a clean canonical URL', async () => 
         shared.push(attr['data-copy-text']);
       }
     });
-    // What is shared is studev itself, from the corner of every page.
-    assert.deepEqual(shared, ['https://studev.hicancan.top/'], `${file}: one share action for the site`);
+    // Sharing lives where one decides to pass StuDev on (the download page), at most once, and only ever StuDev's own address.
+    assert.ok(shared.length <= 1, `${file}: at most one share action`);
+    for (const value of shared) assert.ok(value.startsWith('https://studev.hicancan.top/'), `${file}: shares StuDev itself`);
     const url = new URL(canonical);
     assert.equal(url.origin, 'https://studev.hicancan.top');
     assert.equal(url.search, '');
