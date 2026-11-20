@@ -35,6 +35,24 @@ private fun JsonObject.freeService(): FreeService {
  * moment and who is asking) and the tools it may call (tools.json), both read from the assets the build copies from
  * the web's own files.
  */
+private const val BAR = "[|｜]"
+private val NATIVE = Regex("<\\s*/?\\s*$BAR[\\s|｜]*DSML[\\s|｜]*$BAR")
+private val NATIVE_START = Regex("<(?:\\s*$BAR[\\s|｜]*(?:D(?:S(?:ML?)?)?)?)?[\\s|｜]*$")
+
+/** The calls a DSML block spells out: each invoke's name and parameters, `string="false"` ones read as JSON. */
+internal fun nativeCalls(text: String): List<JsonObject> {
+    val plain = text.replace(Regex("$BAR[\\s|｜]*DSML[\\s|｜]*$BAR"), "DSML:").replace(Regex("<\\s*(/?)\\s*DSML:\\s*"), "<$1DSML:")
+    return Regex("<DSML:invoke\\s+name=\"([^\"]+)\"\\s*>([\\s\\S]*?)</DSML:invoke>").findAll(plain).toList().mapIndexed { index, invoke ->
+        val args = buildJsonObject {
+            Regex("<DSML:parameter\\s+name=\"([^\"]+)\"(?:\\s+string=\"(true|false)\")?\\s*>([\\s\\S]*?)</DSML:parameter>").findAll(invoke.groupValues[2]).forEach { p ->
+                val (key, raw, value) = p.destructured
+                put(key, if (raw == "false") runCatching { Json.parseToJsonElement(value) }.getOrElse { return emptyList() } else JsonPrimitive(value))
+            }
+        }
+        buildJsonObject { put("id", "native-$index-${java.util.UUID.randomUUID().toString().take(8)}"); put("type", "function"); put("function", buildJsonObject { put("name", invoke.groupValues[1]); put("arguments", args.toString()) }) }
+    }
+}
+
 class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private val names = tools.map(::toolName).toSet()
     private fun lines(key: String) = contract.getValue(key).jsonArray.map { it.jsonPrimitive.content }
@@ -82,7 +100,7 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
         private var finish: String? = null
         private val calls = sortedMapOf<Int, Triple<StringBuilder, StringBuilder, StringBuilder>>()
         private var pending = ""
-        private var protocolError = false
+        private var native: StringBuilder? = null
 
         /** One line of the stream; the piece of the answer it adds, or "". */
         fun take(line: String): String {
@@ -107,20 +125,17 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
                 }
             }
             choice["finish_reason"]?.jsonPrimitive?.contentOrNull?.let { finish = it }
-            if (protocolError) return ""
             pending += (delta["content"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
-            val markers = listOf("<｜DSML｜", "<|DSML|")
-            val found = markers.map { pending.indexOf(it) }.filter { it >= 0 }.minOrNull()
-            if (found != null) {
-                val piece = pending.take(found)
-                content.append(piece); pending = ""; protocolError = true
+            // Provider-native tool syntax (DeepSeek's DSML, with however many bars and spaces it drew) is not an
+            // answer: it is held back from the text and read as the calls it spells out once the stream ends.
+            native?.let { it.append(pending); pending = ""; return "" }
+            NATIVE.find(pending)?.let { found ->
+                val piece = pending.take(found.range.first)
+                content.append(piece); native = StringBuilder(pending.drop(found.range.first)); pending = ""
                 return piece
             }
-            var held = (1..minOf(pending.length, 7)).filter { size -> markers.any { it.startsWith(pending.takeLast(size)) } }.maxOrNull() ?: 0
-            if (finish != null) {
-                if (held > 1) { protocolError = true; pending = ""; return "" }
-                held = 0
-            }
+            // Hold a tail that could still become the markup until the next piece shows what it is.
+            val held = if (finish != null) 0 else NATIVE_START.find(pending)?.value?.length ?: 0
             val piece = pending.dropLast(held)
             pending = pending.takeLast(held)
             content.append(piece)
@@ -129,8 +144,13 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
 
         /** The turn, once the stream has ended, or why it is not one. */
         fun result(): Result<JsonObject> {
-            if (protocolError) return Result.failure(IllegalStateException("模型未能正确发起查询，请重试。"))
-            val made = calls.values.map { (id, name, arguments) -> buildJsonObject { put("id", id.toString()); put("type", "function"); put("function", buildJsonObject { put("name", name.toString()); put("arguments", arguments.toString()) }) } }
+            val structured = calls.values.map { (id, name, arguments) -> buildJsonObject { put("id", id.toString()); put("type", "function"); put("function", buildJsonObject { put("name", name.toString()); put("arguments", arguments.toString()) }) } }
+            val made = native?.let { text ->
+                val spelled = nativeCalls(text.toString())
+                if (spelled.isEmpty() || structured.isNotEmpty()) return Result.failure(IllegalStateException("模型未能正确发起查询，请重试。"))
+                finish = "tool_calls"
+                spelled
+            } ?: structured
             // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
             val whole = finish in setOf("stop", "tool_calls") || (finish == "length" && made.isEmpty() && content.isNotEmpty())
             if (!whole || made.any { it.getValue("id").jsonPrimitive.content.isEmpty() || it.getValue("function").jsonObject.getValue("name").jsonPrimitive.content !in allowed })

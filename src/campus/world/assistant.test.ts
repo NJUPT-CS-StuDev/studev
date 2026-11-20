@@ -28,14 +28,25 @@ describe('the model response protocol', () => {
         expect(request.messages[0]!.content).toContain('本次资料查询已结束');
     });
 
-    it.each(['<｜DSML｜', '<|DSML|'])('rejects native markup %s at every stream split without inventing or hiding an executed call', marker => {
-        const native = `${marker} calls>${marker} invoke name="read">id</invoke></calls>`;
-        for (let cut = 1; cut < marker.length; cut++) {
+    it.each(['<｜DSML｜', '<|DSML|', '<｜｜DSML｜｜', '< | | DSML | | '])('reads native markup %s as the call it spells, at every stream split, never as text', marker => {
+        const close = marker.replace('<', '</');
+        const native = `${marker}function_calls>${marker}invoke name="read">${marker}parameter name="id" string="true">sections/a.md</${close.slice(2)}parameter>${marker}parameter name="ids" string="false">["x"]${close}parameter>${close}invoke>${close}function_calls>`;
+        for (let cut = 1; cut < marker.length + 4; cut++) {
             const completion = new Completion();
             const shown = completion.take(frame({ content: '我来查询。' + native.slice(0, cut) }))
                 + completion.take(frame({ content: native.slice(cut) }, 'stop'));
             expect(shown).toBe('我来查询。');
-            expect(completion.result()).toEqual({ error: '模型未能正确发起查询，请重试。' });
+            const { message } = completion.result();
+            expect(message?.content).toBe('我来查询。');
+            expect(message?.tool_calls?.map(call => [call.function.name, JSON.parse(call.function.arguments)])).toEqual([['read', { id: 'sections/a.md', ids: ['x'] }]]);
+        }
+    });
+
+    it('refuses native markup that names an unknown tool or spells nothing', () => {
+        for (const native of ['<｜DSML｜invoke name="format_disk"></｜DSML｜invoke>', '<｜DSML｜function_calls>']) {
+            const completion = new Completion();
+            completion.take(frame({ content: native }, 'stop'));
+            expect(completion.result().error).toBeDefined();
         }
     });
 

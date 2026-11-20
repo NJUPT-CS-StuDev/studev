@@ -99,13 +99,35 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         new(offered?.ToHashSet(StringComparer.Ordinal) ?? names, runtime ? RuntimeError : null);
 
     /** A streamed answer read line by line. */
+    const string Bar = "[|｜]";
+    static readonly Regex Native = new($@"<\s*/?\s*{Bar}[\s|｜]*DSML[\s|｜]*{Bar}");
+    static readonly Regex NativeStart = new($@"<(?:\s*{Bar}[\s|｜]*(?:D(?:S(?:ML?)?)?)?)?[\s|｜]*$");
+
+    /** The calls a DSML block spells out: each invoke's name and parameters, `string="false"` ones read as JSON. */
+    public static List<JsonObject> NativeCalls(string text)
+    {
+        var plain = Regex.Replace(Regex.Replace(text, $@"{Bar}[\s|｜]*DSML[\s|｜]*{Bar}", "DSML:"), @"<\s*(/?)\s*DSML:\s*", "<$1DSML:");
+        var calls = new List<JsonObject>();
+        foreach (Match invoke in Regex.Matches(plain, @"<DSML:invoke\s+name=""([^""]+)""\s*>([\s\S]*?)</DSML:invoke>"))
+        {
+            var args = new JsonObject();
+            foreach (Match p in Regex.Matches(invoke.Groups[2].Value, @"<DSML:parameter\s+name=""([^""]+)""(?:\s+string=""(true|false)"")?\s*>([\s\S]*?)</DSML:parameter>"))
+            {
+                if (p.Groups[2].Value == "false") { try { args[p.Groups[1].Value] = JsonNode.Parse(p.Groups[3].Value); } catch (System.Text.Json.JsonException) { return []; } }
+                else args[p.Groups[1].Value] = p.Groups[3].Value;
+            }
+            calls.Add(new JsonObject { ["id"] = $"native-{calls.Count}-{Guid.NewGuid().ToString()[..8]}", ["type"] = "function", ["function"] = new JsonObject { ["name"] = invoke.Groups[1].Value, ["arguments"] = args.ToJsonString() } });
+        }
+        return calls;
+    }
+
     public sealed class Completion(HashSet<string> names, Func<string?, string, string>? runtimeError = null)
     {
         private readonly StringBuilder content = new();
         private string? finish;
         private readonly SortedDictionary<int, (StringBuilder Id, StringBuilder Name, StringBuilder Arguments)> calls = new();
         private string pending = "";
-        private bool protocolError;
+        private StringBuilder? native;
 
         /** One line of the stream; the piece of the answer it adds, or "". */
         public string Take(string line)
@@ -134,22 +156,17 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
                 }
             }
             if (choice["finish_reason"] is JsonValue f && f.TryGetValue<string>(out var reason)) finish = reason;
-            if (protocolError) return "";
             pending += delta["content"] is JsonValue c && c.TryGetValue<string>(out var text) ? text : "";
-            string[] markers = ["<｜DSML｜", "<|DSML|"];
-            var found = markers.Select(m => pending.IndexOf(m, StringComparison.Ordinal)).Where(at => at >= 0).DefaultIfEmpty(-1).Min();
-            if (found >= 0)
+            // Provider-native tool syntax (DeepSeek's DSML, with however many bars and spaces it drew) is not an
+            // answer: it is held back from the text and read as the calls it spells out once the stream ends.
+            if (native is not null) { native.Append(pending); pending = ""; return ""; }
+            if (Native.Match(pending) is { Success: true } found)
             {
-                var before = pending[..found]; content.Append(before); pending = ""; protocolError = true;
+                var before = pending[..found.Index]; content.Append(before); native = new StringBuilder(pending[found.Index..]); pending = "";
                 return before;
             }
-            var held = 0;
-            for (var size = 1; size <= pending.Length && size < 8; size++) if (markers.Any(m => m.StartsWith(pending[^size..], StringComparison.Ordinal))) held = size;
-            if (finish is not null)
-            {
-                if (held > 1) { protocolError = true; pending = ""; return ""; }
-                held = 0;
-            }
+            // Hold a tail that could still become the markup until the next piece shows what it is.
+            var held = finish is not null ? 0 : NativeStart.Match(pending) is { Success: true } tail ? tail.Length : 0;
             var piece = pending[..(pending.Length - held)]; pending = pending[(pending.Length - held)..];
             content.Append(piece);
             return piece;
@@ -158,8 +175,13 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
         /** The turn, once the stream has ended; thrown when it is not one. */
         public JsonObject Result()
         {
-            if (protocolError) throw new InvalidOperationException("模型未能正确发起查询，请重试。");
             var made = calls.Values.Select(c => new JsonObject { ["id"] = c.Id.ToString(), ["type"] = "function", ["function"] = new JsonObject { ["name"] = c.Name.ToString(), ["arguments"] = c.Arguments.ToString() } }).ToList();
+            if (native is not null)
+            {
+                var spelled = NativeCalls(native.ToString());
+                if (spelled.Count == 0 || made.Count > 0) throw new InvalidOperationException("模型未能正确发起查询，请重试。");
+                made = spelled; finish = "tool_calls";
+            }
             // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
             var whole = finish is "stop" or "tool_calls" || (finish == "length" && made.Count == 0 && content.Length > 0);
             if (!whole || made.Any(m => ((string)m["id"]!).Length == 0 || !names.Contains((string)m["function"]!["name"]!)))

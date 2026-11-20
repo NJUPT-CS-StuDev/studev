@@ -100,11 +100,29 @@ export function situationError(value) {
  * A streamed answer read line by line: each line gives the next piece of what is said (if any); at the end, the whole
  * turn with its tool calls put together, or why it is not one. What the model thinks before answering is dropped.
  */
+const BAR = '[|｜]';
+const NATIVE = new RegExp(`<\\s*/?\\s*${BAR}[\\s|｜]*DSML[\\s|｜]*${BAR}`);
+const NATIVE_START = new RegExp(`<(?:\\s*${BAR}[\\s|｜]*(?:D(?:S(?:ML?)?)?)?)?[\\s|｜]*$`);
+
+/** The calls a DSML block spells out: each invoke's name and parameters, `string="false"` ones read as JSON. */
+export function nativeCalls(text) {
+    const plain = text.replace(new RegExp(`${BAR}[\\s|｜]*DSML[\\s|｜]*${BAR}`, 'g'), 'DSML:').replace(/<\s*(\/?)\s*DSML:\s*/g, '<$1DSML:');
+    const calls = [];
+    for (const [, name, body] of plain.matchAll(/<DSML:invoke\s+name="([^"]+)"\s*>([\s\S]*?)<\/DSML:invoke>/g)) {
+        const args = {};
+        for (const [, key, raw, value] of body.matchAll(/<DSML:parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?\s*>([\s\S]*?)<\/DSML:parameter>/g)) {
+            if (raw === 'false') { try { args[key] = JSON.parse(value); } catch { return []; } } else args[key] = value;
+        }
+        calls.push({ id: `native-${calls.length}-${Math.random().toString(36).slice(2, 10)}`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+    }
+    return calls;
+}
+
 export class Completion {
     /** @param {Iterable<string>} [allowed] */
     constructor(allowed) { this.names = allowed ? new Set(allowed) : names; }
     content = ''; finish = null; calls = [];
-    pending = ''; protocolError = false;
+    pending = ''; /** @type {string | null} */ native = null;
     /** One line of the stream; the piece of the answer it adds, or ''. */
     take(line) {
         if (!line.startsWith('data:')) return '';
@@ -120,23 +138,18 @@ export class Completion {
             if (part.function?.arguments) call.function.arguments += part.function.arguments;
         }
         if (choice.finish_reason) this.finish = choice.finish_reason;
-        if (this.protocolError) return '';
         this.pending += typeof delta.content === 'string' ? delta.content : '';
-        // Provider-native tool syntax is not an answer or a validated function call. Hold a split prefix until
-        // it is known, then reject the malformed turn rather than showing or silently discarding a fake lookup.
-        const markers = ['<｜DSML｜', '<|DSML|'];
-        const found = markers.map(marker => this.pending.indexOf(marker)).filter(at => at >= 0);
-        if (found.length) {
-            const piece = this.pending.slice(0, Math.min(...found));
-            this.content += piece; this.pending = ''; this.protocolError = true;
+        // Provider-native tool syntax (DeepSeek's DSML, with however many bars and spaces it drew) is not an answer:
+        // it is held back from the text and read as the calls it spells out once the stream ends.
+        if (this.native !== null) { this.native += this.pending; this.pending = ''; return ''; }
+        const found = NATIVE.exec(this.pending);
+        if (found) {
+            const piece = this.pending.slice(0, found.index);
+            this.content += piece; this.native = this.pending.slice(found.index); this.pending = '';
             return piece;
         }
-        let held = 0;
-        for (let size = 1; size <= this.pending.length && size < 8; size++) if (markers.some(marker => marker.startsWith(this.pending.slice(-size)))) held = size;
-        if (this.finish) {
-            if (held > 1) { this.protocolError = true; this.pending = ''; return ''; }
-            held = 0;
-        }
+        // Hold a tail that could still become the markup until the next piece shows what it is.
+        let held = this.finish ? 0 : (NATIVE_START.exec(this.pending)?.[0].length ?? 0);
         const piece = this.pending.slice(0, this.pending.length - held);
         this.pending = this.pending.slice(this.pending.length - held);
         this.content += piece;
@@ -144,8 +157,13 @@ export class Completion {
     }
     /** The turn, once the stream has ended: `{ message }`, or `{ error }` when it stopped short or called what it may not. */
     result() {
-        if (this.protocolError) return { error: '模型未能正确发起查询，请重试。' };
         const made = this.calls.filter(Boolean);
+        if (this.native !== null) {
+            const spelled = nativeCalls(this.native);
+            if (!spelled.length || made.length) return { error: '模型未能正确发起查询，请重试。' };
+            made.push(...spelled);
+            this.finish = 'tool_calls';
+        }
         // An answer cut at its length is still an answer, what it got to say; a cut tool call is not.
         const whole = ['stop', 'tool_calls'].includes(this.finish) || (this.finish === 'length' && !made.length && this.content);
         if (!whole || made.some(call => !call.id || !this.names.has(call.function.name))) return { error: 'AI 回答未完成，请缩短问题后重试。' };
