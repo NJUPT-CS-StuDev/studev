@@ -17,6 +17,7 @@ async function guard(fn: () => Promise<void>) {
 }
 
 function switchTab(name: string) {
+  q('[data-account-shell]').dataset.wide = String(name === 'members' || name === 'audit');
   document.querySelectorAll<HTMLElement>('[data-account-panel]').forEach((p) => {
     p.hidden = p.dataset.accountPanel !== name;
   });
@@ -52,30 +53,73 @@ async function confirmAction(title: string, description: string, password = fals
   );
 }
 
-async function editRosterModal(user: User): Promise<{ studentId: string; realName: string; nickname: string; term: string; department: string; title: string; signature: string; order: number } | null> {
+async function editRosterModal(
+  user: User,
+  presetRole?: 'user' | 'admin'
+): Promise<{
+  studentId: string;
+  realName: string;
+  nickname: string;
+  term: string;
+  department: string;
+  title: string;
+  signature: string;
+  order: number;
+  identityVerified: boolean;
+  role?: 'user' | 'admin';
+} | null> {
   const dialog = q<HTMLDialogElement>('[data-roster-edit-modal]');
+  const form = q<HTMLFormElement>('[data-roster-edit-form]');
+  const errBox = q<HTMLElement>('[data-roster-edit-error]');
+  const roleWrap = q<HTMLElement>('[data-roster-edit-role-wrap]');
+  const roleSelect = q<HTMLSelectElement>('#roster-edit-role');
+  const verifiedInput = q<HTMLInputElement>('#roster-edit-verified');
   q('[data-roster-edit-title]').textContent = `编辑档案 · ${user.realName || user.nickname}`;
   const studentInput = q<HTMLInputElement>('#roster-edit-student');
   const realNameInput = q<HTMLInputElement>('#roster-edit-real-name');
-  studentInput.value = user.studentId; realNameInput.value = user.realName;
+  studentInput.value = user.studentId;
+  realNameInput.value = user.realName;
   const termInput = q<HTMLInputElement>('#roster-edit-term');
   const orderInput = q<HTMLInputElement>('#roster-edit-order');
   const deptInput = q<HTMLInputElement>('#roster-edit-department');
   const titleInput = q<HTMLInputElement>('#roster-edit-role-title');
   const nickInput = q<HTMLInputElement>('#roster-edit-nickname');
   const sigInput = q<HTMLInputElement>('#roster-edit-signature');
+  const canEditRole = current?.user.role === 'owner' && user.id !== current?.user.id && user.role !== 'owner';
+  roleWrap.hidden = !canEditRole;
+  roleSelect.value = presetRole || (user.role === 'admin' ? 'admin' : 'user');
+  verifiedInput.checked = presetRole === 'admin' ? true : Boolean(user.identityVerified);
   termInput.value = user.term || '2026-2027';
   orderInput.value = String(user.order ?? 999);
   deptInput.value = user.department || '';
   titleInput.value = user.title || '';
   nickInput.value = nicknameOf(user);
   sigInput.value = user.signature || '';
+  errBox.hidden = true;
+  errBox.textContent = '';
+
+  const onSubmit = (e: SubmitEvent) => {
+    const submitter = e.submitter as HTMLButtonElement | null;
+    if (submitter?.value !== 'confirm') return;
+    const chosenRole = canEditRole ? (roleSelect.value as 'user' | 'admin') : user.role;
+    if (chosenRole === 'admin' && (!deptInput.value.trim() || !titleInput.value.trim())) {
+      e.preventDefault();
+      errBox.textContent = '设为管理员须同时填写所属部门与职务分工；若暂不分配，请改选“用户”。';
+      errBox.hidden = false;
+      (!deptInput.value.trim() ? deptInput : titleInput).focus();
+      return;
+    }
+    errBox.hidden = true;
+  };
+  form.addEventListener('submit', onSubmit);
+
   dialog.returnValue = '';
   dialog.showModal();
   return new Promise((resolve) => {
     dialog.addEventListener(
       'close',
       () => {
+        form.removeEventListener('submit', onSubmit);
         if (dialog.returnValue !== 'confirm') {
           resolve(null);
           return;
@@ -90,6 +134,8 @@ async function editRosterModal(user: User): Promise<{ studentId: string; realNam
           title: titleInput.value.trim(),
           signature: sigInput.value.trim(),
           order: Number.isSafeInteger(parsedOrder) && parsedOrder >= 0 && parsedOrder <= 9999 ? parsedOrder : 999,
+          identityVerified: verifiedInput.checked,
+          ...(canEditRole ? { role: roleSelect.value as 'user' | 'admin' } : {}),
         });
       },
       { once: true }
@@ -322,14 +368,19 @@ async function refreshMembers() {
 function renderMembers() {
   const isOwner = current?.user.role === 'owner';
   const isStaff = current?.user.role === 'owner' || current?.user.role === 'admin';
-  const rosterCount = members.filter(u => ['admin', 'owner'].includes(u.role)).length;
-  q('[data-members-summary]').textContent = `共 ${members.length} 个账号，其中 ${rosterCount} 位管理员与所有者。身份资料仅限管理用途。`;
+  const rosterCount = members.filter((u) => ['admin', 'owner'].includes(u.role)).length;
+  const unassignedAdmins = members.filter((u) => u.role === 'admin' && (!u.department || !u.title)).length;
+  q('[data-members-summary]').textContent = `共 ${members.length} 个账号，其中 ${rosterCount} 位管理员与所有者${unassignedAdmins ? `（含 ${unassignedAdmins} 位待分配部门职务）` : ''}。身份资料仅限管理用途。`;
 
   const term = q<HTMLInputElement>('[data-members-search]').value.trim().toLowerCase();
   const deptFilter = q<HTMLSelectElement>('[data-members-dept-filter]').value;
+  const roleFilter = q<HTMLSelectElement>('[data-members-role-filter]').value;
   const visible = members.filter((user) => {
     if (deptFilter === '__other__' && user.department) return false;
     if (deptFilter && deptFilter !== '__other__' && user.department !== deptFilter) return false;
+    if (roleFilter === 'staff' && user.role === 'user') return false;
+    if (roleFilter === 'unassigned_admin' && !(user.role === 'admin' && (!user.department || !user.title))) return false;
+    if (roleFilter === 'user' && user.role !== 'user') return false;
     return [user.studentId, user.realName, user.qq, user.nickname, user.department, user.title, user.signature].join(' ').toLowerCase().includes(term);
   });
 
@@ -383,7 +434,16 @@ function renderMembers() {
       deptCell.append(el('span', user.department, 'p-user-dept'));
       if (user.title) {
         deptCell.append(el('div', user.title, 'p-user-title'));
+      } else if (user.role === 'admin') {
+        const warn = el('span', '待补职务', 'p-pill');
+        warn.dataset.state = 'pending';
+        warn.style.marginTop = '6px';
+        deptCell.append(el('div'), warn);
       }
+    } else if (user.role === 'admin') {
+      const warn = el('span', '未分配部门职务', 'p-pill');
+      warn.dataset.state = 'rejected';
+      deptCell.append(warn);
     } else {
       deptCell.append(el('span', '暂未分配', 'p-muted'));
     }
@@ -403,7 +463,24 @@ function renderMembers() {
       }
       select.value = user.role;
       select.addEventListener('change', () => {
-        const next = select.value;
+        const next = select.value as 'user' | 'admin';
+        if (next === 'admin' && (!user.department || !user.title)) {
+          select.value = user.role;
+          void guard(async () => {
+            const nextProfile = await editRosterModal(user, 'admin');
+            if (!nextProfile) return;
+            await api(`/admin/users/${encodeURIComponent(user.id)}`, {
+              revision: user.revision,
+              ...nextProfile,
+            });
+            try {
+              localStorage.removeItem('studev_roster_2026-2027');
+            } catch {}
+            await refreshMembers();
+            message(status, '已分配部门职务并更新成员身份。', 'success');
+          });
+          return;
+        }
         void guard(async () => {
           if ((await confirmAction('调整成员角色', `将 ${display}（${ref}）设为${labels[next]}？`)) === null) {
             select.value = user.role;
@@ -423,7 +500,7 @@ function renderMembers() {
     }
 
     // 4. 联系方式
-    const contactCell = el('td', `QQ ${user.qq}`);
+    const contactCell = el('td', `QQ ${user.qq}`, 'p-table-contact');
     contactCell.append(el('small', user.email || `${user.qq}@qq.com`));
 
     // 5. 操作
@@ -621,6 +698,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-account-tab]').forEach((b) =
 
 q('[data-members-search]').addEventListener('input', renderMembers);
 q('[data-members-dept-filter]').addEventListener('change', renderMembers);
+q('[data-members-role-filter]').addEventListener('change', renderMembers);
 q('[data-members-refresh]').addEventListener('click', () => {
   void guard(refreshMembers);
 });

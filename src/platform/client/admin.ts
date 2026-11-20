@@ -13,6 +13,8 @@ let dirty = false;
 const fieldNames: Record<Field['type'], string> = { text: '短文本', textarea: '长文本', select: '单选', checkbox: '多选', number: '数字', date: '日期', file: '附件' };
 
 function panel(name: string) {
+  const shell = document.querySelector<HTMLElement>('.platform');
+  if (shell) shell.dataset.wide = String(name !== 'editor');
   document.querySelectorAll<HTMLElement>('[data-admin-panel]').forEach((p) => {
     p.hidden = p.dataset.adminPanel !== name;
   });

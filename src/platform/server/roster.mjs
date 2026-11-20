@@ -15,7 +15,7 @@ export function qqAvatarUrl(qq) {
 }
 
 /** Bump when the public snapshot shape changes; stale stored snapshots are rebuilt on read. */
-export const ROSTER_SCHEMA = 6;
+export const ROSTER_SCHEMA = 7;
 
 
 export function normalizeDepartmentName(dept) {
@@ -48,10 +48,11 @@ export function profileNickname(user) {
   return [...new Intl.Segmenter('zh', { granularity: 'grapheme' }).segment(name)].at(-1)?.segment || '同学';
 }
 
-/** Public organization membership includes appointed staff awaiting account activation. */
+/** Public organization membership includes appointed staff with department and title. */
 export function isRosterMember(user, term = user?.term) {
   return Boolean(user && SUPPORTED_ROSTER_TERMS.has(term) && user.term === term
-    && ['admin', 'owner'].includes(user.role) && ['active', 'pending'].includes(user.status));
+    && ['admin', 'owner'].includes(user.role) && ['active', 'pending'].includes(user.status)
+    && normalizeDepartmentName(user.department) && normalizeRoleTitle(user.title));
 }
 
 /** Only this projection leaves the private identity store, including on cached reads. */

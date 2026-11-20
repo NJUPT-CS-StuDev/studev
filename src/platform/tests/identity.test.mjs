@@ -153,7 +153,7 @@ test('a blank nickname defaults to the final character of the name', async () =>
 
 test('promotion revokes sessions; admin authority works without mandatory TOTP while optional TOTP is enforced when enabled', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
-  const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin' }, owner);
+  const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin', department: '运营支持部', title: '运营支持部部长' }, owner);
   assert.equal(promoted.user.role, 'admin');
   await rejects(f.call('/auth/session', 'GET', undefined, member), 'TOKEN_INVALID', 401);
   const directAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
@@ -218,7 +218,7 @@ test('TOTP reset revokes sessions; admin can log in without TOTP while owner can
   const setup = await f.call('/auth/totp/setup', 'POST', { password: MEMBER_PASSWORD }, member);
   await f.call('/auth/totp/confirm', 'POST', { code: f.factor(setup.secret) }, member);
   const refreshed = await f.call('/auth/session', 'GET', undefined, member);
-  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin' }, owner);
+  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin', department: '运营支持部', title: '运营支持部部长' }, owner);
   await f.call(`/admin/users/${member.user.id}/reset-totp`, 'POST', {}, owner);
   const resetAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
   assert.equal(resetAdmin.enrollmentRequired, false);
@@ -337,7 +337,7 @@ test('normal login accepts only normalized student ID and independently checks t
 
 test('pre-recorded staff use managed password and status operations to activate, then must change the temporary password', async () => {
   const f = fixture(), owner = await f.owner();
-  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin' }, owner);
+  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin', department: '运营支持部', title: '运营支持部部员' }, owner);
   assert.equal(seeded.user.status, 'pending');
   await rejects(f.call('/auth/register', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', nickname: '有人', password: MEMBER_PASSWORD }), 'ACCOUNT_PENDING_REVIEW', 409);
   await f.call(`/admin/users/${seeded.user.id}/reset-password`, 'POST', { password: MEMBER_PASSWORD }, owner);
@@ -422,4 +422,30 @@ test('every password change or reset mails the account, and a mail failure never
   const other = await broken.member('10000777');
   assert.equal((await broken.call('/auth/password', 'POST', { currentPassword: MEMBER_PASSWORD, newPassword: 'changed-password-0002' }, other)).status, 200);
   assert.equal((await broken.call('/auth/config')).emailDeliveryEnabled, true);
+});
+
+test('admin role requires department and title, while owner can update full identity without resetting password', async () => {
+  const f = fixture(), owner = await f.owner(), member = await f.member('10000888');
+  await rejects(f.call('/admin/users', 'POST', { studentId: 'NODEPT01', realName: '缺部门', qq: '10008881', role: 'admin' }, owner), 'STAFF_PROFILE_REQUIRED', 400);
+  await rejects(f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin' }, owner), 'STAFF_PROFILE_REQUIRED', 400);
+  const updated = await f.call(`/admin/users/${member.user.id}`, 'POST', {
+    revision: member.user.revision,
+    studentId: 'NEWID0888',
+    realName: '已更名成员',
+    identityVerified: true,
+    role: 'admin',
+    term: '2026-2027',
+    department: '媒体宣传部',
+    title: '媒体宣传部部员',
+  }, owner);
+  assert.equal(updated.user.studentId, 'NEWID0888');
+  assert.equal(updated.user.realName, '已更名成员');
+  assert.equal(updated.user.identityVerified, true);
+  assert.equal(updated.user.role, 'admin');
+  const relogin = await f.call('/auth/login', 'POST', { studentId: 'NEWID0888', password: MEMBER_PASSWORD });
+  assert.equal(relogin.status, 200);
+  assert.equal(relogin.passwordChangeRequired, false);
+  await rejects(f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, department: '' }, owner), 'STAFF_PROFILE_REQUIRED', 400);
+  const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, role: 'user', department: '', title: '' }, owner);
+  assert.equal(demoted.user.role, 'user');
 });

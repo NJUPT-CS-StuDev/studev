@@ -111,7 +111,11 @@ test('public roster derives exclusively from admin/owner roles; forged roster fi
   const f = await fixture(), source = await f.repo.latest(`identity/users/${f.user.id}`);
   const ordinary = { ...source, term: '2026-2027', department: '主席团', title: '主席', signature: '保密签名', order: 0 };
   await f.repo.append(`identity/users/${f.user.id}`, ordinary, source.revision);
-  const snapshot = buildRosterSnapshot([ordinary, { ...ordinary, id: '00000000-0000-0000-0000-000000000002', role: 'admin', realName: '公开管理员', nickname: '管理员', signature: '公开签名', qq: '10000903', studentId: 'ADMIN00002' }], '2026-2027', new Date().toISOString(), f.env.PLATFORM_ORIGIN);
+  const snapshot = buildRosterSnapshot([
+    ordinary,
+    { ...ordinary, id: '00000000-0000-0000-0000-000000000002', role: 'admin', realName: '公开管理员', nickname: '管理员', signature: '公开签名', qq: '10000903', studentId: 'ADMIN00002' },
+    { ...ordinary, id: '00000000-0000-0000-0000-000000000099', role: 'admin', department: '', title: '', realName: '未分配管理员', nickname: '未分配', qq: '10000909', studentId: 'ADMIN00009' },
+  ], '2026-2027', new Date().toISOString(), f.env.PLATFORM_ORIGIN);
   assert.equal(snapshot.totalCount, 1); assert.equal(snapshot.groups[0].people[0].nickname, '管理员');
   assert.deepEqual(Object.keys(snapshot.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'nickname', 'role', 'signature']);
   for (const value of ['公开管理员', '10000903', 'ADMIN00002']) assert.equal(JSON.stringify(snapshot).includes(value), false);

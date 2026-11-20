@@ -156,7 +156,7 @@ import '../platform/platform.css';
         </header>
         <div class="p-toolbar">
           <input class="p-input" type="search" aria-label="搜索成员" placeholder="搜索姓名、昵称、学号、部门、职务或 QQ 号" data-members-search />
-          <select class="p-input" style="flex:0 0 auto;min-width:160px" aria-label="按部门筛选" data-members-dept-filter>
+          <select class="p-input" style="flex:0 0 auto;min-width:150px" aria-label="按部门筛选" data-members-dept-filter>
             <option value="">全部部门</option>
             <option value="主席团">主席团</option>
             <option value="运营支持部">运营支持部</option>
@@ -164,6 +164,12 @@ import '../platform/platform.css';
             <option value="媒体宣传部">媒体宣传部</option>
             <option value="心理工作部">心理工作部</option>
             <option value="__other__">未分配部门</option>
+          </select>
+          <select class="p-input" style="flex:0 0 auto;min-width:170px" aria-label="按角色筛选" data-members-role-filter>
+            <option value="">全部角色</option>
+            <option value="staff">管理员与所有者</option>
+            <option value="unassigned_admin">待补部门职务的管理员</option>
+            <option value="user">普通用户</option>
           </select>
           <span class="p-count" data-members-count></span>
         </div>
@@ -197,11 +203,23 @@ import '../platform/platform.css';
   <dialog class="p-modal" data-roster-edit-modal>
     <form method="dialog" data-roster-edit-form>
       <h2 data-roster-edit-title>编辑成员档案</h2>
-      <p class="p-help" style="margin-bottom:14px">请核对身份后更正资料。仅管理员和所有者会出现在公开名册中。</p>
+      <p class="p-help" style="margin-bottom:14px">调整学号、姓名、角色或部门职务不会重置成员密码。仅拥有所属部门与职务的成员可设为管理员并展示在公开名册中。</p>
+      <div class="p-message" data-kind="error" data-roster-edit-error hidden></div>
       <div class="p-inline-grid">
         <div class="p-field"><label for="roster-edit-student">学号</label><input id="roster-edit-student" pattern="[A-Za-z0-9]{6,20}" maxlength="20" required /></div>
         <div class="p-field"><label for="roster-edit-real-name">真实姓名</label><input id="roster-edit-real-name" maxlength="40" required /></div>
       </div>
+      <div class="p-field" data-roster-edit-role-wrap hidden>
+        <label for="roster-edit-role">群内角色</label>
+        <select id="roster-edit-role">
+          <option value="user">用户（无后台管理权限）</option>
+          <option value="admin">管理员（须有所属部门和职务）</option>
+        </select>
+      </div>
+      <label class="p-checkbox" style="margin-bottom:18px">
+        <input id="roster-edit-verified" type="checkbox" />
+        <span>已核验实名身份（学号与姓名核对无误）</span>
+      </label>
       <div class="p-inline-grid">
         <div class="p-field">
           <label for="roster-edit-term">所属届别</label>
@@ -225,7 +243,7 @@ import '../platform/platform.css';
       </div>
       <div class="p-field">
         <label for="roster-edit-role-title">职务 / 分管头衔</label>
-        <input id="roster-edit-role-title" list="roster-title-options" maxlength="80" placeholder="如 执行主席 · 运营支持部、运营支持部部长（部员可留空）" />
+        <input id="roster-edit-role-title" list="roster-title-options" maxlength="80" placeholder="如 执行主席 · 运营支持部、运营支持部部长、部门成员" />
         <datalist id="roster-title-options">
           <option value="执行主席 · 运营支持部"></option>
           <option value="分管主席 · 易班建设部"></option>
@@ -235,6 +253,11 @@ import '../platform/platform.css';
           <option value="易班建设部部长"></option>
           <option value="媒体宣传部部长"></option>
           <option value="心理工作部部长"></option>
+          <option value="运营支持部部员"></option>
+          <option value="易班建设部部员"></option>
+          <option value="媒体宣传部部员"></option>
+          <option value="心理工作部部员"></option>
+          <option value="部门成员"></option>
         </datalist>
       </div>
       <div class="p-field">

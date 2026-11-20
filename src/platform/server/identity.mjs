@@ -574,8 +574,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const role = body.role === undefined ? 'admin' : body.role;
       if (!['admin', 'user'].includes(role)) fail(400, 'INVALID_ROLE', '预录成员角色须为成员或管理员。');
       const term = body.term === undefined ? '2026-2027' : text(body.term, '届别', 32, false);
-      const department = body.department === undefined ? '' : text(body.department, '所属部门', 60, false);
-      const title = body.title === undefined ? '' : text(body.title, '职务头衔', 80, false);
+      const department = body.department === undefined ? '' : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
+      const title = body.title === undefined ? '' : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
+      if (role === 'admin' && (!department || !title)) fail(400, 'STAFF_PROFILE_REQUIRED', '设为管理员须同时填写所属部门与职务分工。');
       const signature = body.signature === undefined ? '' : text(body.signature, '个性签名', 120, false);
       const order = body.order === undefined ? 999 : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
       if (await repo.get(studentKey(studentId))) fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '该学号已存在记录。');
@@ -636,11 +637,14 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const identityChanged = studentId !== (user.studentId || '') || nameChanged;
       if (studentId && !user.studentId && !realName) fail(400, 'INVALID_REAL_NAME', '首次绑定学号时请同时填写真实姓名。');
       if (body.identityVerified !== undefined && typeof body.identityVerified !== 'boolean') fail(400, 'INVALID_FIELD', '身份核验状态无效。');
-      let identityVerified = identityChanged ? false : (body.identityVerified ?? (user.identityVerified === true));
+      let identityVerified = body.identityVerified !== undefined ? body.identityVerified : (identityChanged ? false : (user.identityVerified === true));
       if (identityVerified && !profileComplete({ ...user, studentId, realName })) fail(409, 'PROFILE_REQUIRED', '账号需先补齐学号与真实姓名，再核验身份。');
       const term = body.term === undefined ? (user.term || '') : text(body.term, '届别', 32, false);
-      const department = body.department === undefined ? (user.department || '') : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
-      const title = body.title === undefined ? (user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
+      const department = body.department === undefined ? normalizeDepartmentName(user.department || '') : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
+      const title = body.title === undefined ? normalizeRoleTitle(user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
+      if (role === 'admin' && (body.role === 'admin' || body.department !== undefined || body.title !== undefined) && (!department || !title)) {
+        fail(400, 'STAFF_PROFILE_REQUIRED', '设为管理员须同时填写所属部门与职务分工；若暂不分配，请先设为普通用户。');
+      }
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const order = body.order === undefined ? (user.order ?? 999) : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
       const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
