@@ -8,7 +8,8 @@ namespace StuDev.Data;
 public sealed class Repository
 {
     public static string Site => Product.Origin;
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    // The site compresses what it can (the release pointer is 500 KB raw, 60 KB compressed); say we read compressed.
+    private static readonly HttpClient Http = new(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(30) };
     private static readonly string Root = Storage.CacheFor("campus");
     private static string ActiveRelease => Path.Combine(Root, "release.json");
     public DataRelease Release { get; }
@@ -27,7 +28,10 @@ public sealed class Repository
         {
             try {
                 var release = JsonSerializer.Deserialize(File.ReadAllText(kept), FactsJson.Default.DataRelease) ?? throw new InvalidDataException("release manifest");
-                Valid(release); return Task.FromResult(new Repository(release));
+                Valid(release);
+                // A release kept by an older StuDev may be in a search format this one does not read: take the latest instead.
+                if (Searchable(release)) return Task.FromResult(new Repository(release));
+                File.Delete(kept);
             } catch (Exception error) when (error is IOException or JsonException) {
                 // This cache contains public release routing, never preferences,
                 // tasks or credentials. An obsolete shape is discarded outright.
@@ -66,8 +70,13 @@ public sealed class Repository
         release = release with { Base = new Uri(origin, release.Base).AbsoluteUri,
             MapBase = new Uri(origin, release.MapBase).AbsoluteUri, KnowledgeBase = new Uri(origin, release.KnowledgeBase).AbsoluteUri,
             SearchBase = new Uri(origin, release.SearchBase).AbsoluteUri, TextsBase = new Uri(origin, release.TextsBase).AbsoluteUri };
-        Valid(release); return new Repository(release);
+        Valid(release);
+        if (!Searchable(release)) throw new NotSupportedException("校园数据已经更新，这个版本的 StuDev 读不了，请更新到新版本。");
+        return new Repository(release);
     }
+
+    /** Whether this app's search engine reads the release's bundles; a release it cannot is one only a newer app can use. */
+    private static bool Searchable(DataRelease release) => release.SearchFormat == Kernels.Search.WasmSearchNativeMethods.BundleFormat();
 
     public void Activate() {
         Storage.Write(ActiveRelease, JsonSerializer.Serialize(Release, FactsJson.Default.DataRelease));

@@ -7,7 +7,7 @@ import type { CampusRelease } from '../../src/campus/world/release';
 const tempBase = process.platform === 'win32' ? 'D:/Temp/codex' : '/tmp/codex';
 let work: string;
 const snapshot = (version: string): CampusRelease => ({ version, base: `/data/${version}`, built_at: '2026-11-17T12:00:00Z', teaching: '2026-2027-1', exams: null, labs: null, rooms: '2026-2027-1',
-    map_version: 'map-v1.0.0', knowledge_version: 'k1', data_version: 'data1', map_base: '/space/m1', knowledge_base: '/knowledge/k1', search_base: '/search/s1', texts_base: '/texts/s1' });
+    map_version: 'map-v1.0.0', knowledge_version: 'k1', data_version: 'data1', map_base: '/space/m1', knowledge_base: '/knowledge/k1', search_base: '/search/s1', search_format: 'wasm-search-bundle-v5', texts_base: '/texts/s1' });
 afterAll(async () => { if (work && resolve(work).startsWith(resolve(tempBase) + sep)) await rm(work, { recursive: true, force: true }); });
 
 it('publishes only the current snapshot without archives or duplicate bundled components', async () => {

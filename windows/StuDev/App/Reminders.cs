@@ -21,6 +21,7 @@ internal static class Reminders
     {
         AppNotificationManager.Default.NotificationInvoked += (_, e) => queue.TryEnqueue(() =>
         {
+            if (e.Arguments.ContainsKey("update")) { Updates.RestartNow(); return; }
             App.Window?.Bring();
             if (e.Arguments.TryGetValue("nav", out var room)) App.Open("map", ("nav", room));
             else App.Open("timetable");
@@ -30,6 +31,11 @@ internal static class Reminders
         timer.Start();
         Check();
     }
+
+    /** One notification outside the timetable's own, with one button that hands `argument` back when pressed. */
+    public static void Announce(string title, string text, string button, string argument) =>
+        AppNotificationManager.Default.Show(new AppNotificationBuilder().AddText(title).AddText(text).AddArgument(argument, "1")
+            .AddButton(new AppNotificationButton(button).AddArgument(argument, "1")).BuildNotification());
 
     private static DateTime At(DateOnly date, int minute) => date.ToDateTime(TimeOnly.MinValue).AddMinutes(minute);
 

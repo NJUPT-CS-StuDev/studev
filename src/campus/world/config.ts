@@ -1,7 +1,11 @@
 import bundled from '../../data/campus-release.json';
 import product from '../../../product.json';
 import { PRODUCT_CONFIG } from './product';
+import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
 import { releaseAt, validRelease, type CampusRelease } from './release';
+
+/** A release this build can read: valid, and in the search format its engine reads. */
+const readable = (value: unknown): value is CampusRelease => validRelease(value) && value.search_format === SEARCH_BUNDLE_FORMAT;
 
 const CACHE = 'studev-campus-release';
 const RUNTIME = 'studev-app-runtime';
@@ -21,7 +25,7 @@ function kept(): { release: CampusRelease; entry: string } | undefined {
     try {
         const value = JSON.parse(localStorage.getItem(CACHE) ?? 'null');
         const entry = new URL(value.entry);
-        return validRelease(value.release) && entry.protocol === 'https:' && !entry.username && !entry.password
+        return readable(value.release) && entry.protocol === 'https:' && !entry.username && !entry.password
             ? { release: value.release, entry: entry.href } : undefined;
     } catch { return undefined; }
 }
@@ -41,7 +45,8 @@ export async function latestCampusRelease(): Promise<CampusRelease | undefined> 
         const response = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(4000) });
         if (!response.ok) return;
         const value: unknown = await response.json();
-        if (!validRelease(value)) return;
+        // Data newer than this build (or older) is left alone; the next deployment of the site reads it.
+        if (!readable(value)) return;
         try { localStorage.setItem(CACHE, JSON.stringify({ entry, release: value })); } catch { /* Private browsing still reads the public snapshot. */ }
         return releaseAt(value, new URL(entry).origin);
     } catch { return undefined; }

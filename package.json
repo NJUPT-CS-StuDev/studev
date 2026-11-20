@@ -44,7 +44,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v6.0.0/wasm-search-6.0.0.tgz",
+    "wasm-search": "https://github.com/hicancan/wasm-search/releases/download/v6.1.0/wasm-search-6.1.0.tgz",
     "wayfind": "https://github.com/hicancan/wayfind/releases/download/v0.3.1/wayfind-0.3.1.tgz"
   },
   "allowScripts": {

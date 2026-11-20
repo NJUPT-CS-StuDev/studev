@@ -105,7 +105,9 @@ public sealed partial class MeScreen : Screen
             Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
             Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);
             Row("", Value("提醒与后台运行", "课前提醒、托盘和开机启动"), () => Go("device"));
-            Row("", Value("帮助与关于", Updates.Ready is { } ready ? $"新版本 {ready} 已准备好" : "反馈、资料提交和应用更新"), () => Go("about"));
+            if (Updates.Ready is { } ready) Row("", Value($"新版本 {ready} 已准备好", "点击立即重启更新"), Updates.RestartNow);
+            else Row("", Value("检查更新", $"StuDev {Updates.Version} · 数据 {campus.Repository?.Release.DataVersion ?? "—"}"), () => UpdateSheet.Check(campus));
+            Row("", Value("帮助与关于", "反馈、资料提交、协议"), () => Go("about"));
         }
         if (section == "timetable")
         {
@@ -147,8 +149,6 @@ public sealed partial class MeScreen : Screen
             Row("", Value("提供校园资料", "提交实验课表、讲座、校车或营业时间"), () => Browse(Form("data")));
             Row("", Value("学生发展中心", "南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
             Row("", Value("下载 StuDev", "网页、Android 和 Windows"), () => Browse($"{Repository.Site}/download/"));
-            if (Updates.Ready is { } next) Row("", Value($"新版本 {next} 已准备好", "点击立即重启更新"), Updates.RestartNow);
-            else Row("", Value("检查更新", $"StuDev {Updates.Version}"), async () => { await Updates.Check(); await campus.Refresh(); });
             Row("", Value("用户协议"), () => Browse($"{Repository.Site}/terms/"));
             Row("", Value("隐私政策"), () => Browse($"{Repository.Site}/privacy/"));
             page.Children.Add(Kit.Text($"StuDev {Updates.Version} · 数据 {campus.Repository?.Release.DataVersion ?? "—"}", Role.Caption, "muted"));

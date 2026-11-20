@@ -81,7 +81,13 @@ public partial class App : Application
         Window.Open("timetable");
         Syncing = new Me.Sync(World.Campus.Shared, Window.DispatcherQueue);
         _ = RefreshAccount();
+        // A newer StuDev fetched in the background is said once, in a notification that can restart into it.
+        Me.Updates.Changed += () => Window.DispatcherQueue.TryEnqueue(() => { if (Me.Updates.Ready is { } ready) Reminders.Announce($"StuDev {ready} 已准备好", "重启即可更新，班级和设置都会保留。", "重启更新", "update"); });
+        // Data only a newer StuDev reads is said over whatever is open, once.
+        var required = false;
+        World.Campus.Shared.Changed += () => Window.DispatcherQueue.TryEnqueue(() => { if (World.Campus.Shared.AppRequired && !required) { required = true; Me.UpdateSheet.Required(World.Campus.Shared); } });
         Watch(Me.Updates.Check());
+        Me.Updates.Keep(Window.DispatcherQueue);
         // Started at sign-in, StuDev stays in the tray with its card; otherwise its window opens.
         if (!Me.Device.Background) Window.Activate();
         Tray.Opened += () => Window.DispatcherQueue.TryEnqueue(() => Window.Bring());

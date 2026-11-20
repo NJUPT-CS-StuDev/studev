@@ -103,6 +103,28 @@ import top.hicancan.studev.world.Moment
     if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm, onMembers = { onMembers { me = true } }) { me = false }
     if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
     if (state.appRequired) AppRequired(state.app!!)
+    else model.update.collectAsStateWithLifecycle().value?.let { news -> UpdateDialog(news, model::closeUpdate) }
+}
+
+/** A check for updates answers here, above every sheet and tab, so the answer is seen where it was asked. */
+@Composable private fun UpdateDialog(news: UpdateNews, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val found = news as? UpdateNews.Found
+    androidx.compose.material3.AlertDialog(onDismissRequest = onClose, containerColor = Ink.paper,
+        title = { androidx.compose.material3.Text(found?.title ?: "正在检查更新") },
+        text = {
+            if (found == null) Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Ink.brand)
+                Plain("查找新版本和新的校园数据……", 14.sp, Ink.muted, modifier = Modifier.padding(start = 12.dp))
+            } else Plain(found.detail, 14.sp, Ink.muted, lineHeight = 21.sp)
+        },
+        confirmButton = {
+            val app = found?.app
+            if (app != null) TextAction("去下载", {
+                onClose(); context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/download/")))
+            }) else if (found != null) TextAction("好", onClose)
+        },
+        dismissButton = { if (found?.app != null) TextAction("稍后", onClose, muted = true) else if (found == null) TextAction("取消", onClose, muted = true) })
 }
 
 /** The website now publishes data this app cannot read: only the newer app can go on. */

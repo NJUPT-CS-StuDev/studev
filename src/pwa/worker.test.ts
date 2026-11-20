@@ -19,7 +19,7 @@ function harness() {
     const fetch = vi.fn(async (input: string | Request) => {
         const path = new URL(typeof input === 'string' ? input : input.url, origin).pathname;
         if (path === '/app-release.json') return new Response(JSON.stringify({ campus_entry: `${origin}/campus-release.json` }), { headers: { 'Content-Type': 'application/json' } });
-        if (path === '/campus-release.json') return new Response(JSON.stringify({ version: 'fixture', base: '/data/fixture', map_base: '/space/map1', knowledge_base: '/knowledge/k1', search_base: '/search/s1', texts_base: '/texts/s1', core: ['/space/map1/test/basemap.pmtiles'], all: [] }), { headers: { 'Content-Type': 'application/json' } });
+        if (path === '/campus-release.json') return new Response(JSON.stringify({ version: 'fixture', base: '/data/fixture', map_base: '/space/map1', knowledge_base: '/knowledge/k1', search_base: '/search/s1', search_format: 'wasm-search-bundle-v5', texts_base: '/texts/s1', core: ['/space/map1/test/basemap.pmtiles'], all: [] }), { headers: { 'Content-Type': 'application/json' } });
         if (path.endsWith('.pmtiles')) return new Response(new Uint8Array([0, 1, 2, 3, 4, 5]), { headers: { 'Content-Type': 'application/octet-stream' } });
         if (path === '/_astro/app.js') return new Response('import "./chunk.js";', { headers: { 'Content-Type': 'application/javascript' } });
         if (path === '/_astro/chunk.js') return new Response('const wasm=`/_astro/kernel.wasm`; const imports={"./kernel_bg.js":{}};', { headers: { 'Content-Type': 'application/javascript' } });

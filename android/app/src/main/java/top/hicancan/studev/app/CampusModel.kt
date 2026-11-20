@@ -31,6 +31,12 @@ data class AcademicState(val repository: AcademicRepository? = null, val term: T
     val appBehind get() = app != null && app.versionCode > top.hicancan.studev.BuildConfig.VERSION_CODE
     val holidays by lazy { CampusLine.holidays(calendar) }
 }
+/** What a check for updates says, shown over whatever is open: while it looks, then what it found. */
+sealed interface UpdateNews {
+    data object Checking : UpdateNews
+    /** [app] is set when a newer app is out; the dialog then offers its download page. */
+    data class Found(val title: String, val detail: String, val app: AppRelease? = null) : UpdateNews
+}
 class CampusModel(application: Application) : AndroidViewModel(application) {
     val settings = CampusSettings(application)
     /** One's own tasks, on this device. */
@@ -58,6 +64,11 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     private var checked = System.currentTimeMillis()
     private val _state = MutableStateFlow(AcademicState())
     val state = _state.asStateFlow()
+    private val _update = MutableStateFlow<UpdateNews?>(null)
+    val update = _update.asStateFlow()
+    fun closeUpdate() { _update.value = null }
+    /** A newer app found by an automatic check is announced once per version; after that the timetable keeps saying so quietly. */
+    private val announced = application.getSharedPreferences("updates", android.content.Context.MODE_PRIVATE)
     private val _notice = MutableStateFlow<String?>(null)
     val notice = _notice.asStateFlow()
     private var loading: Job? = null
@@ -246,22 +257,37 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     /** Takes what a check found: the newer app, and the newer data when this app can read it. */
     private suspend fun take(found: Discovery): Boolean {
         _state.update { it.copy(app = found.app, appRequired = found.unreadable && found.appBehind) }
+        val app = found.app
+        if (app != null && found.appBehind && !found.unreadable && _update.value == null && announced.getInt("app", 0) < app.versionCode) {
+            announced.edit().putInt("app", app.versionCode).apply()
+            _update.value = UpdateNews.Found("发现新版本 ${app.versionName}", "当前 ${top.hicancan.studev.BuildConfig.VERSION_NAME}。新版本在浏览器里下载，安装后班级和设置都会保留。", app)
+        }
         val repo = found.repository ?: return false
         if (repo.release == state.value.repository?.release) return false
         loadRepository(repo)
         return true
     }
-    fun refresh() { viewModelScope.launch {
-        tell("正在检查更新")
-        val found = AcademicRepository.discover(getApplication(), settings.state.value.klass)
-        if (found == null) { tell("暂时连不上，离线数据仍可使用"); return@launch }
-        val fresh = try { take(found) } catch (e: CancellationException) { throw e } catch (_: Exception) { tell("新数据暂时无法读取，请稍后重试"); return@launch }
-        tell(when {
-            found.appBehind -> "有新版本 ${found.app?.versionName}" + if (fresh) "，校园数据已更新" else ""
-            fresh -> "校园数据已更新"
-            else -> "App 和校园数据都是最新的"
-        })
-    } }
+    /** Asked for: looks for a newer app and newer data, and says what it found in a dialog over whatever is open. */
+    fun refresh() {
+        if (_update.value == UpdateNews.Checking) return
+        _update.value = UpdateNews.Checking
+        viewModelScope.launch {
+            val versions = { "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 数据 ${state.value.repository?.release?.data_version.orEmpty()}" }
+            val found = try { AcademicRepository.discover(getApplication(), settings.state.value.klass) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+            if (found == null) { _update.value = UpdateNews.Found("暂时连不上", "离线数据仍可使用，联网后再试。\n${versions()}"); return@launch }
+            found.app?.let { announced.edit().putInt("app", maxOf(announced.getInt("app", 0), it.versionCode)).apply() }
+            val fresh = try { take(found) } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                _update.value = UpdateNews.Found("新数据暂时无法读取", "继续使用当前数据，请稍后再试。\n${versions()}"); return@launch
+            }
+            val app = found.app
+            _update.value = when {
+                app != null && found.appBehind -> UpdateNews.Found("发现新版本 ${app.versionName}",
+                    (if (fresh) "校园数据已更新。" else "") + "当前 ${top.hicancan.studev.BuildConfig.VERSION_NAME}。新版本在浏览器里下载，安装后班级和设置都会保留。", app)
+                fresh -> UpdateNews.Found("校园数据已更新", versions())
+                else -> UpdateNews.Found("已是最新", versions())
+            }
+        }
+    }
     fun syncPhone() {
         if (state.value.classBusy || state.value.busy) return
         phone?.cancel()
