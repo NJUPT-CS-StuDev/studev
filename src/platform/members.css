@@ -27,8 +27,29 @@
 .p-member-profile .p-member-avatar { width:80px; height:80px; margin-inline:auto; }
 .p-member-profile h2 { font-size:24px; font-weight:600; line-height:1.4; margin:18px 0 10px; overflow-wrap:anywhere; }
 .p-member-profile p { max-width:480px; margin:0 auto; color:var(--muted); font-size:15px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; }
+.p-modal.p-record { width:min(580px,calc(100% - 28px)); padding-bottom:0; }
+.p-record-heading { display:flex; align-items:center; gap:14px; padding-bottom:16px; }
+.p-record-heading .p-member-avatar { width:52px; height:52px; }
+.p-record-heading h2 { margin:0; font-size:1.18rem; }
+.p-record-row { display:grid; grid-template-columns:minmax(5rem,7rem) minmax(0,1fr) auto; align-items:center; column-gap:8px; min-height:44px; border-bottom:1px solid var(--line); }
+.p-record-label { font-size:.83rem; color:var(--muted); }
+.p-button.record-value, .p-button.record-edit, .p-button.record-avatar { border:0; background:transparent; padding:4px 0; min-height:32px; border-radius:4px; }
+.p-button.record-value { padding-inline:4px; place-self:stretch start; color:var(--ink); text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; }
+.p-button.record-value:is(:hover,:focus-visible) { background:var(--surface-sunken); color:var(--brand); }
+.p-button.record-edit { color:var(--brand); padding-inline:6px; font-size:.83rem; }
+.p-button.record-avatar { min-height:0; padding:0; border-radius:50%; }
+.p-record-edit { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; grid-column:1 / -1; padding-block:7px 10px; }
+.p-record-edit .p-input { width:100%; min-width:0; }
+.p-record-organization + .p-record-organization { margin-top:14px; }
+.p-record-organization h4 { margin:0; font-size:.94rem; }
+.p-record-empty { margin:4px 0 8px; }
+.p-record-footer { position:sticky; bottom:0; background:var(--paper); display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding-block:10px; margin-top:14px; }
+.p-record-footer .p-message { margin:0; padding:0; background:transparent; border:0; }
+.p-record-footer .p-button { margin-left:auto; }
 @media(max-width:999.98px) { .p-members-heading { margin-right:var(--size-account-base); } }
 @media(max-width:720px) {
+    .p-modal.p-record { padding-inline:16px; }
+    .p-record-row { grid-template-columns:minmax(4.3rem,5.5rem) minmax(0,1fr) auto; }
     .p-members-filters { width:100%; }
     .p-members-filters .p-input { min-width:0; width:auto; }
     .p-members[data-member-view="management"] .p-directory { display:block; min-width:0; }

@@ -17,7 +17,9 @@ import java.io.ByteArrayOutputStream
 const val PLATFORM_ORIGIN = BuildConfig.SITE_ORIGIN
 internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 @Serializable data class AccountUser(val id: String, val nickname: String, val studentId: String = "", val totpEnabled: Boolean = false, val realName: String = "", val qq: String = "", val role: String = "user", val revision: Int = 0,
-    val department: String = "", val title: String = "", val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true)
+    val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true,
+    val memberships: List<AccountMembership> = emptyList())
+@Serializable data class AccountMembership(val organizationName: String, val department: String = "", val position: String = "")
 /** The server resolves the public nickname, including its default. */
 @Serializable data class PublicMember(val id: String, val nickname: String, val signature: String, val avatarUrl: String)
 fun avatarLetter(nickname: String): String = if (nickname.isEmpty()) "我" else java.text.BreakIterator.getCharacterInstance(java.util.Locale.ROOT).run {

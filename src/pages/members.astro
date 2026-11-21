@@ -15,6 +15,7 @@ import '../platform/members.css';
           <option value="admin">管理员</option>
           <option value="user">普通用户</option>
         </select>
+        <button class="p-button secondary small" type="button" data-members-archive hidden>归档本届名册</button>
         <button class="p-button secondary small" type="button" data-members-audit hidden>操作记录</button>
       </div>
     </header>
@@ -23,6 +24,7 @@ import '../platform/members.css';
       <form class="p-toolbar p-members-search" role="search" data-members-search-form>
         <input class="p-input" type="search" aria-label="搜索昵称" placeholder="搜索昵称" maxlength="40" autocomplete="off" data-members-search />
         <div class="p-members-filters" data-members-filters hidden>
+          <select class="p-input" aria-label="按组织筛选" data-manage-org-filter><option value="">全部组织</option></select>
           <select class="p-input" aria-label="按部门筛选" data-manage-dept-filter><option value="">全部部门</option></select>
           <select class="p-input" aria-label="按角色筛选" data-manage-role-filter>
             <option value="">全部角色</option><option value="owner">所有者</option>
@@ -46,74 +48,13 @@ import '../platform/members.css';
     </section>
     <noscript><p class="p-message">查看成员需要启用 JavaScript。</p></noscript>
   </div>
-  <dialog class="p-modal" data-member-card-modal>
-    <form method="dialog">
-      <div data-member-card-body></div>
-      <div class="p-actions" style="margin-top:18px;justify-content:flex-end">
-        <button class="p-button secondary" value="close" type="submit">关闭</button>
-      </div>
-    </form>
+  <dialog class="p-modal p-record" data-member-card-modal aria-labelledby="member-record-title">
+    <div data-member-card-body></div>
+    <footer class="p-record-footer">
+      <p class="p-message" role="status" aria-live="polite" data-member-card-status hidden></p>
+      <button class="p-button secondary" type="button" data-member-card-close>关闭</button>
+    </footer>
   </dialog>
-
-  <dialog class="p-modal" data-roster-edit-modal>
-    <form method="dialog" data-roster-edit-form>
-      <h2 data-roster-edit-title>编辑成员档案</h2>
-      <div class="p-message" data-kind="error" data-roster-edit-error hidden></div>
-      <h3 class="p-section-heading">身份资料</h3>
-      <div class="p-field"><label for="roster-edit-real-name">真实姓名</label><input id="roster-edit-real-name" maxlength="40" required /></div>
-      <div class="p-field"><label for="roster-edit-student">学号</label><input id="roster-edit-student" pattern="[A-Za-z0-9]{6,20}" maxlength="20" required /></div>
-      <label class="p-checkbox" style="margin-bottom:18px">
-        <input id="roster-edit-verified" type="checkbox" />
-        <span>已核验实名身份（学号与姓名核对无误）</span>
-      </label>
-      <h3 class="p-section-heading">组织资料</h3>
-      <div class="p-inline-grid">
-        <div class="p-field">
-          <label for="roster-edit-term">所属届别</label>
-          <input id="roster-edit-term" maxlength="32" placeholder="如 2026-2027" />
-        </div>
-        <div class="p-field">
-          <label for="roster-edit-order">名册排序序号</label>
-          <input id="roster-edit-order" type="number" min="0" max="9999" step="1" />
-        </div>
-      </div>
-      <div class="p-field">
-        <label for="roster-edit-department">所属部门</label>
-        <input id="roster-edit-department" list="roster-department-options" maxlength="60" placeholder="如 主席团、运营支持部、易班建设部…" />
-        <datalist id="roster-department-options">
-          <option value="主席团"></option>
-          <option value="运营支持部"></option>
-          <option value="易班建设部"></option>
-          <option value="媒体宣传部"></option>
-          <option value="心理工作部"></option>
-        </datalist>
-      </div>
-      <div class="p-field">
-        <label for="roster-edit-role-title">职务 / 分管头衔</label>
-        <input id="roster-edit-role-title" list="roster-title-options" maxlength="80" placeholder="如 执行主席 · 运营支持部、运营支持部部长、部门成员" />
-        <datalist id="roster-title-options">
-          <option value="执行主席 · 运营支持部"></option>
-          <option value="分管主席 · 易班建设部"></option>
-          <option value="分管主席 · 媒体宣传部"></option>
-          <option value="分管主席 · 心理工作部"></option>
-          <option value="运营支持部部长"></option>
-          <option value="易班建设部部长"></option>
-          <option value="媒体宣传部部长"></option>
-          <option value="心理工作部部长"></option>
-          <option value="运营支持部部员"></option>
-          <option value="易班建设部部员"></option>
-          <option value="媒体宣传部部员"></option>
-          <option value="心理工作部部员"></option>
-          <option value="部门成员"></option>
-        </datalist>
-      </div>
-      <div class="p-actions">
-        <button class="p-button secondary" value="cancel" formnovalidate type="submit">取消</button>
-        <button class="p-button" value="confirm" type="submit">保存档案</button>
-      </div>
-    </form>
-  </dialog>
-
   <dialog class="p-modal" data-platform-confirm>
     <form method="dialog">
       <h2 data-confirm-title>确认操作</h2>

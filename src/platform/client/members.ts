@@ -17,6 +17,7 @@ const back = q<HTMLAnchorElement>('[data-members-back]');
 const view = q<HTMLSelectElement>('#members-view');
 const note = q('[data-members-preview]');
 const audit = q<HTMLButtonElement>('[data-members-audit]');
+const archive = q<HTMLButtonElement>('[data-members-archive]');
 const auditPanel = q('[data-members-audit-panel]');
 const filters = q('[data-members-filters]');
 let pending: AbortController | null = null;
@@ -71,6 +72,7 @@ async function load(append = false) {
     note.textContent = preview ? '预览' + (view.value === 'user' ? '普通用户' : labels[view.value]) + '视图 · 可浏览资料' : '';
     filters.hidden = publicView;
     audit.hidden = preview || who.user.role !== 'owner';
+    archive.hidden = audit.hidden;
     form.hidden = !!id;
     count.hidden = !!id;
     list.hidden = !!id;
@@ -78,7 +80,7 @@ async function load(append = false) {
     profile.hidden = true;
     profile.replaceChildren();
     back.href = listUrl().pathname + listUrl().search;
-    search.placeholder = publicView ? '搜索昵称' : '搜索姓名、学号、昵称、部门或职务';
+    search.placeholder = publicView ? '搜索昵称' : '搜索姓名、学号、QQ、组织或职务';
     search.setAttribute('aria-label', publicView ? '搜索昵称' : '搜索成员');
     search.maxLength = publicView ? 40 : 80;
     if (!append) {
@@ -145,6 +147,7 @@ audit.addEventListener('click', () => {
     auditOpen = !auditOpen;
     auditPanel.hidden = !auditOpen;
     directory.hidden = auditOpen;
+    archive.hidden = auditOpen;
     view.disabled = auditOpen;
     audit.textContent = auditOpen ? '返回成员' : '操作记录';
     if (auditOpen) { pending?.abort(); void showAudit(who); } else void load();

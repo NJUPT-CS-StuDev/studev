@@ -7,9 +7,9 @@ const origin=process.env.STUDEV_WEB_URL || 'http://127.0.0.1:4324';
 const output=process.env.STUDEV_ROSTER_SMOKE_DIR || 'D:/Temp/codex/studev-roster-privacy/browser';
 const firstId='00000000-0000-0000-0000-000000000051',secondId='00000000-0000-0000-0000-000000000052';
 const people=[
- {id:firstId,realName:'保密𠮷',nickname:'',studentId:'PRIVATESTAFF01',qq:'10000851',role:'admin',status:'pending',term:'2026-2027',department:'主席团',title:'执行主席',signature:'一起成长',order:1},
- {id:secondId,realName:'保密姓名',nickname:'清风 <script>unsafe</script>',studentId:'PRIVATESTAFF02',qq:'10000852',role:'admin',status:'active',term:'2026-2027',department:'媒体宣传部',title:'部长',signature:'一起记录',order:2},
- {id:'00000000-0000-0000-0000-000000000053',realName:'普通用户',nickname:'不可发布',studentId:'PRIVATEUSER01',qq:'10000853',role:'user',status:'active',term:'2026-2027',department:'主席团'},
+ {id:firstId,realName:'保密𠮷',nickname:'',studentId:'PRIVATESTAFF01',qq:'10000851',role:'admin',status:'pending',memberships:[{organizationId:'student-development',title:'执行主席',order:1}],signature:'一起成长'},
+ {id:secondId,realName:'保密姓名',nickname:'清风 <script>unsafe</script>',studentId:'PRIVATESTAFF02',qq:'10000852',role:'admin',status:'active',memberships:[{organizationId:'student-development',department:'媒体宣传部',title:'部长',order:2}],signature:'一起记录'},
+ {id:'00000000-0000-0000-0000-000000000053',realName:'普通用户',nickname:'不可发布',studentId:'PRIVATEUSER01',qq:'10000853',role:'user',status:'active',memberships:[{organizationId:'student-development'}]},
 ];
 const snapshot=buildRosterSnapshot(people,'2026-2027','2026-11-17T00:00:00.000Z',origin);
 await mkdir(output,{recursive:true});const receipts=[];

@@ -1,12 +1,37 @@
-import { api, avatarImg, avatarUrl, button, copy, el, empty, errorText, formatTime, labels, message, pill, q, session, type Session, type User } from './api';
+import { api, avatarImg, button, el, empty, errorText, formatTime, labels, message, pill, q, type Session, type User } from './api';
+import { organization, studentCenter } from '../organizations.mjs';
+import { openMemberRecord, valueButton } from './member-record';
 
 // Staff columns and actions for the shared member directory.
 const status = q<HTMLElement>('[data-members-status]');
 let preview = false;
 let current: Session | null = null;
 let members: User[] = [];
-const avatarCacheBust = '';
 const unassigned = '暂未分配';
+const orgFilter = q<HTMLSelectElement>('[data-manage-org-filter]');
+const deptFilter = q<HTMLSelectElement>('[data-manage-dept-filter]');
+
+function refreshFilters() {
+  const byId = new Map([[studentCenter.id, studentCenter.name]]);
+  for (const user of members) for (const group of user.memberships || []) byId.set(group.organizationId, group.organizationName);
+  const then = orgFilter.value;
+  orgFilter.replaceChildren(new Option('全部组织', ''), ...[...byId].map(([id, name]) => new Option(name, id)));
+  orgFilter.value = byId.has(then) ? then : '';
+  const scope = organization(orgFilter.value || studentCenter.id);
+  const department = deptFilter.value;
+  deptFilter.replaceChildren(new Option('全部部门', ''), ...(scope?.departments ?? []).map(name => new Option(name, name)), new Option(unassigned, '__other__'));
+  deptFilter.value = [...deptFilter.options].some(item => item.value === department) ? department : '';
+  deptFilter.hidden = !scope?.departments.length;
+}
+orgFilter.addEventListener('change', () => { deptFilter.value = ''; refreshFilters(); });
+
+const archive = q<HTMLButtonElement>('[data-members-archive]');
+archive.addEventListener('click', () => void guard(async () => {
+  const term = studentCenter.term;
+  if (await confirmAction('归档本届名册', `封存 ${term} 届当前公开名册。归档后这份名单固定保存。`) === null) return;
+  const { snapshot } = await api<{ snapshot: { term: string; totalCount: number } }>('/admin/roster/archive', {});
+  message(status, `已归档 ${snapshot.term} 届名册 · ${snapshot.totalCount} 人。`, 'success');
+}));
 
 async function guard(fn: () => Promise<void>) {
   try {
@@ -41,150 +66,13 @@ async function confirmAction(title: string, description: string, password = fals
 }
 
 
-async function editRosterModal(user: User): Promise<{
-  studentId: string;
-  realName: string;
-  term: string;
-  department: string;
-  title: string;
-  order: number;
-  identityVerified: boolean;
-} | null> {
-  const dialog = q<HTMLDialogElement>('[data-roster-edit-modal]');
-  const form = q<HTMLFormElement>('[data-roster-edit-form]');
-  const errBox = q<HTMLElement>('[data-roster-edit-error]');
-  const verifiedInput = q<HTMLInputElement>('#roster-edit-verified');
-  q('[data-roster-edit-title]').textContent = `编辑档案 · ${user.realName || user.nickname}`;
-  const studentInput = q<HTMLInputElement>('#roster-edit-student');
-  const realNameInput = q<HTMLInputElement>('#roster-edit-real-name');
-  studentInput.value = user.studentId;
-  realNameInput.value = user.realName;
-  const termInput = q<HTMLInputElement>('#roster-edit-term');
-  const orderInput = q<HTMLInputElement>('#roster-edit-order');
-  const deptInput = q<HTMLInputElement>('#roster-edit-department');
-  const titleInput = q<HTMLInputElement>('#roster-edit-role-title');
-  verifiedInput.checked = Boolean(user.identityVerified);
-  termInput.value = user.term || '';
-  orderInput.value = String(user.order ?? 999);
-  deptInput.value = user.department || '';
-  titleInput.value = user.title || '';
-  errBox.hidden = true;
-  errBox.textContent = '';
-
-  const onSubmit = (e: SubmitEvent) => {
-    const submitter = e.submitter as HTMLButtonElement | null;
-    if (submitter?.value !== 'confirm') return;
-    errBox.hidden = true;
-  };
-  form.addEventListener('submit', onSubmit);
-
-  dialog.returnValue = '';
-  dialog.showModal();
-  return new Promise((resolve) => {
-    dialog.addEventListener(
-      'close',
-      () => {
-        form.removeEventListener('submit', onSubmit);
-        if (dialog.returnValue !== 'confirm') {
-          resolve(null);
-          return;
-        }
-        const parsedOrder = Number.parseInt(orderInput.value, 10);
-        resolve({
-          studentId: studentInput.value.trim().toUpperCase(),
-          realName: realNameInput.value.trim(),
-          term: termInput.value.trim(),
-          department: deptInput.value.trim(),
-          title: titleInput.value.trim(),
-          order: Number.isSafeInteger(parsedOrder) && parsedOrder >= 0 && parsedOrder <= 9999 ? parsedOrder : 999,
-          identityVerified: verifiedInput.checked,
-        });
-      },
-      { once: true }
-    );
-  });
-}
-
-function openMemberCardModal(user: User) {
-  const dialog = q<HTMLDialogElement>('[data-member-card-modal]');
-  const body = q('[data-member-card-body]');
-  body.replaceChildren();
-
-  const top = el('div', undefined, 'p-id-top');
-  top.style.marginBottom = '16px';
-  const img = avatarImg(user, { size: 0, width: 68, height: 68, className: 'p-id-avatar', cacheBust: avatarCacheBust });
-  if (user.qq) {
-    img.style.cursor = 'zoom-in';
-    img.title = '点击查看 1080×1080 原图头像';
-    img.addEventListener('click', () => window.open(avatarUrl(user, 0, avatarCacheBust), '_blank', 'noopener'));
-  }
-
-  const titleWrap = el('div', undefined, 'p-id-title-wrap');
-  const head = el('div', undefined, 'p-id-head');
-  head.append(el('h2', user.realName || user.nickname));
-  if (user.department) {
-    head.append(el('span', user.department, 'p-user-dept'));
-  }
-  titleWrap.append(head);
-  if (user.title) {
-    titleWrap.append(el('p', user.title, 'p-id-sub'));
-  }
-  top.append(img, titleWrap);
-  body.append(top);
-
-  const meta = el('dl', undefined, 'p-meta');
-  const rows: [string, string][] = [
-    ['学号', user.studentId || '待补充'],
-    ['所属部门', user.department || unassigned],
-    ['职务分工', user.title || unassigned],
-    ['所属届别', user.term ? `${user.term} 届` : '—'],
-    ['QQ 号', user.qq],
-    ['联系邮箱', user.email || `${user.qq}@qq.com`],
-    ['管理权限', labels[user.role] || user.role],
-  ];
-  for (const [k, v] of rows) {
-    meta.append(el('dt', k), el('dd', v));
-  }
-  body.append(meta);
-  const card = el('details', undefined, 'p-public-card');
-  card.append(el('summary', '公开名片'));
-  const publicFields = el('dl', undefined, 'p-meta');
-  publicFields.append(el('dt', '昵称'), el('dd', user.nickname || '—'), el('dt', '签名'), el('dd', user.signature || '—'));
-  card.append(publicFields);
-  body.append(card);
-
-  const quickActions = el('div', undefined, 'p-actions');
-  quickActions.style.marginTop = '18px';
-  quickActions.append(
-    button('复制 QQ 号', () => copy(user.qq, status)),
-    button('复制邮箱', () => copy(user.email || `${user.qq}@qq.com`, status))
-  );
-  const mailLink = el('a', '发送邮件', 'p-button secondary small');
-  mailLink.href = `mailto:${encodeURIComponent(user.email || `${user.qq}@qq.com`)}`;
-  quickActions.append(mailLink);
-  if (user.term && user.department) {
-    const anchor = `#member-${user.id}`;
-    const archiveLink = el('a', '在历届档案中定位名片 ↗', 'p-button secondary small');
-    archiveLink.href = user.term === '2026-2027' ? `/history/${anchor}` : `/history/${encodeURIComponent(user.term)}/${anchor}`;
-    quickActions.append(archiveLink);
-  }
-  body.append(quickActions);
-
-  dialog.showModal();
-}
-
-
 let directorySignal: AbortSignal | undefined;
 async function refreshMembers(signal = directorySignal) {
   const visit = directorySignal;
   const res = await api<{ items: User[] }>('/admin/users', undefined, { signal });
   if (visit?.aborted) return;
   members = res.items.sort((a, b) => (a.realName || a.nickname).localeCompare(b.realName || b.nickname, 'zh-CN') || a.id.localeCompare(b.id));
-  const filter = q<HTMLSelectElement>('[data-manage-dept-filter]');
-  const previous = filter.value;
-  filter.replaceChildren(new Option('全部部门', ''), ...[...new Set(members.flatMap(user => user.department ? [user.department] : []))]
-    .sort((a, b) => a.localeCompare(b, 'zh-CN')).map(department => new Option(department, department)), new Option('未分配部门', '__other__'));
-  filter.value = [...filter.options].some(option => option.value === previous) ? previous : '';
+  refreshFilters();
   renderManagedMembers();
 }
 
@@ -192,21 +80,26 @@ export function renderManagedMembers() {
   if (!current || directorySignal?.aborted) return;
   const isOwner = !preview && current.user.role === 'owner';
   const term = q<HTMLInputElement>('[data-members-search]').value.trim().normalize('NFKC').toLowerCase();
-  const deptFilter = q<HTMLSelectElement>('[data-manage-dept-filter]').value;
+  const department = deptFilter.value;
+  const scope = orgFilter.value || studentCenter.id;
+  const affiliation = (user: User) => user.memberships?.find(row => row.organizationId === scope);
   const roleFilter = q<HTMLSelectElement>('[data-manage-role-filter]').value;
   const visible = members.filter((user) => {
-    if (deptFilter === '__other__' && user.department) return false;
-    if (deptFilter && deptFilter !== '__other__' && user.department !== deptFilter) return false;
+    const belongs = affiliation(user);
+    if (orgFilter.value && !belongs) return false;
+    if (department === '__other__' && belongs?.department) return false;
+    if (department && department !== '__other__' && belongs?.department !== department) return false;
     // Role and position are independent: this filter is the role alone; the department filter covers position.
     if (roleFilter && user.role !== roleFilter) return false;
-    return [user.studentId, user.realName, user.qq, user.nickname, user.department, user.title].join(' ').normalize('NFKC').toLowerCase().includes(term);
+    const groups = user.memberships?.flatMap(row => [row.organizationName, row.department, row.position]) ?? [];
+    return [user.studentId, user.realName, user.qq, user.nickname, ...groups].join(' ').normalize('NFKC').toLowerCase().includes(term);
   });
 
   q('[data-members-count]').textContent = `${visible.length} / ${members.length} 人`;
   const head = q<HTMLTableSectionElement>('[data-members-list] thead');
   const body = q<HTMLTableSectionElement>('[data-members-list] tbody');
   const headings = el('tr');
-  for (const label of ['成员', '学号', '部门', '职务', '管理权限', '操作']) {
+  for (const label of ['成员', '学号', 'QQ 号', '部门', '职务', '管理权限', '操作']) {
     const heading = el('th', label);
     heading.scope = 'col';
     headings.append(heading);
@@ -218,26 +111,38 @@ export function renderManagedMembers() {
     const ref = user.studentId || user.qq;
     const isSelf = user.id === current?.user.id;
     const row = el('tr');
+    const mayManage = !preview && (isOwner || user.role === 'user');
+    const openRecord = (focusEdit: boolean) => openMemberRecord(user, mayManage, updated => {
+      members = members.map(member => member.id === updated.id ? updated : member);
+      refreshFilters();
+      renderManagedMembers();
+    }, focusEdit);
 
     const nameCell = el('td');
     const userBox = el('div', undefined, 'p-user-cell');
-    const img = avatarImg(user, { size: 140, width: 42, height: 42, className: 'p-user-avatar', lazy: true, cacheBust: avatarCacheBust });
-    img.style.cursor = 'pointer';
-    img.addEventListener('click', () => openMemberCardModal(user));
+    const img = avatarImg({ realName: user.realName, nickname: user.nickname, avatarUrl: `/api/platform/members/${user.id}/avatar` }, { width: 42, height: 42, className: 'p-user-avatar', lazy: true });
+    const avatar = button('', () => openRecord(false), 'record-avatar');
+    avatar.setAttribute('aria-label', `查看${display}的档案`);
+    avatar.append(img);
 
     const infoBox = el('div', undefined, 'p-user-info');
     const nameBtn = el('button', undefined, 'p-user-name-btn');
     nameBtn.type = 'button';
     nameBtn.append(el('strong', display));
-    nameBtn.addEventListener('click', () => openMemberCardModal(user));
+    nameBtn.addEventListener('click', () => openRecord(false));
     infoBox.append(nameBtn);
-    userBox.append(img, infoBox);
+    const groups = user.memberships?.map(group => group.organizationName).join(' · ');
+    if (groups) infoBox.append(el('small', groups, 'p-muted'));
+    userBox.append(avatar, infoBox);
     nameCell.append(userBox);
 
-    const studentCell = el('td', user.studentId || '—', 'p-member-student');
-    const deptCell = el('td', user.department || unassigned, user.department ? undefined : 'p-muted');
-    const titleCell = el('td', user.title || unassigned, user.title ? undefined : 'p-muted');
-    const mayManage = !preview && (isOwner || user.role === 'user');
+    const studentCell = el('td', undefined, 'p-member-student');
+    studentCell.append(valueButton('学号', user.studentId, status));
+    const qqCell = el('td', undefined, 'p-member-student');
+    qqCell.append(valueButton('QQ 号', user.qq, status));
+    const group = affiliation(user);
+    const deptCell = el('td', group?.department || unassigned, group?.department ? undefined : 'p-muted');
+    const titleCell = el('td', group?.position || unassigned, group?.position ? undefined : 'p-muted');
     const roleCell = el('td');
     if (isOwner && !isSelf && user.role !== 'owner') {
       const select = el('select', undefined, 'p-input');
@@ -277,28 +182,7 @@ export function renderManagedMembers() {
     const controls = el('div', undefined, 'p-actions');
     if (!mayManage) controls.append(el('span', '—', 'p-muted'));
 
-    if (mayManage) {
-      controls.append(
-        button('编辑档案', () =>
-          guard(async () => {
-            const nextProfile = await editRosterModal(user);
-            if (!nextProfile) return;
-            await api(`/admin/users/${encodeURIComponent(user.id)}`, {
-              revision: user.revision,
-              ...nextProfile,
-            });
-            try {
-              localStorage.removeItem('studev_roster_2026-2027');
-            } catch {}
-            await refreshMembers();
-            if (isSelf) {
-              current = await session(true);
-            }
-            message(status, '成员档案已保存并实时同步至历届档案。', 'success');
-          })
-        )
-      );
-    }
+    if (mayManage) controls.append(button('编辑档案', () => openRecord(true)));
 
     if (mayManage && !isSelf) {
       const isPending = user.status === 'pending';
@@ -365,7 +249,7 @@ export function renderManagedMembers() {
     }
 
     actionsCell.append(controls);
-    const cells = [nameCell, studentCell, deptCell, titleCell, roleCell, actionsCell];
+    const cells = [nameCell, studentCell, qqCell, deptCell, titleCell, roleCell, actionsCell];
     cells.forEach((cell, index) => { cell.dataset.label = headings.cells[index]!.textContent; });
     row.append(...cells);
     body.append(row);
@@ -389,7 +273,8 @@ const auditLabels: Record<string, string> = {
   'identity.user.updated': '调整成员档案与权限',
   'identity.user.deleted': '删除账号',
   'identity.user.seeded': '预录在编成员',
-  'identity.roster.synced': '同步历届名录',
+  'identity.roster.synced': '更新本届名册',
+  'identity.roster.archived': '归档本届名册',
   'form.create': '新建表单',
   'form.update': '修改表单',
   'form.duplicate': '复制表单',
@@ -415,6 +300,7 @@ function formatAuditDetails(details: unknown): string {
   if (d.role) parts.push(`角色：${labels[String(d.role)] || d.role}`);
   if (d.status) parts.push(`状态：${labels[String(d.status)] || d.status}`);
   if (typeof d.totalCount === 'number') parts.push(`在编 ${d.totalCount} 人`);
+  if (typeof d.count === 'number') parts.push(`${d.count} 人`);
   return parts.length ? parts.join(' · ') : JSON.stringify(details);
 }
 

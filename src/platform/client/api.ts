@@ -1,6 +1,15 @@
 type Role = 'owner' | 'admin' | 'user';
 export interface MemberProfile { id: string; nickname: string; signature: string; avatarUrl: string; }
 export interface MemberPage { items: MemberProfile[]; total: number; offset: number; limit: number; }
+export interface Membership {
+    organizationId: string;
+    organizationName: string;
+    department: string;
+    title: string;
+    responsibleDepartment: string;
+    position: string;
+    order: number;
+}
 export interface User {
     id: string;
     qq: string;
@@ -10,10 +19,7 @@ export interface User {
     realName:string;
     identityVerified:boolean;
     profileComplete:boolean;
-    term?: string;
-    department?: string;
-    title?: string;
-    order?: number;
+    memberships: Membership[];
     signature?: string;
     email: string;
     emailVerified: boolean;
@@ -330,10 +336,10 @@ catch {
 export function formatTime(value?: string) { if (!value)
     return '—'; const date = new Date(value); return Number.isNaN(date.valueOf()) ? '—' : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 export function bytes(value: number) { return value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1048576).toFixed(1).replace(/\.0$/, '')} MB`; }
-export async function copy(text: string, status?: HTMLElement) { try {
+export async function copy(text: string, status?: HTMLElement, label?: string) { try {
     await navigator.clipboard.writeText(text);
     if (status)
-        message(status, '已复制。', 'success');
+        message(status, label ? `已复制${label}。` : '已复制。', 'success');
 }
 catch {
     if (status)

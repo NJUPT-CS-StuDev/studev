@@ -1,4 +1,5 @@
 import { api, avatarImg, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, saveBlob, session, type Session, type User } from './api';
+import { studentCenter } from '../organizations.mjs';
 
 const status = q<HTMLElement>('[data-account-status]');
 let current: Session | null = null;
@@ -55,15 +56,12 @@ function renderIdCard(user: User) {
   top.append(img, titleWrap);
 
   const body = el('div', undefined, 'p-id-body');
-  if (user.department || user.title) {
+  for (const group of user.memberships ?? []) {
     const orgLine = el('div', undefined, 'p-actions');
     orgLine.style.gap = '8px';
-    if (user.department) {
-      orgLine.append(el('span', user.department, 'p-user-dept'));
-    }
-    if (user.title) {
-      orgLine.append(el('span', user.title, 'p-id-org'));
-    }
+    orgLine.append(el('span', group.organizationName, 'p-user-dept'));
+    if (group.department) orgLine.append(el('span', group.department, 'p-id-org'));
+    if (group.position) orgLine.append(el('span', group.position, 'p-id-org'));
     body.append(orgLine);
   }
 
@@ -74,10 +72,10 @@ function renderIdCard(user: User) {
   const linksRow = el('div', undefined, 'p-actions');
   linksRow.style.gap = '14px';
   linksRow.style.marginTop = '8px';
-  if (user.term && user.department) {
-    const archiveLink = el('a', '在历届档案中查看我的名片 ↗', 'p-link');
+  if (user.memberships?.some(row => row.organizationId === studentCenter.id && row.title)) {
+    const archiveLink = el('a', '查看本届名册 ↗', 'p-link');
     const anchor = `#member-${user.id}`;
-    archiveLink.href = user.term === '2026-2027' ? `/history/${anchor}` : `/history/${encodeURIComponent(user.term)}/${anchor}`;
+    archiveLink.href = `/history/${anchor}`;
     linksRow.append(archiveLink);
   }
   if (user.qq) {
@@ -200,7 +198,7 @@ q<HTMLFormElement>('[data-profile-form]').addEventListener('submit', async (e) =
       });
       current!.user = result.user;
       try {
-        localStorage.removeItem(`studev_roster_${result.user.term || '2026-2027'}`);
+        localStorage.removeItem(`studev_roster_${studentCenter.term}`);
       } catch {}
       current = await session(true);
       render();

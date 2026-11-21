@@ -14,12 +14,13 @@ namespace StuDev.Me;
 public sealed class PlatformFailure(int status, string code, string message) : Exception(message) { public int Status => status; public string Code => code; }
 
 public sealed record AccountUser(string Id, string Nickname, string StudentId = "", bool TotpEnabled = false, string RealName = "", string Qq = "", string Role = "user", int Revision = 0,
-    string Department = "", string Title = "", string Signature = "", string Email = "", string Status = "active", bool ProfileComplete = true)
+    string Signature = "", string Email = "", string Status = "active", bool ProfileComplete = true, List<AccountMembership>? Memberships = null)
 {
     [JsonIgnore] public string RoleName => Role switch { "owner" => "所有者", "admin" => "管理员", _ => "用户" };
     /** The first text element, also for names beginning with a surrogate pair. */
     [JsonIgnore] public string Letter => System.Globalization.StringInfo.GetNextTextElement(Nickname.Length > 0 ? Nickname : "我");
 }
+public sealed record AccountMembership(string OrganizationName, string Department = "", string Position = "");
 public sealed record PublicMember(string Id, string Nickname, string Signature, string AvatarUrl);
 public sealed record MemberPage(List<PublicMember> Items, int Total, int Offset, int Limit);
 public sealed record AccountState(AccountUser User, bool EnrollmentRequired = false, bool PasswordChangeRequired = false, bool ProfileRequired = false, bool MfaRequired = false);

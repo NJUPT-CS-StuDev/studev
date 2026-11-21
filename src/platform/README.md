@@ -57,22 +57,24 @@ refreshes with Web Locks and persists a non-secret pending marker before spendin
 the refresh ticket, requiring sign-in after an interrupted rotation. No credentials
 enter browser localStorage. All navigation/session checks use that same client.
 
-Roles are one axis: `owner` > `admin` > `user`. Admins and the owner appear in the
-public term roster, manage forms and may list/look up users through `/admin/users`
-and `/admin/users/<id>`. Ordinary users cannot access any account-management
-endpoint. Admins can resolve ordinary-user identity disputes; only the owner
-manages roles or other administrators. Public term rosters retain departments,
-positions and signatures, while each person exposes only an opaque ID, nickname
-and opaque avatar address. Appointed `pending` staff remain in their official
-term roster and may load that avatar; pending ordinary accounts and disabled
-accounts do not. Signed-in member browsing remains limited to active accounts.
-Snapshots exclude `user` even when their records have department/title/term fields.
-The roster derives from existing private identities, maintained through staff
-account management. It never initializes or seeds accounts. A schema change
-rebuilds the stored snapshot before responding; every response projects only
-public fields. Public roster reads
-are not cached in the browser or CDN, so an old projection is never used after
-a role change. Ordinary students'
+Roles are platform-wide: `owner` > `admin` > `user`. The owner manages roles
+and other administrators. Owners and admins manage forms and may list or look up
+users through `/admin/users` and `/admin/users/<id>`; admins may edit ordinary
+users. Account responses carry `memberships` for the subject of that account
+response. A current membership has one organization ID with independent
+department and title fields, plus an optional assigned department for leadership
+and an order for roster display. A staff edit sends `revision` and only the
+fields being edited. Membership changes submit the account's current array
+under the same revision. Class preferences are synchronized separately.
+
+`GET /public/roster?term=YYYY-YYYY` reads the student center's current roster or
+an archived roster. The current roster is derived from appointments independently
+of platform role. It includes eligible pending appointments and excludes disabled
+accounts. `POST /admin/roster/archive` freezes the current term for the owner.
+Repeating the action returns the same archive. Older terms are read from archives
+without rebuilding them. Both projections expose only published organizational
+details and opaque avatar addresses. Signed-in member browsing remains limited
+to active accounts. Ordinary students'
 identity and contact details, including staff identities, are available only to
 themselves and authorized staff. Other
 students see only the avatar, nickname and signature. An unset nickname uses the
@@ -91,6 +93,12 @@ an authenticated submitter's identity or contact details to their holder.
 
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
 output and function together.
+
+Before the organization model is deployed, run
+`node scripts/server/migrate-organizations.mjs` with the scoped migration token
+in `STUDEV_MIGRATION_TOKEN` for a read-only report. Once the report has no
+unmatched rows, run with `--apply` to save the new account revisions and seal
+previous terms. Run the report again to confirm that no revisions remain.
 
 `POST /sync` takes `{ tasks, settings }` and returns both merged. Tasks are merged
 by id and modification time, including deletion markers. Settings contain only

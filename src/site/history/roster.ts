@@ -20,6 +20,7 @@ interface RosterSnapshot {
   term: string;
   totalCount: number;
   activeCount: number;
+  archivedAt?: string;
   groups: RosterGroup[];
 }
 
@@ -67,7 +68,7 @@ function renderRoster(
   data: RosterSnapshot
 ) {
   if (countNode) {
-    countNode.textContent = `${data.totalCount} 人`;
+    countNode.textContent = `${data.totalCount} 人${data.archivedAt ? ' · 已归档' : ''}`;
   }
   if (tabCountNode) {
     tabCountNode.textContent = String(data.totalCount);

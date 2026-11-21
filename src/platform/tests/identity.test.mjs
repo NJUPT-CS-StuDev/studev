@@ -153,7 +153,7 @@ test('a blank nickname defaults to the final character of the name', async () =>
 
 test('promotion revokes sessions; admin authority works without mandatory TOTP while optional TOTP is enforced when enabled', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
-  const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin', department: '运营支持部', title: '运营支持部部长' }, owner);
+  const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin', memberships: [{ organizationId: 'student-development', department: '运营支持部', title: '部长' }] }, owner);
   assert.equal(promoted.user.role, 'admin');
   await rejects(f.call('/auth/session', 'GET', undefined, member), 'TOKEN_INVALID', 401);
   const directAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
@@ -218,7 +218,7 @@ test('TOTP reset revokes sessions; admin can log in without TOTP while owner can
   const setup = await f.call('/auth/totp/setup', 'POST', { password: MEMBER_PASSWORD }, member);
   await f.call('/auth/totp/confirm', 'POST', { code: f.factor(setup.secret) }, member);
   const refreshed = await f.call('/auth/session', 'GET', undefined, member);
-  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin', department: '运营支持部', title: '运营支持部部长' }, owner);
+  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin', memberships: [{ organizationId: 'student-development', department: '运营支持部', title: '部长' }] }, owner);
   await f.call(`/admin/users/${member.user.id}/reset-totp`, 'POST', {}, owner);
   const resetAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
   assert.equal(resetAdmin.enrollmentRequired, false);
@@ -337,7 +337,7 @@ test('normal login accepts only normalized student ID and independently checks t
 
 test('pre-recorded staff use managed password and status operations to activate, then must change the temporary password', async () => {
   const f = fixture(), owner = await f.owner();
-  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin', department: '运营支持部', title: '运营支持部部员' }, owner);
+  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin', memberships: [{ organizationId: 'student-development', department: '运营支持部', title: '部员' }] }, owner);
   assert.equal(seeded.user.status, 'pending');
   await rejects(f.call('/auth/register', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', nickname: '有人', password: MEMBER_PASSWORD }), 'ACCOUNT_PENDING_REVIEW', 409);
   await f.call(`/admin/users/${seeded.user.id}/reset-password`, 'POST', { password: MEMBER_PASSWORD }, owner);
@@ -433,19 +433,27 @@ test('admin role is independent of position, and owner can update full identity 
     realName: '已更名成员',
     identityVerified: true,
     role: 'admin',
-    term: '2026-2027',
-    department: '媒体宣传部',
-    title: '媒体宣传部部员',
+    memberships: [
+      { organizationId: 'student-development', department: '媒体宣传部', title: '部员' },
+      { organizationId: 'class:B240402' },
+    ],
   }, owner);
   assert.equal(updated.user.studentId, 'NEWID0888');
   assert.equal(updated.user.realName, '已更名成员');
   assert.equal(updated.user.identityVerified, true);
   assert.equal(updated.user.role, 'admin');
+  assert.deepEqual(updated.user.memberships.map(row => row.organizationId), ['student-development', 'class:B240402']);
   const relogin = await f.call('/auth/login', 'POST', { studentId: 'NEWID0888', password: MEMBER_PASSWORD });
   assert.equal(relogin.status, 200);
   assert.equal(relogin.passwordChangeRequired, false);
-  const unplaced = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, department: '', title: '' }, owner);
+  const { snapshot } = await f.call('/admin/roster/archive', 'POST', {}, owner);
+  assert.ok(snapshot.archivedAt);
+  const unplaced = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, memberships: [] }, owner);
   assert.equal(unplaced.user.role, 'admin');
+  assert.deepEqual(unplaced.user.memberships, []);
+  const { status, cookie, headers, ...archived } = await f.call('/public/roster');
+  assert.equal(status, 200);
+  assert.deepEqual(archived, snapshot);
   const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: unplaced.user.revision, role: 'user' }, owner);
   assert.equal(demoted.user.role, 'user');
 });

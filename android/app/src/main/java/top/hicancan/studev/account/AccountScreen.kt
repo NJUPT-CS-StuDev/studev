@@ -225,9 +225,9 @@ import top.hicancan.studev.world.CampusDay
                             "学号" to me.studentId.ifBlank { "待补充" }, "姓名" to me.realName.ifBlank { "待补充" }, "昵称" to me.nickname,
                             "QQ 号" to me.qq, "联系邮箱" to me.email.ifBlank { "${me.qq}@qq.com" },
                         ).forEach { (key, value) -> KeyRow(key, value) }
-                        if (me.role != "user") {
-                            if (me.department.isNotBlank()) KeyRow("部门", me.department)
-                            if (me.title.isNotBlank()) KeyRow("职责", me.title)
+                        for (membership in me.memberships) {
+                            val assignment = listOf(membership.department, membership.position).filter(String::isNotBlank)
+                            KeyRow("组织归属", (listOf(membership.organizationName) + assignment).joinToString(" · "))
                         }
                         HorizontalDivider()
                         OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称（选填）") }, placeholder = { Text("留空使用默认昵称") }, singleLine = true, enabled = !busy && !verifying && state != null)

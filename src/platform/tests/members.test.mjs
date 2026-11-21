@@ -82,13 +82,14 @@ test('appointed pending staff use the same opaque avatar without publishing pend
   const identity = createIdentity({ repo:f.repo, env:f.env, fetcher:async () => new Response(new Uint8Array([1]), {headers:{'Content-Type':'image/png'}}) });
   const path = `/api/platform/members/${source.id}/avatar`;
   const image = () => identity.handle({request:new Request(f.env.PLATFORM_ORIGIN+path)}, path);
-  let current = await f.repo.append(`identity/users/${source.id}`, {...source, status:'pending', term:'2026-2027', role:'user'}, source.revision);
+  let current = await f.repo.append(`identity/users/${source.id}`, {...source, status:'pending', memberships:[], role:'user'}, source.revision);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
-  current = await f.repo.append(`identity/users/${source.id}`, {...current, role:'admin', department:'运营支持部', title:'运营支持部部长'}, current.revision);
+  const memberships = [{ organizationId: 'student-development', department: '运营支持部', title: '部长' }];
+  current = await f.repo.append(`identity/users/${source.id}`, {...current, role:'admin', memberships}, current.revision);
   assert.equal((await image()).status, 200);
-  current = await f.repo.append(`identity/users/${source.id}`, {...current, term:'1900-1901'}, current.revision);
+  current = await f.repo.append(`identity/users/${source.id}`, {...current, memberships:[]}, current.revision);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
-  current = await f.repo.append(`identity/users/${source.id}`, {...current, term:'2026-2027', status:'disabled'}, current.revision);
+  current = await f.repo.append(`identity/users/${source.id}`, {...current, memberships, status:'disabled'}, current.revision);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
 });
 

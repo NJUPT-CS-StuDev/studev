@@ -5,7 +5,9 @@ import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
-import { ROSTER_SCHEMA, SUPPORTED_ROSTER_TERMS, buildRosterSnapshot, isRosterMember, publicRoster, normalizeDepartmentName, normalizeRoleTitle, qqAvatarUrl, profileNickname } from './roster.mjs';
+import { ROSTER_SCHEMA, archiveKey, buildRosterSnapshot, centerMembership, isRosterMember, publicRoster, qqAvatarUrl, profileNickname, rosterTerm } from './roster.mjs';
+import { membershipView, validateMemberships } from './organizations.mjs';
+import { studentCenter } from '../organizations.mjs';
 import { avatarBody, createMembers } from './members.mjs';
 
 const API = '/api/platform';
@@ -78,10 +80,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       realName: user.realName || '',
       identityVerified: user.identityVerified === true,
       profileComplete: profileComplete(user),
-      term: user.term || '',
-      department: normalizeDepartmentName(user.department || ''),
-      title: normalizeRoleTitle(user.title || ''),
-      order: Number.isSafeInteger(user.order) ? user.order : 999,
+      memberships: membershipView(user.memberships),
       signature: user.signature || '',
       role: user.role,
       status: user.status,
@@ -108,7 +107,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       }
       const user = { id: index.id, qq, nickname: text(env.PLATFORM_OWNER_NICKNAME || 'StuDev Owner', '昵称', 40, true), email: `${qq}@qq.com`, emailVerified: false,
         studentId: normalizeStudentId(env.PLATFORM_OWNER_STUDENT_ID), realName: normalizeRealName(env.PLATFORM_OWNER_REAL_NAME), identityVerified: true,
-        term: '', department: '', title: '', order: 999, signature: '',
+        memberships: [], signature: '',
         role: 'owner', status: 'active', passwordHash: env.PLATFORM_OWNER_PASSWORD_HASH, mustChangePassword: true,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now) };
       try { await claimStudent(user.studentId, user.id); await createUser(user); await repo.audit('system', 'identity.owner.initialized', index.id); }
@@ -265,7 +264,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     await repo.remove(`identity/qq/${user.qq}.json`);
     if (user.studentId) await repo.remove(studentKey(user.studentId));
     for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
-    if (user.term) await rebuildRoster(user.term);
+    if (centerMembership(user)) await rebuildRoster();
   }
   // After a password changes, the account's mailbox hears of it, so a change nobody asked for is noticed at once.
   async function tellPasswordChanged(user) {
@@ -291,8 +290,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     for (let offset = 0; offset < uniqueIds.length; offset += 32) users.push(...await Promise.all(uniqueIds.slice(offset, offset + 32).map(id => repo.latest(userKey(id)))));
     return users.filter(Boolean);
   }
-  async function rebuildRoster(term = '2026-2027') {
-    if (!term || !/^[0-9]{4}-[0-9]{4}$/.test(term)) return null;
+  async function rebuildRoster() {
+    const term = studentCenter.term;
     const users = await loadAllUsers();
     const snapshot = buildRosterSnapshot(users, term, iso(now), origin);
     await repo.put(`roster/${term}.json`, snapshot);
@@ -353,12 +352,14 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: true, emailDeliveryEnabled: mailer.enabled });
     if (method === 'GET' && route === '/public/roster') {
       const url = new URL(request.url);
-      const term = (url.searchParams.get('term') || '2026-2027').trim();
-      if (!/^[0-9]{4}-[0-9]{4}$/.test(term)) fail(400, 'INVALID_TERM', '届别格式无效。');
-      if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
+      const term = (url.searchParams.get('term') || studentCenter.term).trim();
+      if (!rosterTerm.test(term)) fail(400, 'INVALID_TERM', '届别格式无效。');
+      const archive = await repo.get(archiveKey(term));
+      if (archive) return response(publicRoster(archive, origin));
+      if (term !== studentCenter.term) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
       let snapshot = await repo.get(`roster/${term}.json`);
       if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) {
-        snapshot = await rebuildRoster(term);
+        snapshot = await rebuildRoster();
       }
       return response(publicRoster(snapshot, origin));
     }
@@ -370,11 +371,26 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     if (method === 'POST' && route === '/admin/roster/sync') {
       const auth = await authenticate(request, { owner: true, csrf: true });
       const body = await readJson(request, 8192);
-      const term = typeof body.term === 'string' && /^[0-9]{4}-[0-9]{4}$/.test(body.term) ? body.term : '2026-2027';
-      if (!SUPPORTED_ROSTER_TERMS.has(term)) fail(400, 'INVALID_TERM', '不支持该届别名册同步。');
-      const snapshot = await rebuildRoster(term);
-      await repo.audit(auth.user.id, 'identity.roster.synced', term, { totalCount: snapshot.totalCount, activeCount: snapshot.activeCount });
+      if (body.term !== undefined && body.term !== studentCenter.term) fail(400, 'INVALID_TERM', '请选择本届名册。');
+      const snapshot = await rebuildRoster();
+      await repo.audit(auth.user.id, 'identity.roster.synced', studentCenter.term, { count: snapshot.totalCount });
       return response({ snapshot });
+    }
+    if (method === 'POST' && route === '/admin/roster/archive') {
+      const auth = await authenticate(request, { owner: true, csrf: true });
+      const key = archiveKey(studentCenter.term);
+      let snapshot = await repo.get(key);
+      if (!snapshot) {
+        const live = await rebuildRoster();
+        snapshot = { ...live, archivedAt: iso(now) };
+        try { await repo.putNew(key, snapshot); }
+        catch (error) {
+          if (!isConflict(error)) throw error;
+          snapshot = await repo.get(key);
+        }
+        await repo.audit(auth.user.id, 'identity.roster.archived', studentCenter.term, { count: snapshot.totalCount });
+      }
+      return response({ snapshot: publicRoster(snapshot, origin) });
     }
     if (method === 'POST' && route === '/auth/register') {
       if (!bearerBootstrap(request, path)) requireOrigin(request, env);
@@ -406,7 +422,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       await claimStudent(studentId, id);
       const user = await createUser({ id, qq, nickname, email: `${qq}@qq.com`, emailVerified: false, role: 'user', status: 'active',
         studentId, realName, identityVerified: false,
-        term: '', department: '', title: '', order: 999, signature: '',
+        memberships: [], signature: '',
         passwordHash, securityVersion: secretToken(), mustChangePassword: false, totp: null, createdAt: iso(now), updatedAt: iso(now) });
       await repo.audit(id, 'identity.registered', id);
       return response({ user: publicUser(user) }, 201);
@@ -453,7 +469,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const signature = body.signature === undefined ? (current.signature || '') : text(body.signature, '个性签名', 120, false);
       await bindStudent(current, studentId, realName);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });
-      if (user.term) await rebuildRoster(user.term);
+      if (isRosterMember(user)) await rebuildRoster();
       await repo.audit(user.id, changedIdentity ? 'identity.profile.bound' : 'identity.profile.updated', user.id, { profileComplete: profileComplete(user), identityVerified: user.identityVerified === true });
       return response({ user: publicUser(user) });
     }
@@ -573,11 +589,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const qq = qqValue(body.qq);
       const role = body.role === undefined ? 'admin' : body.role;
       if (!['admin', 'user'].includes(role)) fail(400, 'INVALID_ROLE', '预录成员角色须为成员或管理员。');
-      const term = body.term === undefined ? '2026-2027' : text(body.term, '届别', 32, false);
-      const department = body.department === undefined ? '' : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
-      const title = body.title === undefined ? '' : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
+      const memberships = validateMemberships(body.memberships ?? []);
       const signature = body.signature === undefined ? '' : text(body.signature, '个性签名', 120, false);
-      const order = body.order === undefined ? 999 : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
       if (await repo.get(studentKey(studentId))) fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '该学号已存在记录。');
       if (await repo.get(`identity/qq/${qq}.json`)) fail(409, 'QQ_ALREADY_REGISTERED', '该 QQ 号已存在记录。');
       const id = randomUUID();
@@ -586,12 +599,12 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const user = await createUser({
         id, qq, nickname: '', email: `${qq}@qq.com`, emailVerified: false,
         studentId, realName, identityVerified: true,
-        term, department, title, order, signature,
+        memberships, signature,
         role, status: 'pending', passwordHash: '', mustChangePassword: false,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
       });
-      if (term) await rebuildRoster(term);
-      await repo.audit(auth.user.id, 'identity.user.seeded', id, { studentId, qq, department, term });
+      if (isRosterMember(user)) await rebuildRoster();
+      await repo.audit(auth.user.id, 'identity.user.seeded', id);
       return response({ user: publicUser(user) }, 201);
     }
     if (method === 'GET' && route === '/admin/audit') {
@@ -638,25 +651,19 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (body.identityVerified !== undefined && typeof body.identityVerified !== 'boolean') fail(400, 'INVALID_FIELD', '身份核验状态无效。');
       let identityVerified = body.identityVerified !== undefined ? body.identityVerified : (identityChanged ? false : (user.identityVerified === true));
       if (identityVerified && !profileComplete({ ...user, studentId, realName })) fail(409, 'PROFILE_REQUIRED', '账号需先补齐学号与真实姓名，再核验身份。');
-      const term = body.term === undefined ? (user.term || '') : text(body.term, '届别', 32, false);
-      const department = body.department === undefined ? normalizeDepartmentName(user.department || '') : normalizeDepartmentName(text(body.department, '所属部门', 60, false));
-      const title = body.title === undefined ? normalizeRoleTitle(user.title || '') : normalizeRoleTitle(text(body.title, '职务头衔', 80, false));
+      const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships);
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
-      const order = body.order === undefined ? (user.order ?? 999) : (Number.isSafeInteger(body.order) && body.order >= 0 && body.order <= 9999 ? body.order : fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。'));
       const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
       if (studentId && studentId !== user.studentId) {
         await bindStudent(user, studentId, realName);
       }
-      const updated = await saveUser(user, { role, status, nickname, studentId, realName, identityVerified, term, department, title, signature, order, ...(changedSecurity ? { securityVersion: secretToken() } : {}) });
+      const updated = await saveUser(user, { role, status, nickname, studentId, realName, identityVerified, memberships, signature, ...(changedSecurity ? { securityVersion: secretToken() } : {}) });
       if (user.studentId && studentId !== user.studentId) {
         const previous = await repo.get(studentKey(user.studentId));
         if (previous?.id === user.id) await repo.remove(studentKey(user.studentId));
       }
-      if (user.term || updated.term) {
-        if (user.term && user.term !== updated.term) await rebuildRoster(user.term);
-        if (updated.term) await rebuildRoster(updated.term);
-      }
-      await repo.audit(auth.user.id, 'identity.user.updated', user.id, { role, status, previousRole: user.role, previousStatus: user.status, department, term });
+      if (isRosterMember(user) || isRosterMember(updated)) await rebuildRoster();
+      await repo.audit(auth.user.id, 'identity.user.updated', user.id, { role, status, previousRole: user.role, previousStatus: user.status });
       if (identityChanged || identityVerified !== (user.identityVerified === true)) await repo.audit(auth.user.id, identityChanged ? 'identity.profile.corrected' : 'identity.verification.updated', user.id, { identityVerified, profileComplete: profileComplete(updated) });
       return response({ user: publicUser(updated) });
     }
