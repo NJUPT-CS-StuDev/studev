@@ -2,11 +2,14 @@
 // highlights and one way to page — here, on the web and in the app. SearchApp.tsx and RoomsBrowse.tsx, natively.
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using StuDev.Data;
 using StuDev.Ui;
 using StuDev.World;
@@ -19,6 +22,9 @@ public sealed partial class SearchScreen : Screen
     private const int PageSize = 10;
     private static readonly List<Channel> Channels = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "channels.json")), StorageJson.Default.ListChannel)!;
     private static readonly HashSet<string> Entities = ["courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "sections"];
+    private static readonly HashSet<string> FillerSections = ["Direct detail links", "显示更多", "更多", "查看更多", "More"];
+    private static readonly Regex FileSuffix = new(@"\.[a-z0-9]{1,5}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex FileTypePattern = new(@"\.([a-z0-9]{2,5})(?:$|[?#])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly (string Value, string Label)[] Since = [("", "全部时间"), ("3", "近三天"), ("7", "近一周"), ("30", "近一月"), ("365", "近一年")];
     private static readonly string[] Campuses = ["仙林", "三牌楼", "锁金"];
     private readonly Campus campus = Campus.Shared;
@@ -244,9 +250,9 @@ public sealed partial class SearchScreen : Screen
     private FrameworkElement Result(JsonObject r)
     {
         var title = (string)r["title"]!; var source = (string)r["source"]!; var snippet = r["snippet"]?.GetValue<string>();
-        string Says(string t) => System.Text.RegularExpressions.Regex.Replace(t, @"\.[a-z0-9]{1,5}$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
         var attachments = r["attachments"]?.AsArray() ?? [];
-        var adds = snippet is not null && Says(snippet) != Says(title) && !attachments.Any(f => Says((string)f!["name"]!) == Says(snippet));
+        var adds = !string.IsNullOrWhiteSpace(snippet) && FileName(snippet) != FileName(title)
+            && !attachments.Any(f => FileName((string)f!["name"]!) == FileName(snippet));
         var url = (string?)r["url"] ?? "";
         if (Entities.Contains(source))
         {
@@ -274,31 +280,120 @@ public sealed partial class SearchScreen : Screen
             };
             return tap;
         }
-        var date = r["publishedAt"]?.GetValue<string>() ?? r["updatedAt"]?.GetValue<string>();
-        var sec = r["section"]?.GetValue<string>();
-        var crumbs = string.Join(" › ", new[] { (string?)r["sourceName"], sec == "Direct detail links" ? null : sec }.Where(s => !string.IsNullOrEmpty(s)));
-        var doc = new StackPanel { Padding = new Thickness(0, 16, 0, 16), Spacing = 3 };
-        doc.Children.Add(Kit.Text($"{crumbs}{(date is not null ? $" · {date[..10]}" : "")}{((string?)r["kind"] == "file" ? " · 文件" : (string?)r["kind"] == "link" ? " · 站外" : "")}", Role.Caption, "muted"));
-        var link = Marked(title, r["titleHighlights"]?.AsArray(), 17, "brand", "brand", wrap: true); link.LineHeight = 24;
-        var open = new Tap { Content = link, HorizontalAlignment = HorizontalAlignment.Left };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(open, title);
-        open.Click += (_, _) => Browse(url);
-        doc.Children.Add(open);
-        if (adds) { var p = Marked(snippet!, r["snippetHighlights"]?.AsArray(), 14, "muted", "ink", wrap: true); p.MaxLines = 3; p.LineHeight = 23; doc.Children.Add(p); }
-        else if (r["snippet"] is null) doc.Children.Add(new Border { Height = 40, CornerRadius = new CornerRadius(4), Background = Paint.Brush("surfaceSunken") });
+        var internalLink = url.StartsWith('/');
+        var sourceName = internalLink ? "StuDev" : (string?)r["sourceName"] ?? "";
+        var sectionName = (string?)r["section"];
+        var host = !internalLink && Uri.TryCreate(url, UriKind.Absolute, out var address) ? address.Authority : "";
+        var crumbs = string.Join(" › ", new[] { host, FillerSections.Contains(sectionName ?? "") ? "" : sectionName }
+            .Where(value => !string.IsNullOrWhiteSpace(value)));
+        var doc = new StackPanel { Padding = new Thickness(0, 16, 0, 20) };
+        var provenance = Kit.Column(0, Kit.Text(sourceName, Role.Label));
+        if (crumbs.Length > 0) provenance.Children.Add(Kit.Text(crumbs, Role.Caption, "muted"));
+        var site = Linked(Aside(SourceMark(sourceName, internalLink), provenance, 9), url, sourceName);
+        site.Margin = new Thickness(0, 0, 0, 6);
+        doc.Children.Add(site);
+
+        var headline = Kit.Text(title, Role.Heading, "searchLink", wrap: true);
+        headline.FontSize = 19; headline.LineHeight = 25;
+        var type = (string?)r["kind"] == "file" ? FileType(url) : null;
+        var titleLink = Linked(type is null ? headline : Aside(TypeBadge(type, true), headline, 7), url, title);
+        titleLink.Margin = new Thickness(0, 0, 0, 3);
+        doc.Children.Add(titleLink);
+
+        var date = (string?)r["publishedAt"] ?? (string?)r["updatedAt"];
+        var when = date is { Length: >= 10 } && DateOnly.TryParseExact(date.AsSpan(0, 10), "yyyy-MM-dd",
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? $"{day.Year}年{day.Month}月{day.Day}日" : null;
+        if (when is not null || adds)
+        {
+            var excerpt = Marked(adds ? snippet! : "", adds ? r["snippetHighlights"]?.AsArray() : null, 14, "muted", "searchHit", wrap: true);
+            if (when is not null) excerpt.Inlines.Insert(0, new Run { Text = adds ? when + " — " : when, Foreground = Paint.Brush("faint") });
+            excerpt.MaxLines = 2; excerpt.LineHeight = 22;
+            doc.Children.Add(excerpt);
+        }
         if (attachments.Count > 0)
         {
-            var files = new WrapRow { Gap = 10, Margin = new Thickness(0, 4, 0, 0) };
+            var files = new WrapRow { Gap = 6, Margin = new Thickness(0, 9, 0, 0) };
             foreach (var f in attachments.Take(4))
             {
-                var file = new Tap { Content = Kit.Text((string)f!["name"]!, Role.Caption, "brand") };
-                var fileUrl = (string)f["url"]!; file.Click += (_, _) => Browse(fileUrl);
+                var name = FileName((string)f!["name"]!);
+                var fileUrl = (string)f["url"]!;
+                var extension = (string?)f["extension"];
+                var label = string.IsNullOrWhiteSpace(extension) ? FileType(fileUrl) ?? "文件" : extension.ToUpperInvariant();
+                var file = Linked(Aside(TypeBadge(label), Kit.Text(name, Role.Caption), 6), fileUrl, $"{label} {name}");
+                file.BorderBrush = Paint.Brush("line"); file.BorderThickness = new Thickness(1);
+                file.CornerRadius = Kit.Capsule(30); file.MinHeight = 30;
+                file.Padding = new Thickness(6, 3, 10, 3);
+                file.Ground(Paint.Clear, Paint.Brush("surface"));
                 files.Children.Add(file);
             }
             if (attachments.Count > 4) files.Children.Add(Kit.Text($"等 {attachments.Count} 个附件", Role.Caption, "muted"));
             doc.Children.Add(files);
         }
         return doc;
+    }
+
+    private static string FileName(string value) => FileSuffix.Replace(value.Trim(), "");
+    private static string? FileType(string url) => FileTypePattern.Match(url) is { Success: true } match
+        ? match.Groups[1].Value.ToUpperInvariant() : null;
+
+    private static Tap Linked(FrameworkElement content, string url, string label)
+    {
+        var link = new Tap { Content = content, HorizontalAlignment = HorizontalAlignment.Left };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(link, label);
+        link.Click += (_, _) => Browse(url);
+        return link;
+    }
+
+    private static Grid Aside(FrameworkElement mark, FrameworkElement text, double gap)
+    {
+        var line = new Grid { ColumnSpacing = gap };
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition());
+        Grid.SetColumn(text, 1);
+        line.Children.Add(mark); line.Children.Add(text);
+        return line;
+    }
+
+    private static Border SourceMark(string name, bool internalLink)
+    {
+        var shortName = name[(name.LastIndexOf('/') + 1)..].Trim();
+        var hue = 0;
+        foreach (var point in shortName.EnumerateRunes()) hue = (hue * 31 + point.Value) % 360;
+        var text = Kit.Text(StringInfo.GetNextTextElement(shortName.Length == 0 ? "·" : shortName), Role.Caption, bold: true);
+        text.Foreground = Paint.Mix($"search-source-{hue}-ink", dark => SourceColor(hue, dark ? .70 : .55, dark ? .80 : .34));
+        text.HorizontalAlignment = HorizontalAlignment.Center; text.VerticalAlignment = VerticalAlignment.Center;
+        return new Border
+        {
+            Width = 28, Height = 28, CornerRadius = Kit.Capsule(28), VerticalAlignment = VerticalAlignment.Center,
+            Background = internalLink ? Paint.Brush("paper") : Paint.Mix($"search-source-{hue}-fill", dark => SourceColor(hue, dark ? .30 : .60, dark ? .20 : .94)),
+            BorderBrush = internalLink ? Paint.Brush("line") : Paint.Mix($"search-source-{hue}-line", dark => SourceColor(hue, dark ? .25 : .40, dark ? .30 : .86)),
+            BorderThickness = new Thickness(1),
+            Child = internalLink ? new Image { Width = 18, Height = 18, Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "logo.png"))) } : text
+        };
+    }
+
+    private static Windows.UI.Color SourceColor(int hue, double saturation, double lightness)
+    {
+        var chroma = saturation * Math.Min(lightness, 1 - lightness);
+        byte Channel(double offset)
+        {
+            var k = (offset + hue / 30.0) % 12;
+            return (byte)Math.Round(255 * (lightness - chroma * Math.Max(-1, Math.Min(Math.Min(k - 3, 9 - k), 1))));
+        }
+        return Windows.UI.Color.FromArgb(255, Channel(0), Channel(8), Channel(4));
+    }
+
+    private static Border TypeBadge(string type, bool standalone = false)
+    {
+        var text = Kit.Text(type, Role.Caption, "muted", bold: true); text.FontSize = 11;
+        return new Border
+        {
+            Child = text, CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 1, 4, 1),
+            VerticalAlignment = standalone ? VerticalAlignment.Top : VerticalAlignment.Center,
+            Margin = standalone ? new Thickness(0, 3, 0, 0) : new Thickness(0),
+            BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(standalone ? 1 : 0),
+            Background = standalone ? Paint.Clear : Paint.Brush("surfaceSunken"),
+        };
     }
 
     private static void Browse(string url) => App.OpenLink(url);

@@ -441,7 +441,7 @@
   .hit.entity mark{font-weight:inherit;color:var(--brand)}
   .hit.entity .b mark{color:var(--ink);font-weight:400}
   .hit.entity svg{width:14px;height:14px;flex:none;color:var(--faint)}
-  .hits{--link:#1a4fd6;--visited:#6a2fb8;--hit:#b3261e}
+  .hits{--link:var(--search-link);--visited:#6a2fb8;--hit:var(--search-hit)}
   .hit.doc{padding:14px 0 18px;max-width:652px}
   .hit.doc .site,.files a{text-decoration:none}
   .hit.doc .site:hover .site-name{text-decoration:underline;text-underline-offset:2px}
@@ -957,5 +957,5 @@
 .ai .ai-chat.drop,.ai .ai-history.drop{background:color-mix(in srgb,var(--brand) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 45%,transparent)}
 .ai .ai-history.drop{border-radius:10px}
 .ai .ai-chat[draggable=true]{cursor:default}
-:root[data-theme='dark'] .sd .hits{--link:#99c3ff;--visited:#c58af9;--hit:#f28b82}
+:root[data-theme='dark'] .sd .hits{--visited:#c58af9}
 :root[data-theme='dark'] .sd .site-mark:not(.studev){background:hsl(var(--hue,210) 30% 20%);color:hsl(var(--hue,210) 70% 80%);border-color:hsl(var(--hue,210) 25% 30%)}

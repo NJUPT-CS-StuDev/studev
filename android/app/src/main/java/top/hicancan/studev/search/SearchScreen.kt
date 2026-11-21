@@ -2,24 +2,32 @@ package top.hicancan.studev.search
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -31,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import top.hicancan.studev.account.PLATFORM_ORIGIN
+import top.hicancan.studev.R
 import top.hicancan.studev.app.*
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
@@ -46,6 +55,16 @@ private const val PAGE = 10
 private val SINCE = listOf("" to "全部时间", "3" to "近三天", "7" to "近一周", "30" to "近一月", "365" to "近一年")
 private val ENTITIES = setOf("courses", "teachers", "classes", "teaching-classes", "exams", "rooms", "places", "topics", "sections")
 private val LABELS = mapOf("courses" to "课程", "teachers" to "老师", "classes" to "班级", "teaching-classes" to "教学班", "exams" to "考试安排", "rooms" to "教室", "places" to "地点", "topics" to "知识点", "sections" to "资料章节")
+private val FILLER_SECTIONS = setOf("Direct detail links", "显示更多", "更多", "查看更多", "More")
+private val FILE_SUFFIX = Regex("""\.[a-z0-9]{1,5}$""", RegexOption.IGNORE_CASE)
+private val FILE_TYPE = Regex("""\.([a-z0-9]{2,5})(?:$|[?#])""", RegexOption.IGNORE_CASE)
+private val RESULT_DATE = Regex("""(\d{4})-(\d{2})-(\d{2})""")
+
+private fun fileType(url: String) = FILE_TYPE.find(url)?.groupValues?.get(1)?.uppercase()
+private fun fileName(name: String) = name.trim().replace(FILE_SUFFIX, "")
+
+private data class Attachment(val name: String, val url: String, val type: String)
+
 private data class Hit(val raw: JsonObject) {
     fun text(key: String) = raw[key]?.jsonPrimitive?.contentOrNull
     val id get() = text("id").orEmpty()
@@ -53,9 +72,15 @@ private data class Hit(val raw: JsonObject) {
     val title get() = text("title").orEmpty()
     val url get() = text("url").orEmpty()
     val snippet get() = text("snippet")
-    val date get() = (text("publishedAt") ?: text("updatedAt"))?.take(10)
+    val date get() = RESULT_DATE.matchEntire((text("publishedAt") ?: text("updatedAt")).orEmpty().take(10))
+        ?.destructured?.let { (year, month, day) -> "${year}年${month.toInt()}月${day.toInt()}日" }
     fun ranges(key: String) = raw[key]?.jsonArray?.map { it.jsonArray[0].jsonPrimitive.int to it.jsonArray[1].jsonPrimitive.int }.orEmpty()
-    val files get() = raw["attachments"]?.jsonArray?.map { it.jsonObject["name"]!!.jsonPrimitive.content to it.jsonObject["url"]!!.jsonPrimitive.content }.orEmpty()
+    val files get() = raw["attachments"]?.jsonArray?.map {
+        val file = it.jsonObject
+        val url = file.getValue("url").jsonPrimitive.content
+        Attachment(file.getValue("name").jsonPrimitive.content, url,
+            file["extension"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)?.uppercase() ?: fileType(url) ?: "文件")
+    }.orEmpty()
 }
 private data class Answer(val key: String, val hits: List<Hit>, val total: Int, val seconds: Double)
 private data class Facets(val sources: Map<String, String>, val categories: Set<String>)
@@ -229,19 +254,76 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable private fun DocumentRow(hit: Hit, open: (String) -> Unit) {
-    val brand = Ink.brand
-    val tint = SpanStyle(color = Ink.text, background = brand.copy(alpha = .1f))
-    fun says(value: String) = value.replace(Regex("\\.[A-Za-z0-9]{1,5}$"), "").trim()
-    val snippet = hit.snippet?.takeIf { value -> says(value) != says(hit.title) && hit.files.none { says(it.first) == says(value) } }
-    val section = hit.text("section")?.takeIf { it != "Direct detail links" }
-    Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
-        Plain(listOfNotNull(hit.text("sourceName"), section).joinToString(" › ") + (hit.date?.let { " · $it" } ?: ""), 12.5.sp, Ink.muted, maxLines = 1)
-        Text(marked(hit.title, hit.ranges("titleHighlights"), SpanStyle(fontWeight = FontWeight.Bold)), Modifier.padding(vertical = 3.dp).clickable { open(hit.url) }, style = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, color = brand))
-        snippet?.let { Text(marked(it, hit.ranges("snippetHighlights"), tint), style = TextStyle(fontSize = 14.sp, lineHeight = 23.sp, color = Ink.muted), maxLines = 3) }
-        if (hit.files.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            hit.files.take(4).forEach { (name, url) -> Plain(name, 12.5.sp, Ink.muted, modifier = Modifier.clickable { open(url) }, maxLines = 1) }
+    val dark = isSystemInDarkTheme()
+    val titleColor = if (dark) Tokens.Color.Dark.searchLink else Tokens.Color.Light.searchLink
+    val hitColor = if (dark) Tokens.Color.Dark.searchHit else Tokens.Color.Light.searchHit
+    val files = hit.files
+    val snippet = hit.snippet?.takeIf { value ->
+        value.isNotBlank() && fileName(value) != fileName(hit.title) && files.none { fileName(it.name) == fileName(value) }
+    }
+    val internal = hit.url.startsWith('/')
+    val source = if (internal) "StuDev" else hit.text("sourceName").orEmpty()
+    val section = hit.text("section")?.takeUnless { it.isBlank() || it in FILLER_SECTIONS }
+    val breadcrumb = listOfNotNull(Uri.parse(hit.url).host, section).joinToString(" › ")
+    val type = fileType(hit.url).takeIf { hit.text("kind") == "file" }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 20.dp)) {
+        Row(
+            Modifier.clip(RoundedCornerShape(4.dp)).clickable { open(hit.url) },
+            horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val shortName = source.substringAfterLast('/').trim()
+            val hue = shortName.codePoints().toArray().fold(0) { hue, point -> (hue * 31 + point) % 360 }
+            val background = if (dark) Color.hsl(hue.toFloat(), .30f, .20f) else Color.hsl(hue.toFloat(), .60f, .94f)
+            val border = if (dark) Color.hsl(hue.toFloat(), .25f, .30f) else Color.hsl(hue.toFloat(), .40f, .86f)
+            val foreground = if (dark) Color.hsl(hue.toFloat(), .70f, .80f) else Color.hsl(hue.toFloat(), .55f, .34f)
+            Box(Modifier.size(28.dp).background(if (internal) Ink.paper else background, CircleShape)
+                .border(1.dp, if (internal) Ink.line else border, CircleShape), contentAlignment = Alignment.Center) {
+                if (internal) Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(22.dp))
+                else Plain(shortName.codePoints().findFirst().orElse('·'.code).let { String(intArrayOf(it), 0, 1) }, 13.sp, foreground, FontWeight.SemiBold)
+            }
+            Column {
+                Plain(source, 14.sp, maxLines = 1, lineHeight = 18.sp)
+                if (breadcrumb.isNotEmpty()) Plain(breadcrumb, 12.sp, Ink.muted, maxLines = 1, lineHeight = 16.sp)
+            }
+        }
+        Row(
+            Modifier.padding(top = 6.dp, bottom = 3.dp).clickable { open(hit.url) },
+            horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.Top,
+        ) {
+            type?.let { FileType(it, standalone = true, modifier = Modifier.padding(top = 3.dp)) }
+            Plain(hit.title, 19.sp, titleColor, lineHeight = 25.sp)
+        }
+        val date = hit.date
+        if (date != null || snippet != null) {
+            val faint = Ink.faint
+            val emphasis = SpanStyle(color = hitColor, fontWeight = FontWeight.SemiBold)
+            val description = buildAnnotatedString {
+                if (date != null) withStyle(SpanStyle(color = faint)) { append(date); if (snippet != null) append(" — ") }
+                if (snippet != null) append(marked(snippet, hit.ranges("snippetHighlights"), emphasis))
+            }
+            Text(description, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp, color = Ink.muted), maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        if (files.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            files.take(4).forEach { file ->
+                Row(Modifier.clip(CircleShape).border(1.dp, Ink.line, CircleShape).clickable { open(file.url) }
+                    .heightIn(min = 32.dp).padding(horizontal = 7.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FileType(file.type)
+                    Plain(fileName(file.name), 12.5.sp, modifier = Modifier.weight(1f, fill = false), maxLines = 1)
+                }
+            }
+            if (files.size > 4) Plain("等 ${files.size} 个附件", 12.sp, Ink.muted)
         }
     }
+}
+
+@Composable private fun FileType(type: String, standalone: Boolean = false, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(4.dp)
+    val surface = if (standalone) Modifier.border(1.dp, Ink.line, shape) else Modifier.background(Ink.sunken, shape)
+    Plain(type, 11.sp, Ink.muted, FontWeight.SemiBold,
+        modifier.then(surface).padding(horizontal = 4.dp, vertical = 1.dp), maxLines = 1)
 }
 
 @Composable private fun Pages(page: Int, total: Int, onPage: (Int) -> Unit) {
