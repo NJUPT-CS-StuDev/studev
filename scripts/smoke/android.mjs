@@ -28,6 +28,9 @@ const examIndex = JSON.parse(readFileSync(join(data, `exams/${release.exams}/ind
 const examChanges = JSON.parse(readFileSync(join(data, `exams/${release.exams}/changes.json`), 'utf8'));
 const teachingClasses = JSON.parse(readFileSync(join(data, `teaching/${release.teaching}/classes.json`), 'utf8'));
 const affectedExam = examChanges.find(change => teachingClasses.some(klass => klass.id === change.class));
+const latestExam = examIndex.history.at(-1);
+const ownExamChanges = examChanges.filter(change => change.version === latestExam.id && change.class === 'B240402').length;
+const examImpact = ownExamChanges ? `本班 ${ownExamChanges} 门考试有变动` : '本次更新未影响本班';
 if (!affectedExam || !examIndex.history.some(version => version.baseline)) throw new Error('the actual release has no exam baseline or affected class');
 const navigationMeeting = ownSchedule.find(meeting => meeting.teachers.length > 0 && meeting.course.code);
 const navigationExam = JSON.parse(readFileSync(join(data, `exams/${release.exams}/exams.json`), 'utf8'))[0];
@@ -211,14 +214,14 @@ async function chooseClass() {
 }
 async function examHistory() {
     await link('/?scale=exam', 'open the personal exam arrangements');
-    await scrollFind('本次更新未影响本班', 'the latest exam update does not affect B240402');
+    await scrollFind(node => node.text.startsWith(examImpact), 'the released class impact is reported');
     await scrollTap(node => node.text.includes('首次记录'), 'open the original exam baseline');
     capture('exam-unaffected-baseline');
     await link(`/?who=${encodeURIComponent(`class:${affectedExam.class}`)}&scale=exam`, 'open the actual affected class exams');
     const version = examIndex.history.find(item => item.id === affectedExam.version);
-    const date = (version.published || version.observed).slice(0, 10);
+    const date = version.published.slice(0, 10);
     const said = `${Number(date.slice(5, 7))}月${Number(date.slice(8))}日`;
-    await scrollTap(node => node.text.startsWith(said) && node.text.endsWith(version.published ? '官方发布' : '收录'), 'select a real exam update affecting this class');
+    await scrollTap(node => node.text === said + ' 官方发布', 'select a real exam update affecting this class');
     await scrollFind(node => node.text.includes(affectedExam.course.name), 'the affected course is named');
     const sitting = affectedExam.after?.[0] ?? affectedExam.before?.[0];
     await scrollFind(node => node.text.includes(sitting.date) && node.text.includes(sitting.start), 'the actual added or previous sitting is explained');

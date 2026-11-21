@@ -333,7 +333,10 @@ function ExamHistory {
     Find $window $Pressable { param($e) $e.Current.Name.StartsWith('暑假 ·') } 'the second term has its published summer break' | Out-Null
     Capture 'timetable-second-term'
     Press $window '考试' 'open the personal exam arrangements'
-    Find $window (Is $A::NameProperty '本次更新未影响本班') $null 'the latest update does not affect B240402' 30 | Out-Null
+    $latest = $examIndex.history[-1]
+    $count = @($examChanges | Where-Object { $_.version -eq $latest.id -and $_.class -eq 'B240402' }).Count
+    $impact = if ($count) { "本班 $count 门考试有变动" } else { '本次更新未影响本班' }
+    Find $window (Is $A::AutomationIdProperty "exam-version:$($latest.id)") { param($e) $e.Current.Name.EndsWith("$impact · 当前版本") } 'the latest update reports the published class impact' 30 | Out-Null
     $baseline = $examIndex.history | Where-Object baseline | Select-Object -First 1
     Press $window { param($e) $e.Current.AutomationId -eq "exam-version:$($baseline.id)" } 'open the original exam baseline'
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)

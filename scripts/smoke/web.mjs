@@ -19,6 +19,9 @@ assert(person, 'The released class is available for the actual UI test');
 const examIndex = JSON.parse(await readFile(join(root, `public/data/${release.version}/exams/${release.exams}/index.json`), 'utf8'));
 const examChanges = JSON.parse(await readFile(join(root, `public/data/${release.version}/exams/${release.exams}/changes.json`), 'utf8'));
 const affectedExam = examChanges.find(change => teaching.some(klass => klass.id === change.class));
+const latestExam = examIndex.history.at(-1);
+const ownExamChanges = examChanges.filter(change => change.version === latestExam.id && change.class === person.id).length;
+const examImpact = ownExamChanges ? `本班 ${ownExamChanges} 门考试有变动` : '本次更新未影响本班';
 assert(affectedExam && examIndex.history.some(version => version.baseline), 'the released exam history has a baseline and a real affected class');
 const ownMeetings = JSON.parse(await readFile(join(root, `public/data/${release.version}/teaching/${release.teaching}/classes/B240402.json`), 'utf8')).meetings;
 const navigationMeeting = ownMeetings.find(meeting => meeting.teachers.length > 0 && meeting.course.code);
@@ -80,7 +83,7 @@ async function examsHistory(page, name) {
     try {
         await goto(page, '/?scale=exam');
         const current = page.locator('.xversion.current');
-        await current.getByText('本次更新未影响本班', { exact: true }).waitFor({ state: 'visible' });
+        await current.locator('.xversion-head small').filter({ hasText: examImpact }).waitFor({ state: 'visible' });
         assert.equal(await current.locator('.xversion-head').getAttribute('aria-expanded'), 'true', 'the current version opens without another disclosure');
         const baseline = page.locator(`[data-exam-version="${examIndex.history.find(version => version.baseline).id}"]`);
         await baseline.locator('.xversion-head').click();
@@ -110,7 +113,7 @@ async function examsHistory(page, name) {
         }
         assert.equal(await page.locator('.xtrust details').count(), 0, 'files and changes do not hide behind another layer');
         await screenshot(page, `${name}-exam-affected-sources`);
-        log(`${name}: real exam baseline, unaffected class, before/after history despite hidden lectures and official sources`);
+        log(`${name}: real exam baseline, current class impact, before/after history despite hidden lectures and official sources`);
     } finally {
         await page.evaluate(value => localStorage.setItem('studev_prefs', JSON.stringify(value)), before);
         await goto(page, '/');
