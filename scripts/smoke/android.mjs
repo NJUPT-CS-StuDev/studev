@@ -154,7 +154,7 @@ async function tap(match, step, seconds) {
     await sleep(900);
     alive(step);
 }
-async function scrollFind(match, step, attempts = 12, direction = 1) {
+async function scrollFind(match, step, attempts = 12, direction = 1, distance = .50) {
     for (let i = 0; i < attempts; i++) {
         const nodes = screen();
         if (!nodes.length) { await sleep(500); continue; }
@@ -163,7 +163,10 @@ async function scrollFind(match, step, attempts = 12, direction = 1) {
         healthy(step, nodes, true);
         const width = Math.max(...nodes.map(node => node.right));
         const height = Math.max(...nodes.map(node => node.bottom));
-        adb('shell', 'input', 'swipe', String(Math.round(width * .55)), String(Math.round(height * (direction > 0 ? .78 : .28))), String(Math.round(width * .55)), String(Math.round(height * (direction > 0 ? .28 : .78))), '300');
+        const x = String(Math.round(width * .55));
+        const start = String(Math.round(height * (.53 + distance * direction / 2)));
+        const end = String(Math.round(height * (.53 - distance * direction / 2)));
+        adb('shell', 'input', 'swipe', x, start, x, end, '300');
         await sleep(300);
     }
     throw new Error(`not found while scrolling: ${step}; on screen: ${screen().map(node => node.text).filter(Boolean).join(' | ')}`);
@@ -214,7 +217,9 @@ async function chooseClass() {
 }
 async function examHistory() {
     await link('/?scale=exam', 'open the personal exam arrangements');
-    await scrollFind(node => node.text.startsWith(examImpact), 'the released class impact is reported');
+    // The latest version can be expanded into a long list of changes. Keep its
+    // small header in view between swipes rather than jumping into that list.
+    await scrollFind(node => node.text.startsWith(examImpact), 'the released class impact is reported', 26, 1, .24);
     await scrollTap(node => node.text.includes('首次记录'), 'open the original exam baseline');
     capture('exam-unaffected-baseline');
     await link(`/?who=${encodeURIComponent(`class:${affectedExam.class}`)}&scale=exam`, 'open the actual affected class exams');
