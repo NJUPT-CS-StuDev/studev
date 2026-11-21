@@ -16,6 +16,7 @@ public static class ListView
 {
     private static readonly HashSet<string> Folded = [];
     private static bool showDone;
+    private static string draft = "";
     /** One course at a time, by its name: its tasks and its exams, the rest set aside. */
     private static string? only;
     /** On a wide window, the task open beside the list, and which of its choices are open. */
@@ -100,7 +101,8 @@ public static class ListView
         var done = top.Where(t => t.Done is not null).OrderByDescending(t => t.Done, StringComparer.Ordinal).ToList();
         var exams = shown is null ? allExams : allExams.Where(x => Names.Course(x.Course.Name) == shown).ToList();
         var identity = shown is null ? null : courses.FirstOrDefault(p => p.Value == shown).Key;
-        var adder = TaskSheet.Adder(campus, line, now, _ => { }, open_.Count == 0, identity); adder.Margin = new Thickness(0, 0, 0, filters.Count > 1 ? 12 : 16);
+        var adder = TaskSheet.Adder(campus, line, now, _ => { }, open_.Count == 0, identity, draft, value => draft = value);
+        adder.Margin = new Thickness(0, 0, 0, filters.Count > 1 ? 12 : 16);
         page.Children.Add(adder);
         if (filters.Count > 1)
         {

@@ -37,11 +37,12 @@ public static class TaskSheet
 
     /** The line a task is added with, and what it was read as under it; Enter adds it. */
     /** The one-line adder; with `course` given, a task said without a course is that course's. */
-    public static FrameworkElement Adder(Campus campus, CampusLine line, Moment now, Action<PersonalTask> added, bool examples = true, string? course = null)
+    public static FrameworkElement Adder(Campus campus, CampusLine line, Moment now, Action<PersonalTask> added, bool examples = true, string? course = null,
+        string draft = "", Action<string>? draftChanged = null)
     {
         var courses = CourseNames(line); var quick = QuickCourses(line);
         var column = new StackPanel { Spacing = 8 };
-        var box = Kit.Field("", "添加任务，如：明天下午3点 交毛概作业 #毛概 !!", "添加任务");
+        var box = Kit.Field(draft, "添加任务，如：明天下午3点 交毛概作业 #毛概 !!", "添加任务");
         var row = new Grid { ColumnSpacing = 8 };
         row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.Children.Add(box);
@@ -56,8 +57,8 @@ public static class TaskSheet
             if (parsed.Title.Length == 0) return;
             // A task just added goes first in its group, where it is seen.
             var task = new PersonalTask { Id = TaskRules.NewId(), Title = parsed.Title, Modified = "", Date = parsed.Date, Start = parsed.Start, End = parsed.End, Due = parsed.Due, Priority = parsed.Priority, Course = parsed.Course ?? course, Order = -DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
-            campus.Tasks.Put(task);
             box.Text = "";
+            campus.Tasks.Put(task);
             added(campus.Tasks.All.First(t => t.Id == task.Id));
         }
         add.Click += (_, _) => Add();
@@ -78,7 +79,7 @@ public static class TaskSheet
             var title = Kit.Text(parsed.Title, Role.Label, bold: true); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(2, 0, 0, 0);
             read.Children.Add(title);
         }
-        box.TextChanged += (_, _) => Read();
+        box.TextChanged += (_, _) => { draftChanged?.Invoke(box.Text); Read(); };
         box.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { Add(); e.Handled = true; } };
         Read();
         return column;
