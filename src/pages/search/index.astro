@@ -11,6 +11,12 @@ const indexes = inputs.map(({ asset }) => asset);
 ---
 <SiteLayout title="搜索 — StuDev" description="搜南京邮电大学的课程、老师、班级、教室、地点、通知和学习资料。" active="search">
   <link slot="head" rel="preconnect" href={product.campusOrigin} crossorigin="anonymous" />
+  <Fragment slot="head">
+    <script>
+      import { warmSearch } from '../../campus/world/search';
+      warmSearch();
+    </script>
+  </Fragment>
   <script slot="head" is:inline type="application/json" data-search-base={searchBase} set:html={JSON.stringify(manifest).replaceAll('<', '\\u003c')} />
   <script slot="head" define:vars={{ indexes, searchBase, cacheKey: CAMPUS_RELEASE_CACHE }}>
     if (!navigator.connection?.saveData) {

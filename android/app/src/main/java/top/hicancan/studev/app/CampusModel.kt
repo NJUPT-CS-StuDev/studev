@@ -105,12 +105,20 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             catch (_: Exception) { _state.update { it.copy(busy = false, error = "校园数据暂时无法打开，请重试") } }
         }
     }
-    private suspend fun loadRepository(repo: AcademicRepository) {
-        val term = repo.term(); val periods = repo.periods(); val classes = repo.classes(); val coursePlans = repo.coursePlans(); val rooms = repo.rooms()
-        val examClasses = repo.examIndex()?.classes.orEmpty()
-        val calendar = repo.calendar(); val run = repo.runs()[term.term]
+    private suspend fun loadRepository(repo: AcademicRepository) = coroutineScope {
+        val term = async { repo.term() }
+        val periods = async { repo.periods() }
+        val classes = async { repo.classes() }
+        val coursePlans = async { repo.coursePlans() }
+        val rooms = async { repo.rooms() }
+        val examClasses = async { repo.examIndex()?.classes.orEmpty() }
+        val calendar = async { repo.calendar() }
+        val runs = async { repo.runs() }
+        val teaching = term.await()
+        val ready = AcademicState(repo, teaching, periods.await(), classes.await(), coursePlans.await(), examClasses.await(),
+            rooms = rooms.await(), busy = false, calendar = calendar.await(), run = runs.await()[teaching.term])
         val previous = _state.value.repository
-        _state.value = AcademicState(repo, term, periods, classes, coursePlans, examClasses, rooms = rooms, busy = false, calendar = calendar, run = run)
+        _state.value = ready
         if (previous !== repo) previous?.closeSearch()
         loadClass(settings.state.value.klass)
     }

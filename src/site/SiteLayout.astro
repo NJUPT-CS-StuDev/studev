@@ -139,6 +139,6 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <script>import './theme-toggle';</script>
     <script>import '../platform/client/auth-status';</script>
     {appPage && <script>import '../campus/ai/host';</script>}
-    {active !== 'download' && active !== 'login' && <script>import { warmSearch } from '../campus/world/search'; warmSearch();</script>}
+    {active !== 'download' && active !== 'login' && active !== 'search' && <script>import { warmSearch } from '../campus/world/search'; warmSearch();</script>}
   </body>
 </html>
