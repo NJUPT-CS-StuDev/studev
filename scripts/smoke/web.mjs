@@ -356,8 +356,15 @@ async function sheetHistory(page, name) {
     assert.equal(await page.evaluate(() => history.length), baseLength + 1, 'nested settings share one overlay history entry');
     await page.getByRole('button', { name: /^查看课程详情：/ }).first().click();
     await page.getByRole('heading', { name: '上课安排', exact: true }).waitFor();
+    const routePreparation = await page.evaluateHandle(() => {
+        const events = { started: false };
+        document.addEventListener('astro:before-preparation', () => { events.started = true; }, { once: true });
+        return events;
+    });
     await page.goBack();
     await heading(page, '我的课程');
+    assert.equal(await routePreparation.evaluate(events => events.started), false, 'the sheet consumes Back before the page router');
+    await routePreparation.dispose();
     assert.equal(await page.evaluate(() => history.length), baseLength + 1);
     await page.getByRole('button', { name: '自定义课程', exact: true }).click();
     await heading(page, '自定义课程');

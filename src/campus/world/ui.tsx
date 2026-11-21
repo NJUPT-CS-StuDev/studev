@@ -29,7 +29,7 @@ export function CampusHeader({ children, className = '' }: { children: ReactNode
 
 interface SheetOwner { close: () => void; leaving: boolean }
 const sheetOwners: SheetOwner[] = [];
-let sheetEntry: number | null = null;
+let sheetEntry: { id: number; page: string } | null = null;
 let sheetSequence = 0;
 let sheetCleanup = 0;
 let pendingSheetNavigation: { kind: 'dismiss' | 'release'; owner: SheetOwner } | null = null;
@@ -38,15 +38,15 @@ let sheetOpener: HTMLElement | null = null;
 
 /** Replacing one panel with another keeps one overlay entry; only leaving the last owner traverses back. */
 function ensureSheetEntry() {
-    if (!sheetOwners.length || sheetOwners.at(-1)?.leaving || pendingSheetNavigation || (sheetEntry !== null && history.state?.sheet === sheetEntry)) return;
+    if (!sheetOwners.length || sheetOwners.at(-1)?.leaving || pendingSheetNavigation || (sheetEntry !== null && history.state?.sheet === sheetEntry.id)) return;
     const { sheet: _, ...state } = history.state ?? {};
     if (history.state?.sheet !== undefined) history.replaceState(state, '', location.href);
-    sheetEntry = ++sheetSequence;
-    history.pushState({ ...state, sheet: sheetEntry }, '', location.href);
+    sheetEntry = { id: ++sheetSequence, page: location.href };
+    history.pushState({ ...state, sheet: sheetEntry.id }, '', sheetEntry.page);
 }
 
 function consumeSheetEntry() {
-    if (sheetEntry === null || history.state?.sheet !== sheetEntry || pendingSheetNavigation) return false;
+    if (sheetEntry === null || history.state?.sheet !== sheetEntry.id || pendingSheetNavigation) return false;
     sheetEntry = null;
     for (const owner of sheetOwners) owner.leaving = true;
     return true;
@@ -61,16 +61,20 @@ export function replaceSheetRoute(url: string) {
 
 function finishSheetListeners() {
     if (sheetOwners.length || pendingSheetNavigation || sheetEntry !== null) return;
-    removeEventListener('popstate', sheetPopped);
+    removeEventListener('studev:before-popstate', sheetPopped);
     removeEventListener('keydown', sheetKey);
     sheetListening = false;
     if (sheetOpener?.isConnected) sheetOpener.focus();
     sheetOpener = null;
 }
 
-function sheetPopped(event: PopStateEvent) {
+function sheetPopped(event: Event) {
     const pending = pendingSheetNavigation;
-    if (!pending && (sheetEntry === null || event.state?.sheet === sheetEntry)) return;
+    const state = (event as PopStateEvent).state;
+    if (!pending && (sheetEntry === null || state?.sheet === sheetEntry.id)) return;
+    // Traversing the sheet's own entry stays on its page. Letting the site router handle it would
+    // swap out the page and unmount the parent sheet just after the child has been closed.
+    if (sheetEntry?.page === location.href) event.preventDefault();
     pendingSheetNavigation = null;
     sheetEntry = null;
     if (pending) {
@@ -86,7 +90,7 @@ function sheetKey(event: KeyboardEvent) {
     event.preventDefault();
     if (pendingSheetNavigation) return;
     const owner = sheetOwners.at(-1)!;
-    if (sheetEntry !== null && history.state?.sheet === sheetEntry) {
+    if (sheetEntry !== null && history.state?.sheet === sheetEntry.id) {
         pendingSheetNavigation = { kind: 'dismiss', owner };
         history.back();
     } else owner.close();
@@ -107,7 +111,7 @@ export function Sheet({ title, top, className, style, onClose, children }: { tit
         owner.current = current;
         sheetOwners.push(current);
         if (!sheetListening) {
-            addEventListener('popstate', sheetPopped);
+            addEventListener('studev:before-popstate', sheetPopped);
             addEventListener('keydown', sheetKey);
             sheetListening = true;
         }
@@ -121,7 +125,7 @@ export function Sheet({ title, top, className, style, onClose, children }: { tit
             queueMicrotask(() => {
                 if (cleanup !== sheetCleanup) return;
                 if (sheetOwners.length) ensureSheetEntry();
-                else if (sheetEntry !== null && history.state?.sheet === sheetEntry && !pendingSheetNavigation) {
+                else if (sheetEntry !== null && history.state?.sheet === sheetEntry.id && !pendingSheetNavigation) {
                     pendingSheetNavigation = { kind: 'release', owner: current };
                     history.back();
                 } else if (!pendingSheetNavigation) sheetEntry = null;

@@ -74,6 +74,13 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {(active === 'history' || active === 'account' || active === 'forms') && <link rel="preconnect" href="https://q1.qlogo.cn" crossorigin />}
     <link rel="canonical" href={canonical} />
     <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />
+    <script is:inline>
+      // A same-page panel can consume Back before the page router sees it.
+      window.addEventListener('popstate', (event) => {
+        const local = new PopStateEvent('studev:before-popstate', { state: event.state, cancelable: true });
+        if (!window.dispatchEvent(local)) event.stopImmediatePropagation();
+      });
+    </script>
     {appPage && <ClientRouter fallback="swap" />}
     <slot name="head" />
     <title>{title}</title>
