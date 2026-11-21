@@ -147,10 +147,10 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
                 {isMe && outside.length > 0 && <div className="xtidy">
                     <button onClick={() => onExamChoices(Object.fromEntries(outside.map(exam => [exam.id, false])))}>去掉课表里没有的课的考试（{outside.length}）</button>
                 </div>}
-                {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
+                {taken.length > 0 && <details className="xhist"><summary><span>已考</span><span className="xcount">{taken.length} 场<Chevron /></span></summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
                 {/* Taken away: out of the way, folded at the bottom, each one a tap from coming back. */}
                 {skipped.length > 0 && <details className="xhist xskipped">
-                    <summary>已去掉 {skipped.length} 场 · 不提醒</summary>
+                    <summary><span>已去掉<small>不提醒</small></span><span className="xcount">{skipped.length} 场<Chevron /></span></summary>
                     <div className="xtidy"><button onClick={() => onExamChoices(Object.fromEntries(skipped.map(exam => [exam.id, true])))}>全部恢复</button></div>
                     {skipped.map(exam => <div key={exam.id} className="xrow off">
                         <span className="cd">{dateLabel(exam.date)}</span>

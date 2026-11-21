@@ -216,8 +216,16 @@
   .xk.changed{color:var(--warning-ink)}
   .xk.removed{color:var(--danger)}
   .xmore{border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;padding:11px 0;width:100%;justify-content:space-between}
-  .xhist{border-top:1px solid var(--line);padding:10px 0;font-size:13.5px}
-  .xhist summary{cursor:pointer;color:var(--muted)}
+  .xhist{border-top:1px solid var(--line);font-size:14px}
+  .xhist summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;margin:0 -10px;padding:0 10px;border-radius:10px;list-style:none;cursor:pointer;color:var(--ink);font-weight:500}
+  .xhist summary::-webkit-details-marker{display:none}
+  .xhist summary:hover{background:var(--surface-sunken)}
+  .xhist summary:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+  .xhist summary small{margin-left:8px;font-size:12px;font-weight:400;color:var(--faint)}
+  .xhist .xcount{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+  .xhist .xcount svg{width:14px;height:14px;color:var(--faint);transition:transform .18s ease}
+  .xhist[open] .xcount svg{transform:rotate(90deg)}
+  .xhist[open]{padding-bottom:6px}
   .xtidy{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
   .xtidy button{padding:6px 14px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--ink)}
   .xtidy button:hover{border-color:var(--brand);color:var(--brand)}
