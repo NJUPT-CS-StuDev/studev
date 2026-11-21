@@ -237,7 +237,7 @@ public static class Events
         {
             Background = Paint.Brush("surfaceSunken"),
             Padding = new Thickness(20, 14, 20, 14),
-            Child = Kit.Text($"实践 · {Practices.Name(practice)}", Role.Heading, wrap: true),
+            Child = Pages.SheetHead(Pages.SheetTitle($"实践 · {Practices.Name(practice)}"), () => App.Window?.Close()),
         };
         App.Window?.Sheet(Kit.Column(0, head, body), 480);
     }
