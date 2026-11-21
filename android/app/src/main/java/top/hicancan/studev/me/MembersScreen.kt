@@ -1,5 +1,7 @@
 package top.hicancan.studev.me
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -88,9 +90,11 @@ import top.hicancan.studev.app.*
                 val context = androidx.compose.ui.platform.LocalContext.current
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Plain("共 $total 位成员", 12.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
-                    // Managing members (full profiles, roles, the audit log) lives on the web's members page for now.
+                    // The same URL also opens the native member directory as a deep link.
                     if (account?.role == "admin" || account?.role == "owner") TextAction("管理成员", {
-                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${top.hicancan.studev.account.PLATFORM_ORIGIN}/members/")))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/members/")).apply {
+                            selector = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER)
+                        })
                     })
                 }
             }
