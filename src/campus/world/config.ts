@@ -11,7 +11,6 @@ import { releaseAt, validRelease, type CampusRelease } from './release';
 const readable = (value: unknown): value is CampusRelease => validRelease(value) && value.search_format === SEARCH_BUNDLE_FORMAT;
 
 export const CAMPUS_RELEASE_CACHE = 'studev-campus-release';
-const RUNTIME = 'studev-app-runtime';
 // The offline resource inventories belong to the service worker. Keeping them
 // out of this module removes hundreds of kilobytes from each campus entry.
 const local: CampusRelease = {
@@ -19,28 +18,13 @@ const local: CampusRelease = {
     map_base, knowledge_base, search_base, texts_base, search_format,
 };
 const browser = typeof window !== 'undefined';
-function runtimeEntry() {
-    try {
-        const value = JSON.parse(localStorage.getItem(RUNTIME) ?? 'null')?.campus_entry;
-        const url = new URL(value);
-        if (url.protocol === 'https:' && !url.username && !url.password) return url.href;
-    } catch { /* The configured origin is the first-start address. */ }
-    return `${product.campusOrigin}/campus-release.json`;
-}
-const dataOrigin = import.meta.env.DEV ? (browser ? location.origin : product.origin) : new URL(runtimeEntry()).origin;
+const entry = `${product.campusOrigin}/campus-release.json`;
+const dataOrigin = import.meta.env.DEV ? (browser ? location.origin : product.origin) : product.campusOrigin;
 let available: string | undefined;
-function kept(): { release: CampusRelease; entry: string } | undefined {
+function kept(): CampusRelease | undefined {
     try {
         const value = JSON.parse(localStorage.getItem(CAMPUS_RELEASE_CACHE) ?? 'null');
-        const entry = new URL(value.entry);
-        return readable(value.release) && entry.protocol === 'https:' && !entry.username && !entry.password
-            ? { release: value.release, entry: entry.href } : undefined;
-    } catch { return undefined; }
-}
-async function readCampus(entry: string): Promise<unknown> {
-    try {
-        const response = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(4000) });
-        return response.ok ? await response.json() : undefined;
+        return value?.entry === entry && readable(value.release) ? value.release : undefined;
     } catch { return undefined; }
 }
 let discovering: Promise<CampusRelease | undefined> | undefined;
@@ -49,28 +33,17 @@ export function latestCampusRelease(): Promise<CampusRelease | undefined> {
 }
 async function discoverCampus(): Promise<CampusRelease | undefined> {
     try {
-        const previousEntry = runtimeEntry();
-        const previousRead = readCampus(previousEntry);
-        let entry = previousEntry;
-        try {
-            const runtime = await fetch(`${product.origin}/app-release.json`, { cache: 'no-cache', signal: AbortSignal.timeout(2500) });
-            if (runtime.ok) {
-                const value = await runtime.json(); const url = new URL(value.campus_entry);
-                if (url.protocol === 'https:' && !url.username && !url.password) {
-                    entry = url.href;
-                    try { localStorage.setItem(RUNTIME, JSON.stringify(value)); } catch { /* The live discovery still uses it. */ }
-                }
-            }
-        } catch { /* An offline application configuration does not block its saved data entry. */ }
-        const value = await (entry === previousEntry ? previousRead : readCampus(entry));
-        // Data newer than this build (or older) is left alone; the next deployment of the site reads it.
+        // The pointer requires HTTP revalidation. The default cache mode also reuses its document preload.
+        const response = await fetch(entry, { signal: AbortSignal.timeout(4000) });
+        if (!response.ok) return;
+        const value: unknown = await response.json();
         if (!readable(value)) return;
         try { localStorage.setItem(CAMPUS_RELEASE_CACHE, JSON.stringify({ entry, release: value })); } catch { /* Private browsing still reads the public snapshot. */ }
-        return releaseAt(value, new URL(entry).origin);
+        return releaseAt(value, product.campusOrigin);
     } catch { return undefined; }
 }
 const cached = browser && !import.meta.env.DEV ? kept() : undefined;
-const initial = browser ? releaseAt(cached?.release ?? local, cached ? new URL(cached.entry).origin : dataOrigin, import.meta.env.DEV) : local;
+const initial = browser ? releaseAt(cached ?? local, dataOrigin, import.meta.env.DEV) : local;
 const opensSearch = browser && !import.meta.env.DEV && location.pathname === '/search/' && navigator.onLine;
 /** The visit reads one snapshot. On a direct cold search, resolve the live pointer before opening its index:
  * the deployment's bundled snapshot may have been retired by a separate data release. */

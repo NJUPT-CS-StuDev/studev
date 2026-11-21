@@ -54,9 +54,11 @@ export default function searchPreload() {
                 const links = [...preload].map(path => `<link rel="modulepreload" href="${path}">`).join('');
                 const script = `<script type="module" src="${warm}"></script>`;
                 const seed = html.match(/<script[^>]*data-search-base=[^>]*>[\s\S]*?<\/script>/)?.[0];
+                const entry = html.match(/<link[^>]*\bdata-campus-entry\b[^>]*>/)?.[0];
                 if (!seed || !html.includes(script)) throw new Error('The search page has no worker seed');
-                const early = `${links}${seed}<script type="module" async src="${warm}"></script>`;
-                await writeFile(page, html.replace(script, '').replace(seed, '').replace(/<meta charset="UTF-8">/i, tag => tag + early));
+                if (!entry) throw new Error('The search page has no campus entry preload');
+                const early = `${entry}${links}${seed}<script type="module" async src="${warm}"></script>`;
+                await writeFile(page, html.replace(script, '').replace(seed, '').replace(entry, '').replace(/<meta charset="UTF-8">/i, tag => tag + early));
             },
         },
     };
