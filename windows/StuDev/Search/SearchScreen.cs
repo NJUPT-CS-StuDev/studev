@@ -112,7 +112,7 @@ public sealed partial class SearchScreen : Screen
         }
         var query = box.Text.Trim();
         if (query.Length == 1 || Live || campus.Repository is null) { answer = null; Draw(); return; }
-        search ??= new NativeSearch(campus.Repository);
+        var engine = search ??= new NativeSearch(campus.Repository);
         var cancel = (running = new CancellationTokenSource()).Token;
         var started = System.Diagnostics.Stopwatch.StartNew();
         failure = null;
@@ -122,7 +122,10 @@ public sealed partial class SearchScreen : Screen
         {
             await Task.Delay(120, cancel);
             // Nothing typed lists the newest first; a query, the best match first.
-            var done = await search.Page(query, PageSize, byDate || query.Length == 0 ? "date_desc" : "relevance", Filters(), (page - 1) * PageSize, cancel);
+            var filters = Filters();
+            var sort = byDate || query.Length == 0 ? "date_desc" : "relevance";
+            var offset = (page - 1) * PageSize;
+            var done = await Task.Run(() => engine.Page(query, PageSize, sort, filters, offset, cancel), cancel);
             if (cancel.IsCancellationRequested) return;
             facets = done.Filters;
             answer = (done.Results, done.Total, started.Elapsed.TotalSeconds);

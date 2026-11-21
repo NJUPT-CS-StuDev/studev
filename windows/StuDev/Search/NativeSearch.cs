@@ -18,11 +18,24 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     private long loaded;
     private volatile bool closed;
 
-    private Task<byte[]> Ref(JsonNode value, CancellationToken cancel)
+    private string Pack(JsonNode value)
     {
         var number = (int)value["pack"]!;
         var pack = (string)manifest!["packs"]![number]!;
-        return repository.Block(repository.SearchPackPath(pack), (long)value["offset"]!, (int)value["bytes"]!, cancel);
+        return repository.SearchPackPath(pack);
+    }
+
+    private async Task<byte[][]> ReadBlocks(List<JsonNode> blocks, CancellationToken cancel)
+    {
+        var output = new byte[blocks.Count][];
+        await Task.WhenAll(blocks.Select((block, index) => (block, index)).GroupBy(item => Pack(item.block)).Select(async group =>
+        {
+            var refs = group.ToArray();
+            var spans = refs.Select(item => ((long)item.block["offset"]!, (int)item.block["bytes"]!)).ToArray();
+            var bytes = await repository.Blocks(group.Key, spans, cancel);
+            for (var i = 0; i < refs.Length; i++) output[refs[i].index] = bytes[i];
+        }));
+        return output;
     }
 
     /** Blocks accumulate between queries; past the budget, start from the index again. */
@@ -33,7 +46,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
         manifest ??= JsonNode.Parse(await repository.Bytes("search/manifest.json"))!.AsObject();
         var indexes = new List<JsonNode> { manifest["index"]! };
         if (manifest["segments"] is JsonArray segments) indexes.AddRange(segments.Select(part => part!));
-        var bytes = await Task.WhenAll(indexes.Select(index => Ref(index, cancel)));
+        var bytes = await ReadBlocks(indexes, cancel);
         static uint Decoded(JsonNode node) => (uint)(int)node["decoded_bytes"]!;
         var ready = new SearchEngine(bytes[0], Decoded(indexes[0]), manifest["profile"]!.ToJsonString());
         try
@@ -49,8 +62,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     private async Task Load(string json, Action<uint, byte[], uint> consume, CancellationToken cancel)
     {
         var blocks = JsonNode.Parse(json)!.AsArray().Select(b => b!).ToList();
-        using var slots = new SemaphoreSlim(8);
-        var fetched = await Task.WhenAll(blocks.Select(async block => { await slots.WaitAsync(cancel); try { return await Ref(block, cancel); } finally { slots.Release(); } }));
+        var fetched = await ReadBlocks(blocks, cancel);
         for (var i = 0; i < blocks.Count; i++)
         {
             cancel.ThrowIfCancellationRequested();

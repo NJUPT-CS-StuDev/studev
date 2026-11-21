@@ -75,7 +75,12 @@ public sealed partial class Shell : Window
         // The caption buttons' width can read 0 while a window comes back from the tray or from minimized, and changes
         // with the display's scale; it is read again on every change and a reading of none keeps the last.
         AppWindow.Changed += (_, e) => { if (e.DidSizeChange || e.DidPositionChange || e.DidVisibilityChange || e.DidPresenterChange) Inset(); };
-        Activated += (_, _) => { Inset(); World.Campus.Shared.Resume(); };
+        Activated += (_, state) => {
+            Inset();
+            if (state.WindowActivationState == WindowActivationState.Deactivated) return;
+            World.Campus.Shared.Resume();
+            App.Syncing?.Soon();
+        };
         Place();
     }
 

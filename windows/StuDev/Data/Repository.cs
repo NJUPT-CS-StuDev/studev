@@ -25,6 +25,7 @@ public sealed class Repository
     private int checkedRetirement;
     private void Missing() { if (Interlocked.Exchange(ref checkedRetirement, 1) == 0) Retired?.Invoke(Release); }
     private readonly Dictionary<string, Task<byte[]>> loading = new();
+    private readonly SemaphoreSlim searchDownloads = new(12);
 
     private Repository(DataRelease release) { Release = release; }
 
@@ -40,7 +41,7 @@ public sealed class Repository
                 // A release kept by an older StuDev may be in a search format this one does not read: take the latest instead.
                 if (Searchable(release)) return Task.FromResult(new Repository(release));
                 File.Delete(kept);
-            } catch (Exception error) when (error is IOException or JsonException) {
+            } catch (Exception error) when (error is IOException or InvalidDataException or JsonException) {
                 // This cache contains public release routing, never preferences,
                 // tasks or credentials. An obsolete shape is discarded outright.
                 try { File.Delete(kept); } catch (IOException) { }
@@ -54,7 +55,7 @@ public sealed class Repository
             Valid(release);
             if (Searchable(release)) return Task.FromResult(new Repository(release));
         }
-        catch (Exception error) when (error is IOException or JsonException) { }
+        catch (Exception error) when (error is IOException or InvalidDataException or JsonException) { }
         return Discover();
     }
     public static async Task<Repository> Discover()
@@ -223,37 +224,79 @@ public sealed class Repository
         throw new InvalidDataException("校园搜索包地址无效。");
     }
 
-    /** A stretch of a public search pack, fetched from the same data entry and kept on disk. */
-    public async Task<byte[]> Block(string path, long offset, int length, CancellationToken cancel)
+    /** Read a pack once, combining nearby missing ranges and keeping the named blocks for offline queries. */
+    public async Task<byte[][]> Blocks(string path, IReadOnlyList<(long Offset, int Length)> spans, CancellationToken cancel)
     {
-        if (path.Split('/').Any(part => part is "" or "." or "..")) throw new ArgumentException($"bad release path {path}");
-        if (offset < 0 || length <= 0 || offset > long.MaxValue - length) throw new ArgumentOutOfRangeException(nameof(offset));
-        var file = LocalPath(path) + "." + offset;
-        if (File.Exists(file))
-        {
-            var kept = await File.ReadAllBytesAsync(file, cancel);
-            if (kept.Length != length) throw new InvalidDataException("离线搜索数据不完整");
-            return kept;
-        }
+        const int gap = 16 * 1024;
+        const int maxCombined = 2 * 1024 * 1024;
+        if (spans.Any(span => span.Offset < 0 || span.Length <= 0 || span.Offset > long.MaxValue - span.Length))
+            throw new ArgumentOutOfRangeException(nameof(spans));
         var whole = LocalPath(path);
+        var blocks = new byte[spans.Count][];
         if (File.Exists(whole)) {
             await using var stream = File.OpenRead(whole);
-            if (offset > stream.Length || length > stream.Length - offset) throw new InvalidDataException("离线搜索数据不完整");
-            stream.Position = offset; var bytes = new byte[length]; await stream.ReadExactlyAsync(bytes, cancel); return bytes;
+            for (var i = 0; i < spans.Count; i++) {
+                var (offset, length) = spans[i];
+                if (offset > stream.Length || length > stream.Length - offset) throw new InvalidDataException("离线搜索数据不完整");
+                stream.Position = offset;
+                blocks[i] = new byte[length];
+                await stream.ReadExactlyAsync(blocks[i], cancel);
+            }
+            return blocks;
         }
         if (await BundledBytes(whole, cancel) is { } bundled)
         {
-            if (offset > bundled.Length || length > bundled.Length - offset) throw new InvalidDataException("随应用发布的搜索索引不完整");
-            return bundled.AsSpan((int)offset, length).ToArray();
+            for (var i = 0; i < spans.Count; i++) {
+                var (offset, length) = spans[i];
+                if (offset > bundled.Length || length > bundled.Length - offset) throw new InvalidDataException("随应用发布的搜索索引不完整");
+                blocks[i] = bundled.AsSpan((int)offset, length).ToArray();
+            }
+            return blocks;
         }
-        byte[] got;
-        try { got = await ReadRange(Address(path), offset, length, cancel); }
-        catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.NotFound) { Missing(); throw; }
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        var pending = file + "." + Guid.NewGuid().ToString("N") + ".pending";
-        try { await File.WriteAllBytesAsync(pending, got, cancel); File.Move(pending, file, true); }
-        finally { if (File.Exists(pending)) File.Delete(pending); }
-        return got;
+        var files = spans.Select(span => whole + "." + span.Offset).ToArray();
+        var ranges = new List<List<int>>();
+        long start = 0, end = 0;
+        foreach (var i in Enumerable.Range(0, spans.Count).OrderBy(i => spans[i].Offset))
+        {
+            var (offset, length) = spans[i];
+            if (File.Exists(files[i]))
+            {
+                blocks[i] = await File.ReadAllBytesAsync(files[i], cancel);
+                if (blocks[i].Length != length) throw new InvalidDataException("离线搜索数据不完整");
+                continue;
+            }
+            if (ranges.Count == 0 || offset - end > gap || Math.Max(end, offset + length) - start > maxCombined)
+            {
+                ranges.Add([]);
+                start = offset;
+                end = offset;
+            }
+            ranges[^1].Add(i);
+            end = Math.Max(end, offset + length);
+        }
+        if (ranges.Count == 0) return blocks;
+        var url = Address(path);
+        Directory.CreateDirectory(Path.GetDirectoryName(whole)!);
+        await Task.WhenAll(ranges.Select(async range =>
+        {
+            var from = spans[range[0]].Offset;
+            var to = range.Max(i => spans[i].Offset + spans[i].Length);
+            await searchDownloads.WaitAsync(cancel);
+            byte[] got;
+            try { got = await ReadRange(url, from, checked((int)(to - from)), cancel); }
+            catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.NotFound) { Missing(); throw; }
+            finally { searchDownloads.Release(); }
+            foreach (var i in range)
+            {
+                var (offset, length) = spans[i];
+                var part = got.AsSpan((int)(offset - from), length).ToArray();
+                var pending = files[i] + "." + Guid.NewGuid().ToString("N") + ".pending";
+                try { await File.WriteAllBytesAsync(pending, part, cancel); File.Move(pending, files[i], true); }
+                finally { if (File.Exists(pending)) File.Delete(pending); }
+                blocks[i] = part;
+            }
+        }));
+        return blocks;
     }
 
     internal static async Task<byte[]> ReadRange(string url, long offset, int length, CancellationToken cancel = default)

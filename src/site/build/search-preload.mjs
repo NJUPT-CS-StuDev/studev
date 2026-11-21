@@ -19,6 +19,7 @@ export function searchBootstrap(release, origin, bundled) {
  * its WebAssembly and index files. Document preload responses are scoped to the document. */
 export default function searchPreload() {
     const modules = new Map();
+    let warm;
     return {
         name: 'studev-search-preload',
         hooks: {
@@ -28,7 +29,9 @@ export default function searchPreload() {
                 generateBundle(_options, bundle) {
                     for (const chunk of Object.values(bundle)) {
                         if (chunk.type === 'chunk' && chunk.fileName.startsWith('_astro/')) {
-                            modules.set('/' + chunk.fileName, chunk.imports.map(path => '/' + path));
+                            const path = '/' + chunk.fileName;
+                            modules.set(path, chunk.imports.map(path => '/' + path));
+                            if (chunk.facadeModuleId?.replaceAll('\\', '/').includes('/src/pages/search/index.astro?astro&type=script&')) warm = path;
                         }
                     }
                 },
@@ -41,14 +44,19 @@ export default function searchPreload() {
                 const html = await readFile(page, 'utf8');
                 const island = html.match(/<astro-island[^>]*component-url="(\/_astro\/SearchApp\.[^"]+)"[^>]*renderer-url="([^"]+)"/);
                 if (!island) throw new Error('The search page has no search island to preload');
-                const preload = new Set(island.slice(1));
+                if (!warm) throw new Error('The search page has no warm-up module');
+                const preload = new Set([warm, ...island.slice(1)]);
                 for (const path of preload) {
                     const imports = modules.get(path);
                     if (!imports) throw new Error(`Missing search module graph for ${path}`);
                     for (const dep of imports) if (modules.has(dep)) preload.add(dep);
                 }
                 const links = [...preload].map(path => `<link rel="modulepreload" href="${path}">`).join('');
-                await writeFile(page, html.replace('</head>', links + '</head>'));
+                const script = `<script type="module" src="${warm}"></script>`;
+                const seed = html.match(/<script[^>]*data-search-base=[^>]*>[\s\S]*?<\/script>/)?.[0];
+                if (!seed || !html.includes(script)) throw new Error('The search page has no worker seed');
+                const early = `${links}${seed}<script type="module" async src="${warm}"></script>`;
+                await writeFile(page, html.replace(script, '').replace(seed, '').replace(/<meta charset="UTF-8">/i, tag => tag + early));
             },
         },
     };

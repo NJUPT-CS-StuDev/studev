@@ -137,7 +137,7 @@ public sealed class Campus
             else Error = "连不上 StuDev，检查一下网络。";
             loading = null;
         }
-        catch (System.Text.Json.JsonException)
+        catch (Exception error) when (error is System.Text.Json.JsonException or InvalidDataException)
         {
             if (source is not null && Repository is not null) UpdateError = "新版校园数据无法读取，已保留当前版本。";
             else Error = "这份校园数据无法读取，请检查应用更新。";

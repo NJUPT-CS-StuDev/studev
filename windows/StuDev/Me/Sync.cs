@@ -15,6 +15,7 @@ public sealed class Sync
     private readonly Campus campus;
     private readonly DispatcherQueueTimer later;
     private bool running;
+    private bool again;
 
     public Sync(Campus campus, DispatcherQueue queue)
     {
@@ -27,7 +28,12 @@ public sealed class Sync
         Account.Shared.Changed += Soon;
         Soon();
     }
-    public void Soon() { later.Stop(); later.Start(); }
+    public void Soon()
+    {
+        if (running) { again = true; return; }
+        later.Stop();
+        later.Start();
+    }
 
     private async Task Run()
     {
@@ -43,6 +49,10 @@ public sealed class Sync
             if (SettingsSync.Taken(campus.Preferences.Snapshot(), result["settings"] as JsonObject ?? []) is { } taken) campus.Preferences.Adopt(taken);
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or PlatformFailure or JsonException or IOException) { /* Offline or signed out: they stay here and go next time. */ }
-        finally { running = false; }
+        finally
+        {
+            running = false;
+            if (again) { again = false; Soon(); }
+        }
     }
 }

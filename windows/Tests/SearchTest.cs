@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -34,8 +35,19 @@ internal static class SearchTest
         var release = JsonSerializer.Deserialize(releaseText, FactsJson.Default.DataRelease)!;
         var searchFolder = Path.Combine(root, "public", release.SearchBase.TrimStart('/'));
         var activeRelease = Path.Combine(Storage.CacheFor("campus"), "release.json");
-        Storage.Write(activeRelease, releaseText);
-        var repository = await Repository.Open();
+        Storage.Write(activeRelease, """{"version":"retired-public","base":"/data/retired-public"}""");
+        var bundle = Path.Combine(AppContext.BaseDirectory, "campus.zip");
+        using (var file = new FileStream(bundle, FileMode.CreateNew))
+        {
+            using var zip = new ZipArchive(file, ZipArchiveMode.Create);
+            using var manifestEntry = new StreamWriter(zip.CreateEntry("release.json").Open());
+            manifestEntry.Write(releaseText);
+        }
+        Repository repository;
+        try { repository = await Repository.Open(); }
+        finally { File.Delete(bundle); }
+        equal("an obsolete active pointer falls back to the packaged release", repository.Release.Version, JsonValue.Create(release.Version));
+        equal("obsolete active pointer is removed", File.Exists(activeRelease), JsonValue.Create(false));
         var oldPointer = Path.Combine(Storage.CacheFor("campus"), "release-3.4.1.json");
         var oldPublic = Path.Combine(Storage.CacheFor("campus"), "old__app3.4.1", "calendar.json");
         Storage.Write(oldPointer, "retired public pointer"); Storage.Write(oldPublic, "retired public data");

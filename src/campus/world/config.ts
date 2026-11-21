@@ -70,8 +70,11 @@ async function discoverCampus(): Promise<CampusRelease | undefined> {
     } catch { return undefined; }
 }
 const cached = browser && !import.meta.env.DEV ? kept() : undefined;
-/** Read one snapshot for the visit, using the saved or bundled release immediately. */
-export const DATA_RELEASE: CampusRelease = browser ? releaseAt(cached?.release ?? local, cached ? new URL(cached.entry).origin : dataOrigin, import.meta.env.DEV) : local;
+const initial = browser ? releaseAt(cached?.release ?? local, cached ? new URL(cached.entry).origin : dataOrigin, import.meta.env.DEV) : local;
+const opensSearch = browser && !import.meta.env.DEV && location.pathname === '/search/' && navigator.onLine;
+/** The visit reads one snapshot. On a direct cold search, resolve the live pointer before opening its index:
+ * the deployment's bundled snapshot may have been retired by a separate data release. */
+export const DATA_RELEASE: CampusRelease = (opensSearch ? await latestCampusRelease() : undefined) ?? initial;
 if (browser && !import.meta.env.DEV) {
     const check = async () => {
         if (!navigator.onLine) return;
@@ -85,8 +88,10 @@ if (browser && !import.meta.env.DEV) {
     };
     setInterval(() => void check(), 10 * 60_000);
     window.addEventListener('focus', () => void check());
-    if ('requestIdleCallback' in window) requestIdleCallback(() => void check(), { timeout: 2000 });
-    else setTimeout(() => void check(), 1000);
+    if (!opensSearch) {
+        if ('requestIdleCallback' in window) requestIdleCallback(() => void check(), { timeout: 2000 });
+        else setTimeout(() => void check(), 1000);
+    }
 }
 
 export const APP_CONFIG = {
