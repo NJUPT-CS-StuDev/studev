@@ -144,19 +144,20 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
                         </button>
                     ))}</div>
                 </section>)}
-                {isMe && (outside.length > 0 || skipped.length > 0) && <div className="xtidy">
-                    {outside.length > 0 && <button className="chip" onClick={() => onExamChoices(Object.fromEntries(outside.map(exam => [exam.id, false])))}>去掉课表里没有的课的考试（{outside.length}）</button>}
-                    {skipped.length > 0 && <button className="chip" onClick={() => onExamChoices(Object.fromEntries(skipped.map(exam => [exam.id, true])))}>全部恢复（{skipped.length}）</button>}
+                {isMe && outside.length > 0 && <div className="xtidy">
+                    <button onClick={() => onExamChoices(Object.fromEntries(outside.map(exam => [exam.id, false])))}>去掉课表里没有的课的考试（{outside.length}）</button>
                 </div>}
-                {skipped.length > 0 && <section className="xskipped" aria-label="已去掉的考试">
-                    <h3 className="sh">已去掉 · 不提醒</h3>
+                {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
+                {/* Taken away: out of the way, folded at the bottom, each one a tap from coming back. */}
+                {skipped.length > 0 && <details className="xhist xskipped">
+                    <summary>已去掉 {skipped.length} 场 · 不提醒</summary>
+                    <div className="xtidy"><button onClick={() => onExamChoices(Object.fromEntries(skipped.map(exam => [exam.id, true])))}>全部恢复</button></div>
                     {skipped.map(exam => <div key={exam.id} className="xrow off">
                         <span className="cd">{dateLabel(exam.date)}</span>
                         <span className="m">{courseName(exam.course.name)}<small>{exam.start}–{exam.end} · {placeOf(exam)}</small></span>
                         <button className="ib" onClick={() => onExamChoices({ [exam.id]: true })}>恢复</button>
                     </div>)}
-                </section>}
-                {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
+                </details>}
                 {record && <ExamHistory record={record} />}
                 {recordFailed && <div className="xtrust"><p>更新记录暂时无法加载</p><TextAction onClick={onRecordRetry}>重试</TextAction></div>}
             </div>

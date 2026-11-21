@@ -71,34 +71,16 @@ public static class TermView
                 group.Children.Add(dateBox); Grid.SetColumn(items, 1); group.Children.Add(items);
                 list.Children.Add(group);
             }
-            // What one has taken away stays listed, greyed; exams of courses not on one's timetable can be taken away at once.
+            // Exams of courses not on one's timetable can be taken away at once; what is taken away is folded at the bottom.
+            var skippedExams = mine ? line.SkippedExams.OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList() : [];
             if (mine && klass is not null)
             {
-                var term = line.Term.Term;
-                var skipped = line.SkippedExams.OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList();
                 var outside = ExamAttendance.Outside(line.Exams, line.Meetings.Select(m => m.Course.Code).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!).ToHashSet());
-                if (outside.Count > 0 || skipped.Count > 0)
+                if (outside.Count > 0)
                 {
-                    var tidy = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 12, 0, 4) };
-                    if (outside.Count > 0) tidy.Children.Add(Kit.Action($"去掉课表里没有的课的考试（{outside.Count}）", () => Choices.ExamChoices(campus.Preferences, term, klass, outside.ToDictionary(x => x.Id, _ => false))));
-                    if (skipped.Count > 0) tidy.Children.Add(Kit.Action($"全部恢复（{skipped.Count}）", () => Choices.ExamChoices(campus.Preferences, term, klass, skipped.ToDictionary(x => x.Id, _ => true))));
-                    list.Children.Add(tidy);
-                }
-                if (skipped.Count > 0)
-                {
-                    list.Children.Add(Pages.Section("已去掉 · 不提醒"));
-                    foreach (var exam in skipped)
-                    {
-                        var off = new Grid { ColumnSpacing = 12, Padding = new Thickness(0, 9, 0, 9), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0), Opacity = .6 };
-                        off.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) }); off.ColumnDefinitions.Add(new ColumnDefinition()); off.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                        var lead = Kit.Text(Clock.DateLabel(Clock.Parse(exam.Date)), Role.Label, "faint"); off.Children.Add(lead);
-                        var name = Kit.Text(Names.Course(exam.Course.Name), Role.Body, "faint"); name.TextDecorations = Windows.UI.Text.TextDecorations.Strikethrough;
-                        var words = Kit.Column(1, name, Kit.Text($"{exam.Start}–{exam.End} · {PlaceOf(exam)}", Role.Caption, "faint")); Grid.SetColumn(words, 1); off.Children.Add(words);
-                        var x = exam;
-                        var restore = Kit.Action("恢复", () => Choices.ExamChoices(campus.Preferences, term, klass, new() { [x.Id] = true })); Grid.SetColumn(restore, 2); off.Children.Add(restore);
-                        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(restore, $"恢复 {Names.Course(exam.Course.Name)}");
-                        list.Children.Add(off);
-                    }
+                    var clean = Kit.Action($"去掉课表里没有的课的考试（{outside.Count}）", () => Choices.ExamChoices(campus.Preferences, line.Term.Term, klass, outside.ToDictionary(x => x.Id, _ => false)));
+                    clean.Margin = new Thickness(0, 12, 0, 4); clean.HorizontalAlignment = HorizontalAlignment.Left;
+                    list.Children.Add(clean);
                 }
             }
             var taken = line.Exams.Where(x => string.CompareOrdinal(x.Date, Clock.Text(now.Date)) < 0).OrderByDescending(x => x.Date, StringComparer.Ordinal).ToList();
@@ -106,6 +88,30 @@ public static class TermView
             {
                 list.Children.Add(Pages.Section($"已考 {taken.Count} 场"));
                 foreach (var exam in taken) list.Children.Add(Row(Clock.DateLabel(Clock.Parse(exam.Date)), Names.Course(exam.Course.Name), $"{exam.Start}–{exam.End} · {PlaceOf(exam)}", () => { if (EventOf(exam) is { } e) open(e); }));
+            }
+            if (skippedExams.Count > 0 && klass is not null)
+            {
+                // Taken away: out of the way, folded at the bottom, each one a tap from coming back.
+                var term = line.Term.Term;
+                var body = new StackPanel { Visibility = Visibility.Collapsed };
+                var restoreAll = Kit.Action("全部恢复", () => Choices.ExamChoices(campus.Preferences, term, klass, skippedExams.ToDictionary(x => x.Id, _ => true)));
+                restoreAll.HorizontalAlignment = HorizontalAlignment.Left; restoreAll.Margin = new Thickness(0, 4, 0, 6);
+                body.Children.Add(restoreAll);
+                foreach (var exam in skippedExams)
+                {
+                    var off = new Grid { ColumnSpacing = 12, Padding = new Thickness(0, 9, 0, 9), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
+                    off.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) }); off.ColumnDefinitions.Add(new ColumnDefinition()); off.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    off.Children.Add(Kit.Text(Clock.DateLabel(Clock.Parse(exam.Date)), Role.Label, "faint"));
+                    var words = Kit.Column(1, Kit.Text(Names.Course(exam.Course.Name), Role.Body, "faint"), Kit.Text($"{exam.Start}–{exam.End} · {PlaceOf(exam)}", Role.Caption, "faint")); Grid.SetColumn(words, 1); off.Children.Add(words);
+                    var x = exam;
+                    var restore = Kit.Action("恢复", () => Choices.ExamChoices(campus.Preferences, term, klass, new() { [x.Id] = true })); Grid.SetColumn(restore, 2); off.Children.Add(restore);
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(restore, $"恢复 {Names.Course(exam.Course.Name)}");
+                    body.Children.Add(off);
+                }
+                var foldHead = new Tap(Paint.Clear, Paint.Faded("surfaceSunken", .55)) { Content = Kit.Text($"已去掉 {skippedExams.Count} 场 · 不提醒", Role.Label, "muted"), Padding = new Thickness(0, 11, 0, 11), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0), HorizontalContentAlignment = HorizontalAlignment.Left };
+                foldHead.Click += (_, _) => body.Visibility = body.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+                list.Children.Add(foldHead);
+                list.Children.Add(body);
             }
             if (record is not null) list.Children.Add(ExamHistory.Make(record, selectedVersion, selectVersion));
             page.Children.Add(list);

@@ -2,7 +2,6 @@ package top.hicancan.studev.timetable
 
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -525,6 +524,7 @@ private fun goneSummary(events: List<LineEvent>): String {
     val courses = line.exams.map { it.course.code ?: it.course.name }.distinct().size
     val offGrid = practice.distinctBy { it.name to it.weeks }.sortedWith(compareBy({ it.weeks.first() }, { it.name }))
     var takenOpen by remember { mutableStateOf(false) }
+    var skippedOpen by remember { mutableStateOf(false) }
     // What one has taken away stays listed, greyed; exams of courses not on one's timetable can be taken away at once.
     val skipped = if (isMe) model.skippedExams(state).sortedWith(compareBy({ it.date }, { it.start })) else emptyList()
     val outside = if (isMe) ExamAttendance.outside(line.exams, line.meetings.mapNotNull { it.course.code }.toSet()) else emptyList()
@@ -599,30 +599,29 @@ private fun goneSummary(events: List<LineEvent>): String {
                     }
                 }
             }
-            if (outside.isNotEmpty() || skipped.isNotEmpty()) item {
-                FlowRow(Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (outside.isNotEmpty()) ActionButton("去掉课表里没有的课的考试（${outside.size}）") { model.examChoices(outside.associate { it.id to false }) }
-                    if (skipped.isNotEmpty()) ActionButton("全部恢复（${skipped.size}）") { model.examChoices(skipped.associate { it.id to true }) }
-                }
+            if (outside.isNotEmpty()) item {
+                Box(Modifier.padding(vertical = 12.dp)) { ActionButton("去掉课表里没有的课的考试（${outside.size}）") { model.examChoices(outside.associate { it.id to false }) } }
             }
-            if (skipped.isNotEmpty()) {
-                item { Plain("已去掉 · 不提醒", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) }
-                skipped.forEach { exam ->
-                    item {
+            if (taken.isNotEmpty()) item {
+                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { takenOpen = !takenOpen }.padding(vertical = 11.dp)) { Plain("已考 ${taken.size} 场", 13.5.sp, Ink.muted) }
+                if (takenOpen) taken.forEach { examRow(it, dateLabel(LocalDate.parse(it.date))) }
+            }
+            // Taken away: out of the way, folded at the bottom, each one a tap from coming back.
+            if (skipped.isNotEmpty()) item {
+                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { skippedOpen = !skippedOpen }.padding(vertical = 11.dp)) { Plain("已去掉 ${skipped.size} 场 · 不提醒", 13.5.sp, Ink.muted) }
+                if (skippedOpen) {
+                    Box(Modifier.padding(bottom = 6.dp)) { ActionButton("全部恢复") { model.examChoices(skipped.associate { it.id to true }) } }
+                    skipped.forEach { exam ->
                         Row(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Plain(dateLabel(LocalDate.parse(exam.date)), 13.sp, Ink.faint, modifier = Modifier.width(52.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(Names.course(exam.course.name), color = Ink.faint, style = TextStyle(fontSize = 15.sp, textDecoration = TextDecoration.LineThrough), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Plain(Names.course(exam.course.name), 15.sp, Ink.faint, maxLines = 1)
                                 Plain("${exam.start}–${exam.end} · ${placeOf(exam)}", 12.5.sp, Ink.faint)
                             }
                             TextAction("恢复", onClick = { model.examAttendance(exam.id, true) })
                         }
                     }
                 }
-            }
-            if (taken.isNotEmpty()) item {
-                Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { takenOpen = !takenOpen }.padding(vertical = 11.dp)) { Plain("已考 ${taken.size} 场", 13.5.sp, Ink.muted) }
-                if (takenOpen) taken.forEach { examRow(it, dateLabel(LocalDate.parse(it.date))) }
             }
             if (record != null) item { ExamRecordView(record) }
             if (recordState.failed) item { Column(Modifier.padding(vertical = 24.dp)) { Plain("更新记录暂时无法加载", 13.sp, Ink.muted); TextAction("重试", onClick = recordState.retry) } }
