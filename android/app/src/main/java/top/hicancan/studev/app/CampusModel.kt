@@ -226,14 +226,21 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
     fun saveCustomCourse(course: CustomCourse) = applyTimetableChange { edits -> edits.copy(custom = edits.custom.filter { it.id != course.id } + course) }
     /** Undoes what was changed about the class's timetable; one's own courses stay, since they are deleted one by one. */
     fun resetTimetableEdits() = applyTimetableChange { TimetableEdits(custom = it.custom) }
-    private fun personalExams(repo: AcademicRepository, schedule: ClassSchedule?, exams: List<Exam>) =
-        ExamAttendance.select(exams, settings.state.value.examChoices(repo.release.exams, settings.state.value.klass), ExamAttendance.ownCodes(repo.release, schedule))
-    fun examAttendance(id: String, attending: Boolean) {
+    private fun personalExams(repo: AcademicRepository, exams: List<Exam>) =
+        ExamAttendance.select(exams, settings.state.value.examChoices(repo.release.exams, settings.state.value.klass))
+    /** The class's exams one has taken away: shown greyed, never reminded of. */
+    fun skippedExams(state: AcademicState): List<Exam> {
+        val repo = state.repository ?: return emptyList()
+        return ExamAttendance.skipped(state.exams, settings.state.value.examChoices(repo.release.exams, settings.state.value.klass))
+    }
+    fun examAttendance(id: String, attending: Boolean) = examChoices(mapOf(id to attending))
+    /** Takes exams away from one's own line (false) or brings them back (true). */
+    fun examChoices(choices: Map<String, Boolean>) {
         val current = state.value
         val repo = current.repository ?: return
         val klass = settings.state.value.klass ?: return
         val term = repo.release.exams ?: return
-        settings.updateExamAttendance(term, klass, mapOf(id to attending))
+        settings.updateExamAttendance(term, klass, choices)
         syncPhone()
     }
     /** The visitor's own timeline, the same line the web draws. */
@@ -242,7 +249,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
         val repo = state.repository ?: return null
         val grade = CampusLine.grade(state.classes.find { it.id == settings.klass }?.grade, term)
         val runShown = settings.runShown ?: (grade != null && grade <= 2)
-        return Courses.named(CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.schedule, state.exams), state.holidays,
+        return Courses.named(CampusLine(term, state.periods, state.schedule?.meetings.orEmpty(), CourseCatalog.attendingLabs(state.labs, settings.labs), personalExams(repo, state.exams), state.holidays,
             state.run?.takeIf { runShown }?.let { RunPlan(it, settings.runDays, settings.runAdjust) }, tasks,
             courseMeetings = (state.rawSchedule?.meetings.orEmpty() + state.schedule?.meetings.orEmpty()).distinctBy { it.id }), settings.timetableEdits(term.term).names, settings.events)
     }

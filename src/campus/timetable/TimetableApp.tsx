@@ -136,7 +136,7 @@ export default function TimetableApp() {
     const mine = {
         hideCourse: (id: string) => id.startsWith('custom:') ? updateTimetableEdits(term.term, edits => ({ ...edits, custom: (edits.custom ?? []).filter(course => `custom:${course.id}` !== id) })) : updateTimetableEdits(term.term, edits => edits.added.includes(id)
             ? { ...edits, added: edits.added.filter(item => item !== id) } : { ...edits, hidden: [...edits.hidden, id] }),
-        skipExam: (id: string) => { if (prefs.class) updateExamAttendance(term.term, prefs.class, { [id]: false }); },
+        examChoices: (choices: Record<string, boolean>) => { if (prefs.class) updateExamAttendance(term.term, prefs.class, choices); },
         labs: (key: 'skip' | 'drop', value: string) => writePreferences(current => ({ ...current, labs: { ...current.labs, [key]: [...new Set([...(current.labs?.[key] ?? []), value])] } })),
     };
 
@@ -166,7 +166,7 @@ export default function TimetableApp() {
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'list' && isMe && <ListView line={line} now={now} courses={courses} onTask={openTask} onOpen={openEvent} />}
-                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} recordFailed={recordFailed} onRecordRetry={() => setRecordAttempt(current => current + 1)} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} />}
+                {scale === 'term' && <TermView line={line} now={now} isMe={isMe} record={record} recordFailed={recordFailed} onRecordRetry={() => setRecordAttempt(current => current + 1)} practice={loaded.classInfo?.practice ?? []} mode={(params.get('mode') as TermMode | null) ?? 'course'} onMode={next => set({ mode: next === 'course' ? null : next })} onPick={date => set({ t: date, scale: 'week' }, { push: true })} onOpen={openEvent} onExamChoices={mine.examChoices} />}
                 {preview && previewRows.length > 0 && <PreviewDock rows={previewRows} mine={line.meetings} week={week} added={prefs.timetable?.[term.term]?.added.includes(preview) ?? false}
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
@@ -178,7 +178,7 @@ export default function TimetableApp() {
                 onRename={(event, name) => { const id = courseIdentity(event.meeting!); const next = updateTimetableEdits(term.term, edits => { const names = { ...edits.names }; if (name) names[id] = name; else delete names[id]; return { ...edits, names: Object.keys(names).length ? names : undefined }; }); setOpen(eventsOn({ ...line, names: next.timetable?.[term.term]?.names }, event.date).find(item => item.id === event.id) ?? event); }}
                 onDropLab={event => { mine.labs('drop', labCourseKey(event.lab!)); setOpen(null); }}
                 onHide={event => { mine.hideCourse(event.meeting!.teaching_class.id); setOpen(null); }}
-                onSkipExam={event => { mine.skipExam(event.exam!.id); setOpen(null); }}
+                onSkipExam={event => { mine.examChoices({ [event.exam!.id]: false }); setOpen(null); }}
                 onUnplan={() => { updateRun({ days: toggleRun(line.run!.days, open.date) }); setOpen(null); }}
                 onPlan={() => { setOpen(null); set({ scale: 'term', mode: 'run' }, { push: true }); }}
                 onExams={() => { setOpen(null); set({ scale: 'term', mode: 'exam' }, { push: true }); }} />}

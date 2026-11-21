@@ -5,6 +5,7 @@ import { usePreferences } from '@/world/usePreferences';
 import { loadCalendar, type CalendarTerm, type ExamRecord } from '@/world/data';
 import type { Exam, Practice } from '@/world/facts';
 import { wasChanged, weeksText } from '@/world/exams';
+import { outsideTimetable } from '@/timetable/model/examAttendance';
 import { ExamHistory } from '../ExamHistory';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { addDays, dateLabel, daysBetween, WEEKDAYS, weekdayOf, type Moment } from '@/world/time';
@@ -31,10 +32,12 @@ function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Mom
     );
 }
 
-export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry, practice, mode, onMode, onPick, onOpen }: {
+export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry, practice, mode, onMode, onPick, onOpen, onExamChoices }: {
     line: Timeline; now: Moment; isMe: boolean; record: ExamRecord | null; practice: Practice[]; mode: TermMode;
     recordFailed: boolean; onRecordRetry: () => void;
     onMode: (mode: TermMode) => void; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void;
+    /** Takes exams away from one's own line (false) or brings them back (true). */
+    onExamChoices: (choices: Record<string, boolean>) => void;
 }) {
     const [terms, setTerms] = useState<CalendarTerm[]>([]);
     const { prefs } = usePreferences();
@@ -68,6 +71,9 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
     ]
         .filter(item => item.start >= now.date).sort((left, right) => left.start.localeCompare(right.start));
     const eventOf = (exam: Exam) => eventsOn(line, exam.date).find(item => item.exam?.id === exam.id);
+    // What one has taken away stays listed, greyed; exams of courses not on one's timetable can be taken away at once.
+    const skipped = useMemo(() => [...(line.skippedExams ?? [])].sort((left, right) => left.date.localeCompare(right.date) || left.start.localeCompare(right.start)), [line.skippedExams]);
+    const outside = useMemo(() => line.ownCodes ? outsideTimetable(line.exams, line.ownCodes) : [], [line.exams, line.ownCodes]);
     const examRow = (exam: Exam, lead: string) => (
         <button key={exam.id} className="xrow" onClick={() => { const event = eventOf(exam); if (event) onOpen(event); }}>
             <span className="cd">{lead}</span>
@@ -138,6 +144,18 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
                         </button>
                     ))}</div>
                 </section>)}
+                {isMe && (outside.length > 0 || skipped.length > 0) && <div className="xtidy">
+                    {outside.length > 0 && <button className="chip" onClick={() => onExamChoices(Object.fromEntries(outside.map(exam => [exam.id, false])))}>去掉课表里没有的课的考试（{outside.length}）</button>}
+                    {skipped.length > 0 && <button className="chip" onClick={() => onExamChoices(Object.fromEntries(skipped.map(exam => [exam.id, true])))}>全部恢复（{skipped.length}）</button>}
+                </div>}
+                {skipped.length > 0 && <section className="xskipped" aria-label="已去掉的考试">
+                    <h3 className="sh">已去掉 · 不提醒</h3>
+                    {skipped.map(exam => <div key={exam.id} className="xrow off">
+                        <span className="cd">{dateLabel(exam.date)}</span>
+                        <span className="m">{courseName(exam.course.name)}<small>{exam.start}–{exam.end} · {placeOf(exam)}</small></span>
+                        <button className="ib" onClick={() => onExamChoices({ [exam.id]: true })}>恢复</button>
+                    </div>)}
+                </section>}
                 {taken.length > 0 && <details className="xhist"><summary>已考 {taken.length} 场</summary>{taken.map(exam => examRow(exam, dateLabel(exam.date)))}</details>}
                 {record && <ExamHistory record={record} />}
                 {recordFailed && <div className="xtrust"><p>更新记录暂时无法加载</p><TextAction onClick={onRecordRetry}>重试</TextAction></div>}

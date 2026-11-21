@@ -397,8 +397,11 @@ class ParityTest {
         edge.getValue("examAttendance").jsonArray.forEach { item ->
             val test = item.jsonObject
             val choices = test.getValue("choices").jsonObject.mapValues { it.value.jsonPrimitive.boolean }
-            val own = test.getValue("ownCodes").takeUnless { it is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content }?.toSet()
-            assertEquals(test.getValue("expected").jsonArray.map { it.jsonPrimitive.content }, ExamAttendance.select(exams, choices, own).map { it.id })
+            val own = test.getValue("ownCodes").takeUnless { it is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content }?.toSet().orEmpty()
+            fun ids(name: String) = test.getValue(name).jsonArray.map { it.jsonPrimitive.content }
+            assertEquals(ids("attending"), ExamAttendance.select(exams, choices).map { it.id })
+            assertEquals(ids("skipped"), ExamAttendance.skipped(exams, choices).map { it.id })
+            assertEquals(ids("outside"), ExamAttendance.outside(exams, own).map { it.id })
         }
     }
     @Test fun examRemindersMatch() = golden.getValue("edgeCases").jsonObject.getValue("examReminders").jsonArray.forEach { item ->

@@ -110,12 +110,15 @@ export function EventSheet({ event, line, now, isMe, record, campus, order, onCl
     const tones = timelineTones(line);
     const toneOf = (item: CampusEvent) => { const tone = eventTone(tones, item, line.courseMeetings ?? line.meetings); return tone !== undefined ? courseToneStyle(tone) : undefined; };
     const group = clusters(eventsOn(line, event.date), order).find(item => item.events.some(other => other.id === event.id));
-    const together = group && group.events.length > 1 ? [...group.events].sort((left, right) => (right.layer ?? 0) - (left.layer ?? 0) || order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : 1)) : [];
+    // An exam also switches among the day's other exams, wherever it was tapped: two exams on one day are seen together.
+    const dayExams = event.kind === 'exam' ? eventsOn(line, event.date).filter(item => item.kind === 'exam') : [];
+    const stacked = group && group.events.length > 1 ? [...group.events].sort((left, right) => (right.layer ?? 0) - (left.layer ?? 0) || order.indexOf(left.kind) - order.indexOf(right.kind) || left.start - right.start || (left.id < right.id ? -1 : 1)) : [];
+    const together = dayExams.length > 1 ? [...new Map([...stacked, ...dayExams].map(item => [item.id, item])).values()].sort((left, right) => left.start - right.start || order.indexOf(left.kind) - order.indexOf(right.kind) || (left.id < right.id ? -1 : 1)) : stacked;
     const at = together.findIndex(item => item.id === event.id);
     const swipe = useRef<number | null>(null);
     const [naming, setNaming] = useState<string | null>(null);
     const strip = together.length > 1 && (
-        <div className="sw" role="tablist" aria-label="同时段"
+        <div className="sw" role="tablist" aria-label={dayExams.length > 1 ? '当天的考试' : '同时段'}
             onPointerDown={pointer => { swipe.current = pointer.clientX; }}
             onPointerUp={pointer => { const from = swipe.current; swipe.current = null; if (from === null || Math.abs(pointer.clientX - from) < 48) return; const next = together[at + (pointer.clientX < from ? 1 : -1)]; if (next) onOpen(next); }}>
             {together.map(item => <button key={item.id} role="tab" aria-selected={item.id === event.id} className={`sw-i ${item.kind} ${item.id === event.id ? 'on' : ''}`} style={toneOf(item)} onClick={() => onOpen(item)}>

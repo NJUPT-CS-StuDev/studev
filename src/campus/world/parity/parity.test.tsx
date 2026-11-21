@@ -6,7 +6,7 @@ import { offWeekLessons } from '@/timetable/model/weekPattern';
 import { parseQuickTask, reminderAt, taskGroup, taskOrder, type Task } from '@/world/tasks';
 import { dueOn } from '@/world/events';
 import { glanceDay, glanceDue, glanceExams, glanceNextChange, glanceTerm, glanceWeek } from '@/world/glance';
-import { attendingExams } from '@/timetable/model/examAttendance';
+import { attendingExams, outsideTimetable, skippedExams } from '@/timetable/model/examAttendance';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, nextEvent, overlapping, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { courseName, courseShort, roomLabel } from '@/world/names';
 import { makeRoomReader } from '@/world/rooms';
@@ -97,7 +97,12 @@ describe('the shared web / Android real-data contract', () => {
         for (const test of golden.edgeCases.colours) expect(courseIdentity(test)).toBe(test.identity);
         for (const test of golden.tones) expect(Object.fromEntries(courseTones(golden.schedules.find(schedule => schedule.class === test.class)!.meetings))).toEqual(test.tones);
         for (const test of golden.edgeCases.names) expect({ course: courseName(test.value), short: courseShort(test.value), room: roomLabel(test.value) }).toEqual({ course: test.course, short: test.short, room: test.room });
-        for (const test of golden.edgeCases.examAttendance) expect(attendingExams(golden.edgeCases.attendanceExams as Exam[], test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id)).toEqual(test.expected);
+        for (const test of golden.edgeCases.examAttendance) {
+            const exams = golden.edgeCases.attendanceExams as Exam[], choices = test.choices as Record<string, boolean>;
+            expect(attendingExams(exams, choices).map(exam => exam.id)).toEqual(test.attending);
+            expect(skippedExams(exams, choices).map(exam => exam.id)).toEqual(test.skipped);
+            expect(outsideTimetable(exams, new Set(test.ownCodes ?? [])).map(exam => exam.id)).toEqual(test.outside);
+        }
     });
     it('places tasks on the line, groups and orders them, and reads a task typed in one line', () => {
         const t = golden.tasks;

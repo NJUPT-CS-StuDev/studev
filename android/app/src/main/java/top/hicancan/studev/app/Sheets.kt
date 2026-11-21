@@ -122,7 +122,10 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
         else -> top.hicancan.studev.timetable.TimetablePresentation.toneOf(item, tones, line.courseMeetings)?.let { tone(it) }?.let { it.bg to it.fg } ?: (Ink.sunken to Ink.text)
     }
     val group = CampusLine.clusters(line.on(date), settings.layers).firstOrNull { run -> run.events.any { it.id == event.id } }
-    val together = group?.events?.takeIf { it.size > 1 }?.sortedWith(compareByDescending<LineEvent> { it.layer }.thenBy { settings.layers.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }).orEmpty()
+    val stacked = group?.events?.takeIf { it.size > 1 }?.sortedWith(compareByDescending<LineEvent> { it.layer }.thenBy { settings.layers.indexOf(it.kind) }.thenBy { it.start }.thenBy { it.id }).orEmpty()
+    // An exam also switches among the day's other exams, wherever it was tapped: two exams on one day are seen together.
+    val dayExams = if (event.kind == "exam") line.on(date).filter { it.kind == "exam" } else emptyList()
+    val together = if (dayExams.size > 1) (stacked + dayExams).distinctBy { it.id }.sortedWith(compareBy<LineEvent> { it.start }.thenBy { settings.layers.indexOf(it.kind) }.thenBy { it.id }) else stacked
     val kindNames = mapOf("class" to "课", "lab" to "实验", "exam" to "考试", "run" to "早锻炼", "task" to "任务")
     val strip: (@Composable () -> Unit)? = if (together.isEmpty()) null else ({
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

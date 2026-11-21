@@ -64,6 +64,10 @@ export interface Timeline {
     /** One's own tasks, steps included; only someone's own line has any. */
     tasks: Task[];
     preferences?: EventPreferences;
+    /** Exams one has taken away from one's own line: shown greyed, never reminded of. */
+    skippedExams?: Exam[];
+    /** The course codes of one's own timetable, for offering to take away exams of other courses. */
+    ownCodes?: ReadonlySet<string>;
     names?: Record<string, string>;
     /** Course facts for names and links, including lectures this person does not attend. */
     courseMeetings?: TeachingMeeting[];

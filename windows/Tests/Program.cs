@@ -88,6 +88,18 @@ foreach (var item in golden["edgeCases"]!["names"]!.AsArray())
 }
 foreach (var item in golden["edgeCases"]!["colours"]!.AsArray())
     Equal("identity", CourseTones.Identity(item!["course"]!["code"]?.GetValue<string>(), item["course"]!["name"]!.GetValue<string>()), item["identity"]);
+{
+    // Which exams one attends: every one but those taken away, which stay listed; other courses' exams offered for clean-up.
+    var attendanceExams = golden["edgeCases"]!["attendanceExams"]!.AsArray().Select(x => new Exam((string)x!["id"]!, ["A"], new ExamCourse(x["course"]!["code"]?.GetValue<string>(), (string)x["course"]!["name"]!), null, null, "教1-101", null, "2026-11-05", "08:00", "09:00", null, null, "2026-11-04-sheet.xlsx", "event", "exam")).ToList();
+    foreach (var item in golden["edgeCases"]!["examAttendance"]!.AsArray())
+    {
+        var choices = item!["choices"]!.AsObject().ToDictionary(p => p.Key, p => p.Value!.GetValue<bool>());
+        var own = item["ownCodes"] is JsonArray codes ? codes.Select(c => (string)c!).ToHashSet() : new HashSet<string>();
+        Equal("exam attending", ExamAttendance.Select(attendanceExams, choices).Select(x => x.Id), item["attending"]);
+        Equal("exam skipped", ExamAttendance.Skipped(attendanceExams, choices).Select(x => x.Id), item["skipped"]);
+        Equal("exam outside", ExamAttendance.Outside(attendanceExams, own).Select(x => x.Id), item["outside"]);
+    }
+}
 foreach (var item in golden["edgeCases"]!["compactPlaces"]!.AsArray())
     Equal("compact place", Names.CompactPlace((string)item!["value"]!), item["compact"]);
 foreach (var item in golden["tones"]!.AsArray())

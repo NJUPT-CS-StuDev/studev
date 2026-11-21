@@ -3,7 +3,7 @@ import type { Exam, Lab, TeachingClass, TeachingMeeting, TeachingPeriod, Teachin
 import type { Task } from '@/world/tasks';
 import { attendingLabs, personalLabs } from '@/timetable/model/labs';
 import { customMeetings } from '@/timetable/model/courses';
-import { attendingExams } from '@/timetable/model/examAttendance';
+import { attendingExams, skippedExams } from '@/timetable/model/examAttendance';
 import { examAttendanceScope, timetableEdits, type Preferences, type TimetableEdits } from '@/world/preferences';
 import { loadCalendar, loadClasses, loadClassExams, loadClassLabs, loadClassMeetings, loadExams, loadLabs, loadMeetings, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { gradeOf, holidayMap, type Timeline } from '@/world/events';
@@ -84,12 +84,14 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
         const classInfo = classId ? base.classes.find(item => item.id === classId || item.name === classId) ?? null : null;
         const codes = new Set(meetings.map(meeting => meeting.course.code ?? ''));
         const choices = classId ? prefs.examAttendance?.[examAttendanceScope(base.term.term, classId)] ?? {} : {};
-        const exams = who.type === 'me' ? attendingExams(source.exams, choices, codes) : source.exams;
+        const exams = who.type === 'me' ? attendingExams(source.exams, choices) : source.exams;
         const grade = gradeOf(classInfo?.grade, base.term);
         const runOn = who.type === 'me' && base.run && (prefs.run?.on ?? (grade !== null && grade <= 2));
         const labs = who.type === 'me' ? attendingLabs(personalLabs(source.labs, prefs.labs?.classes ?? [], catalogLabs), prefs.labs) : source.labs;
         const line: Timeline = { term: base.term, periods: base.periods, meetings, labs, exams, holidays: base.holidays, run: runOn && base.run ? { rule: base.run, days: prefs.run?.days ?? [], adjust: prefs.run?.adjust ?? 0 } : null, tasks: who.type === 'me' ? tasks : [], names: edits.names };
         line.preferences = who.type === 'me' ? prefs.events : undefined;
+        line.skippedExams = who.type === 'me' ? skippedExams(source.exams, choices) : [];
+        line.ownCodes = codes;
         line.courseMeetings = distinct([...source.meetings, ...plain]);
         return { loaded: { ...base, line, own, added, classInfo }, term: base.term, error, previewRows };
     }, [base, catalogLabs, catalogRows, classId, prefs.labs, prefs.events, tasks, edits, error, key, prefs.examAttendance, prefs.run, previewRows, source, who.type]);

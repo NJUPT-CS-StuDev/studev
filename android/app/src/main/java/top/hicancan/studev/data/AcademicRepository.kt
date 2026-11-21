@@ -220,9 +220,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     }
     suspend fun effectiveExams(id: String, settings: top.hicancan.studev.me.PersonalSettings): List<Exam> {
         val edits = settings.timetableEdits(release.teaching)
-        val schedule = if (release.exams == release.teaching && classes().any { it.id == id }) effectiveSchedule(id, edits) else null
-        return top.hicancan.studev.timetable.ExamAttendance.select(examCandidates(id, edits), settings.examChoices(release.exams, id),
-            top.hicancan.studev.timetable.ExamAttendance.ownCodes(release, schedule))
+        return top.hicancan.studev.timetable.ExamAttendance.select(examCandidates(id, edits), settings.examChoices(release.exams, id))
     }
     private val lenient = Json { ignoreUnknownKeys = true }
     suspend fun calendar() = withContext(Dispatchers.Default) { lenient.decodeFromString<top.hicancan.studev.world.CalendarFile>(bytes("calendar.json").decodeToString()).terms }

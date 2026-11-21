@@ -16,6 +16,8 @@ public sealed class CampusLine(TeachingTerm term, List<TeachingPeriod> periods, 
     public List<TeachingMeeting> Meetings { get; } = meetings;
     public List<Lab> Labs { get; } = labs;
     public List<Exam> Exams { get; } = exams;
+    /// Exams one has taken away from one's own line: shown greyed, never reminded of.
+    public List<Exam> SkippedExams { get; init; } = [];
     public Dictionary<DateOnly, string> Holidays { get; } = holidays;
     private readonly Dictionary<int, TeachingPeriod> byPeriod = periods.ToDictionary(period => period.Period);
     public List<TeachingPeriod> Periods { get; } = periods;

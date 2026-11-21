@@ -23,15 +23,14 @@ public sealed record PersonalLine(CampusLine Line, List<TeachingMeeting> ClassMe
         var personalLabs = classLabs.Concat(labChoices?.Classes is { Count: > 0 } extra
             ? (await repo.AllLabs()).Where(l => l.Classes.Any(extra.Contains)) : []).DistinctBy(l => l.Id).OrderBy(l => l.Date).ThenBy(l => l.Start).ToList();
         var examChoices = preferences.Get("examAttendance", StorageJson.Default.DictionaryStringDictionaryStringBoolean)?.GetValueOrDefault($"{term.Term}:{klass}");
-        var codes = meetings.Select(m => m.Course.Code).Where(code => !string.IsNullOrEmpty(code)).ToHashSet();
-        var attendingExams = exams.Result.Where(e => examChoices?.GetValueOrDefault(e.Id, e.Course.Code is null || codes.Contains(e.Course.Code))
-            ?? (e.Course.Code is null || codes.Contains(e.Course.Code))).ToList();
+        var attendingExams = ExamAttendance.Select(exams.Result, examChoices);
         var run = preferences.Get("run", StorageJson.Default.RunSettings);
         var runRule = runs.Result.GetValueOrDefault(term.Term);
         var grade = int.TryParse(schedule.Result.Klass.Grade, out var year) ? term.Year - year + 1 : 0;
         var line = new CampusLine(term, periods, meetings, Choices.Labs(personalLabs, labChoices), attendingExams, CampusLine.HolidaysOf(calendar))
         {
             CourseMeetings = chosen,
+            SkippedExams = ExamAttendance.Skipped(exams.Result, examChoices),
             CourseNames = edits.Names,
             Preferences = preferences.Get("events", StorageJson.Default.DictionaryStringEventChoice),
             Order = preferences.Get("layers", StorageJson.Default.ListString) is { } order && order.Count == CampusLine.LayerOrder.Length && CampusLine.LayerOrder.All(order.Contains) ? order : CampusLine.LayerOrder,

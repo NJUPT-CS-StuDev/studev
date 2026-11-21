@@ -50,11 +50,14 @@ public static class Choices
         labs = key == "skip" ? labs with { Skip = [.. (labs.Skip ?? []).Append(value).Distinct()] } : labs with { Drop = [.. (labs.Drop ?? []).Append(value).Distinct()] };
         prefs.Set("labs", labs, Data.StorageJson.Default.LabChoices);
     }
-    public static void SkipExam(Preferences prefs, string term, string klass, string exam)
+    public static void SkipExam(Preferences prefs, string term, string klass, string exam) => ExamChoices(prefs, term, klass, new() { [exam] = false });
+    /// Takes exams away from one's own line (false) or brings them back (true).
+    public static void ExamChoices(Preferences prefs, string term, string klass, Dictionary<string, bool> choices)
     {
         var all = prefs.Get("examAttendance", Data.StorageJson.Default.DictionaryStringDictionaryStringBoolean) ?? new();
         var mine = all.GetValueOrDefault($"{term}:{klass}") ?? new();
-        mine[exam] = false; all[$"{term}:{klass}"] = mine;
+        foreach (var (exam, attending) in choices) mine[exam] = attending;
+        all[$"{term}:{klass}"] = mine;
         prefs.Set("examAttendance", all, Data.StorageJson.Default.DictionaryStringDictionaryStringBoolean);
     }
     public static TimetableEdits Edits(Preferences prefs, string term) => prefs.Get("timetable", Data.StorageJson.Default.DictionaryStringTimetableEdits)?.GetValueOrDefault(term) ?? new([], []);

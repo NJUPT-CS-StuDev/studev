@@ -42,10 +42,14 @@ public static class Events
         var root = new StackPanel();
         // What else is on at the same time, in the order it is stacked, switched in place.
         var group = CampusLine.Clusters(line.On(e.Date), line.Order).FirstOrDefault(c => c.Events.Any(o => o.Id == e.Id));
-        if (group is { Events.Count: > 1 })
+        var stacked = group is { Events.Count: > 1 } ? group.Events.OrderByDescending(o => o.Layer).ThenBy(o => line.Order.ToList().IndexOf(o.Kind)).ThenBy(o => o.Start).ToList() : [];
+        // An exam also switches among the day's other exams, wherever it was tapped: two exams on one day are seen together.
+        var dayExams = e.Kind == "exam" ? line.On(e.Date).Where(o => o.Kind == "exam").ToList() : [];
+        var together = dayExams.Count > 1 ? stacked.Concat(dayExams).DistinctBy(o => o.Id).OrderBy(o => o.Start).ThenBy(o => line.Order.ToList().IndexOf(o.Kind)).ToList() : stacked;
+        if (together.Count > 1)
         {
             var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Padding = new Thickness(16, 14, 16, 0) };
-            foreach (var other in group.Events.OrderByDescending(o => o.Layer).ThenBy(o => line.Order.ToList().IndexOf(o.Kind)).ThenBy(o => o.Start))
+            foreach (var other in together)
             {
                 var otherLook = Tiles.LookOf(other, CourseTones.ToneOf(other, tones, line.CourseMeetings), false);
                 var on = other.Id == e.Id;

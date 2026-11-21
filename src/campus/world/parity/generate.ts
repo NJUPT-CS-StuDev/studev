@@ -30,7 +30,7 @@ import type { CurriculumCourse, Knowledge } from '../knowledge';
 import { createHash } from 'node:crypto';
 import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
-import { attendingExams } from '@/timetable/model/examAttendance';
+import { attendingExams, outsideTimetable, skippedExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
 import { changeLines, examHistory, examImpact, examTime, examVersionSeen, examVersionTime } from '@/world/exams';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, nextLesson, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
@@ -104,7 +104,10 @@ const compactPlaces = ['计科楼-401/403', '计科楼-401/403/405/407', '计科
 const attendanceExams = [{ id: 'a', course: { code: 'X1', name: '甲' } }, { id: 'b', course: { code: 'X2', name: '乙' } }, { id: 'c', course: { code: null, name: '丙' } }] as Exam[];
 const examAttendance = [
     { choices: {}, ownCodes: null }, { choices: { a: false }, ownCodes: null }, { choices: {}, ownCodes: ['X1'] }, { choices: { b: true }, ownCodes: ['X1'] },
-].map(test => ({ ...test, expected: attendingExams(attendanceExams, test.choices as Record<string, boolean>, test.ownCodes && new Set(test.ownCodes)).map(exam => exam.id) }));
+].map(test => ({ ...test,
+    attending: attendingExams(attendanceExams, test.choices as Record<string, boolean>).map(exam => exam.id),
+    skipped: skippedExams(attendanceExams, test.choices as Record<string, boolean>).map(exam => exam.id),
+    outside: outsideTimetable(attendanceExams, new Set(test.ownCodes ?? [])).map(exam => exam.id) }));
 const examReminders = EXAM_REMINDERS.flatMap(({ key }) => [8 * 60, 13 * 60 + 30, 18 * 60 + 30].map(start => ({ key, start, minutes: examReminderMinutes(key, start) })));
 const placeRows = JSON.parse(readFileSync(`public${release.map_base}/仙林/entities.json`, 'utf8')) as Place[];
 const hourFacts = JSON.parse(readFileSync(`public/data/${release.version}/hours.json`, 'utf8')) as Record<string, { hours: Place['hours'] }>;
