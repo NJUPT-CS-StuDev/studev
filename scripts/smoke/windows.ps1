@@ -22,8 +22,8 @@ $catalogCourse = $allMeetings | Where-Object { $_.teaching_class.id -notin $ownT
 $catalogName = ($catalogCourse.course.name -replace '[（(].*?[)）]', '').Trim()
 $navTeacher = ($ownSchedule | Where-Object { $_.teachers.Count -gt 0 } | Select-Object -First 1).teachers[0].name
 $navExam = Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/exams.json") -Raw | ConvertFrom-Json | Select-Object -First 1
-$examIndex = Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/index.json") -Raw | ConvertFrom-Json
-$examChanges = @(Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/changes.json") -Raw | ConvertFrom-Json)
+$examIndex = Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/index.json") -Raw | ConvertFrom-Json -DateKind String
+$examChanges = @(Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/exams/$($release.exams)/changes.json") -Raw | ConvertFrom-Json -DateKind String)
 $classIds = @((Get-Content -LiteralPath (Join-Path $repo "public/data/$($release.version)/teaching/$($release.teaching)/classes.json") -Raw | ConvertFrom-Json).id)
 $affectedExam = $examChanges | Where-Object { $_.class -in $classIds } | Select-Object -First 1
 if (-not $affectedExam -or -not ($examIndex.history | Where-Object baseline)) { throw 'the actual release has no exam baseline or affected class' }
