@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import java.time.LocalDate
 
 /** Whoever is being looked at, unfolded along time. */
 @Composable fun TimetableScreen(route: Route, model: CampusModel, state: AcademicState, settings: PersonalSettings, now: Moment, walk: suspend (String) -> top.hicancan.studev.navigation.WalkEstimate?, onEvent: (LineEvent, CampusLine) -> Unit) {
+    val views = rememberSaveableStateHolder()
     val term = state.term
     if (settings.klass == null && route.whoType == "me") { ClassPicker(state) { model.chooseClass(it) }; return }
     if (term == null) { Box(Modifier.fillMaxSize()); return }
@@ -146,7 +148,7 @@ import java.time.LocalDate
             // The avatar has its own place beside the title. Week navigation must not squeeze the title into it.
             if (isMe) CampusHeader { Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 1) }
             else {
-                CampusHeader { Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.whoType = "me"; route.whoId = ""; route.scale = "day"; route.preview = null }.padding(vertical = 10.dp)) }
+                CampusHeader { Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.myTimetable() }.padding(vertical = 10.dp)) }
                 Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 2)
             }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -168,11 +170,13 @@ import java.time.LocalDate
         TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期", "exam" to "考试") + if (isMe) listOf("list" to "任务") else emptyList(), scale, separateBefore = "list") { route.scale = it; route.termMode = "course" }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
-            when (scale) {
-                "list" -> TaskList(line, now, model.tasks, model.settings) { onEvent(it, line) }
-                "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
-                "term", "exam" -> TermView(line, state, model, now, isMe, recordState, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, scale == "exam", { route.day = it; route.scale = "week" }) { onEvent(it, line) }
-                else -> DayView(line, day, now, isMe, record, route, walk, settings.layers, model.tasks) { onEvent(it, line) }
+            views.SaveableStateProvider("${term.term}:${route.whoType}:${route.whoId}:$scale") {
+                when (scale) {
+                    "list" -> TaskList(line, now, model.tasks, model.settings) { onEvent(it, line) }
+                    "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
+                    "term", "exam" -> TermView(line, state, model, now, isMe, recordState, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, scale == "exam", { route.day = it; route.scale = "week" }) { onEvent(it, line) }
+                    else -> DayView(line, day, now, isMe, record, route, walk, settings.layers, model.tasks) { onEvent(it, line) }
+                }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
                 onCancel = { route.preview = null },

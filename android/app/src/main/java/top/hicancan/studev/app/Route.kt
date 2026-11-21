@@ -11,6 +11,8 @@ fun absolute(link: String, origin: String) = if (link.startsWith("//")) origin.s
 
 /** What is on screen. It has the same shape as the website's address, so a link opens the same thing on either. */
 class Route {
+    private data class TimetableView(val scale: String, val day: LocalDate?, val termMode: String)
+    private var mine: TimetableView? = null
     var tab by mutableStateOf("timetable")
     var whoType by mutableStateOf("me")
     var whoId by mutableStateOf("")
@@ -52,6 +54,7 @@ class Route {
         when (path) {
             "" -> {
                 val who = param("who")
+                if (who != null) keepMyTimetable()
                 whoType = who?.substringBefore(':', "me") ?: "me"
                 whoId = who?.substringAfter(':', "").orEmpty()
                 scale = when (val view = param("scale")) {
@@ -98,7 +101,18 @@ class Route {
     fun knowledge(course: String? = null, topic: String? = null, material: String? = null, anchor: String? = null) {
         knowledgeCourse = course; knowledgeTopic = topic; knowledgeMaterial = material; knowledgeAnchor = anchor; tab = "knowledge"
     }
-    fun timetable(type: String, id: String, newScale: String = "week", at: LocalDate? = null) { whoType = type; whoId = id; scale = newScale; day = at; preview = null; tab = "timetable" }
+    private fun keepMyTimetable() {
+        if (whoType == "me") mine = TimetableView(scale, day, termMode)
+    }
+    fun timetable(type: String, id: String, newScale: String = "week", at: LocalDate? = null) {
+        if (type != "me") keepMyTimetable()
+        whoType = type; whoId = id; scale = newScale; day = at; termMode = "course"; preview = null; tab = "timetable"
+    }
+    fun myTimetable() {
+        val previous = mine ?: TimetableView("day", null, "course")
+        timetable("me", "", previous.scale, previous.day)
+        termMode = previous.termMode
+    }
     fun map(place: String? = null, at: Pair<LocalDate, Int>? = null, nav: String? = null, from: String? = null, mode: String = "walk") { this.place = place; this.moment = at; this.nav = nav; this.from = from; navMode = mode.takeIf { it == "bike" } ?: "walk"; floor = null; tab = "map" }
     fun search(scope: String = "all", query: String = "", within: String? = null, source: String? = null, focus: Boolean = false) {
         this.scope = scope; this.query = query; this.within = within; searchFocus = focus

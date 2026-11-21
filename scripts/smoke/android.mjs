@@ -557,7 +557,8 @@ async function aiTrace() {
     for (const call of calls) await scrollFind(node => node['resource-id'] === `ai-call:${call.id}`, `the preserved ${call.function.name} call ${call.id}`, 15);
     await scrollTap(node => node['resource-id'] === `ai-call:${read.id}`, 'inspect an original-text read', 15, -1);
     const expected = JSON.parse(read.function.arguments).id;
-    await find(node => node.text.includes('调用参数') && node.text.includes('调用结果') && node.text.includes(expected) && node.text.includes('TCP'), 'raw AI call arguments and the actual TCP result');
+    await find(node => node['resource-id'] === 'ai-call-arguments' && node.text.includes(expected), 'raw AI call arguments');
+    await find(node => node['resource-id'] === 'ai-call-result' && node.text.includes('TCP'), 'the actual TCP call result');
     healthy('real AI call details render without sending another prompt');
     capture('ai-call-details');
     adb('shell', 'input', 'keyevent', '4');

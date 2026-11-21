@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -72,10 +73,11 @@ import top.hicancan.studev.world.Moment
         when {
             route.tab != "timetable" -> route.tab = "timetable"
             route.preview != null -> route.preview = null
-            else -> { route.whoType = "me"; route.whoId = "" }
+            else -> route.myTimetable()
         }
     }
     CompositionLocalProvider(LocalMeAction provides { me = true }) {
+    val views = rememberSaveableStateHolder()
     Scaffold(containerColor = Ink.paper, snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
         if (!navigation.active) Row(Modifier.fillMaxWidth().background(Ink.paper).topHairline(Ink.line).navigationBarsPadding().height(50.dp)) {
             listOf("timetable" to "课表", "map" to "地图", "knowledge" to "知识", "search" to "搜索", "ai" to "AI").forEach { (key, label) ->
@@ -91,8 +93,12 @@ import top.hicancan.studev.world.Moment
             // The native map keeps its surface while another entry is on top of it.
             if (mapOpened) campus?.let { loaded -> key(loaded.repository.release.map_base) { MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) } }
             when (route.tab) {
-                "timetable" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
-                "knowledge" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.knowledge.KnowledgeScreen(route, state, settings) }
+                "timetable" -> views.SaveableStateProvider("timetable") {
+                    Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
+                }
+                "knowledge" -> views.SaveableStateProvider("knowledge") {
+                    Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.knowledge.KnowledgeScreen(route, state, settings) }
+                }
                 "search" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { SearchScreen(route, state, model) }
                 "ai" -> Surface(Modifier.fillMaxSize(), color = Ink.paper) { top.hicancan.studev.ai.AiScreen(model, route) }
             }

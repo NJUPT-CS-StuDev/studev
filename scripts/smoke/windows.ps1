@@ -558,9 +558,10 @@ try {
     if ($shownCalls.Count -ne $traceCalls.Count) { throw "the AI trace shows $($shownCalls.Count) calls instead of all $($traceCalls.Count)" }
     $traceReadId = "ai-call:$($traceRead.id)"
     Press $window { param($e) $e.Current.AutomationId -eq $traceReadId } 'inspect the exact arguments and result of an original-text read'
-    $traceBody = Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name.Contains('调用参数') -and $e.Current.Name.Contains('调用结果') } 'the complete AI call details'
     $readArgument = ($traceRead.function.arguments | ConvertFrom-Json).id
-    if (-not $traceBody.Current.Name.Contains($readArgument) -or -not $traceBody.Current.Name.Contains('TCP')) { throw 'the AI call details lost their original reference or text result' }
+    $traceArguments = Find $window (Is $A::AutomationIdProperty 'ai-call-arguments') $null 'the AI call arguments'
+    $traceResult = Find $window (Is $A::AutomationIdProperty 'ai-call-result') $null 'the AI call result'
+    if (-not $traceArguments.Current.Name.Contains($readArgument) -or -not $traceResult.Current.Name.Contains('TCP')) { throw 'the AI call details lost their original reference or text result' }
     Capture 'ai-call-details'
     Press $window '关闭' 'close the AI call details'
     Press $window { param($e) $e.Current.AutomationId -eq $traceHeadId } 'collapse the AI tool-call record'

@@ -142,7 +142,12 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     }
     LaunchedEffect(scene, moment, settings.theme) { scene?.moment(moment, settings.theme) }
     val screenDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
-    val padding = remember(density, picked != null, screenDp) { intArrayOf((28 * density).toInt(), (70 * density).toInt(), (64 * density).toInt(), ((if (picked != null) screenDp * .62f + 30 else 280f) * density).toInt()) }
+    val peek = when {
+        picked != null -> 320f
+        selected != null -> if (buildingId != null && floors.isNotEmpty()) 222f else 245f
+        else -> 190f
+    }.coerceAtMost((screenDp * .36f).coerceAtLeast(118f))
+    val padding = intArrayOf((28 * density).toInt(), (70 * density).toInt(), (64 * density).toInt(), ((peek + 28) * density).toInt())
     var entered by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(scene, buildingId, floor, picked?.id, route.nav, paints) {
         val active = scene ?: return@LaunchedEffect
@@ -306,23 +311,28 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                     Plain("◎", 18.sp, if (controller.follow != FollowMode.None) Ink.brand else Ink.text)
                 }
             }
-            val base = when { picked != null -> 430; selected != null -> if (buildingId != null && floors.isNotEmpty()) 230 else 260; else -> 190 }
             if (closed) Row(Modifier.align(Alignment.BottomStart).padding(12.dp).height(36.dp).clip(RoundedCornerShape(8.dp)).background(Ink.paper).border(1.dp, Ink.line, RoundedCornerShape(8.dp)).clickable { closed = false; snap = 0 }.padding(horizontal = 12.dp).testTag("open-sheet"), verticalAlignment = Alignment.CenterVertically) {
                 Plain(hm(moment.min), 14.sp, weight = FontWeight.SemiBold)
             } else BoxWithConstraints(Modifier.fillMaxSize()) {
-                val full = maxHeight - 90.dp
-                val target = when (snap) { 2 -> full; 1 -> maxOf(base.dp, maxHeight * .56f); else -> base.dp }
+                val full = (maxHeight - 90.dp).coerceAtLeast(0.dp)
+                val base = peek.dp.coerceAtMost(full)
+                val target = when (snap) { 2 -> full; 1 -> maxOf(base, maxHeight * .56f).coerceAtMost(full); else -> base }
                 val animated by animateDpAsState(target, label = "sheet")
                 val shown = dragPeek?.let { with(LocalDensity.current) { it.toDp() } } ?: animated
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(shown).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(Ink.paper)) {
                     var startPeek by remember { mutableFloatStateOf(0f) }
                     val targetPx = with(LocalDensity.current) { target.toPx() }
-                    Box(Modifier.fillMaxWidth().height(18.dp).pointerInput(snap, base) {
+                    val fullPx = with(LocalDensity.current) { full.toPx() }
+                    val minPx = with(LocalDensity.current) { base.toPx() }
+                    Box(Modifier.fillMaxWidth().height(18.dp).pointerInput(snap, targetPx, fullPx) {
                         detectDragGestures(onDragStart = { startPeek = targetPx; dragPeek = targetPx }, onDragEnd = {
                             val moved = (dragPeek ?: startPeek) - startPeek
                             if (abs(moved) > 6) snap = if (moved > 0) min(2, snap + 1) else max(0, snap - 1)
                             dragPeek = null
-                        }, onDragCancel = { dragPeek = null }) { change, amount -> change.consume(); dragPeek = max(150 * density, (dragPeek ?: startPeek) - amount.y) }
+                        }, onDragCancel = { dragPeek = null }) { change, amount ->
+                            change.consume()
+                            dragPeek = ((dragPeek ?: startPeek) - amount.y).coerceIn(minPx, fullPx)
+                        }
                     }.pointerInput(snap) { detectTapGestures { snap = if (snap > 0) 0 else 1 } }, contentAlignment = Alignment.Center) {
                         Box(Modifier.size(32.dp, 3.dp).clip(RoundedCornerShape(2.dp)).background(Ink.line))
                     }

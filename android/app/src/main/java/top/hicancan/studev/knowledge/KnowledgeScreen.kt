@@ -284,12 +284,11 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
             catch (e: IOException) { Log.e("Knowledge", "Could not read $relPath", e); textErr = true }
         }
 
+        key(relPath) {
         val scrollState = rememberScrollState()
-        LaunchedEffect(course.id, topic?.id, material?.path, route.knowledgeAnchor) {
-            if (route.knowledgeAnchor == null) scrollState.scrollTo(0)
-        }
-        key(relPath) { DocAnchors(route.knowledgeAnchor.takeIf { material != null }, scrollState) { anchors ->
-        Column(Modifier.weight(1f).then(anchors).verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        DocAnchors(route.knowledgeAnchor.takeIf { material != null }, scrollState) { anchors ->
+        Column(Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = 748.dp).fillMaxWidth().then(anchors)
+            .verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when {
                 textErr -> Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("内容暂时无法加载", 14.sp, Ink.muted); TextAction("重试", { textRevision++ }, refresh = true) }
                 text == null -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("正在打开…", 14.sp, Ink.muted) }
@@ -794,6 +793,17 @@ private fun referencePreviews(blocks: List<JsonObject>): Map<String, ReferencePr
                     }
                 } }
             }
+        }
+    }
+    val related = remember(index, material.path) {
+        index.topics.mapNotNull { topic ->
+            topic.references.count { it.material == material.path }.takeIf { it > 0 }?.let { topic to it }
+        }.sortedByDescending { it.second }
+    }
+    if (related.isNotEmpty()) Column(Modifier.fillMaxWidth().topHairline(Ink.line).padding(top = 12.dp)) {
+        Plain("这份资料关联的知识点", 14.sp, ct.fg, FontWeight.SemiBold)
+        related.forEach { (topic, count) ->
+            KeyRow(null, topic.title, "$count 处关联", chevron = true) { onLink("topics/${topic.id}.md") }
         }
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -61,6 +62,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+
+private data class CallInspection(val step: Steps.Step, val arguments: String, val result: String)
+
+@Composable private fun CallData(label: String, body: String, tag: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Plain(label, 13.sp, Ink.muted, FontWeight.SemiBold)
+        Text(body, Modifier.semantics { testTagsAsResourceId = true }.testTag(tag).fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp)).background(Ink.sunken).padding(10.dp),
+            color = Ink.text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
 
 /** What one can ask, offered while the conversation is empty, as AI_EXAMPLES in src/campus/ai/AiApp.tsx. */
 private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？")
@@ -123,7 +135,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     var error by remember { mutableStateOf("") }
     var job by remember { mutableStateOf<Job?>(null) }
     var editing by remember { mutableStateOf<String?>(null) }
-    var inspectingCall by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var inspectingCall by remember { mutableStateOf<CallInspection?>(null) }
     // While answering after a message, only what this answer says shows after it, not the answer it had before.
     var from by remember { mutableStateOf<String?>(null) }
     val fresh = remember { mutableSetOf<String>() }
@@ -339,9 +351,13 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             moving = null
         }
     }
-    inspectingCall?.let { (title, body) -> PlainSheet(title, { inspectingCall = null }) {
+    inspectingCall?.let { call -> PlainSheet(call.step.label, { inspectingCall = null }) {
         androidx.compose.foundation.text.selection.SelectionContainer {
-            Column(Modifier.verticalScroll(rememberScrollState())) { Plain(body, 13.sp, Ink.muted) }
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (call.step.detail.isNotEmpty()) Plain(call.step.detail, 14.sp, if (call.step.failed) marks().danger else Ink.muted)
+                CallData("调用参数", call.arguments, "ai-call-arguments")
+                CallData("调用结果", call.result, "ai-call-result")
+            }
         }
     } }
     renaming?.let { chat ->
@@ -422,7 +438,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                                 val pretty = Json { prettyPrint = true }
                                 fun shown(value: JsonElement) = pretty.encodeToString(JsonElement.serializer(), value)
                                 val args = runCatching { shown(Json.parseToJsonElement(arguments)) }.getOrDefault(arguments)
-                                inspectingCall = step.label to "调用参数\n$args\n\n调用结果\n${result?.let(::shown) ?: "正在等待结果…"}"
+                                inspectingCall = CallInspection(step, args, result?.let(::shown) ?: "正在等待结果…")
                             }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Plain(step.label, 13.sp, if (step.failed) marks().danger else Ink.text, weight = FontWeight.Medium)
                                 Plain(step.detail + if (step.pending) "……" else "", 13.sp, if (step.failed) marks().danger else Ink.muted, modifier = Modifier.weight(1f, fill = false))

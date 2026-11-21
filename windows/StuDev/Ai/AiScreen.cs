@@ -983,8 +983,18 @@ public sealed partial class AiScreen : Screen
                             var arguments = (string?)call["function"]?["arguments"] ?? "";
                             var result = results.GetValueOrDefault((string)call["id"]!);
                             try { arguments = CallText(JsonNode.Parse(arguments)); } catch (JsonException) { }
-                            var words = Kit.Text($"调用参数\n{arguments}\n\n调用结果\n{(result is null ? "正在等待结果…" : CallText(result))}", Role.Caption, "muted", wrap: true);
-                            words.IsTextSelectionEnabled = true; column.Children.Add(words);
+                            if (step.Detail.Length > 0) column.Children.Add(Kit.Text(step.Detail, Role.Label, step.Failed ? "danger" : "muted", wrap: true));
+                            void DataBlock(string label, string body, string id)
+                            {
+                                column.Children.Add(Kit.Text(label, Role.Caption, "muted", bold: true));
+                                var words = Kit.Text(body, Role.Caption, wrap: true);
+                                words.FontFamily = new FontFamily("Consolas");
+                                words.IsTextSelectionEnabled = true;
+                                AutomationProperties.SetAutomationId(words, id);
+                                column.Children.Add(new Border { Child = words, Padding = new Thickness(10), Background = Paint.Brush("surfaceSunken"), CornerRadius = new CornerRadius(8) });
+                            }
+                            DataBlock("调用参数", arguments, "ai-call-arguments");
+                            DataBlock("调用结果", result is null ? "正在等待结果…" : CallText(result), "ai-call-result");
                             App.Window?.Sheet(column, 620);
                         };
                         list.Children.Add(inspect);

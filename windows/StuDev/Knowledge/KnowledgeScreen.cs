@@ -506,7 +506,7 @@ public sealed partial class KnowledgeScreen : Screen
         Grid.SetColumn(outlineButton, 1); detailHead.Children.Add(outlineButton);
         midStack.Children.Add(detailHead);
 
-        var contentHost = new StackPanel { Spacing = 14 };
+        var contentHost = new StackPanel { Spacing = 14, MaxWidth = 748 };
         midStack.Children.Add(contentHost);
         var relPath = topic?.Path ?? material?.Path ?? course.Path;
         _ = LoadDocument(contentHost, idx, course, topic, material, relPath, t);
@@ -600,7 +600,7 @@ public sealed partial class KnowledgeScreen : Screen
             var compact = width < (courseHome ? 900 : 1100);
             if (compactLayout == compact) return;
             compactLayout = compact;
-            layout.MaxWidth = compact ? 828 : 1440;
+            layout.MaxWidth = compact ? 780 : 1320;
             layout.ColumnSpacing = compact ? 0 : 28;
             if (outlineColumn is not null) outlineColumn.Width = new GridLength(compact ? 0 : 250);
             relatedColumn.Width = new GridLength(compact ? 0 : 260);

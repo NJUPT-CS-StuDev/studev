@@ -20,9 +20,11 @@ public sealed partial class TimetableScreen : Screen
     private bool wide = true;
     /** Room for a task open beside the list. */
     private bool roomy = true;
-    private double lastScroll;
+    private readonly Dictionary<(Who? Who, string Scale, string Mode), double> scroll = new();
     private ScrollViewer? frame;
+    private (Who? Who, string Scale, string Mode) frameView;
     private string termMode = "course";
+    private (string Scale, DateOnly? Day, string Mode)? myView;
     /** Whose timetable this is when it is not one's own, and their line once it is gathered. */
     private Who? who;
     private CampusLine? others;
@@ -89,6 +91,7 @@ public sealed partial class TimetableScreen : Screen
             var query = System.Web.HttpUtility.ParseQueryString(address.Query);
             var value = query["who"]?.Split(':', 2);
             var destination = value is { Length: 2 } && value[0] is "class" or "course" or "teacher" or "room" ? new Who(value[0], value[1]) : null;
+            if (destination is not null && who is null) myView = (scale, picked, termMode);
             if (who != destination) { who = destination; others = null; othersError = null; if (destination is not null) Gather(destination); }
             scale = Scales.Any(item => item.Key == query["scale"]) ? query["scale"]! : "week";
             picked = DateOnly.TryParseExact(query["t"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var linkedDate) ? linkedDate : null;
@@ -99,7 +102,10 @@ public sealed partial class TimetableScreen : Screen
         if (argument is DateOnly date) { who = null; others = null; preview = null; previewRows = null; picked = date; scale = "week"; }
         if (argument is "exams") { who = null; others = null; preview = null; previewRows = null; scale = "exam"; termMode = "course"; }
         if (argument is Who) { preview = null; previewRows = null; }
-        if (argument is Who next && next != who) { who = next; others = null; othersError = null; picked = null; scale = "week"; Gather(next); }
+        if (argument is Who next && next != who) {
+            if (who is null) myView = (scale, picked, termMode);
+            who = next; others = null; othersError = null; picked = null; scale = "week"; termMode = "course"; Gather(next);
+        }
         now = Moment.Now(); Draw();
     }
 
@@ -149,7 +155,12 @@ public sealed partial class TimetableScreen : Screen
     }
 
     /** Back to one's own timetable. */
-    private void Mine() { who = null; others = null; othersError = null; preview = null; previewRows = null; picked = null; Draw(); }
+    private void Mine()
+    {
+        who = null; others = null; othersError = null; preview = null; previewRows = null;
+        (scale, picked, termMode) = myView ?? ("week", null, "course");
+        Draw();
+    }
 
     private void Shift(int direction)
     {
@@ -162,7 +173,8 @@ public sealed partial class TimetableScreen : Screen
 
     private void Draw()
     {
-        lastScroll = frame?.VerticalOffset ?? 0;
+        if (frame is not null) scroll[frameView] = frame.VerticalOffset;
+        frame = null;
         Children.Clear();
         if (campus.Error is { } error && campus.Line is null && campus.Repository is null)
         {
@@ -274,9 +286,11 @@ public sealed partial class TimetableScreen : Screen
             _ => ListView.Make(campus, line, now, OpenTask, Open, roomy),
         });
         if (scale == "exam" && recordClass is not null && recordError is { } recordMessage) page.Children.Add(Kit.TextAction($"{recordMessage} · 重试", () => { recordError = null; _ = GatherRecord(campus.Repository, recordClass); Draw(); }));
-        frame = Pages.Frame(page);
-        var keep = lastScroll;
-        frame.Loaded += (_, _) => frame.ChangeView(null, keep, null, true);
-        Children.Add(frame);
+        var nextFrame = Pages.Frame(page);
+        frame = nextFrame;
+        frameView = (who, scale, termMode);
+        var keep = scroll.GetValueOrDefault(frameView);
+        if (keep > 0) nextFrame.Loaded += (_, _) => nextFrame.ChangeView(null, keep, null, true);
+        Children.Add(nextFrame);
     }
 }
