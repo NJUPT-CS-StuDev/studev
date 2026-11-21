@@ -76,7 +76,12 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   if (!token) throw new Error('Provide STUDEV_MIGRATION_TOKEN for this process.');
   const store = getStore({ name: 'studev-collections', projectId: 'makers-xubgsi8n79pp', token, consistency: 'strong' });
   const repo = createRepository(store, { secret: 'organization-migration-no-auth-required' });
-  console.log(JSON.stringify(await migrateOrganizations(repo, {
-    apply: process.argv.includes('--apply'), origin: 'https://studev.hicancan.top',
-  })));
+  const apply = process.argv.includes('--apply');
+  const verify = process.argv.includes('--verify');
+  if (apply && verify) throw new Error('Choose either --apply or --verify.');
+  const result = await migrateOrganizations(repo, { apply, origin: 'https://studev.hicancan.top' });
+  console.log(JSON.stringify(result));
+  if (verify && (result.revisions || result.archives || result.unmatched)) {
+    throw new Error('Organization cutover is incomplete; the old records must be resolved before deploying.');
+  }
 }

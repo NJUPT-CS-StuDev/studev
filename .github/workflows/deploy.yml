@@ -70,6 +70,12 @@ jobs:
       - run: npm run test:platform
       - run: npm run build
       - run: npm run test:site
+      - name: Cut over organization memberships and verify the stored accounts
+        env:
+          STUDEV_MIGRATION_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+        run: |
+          node scripts/server/migrate-organizations.mjs --apply
+          node scripts/server/migrate-organizations.mjs --verify
       - name: Deploy
         run: |
           set -o pipefail
