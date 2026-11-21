@@ -117,7 +117,6 @@ export async function pullSnapshot(entry = `${product.campusOrigin}/campus-relea
         await cp(join(publicRoot, base!), join(publicRoot, snapshot.base, name!), { recursive: true });
     if (snapshot.search_stable_base) await cp(join(publicRoot, snapshot.search_stable_base), join(publicRoot, snapshot.base, 'search-base'), { recursive: true });
     await cp(join(publicRoot, snapshot.map_base, 'assets'), join(publicRoot, 'map'), { recursive: true });
-    if (snapshot.search_stable_base) await cp(join(publicRoot, snapshot.search_stable_base), join(publicRoot, snapshot.base, 'search-base'), { recursive: true });
     await cp(join(publicRoot, snapshot.map_base, 'assets'), join(root, 'android/app/src/main/assets/map'), { recursive: true });
     const manifest = join(root, 'src/data/campus-release.json');
     await mkdir(dirname(manifest), { recursive: true });
