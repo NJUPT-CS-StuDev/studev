@@ -5,7 +5,7 @@ import '../platform/platform.css';
 <SiteLayout title="登录 — StuDev" active="login" noindex={true}>
   <div class="platform">
     <section class="p-card p-auth">
-      <h1>登录</h1>
+      <h1 data-auth-title>登录</h1>
       <div class="p-tabs p-auth-tabs" role="tablist" aria-label="账号操作">
         <button class="p-tab" id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="login-panel" data-auth-tab="login">登录</button>
         <button class="p-tab" id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="register-panel" data-auth-tab="register">注册账号</button>
@@ -17,7 +17,7 @@ import '../platform/platform.css';
           <input id="login-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="你的学号" required />
         </div>
         <div class="p-field">
-          <label for="login-password">密码</label>
+          <div class="p-label-row"><label for="login-password">密码</label><button class="p-link-button" type="button" data-forgot-open>忘记密码？</button></div>
           <div class="p-password-wrap">
             <input id="login-password" name="password" type="password" maxlength="256" autocomplete="current-password" placeholder="请输入密码" required />
             <button class="p-password-toggle" type="button" aria-label="显示密码" data-toggle-password></button>
@@ -28,10 +28,22 @@ import '../platform/platform.css';
           <input id="login-totp" name="totp" autocomplete="one-time-code" maxlength="64" placeholder="6 位动态码或恢复码" />
         </div>
         <button class="p-button wide" type="submit">立即登录</button>
-        <details style="margin-top:16px" data-forgot><summary class="p-help">忘记密码？</summary>
-          <p class="p-help">在上面填好学号，点下面的按钮，重设链接会发到这个账号绑定的 QQ 邮箱，30 分钟内有效。</p>
-          <button class="p-button secondary" type="button" data-forgot-send>发送重设链接</button>
-        </details>
+      </form>
+      <form data-forgot-form hidden>
+        <div data-forgot-ask>
+          <p class="p-help p-auth-lead">输入学号，我们会把重设密码的链接发到这个账号绑定的 QQ 邮箱，30 分钟内有效。</p>
+          <div class="p-field">
+            <label for="forgot-student-id">学号</label>
+            <input id="forgot-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="你的学号" required />
+          </div>
+          <button class="p-button wide" type="submit">发送重设链接</button>
+        </div>
+        <div class="p-auth-sent" data-forgot-sent hidden>
+          <p><b>请查收邮件</b></p>
+          <p class="p-help">如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，请在 30 分钟内打开。没收到的话，看看垃圾箱，或稍后重新发送。</p>
+          <button class="p-button secondary wide" type="button" data-forgot-again>重新发送</button>
+        </div>
+        <button class="p-link-button p-auth-back" type="button" data-forgot-back>‹ 返回登录</button>
       </form>
       <form data-reset-form hidden>
         <p class="p-help">为你的账号设置新密码。设置后，所有设备都会退出登录。</p>

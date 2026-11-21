@@ -141,14 +141,40 @@ if (resetToken) {
         });
     } catch (e) { message(status, errorText(e), 'error'); } });
 }
-q<HTMLButtonElement>('[data-forgot-send]').addEventListener('click', async (e) => {
-    const b = e.currentTarget as HTMLButtonElement;
-    const studentId = q<HTMLInputElement>('#login-student-id').value.trim().toUpperCase();
-    if (!/^[A-Z0-9]{6,20}$/.test(studentId)) { message(status, '请先在上面填写学号。', 'error'); q<HTMLInputElement>('#login-student-id').focus(); return; }
+// Forgotten password: a step of its own, as sign-in pages have it, carrying over the student ID already typed.
+const forgot = q<HTMLFormElement>('[data-forgot-form]');
+const tabs = q<HTMLElement>('.p-auth-tabs');
+function showForgot(open: boolean) {
+    resetLoginFactor();
+    message(status);
+    forgot.hidden = !open;
+    login.hidden = open;
+    register.hidden = true;
+    tabs.hidden = open;
+    q('[data-auth-title]').textContent = open ? '找回密码' : '登录';
+    q('[data-forgot-ask]').hidden = false;
+    q('[data-forgot-sent]').hidden = true;
+    if (open) {
+        const typed = q<HTMLInputElement>('#login-student-id').value.trim();
+        const input = q<HTMLInputElement>('#forgot-student-id');
+        if (typed) input.value = typed;
+        input.focus();
+    } else {
+        showTab('login');
+    }
+}
+q<HTMLButtonElement>('[data-forgot-open]').addEventListener('click', () => showForgot(true));
+q<HTMLButtonElement>('[data-forgot-back]').addEventListener('click', () => showForgot(false));
+q<HTMLButtonElement>('[data-forgot-again]').addEventListener('click', () => { q('[data-forgot-sent]').hidden = true; q('[data-forgot-ask]').hidden = false; });
+forgot.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const b = q<HTMLButtonElement>('button[type=submit]', forgot);
+    const studentId = q<HTMLInputElement>('#forgot-student-id').value.trim().toUpperCase();
     try {
         await busy(b, async () => {
             await api('/auth/password/forgot', { studentId });
-            message(status, '如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，请在 30 分钟内打开。没收到的话看看垃圾箱。', 'success');
+            q('[data-forgot-ask]').hidden = true;
+            q('[data-forgot-sent]').hidden = false;
         });
     } catch (e) { message(status, errorText(e), 'error'); }
 });

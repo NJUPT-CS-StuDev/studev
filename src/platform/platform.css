@@ -21,6 +21,13 @@
 .p-auth h1 { margin:0 0 8px; font-size:24px; font-weight:600; letter-spacing:-.02em; }
 .p-auth .p-muted { margin-bottom:24px; }
 .p-field { display:grid; gap:7px; margin-bottom:18px; min-width:0; }
+.p-label-row { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.p-link-button { padding:0; border:0; background:none; color:var(--blue, var(--brand)); font:inherit; font-size:13px; cursor:pointer; }
+.p-link-button:hover { text-decoration:underline; text-underline-offset:3px; }
+.p-auth-lead { margin:0 0 20px; }
+.p-auth-sent { padding:4px 0 0; }
+.p-auth-sent p { margin:0 0 10px; }
+.p-auth-back { display:block; margin:18px auto 0; color:var(--muted); }
 .p-field>label,.p-field>legend,.p-label { font-size:.87rem; font-weight:600; }
 .p-field input:not([type=checkbox]):not([type=radio]),.p-field textarea,.p-field select,.p-input { width:100%; min-height:var(--size-control); border:1px solid var(--line); border-radius:var(--radius-control); padding:8px 12px; color:var(--ink); background:var(--paper); font:inherit; font-size:14.5px; }
 .platform input[type=search] { min-height:var(--size-target); border-radius:var(--radius-pill); background:var(--surface-sunken); padding-inline:14px; }

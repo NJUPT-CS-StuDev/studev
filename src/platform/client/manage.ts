@@ -210,9 +210,8 @@ function renderMembers() {
   const visible = members.filter((user) => {
     if (deptFilter === '__other__' && user.department) return false;
     if (deptFilter && deptFilter !== '__other__' && user.department !== deptFilter) return false;
-    if (roleFilter === 'staff' && user.role === 'user') return false;
-    if (roleFilter === 'unplaced' && user.department && user.title) return false;
-    if (roleFilter === 'user' && user.role !== 'user') return false;
+    // Role and position are independent: this filter is the role alone; the department filter covers position.
+    if (roleFilter && user.role !== roleFilter) return false;
     return [user.studentId, user.realName, user.qq, user.nickname, user.department, user.title, user.signature].join(' ').toLowerCase().includes(term);
   });
 
