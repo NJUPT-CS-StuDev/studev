@@ -278,15 +278,16 @@ public sealed partial class TimetableScreen : Screen
         }
         void Open(LineEvent e) { if (e.Task is { } task) TaskSheet.Open(campus, task.Id, now); else Events.Open(campus, e, now, !mine || e.Meeting is { } meeting && previewIds.Contains(meeting.Id) ? line : null); }
         void OpenTask(World.PersonalTask task) => TaskSheet.Open(campus, task.Id, now);
+        var record = recordClass is not null ? examRecord : null;
         page.Children.Add(scale switch
         {
             "week" => WeekView.Make(line, day, now, wide, Open, OpenTask),
             "day" => DayView.Make(line, day, now, Open, OpenTask, date => { picked = date == now.Date ? null : date; Draw(); }, mine),
-            "term" or "exam" => TermView.Make(line, recordClass, now, scale == "exam", termMode, mode => { termMode = mode; Draw(); }, () => Show("exam"), date => { picked = date; Show("week"); }, Open, recordClass is not null ? examRecord : null, examVersion, value => examVersion = value),
+            "term" or "exam" => TermView.Make(line, recordClass, now, scale == "exam", wide, termMode, mode => { termMode = mode; Draw(); }, () => Show("exam"), date => { picked = date; Show("week"); }, Open, record, examVersion, value => examVersion = value),
             _ => ListView.Make(campus, line, now, OpenTask, Open, roomy),
         });
         if (scale == "exam" && recordClass is not null && recordError is { } recordMessage) page.Children.Add(Kit.TextAction($"{recordMessage} · 重试", () => { recordError = null; _ = GatherRecord(campus.Repository, recordClass); Draw(); }));
-        var nextFrame = Pages.Frame(page);
+        var nextFrame = scale == "exam" && record is null ? Pages.Frame(page, width: 744) : Pages.Frame(page);
         frame = nextFrame;
         frameView = (who, scale, termMode);
         var keep = scroll.GetValueOrDefault(frameView);

@@ -18,7 +18,7 @@ public static class TermView
     private static string DayHead(DateOnly date) => $"{Clock.DateLabel(date)} {Clock.Weekdays[Clock.Weekday(date)]}";
     private static string PlaceOf(Exam exam) => exam.Room is not null ? Names.Room(exam.Room) : exam.Location;
 
-    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, bool examPage, string mode, Action<string> onMode, Action onExams, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null, string? selectedVersion = null, Action<string>? selectVersion = null)
+    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, bool examPage, bool wide, string mode, Action<string> onMode, Action onExams, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null, string? selectedVersion = null, Action<string>? selectVersion = null)
     {
         var campus = Campus.Shared;
         var hasExams = line.Exams.Count > 0 || record?.History.Count > 0;
@@ -35,10 +35,10 @@ public static class TermView
 
         if (examPage)
         {
-            var head = ahead.Count > 0 ? Kit.Column(2, Kit.Text($"{Lead(ahead[0].Days)}考试", Role.Heading), Kit.Text(string.Join("、", ahead[0].Exams.Select(x => Names.CourseShort(x.Course.Name))), Role.Body, "muted"))
+            var head = ahead.Count > 0 ? Kit.Column(2, Kit.Text($"{Lead(ahead[0].Days)}考试", Role.Heading), Kit.Text(string.Join("、", ahead[0].Exams.Select(x => Names.CourseShort(x.Course.Name))), Role.Body, "muted", wrap: true))
                 : Kit.Column(0, Kit.Text("暂未查到待考安排", Role.Heading));
             ((TextBlock)head.Children[0]).FontSize = 22; head.Padding = new Thickness(0, 4, 0, 14);
-            var list = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Left };
+            var list = new StackPanel();
             list.Children.Add(head);
             for (var at = 0; at < ahead.Count; at++)
             {
@@ -52,7 +52,7 @@ public static class TermView
                 var items = new StackPanel();
                 foreach (var exam in exams)
                 {
-                    var words = Kit.Column(2, Kit.Text(Names.Course(exam.Course.Name), Role.Body, bold: true), Kit.Text($"{exam.Start}–{exam.End} · {PlaceOf(exam)}", Role.Label, "muted"));
+                    var words = Kit.Column(2, Kit.Text(Names.Course(exam.Course.Name), Role.Body, bold: true, wrap: true), Kit.Text($"{exam.Start}–{exam.End} · {PlaceOf(exam)}", Role.Label, "muted", wrap: true));
                     ((TextBlock)words.Children[0]).FontSize = 16;
                     var row = new Grid { Padding = new Thickness(0, 6, 0, 10) }; row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     row.Children.Add(words); var chev = Kit.Icon(Icons.Chevron, 14, "faint"); Grid.SetColumn(chev, 1); row.Children.Add(chev);
@@ -107,9 +107,22 @@ public static class TermView
                 list.Children.Add(foldHead);
                 list.Children.Add(body);
             }
-            if (record is not null) list.Children.Add(ExamHistory.Make(record, selectedVersion, selectVersion));
-            page.Children.Add(list);
-            return page;
+            if (record is null) return list;
+            var history = ExamHistory.Make(record, selectedVersion, selectVersion);
+            if (!wide)
+            {
+                list.Children.Add(history);
+                return list;
+            }
+
+            var examColumns = new Grid { ColumnSpacing = 40 };
+            examColumns.ColumnDefinitions.Add(new ColumnDefinition());
+            examColumns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(420) });
+            history.Margin = new Thickness(0, 4, 0, 24);
+            examColumns.Children.Add(list);
+            Grid.SetColumn(history, 1);
+            examColumns.Children.Add(history);
+            return examColumns;
         }
 
         var ordered = campus.Calendar.OrderBy(t => t.Start, StringComparer.Ordinal).ToList();
@@ -389,7 +402,7 @@ public static class TermView
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = lead.Length > 0 ? new GridLength(56) : new GridLength(0) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         if (lead.Length > 0) { var l = Kit.Text(lead, Role.Label, "muted"); l.FontSize = 13; grid.Children.Add(l); }
-        var m = Kit.Column(1, Kit.Text(main, Role.Body), Kit.Text(small, Role.Caption, "muted", wrap: true)); ((TextBlock)m.Children[0]).FontSize = 14.5; ((TextBlock)m.Children[0]).FontWeight = FontWeights.Medium; ((TextBlock)m.Children[1]).FontSize = 12.5;
+        var m = Kit.Column(1, Kit.Text(main, Role.Body, wrap: true), Kit.Text(small, Role.Caption, "muted", wrap: true)); ((TextBlock)m.Children[0]).FontSize = 14.5; ((TextBlock)m.Children[0]).FontWeight = FontWeights.Medium; ((TextBlock)m.Children[1]).FontSize = 12.5;
         Grid.SetColumn(m, 1); grid.Children.Add(m);
         if (open is null) return grid;
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

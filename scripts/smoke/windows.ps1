@@ -337,15 +337,23 @@ function ExamHistory {
     Press $window { param($e) $e.Current.Name.StartsWith('第二学期') } 'open the published second term'
     Find $window $Pressable { param($e) $e.Current.Name.StartsWith('暑假 ·') } 'the second term has its published summer break' | Out-Null
     Capture 'timetable-second-term'
+    $examWindow = [Owned]::Of([uint32]$app.Id, 'StuDev')[0]
+    [Owned]::ResizeForTest($examWindow, 1280, 880)
     Press $window '考试' 'open the personal exam arrangements'
     $latest = $examIndex.history[-1]
     $count = @($examChanges | Where-Object { $_.version -eq $latest.id -and $_.class -eq 'B240402' }).Count
     $impact = if ($count) { "本班 $count 门考试有变动" } else { '本次更新未影响本班' }
-    Find $window (Is $A::AutomationIdProperty "exam-version:$($latest.id)") { param($e) $e.Current.Name.EndsWith("$impact · 当前版本") } 'the latest update reports the published class impact' 30 | Out-Null
+    $latestExamVersion = Find $window (Is $A::AutomationIdProperty "exam-version:$($latest.id)") { param($e) $e.Current.Name.EndsWith("$impact · 当前版本") } 'the latest update reports the published class impact' 30
+    InWindow $latestExamVersion 'the latest exam update is visible without scrolling'
+    $examHeading = Find $window (Is $A::NameProperty '更新记录') $null 'the exam history has a heading'
+    if ($examHeading.Current.BoundingRectangle.Left -le ($window.Current.BoundingRectangle.Left + $window.Current.BoundingRectangle.Width / 2)) {
+        throw 'exam history should occupy the second column in a wide window'
+    }
+    Capture 'exam-wide'
     $baseline = $examIndex.history | Where-Object baseline | Select-Object -First 1
     Press $window { param($e) $e.Current.AutomationId -eq "exam-version:$($baseline.id)" } 'open the original exam baseline'
-    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
-    [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
+    [Owned]::ResizeForTest($examWindow, 600, 880)
+    [Owned]::ResizeForTest($examWindow, 1280, 880)
     Find $window (Is $A::AutomationIdProperty "exam-version:$($baseline.id)") { param($e) $e.Current.HelpText -eq '已展开' } 'the selected history survives a responsive redraw' | Out-Null
     Find $window (Is $A::NameProperty '当前版本') $null 'the current version remains identified while viewing history' | Out-Null
     Capture 'exam-unaffected-baseline'
