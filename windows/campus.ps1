@@ -23,7 +23,13 @@ $release.Remove('all')
 $release.Remove('offline')
 $release.Remove('core')
 $searchPaths = @("$($release.search_base)/manifest.json", "$($release.search_base)/pack-000.bin")
-if ($release.search_stable_base) { $searchPaths += "$($release.search_stable_base)/pack-000.bin" }
+if ($release.search_stable_base) {
+    $searchPaths += "$($release.search_stable_base)/pack-000.bin"
+    $increment = Get-ChildItem -LiteralPath (Join-Path $root "public$($release.search_base)") -File -Filter 'pack-*.bin'
+    if (($increment | Measure-Object Length -Sum).Sum -le 2MB) {
+        $searchPaths += $increment | Where-Object Name -NE 'pack-000.bin' | ForEach-Object { "$($release.search_base)/$($_.Name)" }
+    }
+}
 $output = [IO.Path]::GetFullPath($Destination)
 [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($output)) | Out-Null
 $pending = "$output.$PID.tmp"

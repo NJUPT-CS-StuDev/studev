@@ -71,6 +71,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val sameComponent = when {
             path.startsWith("space/") -> URI(release.map_base).path == URI(bundled.map_base).path
             path.startsWith("knowledge/") -> URI(release.knowledge_base).path == URI(bundled.knowledge_base).path
+            path.startsWith("search/") -> URI(release.search_base).path == URI(bundled.search_base).path
             else -> release.version == bundled.version
         }
         if (sameComponent) {
@@ -111,7 +112,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         require(spans.all { (offset, length) -> offset >= 0 && length > 0 && offset <= Long.MAX_VALUE - length })
         val prefix = component(path).first
         val bundledBase = if (path.startsWith("search-base/")) bundled.search_stable_base else bundled.search_base
-        if (bundledBase != null && URI(prefix).path == URI(bundledBase).path && path.endsWith("/pack-000.bin")) {
+        if (bundledBase != null && URI(prefix).path == URI(bundledBase).path) {
             val bundle = try { context.assets.open("data/$path").use { it.readBytes() } } catch (_: FileNotFoundException) { null }
             if (bundle != null) return@withContext spans.map { (offset, length) ->
                 if (offset > bundle.size || length > bundle.size - offset) throw DataCorruptionException("随应用发布的搜索索引不完整")
@@ -268,7 +269,10 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = connectTimeoutMs; connection.readTimeout = minOf(connectTimeoutMs, 15_000)
             connection.setRequestProperty("User-Agent", "studev-android")
-            if (offset != null) connection.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
+            if (offset != null) {
+                connection.useCaches = false
+                connection.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
+            }
             try {
                 if (connection.responseCode == 404) throw FileNotFoundException(address)
                 if (connection.responseCode !in 200..299) throw IOException("数据请求失败：${connection.responseCode}")

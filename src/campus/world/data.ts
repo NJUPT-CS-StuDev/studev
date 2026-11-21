@@ -1,6 +1,6 @@
 // Everything the three entries read from one campus release, fetched once per page.
 import type { Exam, ExamChange, ExamSource, ExamVersion, Lab, Room, RoomDay, TeachingClass, TeachingMeeting, TeachingPeriod, TeachingTerm, TeachingWeek } from '@/world/facts';
-import { DATA_RELEASE, releaseReady } from '@/world/config';
+import { DATA_RELEASE } from '@/world/config';
 import { fetchJson } from '@/world/fetch';
 import type { CourseMaterials } from '@/world/materials';
 
@@ -8,7 +8,7 @@ const base = () => DATA_RELEASE.base;
 const teaching = () => `${base()}/teaching/${DATA_RELEASE.teaching}`;
 const once = <T>(load: () => Promise<T>) => {
     let value: Promise<T> | null = null;
-    return () => value ??= releaseReady.then(load).catch(error => { value = null; throw error; });
+    return () => value ??= load().catch(error => { value = null; throw error; });
 };
 
 export interface CalendarTerm {
@@ -36,7 +36,6 @@ export const loadMaterials = once(() => fetchJson<CourseMaterials[]>(`${base()}/
 
 const classFiles = new Map<string, Promise<TeachingMeeting[]>>();
 export const loadClassMeetings = async (id: string) => {
-    await releaseReady;
     let file = classFiles.get(id);
     if (!file) classFiles.set(id, file = fetchJson<{ meetings: TeachingMeeting[] }>(`${teaching()}/classes/${encodeURIComponent(id)}.json`).then(value => value.meetings).catch(error => { classFiles.delete(id); throw error; }));
     return file;
@@ -56,7 +55,6 @@ export const loadExamRecord = async (id: string): Promise<ExamRecord> => {
     return { changes: (await fetchJson<{ changes: ExamChange[] }>(`${base()}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).changes, sources, checked, history };
 };
 export const loadClassExams = async (id: string): Promise<Exam[]> => {
-    await releaseReady;
     if (!DATA_RELEASE.exams) return [];
     const { classes } = await examIndex();
     if (!classes.includes(id)) return [];

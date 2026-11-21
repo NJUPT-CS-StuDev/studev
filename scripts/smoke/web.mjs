@@ -160,7 +160,10 @@ async function searchRanges(page, name) {
     });
     assert.equal(await cachedPacks(), 0, 'the first search starts without a complete cached search archive');
     const requests = [], responses = [];
-    const pack = url => url.origin === dataOrigin.origin && [release.search_base, release.search_stable_base].some(base => base && url.pathname.startsWith(base + "/pack-"));
+    // Index files contain solely the index and can be preloaded whole. The
+    // much larger packs with postings and pages still use byte ranges.
+    const pack = url => url.origin === dataOrigin.origin && !url.pathname.endsWith('/pack-000.bin') &&
+        [release.search_base, release.search_stable_base].some(base => base && url.pathname.startsWith(base + "/pack-"));
     const context = page.context();
     const onRequest = request => { if (pack(new URL(request.url()))) requests.push({ range: request.headers().range ?? null }); };
     const onResponse = response => { if (pack(new URL(response.url()))) responses.push({ status: response.status(), range: response.headers()['content-range'] ?? null }); };

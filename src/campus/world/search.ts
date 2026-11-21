@@ -1,25 +1,15 @@
-import { SearchClient } from 'wasm-search';
-import { APP_CONFIG, releaseReady } from './config';
+import { SearchClient, type SearchBundleManifest } from 'wasm-search';
+import { APP_CONFIG } from './config';
 
-let shared: { base: string; client: SearchClient } | null = null;
+let shared: SearchClient | undefined;
 
-/** The session's one search engine: the search page and the assistant's tools share it, so the index is read and
- * decoded once. A new campus release moves the bundle; the engine of the old one is let go. */
-function openSearch(base: string): SearchClient {
-    if (shared?.base !== base) {
-        shared?.client.dispose();
-        shared = { base, client: new SearchClient({ baseUrl: base }) };
-    }
-    return shared.client;
-}
-
-export async function searchClient(): Promise<SearchClient> {
-    // The bundled or saved pointer is already known. Start its index read while the
-    // current pointer is being discovered, and select the current engine when that finishes.
-    const first = openSearch(APP_CONFIG.DATA_URLS.SEARCH);
-    void first.initialize().catch(() => undefined);
-    await releaseReady;
-    return openSearch(APP_CONFIG.DATA_URLS.SEARCH);
+/** The search page and assistant share the engine for this visit's immutable snapshot. */
+export function searchClient(): SearchClient {
+    if (shared) return shared;
+    const baseUrl = APP_CONFIG.DATA_URLS.SEARCH;
+    const seed = document.querySelector<HTMLScriptElement>('script[data-search-base]');
+    const manifest = seed?.dataset.searchBase === baseUrl ? JSON.parse(seed.textContent!) as SearchBundleManifest : undefined;
+    return shared = new SearchClient({ baseUrl, manifest });
 }
 
 /** Readies the engine while the browser is idle, so the first search does not wait for the index. Skipped when the
@@ -27,6 +17,7 @@ export async function searchClient(): Promise<SearchClient> {
 export function warmSearch() {
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
     if (connection?.saveData) return;
-    const start = () => void searchClient().then(client => client.initialize()).catch(() => undefined);
+    const start = () => void searchClient().initialize().catch(() => undefined);
+    if (location.pathname === '/search/') { start(); return; }
     if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 8000 }); else setTimeout(start, 3000);
 }

@@ -129,11 +129,7 @@ export default function SearchApp() {
     const [rooms, setRooms] = useState<((id: string) => { busy: boolean; text: string } | null) | null>(null);
     const input = useRef<HTMLInputElement>(null);
     const [client, setClient] = useState<SearchClient | null>(null);
-    useEffect(() => {
-        let current = true;
-        void searchClient().then(shared => { if (current) setClient(shared); });
-        return () => { current = false; };
-    }, []);
+    useEffect(() => { setClient(searchClient()); }, []);
     useEffect(() => {
         const scope = params.get('scope');
         if (scope === 'place' || scope === 'course') input.current?.focus();

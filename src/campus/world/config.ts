@@ -7,7 +7,7 @@ import { releaseAt, validRelease, type CampusRelease } from './release';
 /** A release this build can read: valid, and in the search format its engine reads. */
 const readable = (value: unknown): value is CampusRelease => validRelease(value) && value.search_format === SEARCH_BUNDLE_FORMAT;
 
-const CACHE = 'studev-campus-release';
+export const CAMPUS_RELEASE_CACHE = 'studev-campus-release';
 const RUNTIME = 'studev-app-runtime';
 const local = bundled as unknown as CampusRelease;
 const browser = typeof window !== 'undefined';
@@ -23,7 +23,7 @@ const dataOrigin = import.meta.env.DEV ? (browser ? location.origin : product.or
 let available: string | undefined;
 function kept(): { release: CampusRelease; entry: string } | undefined {
     try {
-        const value = JSON.parse(localStorage.getItem(CACHE) ?? 'null');
+        const value = JSON.parse(localStorage.getItem(CAMPUS_RELEASE_CACHE) ?? 'null');
         const entry = new URL(value.entry);
         return readable(value.release) && entry.protocol === 'https:' && !entry.username && !entry.password
             ? { release: value.release, entry: entry.href } : undefined;
@@ -57,17 +57,13 @@ async function discoverCampus(): Promise<CampusRelease | undefined> {
         const value = await (entry === previousEntry ? previousRead : readCampus(entry));
         // Data newer than this build (or older) is left alone; the next deployment of the site reads it.
         if (!readable(value)) return;
-        try { localStorage.setItem(CACHE, JSON.stringify({ entry, release: value })); } catch { /* Private browsing still reads the public snapshot. */ }
+        try { localStorage.setItem(CAMPUS_RELEASE_CACHE, JSON.stringify({ entry, release: value })); } catch { /* Private browsing still reads the public snapshot. */ }
         return releaseAt(value, new URL(entry).origin);
     } catch { return undefined; }
 }
 const cached = browser && !import.meta.env.DEV ? kept() : undefined;
-/** Fixed before the first fact read. Headers, account and the application shell
- * render immediately; only cold data readers await discovery. */
-export let DATA_RELEASE: CampusRelease = browser ? releaseAt(cached?.release ?? local, cached ? new URL(cached.entry).origin : dataOrigin, import.meta.env.DEV) : local;
-export const releaseReady: Promise<void> = browser && !import.meta.env.DEV && !cached
-    ? latestCampusRelease().then(next => { if (next) DATA_RELEASE = next; })
-    : Promise.resolve();
+/** Read one snapshot for the visit, using the saved or bundled release immediately. */
+export const DATA_RELEASE: CampusRelease = browser ? releaseAt(cached?.release ?? local, cached ? new URL(cached.entry).origin : dataOrigin, import.meta.env.DEV) : local;
 if (browser && !import.meta.env.DEV) {
     const check = async () => {
         if (!navigator.onLine) return;
@@ -81,7 +77,8 @@ if (browser && !import.meta.env.DEV) {
     };
     setInterval(() => void check(), 10 * 60_000);
     window.addEventListener('focus', () => void check());
-    if (cached) void check();
+    if ('requestIdleCallback' in window) requestIdleCallback(() => void check(), { timeout: 2000 });
+    else setTimeout(() => void check(), 1000);
 }
 
 export const APP_CONFIG = {

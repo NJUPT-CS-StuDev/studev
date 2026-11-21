@@ -3,7 +3,7 @@ import { PRODUCT_CONFIG } from '@/world/product';
 // contributed by the campus facts release and are joined by canonical map id.
 import type { StyleSpecification } from 'maplibre-gl';
 import type { GraphData, Position, Endpoint } from 'wayfind';
-import { DATA_RELEASE, releaseReady } from '@/world/config';
+import { DATA_RELEASE } from '@/world/config';
 import { fetchJson, fetchText } from '@/world/fetch';
 import { loadRoomIndex } from '@/world/data';
 
@@ -42,7 +42,6 @@ export const spaceBase = (campus = CAMPUS) =>
     new URL(`${DATA_RELEASE.map_base}/${encodeURIComponent(campus)}`, location.origin).href;
 
 export async function loadSpace(campus = CAMPUS): Promise<Space> {
-    await releaseReady;
     const base = spaceBase(campus);
     const [places, network, opening, rooms] = await Promise.all([
         fetchJson<Place[]>(`${base}/entities.json`),
@@ -65,7 +64,6 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
 
 /** The packaged style, with its two tokens bound to this site. */
 export async function loadStyle(campus = CAMPUS): Promise<StyleSpecification> {
-    await releaseReady;
     const base = spaceBase(campus);
     const text = await fetchText(`${base}/style.json`);
     return JSON.parse(text.replaceAll('{data}', base).replaceAll('{assets}', `${DATA_RELEASE.map_base}/assets`));

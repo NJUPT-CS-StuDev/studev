@@ -83,13 +83,19 @@ abstract class CampusDataTask @Inject constructor(private val fs: FileSystemOper
         fs.sync {
             from(release)
             into(assetDir.dir("data"))
-            // Map and compact search metadata are local on first launch. Search
-            // postings/snippets and large academic shards are fetched lazily.
+            // The map, search indexes and a small search increment are usable
+            // on first launch. Large postings and pages are fetched lazily.
             if (!bundleAllData.get()) {
                 include("space/**")
                 include("entities/**")
                 include("hours.json", "calendar.json", "morning-run.json", "curriculum/**", "knowledge/knowledge.json")
                 include("search/manifest.json", "search/pack-000.bin", "search-base/pack-000.bin")
+                if (metadata["search_stable_base"] != null) {
+                    val packs = release.resolve("search").listFiles { file -> file.name.matches(Regex("pack-[0-9]+[.]bin")) }.orEmpty()
+                    if (packs.sumOf { it.length() } <= 2L * 1024 * 1024) {
+                        include(packs.map { "search/${it.name}" })
+                    }
+                }
                 include("teaching/${metadata["teaching"]}/term.json", "teaching/${metadata["teaching"]}/periods.json",
                     "teaching/${metadata["teaching"]}/classes.json", "teaching/${metadata["teaching"]}/meetings.json", "rooms/index.json")
                 include("teaching/${metadata["teaching"]}/classes/B240402.json")

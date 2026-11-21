@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { initialize as initializeRouting, Router, type Mode, type Route } from 'wayfind';
 import type { Position } from 'geojson';
 import { PRODUCT_CONFIG } from '@/world/product';
-import { releaseReady } from '@/world/config';
 import type { Room, RoomDay, TeachingPeriod, TeachingTerm } from '@/world/facts';
 import { loadCalendar, loadPeriods, loadRoomDay, loadRoomIndex, loadTerm } from '@/world/data';
 import { courseName, roomLabel, unplaced } from '@/world/names';
@@ -48,7 +47,7 @@ function useWorld() {
     const [world, setWorld] = useState<World | null>(null);
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
-        releaseReady.then(() => Promise.all([loadSpace(), fetchJson<CampusModel>(`${spaceBase()}/model.json`), loadRoomIndex(), loadPeriods(), loadTerm(), loadCalendar(), initializeRouting()])).then(([space, model, index, periods, term, calendar]) => {
+        Promise.all([loadSpace(), fetchJson<CampusModel>(`${spaceBase()}/model.json`), loadRoomIndex(), loadPeriods(), loadTerm(), loadCalendar(), initializeRouting()]).then(([space, model, index, periods, term, calendar]) => {
             const placedRooms = index.rooms.filter(room => !unplaced(room.id));
             setWorld({ space, model, router: new Router(space.network), rooms: placedRooms, roomById: new Map(placedRooms.map(room => [room.id, room])), periods, term, holidays: holidayMap(calendar), read: makeRoomReader(periods) });
         }).catch(reason => setError(reason instanceof Error ? reason.message : String(reason)));

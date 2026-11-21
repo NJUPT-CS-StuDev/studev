@@ -1,5 +1,5 @@
 import { initialize, Router, type Mode } from 'wayfind';
-import { APP_CONFIG, releaseReady } from './config';
+import { APP_CONFIG } from './config';
 import { loadPeriods, loadRoomDay, loadRoomIndex } from './data';
 import { buildingWord, isClassroom, makeRoomReader } from './rooms';
 import { loadSpace, type Space } from '@/map/model/space';
@@ -27,8 +27,7 @@ export class CampusTools {
     async query(query: string, within = '全部') {
         const channel = CHANNELS.find(item => item.label === within);
         if (!channel) throw new Error('没有这个搜索范围。');
-        const search = await searchClient();
-        await search.initialize();
+        const search = searchClient();
         const filters = { ...(channel.sources ? { sourceIds: [...channel.sources] } : {}), ...(channel.excluded ? { excludedSourceIds: [...channel.excluded] } : {}) };
         const answer = await search.search({ query, offset: 0, limit: 6, sort: 'relevance', filters }).response;
         return answer.results.map(item => ({ id: /^(topics|sections)\//.test(item.id) ? textKey(item.id) : item.id, title: item.title, source: item.sourceName, ...(item.publishedAt ? { date: item.publishedAt.slice(0, 10) } : {}), snippet: item.snippet, url: item.url }));
@@ -36,7 +35,6 @@ export class CampusTools {
     /** One result's own text, as far as it is kept: an article, a knowledge topic or a question. Courses, teachers,
      * classes, rooms and places are not texts; their own tools answer for them. */
     async read(id: string, offset = 0) {
-        await releaseReady;
         if (!/^[0-9a-f]{16}$/.test(id)) throw new UnknownReference();
         const shard = await fetchJson<Record<string, { title: string; path?: string; url: string; source: string; published: string | null; text: string; files: { name: string; url: string }[] }>>(`${APP_CONFIG.DATA_URLS.TEXTS}/${id.slice(0, 2)}.json`);
         const doc = shard[id];

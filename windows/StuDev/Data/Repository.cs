@@ -197,7 +197,7 @@ public sealed class Repository
         return bytes;
     }
 
-    private static async Task<byte[]?> BundledBytes(string file)
+    private static async Task<byte[]?> BundledBytes(string file, CancellationToken cancel = default)
     {
         if (!File.Exists(BundledRelease)) return null;
         using var archive = ZipFile.OpenRead(BundledRelease);
@@ -205,7 +205,7 @@ public sealed class Repository
         if (entry is null) return null;
         var bytes = new byte[checked((int)entry.Length)];
         await using var contents = entry.Open();
-        await contents.ReadExactlyAsync(bytes);
+        await contents.ReadExactlyAsync(bytes, cancel);
         return bytes;
     }
 
@@ -224,14 +224,14 @@ public sealed class Repository
     }
 
     /** A stretch of a public search pack, fetched from the same data entry and kept on disk. */
-    public async Task<byte[]> Block(string path, long offset, int length)
+    public async Task<byte[]> Block(string path, long offset, int length, CancellationToken cancel)
     {
         if (path.Split('/').Any(part => part is "" or "." or "..")) throw new ArgumentException($"bad release path {path}");
         if (offset < 0 || length <= 0 || offset > long.MaxValue - length) throw new ArgumentOutOfRangeException(nameof(offset));
         var file = LocalPath(path) + "." + offset;
         if (File.Exists(file))
         {
-            var kept = await File.ReadAllBytesAsync(file);
+            var kept = await File.ReadAllBytesAsync(file, cancel);
             if (kept.Length != length) throw new InvalidDataException("离线搜索数据不完整");
             return kept;
         }
@@ -239,19 +239,19 @@ public sealed class Repository
         if (File.Exists(whole)) {
             await using var stream = File.OpenRead(whole);
             if (offset > stream.Length || length > stream.Length - offset) throw new InvalidDataException("离线搜索数据不完整");
-            stream.Position = offset; var bytes = new byte[length]; await stream.ReadExactlyAsync(bytes); return bytes;
+            stream.Position = offset; var bytes = new byte[length]; await stream.ReadExactlyAsync(bytes, cancel); return bytes;
         }
-        if (path.EndsWith("/pack-000.bin", StringComparison.Ordinal) && await BundledBytes(whole) is { } bundled)
+        if (await BundledBytes(whole, cancel) is { } bundled)
         {
             if (offset > bundled.Length || length > bundled.Length - offset) throw new InvalidDataException("随应用发布的搜索索引不完整");
             return bundled.AsSpan((int)offset, length).ToArray();
         }
         byte[] got;
-        try { got = await ReadRange(Address(path), offset, length); }
+        try { got = await ReadRange(Address(path), offset, length, cancel); }
         catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.NotFound) { Missing(); throw; }
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         var pending = file + "." + Guid.NewGuid().ToString("N") + ".pending";
-        try { await File.WriteAllBytesAsync(pending, got); File.Move(pending, file, true); }
+        try { await File.WriteAllBytesAsync(pending, got, cancel); File.Move(pending, file, true); }
         finally { if (File.Exists(pending)) File.Delete(pending); }
         return got;
     }

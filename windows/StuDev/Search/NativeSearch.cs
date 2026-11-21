@@ -18,22 +18,22 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     private long loaded;
     private volatile bool closed;
 
-    private Task<byte[]> Ref(JsonNode value)
+    private Task<byte[]> Ref(JsonNode value, CancellationToken cancel)
     {
         var number = (int)value["pack"]!;
         var pack = (string)manifest!["packs"]![number]!;
-        return repository.Block(repository.SearchPackPath(pack), (long)value["offset"]!, (int)value["bytes"]!);
+        return repository.Block(repository.SearchPackPath(pack), (long)value["offset"]!, (int)value["bytes"]!, cancel);
     }
 
     /** Blocks accumulate between queries; past the budget, start from the index again. */
-    private async Task<SearchEngine> Ready()
+    private async Task<SearchEngine> Ready(CancellationToken cancel = default)
     {
         if (engine is not null && loaded < Budget) return engine;
         Close();
         manifest ??= JsonNode.Parse(await repository.Bytes("search/manifest.json"))!.AsObject();
         var indexes = new List<JsonNode> { manifest["index"]! };
         if (manifest["segments"] is JsonArray segments) indexes.AddRange(segments.Select(part => part!));
-        var bytes = await Task.WhenAll(indexes.Select(Ref));
+        var bytes = await Task.WhenAll(indexes.Select(index => Ref(index, cancel)));
         static uint Decoded(JsonNode node) => (uint)(int)node["decoded_bytes"]!;
         var ready = new SearchEngine(bytes[0], Decoded(indexes[0]), manifest["profile"]!.ToJsonString());
         try
@@ -50,7 +50,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     {
         var blocks = JsonNode.Parse(json)!.AsArray().Select(b => b!).ToList();
         using var slots = new SemaphoreSlim(8);
-        var fetched = await Task.WhenAll(blocks.Select(async block => { await slots.WaitAsync(cancel); try { return await Ref(block); } finally { slots.Release(); } }));
+        var fetched = await Task.WhenAll(blocks.Select(async block => { await slots.WaitAsync(cancel); try { return await Ref(block, cancel); } finally { slots.Release(); } }));
         for (var i = 0; i < blocks.Count; i++)
         {
             cancel.ThrowIfCancellationRequested();
@@ -67,7 +67,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
         {
             ObjectDisposedException.ThrowIf(closed, this);
             if (query.Trim().Length == 1) return new([], 0, []);
-            var search = await Ready();
+            var search = await Ready(cancel);
             var request = new JsonObject { ["query"] = query.Trim(), ["offset"] = offset, ["limit"] = limit, ["sort"] = sort, ["filters"] = filters.DeepClone() };
             var options = JsonNode.Parse(search.FilterOptions())!.AsObject();
             await Load(search.BeginSearch(request.ToJsonString()), search.LoadPostingsChunk, cancel);
