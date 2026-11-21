@@ -131,7 +131,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         } }.awaitAll() }
         out.map { it!! }
     }
-    suspend inline fun <reified T> read(path: String): T = withContext(Dispatchers.Default) { Json.decodeFromString(bytes(path).decodeToString()) }
+    // A data release reaches every install at once: a field added to a published file must not stop an older app reading it.
+    suspend inline fun <reified T> read(path: String): T = withContext(Dispatchers.Default) { dataJson.decodeFromString(bytes(path).decodeToString()) }
     suspend fun term() = read<TeachingTerm>("teaching/${release.teaching}/term.json")
     suspend fun periods() = read<List<TeachingPeriod>>("teaching/${release.teaching}/periods.json")
     suspend fun classes() = read<List<TeachingClass>>("teaching/${release.teaching}/classes.json")
@@ -222,7 +223,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         val edits = settings.timetableEdits(release.teaching)
         return top.hicancan.studev.timetable.ExamAttendance.select(examCandidates(id, edits), settings.examChoices(release.exams, id))
     }
-    private val lenient = Json { ignoreUnknownKeys = true }
+    private val lenient = dataJson
     suspend fun calendar() = withContext(Dispatchers.Default) { lenient.decodeFromString<top.hicancan.studev.world.CalendarFile>(bytes("calendar.json").decodeToString()).terms }
     suspend fun materials() = withContext(Dispatchers.Default) { lenient.decodeFromString<List<top.hicancan.studev.world.CourseMaterials>>(bytes("materials.json").decodeToString()) }
     suspend fun runs() = withContext(Dispatchers.Default) { lenient.decodeFromString<Map<String, top.hicancan.studev.world.MorningRun>>(bytes("morning-run.json").decodeToString()) }

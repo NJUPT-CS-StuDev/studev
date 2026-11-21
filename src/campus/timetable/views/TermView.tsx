@@ -16,6 +16,12 @@ export type TermMode = 'course' | 'exam' | 'run';
 
 const lead = (days: number) => days === 0 ? '今天' : days === 1 ? '明天' : `${days} 天后`;
 const dayHead = (date: string) => `${dateLabel(date)} ${WEEKDAYS[weekdayOf(date)]}`;
+/** Small marks for the three kinds of thing ahead, drawn like the site's other line icons. */
+const ICONS = {
+    exam: <svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v4h4M10 12h5M10 16h5" /></svg>,
+    calendar: <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>,
+    practice: <svg viewBox="0 0 24 24"><path d="M6 21V4M6 4h10l-2 4 2 4H6" /></svg>,
+};
 const placeOf = (exam: Exam) => exam.room ? roomLabel(exam.room) : exam.location;
 
 function RunPanel({ plan, line, now }: { plan: RunPlan; line: Timeline; now: Moment }) {
@@ -64,12 +70,14 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
     const courses = new Set(line.exams.map(exam => exam.course.code ?? exam.course.name)).size;
     const offGrid = [...new Map(practice.map(item => [`${item.name}|${item.weeks.join()}`, item])).values()].sort((left, right) => left.weeks[0]! - right.weeks[0]! || left.name.localeCompare(right.name));
     const when = (item: { start: string; end: string }) => item.start === item.end ? dayHead(item.start) : `${dateLabel(item.start)} – ${dateLabel(item.end)}`;
-    const calendarAhead = [
+    // The whole term's calendar: what is still to come leads, and what has passed (运动会, 校庆) folds beneath it.
+    const calendarItems = [
         ...(calendar?.holidays ?? []).map(item => ({ ...item, text: when(item) })),
         ...(calendar?.events ?? []).map(item => ({ ...item, text: `${when(item)} · 按惯例全天停课` })),
         ...(calendar?.break ? [{ ...calendar.break, text: when(calendar.break) }] : []),
-    ]
-        .filter(item => item.start >= now.date).sort((left, right) => left.start.localeCompare(right.start));
+    ].sort((left, right) => left.start.localeCompare(right.start));
+    const calendarAhead = calendarItems.filter(item => item.end >= now.date);
+    const calendarPast = calendarItems.filter(item => item.end < now.date);
     const eventOf = (exam: Exam) => eventsOn(line, exam.date).find(item => item.exam?.id === exam.id);
     // What one has taken away stays listed, greyed; exams of courses not on one's timetable can be taken away at once.
     const skipped = useMemo(() => [...(line.skippedExams ?? [])].sort((left, right) => left.date.localeCompare(right.date) || left.start.localeCompare(right.start)), [line.skippedExams]);
@@ -178,18 +186,26 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
                                 已跑 {tally.done}，排上 {tally.planned}，{tally.need ? `还差 ${tally.need} 次` : '够了'}
                             </button>
                         ); })()}
-                        {hasExams && <button className="runc xcard" onClick={() => onMode('exam')}>
-                            <b>{courses ? `考试 · 已发现 ${courses} 门` : '考试 · 最新安排与更新记录'}{fresh && <i className="dot" aria-label="有新变动" />}</b>
+                        {/* Three kinds of thing ahead, each in the colour the grid gives it: exams, the school calendar, practice. */}
+                        {hasExams && <button className="tcard exam" onClick={() => onMode('exam')}>
+                            <span className="tcard-head"><i className="tcard-icon" aria-hidden="true">{ICONS.exam}</i><b>考试</b><span className="tcard-meta">{courses ? `${courses} 门` : '更新记录'}{fresh && <i className="dot" aria-label="有新变动" />}<Chevron /></span></span>
                             {ahead[0] ? <>
-                                <span className="xday">{dayHead(ahead[0].date)} · {lead(ahead[0].days)}</span>
-                                {ahead[0].exams.map(exam => <span key={exam.id} className="xline"><span>{courseName(exam.course.name)}</span><span>{exam.start} · {placeOf(exam)}</span></span>)}
-                            </> : <span className="xday">{courses ? '都考完了' : '暂无待考安排'}</span>}
+                                <span className="tcard-lead"><b>{dayHead(ahead[0].date)}</b><span className="tcard-pill">{lead(ahead[0].days)}</span></span>
+                                {ahead[0].exams.map(exam => <span key={exam.id} className="tcard-row"><span>{courseName(exam.course.name)}</span><small>{exam.start} · {placeOf(exam)}</small></span>)}
+                            </> : <span className="tcard-row"><span className="faint">{courses ? '都考完了' : '暂无待考安排'}</span></span>}
                         </button>}
-                        {offGrid.length > 0 && <>
-                            <h3 className="sh">不在课表里的课</h3>
-                            {offGrid.map(item => <div key={`${item.name}|${item.weeks.join()}`} className="xrow"><span className="m">{item.name}<small>{weeksText(item.weeks)}</small></span></div>)}
-                        </>}
-                        {calendarAhead.length > 0 && <><h3 className="sh">校历</h3>{calendarAhead.map(item => <div key={item.name + item.start} className="xrow"><span className="cd">{lead(daysBetween(now.date, item.start))}</span><span className="m">{item.name}<small>{item.text}</small></span></div>)}</>}
+                        {offGrid.length > 0 && <section className="tcard practice">
+                            <span className="tcard-head"><i className="tcard-icon" aria-hidden="true">{ICONS.practice}</i><b>实践课程</b><span className="tcard-meta">不占课表格子</span></span>
+                            {offGrid.map(item => <span key={`${item.name}|${item.weeks.join()}`} className="tcard-row"><span className="grow">{item.name}</span><small>{weeksText(item.weeks)}</small></span>)}
+                        </section>}
+                        {calendarItems.length > 0 && <section className="tcard holiday">
+                            <span className="tcard-head"><i className="tcard-icon" aria-hidden="true">{ICONS.calendar}</i><b>校历</b></span>
+                            {calendarAhead.map(item => <span key={item.name + item.start} className="tcard-row"><span className="tcard-pill">{item.start <= now.date ? '进行中' : lead(daysBetween(now.date, item.start))}</span><span className="grow">{item.name}<small>{item.text}</small></span></span>)}
+                            {calendarPast.length > 0 && <details className="tcard-past">
+                                <summary><span>已过</span><span className="xcount">{calendarPast.length} 项<Chevron /></span></summary>
+                                {calendarPast.map(item => <span key={item.name + item.start} className="tcard-row past"><span className="tcard-pill">已过</span><span className="grow">{item.name}<small>{item.text}</small></span></span>)}
+                            </details>}
+                        </section>}
                     </>}
                 </div>
             </div>

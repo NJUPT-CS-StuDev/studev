@@ -28,6 +28,9 @@ internal fun appRuntime(text: String): AppRuntime = kotlinx.serialization.json.J
 @Serializable data class TeachingPeriod(val period: Int, val start: String, val end: String, val part: String?)
 @Serializable data class TeachingClass(val id: String, val name: String, val grade: String?, val college: String?, val major: String?, val campus: String?, val students: Int?, val practice: List<Practice>)
 /** Coursework off the timetable (课程设计, 实践): its weeks, and its name as far as the data proves it. */
+/** Published data files are read tolerantly: keys a newer release adds are ignored, never fatal. */
+val dataJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
 @Serializable data class Practice(val name: String, val weeks: List<Int>, val text: String)
 @Serializable data class Course(val code: String?, val name: String, val category: String?, val nature: String?, val credits: Double?, val hours: Double?, val hours_composition: String?, val assessment: String?, val exam: String?)
 @Serializable data class CoursePlan(

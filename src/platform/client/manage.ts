@@ -88,14 +88,6 @@ async function editRosterModal(
   const onSubmit = (e: SubmitEvent) => {
     const submitter = e.submitter as HTMLButtonElement | null;
     if (submitter?.value !== 'confirm') return;
-    const chosenRole = canEditRole ? (roleSelect.value as 'user' | 'admin') : user.role;
-    if (chosenRole === 'admin' && (!deptInput.value.trim() || !titleInput.value.trim())) {
-      e.preventDefault();
-      errBox.textContent = '设为管理员须同时填写所属部门与职务分工；若暂不分配，请改选“用户”。';
-      errBox.hidden = false;
-      (!deptInput.value.trim() ? deptInput : titleInput).focus();
-      return;
-    }
     errBox.hidden = true;
   };
   form.addEventListener('submit', onSubmit);
@@ -304,23 +296,7 @@ function renderMembers() {
       select.value = user.role;
       select.addEventListener('change', () => {
         const next = select.value as 'user' | 'admin';
-        if (next === 'admin' && (!user.department || !user.title)) {
-          select.value = user.role;
-          void guard(async () => {
-            const nextProfile = await editRosterModal(user, 'admin');
-            if (!nextProfile) return;
-            await api(`/admin/users/${encodeURIComponent(user.id)}`, {
-              revision: user.revision,
-              ...nextProfile,
-            });
-            try {
-              localStorage.removeItem('studev_roster_2026-2027');
-            } catch {}
-            await refreshMembers();
-            message(status, '已分配部门职务并更新成员身份。', 'success');
-          });
-          return;
-        }
+        // The owner sets and lifts admins directly, as a group owner does; admin and position are independent.
         void guard(async () => {
           if ((await confirmAction('调整成员角色', `将 ${display}（${ref}）设为${labels[next]}？`)) === null) {
             select.value = user.role;

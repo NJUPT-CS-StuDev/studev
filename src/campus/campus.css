@@ -283,6 +283,38 @@
   .xsource-files li>span{display:block;padding:8px 0}
   .xlist section{margin-bottom:6px}
   .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warning);margin-left:6px;vertical-align:2px}
+  /* The term's side: one card per kind of thing ahead, tinted as the grid marks it. */
+  .tcard{--tint:var(--brand);display:flex;flex-direction:column;gap:10px;width:100%;margin-bottom:14px;padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--tint) 5%,var(--paper));text-align:left;font-variant-numeric:tabular-nums}
+  .tcard.exam{--tint:var(--exam)}.tcard.holiday{--tint:var(--holiday)}.tcard.practice{--tint:var(--free)}
+  button.tcard{cursor:pointer;transition:border-color .15s,background .15s}
+  button.tcard:hover{border-color:color-mix(in srgb,var(--tint) 45%,var(--line));background:color-mix(in srgb,var(--tint) 9%,var(--paper))}
+  .tcard-head{display:flex;align-items:center;gap:10px}
+  .tcard-head b{font-size:15px;font-weight:600;color:var(--ink)}
+  .tcard-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--tint) 16%,transparent);color:var(--tint);flex:none}
+  .tcard-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tcard-meta{display:inline-flex;align-items:center;gap:4px;margin-left:auto;font-size:12.5px;color:var(--muted)}
+  .tcard-meta svg{width:14px;height:14px;color:var(--faint)}
+  .tcard-lead{display:flex;align-items:center;gap:8px}
+  .tcard-lead b{font-size:17px;font-weight:600;color:var(--ink)}
+  .tcard-pill{flex:none;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--tint) 16%,transparent);color:color-mix(in srgb,var(--tint) 80%,var(--ink));font-size:12px;font-weight:600;white-space:nowrap}
+  .tcard-row{display:flex;align-items:baseline;gap:10px;font-size:14px;color:var(--ink)}
+  .tcard-row .grow{flex:1;min-width:0}
+  .tcard-row small{display:block;font-size:12.5px;color:var(--muted)}
+  .tcard-row>small{flex:none;margin-left:auto}
+  .tcard-row>span:first-child:not(.tcard-pill):not(.grow){flex:1;min-width:0}
+  .tcard-row .faint{color:var(--muted)}
+  .tcard.holiday .tcard-row .tcard-pill{min-width:58px;text-align:center}
+  .tcard-past{border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+  .tcard-past summary{display:flex;align-items:center;justify-content:space-between;min-height:38px;list-style:none;cursor:pointer;font-size:13px;color:var(--muted)}
+  .tcard-past summary::-webkit-details-marker{display:none}
+  .tcard-past summary:hover{color:var(--ink)}
+  .tcard-past .xcount{display:inline-flex;align-items:center;gap:6px}
+  .tcard-past .xcount svg{width:14px;height:14px;color:var(--faint);transition:transform .18s ease}
+  .tcard-past[open] .xcount svg{transform:rotate(90deg)}
+  .tcard-past .tcard-row{padding:8px 0}
+  .tcard-row.past{color:var(--muted)}
+  .tcard-row.past .tcard-pill{background:var(--surface-sunken);color:var(--faint)}
+  .tcard.practice .tcard-row+.tcard-row,.tcard.holiday .tcard-row+.tcard-row{padding-top:10px;border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
   .xcard{display:block;width:100%;text-align:left}
   .xcard .xday{display:block;margin-top:2px;color:var(--ink);font-weight:500}
   .xcard .xline{display:flex;justify-content:space-between;gap:12px;margin-top:4px}

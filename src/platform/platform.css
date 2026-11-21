@@ -1,6 +1,6 @@
 .platform { width:min(680px,calc(100% - 32px)); margin-inline:auto; padding:20px 0 72px; font-family:var(--font-sans); transition:width .18s ease; }
 .platform[data-wide="true"] { width:min(1140px,calc(100% - 48px)); }
-.platform [hidden] { display:none!important; }
+.platform [hidden], .p-modal [hidden] { display:none!important; }
 .p-nav { display:flex; align-items:center; justify-content:flex-start; margin-bottom:28px; overflow-x:auto; scrollbar-width:none; }
 .p-nav::-webkit-scrollbar { display:none; }
 .p-nav-group { display:flex; gap:22px; border-bottom:1px solid var(--line); width:100%; }
