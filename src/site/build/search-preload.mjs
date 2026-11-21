@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { copyFile, readFile, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 
 export function searchBootstrap(release, origin, bundled) {
     const base = new URL(release.search_base + '/', origin);
@@ -15,8 +15,8 @@ export function searchBootstrap(release, origin, bundled) {
     return { base: base.href.slice(0, -1), manifest, inputs };
 }
 
-/** Load the search island's static module graph alongside its index, rather
- * than discovering each layer of imports on a separate network round trip. */
+/** Fetch the search island's module graph in parallel. The worker owns fetching
+ * its WebAssembly and index files. Document preload responses are scoped to the document. */
 export default function searchPreload() {
     const modules = new Map();
     return {
@@ -47,10 +47,7 @@ export default function searchPreload() {
                     if (!imports) throw new Error(`Missing search module graph for ${path}`);
                     for (const dep of imports) if (modules.has(dep)) preload.add(dep);
                 }
-                const wasm = (await readdir(new URL('_astro/', dir))).find(file => /^wasm_search_wasm_bg[-.].+\.wasm$/.test(file));
-                if (!wasm) throw new Error('The built search worker has no WASM kernel to preload');
-                const links = [...preload].map(path => `<link rel="modulepreload" href="${path}">`).join('')
-                    + `<link rel="preload" as="fetch" href="/_astro/${wasm}" crossorigin>`;
+                const links = [...preload].map(path => `<link rel="modulepreload" href="${path}">`).join('');
                 await writeFile(page, html.replace('</head>', links + '</head>'));
             },
         },

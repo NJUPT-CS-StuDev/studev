@@ -3,11 +3,9 @@ import SiteLayout from '../../site/SiteLayout.astro';
 import SearchApp from '../../campus/search/SearchApp';
 import product from '../../../product.json';
 import release from '../../data/campus-release.json';
-import { CAMPUS_RELEASE_CACHE } from '../../campus/world/config';
 import { searchBootstrap } from '../../site/build/search-preload.mjs';
 
-const { base: searchBase, manifest, inputs } = searchBootstrap(release, import.meta.env.DEV ? Astro.url.origin : product.campusOrigin, !import.meta.env.DEV);
-const indexes = inputs.map(({ asset }) => asset);
+const { base: searchBase, manifest } = searchBootstrap(release, import.meta.env.DEV ? Astro.url.origin : product.campusOrigin, !import.meta.env.DEV);
 ---
 <SiteLayout title="搜索 — StuDev" description="搜南京邮电大学的课程、老师、班级、教室、地点、通知和学习资料。" active="search">
   <link slot="head" rel="preconnect" href={product.campusOrigin} crossorigin="anonymous" />
@@ -18,24 +16,5 @@ const indexes = inputs.map(({ asset }) => asset);
     </script>
   </Fragment>
   <script slot="head" is:inline type="application/json" data-search-base={searchBase} set:html={JSON.stringify(manifest).replaceAll('<', '\\u003c')} />
-  <script slot="head" define:vars={{ indexes, searchBase, cacheKey: CAMPUS_RELEASE_CACHE }}>
-    if (!navigator.connection?.saveData) {
-      let activeBase = searchBase;
-      try {
-        const saved = JSON.parse(localStorage.getItem(cacheKey) ?? 'null');
-        if (saved?.release) activeBase = new URL(saved.release.search_base, saved.entry).href;
-      } catch {}
-      if (activeBase === searchBase) {
-        for (const href of indexes) {
-          const link = document.createElement('link');
-          link.rel = 'preload';
-          link.as = 'fetch';
-          link.crossOrigin = 'anonymous';
-          link.href = href;
-          document.head.append(link);
-        }
-      }
-    }
-  </script>
   <SearchApp client:only="react" />
 </SiteLayout>
