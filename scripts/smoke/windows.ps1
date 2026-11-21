@@ -113,8 +113,8 @@ if (-not $Online) {
     New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
     $facts = Join-Path $cacheRoot $release.base.TrimStart('/')
     New-Item -ItemType Directory -Path $facts -Force | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $repo "public$($release.base)") | Where-Object Name -NotIn @('space','knowledge','search','texts') | Copy-Item -Destination $facts -Recurse
-    foreach ($base in @($release.map_base,$release.knowledge_base,$release.search_base,$release.texts_base)) {
+    Get-ChildItem -LiteralPath (Join-Path $repo "public$($release.base)") | Where-Object Name -NotIn @('space','knowledge','search','search-base','texts') | Copy-Item -Destination $facts -Recurse
+    foreach ($base in @($release.map_base,$release.knowledge_base,$release.search_base,$release.texts_base,$release.search_stable_base) | Where-Object { $_ }) {
         $destination = Join-Path $cacheRoot $base.TrimStart('/')
         New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $repo "public$base") -Destination (Split-Path $destination) -Recurse

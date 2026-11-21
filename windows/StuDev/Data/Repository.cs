@@ -1,5 +1,7 @@
 // One immutable data release, fetched as needed from the site and kept on disk for offline use, as Android's
 // AcademicRepository does: the same files, the same release manifest the website's offline worker reads.
+using System.IO.Compression;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 
@@ -9,9 +11,15 @@ public sealed class Repository
 {
     public static string Site => Product.Origin;
     // The site compresses what it can (the release pointer is 500 KB raw, 60 KB compressed); say we read compressed.
-    private static readonly HttpClient Http = new(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient Http = new(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All })
+    {
+        Timeout = TimeSpan.FromSeconds(30),
+        DefaultRequestVersion = HttpVersion.Version20,
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+    };
     private static readonly string Root = Storage.CacheFor("campus");
     private static string ActiveRelease => Path.Combine(Root, "release.json");
+    private static string BundledRelease => Path.Combine(AppContext.BaseDirectory, "campus.zip");
     public DataRelease Release { get; }
     public static event Action<DataRelease>? Retired;
     private int checkedRetirement;
@@ -38,6 +46,15 @@ public sealed class Repository
                 try { File.Delete(kept); } catch (IOException) { }
             }
         }
+        try
+        {
+            using var archive = ZipFile.OpenRead(BundledRelease);
+            using var file = archive.GetEntry("release.json")?.Open() ?? throw new InvalidDataException("bundled release manifest");
+            var release = JsonSerializer.Deserialize(file, FactsJson.Default.DataRelease) ?? throw new InvalidDataException("bundled release manifest");
+            Valid(release);
+            if (Searchable(release)) return Task.FromResult(new Repository(release));
+        }
+        catch (Exception error) when (error is IOException or JsonException) { }
         return Discover();
     }
     public static async Task<Repository> Discover()
@@ -53,14 +70,14 @@ public sealed class Repository
         try { if (File.Exists(runtimeFile)) entry = Entry(await File.ReadAllTextAsync(runtimeFile)); } catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException or InvalidOperationException) { }
         try {
             using var runtimeCancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
-            using var runtimeRequest = new HttpRequestMessage(HttpMethod.Get, $"{Site}/app-release.json");
+            using var runtimeRequest = Get($"{Site}/app-release.json");
             runtimeRequest.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
             using var runtimeResponse = await Http.SendAsync(runtimeRequest, runtimeCancel.Token);
             runtimeResponse.EnsureSuccessStatusCode();
             var runtimeText = await runtimeResponse.Content.ReadAsStringAsync(runtimeCancel.Token);
             entry = Entry(runtimeText); Storage.Write(runtimeFile, runtimeText);
         } catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException or JsonException or KeyNotFoundException or InvalidOperationException) { }
-        using var request = new HttpRequestMessage(HttpMethod.Get, entry);
+        using var request = Get(entry);
         request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
         using var response = await Http.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -69,7 +86,8 @@ public sealed class Repository
         var origin = new Uri(entry);
         release = release with { Base = new Uri(origin, release.Base).AbsoluteUri,
             MapBase = new Uri(origin, release.MapBase).AbsoluteUri, KnowledgeBase = new Uri(origin, release.KnowledgeBase).AbsoluteUri,
-            SearchBase = new Uri(origin, release.SearchBase).AbsoluteUri, TextsBase = new Uri(origin, release.TextsBase).AbsoluteUri };
+            SearchBase = new Uri(origin, release.SearchBase).AbsoluteUri,
+            SearchStableBase = release.SearchStableBase is { } stable ? new Uri(origin, stable).AbsoluteUri : null, TextsBase = new Uri(origin, release.TextsBase).AbsoluteUri };
         Valid(release);
         if (!Searchable(release)) throw new NotSupportedException("校园数据已经更新，这个版本的 StuDev 读不了，请更新到新版本。");
         return new Repository(release);
@@ -91,7 +109,13 @@ public sealed class Repository
     {
         if (release.Version is null || !System.Text.RegularExpressions.Regex.IsMatch(release.Version, "^[A-Za-z0-9._-]+$") || !Uri.TryCreate(new Uri(Product.CampusOrigin), release.Base, out var factBase) || factBase.Scheme != "https" || factBase.UserInfo.Length != 0 || factBase.Query.Length != 0 || factBase.Fragment.Length != 0 || factBase.AbsolutePath != $"/data/{release.Version}")
             throw new InvalidDataException($"unexpected release {release.Version}");
-        foreach (var (value, prefix) in new[] { (release.MapBase, "space"), (release.KnowledgeBase, "knowledge"), (release.SearchBase, "search"), (release.TextsBase, "texts") })
+        var components = new List<(string? Base, string Prefix)> { (release.MapBase, "space"), (release.KnowledgeBase, "knowledge"), (release.SearchBase, "search"), (release.TextsBase, "texts") };
+        if (release.SearchStableBase is { } stable)
+        {
+            if (stable == release.SearchBase) throw new InvalidDataException("校园搜索包地址无效。");
+            components.Add((stable, "search"));
+        }
+        foreach (var (value, prefix) in components)
             if (value is null || !Uri.TryCreate(new Uri(Product.CampusOrigin), value, out var component) || component.Scheme != "https" || component.UserInfo.Length != 0 || component.Query.Length != 0 || component.Fragment.Length != 0 || !System.Text.RegularExpressions.Regex.IsMatch(component.AbsolutePath, $"^/{prefix}/[A-Za-z0-9._-]+$"))
                 throw new InvalidDataException("校园数据入口不完整。");
     }
@@ -136,10 +160,15 @@ public sealed class Repository
     private (string Base, string Relative) Component(string path) => path.Split('/', 2) is [var head, var tail] ? head switch
     {
         "space" => (Release.MapBase, tail), "knowledge" => (Release.KnowledgeBase, tail),
-        "search" => (Release.SearchBase, tail), "texts" => (Release.TextsBase, tail),
+        "search" => (Release.SearchBase, tail), "search-base" => (Release.SearchStableBase ?? throw new InvalidDataException("校园搜索底座未发布。"), tail), "texts" => (Release.TextsBase, tail),
         _ => (Release.Base, path),
     } : (Release.Base, path);
     private string Address(string path) { var (component, relative) = Component(path); return new Uri(new Uri(Product.CampusOrigin), component).AbsoluteUri.TrimEnd('/') + "/" + string.Join('/', relative.Split('/').Select(Uri.EscapeDataString)); }
+    private static HttpRequestMessage Get(string url) => new(HttpMethod.Get, url)
+    {
+        Version = Http.DefaultRequestVersion,
+        VersionPolicy = Http.DefaultVersionPolicy,
+    };
 
     /** Native readers of archives use the same downloaded file as other release reads. */
     public async Task<string> LocalFile(string path)
@@ -153,6 +182,9 @@ public sealed class Repository
     {
         var file = LocalPath(path);
         if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
+        // The package holds immutable startup facts under the same versioned paths as the download cache.
+        if (path.EndsWith(".json", StringComparison.Ordinal) && await BundledBytes(file) is { } bundled)
+            return bundled;
         var url = Address(path);
         byte[] bytes;
         try { bytes = await Http.GetByteArrayAsync(url); }
@@ -163,6 +195,32 @@ public sealed class Repository
         try { await File.WriteAllBytesAsync(pending, bytes); File.Move(pending, file, true); }
         finally { if (File.Exists(pending)) File.Delete(pending); }
         return bytes;
+    }
+
+    private static async Task<byte[]?> BundledBytes(string file)
+    {
+        if (!File.Exists(BundledRelease)) return null;
+        using var archive = ZipFile.OpenRead(BundledRelease);
+        var entry = archive.GetEntry(Path.GetRelativePath(Root, file).Replace('\\', '/'));
+        if (entry is null) return null;
+        var bytes = new byte[checked((int)entry.Length)];
+        await using var contents = entry.Open();
+        await contents.ReadExactlyAsync(bytes);
+        return bytes;
+    }
+
+    internal string SearchPackPath(string pack)
+    {
+        static bool Pack(string name) => System.Text.RegularExpressions.Regex.IsMatch(name, @"^pack-[0-9]+[.]bin$");
+        if (Pack(pack)) return $"search/{pack}";
+        if (Release.SearchStableBase is { } stable)
+        {
+            var name = new Uri(new Uri(Product.CampusOrigin), stable).Segments[^1];
+            var prefix = $"../{name}/";
+            if (pack.StartsWith(prefix, StringComparison.Ordinal) && Pack(pack[prefix.Length..]))
+                return "search-base/" + pack[prefix.Length..];
+        }
+        throw new InvalidDataException("校园搜索包地址无效。");
     }
 
     /** A stretch of a public search pack, fetched from the same data entry and kept on disk. */
@@ -183,6 +241,11 @@ public sealed class Repository
             if (offset > stream.Length || length > stream.Length - offset) throw new InvalidDataException("离线搜索数据不完整");
             stream.Position = offset; var bytes = new byte[length]; await stream.ReadExactlyAsync(bytes); return bytes;
         }
+        if (path.EndsWith("/pack-000.bin", StringComparison.Ordinal) && await BundledBytes(whole) is { } bundled)
+        {
+            if (offset > bundled.Length || length > bundled.Length - offset) throw new InvalidDataException("随应用发布的搜索索引不完整");
+            return bundled.AsSpan((int)offset, length).ToArray();
+        }
         byte[] got;
         try { got = await ReadRange(Address(path), offset, length); }
         catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.NotFound) { Missing(); throw; }
@@ -196,7 +259,7 @@ public sealed class Repository
     internal static async Task<byte[]> ReadRange(string url, long offset, int length, CancellationToken cancel = default)
     {
             if (offset < 0 || length <= 0 || offset > long.MaxValue - length) throw new ArgumentOutOfRangeException(nameof(offset));
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var request = Get(url);
             request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + length - 1);
             using var response = await Http.SendAsync(request, cancel);
             response.EnsureSuccessStatusCode();

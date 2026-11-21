@@ -18,13 +18,14 @@ export async function offlineRelease() {
     const snapshot = release as unknown as CampusRelease;
     const publicRoot = join(process.cwd(), 'public');
     const data = (await files(join(publicRoot, snapshot.base), snapshot.base)).filter(file =>
-        !['space', 'knowledge', 'search', 'texts'].some(name => file.path.startsWith(`${snapshot.base}/${name}/`)));
+        !['space', 'knowledge', 'search', 'search-base', 'texts'].some(name => file.path.startsWith(`${snapshot.base}/${name}/`)));
     const local = (base: string) => new URL(base, 'https://campus.invalid').pathname;
     const map = await files(join(publicRoot, local(snapshot.map_base)), snapshot.map_base);
     const knowledge = await files(join(publicRoot, local(snapshot.knowledge_base)), snapshot.knowledge_base);
     const search = await files(join(publicRoot, local(snapshot.search_base)), snapshot.search_base);
     const texts = await files(join(publicRoot, local(snapshot.texts_base)), snapshot.texts_base);
-    const all = [...data, ...map, ...knowledge, ...search, ...texts];
+    const searchBase = snapshot.search_stable_base ? await files(join(publicRoot, local(snapshot.search_stable_base)), snapshot.search_stable_base) : [];
+    const all = [...data, ...map, ...knowledge, ...search, ...searchBase, ...texts];
     return {
         ...snapshot, core: map.map(file => file.path), all: all.map(file => file.path),
         bytes: all.reduce((sum, file) => sum + file.bytes, 0),

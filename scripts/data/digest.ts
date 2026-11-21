@@ -6,7 +6,7 @@ import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/p
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { compileBundle } from 'wasm-search/compile';
+import { packageSearch } from './search.ts';
 import { initialize as initializeDocuments, read as readDocument, type Block, type Inline } from 'docstream';
 import type { SearchDocument } from 'wasm-search';
 import { campusConfig } from '../../campus.config.ts';
@@ -737,24 +737,8 @@ async function main() {
     docs.push(...knowledgeTexts.docs);
     // Free-room observations and check timestamps do not change searchable content.
     // Compare the actual compiler inputs, not release numbers or file hashes.
-    const searchCache = join(root, '.data', 'search');
-    const searchInputs = JSON.stringify({ profile: campusConfig.search.profile, docs });
-    const inputsFile = join(searchCache, 'inputs.json');
-    const searchVersionFile = join(searchCache, 'version.txt');
-    let searchVersion = version;
-    if (existsSync(inputsFile) && await readFile(inputsFile, 'utf8') === searchInputs) {
-        console.log('campus: reusing unchanged search artifacts');
-        await cp(join(searchCache, 'bundle'), join(out, 'search'), { recursive: true });
-        searchVersion = (await readFile(searchVersionFile, 'utf8')).trim();
-    } else {
-        console.log(`campus: compiling ${docs.length} search documents`);
-        await compileBundle(docs, campusConfig.search.profile, join(out, 'search'));
-        await rm(searchCache, { recursive: true, force: true });
-        await mkdir(searchCache, { recursive: true });
-        await cp(join(out, 'search'), join(searchCache, 'bundle'), { recursive: true });
-        await writeFile(inputsFile, searchInputs);
-        await writeFile(searchVersionFile, version);
-    }
+    const search = await packageSearch(root, out, version, data.index.built_at, docs, campusConfig.search.profile);
+    const searchVersion = search.version;
     await writeTexts(docs, knowledgeTexts.readable, join(out, 'texts'));
     // Native bundles keep their familiar relative paths. The public publisher
     // serves each independently versioned component once at its stable address.
@@ -764,6 +748,7 @@ async function main() {
     ]) {
         await cp(join(out, folder!), join(root, 'public', target!), { recursive: true });
     }
+    if (search.base) await cp(join(out, 'search-base'), join(root, 'public', search.base), { recursive: true });
     await write(join(root, 'src', 'data', 'campus-release.json'), {
         map_version: map.version,
         data_version: data.version,
@@ -772,7 +757,8 @@ async function main() {
         map_base: mapPath,
         search_base: `/search/${searchVersion}`,
         // The bundle format, as its compiler wrote it: an app whose engine reads another asks to be updated.
-        search_format: (await read<{ format: string }>(join(out, 'search', 'manifest.json'))).format,
+        search_format: search.format,
+        ...(search.base ? { search_stable_base: search.base } : {}),
         texts_base: `/texts/${searchVersion}`,
         version,
         base: `/data/${version}`,

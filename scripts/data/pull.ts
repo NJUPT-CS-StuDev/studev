@@ -17,7 +17,7 @@ async function currentSnapshot(entry: string, publicRoot: string): Promise<Campu
     if (!response.ok) throw new Error(`published campus snapshot is unavailable (${response.status})`);
     const snapshot: unknown = await response.json();
     if (!validRelease(snapshot) || !Array.isArray(snapshot.all) || !snapshot.all.length) throw new Error('published campus snapshot has no complete resource list');
-    const bases = [snapshot.base, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base];
+    const bases = [snapshot.base, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base, snapshot.search_stable_base].filter((base): base is string => Boolean(base));
     for (const path of snapshot.all) {
         if (typeof path !== 'string' || !bases.some(base => path.startsWith(base + '/')) || path.includes('\\')
             || path.split('/').some(part => part === '..' || part === '.')
@@ -41,7 +41,7 @@ async function readableSnapshot(entry: string, publicRoot: string, wait = 20 * 6
 }
 
 const components = (snapshot: CampusRelease) => JSON.stringify([snapshot.version, snapshot.base, snapshot.map_version, snapshot.data_version,
-    snapshot.knowledge_version, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base]);
+    snapshot.knowledge_version, snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base, snapshot.search_stable_base]);
 
 async function resourceBytes(path: string, entry: string, signal: AbortSignal): Promise<Buffer> {
     let firstFailure: unknown;
@@ -115,7 +115,9 @@ export async function pullSnapshot(entry = `${product.campusOrigin}/campus-relea
     // These copies are local build inputs; public publication omits duplicates.
     for (const [name, base] of [['space', snapshot.map_base], ['knowledge', snapshot.knowledge_base], ['search', snapshot.search_base], ['texts', snapshot.texts_base]])
         await cp(join(publicRoot, base!), join(publicRoot, snapshot.base, name!), { recursive: true });
+    if (snapshot.search_stable_base) await cp(join(publicRoot, snapshot.search_stable_base), join(publicRoot, snapshot.base, 'search-base'), { recursive: true });
     await cp(join(publicRoot, snapshot.map_base, 'assets'), join(publicRoot, 'map'), { recursive: true });
+    if (snapshot.search_stable_base) await cp(join(publicRoot, snapshot.search_stable_base), join(publicRoot, snapshot.base, 'search-base'), { recursive: true });
     await cp(join(publicRoot, snapshot.map_base, 'assets'), join(root, 'android/app/src/main/assets/map'), { recursive: true });
     const manifest = join(root, 'src/data/campus-release.json');
     await mkdir(dirname(manifest), { recursive: true });

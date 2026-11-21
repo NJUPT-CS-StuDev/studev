@@ -35,7 +35,23 @@ internal class NativeSearch(
         val m = manifest ?: Json.parseToJsonElement(file("manifest.json").decodeToString()).jsonObject.also { manifest = it }
         val index = m.getValue("index").jsonObject
         loaded = 0
-        return SearchEngine(blocks(pack(index), listOf(span(index))).single(), index.getValue("decoded_bytes").jsonPrimitive.int.toUInt(), m.getValue("profile").toString()).also { engine = it }
+        val refs = listOf(index) + m["segments"]?.jsonArray.orEmpty().map { it.jsonObject }
+        val indexes = coroutineScope {
+            refs.map { ref -> async { blocks(pack(ref), listOf(span(ref))).single() } }.awaitAll()
+        }
+        fun decoded(ref: JsonObject) = ref.getValue("decoded_bytes").jsonPrimitive.int.toUInt()
+        val ready = SearchEngine(indexes.first(), decoded(index), m.getValue("profile").toString())
+        try {
+            refs.drop(1).forEachIndexed { i, ref ->
+                ready.addSegment(indexes[i + 1], decoded(ref), ref.getValue("pack").jsonPrimitive.int.toUInt())
+            }
+        } catch (error: Throwable) {
+            ready.close()
+            throw error
+        }
+        loaded = refs.sumOf { decoded(it).toLong() }
+        engine = ready
+        return ready
     }
 
     private suspend fun load(json: String, consume: (UInt, ByteArray, UInt) -> Unit) {

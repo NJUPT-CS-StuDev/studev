@@ -32,8 +32,7 @@ internal static class SearchTest
             throw new IOException("Windows verification did not isolate its data directory");
         var releaseText = await File.ReadAllTextAsync(Path.Combine(root, "src/data/campus-release.json"));
         var release = JsonSerializer.Deserialize(releaseText, FactsJson.Default.DataRelease)!;
-        var searchFolder = Path.Combine(root, "public/data", release.Version, "search");
-        await using var server = new Packs(searchFolder);
+        var searchFolder = Path.Combine(root, "public", release.SearchBase.TrimStart('/'));
         var activeRelease = Path.Combine(Storage.CacheFor("campus"), "release.json");
         Storage.Write(activeRelease, releaseText);
         var repository = await Repository.Open();
@@ -48,15 +47,22 @@ internal static class SearchTest
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(searchFolder, "manifest.json")))!;
         var index = manifest["index"]!;
         var pack = manifest["packs"]![(int)index["pack"]!]!.GetValue<string>();
+        var packFile = Path.GetFullPath(Path.Combine(searchFolder, pack));
+        await using var server = new Packs(Path.GetDirectoryName(packFile)!);
         server.WrongRange = true;
         var rejected = false;
-        try { await Repository.ReadRange(server.Address + pack, (long)index["offset"]!, (int)index["bytes"]!); }
+        try { await Repository.ReadRange(server.Address + Path.GetFileName(packFile), (long)index["offset"]!, (int)index["bytes"]!); }
         catch (InvalidDataException) { rejected = true; }
         equal("malformed search range is a data error", rejected, JsonValue.Create(true));
         // The index and complete packs are the actual immutable data snapshot.
-        var cachedSearch = Path.Combine(Storage.CacheFor("campus"), new Uri(new Uri(StuDev.Product.CampusOrigin), release.SearchBase).AbsolutePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(cachedSearch);
-        foreach (var file in Directory.EnumerateFiles(searchFolder)) File.Copy(file, Path.Combine(cachedSearch, Path.GetFileName(file)), true);
+        foreach (var component in new[] { release.SearchBase, release.SearchStableBase }.OfType<string>())
+        {
+            var path = component.TrimStart('/');
+            var cachedSearch = Path.Combine(Storage.CacheFor("campus"), path);
+            Directory.CreateDirectory(cachedSearch);
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "public", path)))
+                File.Copy(file, Path.Combine(cachedSearch, Path.GetFileName(file)), true);
+        }
         using var search = new NativeSearch(repository);
         var running = search.Page("101", 10, "relevance", new JsonObject(), 0, CancellationToken.None);
         search.Dispose();

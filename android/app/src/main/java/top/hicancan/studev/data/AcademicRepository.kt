@@ -32,6 +32,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
     private fun component(path: String): Pair<String, String> = when {
         path.startsWith("space/") -> release.map_base to path.removePrefix("space/")
         path.startsWith("knowledge/") -> release.knowledge_base to path.removePrefix("knowledge/")
+        path.startsWith("search-base/") -> requireNotNull(release.search_stable_base) to path.removePrefix("search-base/")
         path.startsWith("search/") -> release.search_base to path.removePrefix("search/")
         path.startsWith("texts/") -> release.texts_base to path.removePrefix("texts/")
         else -> release.base to path
@@ -91,7 +92,15 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         } finally { pending.delete() }
         bytes
     } }
-    private val engine = lazy { top.hicancan.studev.search.NativeSearch({ bytes("search/$it") }, { pack, spans -> blocks("search/$pack", spans) }) }
+    private fun packPath(pack: String): String {
+        val local = Regex("pack-[0-9]+[.]bin")
+        if (local.matches(pack)) return "search/$pack"
+        val base = URI(requireNotNull(release.search_stable_base)).path.substringAfterLast('/')
+        val stable = pack.removePrefix("../$base/")
+        require(stable != pack && local.matches(stable)) { "校园搜索包地址无效" }
+        return "search-base/$stable"
+    }
+    private val engine = lazy { top.hicancan.studev.search.NativeSearch({ bytes("search/$it") }, { pack, spans -> blocks(packPath(pack), spans) }) }
     /** This release's search engine, shared by the search page and the assistant; [closeSearch] lets it go when a
      * newer reader takes over (the native bindings free nothing on their own). */
     internal val search by engine
@@ -100,6 +109,23 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
      * are read from the network together: neighbours (within [GAP_BYTES]) share one range request. */
     suspend fun blocks(path: String, spans: List<Pair<Long, Int>>): List<ByteArray> = withContext(Dispatchers.IO) {
         require(spans.all { (offset, length) -> offset >= 0 && length > 0 && offset <= Long.MAX_VALUE - length })
+        val prefix = component(path).first
+        val bundledBase = if (path.startsWith("search-base/")) bundled.search_stable_base else bundled.search_base
+        if (bundledBase != null && URI(prefix).path == URI(bundledBase).path && path.endsWith("/pack-000.bin")) {
+            val bundle = try { context.assets.open("data/$path").use { it.readBytes() } } catch (_: FileNotFoundException) { null }
+            if (bundle != null) return@withContext spans.map { (offset, length) ->
+                if (offset > bundle.size || length > bundle.size - offset) throw DataCorruptionException("随应用发布的搜索索引不完整")
+                bundle.copyOfRange(offset.toInt(), offset.toInt() + length)
+            }
+        }
+        val whole = local(path)
+        if (whole.isFile) return@withContext java.io.RandomAccessFile(whole, "r").use { input ->
+            spans.map { (offset, length) ->
+                if (offset > input.length() || length > input.length() - offset) throw DataCorruptionException("离线搜索数据不完整")
+                input.seek(offset)
+                ByteArray(length).also(input::readFully)
+            }
+        }
         val files = spans.map { (offset, _) -> File(local(path).absolutePath + ".$offset") }
         val out = arrayOfNulls<ByteArray>(spans.size)
         spans.forEachIndexed { i, (_, length) ->
@@ -291,7 +317,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
                 val at = URI(entry)
                 Discovery(app, activate(context, release.copy(base = at.resolve(release.base).toString(),
                     map_base = at.resolve(release.map_base).toString(), knowledge_base = at.resolve(release.knowledge_base).toString(),
-                    search_base = at.resolve(release.search_base).toString(), texts_base = at.resolve(release.texts_base).toString()), klass), unreadable = false)
+                    search_base = at.resolve(release.search_base).toString(),
+                    search_stable_base = release.search_stable_base?.let { at.resolve(it).toString() }, texts_base = at.resolve(release.texts_base).toString()), klass), unreadable = false)
             } catch (e: CancellationException) { throw e }
             catch (_: kotlinx.serialization.SerializationException) { Discovery(app, null, unreadable = true) }
             catch (_: IllegalArgumentException) { Discovery(app, null, unreadable = true) }
@@ -306,7 +333,8 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
         private fun searchable(release: DataRelease) = release.search_format == top.hicancan.search.bundleFormat()
         private fun validRelease(release: DataRelease) = Regex("[A-Za-z0-9._-]+").matches(release.version) && runCatching { val base = URI(release.base); base.path == "/data/${release.version}" && (base.scheme == null || base.scheme == "https") && base.rawUserInfo == null && base.rawQuery == null && base.rawFragment == null }.getOrDefault(false)
             && componentBase(release.map_base, "space") && componentBase(release.knowledge_base, "knowledge")
-            && componentBase(release.search_base, "search") && componentBase(release.texts_base, "texts")
+            && componentBase(release.search_base, "search")
+            && (release.search_stable_base?.let { it != release.search_base && componentBase(it, "search") } ?: true) && componentBase(release.texts_base, "texts")
         private suspend fun activate(context: Context, release: DataRelease, klass: String?): AcademicRepository {
             require(validRelease(release))
             val repository = AcademicRepository(context.applicationContext, release)

@@ -99,10 +99,10 @@ async function seedRelease() {
     const facts = `${cache}${release.base}`;
     adb('shell', 'mkdir', '-p', facts);
     for (const entry of readdirSync(data)) {
-        if (['space', 'knowledge', 'search', 'texts'].includes(entry)) continue;
+        if (['space', 'knowledge', 'search', 'search-base', 'texts'].includes(entry)) continue;
         execFileSync(adbPath, ['-s', serial, 'push', join(data, entry), facts], { stdio: 'ignore', timeout: 120_000 });
     }
-    for (const base of [release.map_base, release.knowledge_base, release.search_base, release.texts_base]) {
+    for (const base of [release.map_base, release.knowledge_base, release.search_base, release.texts_base, release.search_stable_base].filter(Boolean)) {
         const parent = `${cache}${base.slice(0, base.lastIndexOf('/'))}`;
         adb('shell', 'mkdir', '-p', parent);
         execFileSync(adbPath, ['-s', serial, 'push', join(root, 'public', base), parent], { stdio: 'ignore', timeout: 120_000 });
@@ -631,6 +631,11 @@ await scrollFind(node => node.text.includes('暑假'), 'the second term has its 
 capture('timetable-second-term');
 await examHistory();
 await searchNavigation();
+await link('/search/?scope=material', 'open the exam materials scope');
+await find(node => node.text.includes('全部来源'), 'exam materials resolves the names of its sources', 30);
+await tap(node => node.text.includes('全部来源'), 'show the exam materials sources');
+await find('南邮历年资料', 'the external exam archive has its published source name');
+await link('/', 'return to the timetable after browsing exam materials');
 await managedCourses();
 await mapFloors();
 await unknownRoomDay();

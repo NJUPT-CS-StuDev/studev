@@ -19,7 +19,7 @@ internal fun appRuntime(text: String): AppRuntime = kotlinx.serialization.json.J
     require(url.scheme == "https" && url.host != null && url.rawUserInfo == null && url.rawFragment == null)
 }
 @Serializable data class DataRelease(val version: String, val base: String, val built_at: String, val teaching: String, val exams: String? = null, val labs: String? = null, val rooms: String, val map_version: String? = null, val data_version: String? = null, val knowledge_version: String? = null,
-    val map_base: String = "", val knowledge_base: String = "", val search_base: String = "", val texts_base: String = "",
+    val map_base: String = "", val knowledge_base: String = "", val search_base: String = "", val search_stable_base: String? = null, val texts_base: String = "",
     /** The search bundle's format; a release whose format this app's engine does not read is one only a newer app can use. */
     val search_format: String = "", val core: List<String> = emptyList(),
     val all: List<String> = emptyList(), val bytes: Long? = null)

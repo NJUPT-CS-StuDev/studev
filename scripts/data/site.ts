@@ -8,7 +8,7 @@ import product from '../../product.json' with { type: 'json' };
 
 export const componentPath = (base: string) => new URL(base, product.campusOrigin).pathname;
 const write = async (path: string, value: unknown) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, JSON.stringify(value)); };
-const embedded = ['space', 'knowledge', 'search', 'texts'];
+const embedded = ['space', 'knowledge', 'search', 'search-base', 'texts'];
 const config = { headers: [
     { source: '/*', headers: [
         { key: 'Access-Control-Allow-Origin', value: '*' },
@@ -36,6 +36,7 @@ export async function prepareSite(destination: string, release?: CampusRelease, 
     };
     await copy(snapshot.base, true);
     for (const base of [snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base]) await copy(base);
+    if (snapshot.search_stable_base) await copy(snapshot.search_stable_base);
     await write(join(out, 'campus-release.json'), snapshot);
     await write(join(out, 'edgeone.json'), config);
     await writeFile(join(out, 'index.html'), '<!doctype html><meta charset="utf-8"><title>StuDev data</title>');

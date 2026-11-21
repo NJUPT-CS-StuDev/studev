@@ -22,7 +22,7 @@ public sealed class NativeSearch(Repository repository) : IDisposable
     {
         var number = (int)value["pack"]!;
         var pack = (string)manifest!["packs"]![number]!;
-        return repository.Block($"search/{pack}", (long)value["offset"]!, (int)value["bytes"]!);
+        return repository.Block(repository.SearchPackPath(pack), (long)value["offset"]!, (int)value["bytes"]!);
     }
 
     /** Blocks accumulate between queries; past the budget, start from the index again. */
@@ -31,9 +31,19 @@ public sealed class NativeSearch(Repository repository) : IDisposable
         if (engine is not null && loaded < Budget) return engine;
         Close();
         manifest ??= JsonNode.Parse(await repository.Bytes("search/manifest.json"))!.AsObject();
-        var index = manifest["index"]!;
-        loaded = 0;
-        return engine = new SearchEngine(await Ref(index), (uint)(int)index["decoded_bytes"]!, manifest["profile"]!.ToJsonString());
+        var indexes = new List<JsonNode> { manifest["index"]! };
+        if (manifest["segments"] is JsonArray segments) indexes.AddRange(segments.Select(part => part!));
+        var bytes = await Task.WhenAll(indexes.Select(Ref));
+        static uint Decoded(JsonNode node) => (uint)(int)node["decoded_bytes"]!;
+        var ready = new SearchEngine(bytes[0], Decoded(indexes[0]), manifest["profile"]!.ToJsonString());
+        try
+        {
+            for (var i = 1; i < indexes.Count; i++)
+                ready.AddSegment(bytes[i], Decoded(indexes[i]), (uint)(int)indexes[i]["pack"]!);
+        }
+        catch { ready.Dispose(); throw; }
+        loaded = indexes.Sum(part => (long)Decoded(part));
+        return engine = ready;
     }
 
     private async Task Load(string json, Action<uint, byte[], uint> consume, CancellationToken cancel)

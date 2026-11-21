@@ -75,6 +75,9 @@ public sealed partial class MembersScreen : Screen
                 AutomationProperties.SetAutomationId(search, "members-search");
                 search.TextChanged += (_, _) => { query = search.Text; QueueSearch(); };
                 page.Children.Add(Kit.SearchField(search));
+                if (Account.Shared.User?.Role is "owner" or "admin")
+                    page.Children.Add(Kit.TextAction("管理成员", async () =>
+                        await Windows.System.Launcher.LaunchUriAsync(new Uri($"{Data.Repository.Site}/members/"))));
             }
             status = Kit.Text("", Role.Caption, "muted", wrap: true);
             AutomationProperties.SetAutomationId(status, "members-status");

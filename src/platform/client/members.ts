@@ -1,8 +1,12 @@
-import { api, avatarImg, el, errorText, message, PlatformError, q, session, type MemberPage, type MemberProfile, type Session } from './api';
-import { showManage } from './manage';
+import { api, avatarImg, el, errorText, labels, message, PlatformError, q, session, type MemberPage, type MemberProfile, type Session, type User } from './api';
+import { renderManagedMembers, showAudit, showManagement } from './manage';
 
+const shell = q('[data-members-shell]');
 const status = q<HTMLElement>('[data-members-status]');
+const directory = q('[data-members-directory]');
 const list = q<HTMLElement>('[data-members-list]');
+const head = q<HTMLTableSectionElement>('thead', list);
+const body = q<HTMLTableSectionElement>('tbody', list);
 const profile = q<HTMLElement>('[data-members-profile]');
 const search = q<HTMLInputElement>('[data-members-search]');
 const form = q<HTMLFormElement>('[data-members-search-form]');
@@ -10,106 +14,163 @@ const count = q<HTMLElement>('[data-members-count]');
 const more = q<HTMLButtonElement>('[data-members-more]');
 const retry = q<HTMLButtonElement>('[data-members-retry]');
 const back = q<HTMLAnchorElement>('[data-members-back]');
-const title = q<HTMLElement>('[data-members-title]');
+const view = q<HTMLSelectElement>('#members-view');
+const note = q('[data-members-preview]');
+const audit = q<HTMLButtonElement>('[data-members-audit]');
+const auditPanel = q('[data-members-audit-panel]');
+const filters = q('[data-members-filters]');
 let pending: AbortController | null = null;
 let debounce: ReturnType<typeof setTimeout> | undefined;
 let offset = 0;
 let loadMoreFailed = false;
-let authorized = false;
 let who: Session | null = null;
-type View = 'cards' | 'manage' | 'audit';
+let auditOpen = false;
 
-/** One page for everyone in the organization: the cards anyone signed in sees, and for admins the management view. */
-function viewOf(): View {
-    const wanted = new URL(location.href).searchParams.get('view');
-    if (wanted === 'manage' && who && who.user.role !== 'user') return 'manage';
-    if (wanted === 'audit' && who?.user.role === 'owner') return 'audit';
-    return 'cards';
-}
-function show(view: View) {
-    q('[data-members-shell]').dataset.wide = String(view !== 'cards');
-    document.querySelectorAll<HTMLElement>('[data-members-view]').forEach(node => node.hidden = node.dataset.membersView !== view);
-    document.querySelectorAll<HTMLButtonElement>('[data-members-tab]').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.membersTab === view)));
-    if (view !== 'cards' && who) void showManage(view, who);
-}
-document.querySelectorAll<HTMLButtonElement>('[data-members-tab]').forEach(tab => tab.addEventListener('click', () => {
-    const url = listUrl(); const view = tab.dataset.membersTab as View;
-    if (view === 'cards') url.searchParams.delete('view'); else url.searchParams.set('view', view);
-    history.replaceState(null, '', url.pathname + url.search); show(viewOf());
-}));
+const roleOrder: User['role'][] = ['owner', 'admin', 'user'];
+const isPublic = () => view.value === 'user';
+const listUrl = () => { const url = new URL(location.href); url.searchParams.delete('id'); return url; };
+const avatar = (member: MemberProfile) => avatarImg(member, { width: 44, className: 'p-member-avatar', lazy: true });
+const plainClick = (event: MouseEvent) => !event.button && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
-function listUrl(): URL { const url = new URL(location.href); url.searchParams.delete('id'); return url; }
-function avatar(member: MemberProfile) { return avatarImg(member, { width:44, className:'p-member-avatar', lazy:true }); }
-function row(member: MemberProfile): HTMLAnchorElement {
+function publicRow(member: MemberProfile) {
+    const row = el('tr');
+    const url = listUrl();
+    url.searchParams.set('id', member.id);
     const link = el('a', undefined, 'p-member-row');
-    const url = listUrl(); url.searchParams.set('id', member.id); link.href = url.pathname + url.search;
-    const copy = el('div', undefined, 'p-member-copy'); copy.append(el('strong', member.nickname));
-    if (member.signature) copy.append(el('p', member.signature));
-    const chevron = el('span', '›', 'p-member-chevron'); chevron.setAttribute('aria-hidden','true');
-    link.append(avatar(member), copy, chevron);
-    link.addEventListener('click', event => { if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); navigate(url); });
-    return link;
+    link.href = url.pathname + url.search;
+    const text = el('span', undefined, 'p-member-copy');
+    text.append(el('strong', member.nickname));
+    if (member.signature) text.append(el('span', member.signature, 'p-member-signature'));
+    const chevron = el('span', '›', 'p-member-chevron');
+    chevron.setAttribute('aria-hidden', 'true');
+    link.append(avatar(member), text, chevron);
+    link.addEventListener('click', event => { if (plainClick(event)) { event.preventDefault(); navigate(url); } });
+    row.insertCell().append(link);
+    return row;
 }
-function navigate(url: URL) { history.pushState(null,'',url.pathname+url.search); void load(); }
+
+function navigate(url: URL) {
+    history.pushState(null, '', url.pathname + url.search);
+    void load();
+}
 
 async function load(append = false) {
-    clearTimeout(debounce); pending?.abort(); const controller = new AbortController(); pending = controller;
-    const signal = AbortSignal.any([controller.signal,AbortSignal.timeout(10_000)]);
-    const url = new URL(location.href), id = url.searchParams.get('id');
-    form.hidden = !!id; count.hidden = !!id; list.hidden = !!id; title.hidden = !!id; back.hidden = !id;
-    profile.hidden = true; profile.replaceChildren(); back.href = listUrl().pathname + listUrl().search;
-    if (!append) { offset=0; list.replaceChildren(); count.textContent=''; }
-    search.value = url.searchParams.get('query') ?? '';
-    more.hidden = true; retry.hidden = true; loadMoreFailed = false;
+    if (!who || auditOpen) return;
+    clearTimeout(debounce);
+    pending?.abort();
+    const request = new AbortController();
+    pending = request;
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]);
+    const publicView = isPublic();
+    const url = new URL(location.href);
+    const id = publicView ? url.searchParams.get('id') : null;
+    shell.dataset.wide = String(!publicView);
+    shell.dataset.memberView = publicView ? 'public' : 'management';
+    const preview = view.value !== who.user.role;
+    note.hidden = !preview;
+    note.textContent = preview ? '预览' + (view.value === 'user' ? '普通用户' : labels[view.value]) + '视图 · 可浏览资料' : '';
+    filters.hidden = publicView;
+    audit.hidden = preview || who.user.role !== 'owner';
+    form.hidden = !!id;
+    count.hidden = !!id;
+    list.hidden = !!id;
+    back.hidden = !id;
+    profile.hidden = true;
+    profile.replaceChildren();
+    back.href = listUrl().pathname + listUrl().search;
+    search.placeholder = publicView ? '搜索昵称' : '搜索姓名、学号、昵称、部门或职务';
+    search.setAttribute('aria-label', publicView ? '搜索昵称' : '搜索成员');
+    search.maxLength = publicView ? 40 : 80;
+    if (!append) {
+        offset = 0;
+        body.replaceChildren();
+        head.replaceChildren();
+        count.textContent = '';
+    }
+    head.hidden = publicView;
+    more.hidden = true;
+    retry.hidden = true;
+    loadMoreFailed = false;
     message(status, append ? '正在读取更多成员…' : id ? '正在读取成员资料…' : '正在读取成员…');
     try {
-        if (id) {
-            const result = await api<{member:MemberProfile}>(`/members/${encodeURIComponent(id)}`, undefined, {signal});
-            if (controller.signal.aborted) return;
-            const member = result.member;
-            profile.append(avatar(member),el('h1',member.nickname),el('p',member.signature || '还没有签名'));
-            profile.hidden=false; document.title=`${member.nickname} — StuDev`;
+        if (!publicView) {
+            await showManagement(who, preview, signal, request.signal);
+        } else if (id) {
+            const { member } = await api<{ member: MemberProfile }>('/members/' + encodeURIComponent(id), undefined, { signal });
+            if (request.signal.aborted) return;
+            profile.append(avatar(member), el('h2', member.nickname));
+            if (member.signature) profile.append(el('p', member.signature));
+            profile.hidden = false;
         } else {
-            const params = new URLSearchParams({query:search.value.trim(),offset:String(offset),limit:'50'});
-            const page = await api<MemberPage>(`/members?${params}`,undefined,{signal});
-            if (controller.signal.aborted) return;
-            list.append(...page.items.map(row)); offset=page.offset+page.items.length;
-            count.textContent=`${page.total} 位成员`; more.hidden=offset>=page.total;
-            document.title='成员 — StuDev';
-            if (!page.total) { message(status, search.value.trim() ? '没有找到这个昵称' : '暂无成员'); return; }
+            const params = new URLSearchParams({ query: search.value.trim(), offset: String(offset), limit: '50' });
+            const result = await api<MemberPage>('/members?' + params, undefined, { signal });
+            if (request.signal.aborted) return;
+            body.append(...result.items.map(publicRow));
+            offset = result.offset + result.items.length;
+            count.textContent = result.total + ' 位成员';
+            more.hidden = offset >= result.total;
+            if (!result.total) { message(status, search.value.trim() ? '没有找到这个昵称' : '暂无成员'); return; }
         }
-        message(status);
+        if (!request.signal.aborted && (publicView || body.rows.length)) message(status);
     } catch (error) {
-        if (controller.signal.aborted) return;
-        loadMoreFailed=append;
-        message(status,error instanceof PlatformError && error.status===404 ? '找不到这位成员' : errorText(error),'error');
-        retry.hidden=false;
+        if (request.signal.aborted) return;
+        loadMoreFailed = append;
+        message(status, error instanceof PlatformError && error.status === 404 ? '找不到这位成员' : errorText(error), 'error');
+        retry.hidden = false;
     }
 }
+
 function query() {
-    const url=listUrl(), value=search.value.trim();
-    if (value) url.searchParams.set('query',value); else url.searchParams.delete('query');
-    history.replaceState(null,'',url.pathname+url.search); void load();
+    if (!isPublic()) { renderManagedMembers(); return; }
+    const url = listUrl();
+    const value = search.value.trim();
+    if (value) url.searchParams.set('query', value); else url.searchParams.delete('query');
+    history.replaceState(null, '', url.pathname + url.search);
+    void load();
 }
-search.addEventListener('input',()=>{ clearTimeout(debounce); pending?.abort(); debounce=setTimeout(query,250); });
-form.addEventListener('submit',event=>{ event.preventDefault(); query(); });
-more.addEventListener('click',()=>void load(true));
-retry.addEventListener('click',()=>void (authorized ? load(loadMoreFailed) : start()));
-back.addEventListener('click',event=>{ if(event.button||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return; event.preventDefault(); navigate(listUrl()); });
-window.addEventListener('popstate',()=>void load());
+search.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(query, 220); });
+form.addEventListener('submit', event => { event.preventDefault(); clearTimeout(debounce); query(); });
+filters.querySelectorAll('select').forEach(filter => filter.addEventListener('change', renderManagedMembers));
+view.addEventListener('change', () => {
+    if (!who || roleOrder.indexOf(view.value as User['role']) < roleOrder.indexOf(who.user.role)) return;
+    search.value = '';
+    filters.querySelectorAll('select').forEach(filter => { filter.value = ''; });
+    const url = listUrl();
+    url.searchParams.delete('query');
+    history.replaceState(null, '', url.pathname + url.search);
+    void load();
+});
+audit.addEventListener('click', () => {
+    if (who?.user.role !== 'owner' || view.value !== 'owner') return;
+    auditOpen = !auditOpen;
+    auditPanel.hidden = !auditOpen;
+    directory.hidden = auditOpen;
+    view.disabled = auditOpen;
+    audit.textContent = auditOpen ? '返回成员' : '操作记录';
+    if (auditOpen) { pending?.abort(); void showAudit(who); } else void load();
+});
+q('[data-audit-refresh]').addEventListener('click', () => { if (auditOpen && who?.user.role === 'owner') void showAudit(who); });
+more.addEventListener('click', () => void load(true));
+retry.addEventListener('click', () => void (who ? load(loadMoreFailed) : start()));
+back.addEventListener('click', event => { if (plainClick(event)) { event.preventDefault(); navigate(listUrl()); } });
+window.addEventListener('popstate', () => {
+    const params = new URL(location.href).searchParams;
+    if (params.has('id')) view.value = 'user';
+    search.value = params.get('query') ?? '';
+    void load();
+});
 async function start() {
-    retry.hidden=true; message(status,'正在读取成员…');
+    retry.hidden = true;
     try {
         who = await session(true);
-        if (who) {
-            authorized=true;
-            const staff = who.user.role !== 'user';
-            q('[data-members-tabs]').hidden = !staff;
-            document.querySelectorAll<HTMLElement>('[data-owner-only]').forEach(node => node.hidden = who!.user.role !== 'owner');
-            show(viewOf());
-            await load();
-        }
-    }
-    catch (error) { message(status,errorText(error),'error'); retry.hidden=false; }
+        if (!who) return;
+        [...view.options].filter(option => roleOrder.indexOf(option.value as User['role']) < roleOrder.indexOf(who!.user.role)).forEach(option => option.remove());
+        const params = new URL(location.href).searchParams;
+        // A shared member card opens in the same public view for all signed-in roles.
+        view.value = params.has('id') ? 'user' : who.user.role;
+        search.value = params.get('query') ?? '';
+        q('[data-members-tools]').hidden = who.user.role === 'user';
+        await load();
+    } catch (error) { message(status, errorText(error), 'error'); retry.hidden = false; }
 }
 void start();

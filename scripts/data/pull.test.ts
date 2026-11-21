@@ -39,7 +39,8 @@ async function pointer(version: string) {
     const snapshot = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
     const base = `/data/${version}`;
     return { ...snapshot, version, base, all: [`${snapshot.knowledge_base}/index.json`, `${base}/rooms/index.json`, `${snapshot.map_base}/assets/campus.bin`,
-        `${snapshot.search_base}/index.json`, `${snapshot.texts_base}/00.json`] };
+        `${snapshot.search_base}/index.json`, `${snapshot.texts_base}/00.json`,
+        ...(snapshot.search_stable_base ? [snapshot.search_stable_base + "/pack-000.bin"] : [])] };
 }
 
 const entry = 'https://moved-data.example/campus-release.json';

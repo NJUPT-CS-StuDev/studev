@@ -90,7 +90,7 @@ import top.hicancan.studev.app.*
                     Plain("共 $total 位成员", 12.sp, Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
                     // Managing members (full profiles, roles, the audit log) lives on the web's members page for now.
                     if (account?.role == "admin" || account?.role == "owner") TextAction("管理成员", {
-                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${top.hicancan.studev.account.PLATFORM_ORIGIN}/members/?view=manage")))
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${top.hicancan.studev.account.PLATFORM_ORIGIN}/members/")))
                     })
                 }
             }

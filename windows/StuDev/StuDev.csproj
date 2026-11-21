@@ -57,4 +57,10 @@
     <EmbeddedResource Include="Map\Shaders\ModelsVertex.cso" LogicalName="StuDev.Map.Shaders.ModelsVertex.cso" />
     <EmbeddedResource Include="Map\Shaders\ModelsPixel.cso" LogicalName="StuDev.Map.Shaders.ModelsPixel.cso" />
   </ItemGroup>
+  <Target Name="BundleCampus" BeforeTargets="AssignTargetPaths">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildProjectDirectory)\..\campus.ps1&quot; &quot;$(IntermediateOutputPath)campus.zip&quot;" />
+    <ItemGroup>
+      <Content Include="$(IntermediateOutputPath)campus.zip" Link="campus.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>

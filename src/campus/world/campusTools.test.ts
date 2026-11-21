@@ -35,7 +35,7 @@ beforeAll(async () => {
             return new Response(buffer.subarray(0, bytesRead), { status: 206 });
         } finally { await file.close(); }
     });
-    engine = new SearchRuntime(new ArtifactSource(`https://studev.test${release.base}/search`, new CacheStore(64 * 1024 * 1024)), 128 * 1024 * 1024);
+    engine = new SearchRuntime(new ArtifactSource(`https://studev.test${release.search_base}`, new CacheStore(64 * 1024 * 1024)), 128 * 1024 * 1024);
     await engine.initialize();
 });
 afterAll(() => { engine?.dispose(); vi.unstubAllGlobals(); });

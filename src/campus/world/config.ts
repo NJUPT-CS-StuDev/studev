@@ -29,9 +29,21 @@ function kept(): { release: CampusRelease; entry: string } | undefined {
             ? { release: value.release, entry: entry.href } : undefined;
     } catch { return undefined; }
 }
-export async function latestCampusRelease(): Promise<CampusRelease | undefined> {
+async function readCampus(entry: string): Promise<unknown> {
     try {
-        let entry = runtimeEntry();
+        const response = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(4000) });
+        return response.ok ? await response.json() : undefined;
+    } catch { return undefined; }
+}
+let discovering: Promise<CampusRelease | undefined> | undefined;
+export function latestCampusRelease(): Promise<CampusRelease | undefined> {
+    return discovering ??= discoverCampus().finally(() => { discovering = undefined; });
+}
+async function discoverCampus(): Promise<CampusRelease | undefined> {
+    try {
+        const previousEntry = runtimeEntry();
+        const previousRead = readCampus(previousEntry);
+        let entry = previousEntry;
         try {
             const runtime = await fetch(`${product.origin}/app-release.json`, { cache: 'no-cache', signal: AbortSignal.timeout(2500) });
             if (runtime.ok) {
@@ -42,9 +54,7 @@ export async function latestCampusRelease(): Promise<CampusRelease | undefined> 
                 }
             }
         } catch { /* An offline application configuration does not block its saved data entry. */ }
-        const response = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(4000) });
-        if (!response.ok) return;
-        const value: unknown = await response.json();
+        const value = await (entry === previousEntry ? previousRead : readCampus(entry));
         // Data newer than this build (or older) is left alone; the next deployment of the site reads it.
         if (!readable(value)) return;
         try { localStorage.setItem(CACHE, JSON.stringify({ entry, release: value })); } catch { /* Private browsing still reads the public snapshot. */ }
@@ -71,7 +81,7 @@ if (browser && !import.meta.env.DEV) {
     };
     setInterval(() => void check(), 10 * 60_000);
     window.addEventListener('focus', () => void check());
-    void releaseReady.then(check);
+    if (cached) void check();
 }
 
 export const APP_CONFIG = {

@@ -57,7 +57,9 @@ private data class Hit(val raw: JsonObject) {
     fun ranges(key: String) = raw[key]?.jsonArray?.map { it.jsonArray[0].jsonPrimitive.int to it.jsonArray[1].jsonPrimitive.int }.orEmpty()
     val files get() = raw["attachments"]?.jsonArray?.map { it.jsonObject["name"]!!.jsonPrimitive.content to it.jsonObject["url"]!!.jsonPrimitive.content }.orEmpty()
 }
-private data class Answer(val key: String, val hits: List<Hit>, val total: Int, val seconds: Double)
+private data class Answer(
+    val key: String, val hits: List<Hit>, val total: Int, val seconds: Double, val sources: Map<String, String>,
+)
 
 /** Marks the kernel's ranges, which count Unicode scalar values. */
 private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle): AnnotatedString = buildAnnotatedString {
@@ -119,7 +121,11 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
         }
         try {
             val done = engine.page(query, PAGE, if (byDate || browsing) "date_desc" else "relevance", filters, (page - 1) * PAGE)
-            answer = Answer(key, done.results.map(::Hit), done.total, (System.nanoTime() - started) / 1e9)
+            val names = done.filters["sources"]?.jsonArray.orEmpty().associate { value ->
+                val item = value.jsonObject
+                item.getValue("id").jsonPrimitive.content to item.getValue("label").jsonPrimitive.content
+            }
+            answer = Answer(key, done.results.map(::Hit), done.total, (System.nanoTime() - started) / 1e9, names)
         } catch (_: java.io.IOException) {
             answer = null
             failure = key to "搜索需要联网，请稍后重试"
@@ -157,11 +163,11 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
             SINCE.forEach { (value, label) -> Plain(label, 13.sp, if (since == value) Ink.text else Ink.muted, if (since == value) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.clickable { since = value; page = 1 }) }
         }
         val sources = when {
-            channel.sources.size > 1 -> channel.sources.map { it to LABELS.getValue(it) }
+            channel.sources.size > 1 -> channel.sources.mapNotNull { id -> (LABELS[id] ?: answer?.sources?.get(id))?.let { id to it } }
             else -> emptyList()
         }
         if (sources.isNotEmpty() || (channel.dated && !browsing)) Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (sources.isNotEmpty()) Pick(sources.firstOrNull { it.first == source }?.second ?: "全部类型", listOf<Pair<String?, String>>(null to "全部类型") + sources) { source = it; page = 1 }
+            if (sources.isNotEmpty()) Pick(sources.firstOrNull { it.first == source }?.second ?: "全部来源", listOf<Pair<String?, String>>(null to "全部来源") + sources) { source = it; page = 1 }
             if (channel.dated && !browsing) Pick(if (byDate) "按时间" else "按相关性", listOf(false to "按相关性", true to "按时间")) { byDate = it; page = 1 }
         }
         if (query.length == 1) { Plain("再多输入一个字", 14.sp, Ink.faint, modifier = Modifier.padding(vertical = 32.dp)); return@Column }
