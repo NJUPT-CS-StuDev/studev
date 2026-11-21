@@ -109,7 +109,7 @@ test('a published public form opens independently of a stale cookie while privat
 test('role promotion and suspension revoke existing sessions; admin can manage forms and look up users but cannot delete forms', async () => {
   const f = await fixture(); const member = await f.member('100002', '待提升成员');
   const promoted = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: member.user.revision, role: 'admin',
-    memberships: [{ organizationId: 'student-development', department: '运营支持部', title: '部长' }] } });
+    memberships: [{ organizationId: 'student-development/operations', title: '部长' }] } });
   assert.equal(promoted.status, 200);
   assert.equal((await member.client.call('/auth/session')).status, 401);
   const login = await member.client.call('/auth/login', { method: 'POST', body: { studentId: member.user.studentId, password: f.password } });

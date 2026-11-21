@@ -4,9 +4,8 @@ export interface MemberPage { items: MemberProfile[]; total: number; offset: num
 export interface Membership {
     organizationId: string;
     organizationName: string;
-    department: string;
     title: string;
-    responsibleDepartment: string;
+    overseesOrganizationId: string;
     position: string;
     order: number;
 }

@@ -226,8 +226,7 @@ import top.hicancan.studev.world.CampusDay
                             "QQ 号" to me.qq, "联系邮箱" to me.email.ifBlank { "${me.qq}@qq.com" },
                         ).forEach { (key, value) -> KeyRow(key, value) }
                         for (membership in me.memberships) {
-                            val assignment = listOf(membership.department, membership.position).filter(String::isNotBlank)
-                            KeyRow("组织归属", (listOf(membership.organizationName) + assignment).joinToString(" · "))
+                            KeyRow("组织归属", listOf(membership.organizationName, membership.position).filter(String::isNotBlank).joinToString(" · "))
                         }
                         HorizontalDivider()
                         OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称（选填）") }, placeholder = { Text("留空使用默认昵称") }, singleLine = true, enabled = !busy && !verifying && state != null)

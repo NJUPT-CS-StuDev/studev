@@ -1,5 +1,5 @@
 import { api, avatarImg, button, el, empty, errorText, formatTime, labels, message, pill, q, type Session, type User } from './api';
-import { organization, studentCenter } from '../organizations.mjs';
+import { isWithin, namedOrganizations, organizationName, studentCenter } from '../organizations.mjs';
 import { openMemberRecord, valueButton } from './member-record';
 
 // Staff columns and actions for the shared member directory.
@@ -9,21 +9,14 @@ let current: Session | null = null;
 let members: User[] = [];
 const unassigned = '暂未分配';
 const orgFilter = q<HTMLSelectElement>('[data-manage-org-filter]');
-const deptFilter = q<HTMLSelectElement>('[data-manage-dept-filter]');
 
 function refreshFilters() {
-  const byId = new Map([[studentCenter.id, studentCenter.name]]);
+  const byId = new Map(namedOrganizations.map(org => [org.id, organizationName(org.id)]));
   for (const user of members) for (const group of user.memberships || []) byId.set(group.organizationId, group.organizationName);
   const then = orgFilter.value;
   orgFilter.replaceChildren(new Option('全部组织', ''), ...[...byId].map(([id, name]) => new Option(name, id)));
   orgFilter.value = byId.has(then) ? then : '';
-  const scope = organization(orgFilter.value || studentCenter.id);
-  const department = deptFilter.value;
-  deptFilter.replaceChildren(new Option('全部部门', ''), ...(scope?.departments ?? []).map(name => new Option(name, name)), new Option(unassigned, '__other__'));
-  deptFilter.value = [...deptFilter.options].some(item => item.value === department) ? department : '';
-  deptFilter.hidden = !scope?.departments.length;
 }
-orgFilter.addEventListener('change', () => { deptFilter.value = ''; refreshFilters(); });
 
 const archive = q<HTMLButtonElement>('[data-members-archive]');
 archive.addEventListener('click', () => void guard(async () => {
@@ -80,18 +73,13 @@ export function renderManagedMembers() {
   if (!current || directorySignal?.aborted) return;
   const isOwner = !preview && current.user.role === 'owner';
   const term = q<HTMLInputElement>('[data-members-search]').value.trim().normalize('NFKC').toLowerCase();
-  const department = deptFilter.value;
-  const scope = orgFilter.value || studentCenter.id;
-  const affiliation = (user: User) => user.memberships?.find(row => row.organizationId === scope);
+  const scope = orgFilter.value;
+  const affiliations = (user: User) => (user.memberships ?? []).filter(row => !scope || isWithin(row.organizationId, scope));
   const roleFilter = q<HTMLSelectElement>('[data-manage-role-filter]').value;
   const visible = members.filter((user) => {
-    const belongs = affiliation(user);
-    if (orgFilter.value && !belongs) return false;
-    if (department === '__other__' && belongs?.department) return false;
-    if (department && department !== '__other__' && belongs?.department !== department) return false;
-    // Role and position are independent: this filter is the role alone; the department filter covers position.
+    if (scope && !affiliations(user).length) return false;
     if (roleFilter && user.role !== roleFilter) return false;
-    const groups = user.memberships?.flatMap(row => [row.organizationName, row.department, row.position]) ?? [];
+    const groups = user.memberships?.flatMap(row => [row.organizationName, row.position]) ?? [];
     return [user.studentId, user.realName, user.qq, user.nickname, ...groups].join(' ').normalize('NFKC').toLowerCase().includes(term);
   });
 
@@ -99,7 +87,7 @@ export function renderManagedMembers() {
   const head = q<HTMLTableSectionElement>('[data-members-list] thead');
   const body = q<HTMLTableSectionElement>('[data-members-list] tbody');
   const headings = el('tr');
-  for (const label of ['成员', '学号', 'QQ 号', '部门', '职务', '管理权限', '操作']) {
+  for (const label of ['成员', '学号', 'QQ 号', '组织与职务', '管理权限', '操作']) {
     const heading = el('th', label);
     heading.scope = 'col';
     headings.append(heading);
@@ -131,8 +119,6 @@ export function renderManagedMembers() {
     nameBtn.append(el('strong', display));
     nameBtn.addEventListener('click', () => openRecord(false));
     infoBox.append(nameBtn);
-    const groups = user.memberships?.map(group => group.organizationName).join(' · ');
-    if (groups) infoBox.append(el('small', groups, 'p-muted'));
     userBox.append(avatar, infoBox);
     nameCell.append(userBox);
 
@@ -140,9 +126,14 @@ export function renderManagedMembers() {
     studentCell.append(valueButton('学号', user.studentId, status));
     const qqCell = el('td', undefined, 'p-member-student');
     qqCell.append(valueButton('QQ 号', user.qq, status));
-    const group = affiliation(user);
-    const deptCell = el('td', group?.department || unassigned, group?.department ? undefined : 'p-muted');
-    const titleCell = el('td', group?.position || unassigned, group?.position ? undefined : 'p-muted');
+    const titleCell = el('td', undefined, 'p-member-appointments');
+    const assignments = el('ul', undefined, 'p-appointments');
+    for (const group of affiliations(user).sort((a, b) => a.organizationName.localeCompare(b.organizationName, 'zh-CN'))) {
+      const item = el('li');
+      item.append(el('span', group.organizationName, 'p-muted'), el('span', group.position || unassigned, group.position ? undefined : 'p-muted'));
+      assignments.append(item);
+    }
+    titleCell.append(assignments.childElementCount ? assignments : el('span', unassigned, 'p-muted'));
     const roleCell = el('td');
     if (isOwner && !isSelf && user.role !== 'owner') {
       const select = el('select', undefined, 'p-input');
@@ -249,7 +240,7 @@ export function renderManagedMembers() {
     }
 
     actionsCell.append(controls);
-    const cells = [nameCell, studentCell, qqCell, deptCell, titleCell, roleCell, actionsCell];
+    const cells = [nameCell, studentCell, qqCell, titleCell, roleCell, actionsCell];
     cells.forEach((cell, index) => { cell.dataset.label = headings.cells[index]!.textContent; });
     row.append(...cells);
     body.append(row);

@@ -5,7 +5,7 @@ import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
-import { ROSTER_SCHEMA, archiveKey, buildRosterSnapshot, centerMembership, isRosterMember, publicRoster, qqAvatarUrl, profileNickname, rosterTerm } from './roster.mjs';
+import { ROSTER_SCHEMA, archiveKey, buildRosterSnapshot, isRosterMember, publicRoster, qqAvatarUrl, profileNickname, rosterTerm } from './roster.mjs';
 import { membershipView, validateMemberships } from './organizations.mjs';
 import { studentCenter } from '../organizations.mjs';
 import { avatarBody, createMembers } from './members.mjs';
@@ -264,7 +264,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     await repo.remove(`identity/qq/${user.qq}.json`);
     if (user.studentId) await repo.remove(studentKey(user.studentId));
     for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
-    if (centerMembership(user)) await rebuildRoster();
+    if (isRosterMember(user)) await rebuildRoster();
   }
   // After a password changes, the account's mailbox hears of it, so a change nobody asked for is noticed at once.
   async function tellPasswordChanged(user) {

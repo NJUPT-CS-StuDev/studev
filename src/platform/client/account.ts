@@ -1,5 +1,5 @@
 import { api, avatarImg, avatarUrl, busy, button, copy, el, empty, errorText, formatTime, initPasswordToggles, labels, message, nameNode, nicknameOf, pill, q, saveBlob, session, type Session, type User } from './api';
-import { studentCenter } from '../organizations.mjs';
+import { isWithin, studentCenter } from '../organizations.mjs';
 
 const status = q<HTMLElement>('[data-account-status]');
 let current: Session | null = null;
@@ -60,7 +60,6 @@ function renderIdCard(user: User) {
     const orgLine = el('div', undefined, 'p-actions');
     orgLine.style.gap = '8px';
     orgLine.append(el('span', group.organizationName, 'p-user-dept'));
-    if (group.department) orgLine.append(el('span', group.department, 'p-id-org'));
     if (group.position) orgLine.append(el('span', group.position, 'p-id-org'));
     body.append(orgLine);
   }
@@ -72,7 +71,7 @@ function renderIdCard(user: User) {
   const linksRow = el('div', undefined, 'p-actions');
   linksRow.style.gap = '14px';
   linksRow.style.marginTop = '8px';
-  if (user.memberships?.some(row => row.organizationId === studentCenter.id && row.title)) {
+  if (user.memberships?.some(row => row.title && isWithin(row.organizationId, studentCenter.id))) {
     const archiveLink = el('a', '查看本届名册 ↗', 'p-link');
     const anchor = `#member-${user.id}`;
     archiveLink.href = `/history/${anchor}`;

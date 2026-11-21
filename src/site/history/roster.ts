@@ -24,10 +24,10 @@ interface RosterSnapshot {
   groups: RosterGroup[];
 }
 
-function createMemberNode(person: RosterPerson, featured: boolean): HTMLElement {
+function createMemberNode(person: RosterPerson, featured: boolean, first: boolean): HTMLElement {
   const article = document.createElement('article');
   article.className = featured ? 'member member-featured' : 'member';
-  article.id = 'member-' + person.id;
+  if (first) article.id = 'member-' + person.id;
   article.append(avatarImg(person, { width: featured ? 52 : 48, className: 'member-avatar', lazy: !featured }));
 
   const copy = document.createElement('div');
@@ -74,6 +74,7 @@ function renderRoster(
     tabCountNode.textContent = String(data.totalCount);
   }
   container.replaceChildren();
+  const anchored = new Set<string>();
   data.groups.forEach((group, index) => {
     const groupSec = document.createElement('section');
     groupSec.className = 'member-group';
@@ -99,7 +100,8 @@ function renderRoster(
     grid.className = 'member-grid';
     const isFeatured = index === 0 || group.name === '主席团';
     for (const person of group.people) {
-      grid.append(createMemberNode(person, Boolean(person.featured ?? isFeatured)));
+      grid.append(createMemberNode(person, Boolean(person.featured ?? isFeatured), !anchored.has(person.id)));
+      anchored.add(person.id);
     }
     groupSec.append(grid);
     container.append(groupSec);

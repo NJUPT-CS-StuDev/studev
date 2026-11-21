@@ -214,7 +214,7 @@ public sealed partial class AccountScreen : Screen
         Row("学号", me.StudentId); Row("姓名", me.RealName); Row("昵称", me.Nickname);
         Row("QQ 号", me.Qq); Row("联系邮箱", me.Email.Length > 0 ? me.Email : $"{me.Qq}@qq.com");
         foreach (var membership in me.Memberships ?? [])
-            Row("组织归属", string.Join(" · ", new[] { membership.OrganizationName, membership.Department, membership.Position }.Where(value => value.Length > 0)));
+            Row("组织归属", string.Join(" · ", new[] { membership.OrganizationName, membership.Position }.Where(value => value.Length > 0)));
         page.Children.Add(rows);
         var incomplete = state?.ProfileRequired == true || !me.ProfileComplete;
         if (incomplete)

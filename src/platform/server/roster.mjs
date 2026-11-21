@@ -1,7 +1,7 @@
-import { leadership, positionLabel, studentCenter } from '../organizations.mjs';
+import { isWithin, namedOrganizations, positionLabel, studentCenter } from '../organizations.mjs';
 
-export const centerMembership = user => user?.memberships?.find(row => row.organizationId === studentCenter.id);
-export const ROSTER_SCHEMA = 9;
+const appointments = user => (user?.memberships ?? []).filter(row => row.title && isWithin(row.organizationId, studentCenter.id));
+export const ROSTER_SCHEMA = 10;
 export const rosterTerm = /^\d{4}-\d{4}$/;
 export const archiveKey = term => `roster/archives/${term}.json`;
 
@@ -19,9 +19,7 @@ export function profileNickname(user) {
 }
 
 export function isRosterMember(user) {
-  const membership = centerMembership(user);
-  return Boolean(membership?.title && ['active', 'pending'].includes(user.status)
-    && (membership.department || leadership(membership.title)));
+  return Boolean(user && ['active', 'pending'].includes(user.status) && appointments(user).length);
 }
 
 /** The public projection also applies to archived records. */
@@ -38,13 +36,15 @@ export function publicRoster(snapshot, origin) {
 }
 
 export function buildRosterSnapshot(users, term, updatedAt, origin) {
-  const rosterUsers = users.filter(isRosterMember).map(user => ({ user, membership: centerMembership(user) }))
+  const rosterUsers = users.filter(isRosterMember);
+  const rows = rosterUsers.flatMap(user => appointments(user).map(membership => ({ user, membership })))
     .sort((a, b) => (a.membership.order ?? 999) - (b.membership.order ?? 999) || a.user.id.localeCompare(b.user.id));
-  const groups = ['主席团', ...studentCenter.departments].map(name => ({ name, people: rosterUsers
-    .filter(({ membership }) => (leadership(membership.title) ? '主席团' : membership.department) === name)
+  const groups = namedOrganizations.filter(org => isWithin(org.id, studentCenter.id)).map(org => ({
+    name: org.id === studentCenter.id ? '主席团' : org.name, people: rows
+    .filter(({ membership }) => membership.organizationId === org.id)
     .map(({ user, membership }) => ({ id: user.id, name: (user.realName || '').trim(), nickname: profileNickname(user),
-      role: positionLabel(membership), signature: user.signature || '', featured: name === '主席团' })) }))
+      role: positionLabel(membership), signature: user.signature || '', featured: org.id === studentCenter.id })) }))
     .filter(group => group.people.length);
   return publicRoster({ term, updatedAt, totalCount: rosterUsers.length,
-    activeCount: rosterUsers.filter(({ user }) => user.status === 'active').length, groups }, origin);
+    activeCount: rosterUsers.filter(user => user.status === 'active').length, groups }, origin);
 }

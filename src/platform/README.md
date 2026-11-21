@@ -61,9 +61,11 @@ Roles are platform-wide: `owner` > `admin` > `user`. The owner manages roles
 and other administrators. Owners and admins manage forms and may list or look up
 users through `/admin/users` and `/admin/users/<id>`; admins may edit ordinary
 users. Account responses carry `memberships` for the subject of that account
-response. A current membership has one organization ID with independent
-department and title fields, plus an optional assigned department for leadership
-and an order for roster display. A staff edit sends `revision` and only the
+response. Organizations can contain other organizations. Each membership has one
+organization ID, a title in that organization, an optional `overseesOrganizationId`
+for a direct child, and a roster order. A member can hold appointments in both a
+parent and a child. Account roles grant permissions independently of them.
+A staff edit sends `revision` and only the
 fields being edited. Membership changes submit the account's current array
 under the same revision. Class preferences are synchronized separately.
 

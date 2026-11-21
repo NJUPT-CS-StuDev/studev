@@ -135,7 +135,7 @@ test('old roster snapshots rebuild from existing private identities, never initi
   const f = await fixture(), source = await f.repo.latest('identity/users/' + f.user.id);
   const id = '00000000-0000-0000-0000-000000000003';
   const staff = { ...source, id, role: 'admin', status: 'pending', studentId: 'PRIVATESTAFF', realName: '内部真姓名', qq: '10000904', nickname: '',
-    memberships: [{ organizationId: 'student-development', department: '媒体宣传部', title: '部长' }], signature: '一起成长' };
+    memberships: [{ organizationId: 'student-development/media', title: '部长' }], signature: '一起成长' };
   await f.repo.append('identity/users/' + id, staff);
   await f.repo.putNew('identity/qq/' + staff.qq + '.json', { id });
   await f.repo.put('roster/2026-2027.json', { schema: 5, groups: [{name:'媒体宣传部', people:[{name:staff.realName, studentId:staff.studentId, avatarUrl:'https://q1.qlogo.cn/g?nk=' + staff.qq}]}] });
@@ -190,6 +190,25 @@ test('even current roster snapshots expose only the public field projection and 
   for (const value of ['PRIVATESTAFF', '10000905', 'qlogo']) assert.equal(JSON.stringify(result.body).includes(value), false);
   assert.equal(result.body.name, undefined); assert.equal(result.body.groups[0].realName, undefined);
   assert.deepEqual(Object.keys(result.body.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'name', 'nickname', 'role', 'signature']);
+});
+
+test('organization migration preserves oversight separately from a child appointment', async () => {
+  const f = await fixture();
+  const key = 'identity/users/' + f.user.id;
+  const source = await f.repo.latest(key);
+  await f.repo.append(key, { ...source, memberships: [
+    { organizationId: 'student-development', department: '', title: '执行主席', responsibleDepartment: '运营支持部', order: 1 },
+    { organizationId: 'class:B240402', department: '', title: '班长', responsibleDepartment: '', order: 2 },
+  ] }, source.revision);
+  const options = { origin: f.env.PLATFORM_ORIGIN, apply: true };
+  assert.equal((await migrateOrganizations(f.repo, options)).revisions, 1);
+  const latest = await f.repo.latest(key);
+  assert.equal(latest.role, source.role);
+  assert.deepEqual(latest.memberships, [
+    { organizationId: 'student-development', title: '执行主席', overseesOrganizationId: 'student-development/operations', order: 1 },
+    { organizationId: 'class:B240402', title: '班长', overseesOrganizationId: '', order: 2 },
+  ]);
+  assert.equal((await migrateOrganizations(f.repo, options)).revisions, 0);
 });
 
 test('registration and login errors match for web/app; registering cannot claim a pre-recorded administrator', async () => {

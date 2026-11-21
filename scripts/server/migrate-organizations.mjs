@@ -1,21 +1,44 @@
 import { pathToFileURL } from 'node:url';
-import { studentCenter } from '../../src/platform/organizations.mjs';
+import { childrenOf, isWithin, studentCenter } from '../../src/platform/organizations.mjs';
 import { validateMemberships } from '../../src/platform/server/organizations.mjs';
 import { archiveKey, buildRosterSnapshot, publicRoster, rosterTerm } from '../../src/platform/server/roster.mjs';
 import { createRepository, isConflict } from '../../src/platform/server/store.mjs';
 
-// Import old organization fields once, before the new application is deployed.
-export function legacyMembership({ department, title, order }) {
+const departments = childrenOf(studentCenter.id);
+const oldRow = row => row && ('department' in row || 'responsibleDepartment' in row);
+const departmentId = name => {
+  if (!name) return '';
+  const department = departments.find(org => org.name === name);
+  if (!department) throw new Error('Unknown legacy department.');
+  return department.id;
+};
+
+function childMemberships({ organizationId, department, title = '', responsibleDepartment, order }) {
+  const child = departmentId(department);
+  const overseesOrganizationId = departmentId(responsibleDepartment);
+  if (organizationId !== studentCenter.id) {
+    if (child || overseesOrganizationId) throw new Error('Legacy department outside the student center.');
+    return [{ organizationId, title, order }];
+  }
+  if (child && !studentCenter.titles.includes(title) && !overseesOrganizationId) {
+    return [{ organizationId: child, title, order }];
+  }
+  const center = { organizationId, title, overseesOrganizationId, order };
+  return child ? [center, { organizationId: child, order }] : [center];
+}
+
+// Import first-generation organization fields once, before the application is deployed.
+function legacyMemberships({ department, title, order }) {
   const group = typeof department === 'string' ? department.trim() : '';
   let position = typeof title === 'string' ? title.trim() : '';
-  if (!group && !position) return null;
+  if (!group && !position) return [];
   const main = ['主席团', '主席团与统筹', '统筹与协调'].includes(group) ? '' : group;
   if (position === '学生发展中心主席 · StuDev 发起人' || position.startsWith('执行统筹 · ')) position = '执行主席 · 运营支持部';
   if (position.startsWith('分管协调 · ')) position = position.replace(/^分管协调/, '分管主席');
   const [job, responsibleDepartment] = position.split(/\s*·\s*/);
-  const prefix = studentCenter.departments.find(name => job.startsWith(name));
+  const prefix = departments.find(org => job.startsWith(org.name))?.name;
   const role = (prefix ? job.slice(prefix.length) : job).replace(/^部门成员$/, '部员');
-  return validateMemberships([{ organizationId: studentCenter.id, department: main, title: role, responsibleDepartment, order }])[0];
+  return validateMemberships(childMemberships({ organizationId: studentCenter.id, department: main || prefix, title: role, responsibleDepartment, order }));
 }
 
 export async function migrateOrganizations(repo, { apply = false, origin, now = new Date().toISOString() } = {}) {
@@ -39,20 +62,27 @@ export async function migrateOrganizations(repo, { apply = false, origin, now = 
   for (const [key, latest] of newest) {
     const account = await repo.get(latest);
     const { term, department, title, order, ...rest } = account;
-    if (Array.isArray(rest.memberships) && [term, department, title, order].every(value => value === undefined)) continue;
+    const hasOldFields = [term, department, title, order].some(value => value !== undefined);
     if (term && !rosterTerm.test(term)) { unmatched++; continue; }
-    let membership;
-    try { membership = legacyMembership({ department, title, order }); }
-    catch { unmatched++; continue; }
-    const historical = membership && term && term !== studentCenter.term;
+    let rows, legacy, hasOldRows;
+    try {
+      hasOldRows = rest.memberships?.some(oldRow);
+      rows = validateMemberships((rest.memberships ?? []).flatMap(row =>
+        oldRow(row) ? childMemberships(row) : [row]));
+      if (!hasOldFields && Array.isArray(rest.memberships) && !hasOldRows) continue;
+      legacy = legacyMemberships({ department, title, order });
+      if (legacy.length && rows.some(row => isWithin(row.organizationId, studentCenter.id))) {
+        throw new Error('Both legacy and current student center appointments exist.');
+      }
+    } catch { unmatched++; continue; }
+    const historical = legacy.length > 0 && term && term !== studentCenter.term;
     if (historical) {
       const list = older.get(term) ?? [];
-      list.push({ ...rest, memberships: [membership] });
+      list.push({ ...rest, memberships: legacy });
       older.set(term, list);
       reserved++;
-    } else if (membership) current++;
-    revisions.push({ key, account: { ...rest, memberships: [...(rest.memberships ?? []).filter(row => !membership || row.organizationId !== studentCenter.id),
-      ...(membership && !historical ? [membership] : [])] } });
+    } else if (legacy.length || hasOldRows) current++;
+    revisions.push({ key, account: { ...rest, memberships: [...rows, ...(historical ? [] : legacy)] } });
   }
   for (const [term, accounts] of older) {
     if (!archives.has(term) && !await repo.get(archiveKey(term))) {

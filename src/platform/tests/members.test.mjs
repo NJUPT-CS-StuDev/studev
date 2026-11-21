@@ -84,7 +84,7 @@ test('appointed pending staff use the same opaque avatar without publishing pend
   const image = () => identity.handle({request:new Request(f.env.PLATFORM_ORIGIN+path)}, path);
   let current = await f.repo.append(`identity/users/${source.id}`, {...source, status:'pending', memberships:[], role:'user'}, source.revision);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
-  const memberships = [{ organizationId: 'student-development', department: '运营支持部', title: '部长' }];
+  const memberships = [{ organizationId: 'student-development/operations', title: '部长' }];
   current = await f.repo.append(`identity/users/${source.id}`, {...current, role:'admin', memberships}, current.revision);
   assert.equal((await image()).status, 200);
   current = await f.repo.append(`identity/users/${source.id}`, {...current, memberships:[]}, current.revision);

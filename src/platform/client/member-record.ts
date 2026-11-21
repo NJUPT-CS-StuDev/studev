@@ -1,5 +1,5 @@
 import { loadClasses } from '../../campus/world/data';
-import { leadership, organization, studentCenter } from '../organizations.mjs';
+import { childrenOf, isWithin, namedOrganizations, organization, organizationName, studentCenter } from '../organizations.mjs';
 import { api, avatarImg, button, copy, el, errorText, labels, message, nicknameOf, q, type Membership, type User } from './api';
 
 const dialog = q<HTMLDialogElement>('[data-member-card-modal]');
@@ -16,10 +16,10 @@ export function valueButton(label: string, value: string, feedback: HTMLElement,
     return control;
 }
 
-function choices(label: string, options: string[], value: string, empty: string) {
+function choices(label: string, options: (string | { id: string; name: string })[], value: string, empty: string) {
     const control = el('select', undefined, 'p-input');
     control.setAttribute('aria-label', label);
-    control.append(new Option(empty, ''), ...options.map(item => new Option(item, item)));
+    control.append(new Option(empty, ''), ...options.map(item => typeof item === 'string' ? new Option(item, item) : new Option(item.name, item.id)));
     control.value = value;
     return control;
 }
@@ -110,26 +110,24 @@ export function openMemberRecord(initial: User, editable: boolean, saved: (updat
     }
 
     function showMemberships(parent: HTMLElement) {
-        parent.append(el('h3', '当前组织归属', 'p-section-heading'));
-        const memberships = user.memberships || [];
+        parent.append(el('h3', '组织与任职', 'p-section-heading'));
+        const memberships = [...(user.memberships ?? [])].sort((a, b) => a.organizationName.localeCompare(b.organizationName, 'zh-CN'));
         for (const membership of memberships) {
             const org = organization(membership.organizationId);
             if (!org) continue;
             const section = el('section', undefined, 'p-record-organization');
+            if (org.parentId) section.append(el('p', organizationName(org.parentId), 'p-record-parent p-muted'));
             section.append(el('h4', org.name));
-            if (org.departments.length) row(section, '所属部门', membership.department, {
-                control: () => choices('所属部门', org.departments, membership.department, unassigned),
-                change: value => membershipChange(membership, { department: value }),
-            }, unassigned);
             row(section, '现任职务', membership.title, {
                 control: () => choices('现任职务', org.titles, membership.title, unassigned),
-                change: title => membershipChange(membership, { title, responsibleDepartment: leadership(title) ? membership.responsibleDepartment : '' }),
+                change: title => membershipChange(membership, { title, overseesOrganizationId: title ? membership.overseesOrganizationId : '' }),
             }, unassigned);
-            if (org.departments.length && leadership(membership.title)) row(section, '分管部门', membership.responsibleDepartment, {
-                control: () => choices('分管部门', org.departments, membership.responsibleDepartment, unassigned),
-                change: value => membershipChange(membership, { responsibleDepartment: value }),
-            }, unassigned);
-            if (org.id === studentCenter.id) row(section, '名册顺序', membership.order === 999 ? '' : String(membership.order), {
+            const children = childrenOf(org.id);
+            if (children.length && membership.title) row(section, '分管组织', organization(membership.overseesOrganizationId)?.name || '', {
+                control: () => choices('分管组织', children, membership.overseesOrganizationId, '无分管'),
+                change: overseesOrganizationId => membershipChange(membership, { overseesOrganizationId }),
+            }, '无分管');
+            if (isWithin(org.id, studentCenter.id)) row(section, '名册顺序', membership.order === 999 ? '' : String(membership.order), {
                 control: () => {
                     const input = field('名册顺序', membership.order === 999 ? '' : String(membership.order), 4) as HTMLInputElement;
                     input.type = 'number'; input.min = '0'; input.max = '9999';
@@ -157,23 +155,32 @@ export function openMemberRecord(initial: User, editable: boolean, saved: (updat
         if (!memberships.length) parent.append(el('p', unassigned, 'p-record-empty p-muted'));
         if (editable) parent.append(button('添加组织归属', async () => {
             if (saving) return;
-            const add = el('form', undefined, 'p-record-edit');
+            const add = el('form', undefined, 'p-record-edit p-add-membership');
             editing?.remove();
             editing = add;
             const select = el('select', undefined, 'p-input');
             select.setAttribute('aria-label', '选择组织');
             select.append(new Option('选择组织', ''));
             select.required = true;
-            if (!memberships.some(row => row.organizationId === studentCenter.id)) select.add(new Option(studentCenter.name, studentCenter.id));
+            for (const org of namedOrganizations) if (!memberships.some(row => row.organizationId === org.id)) {
+                select.add(new Option(organizationName(org.id), org.id));
+            }
+            const title = choices('选择职务', [], '', unassigned);
+            title.disabled = true;
+            select.addEventListener('change', () => {
+                const org = organization(select.value);
+                title.replaceChildren(new Option(unassigned, ''), ...(org?.titles ?? []).map(value => new Option(value, value)));
+                title.disabled = !org;
+            });
             const commit = el('button', '添加', 'p-button small');
             commit.type = 'submit';
-            add.append(select, button('取消', () => add.remove()), commit);
+            add.append(select, title, button('取消', () => add.remove()), commit);
             parent.append(add);
             select.focus();
             add.addEventListener('submit', event => {
                 event.preventDefault();
                 const organizationId = select.value;
-                void submit(add, () => save({ memberships: [...memberships, { organizationId }] }, '组织归属'));
+                void submit(add, () => save({ memberships: [...memberships, { organizationId, title: title.value }] }, '组织归属'));
             });
             try {
                 const classes = await loadClasses();

@@ -20,7 +20,7 @@ public sealed record AccountUser(string Id, string Nickname, string StudentId = 
     /** The first text element, also for names beginning with a surrogate pair. */
     [JsonIgnore] public string Letter => System.Globalization.StringInfo.GetNextTextElement(Nickname.Length > 0 ? Nickname : "我");
 }
-public sealed record AccountMembership(string OrganizationName, string Department = "", string Position = "");
+public sealed record AccountMembership(string OrganizationName, string Position = "");
 public sealed record PublicMember(string Id, string Nickname, string Signature, string AvatarUrl);
 public sealed record MemberPage(List<PublicMember> Items, int Total, int Offset, int Limit);
 public sealed record AccountState(AccountUser User, bool EnrollmentRequired = false, bool PasswordChangeRequired = false, bool ProfileRequired = false, bool MfaRequired = false);

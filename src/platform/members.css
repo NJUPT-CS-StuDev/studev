@@ -10,6 +10,10 @@
 .p-members[data-member-view="public"] .p-directory td { padding:0; border:0; max-width:none; }
 .p-members[data-member-view="management"] .p-directory td { vertical-align:middle; }
 .p-member-student { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.p-appointments { list-style:none; margin:0; padding:0; }
+.p-appointments li { display:flex; align-items:baseline; flex-wrap:wrap; gap:0 8px; padding-block:2px; }
+.p-appointments li + li { margin-top:3px; }
+.p-appointments .p-muted { font-size:.81rem; }
 .p-section-heading { font-size:.85rem; color:var(--muted); margin:20px 0 9px; }
 .p-public-card { border-top:1px solid var(--line); padding-top:12px; margin-top:18px; }
 .p-public-card summary { cursor:pointer; font-size:.88rem; font-weight:600; }
@@ -40,8 +44,10 @@
 .p-button.record-avatar { min-height:0; padding:0; border-radius:50%; }
 .p-record-edit { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; grid-column:1 / -1; padding-block:7px 10px; }
 .p-record-edit .p-input { width:100%; min-width:0; }
+.p-add-membership > :first-child { grid-column:1 / -1; }
 .p-record-organization + .p-record-organization { margin-top:14px; }
 .p-record-organization h4 { margin:0; font-size:.94rem; }
+.p-record-parent { margin:0 0 4px; font-size:.79rem; }
 .p-record-empty { margin:4px 0 8px; }
 .p-record-footer { position:sticky; bottom:0; background:var(--paper); display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding-block:10px; margin-top:14px; }
 .p-record-footer .p-message { margin:0; padding:0; background:transparent; border:0; }
@@ -59,5 +65,6 @@
     .p-members[data-member-view="management"] .p-directory td { display:flex; align-items:center; gap:5px; padding:0; border:0; max-width:none; min-width:0; }
     .p-members[data-member-view="management"] .p-directory td:not(:first-child):not(:last-child)::before { content:attr(data-label); color:var(--muted); flex:none; }
     .p-members[data-member-view="management"] .p-directory td:first-child,
+    .p-members[data-member-view="management"] .p-directory .p-member-appointments,
     .p-members[data-member-view="management"] .p-directory td:last-child { grid-column:1 / -1; }
 }
