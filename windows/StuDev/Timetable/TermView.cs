@@ -1,4 +1,4 @@
-// The whole term in three pages: the grid with everything on it, the exams as a list, and 早锻炼 to plan.
+// A term calendar or the exam list, reached from their respective timetable tabs.
 // src/campus/timetable/views/TermView.tsx, natively.
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -18,7 +18,7 @@ public static class TermView
     private static string DayHead(DateOnly date) => $"{Clock.DateLabel(date)} {Clock.Weekdays[Clock.Weekday(date)]}";
     private static string PlaceOf(Exam exam) => exam.Room is not null ? Names.Room(exam.Room) : exam.Location;
 
-    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, string mode, Action<string> onMode, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null, string? selectedVersion = null, Action<string>? selectVersion = null)
+    public static FrameworkElement Make(CampusLine line, string? klass, Moment now, bool examPage, string mode, Action<string> onMode, Action onExams, Action<DateOnly> pick, Action<LineEvent> open, ExamRecord? record = null, string? selectedVersion = null, Action<string>? selectVersion = null)
     {
         var campus = Campus.Shared;
         var hasExams = line.Exams.Count > 0 || record?.History.Count > 0;
@@ -26,20 +26,14 @@ public static class TermView
         var seen = campus.Preferences.Get("examsSeen", StorageJson.Default.String);
         var knownSeen = record?.History.Any(version => version.Id == seen) == true;
         var mine = klass is not null && klass == campus.Preferences.Class;
-        if (mine && latest is not null && latest != seen && (mode == "exam" || !knownSeen)) campus.Preferences.Set("examsSeen", latest, StorageJson.Default.String);
-        var fresh = mine && knownSeen && latest is not null && latest != seen && mode != "exam";
-        var plan = line.Run is not null;
-        var showing = mode == "exam" ? "exam" : mode == "run" && plan ? "run" : "course";
-        var modes = new List<(string, string)> { ("course", "课程") };
-        if (hasExams || mode == "exam") modes.Add(("exam", fresh ? "考试 •" : "考试"));
-        if (plan) modes.Add(("run", "早锻炼"));
+        if (mine && latest is not null && latest != seen && (examPage || !knownSeen)) campus.Preferences.Set("examsSeen", latest, StorageJson.Default.String);
+        var fresh = mine && knownSeen && latest is not null && latest != seen && !examPage;
         var page = new StackPanel();
-        if (modes.Count > 1) { var choice = Kit.Choice(modes, showing, onMode); choice.Margin = new Thickness(0, 0, 0, 18); page.Children.Add(choice); }
         var upcoming = line.Exams.Where(x => string.CompareOrdinal(x.Date, Clock.Text(now.Date)) >= 0).OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList();
         var ahead = upcoming.GroupBy(x => x.Date).Select(g => (Date: Clock.Parse(g.Key), Days: Clock.Parse(g.Key).DayNumber - now.Date.DayNumber, Exams: g.ToList())).ToList();
         LineEvent? EventOf(Exam exam) => line.On(Clock.Parse(exam.Date)).FirstOrDefault(e => e.Exam?.Id == exam.Id);
 
-        if (showing == "exam")
+        if (examPage)
         {
             var head = ahead.Count > 0 ? Kit.Column(2, Kit.Text($"{Lead(ahead[0].Days)}考试", Role.Heading), Kit.Text(string.Join("、", ahead[0].Exams.Select(x => Names.CourseShort(x.Course.Name))), Role.Body, "muted"))
                 : Kit.Column(0, Kit.Text("暂未查到待考安排", Role.Heading));
@@ -118,9 +112,32 @@ public static class TermView
             return page;
         }
 
-        var calendar = campus.Calendar.FirstOrDefault(t => t.Start == line.Term.Weeks[0].Start);
-        var termEnd = Clock.Parse(calendar?.End ?? line.Term.Weeks[^1].End);
-        var termStart = Clock.Parse(line.Term.Weeks[0].Start);
+        var ordered = campus.Calendar.OrderBy(t => t.Start, StringComparer.Ordinal).ToList();
+        var termAt = ordered.FindIndex(t => t.Start == line.Term.Weeks[0].Start);
+        var calendar = termAt >= 0 ? ordered[termAt] : null;
+        var next = termAt >= 0 ? ordered.ElementAtOrDefault(termAt + 1) : null;
+        var previous = termAt > 0 ? ordered[termAt - 1] : null;
+        var other = calendar?.Number switch
+        {
+            1 when next?.Number == 2 => next,
+            2 when previous?.Number == 1 => previous,
+            _ => null,
+        };
+        var otherShown = mode == "other" && other is not null;
+        var showing = mode == "run" && line.Run is not null ? "run" : "course";
+        var selected = otherShown ? other : calendar;
+        var termStart = Clock.Parse(selected?.Start ?? line.Term.Weeks[0].Start);
+        var termEnd = Clock.Parse(selected?.End ?? line.Term.Weeks[^1].End);
+        var termBar = new WrapRow { Gap = 12, Margin = new Thickness(0, 0, 0, 18) };
+        if (other is not null && calendar is not null)
+        {
+            var terms = new[] { calendar, other }.OrderBy(t => t.Number);
+            var tabs = terms.Select(t => t == calendar ? ("course", $"{TermName(t.Number)} · 本学期") : ("other", TermName(t.Number))).ToArray();
+            termBar.Children.Add(Kit.Choice(tabs, otherShown ? "other" : "course", onMode));
+        }
+        if (line.Run is not null && !otherShown)
+            termBar.Children.Add(Kit.Action(showing == "run" ? "完成" : "排早锻炼", () => onMode(showing == "run" ? "course" : "run"), go: showing == "run"));
+        if (termBar.Children.Count > 0) page.Children.Add(termBar);
         var last = line.LastLesson();
         var runnable = line.Runnable().ToHashSet();
         var present = new HashSet<string>();
@@ -142,27 +159,30 @@ public static class TermView
             var r = Kit.Hairline(); r.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(r, 2); phase.Children.Add(r);
             Grid.SetRow(phase, rowIndex); Grid.SetColumnSpan(phase, 8); grid.Children.Add(phase); rowIndex++;
         }
-        foreach (var week in line.Term.Weeks)
+        var weeks = otherShown
+            ? Enumerable.Range(0, (termEnd.DayNumber - Clock.WeekStart(termStart).DayNumber) / 7 + 1)
+                .Select(i => (Number: i + 1, Start: Clock.WeekStart(termStart).AddDays(i * 7), End: Clock.WeekStart(termStart).AddDays(i * 7 + 6)))
+            : line.Term.Weeks.Select(week => (Number: week.Week, Start: Clock.Parse(week.Start), End: Clock.Parse(week.End)));
+        foreach (var week in weeks)
         {
             NewRow(new GridLength(30));
-            var start = Clock.Parse(week.Start);
-            var current = start <= now.Date && now.Date <= Clock.Parse(week.End);
-            var wn = Kit.Text(week.Week.ToString(), Role.Caption, current ? "brand" : "faint", bold: current); wn.FontSize = 11.5; wn.VerticalAlignment = VerticalAlignment.Center;
+            var start = week.Start;
+            var current = start <= now.Date && now.Date <= week.End;
+            var wn = Kit.Text(week.Number.ToString(), Role.Caption, current ? "brand" : "faint", bold: current); wn.FontSize = 11.5; wn.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(wn, rowIndex); grid.Children.Add(wn);
             for (var i = 0; i < 7; i++)
             {
                 var date = start.AddDays(i);
-                var cell = Cell(line, date, now, showing, termStart, termEnd, runnable, present, pick, open, campus);
+                var cell = Cell(line, date, now, showing, termStart, termEnd, otherShown ? other : null, runnable, present, pick, open, campus);
                 if (cell is null) continue;
                 Grid.SetRow(cell, rowIndex); Grid.SetColumn(cell, i + 1); grid.Children.Add(cell);
             }
             rowIndex++;
-            if (showing == "course" && last is { } l && start <= l && l <= Clock.Parse(week.End) && week.Week < line.Term.Weeks.Count) Phase($"课程结束 · {DayHead(l)}");
+            if (!otherShown && showing == "course" && last is { } l && start <= l && l <= week.End && week.Number < line.Term.Weeks.Count) Phase($"课程结束 · {DayHead(l)}");
         }
-        if (calendar?.Pause is { } pause && Clock.Parse(pause.Start) <= Clock.Parse(line.Term.Weeks[^1].End).AddDays(1)) Phase($"{pause.Name} {Clock.DateLabel(Clock.Parse(pause.Start))}起");
         var legendItems = showing == "run"
             ? new (string State, string Text)[] { ("rdone", "已跑"), ("rplan", "排上"), ("ropen", "可跑，点一下排上"), ("today", "今天") }
-            : [("has", "上课"), ("exam", "考试"), ("hol", "不上课"), ("today", "今天")];
+            : [("has", "上课"), ("exam", "考试"), ("hol", "不上课"), ("event", "校历活动"), ("today", "今天")];
         var legend = new WrapRow { Gap = 14, Margin = new Thickness(0, 14, 0, 0) };
         foreach (var (state, text) in legendItems.Where(l => present.Contains(l.State)))
         {
@@ -172,6 +192,7 @@ public static class TermView
                 case "has": swatch.Background = Paint.Brush("surfaceSunken"); break;
                 case "exam": swatch.Background = Paint.Brush("exam"); break;
                 case "hol": swatch.Child = new TextBlock { Text = "休", FontSize = 10, Foreground = Paint.Brush("holiday"), FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center }; break;
+                case "event": swatch.BorderBrush = Paint.Brush("free"); swatch.BorderThickness = new Thickness(1); break;
                 case "today": swatch.BorderBrush = Paint.Brush("now"); swatch.BorderThickness = new Thickness(2); break;
                 case "rdone": swatch.Background = Paint.Brush("free"); break;
                 case "rplan": swatch.Background = Paint.Faded("free", .22); swatch.BorderBrush = Paint.Brush("free"); swatch.BorderThickness = new Thickness(1); break;
@@ -181,9 +202,20 @@ public static class TermView
             legend.Children.Add(Kit.Line(0, swatch, t));
         }
         var left = Kit.Column(0, grid, legend);
+        if (showing == "course" && selected?.Pause is { } pause)
+            left.Children.Add(BreakBand(pause, otherShown ? ordered.ElementAtOrDefault(ordered.IndexOf(other!) + 1) : next));
         var right = new StackPanel();
         var tally = line.RunTally(now);
-        if (showing == "run" && line.Run is { } rule)
+        if (otherShown)
+        {
+            right.Children.Add(Pages.Section(TermName(other!.Number)));
+            right.Children.Add(Kit.Text($"{Clock.DateLabel(termStart)} – {Clock.DateLabel(termEnd)} · {other.Weeks} 周", Role.Label, "muted"));
+            foreach (var item in (other.Holidays ?? []).Concat(other.Events ?? []).OrderBy(item => item.Start, StringComparer.Ordinal))
+                right.Children.Add(Row("", item.Name, Dates(item), null));
+            if (now.Date < termStart)
+                right.Children.Add(Kit.Text("这个学期的课表公布后，课程和考试会出现在这里。", Role.Caption, "muted", wrap: true));
+        }
+        else if (showing == "run" && line.Run is { } rule)
         {
             var count = Kit.Text(tally.Count.ToString(), Role.Title); count.FontSize = 34;
             var of = Kit.Text($"/ {rule.Required} 次", Role.Body, "muted"); of.VerticalAlignment = VerticalAlignment.Bottom; of.Margin = new Thickness(0, 0, 0, 7);
@@ -224,13 +256,13 @@ public static class TermView
                     }
                 }
                 else card.Children.Add(Kit.Text(courses > 0 ? "都考完了" : "暂无待考安排", Role.Label, "muted"));
-                right.Children.Add(Card(card, () => onMode("exam")));
+                right.Children.Add(Card(card, onExams));
             }
             var practice = campus.Classes.FirstOrDefault(c => c.Id == klass)?.Practice ?? [];
             var offGrid = practice.DistinctBy(p => $"{p.Name}|{string.Join(",", p.Weeks)}").OrderBy(p => p.Weeks.FirstOrDefault()).ThenBy(p => p.Name).ToList();
             if (offGrid.Count > 0)
             {
-                right.Children.Add(Pages.Section("不在课表里的课"));
+                right.Children.Add(Pages.Section("实践课程"));
                 foreach (var item in offGrid) right.Children.Add(Row("", item.Name, Lessons.WeeksText(item.Weeks), null));
             }
             string When(DaySpan item) => item.Start == item.End ? DayHead(Clock.Parse(item.Start)) : $"{Clock.DateLabel(Clock.Parse(item.Start))} – {Clock.DateLabel(Clock.Parse(item.End))}";
@@ -265,7 +297,28 @@ public static class TermView
 
     private static void UpdateRun(Campus campus, Func<RunSettings, RunSettings> change) => campus.Preferences.Set("run", change(campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([])), Data.StorageJson.Default.RunSettings);
 
-    private static FrameworkElement? Cell(CampusLine line, DateOnly date, Moment now, string showing, DateOnly termStart, DateOnly termEnd, HashSet<DateOnly> runnable, HashSet<string> present, Action<DateOnly> pick, Action<LineEvent> open, Campus campus)
+    private static string TermName(int number) => number == 1 ? "第一学期" : "第二学期";
+
+    private static string Dates(DaySpan span)
+    {
+        var start = Clock.DateLabel(Clock.Parse(span.Start));
+        return span.Start == span.End ? start : $"{start} – {Clock.DateLabel(Clock.Parse(span.End))}";
+    }
+
+    private static FrameworkElement BreakBand(DaySpan pause, CalendarTerm? next)
+    {
+        var days = Clock.Parse(pause.End).DayNumber - Clock.Parse(pause.Start).DayNumber + 1;
+        var details = new StackPanel { Visibility = Visibility.Collapsed };
+        details.Children.Add(Kit.Text($"共 {days} 天", Role.Label, "muted"));
+        if (next is not null) details.Children.Add(Kit.Text($"{Clock.DateLabel(Clock.Parse(next.Start))}开学", Role.Label, "muted"));
+        var toggle = Kit.Action($"{pause.Name} · {Dates(pause)}", () => details.Visibility = details.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible);
+        toggle.HorizontalAlignment = HorizontalAlignment.Left;
+        var band = Kit.Column(6, toggle, details);
+        band.Margin = new Thickness(0, 12, 0, 0);
+        return band;
+    }
+
+    private static FrameworkElement? Cell(CampusLine line, DateOnly date, Moment now, string showing, DateOnly termStart, DateOnly termEnd, CalendarTerm? other, HashSet<DateOnly> runnable, HashSet<string> present, Action<DateOnly> pick, Action<LineEvent> open, Campus campus)
     {
         if (date > termEnd || date < termStart) return null;
         var label = date.Day == 1 ? $"{date.Month}月" : date.Day.ToString();
@@ -297,20 +350,24 @@ public static class TermView
             };
             return tap;
         }
-        var events = line.On(date);
-        var exam = events.FirstOrDefault(e => e.Kind == "exam");
-        var holiday = line.Holidays.GetValueOrDefault(date);
-        var kind = exam is not null ? "exam" : holiday is not null ? "hol" : events.Any(e => e.Kind is "class" or "lab") ? "has" : "";
+        var events = other is null ? line.On(date) : [];
+        var exams = events.Where(e => e.Kind == "exam").ToList();
+        var textDate = Clock.Text(date);
+        bool Covers(DaySpan item) => string.CompareOrdinal(item.Start, textDate) <= 0 && string.CompareOrdinal(textDate, item.End) <= 0;
+        var holiday = other is null ? line.Holidays.GetValueOrDefault(date) : other.Holidays?.FirstOrDefault(Covers)?.Name;
+        var calendarEvent = other?.Events?.FirstOrDefault(Covers)?.Name;
+        var kind = exams.Count > 0 ? "exam" : holiday is not null ? "hol" : calendarEvent is not null ? "event" : events.Any(e => e.Kind is "class" or "lab") ? "has" : "";
         if (kind.Length > 0) present.Add(kind);
         switch (kind)
         {
             case "has": tap.Ground(Paint.Brush("surfaceSunken"), Paint.Brush("line")); words.Foreground = Paint.Brush("ink"); break;
             case "exam": tap.Ground(Paint.Brush("exam")); words.Foreground = Paint.Brush("onExam"); words.FontWeight = FontWeights.SemiBold; break;
             case "hol": words.Foreground = Paint.Brush("holiday"); words.FontWeight = FontWeights.SemiBold; tap.Ground(Paint.Clear, Paint.Brush("surfaceSunken")); ToolTipService.SetToolTip(tap, holiday); break;
+            case "event": words.Foreground = Paint.Brush("free"); ToolTipService.SetToolTip(tap, calendarEvent); break;
             default: tap.Ground(Paint.Clear, Paint.Brush("surfaceSunken")); break;
         }
-        AutomationProperties.SetName(tap, $"{Clock.DateLabel(date)}{(holiday is not null ? $" {holiday}" : "")}{(exam is not null ? " 有考试" : "")}");
-        tap.Click += (_, _) => { if (exam is not null) open(exam); else pick(date); };
+        AutomationProperties.SetName(tap, $"{Clock.DateLabel(date)}{(holiday is not null ? $" {holiday}" : "")}{(calendarEvent is not null ? $" {calendarEvent}" : "")}{(exams.Count > 0 ? " 有考试" : "")}");
+        if (other is null) tap.Click += (_, _) => { if (exams.Count == 1) open(exams[0]); else pick(date); };
         return tap;
     }
 

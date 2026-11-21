@@ -210,7 +210,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             KeyRow("同时段", Names.course(other.course.name), "${Exams.weeksText(other.weeks)} · 本周不上", chevron = true, onClick = { line.meetingAround(other.id, event.date)?.let(onOpen) })
         }
         if (exam != null) {
-            KeyRow("考试", "全部考试 · ${line.exams.map { it.course.code ?: it.course.name }.distinct().size} 门", chevron = true, onClick = { onClose(); route.tab = "timetable"; route.scale = "term"; route.termMode = "exam" })
+            KeyRow("考试", "全部考试 · ${line.exams.map { it.course.code ?: it.course.name }.distinct().size} 门", chevron = true, onClick = { onClose(); route.tab = "timetable"; route.scale = "exam" })
             record?.sources?.firstOrNull { it.file == exam.source }?.let { sheet ->
                 KeyRow("来源", Exams.fileName(sheet.file), sheet.published?.let { "${Exams.time(it.take(10))} 官方发布" })
                 KeyRow(null, "查看官方公告", chevron = true, onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(sheet.notice))) })

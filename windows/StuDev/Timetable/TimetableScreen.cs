@@ -1,5 +1,5 @@
 // The timetable: one's line through the term unfolded as a day, a week, the whole term, or a list of what is to be
-// done. TimetableApp.tsx, natively: the same title and line under it, the same buttons, the same four tabs. Opened on
+// done. TimetableApp.tsx, natively: day, week, term, exams and tasks. Opened on
 // someone else (a teacher, a room, a course, a class) it shows their line the same way, without the list of one's own.
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -11,7 +11,7 @@ namespace StuDev.Timetable;
 
 public sealed partial class TimetableScreen : Screen
 {
-    private static readonly (string Key, string Label)[] Scales = [("day", "天"), ("week", "周"), ("term", "学期"), ("list", "任务")];
+    private static readonly (string Key, string Label)[] Scales = [("day", "天"), ("week", "周"), ("term", "学期"), ("exam", "考试"), ("list", "任务")];
     private readonly Campus campus = Campus.Shared;
     private readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(30) };
     private string scale = "week";
@@ -49,18 +49,17 @@ public sealed partial class TimetableScreen : Screen
         Key(Windows.System.VirtualKey.Left, () => Shift(-1));
         Key(Windows.System.VirtualKey.Right, () => Shift(1));
         Key(Windows.System.VirtualKey.T, () => { picked = null; Draw(); });
-        // One key for each view, as calendars have them: D 天, W 周, S 学期, L 任务.
-        foreach (var (key, view) in new[] { (Windows.System.VirtualKey.D, "day"), (Windows.System.VirtualKey.W, "week"), (Windows.System.VirtualKey.S, "term"), (Windows.System.VirtualKey.L, "list") })
-            Key(key, () => { if (ScalesShown.Any(s => s.Key == view) && scale != view) { scale = view; Draw(); } });
+        foreach (var (key, view) in new[] { (Windows.System.VirtualKey.D, "day"), (Windows.System.VirtualKey.W, "week"), (Windows.System.VirtualKey.S, "term"), (Windows.System.VirtualKey.E, "exam"), (Windows.System.VirtualKey.L, "list") })
+            Key(key, () => { if (ScalesShown.Any(s => s.Key == view) && scale != view) Show(view); });
         Key(Windows.System.VirtualKey.N, () => { if (who is null) TaskSheet.New(campus, now); }, Windows.System.VirtualKeyModifiers.Control);
         Key(Windows.System.VirtualKey.Escape, () => { if (who is not null) Mine(); });
         PointerWheelChanged += (_, e) =>
         {
             if (!e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
-            if (scale == "list") return;
-            var shown = ScalesShown.Where(s => s.Key != "list").ToArray();
+            if (scale is "exam" or "list") return;
+            var shown = Scales[..3];
             var at = Array.FindIndex(shown, s => s.Key == scale) + (e.GetCurrentPoint(this).Properties.MouseWheelDelta < 0 ? 1 : -1);
-            if (at >= 0 && at < shown.Length) { scale = shown[at].Key; Draw(); }
+            if (at >= 0 && at < shown.Length) Show(shown[at].Key);
             e.Handled = true;
         };
         _ = campus.Load();
@@ -74,7 +73,14 @@ public sealed partial class TimetableScreen : Screen
         KeyboardAccelerators.Add(accelerator);
     }
 
-    private (string Key, string Label)[] ScalesShown => who is null ? Scales : Scales[..3];
+    private (string Key, string Label)[] ScalesShown => who is null ? Scales : Scales[..^1];
+
+    private void Show(string view)
+    {
+        scale = view;
+        termMode = "course";
+        Draw();
+    }
 
     public override void Shown(object? argument)
     {
@@ -86,12 +92,12 @@ public sealed partial class TimetableScreen : Screen
             if (who != destination) { who = destination; others = null; othersError = null; if (destination is not null) Gather(destination); }
             scale = Scales.Any(item => item.Key == query["scale"]) ? query["scale"]! : "week";
             picked = DateOnly.TryParseExact(query["t"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var linkedDate) ? linkedDate : null;
-            termMode = query["mode"] is "exam" or "run" ? query["mode"]! : "course";
+            termMode = scale == "term" && query["mode"] is "other" or "run" ? query["mode"]! : "course";
             preview = query["preview"]; previewRows = null; previewError = null;
             if (preview is not null) _ = GatherPreview(preview);
         }
         if (argument is DateOnly date) { who = null; others = null; preview = null; previewRows = null; picked = date; scale = "week"; }
-        if (argument is "exams") { who = null; others = null; preview = null; previewRows = null; scale = "term"; termMode = "exam"; }
+        if (argument is "exams") { who = null; others = null; preview = null; previewRows = null; scale = "exam"; termMode = "course"; }
         if (argument is Who) { preview = null; previewRows = null; }
         if (argument is Who next && next != who) { who = next; others = null; othersError = null; picked = null; scale = "week"; Gather(next); }
         now = Moment.Now(); Draw();
@@ -147,7 +153,7 @@ public sealed partial class TimetableScreen : Screen
 
     private void Shift(int direction)
     {
-        if (scale is "term" or "list" || (who is null ? campus.Line : others) is not { } line) return;
+        if (scale is not ("day" or "week") || (who is null ? campus.Line : others) is not { } line) return;
         picked = Day(line).AddDays(direction * (scale == "week" ? 7 : 1));
         Draw();
     }
@@ -200,15 +206,16 @@ public sealed partial class TimetableScreen : Screen
         var ahead = picked is null ? (Clock.WeekStart(day).DayNumber - Clock.WeekStart(now.Date).DayNumber) / 7 : 0;
         var week = line.WeekOf(day); var nowWeek = line.WeekOf(now.Date);
         var monday = Clock.WeekStart(day);
-        var termName = $"{term.Year}–{term.Year + 1} 学年第{(term.Number == 1 ? "一" : "二")}学期";
+        var yearName = $"{term.Year}–{term.Year + 1} 学年";
         var last = scale == "term" ? line.LastLesson() : null;
         var pending = line.Tasks.Count(t => t.Parent is null && t.Done is null && t.Deleted != true);
-        var title = who is { } named ? named.Title : scale switch { "list" => "任务", "term" => termName, "week" => week is { } w ? $"第 {w} 周" : "假期", _ => $"{Clock.DateLabel(day)} {Clock.Weekdays[Clock.Weekday(day)]}" };
-        var first = Clock.Parse(term.Weeks[0].Start); var end = Clock.Parse(term.Weeks[^1].End);
+        var title = who is { } named ? named.Title : scale switch { "list" => "任务", "exam" => "考试", "term" => yearName, "week" => week is { } w ? $"第 {w} 周" : "假期", _ => $"{Clock.DateLabel(day)} {Clock.Weekdays[Clock.Weekday(day)]}" };
+        var examsAhead = line.Exams.Count(exam => string.CompareOrdinal(exam.Date, Clock.Text(now.Date)) >= 0);
         var subtitle = scale switch
         {
             "list" => pending > 0 ? $"{pending} 件要做" : "没有要做的事",
-            "term" => $"{Clock.DateLabel(first)} – {Clock.DateLabel(end)} · {(nowWeek is { } n ? $"第 {n} / {term.Weeks.Count} 周" : $"{term.Weeks.Count} 周")}{(last is { } l ? $" · 课上到 {Clock.DateLabel(l)}" : "")}",
+            "exam" => examsAhead > 0 ? $"{examsAhead} 场待考" : "暂无待考",
+            "term" => $"本学期 · {(nowWeek is { } n ? $"第 {n} / {term.Weeks.Count} 周" : $"{term.Weeks.Count} 周")}{(last is { } l ? $" · 课上到 {Clock.DateLabel(l)}" : "")}",
             "week" => $"{(ahead == 1 ? "下周 · " : ahead > 1 ? $"{ahead} 周后 · " : "")}{Clock.DateLabel(monday)} – {Clock.DateLabel(monday.AddDays(6))}",
             _ => week is { } dw ? $"第 {dw} 周" : "假期",
         };
@@ -239,7 +246,7 @@ public sealed partial class TimetableScreen : Screen
 
         var page = new StackPanel();
         page.Children.Add(Pages.Header(title, subtitle, actions.ToArray()));
-        var tabs = Kit.Tabs(ScalesShown, scale, key => { scale = key; Draw(); }, separateBefore: "list"); tabs.Margin = new Thickness(0, 0, 0, 20);
+        var tabs = Kit.Tabs(ScalesShown, scale, Show, separateBefore: "list"); tabs.Margin = new Thickness(0, 0, 0, 20);
         page.Children.Add(tabs);
         if (preview is { } previewId) {
             var words = previewRows is { Count: > 0 } ? $"预览 · {Names.Course(previewRows[0].Course.Name)}" : previewError ?? "正在读取预览…";
@@ -263,10 +270,10 @@ public sealed partial class TimetableScreen : Screen
         {
             "week" => WeekView.Make(line, day, now, wide, Open, OpenTask),
             "day" => DayView.Make(line, day, now, Open, OpenTask, date => { picked = date == now.Date ? null : date; Draw(); }, mine),
-            "term" => TermView.Make(line, recordClass, now, termMode, mode => { termMode = mode; Draw(); }, date => { picked = date; scale = "week"; Draw(); }, Open, recordClass is not null ? examRecord : null, examVersion, value => examVersion = value),
+            "term" or "exam" => TermView.Make(line, recordClass, now, scale == "exam", termMode, mode => { termMode = mode; Draw(); }, () => Show("exam"), date => { picked = date; Show("week"); }, Open, recordClass is not null ? examRecord : null, examVersion, value => examVersion = value),
             _ => ListView.Make(campus, line, now, OpenTask, Open, roomy),
         });
-        if (scale == "term" && recordClass is not null && recordError is { } recordMessage) page.Children.Add(Kit.TextAction($"{recordMessage} · 重试", () => { recordError = null; _ = GatherRecord(campus.Repository, recordClass); Draw(); }));
+        if (scale == "exam" && recordClass is not null && recordError is { } recordMessage) page.Children.Add(Kit.TextAction($"{recordMessage} · 重试", () => { recordError = null; _ = GatherRecord(campus.Repository, recordClass); Draw(); }));
         frame = Pages.Frame(page);
         var keep = lastScroll;
         frame.Loaded += (_, _) => frame.ChangeView(null, keep, null, true);

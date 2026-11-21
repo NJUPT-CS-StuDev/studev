@@ -30,7 +30,7 @@ function Together({ label, classes, people }: { label: string; classes: string[]
 }
 
 /** Who teaches it, in one row as the classes are: each name opens that teacher's timetable. */
-function Teachers({ names }: { names: string[] }) {
+export function Teachers({ names }: { names: string[] }) {
     const each = [...new Set(names.flatMap(name => name.split('、')).map(name => name.trim()).filter(Boolean))];
     if (each.length === 0) return null;
     return (

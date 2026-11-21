@@ -210,15 +210,15 @@ async function chooseClass() {
     // Back can leave the app while InputMethodManager still reports the old IME.
 }
 async function examHistory() {
-    await link('/?scale=term&mode=exam', 'open the personal exam arrangements');
+    await link('/?scale=exam', 'open the personal exam arrangements');
     await scrollFind('本次更新未影响本班', 'the latest exam update does not affect B240402');
     await scrollTap(node => node.text.includes('首次记录'), 'open the original exam baseline');
     capture('exam-unaffected-baseline');
-    await link(`/?who=${encodeURIComponent(`class:${affectedExam.class}`)}&scale=term&mode=exam`, 'open the actual affected class exams');
+    await link(`/?who=${encodeURIComponent(`class:${affectedExam.class}`)}&scale=exam`, 'open the actual affected class exams');
     const version = examIndex.history.find(item => item.id === affectedExam.version);
-    const date = (version.observed ? new Intl.DateTimeFormat('en-CA', { timeZone: product.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(version.observed)) : version.published).slice(0, 10);
+    const date = (version.published || version.observed).slice(0, 10);
     const said = `${Number(date.slice(5, 7))}月${Number(date.slice(8))}日`;
-    await scrollTap(node => node.text.startsWith(said) && node.text.endsWith(version.observed ? '发现' : '官方发布'), 'select a real exam update affecting this class');
+    await scrollTap(node => node.text.startsWith(said) && node.text.endsWith(version.published ? '官方发布' : '收录'), 'select a real exam update affecting this class');
     await scrollFind(node => node.text.includes(affectedExam.course.name), 'the affected course is named');
     const sitting = affectedExam.after?.[0] ?? affectedExam.before?.[0];
     await scrollFind(node => node.text.includes(sitting.date) && node.text.includes(sitting.start), 'the actual added or previous sitting is explained');
@@ -616,10 +616,16 @@ adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1')
 await sleep(4000);
 }
 await chooseClass();
-for (const [scale, name] of [['周', 'week'], ['学期', 'term'], ['任务', 'tasks'], ['天', 'day']]) {
+for (const [scale, name] of [['天', 'day'], ['周', 'week'], ['学期', 'term'], ['考试', 'exams'], ['任务', 'tasks']]) {
     await tap(scale, `the ${scale} view`);
     capture(`timetable-${name}`);
 }
+await tap('学期', 'open the academic year calendar');
+await tap(node => node.text.startsWith('第一学期'), 'open the published first term');
+capture('timetable-first-term');
+await tap(node => node.text.startsWith('第二学期'), 'open the published second term');
+await scrollFind(node => node.text.includes('暑假'), 'the second term has its published summer break');
+capture('timetable-second-term');
 await examHistory();
 await searchNavigation();
 await managedCourses();

@@ -15,7 +15,7 @@ class Route {
     var whoType by mutableStateOf("me")
     var whoId by mutableStateOf("")
     var scale by mutableStateOf("day")
-    /** What the term view lays over its grid: "course", "exam" or "run". */
+    /** The term grid, the other term of the academic year, or morning-run planning. */
     var termMode by mutableStateOf("course")
     var day by mutableStateOf<LocalDate?>(null)
     var preview by mutableStateOf<String?>(null)
@@ -49,8 +49,15 @@ class Route {
                 val who = param("who")
                 whoType = who?.substringBefore(':', "me") ?: "me"
                 whoId = who?.substringAfter(':', "").orEmpty()
-                param("scale")?.let { scale = it }
-                termMode = param("mode") ?: "course"
+                scale = when (val view = param("scale")) {
+                    "day", "week", "term", "exam" -> view
+                    "list" -> if (whoType == "me") view else "day"
+                    else -> "day"
+                }
+                termMode = if (scale == "term") when (val mode = param("mode")) {
+                    "other", "run" -> mode
+                    else -> "course"
+                } else "course"
                 day = param("t")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 preview = param("preview")
                 tab = "timetable"

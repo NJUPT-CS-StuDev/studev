@@ -327,6 +327,11 @@ function ReferenceGroups() {
 
 function ExamHistory {
     Press $window '学期' 'open the personal term'
+    Press $window { param($e) $e.Current.Name.StartsWith('第一学期') } 'open the published first term'
+    Capture 'timetable-first-term'
+    Press $window { param($e) $e.Current.Name.StartsWith('第二学期') } 'open the published second term'
+    Find $window $Pressable { param($e) $e.Current.Name.StartsWith('暑假 ·') } 'the second term has its published summer break' | Out-Null
+    Capture 'timetable-second-term'
     Press $window '考试' 'open the personal exam arrangements'
     Find $window (Is $A::NameProperty '本次更新未影响本班') $null 'the latest update does not affect B240402' 30 | Out-Null
     $baseline = $examIndex.history | Where-Object baseline | Select-Object -First 1

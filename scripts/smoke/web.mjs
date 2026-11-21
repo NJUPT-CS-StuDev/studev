@@ -55,10 +55,30 @@ async function openCourses(page) {
     await heading(page, '我的课程');
     await page.getByRole('button', { name: /^查看课程详情：/ }).first().waitFor({ state: 'visible' });
 }
+async function timetableNavigation(page, name) {
+    await goto(page, '/?scale=term&mode=exam');
+    const views = page.locator('.timetable-page .tabs').getByRole('tab');
+    const terms = page.locator('.termmode').getByRole('tab');
+    await terms.nth(1).waitFor({ state: 'visible' });
+    assert.deepEqual(await views.allTextContents(), ['天', '周', '学期', '考试', '任务']);
+    assert.deepEqual((await terms.allTextContents()).map(text => text.replace('本学期', '')), ['第一学期', '第二学期']);
+    assert.equal(await page.locator('.xlist').count(), 0, 'the old term mode does not open exams');
+    for (const term of ['第一学期', '第二学期']) {
+        const tab = terms.filter({ hasText: term });
+        await tab.click();
+        assert.equal(await tab.getAttribute('aria-selected'), 'true');
+        await screenshot(page, name + '-' + term);
+    }
+    await views.getByText('考试', { exact: true }).click();
+    await page.locator('.xlist').waitFor({ state: 'visible' });
+    assert.equal(await terms.count(), 0, 'the exam page has no semester switch');
+    assert.equal(new URL(page.url()).searchParams.get('scale'), 'exam');
+    log(name + ': five views, both real calendar terms, and the independent exam page');
+}
 async function examsHistory(page, name) {
     const before = await prefs(page);
     try {
-        await goto(page, '/?scale=term&mode=exam');
+        await goto(page, '/?scale=exam');
         const current = page.locator('.xversion.current');
         await current.getByText('本次更新未影响本班', { exact: true }).waitFor({ state: 'visible' });
         assert.equal(await current.locator('.xversion-head').getAttribute('aria-expanded'), 'true', 'the current version opens without another disclosure');
@@ -75,7 +95,7 @@ async function examsHistory(page, name) {
         await page.evaluate(({ before, klass, term, hidden }) => localStorage.setItem('studev_prefs', JSON.stringify({ ...before, class: klass, timetable: { ...before.timetable, [term]: { added: [], hidden, custom: [], names: {} } } })), {
             before, klass: affectedExam.class, term: release.teaching, hidden: [...new Set(schedule.meetings.map(meeting => meeting.teaching_class.id))],
         });
-        await goto(page, '/?scale=term&mode=exam');
+        await goto(page, '/?scale=exam');
         const version = page.locator(`[data-exam-version="${affectedExam.version}"]`);
         await version.locator('.xversion-head').click();
         await version.locator('.xchange').filter({ hasText: affectedExam.course.name }).waitFor({ state: 'visible' });
@@ -502,6 +522,7 @@ try {
         await page.locator('[data-me-name]').waitFor({ state: 'visible' });
         assert.equal(await page.locator('[data-me-name]').innerText(), '未登录');
         await headerAligned(page, '.ph h1');
+        await timetableNavigation(page, name);
         await examsHistory(page, name);
         await searchRanges(page, name);
         await searchNavigation(page, name);

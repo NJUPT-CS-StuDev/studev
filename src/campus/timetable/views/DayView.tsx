@@ -52,6 +52,15 @@ function NextBlock({ line, now }: { line: Timeline; now: Moment }) {
     );
 }
 
+/** Under each day of the week: a dot for an exam, a softer one for lessons, so a glance shows the week's shape. */
+function DayMarks({ line, date }: { line: Timeline; date: string }) {
+    const events = eventsOn(line, date);
+    const exam = events.some(event => event.kind === 'exam');
+    const lessons = events.some(event => event.kind === 'class' || event.kind === 'lab');
+    if (!exam && !lessons) return null;
+    return <span className="marks">{lessons && <i className="lesson" />}{exam && <i className="exam" />}</span>;
+}
+
 export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, onTask }: { line: Timeline; day: string; now: Moment; isMe: boolean; record: ExamRecord | null; order: readonly EventKind[]; onTask: (task: Task) => void; onPick: (date: string) => void; onOpen: (event: CampusEvent) => void }) {
     const monday = startOfWeek(day);
     const today = day === now.date;
@@ -62,7 +71,7 @@ export function DayView({ line, day, now, isMe, record, order, onPick, onOpen, o
             {Array.from({ length: 7 }, (_, index) => {
                 const date = addDays(monday, index);
                 return <button key={date} className={`${date === day ? 'on' : ''} ${date === now.date ? 'today' : ''}`} onClick={() => onPick(date)}>
-                    {WEEKDAYS[index + 1]!.slice(1)}<b>{Number(date.slice(8))}</b>{line.exams.some(exam => exam.date === date) && <i />}
+                    {WEEKDAYS[index + 1]!.slice(1)}<b>{Number(date.slice(8))}</b><DayMarks line={line} date={date} />
                 </button>;
             })}
         </div>

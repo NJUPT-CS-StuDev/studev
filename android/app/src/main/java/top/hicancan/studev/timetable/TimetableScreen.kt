@@ -92,7 +92,8 @@ import java.time.LocalDate
     val title = when {
         !isMe -> if (route.whoType == "teacher") "${route.whoId} 老师" else if (route.whoType == "room") Names.room(route.whoId) else route.whoId
         scale == "list" -> "任务"
-        scale == "term" -> "${term.year}–${term.year + 1} 第${if (term.number == 1) "一" else "二"}学期"
+        scale == "exam" -> "考试"
+        scale == "term" -> "${term.year}–${term.year + 1} 学年"
         scale == "week" -> if (week != null) "第 $week 周" else "假期"
         else -> "${dateLabel(day)} ${WEEKDAYS[day.dayOfWeek.value]}"
     }
@@ -101,8 +102,8 @@ import java.time.LocalDate
     val sub = when (scale) {
         "list" -> if (pending > 0) "$pending 件要做" else "没有要做的事"
         // Two lines, so the narrow header never breaks inside a date.
-        "term" -> "${dateLabel(LocalDate.parse(term.weeks.first().start))} – ${dateLabel(LocalDate.parse(term.weeks.last().end))}\n" +
-            (line.weekOf(now.date)?.let { "第 $it / ${term.weeks.size} 周" } ?: "${term.weeks.size} 周") + (lastDay?.let { " · 课上到 ${dateLabel(it)}" } ?: "")
+        "exam" -> line.exams.count { it.date >= now.date.toString() }.let { if (it > 0) "$it 场待考" else "暂无待考" }
+        "term" -> "本学期 · " + (line.weekOf(now.date)?.let { "第 $it / ${term.weeks.size} 周" } ?: "${term.weeks.size} 周") + (lastDay?.let { " · 课上到 ${dateLabel(it)}" } ?: "")
         "week" -> (if (ahead == 1) "下周 · " else if (ahead > 1) "$ahead 周后 · " else "") + "${dateLabel(monday)} – ${dateLabel(monday.plusDays(6))}"
         else -> if (week != null) "第 $week 周" else "假期"
     }
@@ -125,7 +126,10 @@ import java.time.LocalDate
         detectTransformGestures { _, _, zoom, _ ->
             pinch *= zoom
             val step = if (pinch < .72f) 1 else if (pinch > 1.38f) -1 else 0
-            if (step != 0 && scale != "list") { order.getOrNull(order.indexOf(scale) + step)?.let { route.scale = it }; pinch = 1f }
+            if (step != 0) {
+                if (scale in order) order.getOrNull(order.indexOf(scale) + step)?.let { route.scale = it; route.termMode = "course" }
+                pinch = 1f
+            }
         }
     }.statusBarsPadding().padding(horizontal = 16.dp)) {
         // A newer app is out: said once, quietly, above the timetable, until it is installed.
@@ -161,13 +165,13 @@ import java.time.LocalDate
             }
         }
         // The list is one's own: tasks by when they are due, exams among them.
-        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期") + if (isMe) listOf("list" to "任务") else emptyList(), scale, separateBefore = "list") { route.scale = it }
+        TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期", "exam" to "考试") + if (isMe) listOf("list" to "任务") else emptyList(), scale, separateBefore = "list") { route.scale = it; route.termMode = "course" }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.weight(1f)) {
             when (scale) {
                 "list" -> TaskList(line, now, model.tasks, model.settings) { onEvent(it, line) }
                 "week" -> WeekView(line, day, now, record, previewRows, settings.layers) { onEvent(it, line) }
-                "term" -> TermView(line, state, model, now, isMe, recordState, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, { route.day = it; route.scale = "week" }) { onEvent(it, line) }
+                "term", "exam" -> TermView(line, state, model, now, isMe, recordState, state.classes.firstOrNull { it.id == classId }?.practice.orEmpty(), settings, route, scale == "exam", { route.day = it; route.scale = "week" }) { onEvent(it, line) }
                 else -> DayView(line, day, now, isMe, record, route, walk, settings.layers, model.tasks) { onEvent(it, line) }
             }
             if (route.preview != null && previewRows.isNotEmpty()) PreviewDock(previewRows, line.meetings, week, settings.timetableEdits(term.term).added.contains(route.preview), Modifier.align(Alignment.BottomCenter),
@@ -496,9 +500,9 @@ private fun goneSummary(events: List<LineEvent>): String {
     }
 }
 
-/** The term in three pages: the grid with everything on it, the exams as a list, and 早锻炼 to plan. */
+/** A term calendar or the exam list, reached from their respective timetable tabs. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, recordState: ExamRecordState, practice: List<Practice>, settings: PersonalSettings, route: Route, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
+@Composable private fun TermView(line: CampusLine, state: AcademicState, model: CampusModel, now: Moment, isMe: Boolean, recordState: ExamRecordState, practice: List<Practice>, settings: PersonalSettings, route: Route, examPage: Boolean, onPick: (LocalDate) -> Unit, onOpen: (LineEvent) -> Unit) {
     val record = recordState.record
     val mark = marks()
     val hairline = Ink.line
@@ -511,13 +515,19 @@ private fun goneSummary(events: List<LineEvent>): String {
     val ahead = remember(line, now.date) { line.examDays(now.date) }
     val taken = line.exams.filter { it.date < now.date.toString() }.sortedWith(compareByDescending<Exam> { it.date }.thenByDescending { it.start })
     val hasExams = line.exams.isNotEmpty() || record?.history?.isNotEmpty() == true || recordState.failed
-    val mode = when { route.termMode == "exam" -> "exam"; route.termMode == "run" && plan != null -> "run"; else -> "course" }
+    // The academic year's two terms: this one, and the other one of the same year (the next, or the one gone by).
+    val ordered = state.calendar.sortedBy { it.start }
+    val termAt = calendar?.let { ordered.indexOf(it) } ?: -1
+    val nextTerm = ordered.getOrNull(termAt + 1).takeIf { termAt >= 0 }
+    val otherTerm = calendar?.let { if (it.number == 1) nextTerm?.takeIf { next -> next.number == 2 } else ordered.getOrNull(termAt - 1)?.takeIf { previous -> previous.number == 1 } }
+    val holidays = (calendar?.holidays.orEmpty() + otherTerm?.holidays.orEmpty() + (nextTerm?.takeIf { it != otherTerm }?.holidays.orEmpty())).distinct()
+    val mode = when { route.termMode == "run" && plan != null -> "run"; route.termMode == "other" && otherTerm != null -> "other"; else -> "course" }
     val run = plan.takeIf { mode == "run" }
-    LaunchedEffect(latest, mode, settings.examsSeen, isMe) {
+    LaunchedEffect(latest, examPage, settings.examsSeen, isMe) {
         // Someone arriving for the first time has nothing new to be told about.
-        if (isMe && latest != null && settings.examsSeen != latest && (mode == "exam" || seenIndex < 0)) model.settings.update { it.copy(examsSeen = latest) }
+        if (isMe && latest != null && settings.examsSeen != latest && (examPage || seenIndex < 0)) model.settings.update { it.copy(examsSeen = latest) }
     }
-    val fresh = isMe && latest != null && seenIndex >= 0 && latest != settings.examsSeen && mode != "exam"
+    val fresh = isMe && latest != null && seenIndex >= 0 && latest != settings.examsSeen && !examPage
     val termStart = LocalDate.parse(line.term.weeks.first().start)
     val termEnd = LocalDate.parse(calendar?.end ?: line.term.weeks.last().end)
     val last = remember(line) { line.lastLesson() }
@@ -556,12 +566,21 @@ private fun goneSummary(events: List<LineEvent>): String {
         }
     }
     val present = states.values.toSet() + (if (now.date in states) setOf("today") else emptySet())
-    val modes = listOf("course" to "课程") + (if (hasExams || mode == "exam") listOf("exam" to (if (fresh) "考试 •" else "考试")) else emptyList()) + (if (plan != null) listOf("run" to "早锻炼") else emptyList())
+    // The year's two terms in the calendar's order, this one marked; 早锻炼 is a switch on this term's grid, not a page.
+    val yearTabs = listOfNotNull(calendar, otherTerm).sortedBy { it.number }.map { item -> (if (item == calendar) "course" else "other") to (termName(item.number) + if (item == calendar) " · 本学期" else "") }
     // The pages sit above the list, so the list never starts scrolled past them while they appear.
     Column(Modifier.fillMaxSize()) {
-    if (modes.size > 1) Box(Modifier.padding(bottom = 12.dp)) { Choice(modes, mode) { route.termMode = it } }
+    if (!examPage) Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (yearTabs.size > 1) Choice(yearTabs, if (mode == "other") "other" else "course") { route.termMode = it }
+        Spacer(Modifier.weight(1f))
+        if (plan != null && mode != "other") ActionButton(if (mode == "run") "完成" else "排早锻炼", go = mode == "run") { route.termMode = if (mode == "run") "course" else "run" }
+    }
     LazyColumn(Modifier.fillMaxSize()) {
-        if (mode == "exam") {
+        if (!examPage && mode == "other" && otherTerm != null) {
+            item { OtherTerm(otherTerm, line.term.year, holidays, now.date) }
+            return@LazyColumn
+        }
+        if (examPage) {
             // The first thing to know: how soon, and what.
             item {
                 Column(Modifier.padding(top = 4.dp, bottom = 14.dp)) {
@@ -648,14 +667,14 @@ private fun goneSummary(events: List<LineEvent>): String {
                             val ink = when (cell) { "exam" -> mark.onExam; "" -> Ink.faint; "hol" -> mark.holiday; else -> Ink.text }
                             Box(Modifier.weight(1f).height(30.dp).padding(horizontal = 1.5.dp).clip(shape).background(fill)
                                 .then(if (today) Modifier.border(2.dp, mark.now, shape) else Modifier)
-                                .clickable { line.on(date).firstOrNull { it.kind == "exam" }?.let(onOpen) ?: onPick(date) },
+                                .clickable { line.on(date).singleOrNull { it.kind == "exam" }?.let(onOpen) ?: onPick(date) },
                                 contentAlignment = Alignment.Center) { Plain(dayLabel(date), 12.sp, ink, if (cell == "exam" || cell == "hol") FontWeight.SemiBold else FontWeight.Normal) }
                         }
                     }
                 }
                 if (mode == "course" && last != null && week.start <= last.toString() && last.toString() <= week.end && week.week < line.term.weeks.size) PhaseLine("课程结束 · ${dayHead(last)}")
             }
-            calendar?.pause?.takeIf { LocalDate.parse(it.start) <= LocalDate.parse(line.term.weeks.last().end).plusDays(1) }?.let { PhaseLine("${it.name} ${dateLabel(LocalDate.parse(it.start))}起") }
+            if (mode == "course") calendar?.pause?.let { rest -> BreakBand(rest, nextTerm, holidays, now.date) }
             FlowRow(Modifier.padding(top = 14.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (mode == "run") {
                     if ("rdone" in present) Swatch(mark.free, null, "已跑")
@@ -680,7 +699,7 @@ private fun goneSummary(events: List<LineEvent>): String {
                     Plain("已跑 ${tally.done}，排上 ${tally.planned}，" + if (tally.need > 0) "还差 ${tally.need} 次" else "够了", 13.5.sp, Ink.muted)
                 }
             }
-            if (hasExams) Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { route.termMode = "exam" }.padding(vertical = 12.dp)) {
+            if (hasExams) Column(Modifier.fillMaxWidth().topHairline(hairline).clickable { route.scale = "exam" }.padding(vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Plain(if (courses > 0) "考试 · 已发现 $courses 门" else "考试 · 最新安排与更新记录", 17.sp, weight = FontWeight.SemiBold)
                     if (fresh) Box(Modifier.padding(start = 6.dp).size(6.dp).clip(RoundedCornerShape(3.dp)).background(mark.warning))
@@ -698,7 +717,7 @@ private fun goneSummary(events: List<LineEvent>): String {
                 }
             }
             if (offGrid.isNotEmpty()) {
-                Plain("不在课表里的课", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+                Plain("实践课程", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
                 offGrid.forEach { item ->
                     Column(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 11.dp)) { Plain(item.name, 14.5.sp, weight = FontWeight.Medium); Plain(Exams.weeksText(item.weeks), 12.5.sp, Ink.muted) }
                 }
@@ -742,6 +761,98 @@ private fun goneSummary(events: List<LineEvent>): String {
             }
             TextAction("取消", onCancel)
             ActionButton(if (added) "已加入" else "加入课表", go = true, enabled = !added, onClick = onAdd)
+        }
+    }
+}
+
+private fun termName(number: Int) = "第${"一二三"[number - 1]}学期"
+private fun lead(days: Long) = when { days < 0 -> "已过"; days == 0L -> "今天"; days == 1L -> "明天"; else -> "$days 天后" }
+
+/** What a day is on the school calendar beyond the term shown: a holiday, a calendar event, a break day, a term day. */
+private fun calendarMark(date: LocalDate, rest: DaySpan?, holidays: List<DaySpan>, term: CalendarTerm?): String {
+    val text = date.toString()
+    return when {
+        holidays.any { it.start <= text && text <= it.end } -> "hol"
+        term?.events?.any { it.start <= text && text <= it.end } == true -> "event"
+        rest != null && rest.start <= text && text <= rest.end -> "brk"
+        term != null && term.start <= text && text <= term.end -> "term"
+        else -> "out"
+    }
+}
+
+/** Whole weeks, Monday first, covering a span of the calendar: the same grid as the term's, for what lies beyond it. */
+@Composable private fun CalendarGrid(from: LocalDate, to: LocalDate, now: LocalDate, numbered: Boolean, markOf: (LocalDate) -> String) {
+    val mark = marks()
+    Row { Spacer(Modifier.width(28.dp)); WEEKDAYS.drop(1).forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Plain(it.drop(1), 11.5.sp, Ink.faint) } } }
+    var monday = from.minusDays(from.dayOfWeek.value - 1L)
+    var index = 1
+    while (monday <= to) {
+        val start = monday
+        Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(28.dp)) { if (numbered) Plain(index.toString(), 11.5.sp, Ink.faint) }
+            (0L until 7L).forEach { offset ->
+                val date = start.plusDays(offset)
+                val kind = if (date < from || date > to) "out" else markOf(date)
+                val shape = RoundedCornerShape(4.dp)
+                if (kind == "out") Spacer(Modifier.weight(1f).height(30.dp))
+                else Box(Modifier.weight(1f).height(30.dp).padding(horizontal = 1.5.dp).clip(shape)
+                    .background(if (kind == "brk") Ink.sunken.copy(alpha = .6f) else Color.Transparent)
+                    .then(if (kind == "event") Modifier.border(1.dp, mark.free.copy(alpha = .6f), shape) else Modifier)
+                    .then(if (date == now) Modifier.border(2.dp, mark.now, shape) else Modifier), contentAlignment = Alignment.Center) {
+                    val label = if (date.dayOfMonth == 1) "${date.monthValue}月" else date.dayOfMonth.toString()
+                    Plain(label, 12.sp, when (kind) { "hol" -> mark.holiday; "event" -> mark.free; "brk" -> Ink.faint; else -> Ink.text }, if (kind == "hol" || kind == "event") FontWeight.SemiBold else FontWeight.Normal)
+                }
+            }
+        }
+        monday = monday.plusDays(7)
+        index++
+    }
+}
+
+/** The break after the term, folded: how long it is and when the next term starts, opening to its weeks. */
+@Composable private fun BreakBand(rest: DaySpan, next: CalendarTerm?, holidays: List<DaySpan>, now: LocalDate) {
+    var open by remember { mutableStateOf(false) }
+    val start = LocalDate.parse(rest.start)
+    val end = LocalDate.parse(rest.end)
+    val days = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, Ink.line, RoundedCornerShape(14.dp))) {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Plain(rest.name, 14.5.sp, weight = FontWeight.SemiBold)
+            Plain("${dateLabel(start)} – ${dateLabel(end)} · $days 天" + (next?.let { " · ${dateLabel(LocalDate.parse(it.start))}开学" } ?: ""), 13.sp, Ink.muted, modifier = Modifier.weight(1f))
+            Plain(if (open) "⌄" else "›", 16.sp, Ink.faint)
+        }
+        if (open) Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 12.dp)) {
+            CalendarGrid(start, next?.let { LocalDate.parse(it.start).plusDays(6) } ?: end, now, false) { calendarMark(it, rest, holidays, next) }
+        }
+    }
+}
+
+/** The academic year's other term, from the school calendar: its weeks, holidays and events, and its break. */
+@Composable private fun OtherTerm(term: CalendarTerm, year: Int, holidays: List<DaySpan>, now: LocalDate) {
+    val mark = marks()
+    val start = LocalDate.parse(term.start)
+    val end = LocalDate.parse(term.end)
+    val untilStart = java.time.temporal.ChronoUnit.DAYS.between(now, start)
+    Column {
+        CalendarGrid(start, end, now, true) { calendarMark(it, null, holidays, term) }
+        term.pause?.let { BreakBand(it, null, holidays, now) }
+        Column(Modifier.fillMaxWidth().padding(top = 18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Plain("$year–${year + 1} 学年${termName(term.number)}", 17.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Plain(if (untilStart > 0) "$untilStart 天后开学" else if (end < now) "已结束" else "", 13.sp, Ink.muted)
+            }
+            Plain("${dateLabel(start)} – ${dateLabel(end)} · ${term.weeks} 周", 14.sp, Ink.muted, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+            (term.holidays + term.events).sortedBy { it.start }.forEach { item ->
+                val event = item in term.events
+                Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SmallTag(lead(java.time.temporal.ChronoUnit.DAYS.between(now, LocalDate.parse(item.start))), (if (event) mark.free else mark.holiday).copy(alpha = .16f), if (event) mark.free else mark.holiday)
+                    Column(Modifier.weight(1f)) {
+                        Plain(item.name, 14.5.sp)
+                        Plain(if (item.start == item.end) dateLabel(LocalDate.parse(item.start)) else "${dateLabel(LocalDate.parse(item.start))} – ${dateLabel(LocalDate.parse(item.end))}", 12.5.sp, Ink.muted)
+                    }
+                }
+            }
+            if (untilStart > 0) Plain("这个学期的课表公布后，课程和考试会出现在这里。", 12.5.sp, Ink.faint, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }
