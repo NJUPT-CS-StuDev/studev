@@ -1,6 +1,6 @@
 import type { Practice, TeachingTerm } from '@/world/facts';
 import { weeksText } from '@/world/exams';
-import { practiceName, practiceProgress, practiceTeachers } from '@/world/practice';
+import { practiceName, practiceProgress, practiceResourceName, practiceTeachers } from '@/world/practice';
 import { dateLabel } from '@/world/time';
 import { Sheet } from '@/world/ui';
 import { CourseResources, Teachers } from './EventSheet';
@@ -17,7 +17,7 @@ export function PracticeSheet({ practice, term, week, onClose }: { practice: Pra
             <div className="kv"><span className="k">进度</span><span className={`v progress ${progress.state}`}>{progress.text}</span></div>
             <Teachers names={practiceTeachers(practice)} />
             <div className="kv"><span className="k">安排</span><span className="v">不占课表格子<small>具体时间、地点和要求以指导老师的安排为准。</small></span></div>
-            <CourseResources course={name.replace(/[“”"]/g, '').replace(/实践$/, '').trim()} />
+            <CourseResources course={practiceResourceName(practice)} />
         </Sheet>
     );
 }

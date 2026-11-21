@@ -32,6 +32,7 @@ import { addressError, endpoint } from '@/ai/model';
 import { append as threadAppend, chain as threadChain, choose as threadChoose, emptyThread, lineage, path as threadPath, siblings, tip, type Thread } from '@/ai/thread';
 import { attendingExams, outsideTimetable, skippedExams } from '@/timetable/model/examAttendance';
 import { EXAM_REMINDERS, examReminderMinutes } from '@/timetable/model/calendar';
+import { practiceName, practiceProgress, practiceResourceName, practiceTeachers } from '@/world/practice';
 import { changeLines, examHistory, examImpact, examTime, examVersionSeen, examVersionTime } from '@/world/exams';
 import { clusters, eventsOn, holidayMap, lastLesson, layers, meetingAround, nextEvent, nextLesson, overlapping, sharingSlot, planRuns, runTally, weekShown, type EventKind, type Timeline } from '@/world/events';
 import { compactPlace, courseName, courseShort, roomLabel } from '@/world/names';
@@ -41,7 +42,7 @@ import { labelRule } from '../../map/model/labels';
 import { placeFloor, routeContext, routingPlace } from '@/world/routes';
 import type { Place } from '../../map/model/space';
 import type { CalendarTerm, ExamRecord, MorningRun, RoomIndex } from '@/world/data';
-import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, ExamChange, ExamVersion, ExamSource, Lab, RoomDay } from '@/world/facts';
+import type { TeachingMeeting, TeachingPeriod, TeachingTerm, Exam, ExamChange, ExamVersion, ExamSource, Lab, RoomDay, Practice } from '@/world/facts';
 
 const read = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T;
 const campusTimes = ['2026-11-16T15:59:59Z', '2026-11-16T16:00:00Z', '2026-12-31T16:00:00Z', '2026-11-17T00:00:00Z', '2026-03-08T10:30:00Z']
@@ -73,6 +74,13 @@ const periods = read<TeachingPeriod[]>(`${base}/teaching/${release.teaching}/per
 const calendar = read<{ terms: CalendarTerm[] }>(`${base}/calendar.json`).terms;
 const run = read<Record<string, MorningRun>>(`${base}/morning-run.json`)[term.term]!;
 const holidays = holidayMap(calendar);
+
+const practice = read<{ id: string; practice: Practice[] }[]>(`${base}/teaching/${release.teaching}/classes.json`)
+    .find(item => item.id === 'B240402')!.practice.filter(item => item.weeks.length > 0).map(item => ({
+        item, title: practiceName(item), teachers: practiceTeachers(item), course: practiceResourceName(item),
+        progress: [null, Math.min(...item.weeks) - 1, Math.min(...item.weeks), Math.max(...item.weeks), Math.max(...item.weeks) + 1]
+            .map(week => ({ week, text: practiceProgress(item.weeks, week).text })),
+    }));
 const classes = ['B240402', 'B250105', 'B230402'];
 const schedules = classes.map(id => {
     const { meetings } = read<{ meetings: TeachingMeeting[] }>(`${base}/teaching/${release.teaching}/classes/${id}.json`);
@@ -365,5 +373,5 @@ const glance = {
 const campus = campusFrame(read<{ buildings: { geometry: import('geojson').Geometry }[]; context: { geometry: import('geojson').Geometry }[] }>(`${base}/space/仙林/model.json`));
 const sun = [['2026-11-14', 480], ['2026-11-14', 720], ['2026-11-14', 1020], ['2026-06-21', 360], ['2026-06-21', 780], ['2026-12-22', 750], ['2028-03-01', 600], ['2026-03-20', 1140]]
     .map(([date, min]) => ({ date, min, ...sunAt(date as string, min as number, campus) }));
-writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, examHistory: examHistoryCases, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, routing, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
+writeFileSync('src/campus/world/parity/golden.json', JSON.stringify({ campusTimes, practice, examHistory: examHistoryCases, frame: campus, sun, glance, materials: { cases: materialCases, counts: materialCounts }, answers, entities, finding, routing, steps: stepCases, memory: memoryCases, settingsSync, thread, chats, assistant: assistantCases, semantics, courses, tasks, labs, places, labels, from, recommend, hoursCases, runDays: line.run!.days, lastLesson: lastDay, around, tones, sharing, source: { release: release.version, teaching: release.teaching }, term, periods, calendar, run, schedules, days, moments, rooms: { days: roomDays, cases: rooms }, edgeCases: { colours, names, compactPlaces, attendanceExams, examAttendance, examReminders } }, null, 1) + '\n');
 console.log(JSON.stringify({ schedules: schedules.length, days: days.length, moments: moments.length, rooms: rooms.length }));

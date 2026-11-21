@@ -9,7 +9,7 @@ public sealed record MaterialNote(string Title, string Url);
 public sealed record CourseMaterials(string Course, string Source, MaterialNote? Note, List<Material> Items);
 
 /** Where a search looks, by the name a person gives it: the search page's channels (src/campus/world/channels.json). */
-public sealed record Channel(string Id, string Label, List<string>? Sources = null, List<string>? Excluded = null, bool Dated = false);
+public sealed record Channel(string Id, string Label, List<string>? Sources = null, List<string>? Excluded = null, bool Dated = false, Dictionary<string, string>? Categories = null);
 
 public static class Lessons
 {

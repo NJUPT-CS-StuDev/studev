@@ -57,9 +57,8 @@ private data class Hit(val raw: JsonObject) {
     fun ranges(key: String) = raw[key]?.jsonArray?.map { it.jsonArray[0].jsonPrimitive.int to it.jsonArray[1].jsonPrimitive.int }.orEmpty()
     val files get() = raw["attachments"]?.jsonArray?.map { it.jsonObject["name"]!!.jsonPrimitive.content to it.jsonObject["url"]!!.jsonPrimitive.content }.orEmpty()
 }
-private data class Answer(
-    val key: String, val hits: List<Hit>, val total: Int, val seconds: Double, val sources: Map<String, String>,
-)
+private data class Answer(val key: String, val hits: List<Hit>, val total: Int, val seconds: Double)
+private data class Facets(val sources: Map<String, String>, val categories: Set<String>)
 
 /** Marks the kernel's ranges, which count Unicode scalar values. */
 private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle): AnnotatedString = buildAnnotatedString {
@@ -81,10 +80,12 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     val channels = remember(context) { Channel.load(context) }
     val repository = state.repository
     val engine = repository?.search
-    var page by remember { mutableIntStateOf(1) }
-    var source by remember { mutableStateOf<String?>(null) }
-    var since by remember { mutableStateOf("") }
-    var byDate by remember { mutableStateOf(false) }
+    val page = route.searchPage
+    val source = route.searchSource
+    val since = route.searchSince
+    val byDate = route.searchByDate
+    val category = route.searchType
+    var facets by remember(repository) { mutableStateOf<Facets?>(null) }
     var answer by remember { mutableStateOf<Answer?>(null) }
     var failure by remember { mutableStateOf<Pair<String, String>?>(null) }
     var courseSheet by remember { mutableStateOf<String?>(null) }
@@ -100,7 +101,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     }
     val browsing = query.isEmpty()
     val live = channel.id == "room" && browsing && route.within == null
-    val key = listOf(query, channel.id, source, since, byDate, page, route.within, engine.hashCode()).toString()
+    val key = listOf(query, channel.id, source, since, byDate, category, page, route.within, engine.hashCode()).toString()
     LaunchedEffect(key) {
         failure = null
         if (query.length == 1 || live || engine == null) { answer = null; return@LaunchedEffect }
@@ -117,6 +118,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
                 since.isNotEmpty() -> { put("publishedFrom", today.minusDays(since.toLong()).toString()); put("publishedTo", today.toString()); put("includeUndated", false) }
                 browsing -> { put("publishedTo", today.toString()); put("includeUndated", true) }
             }
+            category?.let { put("category", it) }
             route.within?.let { put("within", it) }
         }
         try {
@@ -125,7 +127,9 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
                 val item = value.jsonObject
                 item.getValue("id").jsonPrimitive.content to item.getValue("label").jsonPrimitive.content
             }
-            answer = Answer(key, done.results.map(::Hit), done.total, (System.nanoTime() - started) / 1e9, names)
+            val categories = done.filters["categories"]?.jsonArray.orEmpty().map { it.jsonObject.getValue("id").jsonPrimitive.content }.toSet()
+            facets = Facets(names, categories)
+            answer = Answer(key, done.results.map(::Hit), done.total, (System.nanoTime() - started) / 1e9)
         } catch (_: java.io.IOException) {
             answer = null
             failure = key to "搜索需要联网，请稍后重试"
@@ -151,25 +155,38 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
         CampusHeader {
-            SearchField(route.query, "搜索课程、老师、地点、通知、资料", Modifier.focusRequester(searchFocus), height = Tokens.Size.search.dp) { route.query = it; page = 1 }
+            SearchField(route.query, "搜索课程、老师、地点、通知、资料", Modifier.focusRequester(searchFocus), height = Tokens.Size.search.dp) { route.query = it; route.searchPage = 1 }
         }
         Spacer(Modifier.height(6.dp))
-        route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; page = 1 }) } }
+        route.within?.let { place -> Box(Modifier.padding(bottom = 8.dp)) { Chip("在 ${Names.room(place)} 里 ×", { route.within = null; route.searchPage = 1 }) } }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            TextTabs(channels.map { it.id to it.label }, channel.id, gap = 12.dp) { next -> route.scope = next; source = null; if (next != "all" && channels.first { it.id == next }.dated != true) since = ""; byDate = false; page = 1 }
+            TextTabs(channels.map { it.id to it.label }, channel.id, gap = 12.dp) { next ->
+                route.scope = next; route.searchSource = null; route.searchType = null; route.searchByDate = false; route.searchPage = 1
+                if (next != "all" && channels.first { it.id == next }.dated != true) route.searchSince = ""
+            }
         }
         if (live) { RoomsBrowse(state, route, Modifier.weight(1f)); return@Column }
         if (channel.dated || channel.id == "all") Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            SINCE.forEach { (value, label) -> Plain(label, 13.sp, if (since == value) Ink.text else Ink.muted, if (since == value) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.clickable { since = value; page = 1 }) }
+            SINCE.forEach { (value, label) -> Plain(label, 13.sp, if (since == value) Ink.text else Ink.muted, if (since == value) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.clickable { route.searchSince = value; route.searchPage = 1 }) }
         }
         val sources = when {
-            channel.sources.size > 1 -> channel.sources.mapNotNull { id -> (LABELS[id] ?: answer?.sources?.get(id))?.let { id to it } }
+            channel.sources.size > 1 -> channel.sources.mapNotNull { id -> (LABELS[id] ?: facets?.sources?.get(id))?.let { id to it } }
+            channel.dated -> facets?.sources.orEmpty().filterKeys { it !in channel.excluded }.toList()
             else -> emptyList()
         }
-        if (sources.isNotEmpty() || (channel.dated && !browsing)) Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (sources.isNotEmpty()) Pick(sources.firstOrNull { it.first == source }?.second ?: "全部来源", listOf<Pair<String?, String>>(null to "全部来源") + sources) { source = it; page = 1 }
-            if (channel.dated && !browsing) Pick(if (byDate) "按时间" else "按相关性", listOf(false to "按相关性", true to "按时间")) { byDate = it; page = 1 }
-        }
+        val categories = channel.categories.filterKeys { it in facets?.categories.orEmpty() }.toList()
+        if (sources.isNotEmpty() || categories.isNotEmpty() || (channel.dated && !browsing))
+            Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (sources.isNotEmpty()) Pick(sources.firstOrNull { it.first == source }?.second ?: "全部来源", listOf<Pair<String?, String>>(null to "全部来源") + sources) {
+                    route.searchSource = it; route.searchPage = 1
+                }
+                if (categories.isNotEmpty()) Pick(channel.categories[category] ?: "全部类型", listOf<Pair<String?, String>>(null to "全部类型") + categories) {
+                    route.searchType = it; route.searchPage = 1
+                }
+                if (channel.dated && !browsing) Pick(if (byDate) "按时间" else "按相关性", listOf(false to "按相关性", true to "按时间")) {
+                    route.searchByDate = it; route.searchPage = 1
+                }
+            }
         if (query.length == 1) { Plain("再多输入一个字", 14.sp, Ink.faint, modifier = Modifier.padding(vertical = 32.dp)); return@Column }
         LazyColumn(Modifier.weight(1f), state = list) {
             currentAnswer?.takeIf { it.total > 0 }?.let { current ->
@@ -178,7 +195,7 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
             items(hits, key = { it.id }) { hit -> if (hit.source in ENTITIES) EntityRow(hit) { if (hit.source == "courses") courseSheet = hit.title else open(hit.url) } else DocumentRow(hit, ::open) }
             currentAnswer?.takeIf { it.total == 0 }?.let { item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(if (browsing) "这段时间没有内容" else "没有找到“$query”", 14.sp, Ink.faint) } } }
             failure?.takeIf { it.first == key }?.let { (_, message) -> item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { Plain(message, 14.sp, Ink.faint) } } }
-            currentAnswer?.let { current -> item { Pages(page, current.total) { page = it } } }
+            currentAnswer?.let { current -> item { Pages(page, current.total) { route.searchPage = it } } }
         }
     }
     courseSheet?.let { name -> CourseSheet(name, model, route) { courseSheet = null } }

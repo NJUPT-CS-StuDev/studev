@@ -329,6 +329,11 @@ function ExamHistory {
     Press $window '学期' 'open the personal term'
     Press $window { param($e) $e.Current.Name.StartsWith('第一学期') } 'open the published first term'
     Capture 'timetable-first-term'
+    Press $window '算法与数据结构设计' 'open the real practice course details'
+    Find $window (Is $A::NameProperty '不占课表格子') $null 'practice notes match the term' | Out-Null
+    Find $window (Is $A::NameProperty '陈兴国 的课表') $null 'the practice teacher links to a timetable' | Out-Null
+    Capture 'practice-detail'
+    Press $window '关闭' 'return from practice details'
     Press $window { param($e) $e.Current.Name.StartsWith('第二学期') } 'open the published second term'
     Find $window $Pressable { param($e) $e.Current.Name.StartsWith('暑假 ·') } 'the second term has its published summer break' | Out-Null
     Capture 'timetable-second-term'
@@ -511,6 +516,13 @@ try {
     Fill $window { param($e) $e.Current.Name -eq '搜索' } '计算机' 'search 计算机'
     Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '条结果' } 'search results (the search kernel)' 30 | Out-Null
     Alive 'search results'
+    Fill $window { param($e) $e.Current.Name -eq '搜索' } '' 'browse community without a query'
+    Press $window '社区' 'open the shared community search scope'
+    $sources = Find $window (Is $A::NameProperty '来源') { param($e) $e.Current.ControlType -eq [System.Windows.Automation.ControlType]::ComboBox } 'the community sources'
+    $sources.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    Find $A::RootElement (Is $A::NameProperty '南邮历年资料') { param($e) $e.Current.ProcessId -eq $app.Id } 'the exam archive source has its published name' | Out-Null
+    Find $A::RootElement (Is $A::NameProperty '南邮生存手册') { param($e) $e.Current.ProcessId -eq $app.Id } 'the survival guide source has its published name' | Out-Null
+    $sources.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse()
     Press $window '知识' 'the knowledge board'
     FilterSheet
     $input = Find $window $Editable { param($e) $e.Current.Name -eq '筛选课程' } 'the course input' 60

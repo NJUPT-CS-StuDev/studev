@@ -16,6 +16,9 @@ export function practiceName(practice: Practice): string {
     return name.includes('”') && !name.includes('“') ? `“${name}` : name;
 }
 
+/** The course name used by the existing knowledge and materials lookup. */
+export const practiceResourceName = (practice: Practice) => practiceName(practice).replace(/[“”"]/g, '').replace(/实践$/, '').trim();
+
 /** Where the coursework stands in the term: not started, under way, or done. */
 export function practiceProgress(weeks: number[], week: number | null): { state: 'ahead' | 'now' | 'done'; text: string } {
     const first = Math.min(...weeks), last = Math.max(...weeks);

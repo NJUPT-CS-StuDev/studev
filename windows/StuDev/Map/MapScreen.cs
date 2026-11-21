@@ -874,8 +874,22 @@ public sealed partial class MapScreen : Screen
         else
         {
             var head = Kit.Text("此刻可以去", Role.Label, "muted", bold: true); head.Margin = new Thickness(0, 10, 0, 4); body.Children.Add(head);
-            foreach (var s in Places.Recommendations(space.Places, Clock.Weekday(moment.Date), moment.Min, me ?? space.ById[Product.Campus].Centre!))
-                Row("", Value(Places.DisplayName(s.Place, space.ById), string.Join(" · ", new[] { s.Place.Category, s.Status.Open == Open.Unknown ? null : Places.OpenLabel[s.Status.Open], me is not null ? Metres(s.Distance) : null }.Where(x => !string.IsNullOrEmpty(x)))), () => Select(s.Place.Id));
+            foreach (var item in Places.Recommendations(space.Places, Clock.Weekday(moment.Date), moment.Min, me ?? space.ById[Product.Campus].Centre!))
+            {
+                var name = Places.DisplayName(item.Place, space.ById);
+                var information = Kit.Column(3, Kit.Text(name, Role.Body, wrap: true));
+                var details = new WrapRow { Gap = 6 };
+                if (item.Status.Open != Open.Unknown)
+                {
+                    var colour = item.Status.Open switch { Open.Open => "free", Open.Closing => "warning", _ => "faint" };
+                    details.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 5, Height = 5, Fill = Paint.Brush(colour), VerticalAlignment = VerticalAlignment.Center });
+                    details.Children.Add(Kit.Text(Places.OpenLabel[item.Status.Open], Role.Caption, colour));
+                }
+                if (item.Place.Category is { } category) details.Children.Add(Kit.Text(category, Role.Caption, "muted"));
+                if (me is not null) details.Children.Add(Kit.Text(Metres(item.Distance), Role.Caption, "muted"));
+                if (details.Children.Count > 0) information.Children.Add(details);
+                Row("", information, () => Select(item.Place.Id));
+            }
             if (day is not null && reader is not null && roomIndex is not null)
             {
                 var count = roomIndex.Rooms.Where(World.Rooms.Classroom).Count(r => !reader.At(day, r.Id, moment.Min).Busy);

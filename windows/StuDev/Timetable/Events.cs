@@ -5,6 +5,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using StuDev.Data;
 using StuDev.Me;
 using StuDev.Ui;
 using StuDev.World;
@@ -14,7 +15,6 @@ namespace StuDev.Timetable;
 public static class Events
 {
     private static readonly Dictionary<string, string> Kinds = new() { ["class"] = "课", ["lab"] = "实验", ["exam"] = "考试", ["run"] = "早锻炼", ["task"] = "任务" };
-    private static List<CourseMaterials>? materials;
 
     /** Opens a thing from one's own line, or from someone else's when `other` is given: then nothing in it changes one's own. */
     public static void Open(Campus campus, LineEvent e, Moment now, CampusLine? other = null)
@@ -82,13 +82,6 @@ public static class Events
         root.Children.Add(body);
 
         void Meta(string text, bool strong = false) { var t = Kit.Text(text, Role.Label, strong ? "ink" : "muted", bold: strong, wrap: true); t.FontSize = strong ? 14 : 13.5; t.Margin = new Thickness(0, 0, 0, 4); body.Children.Add(t); }
-        UIElement Value(string text, string? small = null, string colour = "ink")
-        {
-            var v = Kit.Column(2, Kit.Text(text, Role.Label, colour, wrap: true));
-            ((TextBlock)v.Children[0]).FontSize = 14;
-            if (small is not null) v.Children.Add(Kit.Text(small, Role.Caption, "muted", wrap: true));
-            return v;
-        }
         void Row(string key, UIElement value, Action? open = null) => body.Children.Add(Kit.Row(key, value, open));
         var when = $"{Clock.Weekdays[Clock.Weekday(e.Date)]} {Clock.DateLabel(e.Date)} · {Clock.Hm(e.Start)}–{Clock.Hm(e.End)}";
         var place = e.Room is not null ? Names.Room(e.Room) : null;
@@ -104,42 +97,13 @@ public static class Events
             body.Children.Add(buttons);
         }
         // Who teaches it, in one row as the classes are: each name opens that teacher's timetable.
-        void Teachers()
-        {
-            var names = e.Teachers.SelectMany(t => t.Split('、')).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList();
-            if (names.Count == 0) return;
-            var row = new WrapRow { Gap = 6 };
-            foreach (var name in names)
-            {
-                var chip = new Tap(Paint.Brush("surfaceSunken"), Paint.Brush("line")) { Content = new TextBlock { Text = name, FontSize = 13.5, Foreground = Paint.Brush("ink") }, Padding = new Thickness(10, 3, 10, 4), CornerRadius = new CornerRadius(12) };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, $"{name} 的课表");
-                chip.Click += (_, _) => See("teacher", name);
-                row.Children.Add(chip);
-            }
-            Row("老师", row);
-        }
+        void Teachers() { if (TeacherRow(e.Teachers, name => See("teacher", name)) is { } names) Row("老师", names); }
         // Where it is and what it is, each opening the whole of it: the room's week, the course's every slot.
         void Place(string key) { if (Names.IsRoom(e.Room)) Row(key, Value($"{Names.Room(e.Room!)} 的课表"), () => See("room", e.Room!)); }
         void Course(string course, string? code = null)
         {
             Row("课程", Value("这门课的全部时段"), () => See("course", course));
-            var holder = new StackPanel(); body.Children.Add(holder);
-            async void FillKnowledge()
-            {
-                try
-                {
-                    var bytes = await campus.Repository!.Bytes("knowledge/knowledge.json");
-                    var index = System.Text.Json.JsonSerializer.Deserialize(bytes, Data.FactsJson.Default.KnowledgeIndex);
-                    if (index is null) return;
-                    var norm = code?.Trim().ToUpperInvariant();
-                    var found = index.Courses.FirstOrDefault(c => (norm is { Length: > 0 } && c.Codes.Contains(norm)) || c.Name == course || c.Former.Contains(course));
-                    if (found is null) return;
-                    var topics = found.Chapters.Sum(ch => ch.Topics.Count);
-                    holder.Children.Add(Kit.Row("知识", Value("查看这门课的知识与真题", $"{found.Chapters.Count} 章 · {topics} 个知识点"), () => { Close(); App.Open("knowledge", $"/knowledge/?course={Uri.EscapeDataString(found.Id)}"); }));
-                }
-                catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or System.Text.Json.JsonException) { }
-            }
-            FillKnowledge();
+            AddKnowledge(body, campus.Repository, course, code);
         }
         void Together(string key, List<string> classes, int? people)
         {
@@ -147,38 +111,7 @@ public static class Events
             var said = $"{(classes.Count > 1 ? $"{classes.Count} 个班" : classes.FirstOrDefault())}{(people is { } n ? $" · {n} 人" : "")}";
             Row(key, Value(said, classes.Count > 1 ? string.Join("、", classes) : null));
         }
-        void Materials(string course)
-        {
-            var holder = new StackPanel(); body.Children.Add(holder);
-            async void Fill()
-            {
-                try { materials ??= await campus.Repository!.Materials(); }
-                catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or System.Text.Json.JsonException) { return; }
-                if (Lessons.MaterialsOf(materials, course) is not { } found) return;
-                var list = new StackPanel { Spacing = 2, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
-                foreach (var kind in Lessons.MaterialKinds)
-                {
-                    var items = found.Items.Where(i => i.Kind == kind).ToList();
-                    if (items.Count == 0) continue;
-                    var k = Kit.Text(kind, Role.Caption, "muted", bold: true); k.Margin = new Thickness(0, 8, 0, 2); list.Children.Add(k);
-                    foreach (var item in items.Take(6))
-                    {
-                        var line = new Grid { ColumnSpacing = 8, Padding = new Thickness(0, 5, 0, 5) };
-                        line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                        var name = Kit.Text(Lessons.Shown(item.Title), Role.Label, "brand"); line.Children.Add(name);
-                        var small = Kit.Text(string.Join(" · ", new[] { item.Term, item.Ext?.ToUpperInvariant() }.Where(s => !string.IsNullOrEmpty(s))), Role.Caption, "faint"); Grid.SetColumn(small, 1); line.Children.Add(small);
-                        var link = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = line, CornerRadius = new CornerRadius(4) };
-                        var url = item.Url; link.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
-                        list.Children.Add(link);
-                    }
-                    if (items.Count > 6) list.Children.Add(Kit.Text($"还有 {items.Count - 6} 份", Role.Caption, "muted"));
-                }
-                var counts = string.Join(" · ", Lessons.KindCounts(found.Items).Select(k => $"{k.Kind} {k.Count}"));
-                holder.Children.Add(Kit.Row("资料", Value(counts), () => list.Visibility = list.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible));
-                holder.Children.Add(list);
-            }
-            Fill();
-        }
+        void Materials(string course) => AddMaterials(body, campus.Repository, course);
         void Danger(string text, Action act, string? small = null) => Row("", Value(text, small, "danger"), act);
 
         if (e.Kind == "run" && line.Run is { } run)
@@ -281,6 +214,132 @@ public static class Events
         if (meeting is not null)
             Danger(meeting.TeachingClass.Id.StartsWith("custom:") ? "删除这门课" : "从我的课表移除", () => { Choices.Hide(campus.Preferences, term, meeting.TeachingClass.Id); Close(); });
         return root;
+    }
+
+
+    public static void OpenPractice(Campus campus, CampusLine line, Practice practice, Moment now)
+    {
+        var week = line.WeekOf(now.Date);
+        var first = line.Term.Weeks.FirstOrDefault(item => item.Week == practice.Weeks.Min());
+        var last = line.Term.Weeks.FirstOrDefault(item => item.Week == practice.Weeks.Max());
+        var dates = first is not null && last is not null
+            ? $"{Clock.DateLabel(Clock.Parse(first.Start))} – {Clock.DateLabel(Clock.Parse(last.End))}" : null;
+        var body = new StackPanel { Padding = new Thickness(20, 12, 20, 20) };
+        body.Children.Add(Kit.Row("周次", Value(Lessons.WeeksText(practice.Weeks), dates)));
+        body.Children.Add(Kit.Row("进度", Value(Practices.Progress(practice.Weeks, week))));
+        if (TeacherRow(Practices.Teachers(practice), name => { App.Window?.Close(); App.Open("timetable", new Who("teacher", name)); }) is { } teachers)
+            body.Children.Add(Kit.Row("老师", teachers));
+        body.Children.Add(Kit.Row("安排", Value("不占课表格子", "具体时间、地点和要求以指导老师的安排为准。")));
+        var name = Practices.ResourceName(practice);
+        AddKnowledge(body, campus.Repository, name);
+        AddMaterials(body, campus.Repository, name);
+        var head = new Border
+        {
+            Background = Paint.Brush("surfaceSunken"),
+            Padding = new Thickness(20, 14, 20, 14),
+            Child = Kit.Text($"实践 · {Practices.Name(practice)}", Role.Heading, wrap: true),
+        };
+        App.Window?.Sheet(Kit.Column(0, head, body), 480);
+    }
+
+    private static FrameworkElement? TeacherRow(IEnumerable<string> teachers, Action<string> open)
+    {
+        var names = teachers.SelectMany(t => t.Split('、')).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList();
+        if (names.Count == 0) return null;
+        var row = new WrapRow { Gap = 6 };
+        foreach (var name in names)
+        {
+            var chip = new Tap(Paint.Brush("surfaceSunken"), Paint.Brush("line"))
+            {
+                Content = Kit.Text(name, Role.Label), Padding = new Thickness(10, 3, 10, 4), CornerRadius = new CornerRadius(12),
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, $"{name} 的课表");
+            chip.Click += (_, _) => open(name);
+            row.Children.Add(chip);
+        }
+        return row;
+    }
+
+    private static async void AddKnowledge(StackPanel body, Repository? repo, string course, string? code = null)
+    {
+        if (repo is null) return;
+        var holder = new StackPanel();
+        body.Children.Add(holder);
+        try
+        {
+            var index = await repo.Read("knowledge/knowledge.json", FactsJson.Default.KnowledgeIndex);
+            var norm = code?.Trim().ToUpperInvariant();
+            var found = index.Courses.FirstOrDefault(c => (norm is { Length: > 0 } && c.Codes.Contains(norm)) || c.Name == course || c.Former.Contains(course));
+            if (found is null) return;
+            var topics = found.Chapters.Sum(ch => ch.Topics.Count);
+            holder.Children.Add(Kit.Row("知识", Value("查看这门课的知识与真题", $"{found.Chapters.Count} 章 · {topics} 个知识点"), () =>
+            {
+                App.Window?.Close();
+                App.Open("knowledge", $"/knowledge/?course={Uri.EscapeDataString(found.Id)}");
+            }));
+        }
+        catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or System.Text.Json.JsonException) { }
+    }
+
+    private static async void AddMaterials(StackPanel body, Repository? repo, string course)
+    {
+        if (repo is null) return;
+        var holder = new StackPanel();
+        body.Children.Add(holder);
+        List<CourseMaterials> materials;
+        try { materials = await repo.Materials(); }
+        catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or System.Text.Json.JsonException) { return; }
+        if (Lessons.MaterialsOf(materials, course) is not { } found) return;
+
+        var list = new StackPanel { Spacing = 2, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
+        foreach (var kind in Lessons.MaterialKinds)
+        {
+            var items = found.Items.Where(i => i.Kind == kind).ToList();
+            if (items.Count == 0) continue;
+            var section = new StackPanel();
+            var label = Kit.Text(kind, Role.Caption, "muted", bold: true);
+            label.Margin = new Thickness(0, 8, 0, 2);
+            section.Children.Add(label);
+            void AddRows(int start, int count)
+            {
+                foreach (var item in items.Skip(start).Take(count))
+                {
+                    var line = new Grid { ColumnSpacing = 8, Padding = new Thickness(0, 5, 0, 5) };
+                    line.ColumnDefinitions.Add(new ColumnDefinition());
+                    line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    line.Children.Add(Kit.Text(Lessons.Shown(item.Title), Role.Label, "brand", wrap: true));
+                    var details = Kit.Text(string.Join(" · ", new[] { item.Term, item.Ext?.ToUpperInvariant() }.Where(s => !string.IsNullOrEmpty(s))), Role.Caption, "faint");
+                    Grid.SetColumn(details, 1);
+                    line.Children.Add(details);
+                    var link = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = line, CornerRadius = new CornerRadius(4) };
+                    link.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri(item.Url));
+                    section.Children.Add(link);
+                }
+            }
+            const int visible = 4;
+            AddRows(0, visible);
+            if (items.Count > visible)
+            {
+                var more = Kit.TextAction($"还有 {items.Count - visible} 份", () =>
+                {
+                    section.Children.RemoveAt(section.Children.Count - 1);
+                    AddRows(visible, items.Count - visible);
+                });
+                section.Children.Add(more);
+            }
+            list.Children.Add(section);
+        }
+        var counts = string.Join(" · ", Lessons.KindCounts(found.Items).Select(k => $"{k.Kind} {k.Count}"));
+        holder.Children.Add(Kit.Row("资料", Value(counts), () => list.Visibility = list.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible));
+        holder.Children.Add(list);
+    }
+
+    private static UIElement Value(string text, string? small = null, string colour = "ink")
+    {
+        var v = Kit.Column(2, Kit.Text(text, Role.Label, colour, wrap: true));
+        ((TextBlock)v.Children[0]).FontSize = 14;
+        if (small is not null) v.Children.Add(Kit.Text(small, Role.Caption, "muted", wrap: true));
+        return v;
     }
 
     private static async Task ExamDetails(StackPanel target, Data.Repository repository, string? klass, Data.Exam exam)

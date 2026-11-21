@@ -259,11 +259,15 @@ public static class TermView
                 right.Children.Add(Card(card, onExams));
             }
             var practice = campus.Classes.FirstOrDefault(c => c.Id == klass)?.Practice ?? [];
-            var offGrid = practice.DistinctBy(p => $"{p.Name}|{string.Join(",", p.Weeks)}").OrderBy(p => p.Weeks.FirstOrDefault()).ThenBy(p => p.Name).ToList();
+            var offGrid = practice.Where(p => p.Weeks.Count > 0).DistinctBy(p => $"{p.Name}|{string.Join(",", p.Weeks)}").OrderBy(p => p.Weeks.FirstOrDefault()).ThenBy(p => p.Name).ToList();
             if (offGrid.Count > 0)
             {
                 right.Children.Add(Pages.Section("实践课程"));
-                foreach (var item in offGrid) right.Children.Add(Row("", item.Name, Lessons.WeeksText(item.Weeks), null));
+                foreach (var item in offGrid)
+                {
+                    var when = $"{Lessons.WeeksText(item.Weeks)} · {Practices.Progress(item.Weeks, line.WeekOf(now.Date))}";
+                    right.Children.Add(Row("", Practices.Name(item), when, () => Events.OpenPractice(campus, line, item, now)));
+                }
             }
             string When(DaySpan item) => item.Start == item.End ? DayHead(Clock.Parse(item.Start)) : $"{Clock.DateLabel(Clock.Parse(item.Start))} – {Clock.DateLabel(Clock.Parse(item.End))}";
             var calendarAhead = (calendar?.Holidays ?? []).Select(h => (h, When(h)))
@@ -391,6 +395,7 @@ public static class TermView
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var chev = Kit.Icon(Icons.Chevron, 14, "faint"); chev.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(chev, 2); grid.Children.Add(chev);
         var tap = new Tap(Paint.Brush("paper"), Paint.Faded("surfaceSunken", .55)) { Content = grid };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, main);
         tap.Click += (_, _) => open();
         return tap;
     }

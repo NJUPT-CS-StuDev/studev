@@ -16,9 +16,8 @@ import { RoomsBrowse } from './RoomsBrowse';
 import '../campus.css';
 
 const PAGE_SIZE = 10;
-const CHANNELS = campusConfig.search.channels as readonly { id: string; label: string; sources?: readonly string[]; excluded?: readonly string[]; dated?: boolean }[];
+const CHANNELS = campusConfig.search.channels as readonly { id: string; label: string; sources?: readonly string[]; excluded?: readonly string[]; dated?: boolean; categories?: Readonly<Record<string, string>> }[];
 const ENTITIES = new Set(Object.keys(campusConfig.search.entities));
-const CATEGORIES: Record<string, string> = { notice_article: '通知', policy: '政策制度', workflow: '办事流程', download: '下载资源', exam: '考试信息', news: '新闻动态', external: '站外链接' };
 /** Labels a crawl carries over from list pages that name no section of the site. */
 const NOT_SECTIONS = new Set(['Direct detail links', '显示更多', '更多', '查看更多', 'More']);
 const SINCE = [['', '全部时间'], ['3', '近三天'], ['7', '近一周'], ['30', '近一月'], ['365', '近一年']] as const;
@@ -188,9 +187,13 @@ export default function SearchApp() {
     const go = (patch: Record<string, string | number | null>) => { set({ page: null, ...patch }, { push: true }); };
     const onPage = (next: number) => { set({ page: next > 1 ? next : null }, { push: true }); scrollTo({ top: 0 }); };
     const sources = channel.sources && channel.sources.length > 1
-        ? channel.sources.map(id => ({ id, label: (campusConfig.search.entities as Record<string, string>)[id] ?? id }))
+        ? channel.sources.flatMap(id => {
+            const label = (campusConfig.search.entities as Record<string, string>)[id] ?? options?.sources.find(item => item.id === id)?.label;
+            return label ? [{ id, label }] : [];
+        })
         : channel.dated ? (options?.sources ?? []).filter(item => !channel.excluded?.includes(item.id)).map(item => ({ id: item.id, label: item.label })) : [];
-    const categories = channel.dated ? (options?.categories ?? []).filter(item => CATEGORIES[item.id]) : [];
+    const categoryLabels = channel.categories ?? {};
+    const categories = (options?.categories ?? []).filter(item => categoryLabels[item.id]);
     let intent = null;
     if (/空教室|自习/.test(query)) intent = <a className="intent" href="/search/?scope=room"><span>看此刻的空教室<small>按楼和楼层，还能待多久</small></span><Chevron /></a>;
     else if (/^(考试|考表|放假|校历)/.test(query)) intent = <a className="intent" href="/?scale=term"><span>看整个学期<small>课、考试和假期在同一张表上</small></span><Chevron /></a>;
@@ -207,7 +210,7 @@ export default function SearchApp() {
                     {hasTime(channel) && <div className="since">{SINCE.map(([value, label]) => <button key={value} className={since === value ? 'on' : ''} onClick={() => go({ since: value || null })}>{label}</button>)}</div>}
                     {(sources.length > 0 || categories.length > 0 || (channel.dated && !browsing)) && <div className="refine">
                         {sources.length > 0 && <select aria-label="来源" value={source ?? ''} onChange={event => go({ source: event.target.value || null })}><option value="">全部来源</option>{sources.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>}
-                        {categories.length > 0 && <select aria-label="类型" value={category ?? ''} onChange={event => go({ type: event.target.value || null })}><option value="">全部类型</option>{categories.map(item => <option key={item.id} value={item.id}>{CATEGORIES[item.id]}</option>)}</select>}
+                        {categories.length > 0 && <select aria-label="类型" value={category ?? ''} onChange={event => go({ type: event.target.value || null })}><option value="">全部类型</option>{categories.map(item => <option key={item.id} value={item.id}>{categoryLabels[item.id]}</option>)}</select>}
                         {channel.dated && !browsing && <select aria-label="排序" value={sort === 'date_desc' ? 'date' : ''} onChange={event => go({ sort: event.target.value || null })}><option value="">按相关性</option><option value="date">按时间</option></select>}
                     </div>}
                     {trimmed.length === 1 ? <div className="empty">再多输入一个字</div> : <>

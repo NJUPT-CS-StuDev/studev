@@ -30,6 +30,11 @@ class Route {
     var query by mutableStateOf("")
     var scope by mutableStateOf("all")
     var searchFocus by mutableStateOf(false)
+    var searchSource by mutableStateOf<String?>(null)
+    var searchSince by mutableStateOf("")
+    var searchType by mutableStateOf<String?>(null)
+    var searchByDate by mutableStateOf(false)
+    var searchPage by mutableStateOf(1)
     /** Search only inside this entity. */
     var within by mutableStateOf<String?>(null)
     var knowledgeCourse by mutableStateOf<String?>(null)
@@ -77,7 +82,14 @@ class Route {
                 knowledgeFilters = listOf("cohort", "major", "grade", "category", "nature", "view", "focus", "q").mapNotNull { key -> param(key)?.let { key to it } }.toMap()
                 tab = "knowledge"
             }
-            "/search" -> { query = param("q").orEmpty(); scope = param("scope") ?: "all"; within = param("within"); tab = "search" }
+            "/search" -> {
+                search(scope = param("scope") ?: "all", query = param("q").orEmpty(), within = param("within"))
+                searchSource = param("source")
+                searchSince = param("since")?.takeIf { it in listOf("3", "7", "30", "365") }.orEmpty()
+                searchType = param("type")
+                searchByDate = param("sort") == "date"
+                searchPage = param("page")?.toIntOrNull()?.takeIf { it in 1..10000 } ?: 1
+            }
             "/ai" -> tab = "ai"
             else -> return false
         }
@@ -88,6 +100,11 @@ class Route {
     }
     fun timetable(type: String, id: String, newScale: String = "week", at: LocalDate? = null) { whoType = type; whoId = id; scale = newScale; day = at; preview = null; tab = "timetable" }
     fun map(place: String? = null, at: Pair<LocalDate, Int>? = null, nav: String? = null, from: String? = null, mode: String = "walk") { this.place = place; this.moment = at; this.nav = nav; this.from = from; navMode = mode.takeIf { it == "bike" } ?: "walk"; floor = null; tab = "map" }
+    fun search(scope: String = "all", query: String = "", within: String? = null, source: String? = null, focus: Boolean = false) {
+        this.scope = scope; this.query = query; this.within = within; searchFocus = focus
+        searchSource = source; searchType = null; searchSince = ""; searchByDate = false; searchPage = 1
+        tab = "search"
+    }
     /** Free rooms are the rooms dimension of search, at a moment. */
-    fun rooms(at: Pair<LocalDate, Int>) { scope = "room"; moment = at; tab = "search" }
+    fun rooms(at: Pair<LocalDate, Int>) { moment = at; search(scope = "room") }
 }

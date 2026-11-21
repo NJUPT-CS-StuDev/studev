@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -520,7 +523,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 }
             }
             item { ActionButton("去这里", go = true, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) { route.nav = building.id } }
-            item { KeyRow(null, "整栋楼的安排", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = building.id; route.tab = "search" }) }
+            item { KeyRow(null, "整栋楼的安排", chevron = true, onClick = { route.search(within = building.id) }) }
             if (inFloor.isNotEmpty()) items(free, key = { it.first.id }) { (room, status) -> RoomRow(room, status) { openRoom(room.id) } }
             else if (floor != null) items(scene?.roomsOf(building.id, floor).orEmpty(), key = { it.id }) { row ->
                 val place = campus.byId[row.id]
@@ -543,7 +546,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                     Plain(open.label + " · 今日 " + (today.joinToString(" · ") { "${it[0]}–${it[1]}" }.ifEmpty { "不开放" }), 14.sp, if (open == Recommendations.Open.Open) mark.free else Ink.muted, modifier = Modifier.padding(vertical = 12.dp))
                 }
                 ActionButton("去这里", go = true, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) { route.nav = selected.id }
-                KeyRow(null, "这里的一切", chevron = true, onClick = { route.query = ""; route.scope = "all"; route.within = selected.id; route.tab = "search" })
+                KeyRow(null, "这里的一切", chevron = true, onClick = { route.search(within = selected.id) })
                 KeyRow(null, "给这里拍张照", "楼门、入口、店面，大家更好找", chevron = true, onClick = { onForm(photoOf(selected, selected.displayName(campus.byId))) })
                 selected.hours?.let { hours -> DayOfWeek.entries.forEach { day ->
                     Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 5.dp)) {
@@ -562,14 +565,32 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item { Plain("此刻可以去", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
         items(spots, key = { it.place.id }) { spot ->
-            Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { route.place = spot.place.id; route.floor = null; onSnap(1) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            val statusColor = when (spot.status) {
+                Recommendations.Open.Open -> mark.free
+                Recommendations.Open.Closing -> mark.warning
+                else -> Ink.faint
+            }
+            Row(Modifier.fillMaxWidth().topHairline(Ink.line)
+                .clickable { route.place = spot.place.id; route.floor = null; onSnap(1) }
+                .padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Ink.sunken), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Place, null, Modifier.size(18.dp), tint = Ink.muted)
+                }
                 Column(Modifier.weight(1f)) {
                     Plain(spot.place.displayName(campus.byId), 14.5.sp, weight = FontWeight.Medium)
-                    Plain(listOfNotNull(spot.place.category, spot.status.label.ifEmpty { null }).joinToString(" · "), 12.5.sp, if (spot.status == Recommendations.Open.Open) mark.free else Ink.muted)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        if (spot.status.label.isNotEmpty()) {
+                            Box(Modifier.size(5.dp).clip(RoundedCornerShape(50)).background(statusColor))
+                            Plain(spot.status.label, 12.5.sp, statusColor)
+                        }
+                        spot.place.category?.let { Plain(it, 12.5.sp, Ink.muted) }
+                    }
                 }
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(16.dp), tint = Ink.faint)
             }
         }
-        if (free != null) item { KeyRow(null, "$free 间空教室", chevron = true, onClick = { route.query = ""; route.scope = "room"; route.within = null; route.tab = "search" }) }
+        if (free != null) item { KeyRow(null, "$free 间空教室", chevron = true, onClick = { route.search(scope = "room") }) }
         else item { Plain("暂无这一天的排课数据", 13.5.sp, Ink.muted, modifier = Modifier.padding(vertical = 10.dp)) }
         item { Plain(if (events.isEmpty()) "校园活动 · 长按地图任意位置，标记讲座、社团活动的地点" else "校园活动", 13.5.sp, Ink.muted, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp)) }
         items(events, key = { "event-" + it.id }) { event ->

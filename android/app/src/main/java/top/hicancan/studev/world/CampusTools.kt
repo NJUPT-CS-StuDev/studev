@@ -15,11 +15,12 @@ data class TaskProposal(val task: Task, val id: String? = null, val expected: St
 fun buildingWord(said: String): String = said.trim().map { c -> "一二三四五六七八九".indexOf(c).let { if (it >= 0) ('1' + it) else c } }.joinToString("").let { if (it.length > 1 && it.endsWith("楼")) it.dropLast(1) else it }
 
 /** Where a search looks, by the name a person gives it: the search page's channels, src/campus/world/channels.json. */
-data class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false) {
+data class Channel(val id: String, val label: String, val sources: List<String> = emptyList(), val excluded: List<String> = emptyList(), val dated: Boolean = false, val categories: Map<String, String> = emptyMap()) {
     companion object {
         fun load(context: android.content.Context) = Json.parseToJsonElement(context.assets.open("world/channels.json").bufferedReader().use { it.readText() }).jsonArray.map { item ->
             val row = item.jsonObject; fun list(key: String) = row[key]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
-            Channel(row.getValue("id").jsonPrimitive.content, row.getValue("label").jsonPrimitive.content, list("sources"), list("excluded"), row["dated"]?.jsonPrimitive?.boolean ?: false)
+            Channel(row.getValue("id").jsonPrimitive.content, row.getValue("label").jsonPrimitive.content, list("sources"), list("excluded"), row["dated"]?.jsonPrimitive?.boolean ?: false,
+                row["categories"]?.jsonObject?.mapValues { (_, value) -> value.jsonPrimitive.content }.orEmpty())
         }
     }
 }

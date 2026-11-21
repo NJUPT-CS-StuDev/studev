@@ -66,9 +66,10 @@ it('uses released building access for real room routes and retains the requested
     } finally { tools.dispose(); }
 });
 
-it('finds the released TCP past-paper passages in exam materials and reads their exact search IDs', async () => {
-    const channel = channels.find(channel => channel.label === '考试资料')!;
-    const answer = await engine.search({ query: '拥塞控制', offset: 0, limit: 6, sort: 'relevance', filters: { sourceIds: channel.sources } });
+it('finds the released TCP past-paper passages under knowledge and reads their exact search IDs', async () => {
+    const channel = channels.find(channel => channel.id === 'knowledge')!;
+    expect(channel.sources).toContain('sections');
+    const answer = await engine.search({ query: '拥塞控制', offset: 0, limit: 6, sort: 'relevance', filters: { sourceIds: ['sections'] } });
     const compiled = answer.results.filter(result => result.source === 'sections');
     expect(compiled.length).toBeGreaterThan(0);
     const tools = new CampusTools();
@@ -81,6 +82,15 @@ it('finds the released TCP past-paper passages in exam materials and reads their
         }
     } finally { tools.dispose(); }
 }, 20000);
+
+it('browses both real community sources through one shared channel', async () => {
+    const community = channels.find(channel => channel.id === 'community')!;
+    for (const source of community.sources!) {
+        const answer = await engine.search({ query: '', offset: 0, limit: 6, sort: 'date_desc', filters: { sourceIds: [source] } });
+        expect(answer.results.length).toBeGreaterThan(0);
+        expect(answer.results.every(result => result.source === source)).toBe(true);
+    }
+});
 
 it('reads every exact TCP topic and material address offered by the course and its reference passages', async () => {
     const said = courseSaid(index, [], '计算机通信与网络');

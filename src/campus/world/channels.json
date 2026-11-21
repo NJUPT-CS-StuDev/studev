@@ -4,7 +4,7 @@
  {"id":"academic","label":"教务","sources":["courses","teachers","classes","teaching-classes","exams"]},
  {"id":"place","label":"地点","sources":["places","rooms"]},
  {"id":"knowledge","label":"知识","sources":["topics","sections"]},
- {"id":"notice","label":"通知","excluded":["courses","teachers","classes","teaching-classes","exams","rooms","places","topics","sections","njupt-general-free-exams","njupt-survival-guide"],"dated":true},
- {"id":"material","label":"考试资料","sources":["sections","njupt-general-free-exams"]},
- {"id":"community","label":"社区","sources":["njupt-survival-guide"]}
+ {"id":"notice","label":"通知","excluded":["courses","teachers","classes","teaching-classes","exams","rooms","places","topics","sections","njupt-general-free-exams","njupt-survival-guide"],"dated":true,
+  "categories":{"notice_article":"通知","policy":"政策制度","workflow":"办事流程","download":"下载资源","exam":"考试信息","news":"新闻动态","external":"站外链接"}},
+ {"id":"community","label":"社区","sources":["njupt-general-free-exams","njupt-survival-guide"]}
 ]

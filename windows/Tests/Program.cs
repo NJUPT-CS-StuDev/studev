@@ -49,6 +49,15 @@ foreach (var marker in new[] { "<｜DSML｜", "<｜｜DSML｜｜", "< | | DSML |
     var spelled = StuDev.Ai.Assistant.NativeCalls($"{marker}function_calls>{marker}invoke name=\"read\">{marker}parameter name=\"id\" string=\"true\">a.md{close}parameter>{marker}parameter name=\"ids\" string=\"false\">[\"x\"]{close}parameter>{close}invoke>{close}function_calls>");
     Equal("native tool markup", spelled.Select(call => new { name = (string)call["function"]!["name"]!, arguments = JsonNode.Parse((string)call["function"]!["arguments"]!) }), JsonNode.Parse("""[{"name":"read","arguments":{"id":"a.md","ids":["x"]}}]"""));
 }
+foreach (var row in golden["practice"]!.AsArray().OfType<JsonObject>())
+{
+    var item = Read<Practice>(row["item"]!);
+    Equal("practice title", Practices.Name(item), row["title"]);
+    Equal("practice teachers", Practices.Teachers(item).ToList(), row["teachers"]);
+    Equal("practice resources", Practices.ResourceName(item), row["course"]);
+    foreach (var entry in row["progress"]!.AsArray().OfType<JsonObject>())
+        Equal("practice progress", Practices.Progress(item.Weeks, (int?)entry["week"]), entry["text"]);
+}
 foreach (var test in golden["examHistory"]!["times"]!.AsArray()) Equal("exam time", Exams.Time((string)test!["value"]!), test["text"]);
 foreach (var test in golden["examHistory"]!["comparisons"]!.AsArray()) Equal("exam before and after", Exams.ChangeLines(Read<ExamChange>(test!["change"]!)), test["lines"]);
 foreach (var test in golden["examHistory"]!["classes"]!.AsArray())

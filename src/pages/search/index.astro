@@ -1,7 +1,9 @@
 ---
 import SiteLayout from '../../site/SiteLayout.astro';
 import SearchApp from '../../campus/search/SearchApp';
+import product from '../../../product.json';
 ---
 <SiteLayout title="搜索 — StuDev" description="搜南京邮电大学的课程、老师、班级、教室、地点、通知和学习资料。" active="search">
+  <link slot="head" rel="preconnect" href={product.campusOrigin} crossorigin="anonymous" />
   <SearchApp client:only="react" />
 </SiteLayout>

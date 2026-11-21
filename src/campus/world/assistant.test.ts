@@ -19,7 +19,7 @@ it('keeps public teaching time independent of a class and distinguishes unavaila
 describe('the model response protocol', () => {
     it('ends lookup rounds without advertising tools, retaining the actual tool results as evidence', () => {
         const messages = [{ role: 'user', content: '计网里 TCP 拥塞控制有哪些真题考过？' },
-            { role: 'assistant', content: null, tool_calls: [{ id: 'look', type: 'function', function: { name: 'search', arguments: '{"query":"拥塞控制","in":"考试资料"}' } }] },
+            { role: 'assistant', content: null, tool_calls: [{ id: 'look', type: 'function', function: { name: 'search', arguments: '{"query":"拥塞控制","in":"知识"}' } }] },
             { role: 'tool', tool_call_id: 'look', content: '[{"id":"sections/a.md#计算-3","title":"计算 3"}]' }];
         const request = completionRequest('deepseek-flash', messages, situation, 0, true);
         expect(request).not.toHaveProperty('tools');

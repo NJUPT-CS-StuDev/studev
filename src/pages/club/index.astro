@@ -10,19 +10,47 @@ const lists = await Promise.all(sections.map(async ([key, label]) => {
     .sort((a, b) => (a.data.order ?? 1e9) - (b.data.order ?? 1e9) || (b.data.pubDate ?? '').localeCompare(a.data.pubDate ?? ''));
   return { key, label, entries: entries.slice(0, 5) };
 }));
+// A date as people read it: the day within this year, the month for older pieces.
+const thisYear = new Date().getFullYear();
+const dayText = (iso: string) => {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return y === thisYear ? `${m}月${d}日` : `${y}年${m}月`;
+};
+const line = (path: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+const ICONS: Record<string, string> = {
+  study: line('<path d="M3 8l9-4 9 4-9 4z"/><path d="M7 10v5c3 2 7 2 10 0v-5"/>'),
+  develop: line('<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13 6l-2 12"/>'),
+  life: line('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'),
+  history: line('<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5M12 8v4l3 2"/>'),
+  about: line('<circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/>'),
+  forms: line('<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/>'),
+};
 ---
 <SiteLayout title="学生发展中心 — StuDev" description="学习、开发、生活专栏，历届成员与活动，报名与表单。" active="club">
   <div class="club-home">
-    <h1>南邮计软网安学生发展中心</h1>
-    <p>计算机学院 · 软件学院 · 网络空间安全学院</p>
+    <header class="club-hero">
+      <h1>南邮计软网安学生发展中心</h1>
+      <p>计算机学院 · 软件学院 · 网络空间安全学院</p>
+    </header>
     {PRODUCT_CONFIG.SHOW_RECRUITMENT && <RecruitmentGroup />}
-    {lists.map(({ key, label, entries }) => <>
-      <h2>{label}<a href={`/${key}/`}>全部</a></h2>
-      {entries.map((entry) => <a class="art" href={`/${key}/${entry.id}/`}><b>{entry.data.shortTitle ?? entry.data.title}</b>{entry.data.description && <span>{entry.data.description}</span>}</a>)}
-    </>)}
-    <h2>组织</h2>
-    <a class="art" href="/history/"><b>历史</b><span>每个学期的成员与活动。</span></a>
-    <a class="art" href="/about/"><b>关于</b><span>我们是谁，在做什么。</span></a>
-    <a class="art" href="/forms/"><b>表单</b><span>报名和收集。</span></a>
+    <div class="club-sections">
+      {lists.map(({ key, label, entries }) => (
+        <section class:list={['club-sec', key]}>
+          <h2><span class="club-mark" aria-hidden="true" set:html={ICONS[key]} />{label}<a href={`/${key}/`}>全部 ›</a></h2>
+          {entries[0] && <a class="club-feature" href={`/${key}/${entries[0].id}/`}>
+            <b>{entries[0].data.shortTitle ?? entries[0].data.title}</b>
+            {entries[0].data.description && <span>{entries[0].data.description}</span>}
+            {entries[0].data.pubDate && <time datetime={entries[0].data.pubDate}>{dayText(entries[0].data.pubDate)}</time>}
+          </a>}
+          {entries.slice(1).map((entry) => <a class="club-row" href={`/${key}/${entry.id}/`}><b>{entry.data.shortTitle ?? entry.data.title}</b>{entry.data.pubDate && <time datetime={entry.data.pubDate}>{dayText(entry.data.pubDate)}</time>}</a>)}
+        </section>
+      ))}
+    </div>
+    <h2 class="club-org-title">组织</h2>
+    <div class="club-org">
+      <a href="/history/"><span class="club-mark" aria-hidden="true" set:html={ICONS.history} /><b>历史</b><span>每个学期的成员与活动</span></a>
+      <a href="/about/"><span class="club-mark" aria-hidden="true" set:html={ICONS.about} /><b>关于</b><span>我们是谁，在做什么</span></a>
+      <a href="/forms/"><span class="club-mark" aria-hidden="true" set:html={ICONS.forms} /><b>表单</b><span>报名和收集</span></a>
+    </div>
   </div>
 </SiteLayout>

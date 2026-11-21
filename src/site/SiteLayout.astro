@@ -22,13 +22,12 @@ const tabs = [
   { href: '/search/', label: '搜索', key: 'search' },
   { href: '/ai/', label: 'AI', key: 'ai' },
 ];
-const clubKeys = ['club', 'study', 'develop', 'life', 'history', 'about'];
+const clubKeys = ['club', 'study', 'develop', 'life', 'history'];
 const clubNav = [
   { href: '/study/', label: '学习', key: 'study' },
   { href: '/develop/', label: '开发', key: 'develop' },
   { href: '/life/', label: '生活', key: 'life' },
   { href: '/history/', label: '历史', key: 'history' },
-  { href: '/about/', label: '关于', key: 'about' },
 ];
 const favicon = await getImage({ src: logo, width: 48, height: 48, format: 'png' });
 const canonical = new URL(Astro.url.pathname, Astro.site);

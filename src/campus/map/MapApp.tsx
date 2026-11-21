@@ -62,6 +62,16 @@ const buildingOfPlace = (space: Space, place: Place | undefined): Place | null =
     return current ?? null;
 };
 
+/** A small mark for the kind of place, drawn like the site's other line icons. */
+function placeIcon(category: string | null | undefined) {
+    const kind = category ?? '';
+    if (kind.includes('食堂') || kind.includes('餐')) return <svg viewBox="0 0 24 24"><path d="M5 11h14a7 7 0 0 1-14 0zM8 3v4M12 3v4M16 3v4" /></svg>;
+    if (kind.includes('超市') || kind.includes('便利') || kind.includes('店')) return <svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2" /></svg>;
+    if (kind.includes('图书') || kind.includes('阅览')) return <svg viewBox="0 0 24 24"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" /></svg>;
+    if (kind.includes('运动') || kind.includes('体育') || kind.includes('场')) return <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></svg>;
+    return <svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>;
+}
+
 export default function MapApp() {
     const { params, set } = useUrl();
     const wide = useWide();
@@ -381,7 +391,9 @@ export default function MapApp() {
             <div className="msum">此刻可以去</div>
             {recommendations(world.space.places, at, (me as [number, number] | null) ?? world.space.byId.get(PRODUCT_CONFIG.CAMPUS.id)!.centre!).map(({ place, distance, status }) => (
                 <button key={place.id} className="rrow" onClick={() => set({ place: place.id }, { push: true })}>
-                    <span className="m"><span className="a">{displayName(place, world.space.byId)}</span><span className="b">{[place.category, status.state === 'unknown' ? null : openingLabel[status.state], me ? metres(distance) : null].filter(Boolean).join(' · ')}</span></span>
+                    <i className="rrow-icon" aria-hidden="true">{placeIcon(place.category)}</i>
+                    <span className="m"><span className="a">{displayName(place, world.space.byId)}</span><span className="b">{status.state !== 'unknown' && <span className={`open-dot ${status.state}`}>{openingLabel[status.state]}</span>}{[place.category, me ? metres(distance) : null].filter(Boolean).join(' · ')}</span></span>
+                    <Chevron />
                 </button>
             ))}
             {day ? <a className="kv" href={`/search/?scope=room${isNow ? '' : `&t=${momentText(moment)}`}`}><span className="v">{freeRooms.length} 间空教室</span><Chevron /></a> : <div className="msum">暂无这一天的排课数据</div>}

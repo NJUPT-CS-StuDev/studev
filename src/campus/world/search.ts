@@ -5,14 +5,21 @@ let shared: { base: string; client: SearchClient } | null = null;
 
 /** The session's one search engine: the search page and the assistant's tools share it, so the index is read and
  * decoded once. A new campus release moves the bundle; the engine of the old one is let go. */
-export async function searchClient(): Promise<SearchClient> {
-    await releaseReady;
-    const base = APP_CONFIG.DATA_URLS.SEARCH;
+function openSearch(base: string): SearchClient {
     if (shared?.base !== base) {
         shared?.client.dispose();
         shared = { base, client: new SearchClient({ baseUrl: base }) };
     }
     return shared.client;
+}
+
+export async function searchClient(): Promise<SearchClient> {
+    // The bundled or saved pointer is already known. Start its index read while the
+    // current pointer is being discovered, and select the current engine when that finishes.
+    const first = openSearch(APP_CONFIG.DATA_URLS.SEARCH);
+    void first.initialize().catch(() => undefined);
+    await releaseReady;
+    return openSearch(APP_CONFIG.DATA_URLS.SEARCH);
 }
 
 /** Readies the engine while the browser is idle, so the first search does not wait for the index. Skipped when the

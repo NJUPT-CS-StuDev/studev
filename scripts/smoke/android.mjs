@@ -625,17 +625,24 @@ for (const [scale, name] of [['天', 'day'], ['周', 'week'], ['学期', 'term']
 }
 await tap('学期', 'open the academic year calendar');
 await tap(node => node.text.startsWith('第一学期'), 'open the published first term');
+await scrollTap(node => node.text.includes('算法与数据结构设计') || node.words.includes('算法与数据结构设计'), 'open the real practice course details');
+await find('不占课表格子', 'practice notes match the term');
+await find(node => node['content-desc'] === '陈兴国 的课表', 'the practice teacher links to a timetable');
+capture('practice-detail');
+adb('shell', 'input', 'keyevent', '4');
+await find(node => node.text.startsWith('第一学期'), 'return from practice details');
 capture('timetable-first-term');
 await tap(node => node.text.startsWith('第二学期'), 'open the published second term');
 await scrollFind(node => node.text.includes('暑假'), 'the second term has its published summer break');
 capture('timetable-second-term');
 await examHistory();
 await searchNavigation();
-await link('/search/?scope=material', 'open the exam materials scope');
-await find(node => node.text.includes('全部来源'), 'exam materials resolves the names of its sources', 30);
-await tap(node => node.text.includes('全部来源'), 'show the exam materials sources');
+await link('/search/?scope=community', 'open the community scope');
+await find(node => node.text.includes('全部来源'), 'community resolves the names of its sources', 30);
+await tap(node => node.text.includes('全部来源'), 'show the community sources');
 await find('南邮历年资料', 'the external exam archive has its published source name');
-await link('/', 'return to the timetable after browsing exam materials');
+await find('南邮生存手册', 'the survival guide has its published source name');
+await link('/', 'return to the timetable after browsing community sources');
 await managedCourses();
 await mapFloors();
 await unknownRoomDay();

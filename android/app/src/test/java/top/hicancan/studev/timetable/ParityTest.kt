@@ -41,6 +41,21 @@ class ParityTest {
             assertEquals(expected.getValue("min").jsonPrimitive.int, at.hour * 60 + at.minute)
         }
     }
+    @Test fun practiceDetailsMatchTheWeb() {
+        golden.getValue("practice").jsonArray.forEach { value ->
+            val row = value.jsonObject
+            val item = json.decodeFromJsonElement<Practice>(row.getValue("item"))
+            assertEquals(row.getValue("title").jsonPrimitive.content, Practices.name(item))
+            assertEquals(json.decodeFromJsonElement<List<String>>(row.getValue("teachers")), Practices.teachers(item))
+            assertEquals(row.getValue("course").jsonPrimitive.content, Practices.resources(item))
+            row.getValue("progress").jsonArray.forEach { entry ->
+                val progress = entry.jsonObject
+                assertEquals(progress.getValue("text").jsonPrimitive.content,
+                    Practices.progress(item.weeks, progress.getValue("week").jsonPrimitive.intOrNull))
+            }
+        }
+    }
+
     @Test fun examHistoryMatchesClassImpactAndHistoricalDatePrecision() {
         val cases = golden.getValue("examHistory").jsonObject
         cases.getValue("comparisons").jsonArray.forEach { item -> val test = item.jsonObject; assertEquals(test.getValue("lines").jsonArray.map { it.jsonPrimitive.content }, Exams.changeLines(json.decodeFromJsonElement<ExamChange>(test.getValue("change")))) }

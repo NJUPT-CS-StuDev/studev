@@ -74,6 +74,11 @@ internal static class SearchTest
         using var reopened = new NativeSearch(repository);
         var again = await reopened.Page("101", 10, "relevance", new JsonObject(), 0, CancellationToken.None);
         equal("a new engine reads the cached release", again.Results.Select(r => r["url"]!.GetValue<string>()), new JsonArray(answer.Results.Select(r => (JsonNode?)r["url"]!.DeepClone()).ToArray()));
+        foreach (var source in new[] { "njupt-general-free-exams", "njupt-survival-guide" })
+        {
+            var community = await reopened.Page("", 5, "date_desc", new JsonObject { ["sourceIds"] = new JsonArray(source) }, 0, CancellationToken.None);
+            equal("community filter: " + source, community.Results.Count > 0 && community.Results.All(item => (string?)item["source"] == source), JsonValue.Create(true));
+        }
     }
 
     private sealed class Packs : IAsyncDisposable

@@ -121,7 +121,7 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
     const courses = new Set(line.exams.map(exam => exam.course.code ?? exam.course.name)).size;
     const [openPractice, setOpenPractice] = useState<Practice | null>(null);
     const nowWeek = line.term.weeks.find(week => week.start <= now.date && now.date <= week.end)?.week ?? null;
-    const offGrid = [...new Map(practice.map(item => [`${item.name}|${item.weeks.join()}`, item])).values()].sort((left, right) => left.weeks[0]! - right.weeks[0]! || left.name.localeCompare(right.name));
+    const offGrid = [...new Map(practice.filter(item => item.weeks.length > 0).map(item => [`${item.name}|${item.weeks.join()}`, item])).values()].sort((left, right) => left.weeks[0]! - right.weeks[0]! || left.name.localeCompare(right.name));
     const when = (item: { start: string; end: string }) => item.start === item.end ? dayHead(item.start) : `${dateLabel(item.start)} – ${dateLabel(item.end)}`;
     // The whole term's calendar: what is still to come leads, and what has passed (运动会, 校庆) folds beneath it.
     const calendarItems = [

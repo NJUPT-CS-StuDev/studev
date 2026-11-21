@@ -72,11 +72,19 @@ async function timetableNavigation(page, name) {
         assert.equal(await tab.getAttribute('aria-selected'), 'true');
         await screenshot(page, name + '-' + term);
     }
+    await terms.filter({ hasText: '第一学期' }).click();
+    await page.getByRole('button', { name: /算法与数据结构设计/ }).click();
+    const practice = page.getByRole('dialog');
+    await practice.getByText('不占课表格子').waitFor();
+    await practice.getByRole('link', { name: '陈兴国 的课表' }).waitFor();
+    await screenshot(page, name + '-practice-detail');
+    await page.keyboard.press('Escape');
+    await practice.waitFor({ state: 'hidden' });
     await views.getByText('考试', { exact: true }).click();
     await page.locator('.xlist').waitFor({ state: 'visible' });
     assert.equal(await terms.count(), 0, 'the exam page has no semester switch');
     assert.equal(new URL(page.url()).searchParams.get('scale'), 'exam');
-    log(name + ': five views, both real calendar terms, and the independent exam page');
+    log(name + ': five views, both real calendar terms, practice details, and the independent exam page');
 }
 async function examsHistory(page, name) {
     const before = await prefs(page);
@@ -172,6 +180,14 @@ async function searchRanges(page, name) {
         assert(requests.every(request => /^bytes=\d+-\d*$/.test(request.range ?? '')), 'neither the page nor its worker fetches a whole pack for an online range query');
         assert(responses.every(response => response.status === 206 && /^bytes \d+-\d+\/\d+$/.test(response.range ?? '')), 'range responses preserve their actual byte boundaries');
         assert.equal(await cachedPacks(), 0, 'online searches never cache a complete 16 MB pack as a side effect');
+        await goto(page, '/search/?scope=community');
+        const source = page.getByRole('combobox', { name: '来源', exact: true });
+        await source.getByRole('option', { name: '南邮生存手册', exact: true }).waitFor({ state: 'attached' });
+        for (const label of ['南邮历年资料', '南邮生存手册']) {
+            await source.selectOption({ label });
+            await page.locator('.hits').getByText(label, { exact: true }).first().waitFor();
+        }
+        assert.equal(await page.getByRole('tab', { name: '考试资料', exact: true }).count(), 0);
         log(`${name}: active service worker, three successive real searches and ${responses.length} partial pack responses without a whole-pack download`);
     } finally {
         context.off('request', onRequest); context.off('response', onResponse);

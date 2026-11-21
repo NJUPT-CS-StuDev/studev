@@ -35,6 +35,7 @@ public sealed partial class SearchScreen : Screen
     private CancellationTokenSource? running;
     private (List<JsonObject> Results, int Total, double Seconds)? answer;
     private string? failure;
+    private JsonObject? facets;
     private Moment? roomsAt;
     private string roomsCampus = Campuses[0];
     private string? roomsBuilding;
@@ -67,7 +68,7 @@ public sealed partial class SearchScreen : Screen
             within = query["within"]; sourceOnly = query["source"]; category = query["type"]; byDate = query["sort"] == "date";
             box.Text = query["q"] ?? ""; page = int.TryParse(query["page"], out var requested) && requested > 0 ? requested : 1; Run(); Draw();
         }
-        else if (argument is "course") { channel = Channels.First(item => item.Id == "academic"); within = sourceOnly = category = null; since = ""; byDate = false; box.Text = ""; page = 1; Run(); Draw(); }
+        else if (argument is "course") { channel = Channels.First(item => item.Id == "academic"); within = category = null; sourceOnly = "courses"; since = ""; byDate = false; box.Text = ""; page = 1; Run(); Draw(); }
         else if (argument is ValueTuple<string, Moment> { Item1: "rooms" } rooms) { channel = Channels.First(c => c.Id == "room"); within = sourceOnly = category = null; since = ""; byDate = false; box.Text = ""; roomsAt = rooms.Item2; Draw(); }
         else if (argument is ValueTuple<string, string> { Item1: "query" } query) { box.Text = query.Item2; }
         // Opened with nothing typed, it shows what is newest, as the web and Android do.
@@ -100,6 +101,7 @@ public sealed partial class SearchScreen : Screen
         {
             search?.Dispose(); search = null;
             searchRepository = campus.Repository;
+            facets = null;
             roomIndex = null; reader = null; roomDays.Clear(); roomFailure = null;
         }
         var query = box.Text.Trim();
@@ -116,6 +118,7 @@ public sealed partial class SearchScreen : Screen
             // Nothing typed lists the newest first; a query, the best match first.
             var done = await search.Page(query, PageSize, byDate || query.Length == 0 ? "date_desc" : "relevance", Filters(), (page - 1) * PageSize, cancel);
             if (cancel.IsCancellationRequested) return;
+            facets = done.Filters;
             answer = (done.Results, done.Total, started.Elapsed.TotalSeconds);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested) { return; }
@@ -137,7 +140,7 @@ public sealed partial class SearchScreen : Screen
     private void Draw()
     {
         chips.Children.Clear();
-        var tabs = Kit.Tabs(Channels.Select(c => (c.Id, c.Label)).ToList(), channel.Id, id => { channel = Channels.First(c => c.Id == id); sourceOnly = category = null; if (!channel.Dated && channel.Id != "all") since = ""; page = 1; Run(); Draw(); }, 16);
+        var tabs = Kit.Tabs(Channels.Select(c => (c.Id, c.Label)).ToList(), channel.Id, id => { channel = Channels.First(c => c.Id == id); sourceOnly = category = null; byDate = false; if (!channel.Dated && channel.Id != "all") since = ""; page = 1; Run(); Draw(); }, 16);
         tabs.Margin = new Thickness(0, 12, 0, 0);
         chips.Children.Add(tabs);
         body.Children.Clear();
@@ -151,6 +154,7 @@ public sealed partial class SearchScreen : Screen
             body.Children.Add(row);
         }
         var query = box.Text.Trim();
+        DrawFilters(query.Length > 1);
         if (query.Length == 1) { body.Children.Add(Pages.Empty("再多输入一个字")); return; }
         if (answer is { Total: > 0 } a)
         {
@@ -172,6 +176,43 @@ public sealed partial class SearchScreen : Screen
             if (page < last) nav.Children.Add(Kit.Button("下一页", () => { page++; Run(); }, Icons.Chevron));
             body.Children.Add(nav);
         }
+    }
+
+    private void DrawFilters(bool searching)
+    {
+        var names = (facets?["sources"] as JsonArray)?.OfType<JsonObject>()
+            .GroupBy(item => item["id"]!.GetValue<string>())
+            .ToDictionary(group => group.Key, group => group.First()["label"]!.GetValue<string>())
+            ?? new Dictionary<string, string>();
+        var slots = new WrapRow { Gap = 8, Margin = new Thickness(0, 8, 0, 0) };
+        var scope = channel.Sources;
+        var sources = scope is { Count: > 1 }
+            ? scope.Where(names.ContainsKey).Select(id => (id, names[id])).ToList()
+            : channel.Dated ? names.Where(item => channel.Excluded?.Contains(item.Key) != true).Select(item => (item.Key, item.Value)).ToList() : [];
+        if (sources.Count > 0)
+            slots.Children.Add(Filter("来源", "全部来源", sourceOnly, sources, selected => { sourceOnly = selected; page = 1; Run(); }));
+
+        if (channel.Dated)
+        {
+            var live = (facets?["categories"] as JsonArray)?.OfType<JsonObject>().Select(item => item["id"]!.GetValue<string>()).ToHashSet() ?? [];
+            var categories = channel.Categories?.Where(item => live.Contains(item.Key)).Select(item => (item.Key, item.Value)).ToList() ?? [];
+            if (categories.Count > 0)
+                slots.Children.Add(Filter("类型", "全部类型", category, categories, selected => { category = selected; page = 1; Run(); }));
+            if (searching)
+                slots.Children.Add(Filter("排序", "按相关性", byDate ? "date" : null, [("date", "按时间")], selected => { byDate = selected == "date"; page = 1; Run(); }));
+        }
+        if (slots.Children.Count > 0) body.Children.Add(slots);
+    }
+
+    private static ComboBox Filter(string name, string all, string? active, List<(string Id, string Label)> choices, Action<string?> select)
+    {
+        var control = new ComboBox { MinWidth = 132, MaxWidth = 230 };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, name);
+        control.Items.Add(new ComboBoxItem { Content = all });
+        foreach (var (id, label) in choices) control.Items.Add(new ComboBoxItem { Content = label, Tag = id });
+        control.SelectedIndex = choices.FindIndex(item => item.Id == active) + 1;
+        control.SelectionChanged += (_, _) => select((control.SelectedItem as ComboBoxItem)?.Tag as string);
+        return control;
     }
 
     private static Tap Plain(string label, bool on, Action act)

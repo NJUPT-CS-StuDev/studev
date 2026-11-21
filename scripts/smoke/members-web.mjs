@@ -39,14 +39,15 @@ try {
         await page.waitForFunction(()=>document.querySelectorAll('.p-member-row').length===50);
         assert.equal(await page.locator('[data-members-count]').textContent(),'51 位成员');
         await page.locator('[data-me]').click();
-        await page.getByRole('link',{name:'成员 查看头像、昵称与签名'}).waitFor();
+        await page.getByRole('link', { name: /^成员\s/ }).filter({ hasText: '昵称与签名' }).waitFor();
         await page.keyboard.press('Escape');
         await page.getByRole('button',{name:'加载更多',exact:true}).click();
         await page.waitForFunction(()=>document.querySelectorAll('.p-member-row').length===51);
         assert(await page.getByRole('button',{name:'加载更多',exact:true}).isHidden());
         await page.locator('.p-member-row').first().click();
-        await page.locator('[data-members-profile] h1').waitFor();
-        assert.equal(await page.locator('[data-members-profile] h1').textContent(),members[0].nickname);
+        const heading = page.getByRole('heading', { name: members[0].nickname, exact: true });
+        await heading.waitFor();
+        assert.equal(await heading.textContent(), members[0].nickname);
         assert.equal(await page.locator('[data-members-profile] script').count(),0);
         const text=await page.locator('body').innerText();
         for(const privateValue of ['PRIVATE_REAL_NAME','PRIVATE_STUDENT_ID','123456789','private@example.invalid'])assert(!text.includes(privateValue));

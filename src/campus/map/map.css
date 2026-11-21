@@ -83,6 +83,16 @@
   .rrow .a,.rrow .b{display:block}
   .rrow .a{font-size:14.5px;font-weight:500;font-variant-numeric:tabular-nums}
   .rrow .b{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .rrow{gap:12px;margin:0 -10px;padding:10px;border-radius:12px;border-top:0;width:calc(100% + 20px)}
+  .rrow+.rrow{box-shadow:0 -1px 0 var(--line)}
+  @media (hover:hover){.rrow:hover{background:var(--surface-sunken)}}
+  .rrow-icon{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:10px;background:var(--surface-sunken);color:var(--muted)}
+  .rrow-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .rrow>svg{flex:none;width:14px;height:14px;color:var(--faint)}
+  .open-dot{display:inline-flex;align-items:center;gap:5px;margin-right:6px;font-weight:500}
+  .open-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .open-dot::after{content:"·";margin-left:6px;color:var(--faint);font-weight:400}
+  .open-dot.open{color:var(--free)}.open-dot.closing{color:var(--exam)}.open-dot.closed{color:var(--faint)}
   .rrow .r{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
   .sw{width:3px;height:28px;border-radius:2px;flex:none;background:var(--free)}
   .sw.mid{opacity:.55}.sw.short{opacity:.25}

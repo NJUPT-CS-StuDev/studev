@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
+import top.hicancan.studev.data.Practice
 import top.hicancan.studev.me.PersonalSettings
 import top.hicancan.studev.app.marks
 import top.hicancan.studev.world.*
@@ -100,6 +101,26 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
                 Surface({ onOpen(name) }, shape = RoundedCornerShape(50), color = Ink.sunken, modifier = Modifier.semantics { contentDescription = "$name 的课表" }) {
                     Plain(name, 13.5.sp, Ink.text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                 }
+            }
+        }
+    }
+}
+
+@Composable fun PracticeSheet(practice: Practice, line: CampusLine, week: Int?, state: AcademicState, route: Route, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val first = line.term.weeks.firstOrNull { it.week == practice.weeks.min() }
+    val last = line.term.weeks.firstOrNull { it.week == practice.weeks.max() }
+    val course = Practices.resources(practice)
+    PlainSheet("实践 · ${Practices.name(practice)}", onClose, head = Ink.sunken to Ink.text) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            val dates = if (first != null && last != null) "${dateLabel(java.time.LocalDate.parse(first.start))} – ${dateLabel(java.time.LocalDate.parse(last.end))}" else null
+            KeyRow("周次", Exams.weeksText(practice.weeks), dates)
+            KeyRow("进度", Practices.progress(practice.weeks, week))
+            TeacherRow(Practices.teachers(practice)) { onClose(); route.timetable("teacher", it) }
+            KeyRow("安排", "不占课表格子", "具体时间、地点和要求以指导老师的安排为准。")
+            KnowledgeRow(null, course, state.repository) { onClose(); route.knowledge(course = it) }
+            MaterialsRow(course, state.repository) { url ->
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             }
         }
     }
@@ -314,7 +335,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     if (calendarOpen) { top.hicancan.studev.timetable.CalendarSheet(state, settings, model) { calendarOpen = false }; return }
     if (labsOpen) { LabSheet(state, settings, model, onForm = { onClose(); onForm(it) }) { labsOpen = false }; return }
     if (coursesOpen && state.term != null) {
-        top.hicancan.studev.timetable.ManagedCoursesSheet(state, settings, model, onAdd = { onClose(); route.scope = "course"; route.query = ""; route.searchFocus = true; route.tab = "search" }) { coursesOpen = false }
+        top.hicancan.studev.timetable.ManagedCoursesSheet(state, settings, model, onAdd = { onClose(); route.search(scope = "academic", source = "courses", focus = true) }) { coursesOpen = false }
         return
     }
     val context = LocalContext.current

@@ -115,7 +115,7 @@ import java.time.LocalDate
     if (calendar) CalendarSheet(state, settings, model) { calendar = false }
     if (addingCourse) PlainSheet("加课", { addingCourse = false }) {
         KeyRow(null, "从全校课表里挑一门", "查看其他班或老师的时间，点击可预览冲突后加入", chevron = true) {
-            addingCourse = false; route.scope = "course"; route.query = ""; route.searchFocus = true; route.tab = "search"
+            addingCourse = false; route.search(scope = "academic", source = "courses", focus = true)
         }
         KeyRow(null, "手动记一门自己的课", "教务课表里没有的任选课、实习或固定活动", chevron = true) {
             addingCourse = false; customCourseOpen = true
@@ -532,7 +532,10 @@ private fun goneSummary(events: List<LineEvent>): String {
     val termEnd = LocalDate.parse(calendar?.end ?: line.term.weeks.last().end)
     val last = remember(line) { line.lastLesson() }
     val courses = line.exams.map { it.course.code ?: it.course.name }.distinct().size
-    val offGrid = practice.distinctBy { it.name to it.weeks }.sortedWith(compareBy({ it.weeks.first() }, { it.name }))
+    val offGrid = practice.filter { it.weeks.isNotEmpty() }.distinctBy { it.name to it.weeks }.sortedWith(compareBy({ it.weeks.first() }, { it.name }))
+    var selectedPractice by remember(line.term.term, practice, examPage) { mutableStateOf<Practice?>(null) }
+    val weekNow = line.weekOf(now.date)
+    selectedPractice?.let { PracticeSheet(it, line, weekNow, state, route) { selectedPractice = null } }
     var takenOpen by remember { mutableStateOf(false) }
     var skippedOpen by remember { mutableStateOf(false) }
     // What one has taken away stays listed, greyed; exams of courses not on one's timetable can be taken away at once.
@@ -719,7 +722,8 @@ private fun goneSummary(events: List<LineEvent>): String {
             if (offGrid.isNotEmpty()) {
                 Plain("实践课程", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
                 offGrid.forEach { item ->
-                    Column(Modifier.fillMaxWidth().topHairline(hairline).padding(vertical = 11.dp)) { Plain(item.name, 14.5.sp, weight = FontWeight.Medium); Plain(Exams.weeksText(item.weeks), 12.5.sp, Ink.muted) }
+                    KeyRow(null, Practices.name(item), Practices.progress(item.weeks, weekNow), chevron = true,
+                        trailing = { Plain(Exams.weeksText(item.weeks), 12.5.sp, Ink.muted) }, onClick = { selectedPractice = item })
                 }
             }
             val calendarAhead = (calendar?.holidays.orEmpty() + calendar?.events.orEmpty() + listOfNotNull(calendar?.pause)).filter { it.start >= now.date.toString() }.sortedBy { it.start }
