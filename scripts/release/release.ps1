@@ -64,6 +64,16 @@ function Wait-PublishedApp([string]$Origin, [string]$Version, [int]$VersionCode)
 $env:JAVA_HOME = 'D:\Dev\java\jdk-21.0.13+9'
 $env:ANDROID_HOME = 'D:\Dev\Android\Sdk'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$product = Get-Content (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
+$versionName = $product.android.versionName
+$versionCode = [int]$product.android.versionCode
+if (-not $versionName) { throw 'release version metadata is missing' }
+$tag = "v$versionName"
+$repoName = $product.repository
+$existingRelease = & gh release view $tag --repo $repoName --json isDraft 2>&1
+$hasDraft = $LASTEXITCODE -eq 0
+if ($hasDraft -and -not ($existingRelease | ConvertFrom-Json).isDraft) { throw "$tag is already published; increment the Android version before releasing" }
+if (!$hasDraft -and ($existingRelease | Out-String) -notmatch 'release not found') { throw "Could not check whether $tag is already published" }
 Push-Location $repo
 try { & npm run data:pull; if ($LASTEXITCODE -ne 0) { throw 'reading the published campus snapshot failed' } } finally { Pop-Location }
 $android = Join-Path $repo 'android'
@@ -76,10 +86,7 @@ New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 & (Join-Path $PSScriptRoot 'build-android.ps1') -OutputDir $tempRoot -GradleArgs $GradleArgs
 if ($LASTEXITCODE -ne 0) { throw 'signed Android build failed' }
 $apk = Join-Path $android 'app\build\outputs\apk\release\app-release.apk'
-$product = Get-Content (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
-$versionName = $product.android.versionName
-$versionCode = [int]$product.android.versionCode
-if (-not $versionName -or -not (Test-Path $apk)) { throw 'release APK or version metadata is missing' }
+if (-not (Test-Path $apk)) { throw 'release APK is missing' }
 $aapt = Join-Path $env:ANDROID_HOME 'build-tools/36.1.0/aapt.exe'
 if (-not (Test-Path -LiteralPath $aapt)) { throw "aapt is missing: $aapt" }
 $badging = (& $aapt dump badging $apk 2>&1 | Out-String)
@@ -106,12 +113,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Android smoke test failed' }
 
 $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
-$env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
-$env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
-$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
-$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
-& node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
-if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
 
 # The Windows app: the kernels from their pinned tags, the parity checks, a NativeAOT build, and a Velopack release whose
 # portable zip, packages and feed go to windows/ on Cloudflare R2 (public at dl.hicancan.top, no egress fee), where the
@@ -140,23 +141,26 @@ if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEX
 if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
 $portable = Join-Path $velopack 'top.hicancan.studev-win-Portable.zip'
 if (-not (Test-Path -LiteralPath $portable)) { throw "Windows portable zip is missing: $portable" }
-# Upload packages now; the feed waits until the matching site and campus data are public.
+# Both native builds passed. Verify public downloads before GitHub publication
+# lets the site advertise the release. The updater feed still waits for the site.
 $fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
 Copy-Item $portable $fullPortable
 $made = Get-ChildItem $velopack -File -Filter "*-$versionName-*.nupkg"
+if (!($made | Where-Object Name -Like "*-$versionName-full.nupkg")) { throw 'Windows full update package is missing' }
+$env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
+$env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
+$env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
+$env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
+& node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
+if ($LASTEXITCODE -ne 0) { throw 'APK upload or public download check failed' }
 foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
 & node (Join-Path $repo 'scripts/release/put.mjs') $fullPortable "windows/studev-$versionName-windows.zip"
 if ($LASTEXITCODE -ne 0) { throw 'Windows portable upload failed' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
 $assetPaths = @($fullApk, $fullPortable)
-$tag = "v$versionName"
-$repoName = $product.repository
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the release commit' }
-$existingRelease = & gh release view $tag --repo $repoName --json isDraft 2>$null
-if ($LASTEXITCODE -eq 0) {
-    if (-not ($existingRelease | ConvertFrom-Json).isDraft) { throw "$tag is already published; increment the Android version before releasing" }
-} else {
+if (!$hasDraft) {
     $notesPath = Join-Path $tempRoot 'release-notes.md'
     Set-Content -Path $notesPath -Value $releaseNotes -NoNewline
     & gh release create $tag --repo $repoName --target $releaseCommit --draft --title "studev $versionName" --notes-file $notesPath
@@ -164,7 +168,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 & gh release upload $tag @assetPaths --repo $repoName --clobber
 if ($LASTEXITCODE -ne 0) { throw "GitHub release asset upload failed" }
-# Publish only once the assets exist; main owns the application deployment.
+# This event triggers the Web deploy, whose gate independently checks both downloads.
 & gh release edit $tag --repo $repoName --draft=false --latest
 if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
 try {
