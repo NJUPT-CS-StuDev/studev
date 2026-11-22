@@ -46,6 +46,23 @@ const STATUS_LABEL: Record<Status, string> = { submitted: '已提交', late: '�
 const STATUS_SYMBOL: Record<Status, string> = { submitted: '✓', late: '迟', missing: '×' };
 const POLICY_LABEL: Record<RoundPolicy, string> = { strict: '到点截止', 'allow-late': '超时记为迟交', closed: '已关闭' };
 
+function CollectionHeading({ item, policy, openCount }: { item: DetailResponse['item'] | CollectionItemSummary; policy?: RoundPolicy; openCount?: number }) {
+  const organization = item.issuer.organizationName || item.issuer.orgShortName;
+  return (
+    <div className="col-head">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {item.code && <span className="col-code">{item.code}</span>}
+        <span className="col-meta">{item.termLabel} · {item.category}</span>
+      </div>
+      <h1>{item.name}</h1>
+      <p>
+        {organization}{item.issuer.title ? ` · ${item.issuer.title}` : ''}{item.issuer.name ? `（${item.issuer.name}）` : ''}发起
+        {' · '}{item.targetMode === 'open' ? `公开收集${openCount === undefined ? '' : `（已交 ${openCount} 人）`}` : `面向 ${item.recipientCount} 人`}{policy && ` · ${POLICY_LABEL[policy]}`}
+      </p>
+    </div>
+  );
+}
+
 function formatBytes(bytes: number): string {
   if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
@@ -388,6 +405,7 @@ export default function CollectionsApp() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const pendingUpload = useRef<{ itemId: string; roundId: string; fileId: string } | null>(null);
+  const detailRequest = useRef(0);
 
   const notify = (msg: string) => {
     setToast(msg);
@@ -423,30 +441,33 @@ export default function CollectionsApp() {
     }
   };
 
+  const closeDetail = () => {
+    detailRequest.current++;
+    setSelectedId(null);
+    setDetail(null);
+  };
+
   const loadDetail = async (id: string, preferRound?: string) => {
+    const request = ++detailRequest.current;
     const cached = detailCache.get(id);
-    if (cached) {
-      setDetail(cached);
-      setSelectedId(id);
-      setRoundId(preferRound || cached.item.rounds[cached.item.rounds.length - 1]?.id || null);
-    } else {
-      setLoading(true);
-    }
+    setSelectedId(id);
+    setDetail(cached ?? null);
+    setRoundId(preferRound || cached?.item.rounds.at(-1)?.id || null);
+    setBoardOrgFilter('ALL');
+    setStatusFilter('ALL');
     try {
       const data = await api<DetailResponse>(`/collections/items/${encodeURIComponent(id)}`);
+      if (request !== detailRequest.current) return;
       detailCache.set(id, data);
       setDetail(data);
-      setSelectedId(id);
-      const target = preferRound || data.item.rounds[data.item.rounds.length - 1]?.id || null;
-      setRoundId(target);
-      setBoardOrgFilter('ALL');
-      setStatusFilter('ALL');
+      setRoundId(current => data.item.rounds.some(round => round.id === current) ? current : data.item.rounds.at(-1)?.id || null);
       setEditRecMode(data.item.targetMode);
       setEditRecMap(new Map((data.item.recipients || []).map((r) => [r.studentId, r.name])));
     } catch (e) {
+      if (request !== detailRequest.current) return;
+      detailCache.delete(id);
+      closeDetail();
       notify(errorText(e));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -656,12 +677,14 @@ export default function CollectionsApp() {
   const openTodos = viewer ? (listData?.items || []).flatMap((it) =>
     it.inRecipients ? it.rounds.filter((r) => r.policy !== 'closed').map((r) => ({ it, r })) : []
   ) : [];
+  const summary = listData?.items.find((item) => item.id === selectedId);
+  const summaryRound = summary?.rounds.find(round => round.id === roundId) ?? summary?.rounds.at(-1);
 
   return (
     <div className="col-app">
       <input ref={fileInput} type="file" hidden onChange={(e) => { void handleUpload(e.target.files?.[0]); e.target.value = ''; }} />
 
-      {!selectedId || !detail ? (
+      {!selectedId ? (
         <>
           <div className="col-bar">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -809,6 +832,12 @@ export default function CollectionsApp() {
             </p>
           )}
         </>
+      ) : !detail ? (
+        <>
+          <button className="col-back" onClick={closeDetail}>‹ 返回</button>
+          {summary && <CollectionHeading item={summary} policy={summaryRound?.policy} />}
+          <p className="col-meta" role="status">正在同步提交进度…</p>
+        </>
       ) : activeRound ? (() => {
         const stat = detail.roundStats.find((s) => s.roundId === activeRound.id) || { total: 0, submitted: 0, late: 0, missing: 0 };
         const pct = stat.total ? Math.round(((stat.submitted + stat.late) / stat.total) * 100) : 0;
@@ -818,21 +847,10 @@ export default function CollectionsApp() {
           .filter((r) => boardOrgFilter === 'ALL' || r.orgLabel === boardOrgFilter)
           .filter((r) => statusFilter === 'ALL' || r.statuses[activeRound.id] === statusFilter)
           .sort((a, b) => (a.isMe ? -1 : b.isMe ? 1 : a.studentId.localeCompare(b.studentId)));
-        const issuerSummary = `${detail.item.issuer.organizationName || detail.item.issuer.orgShortName}${detail.item.issuer.title ? ` · ${detail.item.issuer.title}` : ''}`;
-
         return (
           <>
-            <button className="col-back" onClick={() => { setSelectedId(null); setDetail(null); }}>‹ 返回</button>
-            <div className="col-head">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {detail.item.code && <span className="col-code">{detail.item.code}</span>}
-                <span className="col-meta">{detail.item.termLabel} · {detail.item.category}</span>
-              </div>
-              <h1>{detail.item.name}</h1>
-              <p>
-                {issuerSummary}{detail.item.issuer.name ? `（${detail.item.issuer.name}）` : ''}发起 · {detail.item.targetMode === 'open' ? `公开收集（已交 ${detail.item.recipientCount} 人）` : `面向 ${detail.item.recipientCount} 人`} · {POLICY_LABEL[activeRound.policy]}
-              </p>
-            </div>
+            <button className="col-back" onClick={closeDetail}>‹ 返回</button>
+            <CollectionHeading item={detail.item} policy={activeRound.policy} openCount={detail.item.recipientCount} />
 
             {detail.item.rounds.length > 1 && (
               <div className="col-rounds">
