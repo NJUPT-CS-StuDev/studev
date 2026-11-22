@@ -233,11 +233,16 @@ public sealed partial class TimetableScreen : Screen
         };
         if (wide && mine) subtitle += $" · {campus.Preferences.Class}";
         var actions = new List<UIElement>();
+        if (mine) actions.Add(Kit.Button("添加课程", () => App.Open("search", "course")));
+        if (mine) actions.Add(Kit.Button("新任务", () => TaskSheet.New(campus, now), Icons.Plus, 20));
+        else actions.Add(Kit.Button("我的课表", Mine));
+
+        FrameworkElement? dateNav = null;
         if (scale is "day" or "week")
         {
             Tap DateStep(string label, Action act, string? icon = null)
             {
-                var target = Paint.Number("size", "target");
+                var target = 36.0;
                 var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) {
                     Content = icon is null ? Kit.Text(label, Role.Label) : Kit.Icon(icon, 16),
                     MinWidth = target, Height = target, Padding = new Thickness(8, 0, 8, 0),
@@ -247,19 +252,37 @@ public sealed partial class TimetableScreen : Screen
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, label);
                 tap.Click += (_, _) => act(); return tap;
             }
-            actions.Add(Kit.Line(0,
+            dateNav = Kit.Line(0,
                 DateStep("上一个", () => Shift(-1), Icons.Back),
                 DateStep("今天", () => { picked = null; Draw(); }),
-                DateStep("下一个", () => Shift(1), Icons.Chevron)));
+                DateStep("下一个", () => Shift(1), Icons.Chevron));
         }
-        if (mine) actions.Add(Kit.Button("加课", () => App.Open("search", "course")));
-        if (mine) actions.Add(Kit.Button("新任务", () => TaskSheet.New(campus, now), Icons.Plus, 20));
-        else actions.Add(Kit.Button("我的课表", Mine));
 
         var page = new StackPanel();
         page.Children.Add(Pages.Header(title, subtitle, actions.ToArray()));
-        var tabs = Kit.Tabs(ScalesShown, scale, Show, separateBefore: "list"); tabs.Margin = new Thickness(0, 0, 0, 20);
-        page.Children.Add(tabs);
+        var tabs = Kit.Tabs(ScalesShown, scale, Show, separateBefore: "list");
+        if (dateNav is not null && wide)
+        {
+            var tabBar = new Grid { BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1), Margin = new Thickness(0, 0, 0, 16) };
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (tabs is Border tabBorder) tabBorder.BorderThickness = new Thickness(0);
+            tabBar.Children.Add(tabs);
+            dateNav.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(dateNav, 1); tabBar.Children.Add(dateNav);
+            page.Children.Add(tabBar);
+        }
+        else
+        {
+            tabs.Margin = new Thickness(0, 0, 0, dateNav is not null ? 8 : 16);
+            page.Children.Add(tabs);
+            if (dateNav is not null)
+            {
+                dateNav.HorizontalAlignment = HorizontalAlignment.Right;
+                dateNav.Margin = new Thickness(0, 0, 0, 8);
+                page.Children.Add(dateNav);
+            }
+        }
         if (preview is { } previewId) {
             var words = previewRows is { Count: > 0 } ? $"预览 · {Names.Course(previewRows[0].Course.Name)}" : previewError ?? "正在读取预览…";
             var previewBar = Kit.Column(8, Kit.Text(words, Role.Body, bold: true));

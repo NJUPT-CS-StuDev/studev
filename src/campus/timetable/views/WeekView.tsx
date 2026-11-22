@@ -24,8 +24,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
     const tones = timelineTones(line);
     const hints = week ? offWeekLessons(line.meetings, week) : [];
     const ghosts = week ? previewRows.filter(meeting => meeting.weeks.includes(week)) : [];
-    let columns = wide ? 7 : 5;
-    days.forEach((date, index) => { if (events[index]!.length || dueOn(line, date).length || hints.some(hint => hint.day === index + 1) || ghosts.some(meeting => meeting.weekday === index + 1)) columns = Math.max(columns, index + 1); });
+    const columns = 7;
     const clock = new Map(line.periods.map(period => [period.period, { start: minutesOf(period.start), end: minutesOf(period.end) }]));
     const scale = wide ? 1.02 : .72;
     const [from, until] = timeBounds(events.flat());
@@ -36,7 +35,8 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
     const dues = days.map(date => dueOn(line, date));
     const lines = line.periods.map(period => <div key={period.period} className="hl" style={{ top: y(minutesOf(period.start)) }} />);
     return (
-        <div className="wk" style={{ gridTemplateColumns: `${wide ? '68px' : '38px'} repeat(${columns},minmax(0,1fr))` }}>
+        <div className="wk-scroll">
+        <div className="wk" style={{ gridTemplateColumns: wide ? `68px repeat(${columns},minmax(0,1fr))` : `38px repeat(${columns},minmax(64px,1fr))` }}>
             <div className="corner" />
             {days.slice(0, columns).map((date, index) => {
                 const holiday = line.holidays.get(date);
@@ -98,6 +98,7 @@ export function WeekView({ line, day, now, wide, record, previewRows, order, onO
                     </div>
                 );
             })}
+        </div>
         </div>
     );
 }

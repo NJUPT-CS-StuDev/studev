@@ -26,6 +26,7 @@ export const Magnifier = () => <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r=
 /** The first row of a campus entry shares one account-aligned baseline on narrow screens. */
 export function CampusHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
     return <div className={`campus-header ${className}`}><div className="campus-header-main">{children}</div><span className="campus-account-slot">
+        <button className="theme-entry" type="button" data-theme-toggle aria-label="切换外观"><svg className="theme-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" /></svg><svg className="theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" /><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6" /></svg><svg className="theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10Z" /></svg></button>
         <button className="site-share-entry" type="button" data-share-studev aria-label="分享 StuDev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph.share} /></svg></button>
         <MeApp placement="page" />
     </span></div>;

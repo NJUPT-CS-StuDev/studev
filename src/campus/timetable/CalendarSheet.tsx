@@ -22,7 +22,7 @@ export function CalendarSheet({ line, className, prefs, onClose }: { line: Timel
         downloadCalendar(`StuDev ${className}.ics`, calendarFile(`StuDev ${className}`, entries, new Date()));
     };
     return (
-        <Sheet title="下载到日历" onClose={onClose}>
+        <Sheet title="导出到日历" onClose={onClose}>
             <p className="fine lead">按你现在的课表写，包括隐藏和添加的课、不参加的考试；之后有变动需要重新下载。要自动同步请用安卓 App。</p>
             {kinds.map(({ kind, name }) => (
                 <button className="kv" key={kind} onClick={() => setPicked(current => current.includes(kind) ? current.filter(item => item !== kind) : [...current, kind])}>

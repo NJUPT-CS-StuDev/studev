@@ -16,7 +16,6 @@ import { DayView } from './views/DayView';
 import { WeekView } from './views/WeekView';
 import { TermView } from './views/TermView';
 import { EventSheet } from './EventSheet';
-import { CalendarSheet } from './CalendarSheet';
 import { PreviewDock } from './PreviewDock';
 import { TaskSheet } from './TaskSheet';
 import { ListView } from './views/ListView';
@@ -47,7 +46,6 @@ export default function TimetableApp() {
     const [open, setOpen] = useState<CampusEvent | null>(null);
     // A task is opened by its id, so the sheet always shows it as it now is.
     const [taskId, setTaskId] = useState<string | null>(null);
-    const [calendar, setCalendar] = useState(false);
     const classId = who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null;
     const [record, setRecord] = useState<ExamRecord | null>(null);
     const [recordFailed, setRecordFailed] = useState(false);
@@ -90,7 +88,7 @@ export default function TimetableApp() {
         return () => { element.removeEventListener('wheel', wheel); element.removeEventListener('pointerdown', down); element.removeEventListener('pointermove', move); element.removeEventListener('pointerup', up); element.removeEventListener('pointercancel', up); };
     }, [scale, stepScale]);
     // One key for each view, as calendars have them: D 天, W 周, S 学期, L 任务, and T back to today.
-    const sheetOpen = open !== null || taskId !== null || calendar;
+    const sheetOpen = open !== null || taskId !== null;
     useEffect(() => {
         const keys: Record<string, Scale> = { d: 'day', w: 'week', s: 'term', e: 'exam', l: 'list' };
         const press = (event: KeyboardEvent) => {
@@ -144,29 +142,38 @@ export default function TimetableApp() {
         labs: (key: 'skip' | 'drop', value: string) => writePreferences(current => ({ ...current, labs: { ...current.labs, [key]: [...new Set([...(current.labs?.[key] ?? []), value])] } })),
     };
 
+    const dateNav = showShift ? (
+        <div className="time-nav" role="group" aria-label="日期切换">
+            <button aria-label="上一个" onClick={() => shift(-1)}><Back /></button>
+            <button onClick={() => set({ t: rolled ? now.date : null })}>今天</button>
+            <button aria-label="下一个" onClick={() => shift(1)}><Chevron /></button>
+        </div>
+    ) : null;
+
     return (
         <div className="sd page campus-entry timetable-page" ref={page}>
             {/* One width for every scale: the title, buttons and tabs stay put when switching. */}
             <div className="wrap">
                 <header className="ph">
-                    <div>
+                    <div className="ph-lead">
                         {!isMe && <CampusHeader><button className="back" onClick={() => set({ who: null, scale: null, preview: null }, { push: true })}><Back />我的课表</button></CampusHeader>}
                         {isMe ? <CampusHeader><h1>{title}</h1></CampusHeader> : <h1>{title}</h1>}
-                        <p>{subtitle}{isMe && wide && prefs.class ? ` · ${prefs.class}` : ''}</p>
+                        <div className="ph-sub">
+                            <p>{subtitle}{isMe && wide && prefs.class ? ` · ${prefs.class}` : ''}</p>
+                            {isMe && !wide && <a className="text-action ph-add" href="/search/?scope=course">添加课程</a>}
+                        </div>
                     </div>
-                    <div className="acts">
-                        {showShift && <div className="time-nav" role="group" aria-label="日期切换">
-                            <button aria-label="上一个" onClick={() => shift(-1)}><Back /></button>
-                            <button onClick={() => set({ t: rolled ? now.date : null })}>今天</button>
-                            <button aria-label="下一个" onClick={() => shift(1)}><Chevron /></button>
-                        </div>}
-                        {isMe && prefs.class && <button className="ib" onClick={() => setCalendar(true)}>日历</button>}
-                        {isMe && <a className="ib" href="/search/?scope=course">{wide || !showShift ? '加课' : '+'}</a>}
-                    </div>
+                    {isMe && wide && <div className="acts">
+                        <a className="ib" href="/search/?scope=course">添加课程</a>
+                    </div>}
                 </header>
-                <div className="tabs" role="tablist">
-                    {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={`${scale === key ? 'on' : ''}${key === 'list' ? ' tasks-tab' : ''}`} title={`${label} · 按 ${({ day: 'D', week: 'W', term: 'S', exam: 'E', list: 'L' } as const)[key]}`} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
+                <div className="tabs-bar">
+                    <div className="tabs" role="tablist">
+                        {SCALES.filter(([key]) => key !== 'list' || isMe).map(([key, label]) => <button key={key} role="tab" aria-selected={scale === key} className={`${scale === key ? 'on' : ''}${key === 'list' ? ' tasks-tab' : ''}`} title={`${label} · 按 ${({ day: 'D', week: 'W', term: 'S', exam: 'E', list: 'L' } as const)[key]}`} onClick={() => set({ scale: key, mode: null })}>{label}</button>)}
+                    </div>
+                    {wide && dateNav}
                 </div>
+                {!wide && dateNav && <div className="view-nav">{dateNav}</div>}
                 {scale === 'day' && <DayView line={line} day={day} now={now} isMe={isMe} record={record} order={prefs.layers ?? LAYER_ORDER} onPick={date => set({ t: date === now.date ? null : date })} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'week' && <WeekView line={line} day={day} now={now} wide={wide} record={record} previewRows={previewRows} order={prefs.layers ?? LAYER_ORDER} onOpen={openEvent} onTask={openTask} />}
                 {scale === 'list' && isMe && <ListView line={line} now={now} courses={courses} onTask={openTask} onOpen={openEvent} />}
@@ -175,7 +182,6 @@ export default function TimetableApp() {
                     onCancel={() => set({ preview: null })}
                     onAdd={() => { updateTimetableEdits(term.term, edits => ({ ...edits, added: [...new Set([...edits.added, preview])] })); set({ preview: null }); }} />}
             </div>
-            {calendar && prefs.class && <CalendarSheet line={line} className={prefs.class} prefs={prefs} onClose={() => setCalendar(false)} />}
             {editing && <TaskSheet key={editing.id} task={editing} line={line} onClose={() => setTaskId(null)} />}
             {open && <EventSheet event={open} line={line} now={now} isMe={isMe} record={record} campus={loaded.classInfo?.campus ?? null} order={prefs.layers ?? LAYER_ORDER} onClose={() => setOpen(null)} onOpen={setOpen}
                 onSkipLab={event => { mine.labs('skip', event.lab!.id); setOpen(null); }}

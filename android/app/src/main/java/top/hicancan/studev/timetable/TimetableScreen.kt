@@ -111,11 +111,9 @@ import java.time.LocalDate
     }
     val order = listOf("day", "week", "term")
     var pinch by remember { mutableFloatStateOf(1f) }
-    var calendar by remember { mutableStateOf(false) }
     var addingCourse by remember { mutableStateOf(false) }
     var customCourseOpen by remember { mutableStateOf(false) }
-    if (calendar) CalendarSheet(state, settings, model) { calendar = false }
-    if (addingCourse) PlainSheet("加课", { addingCourse = false }) {
+    if (addingCourse) PlainSheet("添加课程", { addingCourse = false }) {
         KeyRow(null, "从全校课表里挑一门", "查看其他班或老师的时间，点击可预览冲突后加入", chevron = true) {
             addingCourse = false; route.search(scope = "academic", source = "courses", focus = true)
         }
@@ -144,31 +142,29 @@ import java.time.LocalDate
                 Plain(" · 更新 ›", 13.5.sp, Ink.brand)
             }
         }
-        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-            // The avatar has its own place beside the title. Week navigation must not squeeze the title into it.
+        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            // The avatar has its own place beside the title.
             if (isMe) CampusHeader { Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 1) }
             else {
                 CampusHeader { Plain("‹ 我的课表", 13.sp, Ink.muted, modifier = Modifier.clickable { route.myTimetable() }.padding(vertical = 10.dp)) }
                 Plain(title, 22.sp, weight = FontWeight.SemiBold, maxLines = 2)
             }
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Plain(sub, 13.5.sp, Ink.muted, modifier = Modifier.weight(1f))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (scale == "week") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(44.dp).clickable { route.day = day.minusDays(7) }.semantics { contentDescription = "上一周" }, contentAlignment = Alignment.Center) { Plain("‹", 24.sp, Ink.muted) }
-                            TextAction("今天", { route.day = if (ahead > 0) now.date else null }, modifier = Modifier.heightIn(min = 44.dp), muted = true)
-                            Box(Modifier.size(44.dp).clickable { route.day = day.plusDays(7) }.semantics { contentDescription = "下一周" }, contentAlignment = Alignment.Center) { Plain("›", 24.sp, Ink.muted) }
-                        }
-                    }
-                    if (isMe) Chip(if (scale == "week") "+" else "加课", { addingCourse = true })
-                    if (isMe && scale != "week") Chip("日历", { calendar = true })
-                }
+                if (isMe) TextAction("添加课程", { addingCourse = true }, modifier = Modifier.heightIn(min = 32.dp))
             }
         }
         // The list is one's own: tasks by when they are due, exams among them.
         TextTabs(listOf("day" to "天", "week" to "周", "term" to "学期", "exam" to "考试") + if (isMe) listOf("list" to "任务") else emptyList(), scale, separateBefore = "list") { route.scale = it; route.termMode = "course" }
-        Spacer(Modifier.height(16.dp))
+        if (scale == "week") {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(36.dp).clickable { route.day = day.minusDays(7) }.semantics { contentDescription = "上一周" }, contentAlignment = Alignment.Center) { Plain("‹", 22.sp, Ink.muted) }
+                TextAction("今天", { route.day = if (ahead > 0) now.date else null }, modifier = Modifier.heightIn(min = 36.dp), muted = true)
+                Box(Modifier.size(36.dp).clickable { route.day = day.plusDays(7) }.semantics { contentDescription = "下一周" }, contentAlignment = Alignment.Center) { Plain("›", 22.sp, Ink.muted) }
+            }
+        } else {
+            Spacer(Modifier.height(12.dp))
+        }
         Box(Modifier.weight(1f)) {
             views.SaveableStateProvider("${term.term}:${route.whoType}:${route.whoId}:$scale") {
                 when (scale) {

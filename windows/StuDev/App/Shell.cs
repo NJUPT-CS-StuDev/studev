@@ -30,6 +30,7 @@ public sealed partial class Shell : Window
     private readonly TextBlock faceName = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel faceRow = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
     private readonly Tap me = new();
+    private readonly Tap themeToggle = new();
     private readonly Tap share = new();
     private readonly TextBlock shareLabel = Kit.Text("分享", Role.Label, "muted");
     private readonly ColumnDefinition inset = new() { Width = new GridLength(140) };
@@ -48,7 +49,7 @@ public sealed partial class Shell : Window
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var bar = new Grid { BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(20, 0, 0, 0) };
-        foreach (var width in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto }) bar.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+        foreach (var width in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto }) bar.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
         bar.ColumnDefinitions.Add(inset);
         var mark = Kit.Text("StuDev", Role.Body, bold: true); mark.FontSize = 17; mark.FontWeight = Microsoft.UI.Text.FontWeights.Bold; mark.CharacterSpacing = -30;
         mark.VerticalAlignment = VerticalAlignment.Center; mark.Margin = new Thickness(0, 0, 28, 2); mark.IsHitTestVisible = false;
@@ -56,22 +57,30 @@ public sealed partial class Shell : Window
         bar.Children.Add(mark);
         Grid.SetColumn(nav, 1); bar.Children.Add(nav);
         var drag = new Grid { Background = Paint.Clear }; Grid.SetColumn(drag, 2); bar.Children.Add(drag);
-        var shareRow = Kit.Line(5, Kit.Icon(Paint.Glyph("share"), 18, "muted", 24, 1.8), shareLabel);
+        themeToggle.Width = 34; themeToggle.Height = 34; themeToggle.CornerRadius = Kit.Capsule(34);
+        themeToggle.Margin = new Thickness(0, 0, 2, 0); themeToggle.VerticalAlignment = VerticalAlignment.Center;
+        themeToggle.Ground(Paint.Clear, Paint.Brush("surfaceSunken"));
+        themeToggle.Click += (_, _) => Me.Appearance.Set((Me.Appearance.Current + 1) % 3);
+        Grid.SetColumn(themeToggle, 3); bar.Children.Add(themeToggle);
+        var shareIcon = Kit.Icon(Paint.Glyph("share"), 17, "muted", 24, 1.8); shareIcon.Margin = new Thickness(0, 1, 0, 0);
+        var shareRow = Kit.Line(5, shareIcon, shareLabel);
         shareRow.VerticalAlignment = shareLabel.VerticalAlignment = VerticalAlignment.Center;
         share.Content = shareRow; share.Height = 34; share.MinWidth = 36; share.CornerRadius = new CornerRadius(8);
         share.Padding = new Thickness(7, 0, 7, 0); share.Margin = new Thickness(0, 0, 5, 0);
         share.VerticalAlignment = VerticalAlignment.Center; share.Ground(Paint.Clear, Paint.Brush("surfaceSunken"));
         AutomationProperties.SetName(share, "分享 StuDev"); ToolTipService.SetToolTip(share, "分享 StuDev");
         share.Click += (_, _) => ShareSite();
-        Grid.SetColumn(share, 3); bar.Children.Add(share);
+        Grid.SetColumn(share, 4); bar.Children.Add(share);
         faceRow.Children.Add(face); faceRow.Children.Add(faceName);
         me.Content = faceRow; me.Height = Paint.Number("size", "search"); me.MinWidth = Paint.Number("size", "target"); me.Padding = new Thickness(4, 0, 12, 0); me.CornerRadius = Kit.Capsule(me.Height); me.VerticalAlignment = VerticalAlignment.Center; me.Margin = new Thickness(0, 0, 8, 0);
         AutomationProperties.SetName(me, "我"); AutomationProperties.SetAutomationId(me, "me");
         me.Click += (_, _) => Open("me");
-        Grid.SetColumn(me, 4); bar.Children.Add(me);
+        Grid.SetColumn(me, 5); bar.Children.Add(me);
         face.Changed += () => AutomationProperties.SetHelpText(me, face.Status);
         Face();
+        ThemeButton();
         Me.Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Face);
+        World.Campus.Shared.Preferences.Changed += changed => { if (changed.Contains("appearance")) DispatcherQueue.TryEnqueue(ThemeButton); };
         root.Children.Add(bar);
         SetTitleBar(drag);
 
@@ -145,7 +154,7 @@ public sealed partial class Shell : Window
         foreach (var tap in nav.Children.OfType<Tap>()) tap.Padding = new Thickness(root.ActualWidth < 800 ? 8 : 12, 0, root.ActualWidth < 800 ? 8 : 12, 0);
         // Navigation and a usable title-bar drag area precede the optional nickname.
         var markWidth = wordmark?.Visibility == Visibility.Visible ? wordmark.ActualWidth + 28 : 0;
-        var remaining = root.ActualWidth - inset.Width.Value - 20 - markWidth - nav.ActualWidth - share.ActualWidth - 5 - 60 - 8 - Paint.Number("size", "accountBase");
+        var remaining = root.ActualWidth - inset.Width.Value - 20 - markWidth - nav.ActualWidth - themeToggle.ActualWidth - 2 - share.ActualWidth - 5 - 60 - 8 - Paint.Number("size", "accountBase");
         var compact = remaining < Paint.Number("size", "accountNameMin");
         faceName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         faceName.MaxWidth = Math.Max(0, Math.Min(remaining, Paint.Number("size", "accountNameMax")));
@@ -179,6 +188,30 @@ public sealed partial class Shell : Window
         Sheet(content, 420);
     }
 
+    private void ThemeButton()
+    {
+        var current = Me.Appearance.Current;
+        var names = new[] { "跟随系统", "浅色", "深色" };
+        var label = $"外观：{names[current]}（点按切换到{names[(current + 1) % 3]}）";
+        AutomationProperties.SetName(themeToggle, label);
+        ToolTipService.SetToolTip(themeToggle, label);
+        var brush = Paint.Brush("muted");
+        if (current == 0)
+        {
+            var canvas = new Canvas { Width = 24, Height = 24 };
+            canvas.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 16, Height = 16, Stroke = brush, StrokeThickness = 1.6, Margin = new Thickness(4) });
+            canvas.Children.Add(new Microsoft.UI.Xaml.Shapes.Path { Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), "M12 4a8 8 0 0 1 0 16Z"), Fill = brush });
+            themeToggle.Content = new Viewbox { Width = 18, Height = 18, Child = canvas, IsHitTestVisible = false };
+        }
+        else
+        {
+            var data = current == 1
+                ? "M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2ZM12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"
+                : "M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10Z";
+            themeToggle.Content = Kit.Icon(data, 18, "muted", 24, 1.6);
+        }
+    }
+
     private void Tabs()
     {
         nav.Children.Clear();
@@ -187,7 +220,8 @@ public sealed partial class Shell : Window
             var on = key == shown;
             var tone = on ? "brand" : "muted";
             var words = Kit.Text(label, Role.Label, tone, bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
-            var content = Kit.Line(6, Kit.Icon(Paint.Glyph(key), 17, tone, 24, 1.8), words);
+            var glyph = Kit.Icon(Paint.Glyph(key), 17, tone, 24, 1.8); glyph.Margin = new Thickness(0, 1, 0, 0);
+            var content = Kit.Line(6, glyph, words);
             content.VerticalAlignment = VerticalAlignment.Center;
             var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = content, Padding = new Thickness(12, 0, 12, 0), Height = 34, CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center };
             AutomationProperties.SetName(tap, label); AutomationProperties.SetAutomationId(tap, key);
@@ -238,6 +272,7 @@ public sealed partial class Shell : Window
     {
         Paint.Turn(root.ActualTheme == ElementTheme.Dark);
         Face();
+        ThemeButton();
         var bar = AppWindow.TitleBar;
         bar.ButtonBackgroundColor = Paint.Clear.Color; bar.ButtonInactiveBackgroundColor = Paint.Clear.Color;
         bar.ButtonForegroundColor = Paint.Of("ink", Paint.Dark); bar.ButtonInactiveForegroundColor = Paint.Of("faint", Paint.Dark);

@@ -9,6 +9,9 @@ import { writePreferences } from '@/world/preferences';
 import { usePreferences } from '@/world/usePreferences';
 import { ClassPicker } from '@/timetable/ClassPicker';
 import { CourseManager } from '@/timetable/CourseManager';
+import { CalendarSheet } from '@/timetable/CalendarSheet';
+import { useTimeline } from '@/timetable/useTimeline';
+import { useTasks } from '@/world/useTasks';
 import { loadClasses, loadClassLabs, loadLabs, loadPeriods, loadRuns, loadTerm, type MorningRun } from '@/world/data';
 import { labCourseKey, labSheet, personalLabs } from '@/timetable/model/labs';
 import { publishedOn } from '@/world/exams';
@@ -66,6 +69,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
     const [labsOpen, setLabsOpen] = useState(false);
     const [extraClass, setExtraClass] = useState('');
     const [coursesOpen, setCoursesOpen] = useState(false);
+    const [calendarOpen, setCalendarOpen] = useState(false);
     const [periods, setPeriods] = useState<TeachingPeriod[]>([]);
     useEffect(() => { let live = true; setClassLabs(null); setLabsError(false); if (prefs.class) void Promise.all([loadClassLabs(prefs.class), prefs.labs?.classes?.length ? loadLabs() : Promise.resolve([] as Lab[])]).then(([own, all]) => { if (live) setClassLabs(personalLabs(own, prefs.labs?.classes ?? [], all)); }).catch(() => { if (live) setLabsError(true); }); return () => { live = false; }; }, [prefs.class, prefs.labs?.classes, retry]);
     const [facts, setFacts] = useState<{ term: TeachingTerm; classes: TeachingClass[]; run: MorningRun | null } | null>(null);
@@ -92,6 +96,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
         if (on) list.add(value); else list.delete(value);
         return { ...current, labs: { ...current.labs, [key]: [...list] } };
     });
+    if (calendarOpen && prefs.class) return <MeCalendarSheet prefs={prefs} className={prefs.class} onClose={() => setCalendarOpen(false)} />;
     if (coursesOpen && facts && !labsOpen) return <CourseManager term={facts.term} periods={periods} prefs={prefs} labs={classLabs ?? []} onLabs={() => setLabsOpen(true)} onClose={() => setCoursesOpen(false)} />;
     if (labsOpen) {
         const dropped = [...new Map((classLabs ?? []).filter(lab => choices.drop?.includes(labCourseKey(lab))).map(lab => [labCourseKey(lab), lab])).values()];
@@ -147,6 +152,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
             {facts && <><p className="fine">{facts.term.year}–{facts.term.year + 1} 学年第{facts.term.number === 1 ? '一' : '二'}学期</p><button className="kv" onClick={() => setCoursesOpen(true)}><span className="v">我的课程<small>查看详情、增删课程和修改安排</small></span><Chevron /></button></>}
             {factsError && <div className="empty"><p>课表设置暂时无法加载</p><TextAction refresh onClick={() => setRetry(value => value + 1)}>重试</TextAction></div>}
             <button className="kv" onClick={() => setLabsOpen(true)}><span className="v">实验安排</span><Chevron /></button>
+            {prefs.class && <button className="kv" onClick={() => setCalendarOpen(true)}><span className="v">导出到日历<small>下载 .ics 文件到系统日历</small></span><Chevron /></button>}
             {facts?.run && <>
                 <h3 className="sh gap">早锻炼</h3>
                 <button className="kv" onClick={() => setRun({ on: !runOn })}><span className="v">显示早锻炼<small>{grade !== null && grade <= 2 ? `本学期需完成 ${facts.run.required} 次` : '需要补跑时开启'}</small></span><Toggle on={runOn} /></button>
@@ -163,4 +169,13 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
             </>}
         </Sheet>
     );
+}
+
+function MeCalendarSheet({ prefs, className, onClose }: { prefs: ReturnType<typeof usePreferences>['prefs']; className: string; onClose: () => void }) {
+    const tasks = useTasks();
+    const who = useMemo(() => ({ type: 'me' as const }), []);
+    const { loaded, error } = useTimeline(who, prefs, true, null, tasks);
+    if (error) return <Sheet title="导出到日历" onClose={onClose}><p className="empty">课表暂时无法加载，请稍后重试。</p></Sheet>;
+    if (!loaded) return <Sheet title="导出到日历" onClose={onClose}><p className="empty">正在准备课表…</p></Sheet>;
+    return <CalendarSheet line={loaded.line} className={className} prefs={prefs} onClose={onClose} />;
 }
