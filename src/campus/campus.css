@@ -656,7 +656,7 @@
 @media (min-width:900px){.ai .ai-bar .ai-menu-btn,.ai .ai-bar .ai-bar-new{display:none}}
 .ai .ai-scroll{flex:1;min-height:0;overflow-y:auto;padding:12px 18px 28px;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--faint) 45%,transparent) transparent}
 .ai .ai-col{max-width:768px;margin:0 auto}
-.ai .ai-bar{flex:none;display:flex;align-items:center;gap:6px;min-height:48px;padding:6px 14px 0}
+.ai .ai-bar{--size-header-content:calc(2 * var(--size-target) + 6px);flex:none;display:flex;align-items:center;gap:6px;min-height:48px;padding:6px 14px 0}
 .ai .ai-model{position:relative;flex:none}
 .ai .ai-model-b{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px;border-radius:12px;font-size:13px;font-weight:550;color:var(--muted)}.ai .ai-model-b:hover,.ai .ai-model-b.on{color:var(--ink);background:var(--surface-sunken)}.ai .ai-model-b span{max-width:min(32vw,190px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.ai .ai-model-b svg{width:12px;height:12px;transform:rotate(-90deg)}
 .ai .ai-model-menu{left:auto;right:0;top:auto;bottom:calc(100% + 8px);width:min(300px,calc(100vw - 112px));overflow:hidden;text-align:left;gap:4px}
