@@ -543,7 +543,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         (async () => {
           const index = await repo.get(studentKey(identifier));
           const account = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
-          if (identifier !== normalizeStudentId(env.PLATFORM_OWNER_STUDENT_ID)) return account;
+          const configuredOwner = String(env.PLATFORM_OWNER_STUDENT_ID ?? '').normalize('NFKC').trim().toUpperCase();
+          if (identifier !== configuredOwner) return account;
           if (account?.role === 'owner' && account.qq === String(env.PLATFORM_OWNER_QQ)) return account;
           await bootstrap();
           const owner = await repo.get(studentKey(identifier));

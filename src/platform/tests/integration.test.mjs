@@ -32,6 +32,17 @@ async function fixture() {
   return { ...data, store, gateway, owner, client, member, advance: (ms) => { clock += ms; } };
 }
 
+test('an existing account can sign in without the owner bootstrap student ID', async () => {
+  const f = await fixture();
+  const member = await f.member('100002', '已注册成员');
+  delete f.env.PLATFORM_OWNER_STUDENT_ID;
+  const login = await f.client().call('/auth/login', { method: 'POST', body: {
+    studentId: member.user.studentId, password: f.password,
+  } });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.user.id, member.user.id);
+});
+
 test('real identity and form services compose: private mixed submissions, immutable download, edit, review and CSV', async () => {
   const f = await fixture(); const a = await f.member('100002', '成员甲'), b = await f.member('100003', '成员乙');
   const formResult = await f.owner.call('/admin/forms', { method: 'POST', body: {
