@@ -10,6 +10,7 @@ const resume = process.argv.includes('--resume');
 const personalOnly = process.argv.includes('--personal');
 const routesOnly = process.argv.includes('--routes');
 const entriesOnly = process.argv.includes('--entries');
+const conversations = process.argv.includes('--conversations');
 if (!apk || !existsSync(apk)) throw new Error(`no APK at ${apk}`);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const sdk = process.env.ANDROID_HOME ?? 'D:\\Dev\\Android\\Sdk';
@@ -485,14 +486,33 @@ async function unknownRoomDay() {
     await find(node => /\d+\s*\/\s*\d+ 间空闲/.test(node.text), 'known occupancy returns after the unknown date', 30);
     healthy('unknown room-day data stays distinct from zero availability');
 }
-async function personalViews() {
+async function conversationWelcome() {
     await tap('AI', 'the AI board');
     const opening = await find(node => node.text === '有什么可以帮你？' || node['content-desc'] === '新对话', 'an empty board or a retained conversation');
     if (opening['content-desc'] === '新对话') await tap(node => node['content-desc'] === '新对话', 'open an empty board without removing the retained conversation');
     await find('有什么可以帮你？', 'the empty conversation board');
     await find('问点什么', 'the AI composer');
     await find('免费额度', 'the configured provider selector');
+    const greeting = screen();
+    if (greeting.filter(node => node.text === 'AI').length !== 1) throw new Error('the blank conversation repeats the bottom navigation label');
+    capture('ai-welcome');
+    await tap('找空教室', 'draft a real classroom question');
+    await find(node => node.class === 'android.widget.EditText' && node.text === '今天下午哪里有空教室？', 'the suggestion is editable before sending');
+    adb('shell', 'input', 'keyevent', '4');
     healthy('the AI entry, without sending a prompt');
+}
+async function shareAcceptance() {
+    await tap('未登录', 'open the first-level personal menu');
+    await scrollFind('分享 StuDev', 'sharing is available in the first-level menu', 8, 1, .28);
+    await scrollTap('帮助与关于', 'open about from the first-level menu');
+    if (screen().some(node => node.text === '分享 StuDev')) throw new Error('the Help page still contains the moved share action');
+    capture('help-back');
+    await tap('返回', 'return beside the Help page title');
+    await scrollFind('分享 StuDev', 'the back arrow restores the personal menu', 8, 1, .28);
+    adb('shell', 'input', 'keyevent', '4');
+}
+async function personalViews() {
+    await conversationWelcome();
     await tap('课表', 'back to the timetable');
     await tap('未登录', 'the labeled personal profile button');
     await find('课表设置', 'the personal settings home');
@@ -554,6 +574,10 @@ async function aiTrace() {
     adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1');
     await sleep(2000);
     await tap('AI', 'open the saved real AI conversation');
+    await tap('对话列表', 'open the searchable conversation drawer');
+    await find('搜索对话', 'the drawer search');
+    capture('ai-history');
+    await tap(messages[0].content, 'open the real recorded conversation from history');
     const summaryId = 'ai-steps:ai-replay-message-0';
     await scrollTap(node => node['resource-id'] === summaryId, 'expand the recorded AI calls', 15, -1);
     const calls = messages.flatMap(message => message.tool_calls || []);
@@ -568,12 +592,24 @@ async function aiTrace() {
     capture('ai-call-details');
     adb('shell', 'input', 'keyevent', '4');
     await scrollTap(node => node['resource-id'] === summaryId, 'collapse the recorded AI calls', 15, -1);
+    await scrollTap(node => node['resource-id'] === 'ai-resources:ai-replay-message-0', 'open the compact reference list', 18, 1);
+    capture('ai-references');
     alive('the saved AI call record remains inspectable and can be collapsed');
 }
 
 try {
 await device();
-if (entriesOnly) {
+if (conversations) {
+    adb('install', '-r', apk);
+    adb('shell', 'pm', 'clear', app);
+    await seedRelease();
+    adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1');
+    await sleep(3000);
+    await conversationWelcome();
+    await shareAcceptance();
+    await aiTrace();
+    console.log(`Android conversation and sharing acceptance passed: ${evidence}`);
+} else if (entriesOnly) {
     await entryLinks();
     console.log(`Android native shared-address acceptance passed: ${evidence}`);
 } else if (routesOnly) {

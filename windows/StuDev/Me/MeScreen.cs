@@ -87,11 +87,20 @@ public sealed partial class MeScreen : Screen
         Children.Clear();
         var page = new StackPanel();
         var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型", "tools" => "工具", _ => "我" };
-        page.Children.Add(Pages.Header(title, "", section == "home" ? [] : [Kit.TextAction("返回", () =>
+        void Back()
         {
             if (section is "tools" or "models") App.Open("ai");
             else Go(section is "courses" or "labs" ? "timetable" : "home");
-        }, Icons.Back)]));
+        }
+        if (section == "home") page.Children.Add(Pages.Header(title, ""));
+        else
+        {
+            var name = Kit.Text(title, Role.Title);
+            name.VerticalAlignment = VerticalAlignment.Center;
+            var header = Kit.Line(10, Kit.Button("返回", Back, Icons.Back, iconOnly: true), name);
+            header.Margin = new Thickness(0, 0, 0, 18);
+            page.Children.Add(header);
+        }
         void Row(string key, UIElement value, Action? open = null) => page.Children.Add(Kit.Row(key, value, open));
         var user = Account.Shared.User;
         var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);

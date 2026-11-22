@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
@@ -114,16 +115,21 @@ val LocalMeAction = staticCompositionLocalOf<(() -> Unit)?> { null }
     Box(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp)) { Plain(text, 11.sp, fg, FontWeight.SemiBold) }
 @OptIn(ExperimentalMaterial3Api::class)
 /**
- * A sheet over the page. `top` sits above the title; `head` colours the title band (background, ink), as a tile's colour
+ * A sheet over the page. Return stays beside the title; `head` colours the title band (background, ink), as a tile's colour
  * dresses the sheet it opens.
  */
-@Composable fun PlainSheet(title: String, onClose: () -> Unit, top: (@Composable () -> Unit)? = null, head: Pair<Color, Color>? = null, content: @Composable ColumnScope.() -> Unit) {
+@Composable fun PlainSheet(title: String, onClose: () -> Unit, top: (@Composable () -> Unit)? = null, head: Pair<Color, Color>? = null,
+    back: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Ink.paper, shape = RoundedCornerShape(topStart = Tokens.Radius.sheet.dp, topEnd = Tokens.Radius.sheet.dp), dragHandle = null, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().padding(top = if (top != null) 12.dp else if (head != null) 0.dp else 18.dp, bottom = 24.dp).navigationBarsPadding()) {
+        Column(Modifier.fillMaxWidth().padding(top = if (top != null) 12.dp else if (head != null) 0.dp else if (back != null) 8.dp else 18.dp, bottom = 24.dp).navigationBarsPadding()) {
             if (top != null) Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp)) { top() }
             // A sheet whose content names itself (a task, its title editable) has no title row.
-            if (title.isNotEmpty()) Box(Modifier.fillMaxWidth().then(if (head != null) Modifier.background(head.first).padding(vertical = 14.dp) else Modifier).padding(horizontal = 20.dp)) {
-                Plain(title, 20.sp, head?.second ?: Ink.text, weight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
+            if (title.isNotEmpty()) Row(Modifier.fillMaxWidth().then(if (head != null) Modifier.background(head.first).padding(vertical = 14.dp) else Modifier)
+                .padding(start = if (back != null) 10.dp else 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (back != null) IconButton(onClick = back, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回", Modifier.size(21.dp), tint = Ink.muted)
+                }
+                Plain(title, 20.sp, head?.second ?: Ink.text, weight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = if (back == null) 4.dp else 0.dp))
             }
             Column(Modifier.padding(horizontal = 20.dp).padding(top = if (head != null && title.isNotEmpty()) 12.dp else 0.dp)) { content() }
         }

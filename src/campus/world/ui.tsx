@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import MeApp from '../me/MeApp';
+import tokens from '../../../design/tokens.json';
 
 export const Chevron = () => <svg viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg>;
 export const Back = () => <svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg>;
@@ -24,7 +25,10 @@ export const Magnifier = () => <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r=
 
 /** The first row of a campus entry shares one account-aligned baseline on narrow screens. */
 export function CampusHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
-    return <div className={`campus-header ${className}`}><div className="campus-header-main">{children}</div><span className="campus-account-slot"><MeApp placement="page" /></span></div>;
+    return <div className={`campus-header ${className}`}><div className="campus-header-main">{children}</div><span className="campus-account-slot">
+        <button className="site-share-entry" type="button" data-share-studev aria-label="分享 StuDev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph.share} /></svg></button>
+        <MeApp placement="page" />
+    </span></div>;
 }
 
 interface SheetOwner { close: () => void; leaving: boolean }
@@ -98,7 +102,7 @@ function sheetKey(event: KeyboardEvent) {
 
 /** A sheet from the bottom on phones, a centred card on wide screens. Back closes it. */
 /** A sheet over the page. `top` sits above the title; `className` and `style` dress the sheet, as a tile's colour does. */
-export function Sheet({ title, top, className, style, onClose, children }: { title?: ReactNode; top?: ReactNode; className?: string; style?: CSSProperties; onClose: () => void; children: ReactNode }) {
+export function Sheet({ title, top, className, style, onClose, onBack, children }: { title?: ReactNode; top?: ReactNode; className?: string; style?: CSSProperties; onClose: () => void; onBack?: () => void; children: ReactNode }) {
     const titleId = useId();
     const closing = useRef(onClose);
     closing.current = onClose;
@@ -144,7 +148,8 @@ export function Sheet({ title, top, className, style, onClose, children }: { tit
                 if (consumeSheetEntry()) { event.preventDefault(); location.replace(link.href); }
             }}>
                 {top}
-                <div className="card-h"><h2 id={titleId}>{title}</h2><button className="x" aria-label="关闭" onClick={onClose}><Cross /></button></div>
+                <div className={`card-h${onBack ? ' has-back' : ''}`}>{onBack && <button className="sheet-back" type="button" aria-label="返回" onClick={onBack}><Back /></button>}
+                    <h2 id={titleId}>{title}</h2><button className="x" aria-label="关闭" onClick={onClose}><Cross /></button></div>
                 {children}
             </section>
         </div>

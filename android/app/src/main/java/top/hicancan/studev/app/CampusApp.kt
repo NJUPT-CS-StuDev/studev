@@ -6,6 +6,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,6 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,7 +42,26 @@ import top.hicancan.studev.world.CampusLine
 import top.hicancan.studev.world.LineEvent
 import top.hicancan.studev.world.Moment
 
-/** Three entries over one shell, the same as the website. */
+@Composable internal fun CampusGlyph(entry: String, size: androidx.compose.ui.unit.Dp, tint: Color) {
+    val glyph = remember(entry) {
+        val path = when (entry) {
+            "timetable" -> Tokens.Glyph.timetable
+            "map" -> Tokens.Glyph.map
+            "knowledge" -> Tokens.Glyph.knowledge
+            "search" -> Tokens.Glyph.search
+            "ai" -> Tokens.Glyph.ai
+            "share" -> Tokens.Glyph.share
+            else -> error("Unknown campus entry: $entry")
+        }
+        ImageVector.Builder(entry, 24.dp, 24.dp, 24f, 24f)
+            .addPath(PathParser().parsePathString(path).toNodes(), stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+            .build()
+    }
+    Icon(glyph, null, Modifier.size(size), tint = tint)
+}
+
+/** The five campus entries share one shell. */
 @Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: (() -> Unit) -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { model.resume() }
@@ -79,11 +107,14 @@ import top.hicancan.studev.world.Moment
     CompositionLocalProvider(LocalMeAction provides { me = true }) {
     val views = rememberSaveableStateHolder()
     Scaffold(containerColor = Ink.paper, snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
-        if (!navigation.active) Row(Modifier.fillMaxWidth().background(Ink.paper).topHairline(Ink.line).navigationBarsPadding().height(50.dp)) {
+        if (!navigation.active) Row(Modifier.fillMaxWidth().background(Ink.paper).topHairline(Ink.line).navigationBarsPadding().height(50.dp).selectableGroup()) {
             listOf("timetable" to "课表", "map" to "地图", "knowledge" to "知识", "search" to "搜索", "ai" to "AI").forEach { (key, label) ->
                 val on = route.tab == key
-                Box(Modifier.weight(1f).fillMaxHeight().clickable { route.tab = key }.testTag("tab-$key"), contentAlignment = Alignment.Center) {
-                    Plain(label, 14.sp, if (on) Ink.brand else Ink.muted, if (on) FontWeight.SemiBold else FontWeight.Medium)
+                val color = if (on) Ink.brand else Ink.muted
+                Column(Modifier.weight(1f).fillMaxHeight().selectable(on, role = Role.Tab) { route.tab = key }.testTag("tab-$key"),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {
+                    CampusGlyph(key, 20.dp, color)
+                    Plain(label, 12.sp, color, if (on) FontWeight.SemiBold else FontWeight.Medium)
                 }
             }
         }

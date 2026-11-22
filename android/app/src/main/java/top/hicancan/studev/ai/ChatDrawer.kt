@@ -15,6 +15,8 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,10 +32,10 @@ internal data class CourseProject(val code: String, val name: String)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ChatDrawer(
-    chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean, memory: Memory,
+    chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean,
     openChat: (String) -> Unit, newChat: (String?) -> Unit, openProject: (String) -> Unit,
     saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject) -> Unit,
-    rename: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit, configureModels: () -> Unit,
+    rename: (SavedChat) -> Unit, updateChat: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit, configureModels: () -> Unit,
 ) {
     // One list, as on the web: projects on top, each opening in place over its own chats, then the recent chats.
     var open by remember(activeProject) { mutableStateOf(setOfNotNull(activeProject)) }
@@ -41,7 +43,14 @@ internal data class CourseProject(val code: String, val name: String)
     var marked by remember { mutableStateOf<Set<String>?>(null) }
     var naming by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<ChatProject?>(null) }
-    val recent = chats.filter { it.projectId == null }
+    var historyQuery by remember { mutableStateOf("") }
+    var archived by remember { mutableStateOf(false) }
+    var historyMenu by remember { mutableStateOf(false) }
+    val query = historyQuery.trim()
+    val matches = chats.filter { it.archived == archived && Chats.titleOf(it.title, it.thread).contains(query, ignoreCase = true) }
+    val recent = matches.filter { archived || it.projectId == null }
+    val visibleProjects = projects.filter { project -> project.name.contains(query, ignoreCase = true) || matches.any { it.projectId == project.id } }
+    val pinned = recent.filter { it.pinned }.sortedByDescending { it.updated }
 
     if (naming) {
         var name by remember { mutableStateOf(renaming?.name.orEmpty()) }
@@ -79,6 +88,8 @@ internal data class CourseProject(val code: String, val name: String)
                 IconButton({ more = true }, Modifier.size(38.dp), enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "更多", Modifier.size(18.dp), tint = Ink.muted) }
                 DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
                     DropdownMenuItem({ Text("重命名") }, { more = false; rename(chat) })
+                    DropdownMenuItem({ Text(if (chat.pinned) "取消置顶" else "置顶") }, { more = false; updateChat(chat.copy(pinned = !chat.pinned)) })
+                    DropdownMenuItem({ Text(if (chat.archived) "取消归档" else "归档") }, { more = false; updateChat(chat.copy(archived = !chat.archived)) })
                     DropdownMenuItem({ Text(if (chat.projectId == null) "移至项目" else "移至其他项目或移出") }, { more = false; move(setOf(chat.id)) })
                     DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; remove(chat) })
                 }
@@ -89,16 +100,28 @@ internal data class CourseProject(val code: String, val name: String)
     Column(Modifier.fillMaxHeight().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             if (marked == null) {
-                TextAction("新对话", { newChat(null) }, enabled = !busy)
-                if (recent.isNotEmpty()) TextAction("多选", { marked = emptySet() }, enabled = !busy, muted = true)
+                TextButton(onClick = { newChat(null) }, enabled = !busy) {
+                    Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp), tint = Ink.brand)
+                    Spacer(Modifier.width(5.dp)); Plain("新对话", 14.sp, Ink.brand, FontWeight.SemiBold)
+                }
+                Box {
+                    IconButton(onClick = { historyMenu = true }, enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "更多对话操作", tint = Ink.muted) }
+                    DropdownMenu(historyMenu, { historyMenu = false }, containerColor = Ink.paper) {
+                        DropdownMenuItem({ Text(if (archived) "返回最近对话" else "查看归档") }, { historyMenu = false; archived = !archived })
+                        if (!archived && matches.isNotEmpty()) DropdownMenuItem({ Text("多选对话") }, { historyMenu = false; marked = emptySet() })
+                    }
+                }
             } else {
                 TextAction("取消", { marked = null })
                 val selected = marked.orEmpty()
                 TextAction("移动（${selected.size}）", { move(selected); marked = null }, enabled = selected.isNotEmpty() && !busy)
             }
         }
+        OutlinedTextField(historyQuery, { historyQuery = it }, Modifier.fillMaxWidth().padding(bottom = 7.dp),
+            placeholder = { Text("搜索对话") }, leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = Ink.muted) },
+            singleLine = true, shape = RoundedCornerShape(22.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = Ink.text))
         LazyColumn(Modifier.weight(1f)) {
-            item(key = "projects") {
+            if (!archived) item(key = "projects") {
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.clickable { projectsShown = !projectsShown }.padding(start = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Plain("项目", 12.sp, Ink.faint)
@@ -107,8 +130,9 @@ internal data class CourseProject(val code: String, val name: String)
                     TextAction("新建", { renaming = null; naming = true }, enabled = !busy, muted = true)
                 }
             }
-            if (projectsShown) for (project in projects) {
-                val expanded = project.id in open
+            if (projectsShown && !archived) for (project in visibleProjects) {
+                val inside = matches.filter { it.projectId == project.id }.sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updated })
+                val expanded = project.id in open || query.isNotEmpty() && inside.isNotEmpty()
                 item(key = "project:${project.id}") {
                     var more by remember { mutableStateOf(false) }
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (project.id == activeProject) Ink.sunken else Color.Transparent)
@@ -127,16 +151,20 @@ internal data class CourseProject(val code: String, val name: String)
                     }
                 }
                 if (expanded) {
-                    val inside = chats.filter { it.projectId == project.id }
                     items(inside, key = { "in:${it.id}" }) { chat -> ChatRow(chat, indent = true) }
                     if (inside.isEmpty()) item(key = "empty:${project.id}") { Plain("还没有对话", 13.sp, Ink.faint, modifier = Modifier.padding(start = 26.dp, top = 6.dp, bottom = 6.dp)) }
                 }
             }
-            for ((name, group) in Chats.groups(recent, System.currentTimeMillis())) {
+            if (pinned.isNotEmpty()) {
+                item(key = "pinned") { Plain("置顶", 12.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)) }
+                items(pinned, key = { it.id }) { chat -> ChatRow(chat, indent = false) }
+            }
+            item(key = "recent") { Plain(if (archived) "已归档" else "最近", 12.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)) }
+            for ((name, group) in Chats.groups(recent.filterNot { it.pinned }, System.currentTimeMillis())) {
                 item(key = "date:$name") { Plain(name, 12.sp, Ink.faint, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)) }
                 items(group, key = { it.id }) { chat -> ChatRow(chat, indent = false) }
             }
-            if (recent.isEmpty()) item { Plain("这里还没有对话。", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp)) }
+            if (recent.isEmpty()) item { Plain(if (query.isNotEmpty()) "没有找到对话" else if (archived) "暂无归档对话" else "暂无对话", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp)) }
         }
         HorizontalDivider(color = Ink.line)
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

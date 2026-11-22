@@ -76,13 +76,6 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
         return () => { live = false; };
     }, [facts, retry]);
     const info = useMemo(() => facts?.classes.find(item => item.name === prefs.class) ?? null, [facts, prefs.class]);
-    const [shared, setShared] = useState(false);
-    const share = async () => {
-        const url = `${PRODUCT_CONFIG.ORIGIN}/`;
-        if (navigator.share) { await navigator.share({ title: 'StuDev', url }).catch(() => undefined); return; }
-        await navigator.clipboard.writeText(url);
-        setShared(true);
-    };
     const order = prefs.layers ?? LAYER_ORDER;
     const KIND_NAMES: Record<EventKind, string> = { exam: '考试', task: '任务', lab: '实验', class: '课程', run: '早锻炼' };
     // Moving one up a step swaps it with the one before: the whole order is always written.
@@ -141,7 +134,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
     const runOn = run.on ?? (grade !== null && grade <= 2);
     const setRun = (patch: Partial<typeof run>) => writePreferences(current => ({ ...current, run: { days: [], adjust: 0, ...current.run, ...patch } }));
     return (
-        <Sheet title={section === 'timetable' ? '课表设置' : section === 'about' ? '帮助与关于' : '我'} top={section !== 'home' ? <button className="back" onClick={() => setSection('home')}>‹ 返回</button> : undefined} onClose={onClose}>
+        <Sheet title={section === 'timetable' ? '课表设置' : section === 'about' ? '帮助与关于' : '我'} onBack={section !== 'home' ? () => setSection('home') : undefined} onClose={onClose}>
             {section === 'home' && <>
             <a className="kv me-account" href="/account/"><span className="v"><strong>{account?.nickname || '未登录'}</strong><small>{account ? '管理账号 · 任务和课表设置自动同步' : '登录后同步任务和课表设置'}</small></span><Chevron /></a>
             {account && <a className="kv" href="/members/"><span className="v">成员<small>{account.role === 'admin' || account.role === 'owner' ? '查看成员，管理身份与角色' : '查看大家的头像、昵称与签名'}</small></span><Chevron /></a>}
@@ -164,7 +157,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
             <a className="kv" href={formLink('feedback', { where: '网页 · 我' })}><span className="v">意见反馈</span><Chevron /></a>
             <a className="kv" href={formLink('data')}><span className="v">提供校园资料<small>实验课表、讲座、校车、营业时间等</small></span><Chevron /></a>
             <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>提醒和桌面小组件</small></span><Chevron /></a>
-            <button className="kv" onClick={() => void share()}><span className="v">分享本站<small>{shared ? '网址已复制' : PRODUCT_CONFIG.ORIGIN.replace(/^https:\/\//, '')}</small></span><Chevron /></button>
+            <a className="kv" href="/about/"><span className="v">关于 StuDev</span><Chevron /></a>
             <a className="kv club-row" href="/club/"><span className="k">学生发展中心</span><span className="v">南邮计软网安</span><Chevron /></a>
             <p className="fine">数据版本 {DATA_RELEASE.data_version} · <a href="/terms/">用户协议</a> · <a href="/privacy/">隐私政策</a></p>
             </>}

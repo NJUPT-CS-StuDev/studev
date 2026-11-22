@@ -1,8 +1,21 @@
-﻿# The Windows app as it ships, opened and used before it is released, in a home of its own so no one's records are
+# The Windows app as it ships, opened and used before it is released, in a home of its own so no one's records are
 # touched: a class chosen, the four boards, a search, and a desktop widget opened on one of its lessons. After every
 # step the app must still be running and must not have written a crash log. Usage: pwsh windows.ps1 -Exe <StuDev.exe>
-param([Parameter(Mandatory)] [string]$Exe, [switch]$KeepData, [switch]$Online, [switch]$RoutesOnly)
+param([Parameter(Mandatory)] [string]$Exe, [switch]$KeepData, [switch]$Online, [switch]$RoutesOnly, [switch]$Conversations)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-isolation.ps1')
+$tempBase = 'D:\Temp\codex\studev-windows-smoke'
+if (![SmokeDesktop]::IsIsolated()) {
+    if ($env:STUDEV_SMOKE_DESKTOP) { throw 'The app can only be tested on an isolated, non-input desktop.' }
+    New-Item -ItemType Directory -Path $tempBase -Force | Out-Null
+    $options = @{ Exe = (Resolve-Path -LiteralPath $Exe).Path }
+    foreach ($name in 'KeepData', 'Online', 'RoutesOnly', 'Conversations') {
+        if ($PSBoundParameters[$name]) { $options[$name] = $true }
+    }
+    Invoke-OnSmokeDesktop $PSCommandPath $options $tempBase
+    return
+}
+Write-Output 'Windows acceptance is running on a separate, non-input desktop.'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $release = Get-Content -LiteralPath (Join-Path $repo 'src/data/campus-release.json') -Raw | ConvertFrom-Json
 $product = Get-Content -LiteralPath (Join-Path $repo 'product.json') -Raw | ConvertFrom-Json
@@ -40,8 +53,6 @@ public static class Owned {
     [DllImport("user32.dll")] static extern bool EnumWindows(Each each, IntPtr context);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr window, StringBuilder text, int length);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
@@ -74,7 +85,6 @@ public static class Owned {
 "@
 $A = [System.Windows.Automation.AutomationElement]
 $Tree = [System.Windows.Automation.TreeScope]
-$tempBase = 'D:\Temp\codex\studev-windows-smoke'
 $home_ = Join-Path $tempBase ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $home_ | Out-Null
 '{"tray":false}' | Set-Content -LiteralPath (Join-Path $home_ 'device.json') -Encoding utf8NoBOM
@@ -124,13 +134,10 @@ if (-not $Online) {
 $start = [Diagnostics.ProcessStartInfo]::new($Exe)
 $start.Environment['STUDEV_DATA_DIR'] = $home_
 $start.ArgumentList.Add('--background')
-$foreground = [Owned]::GetForegroundWindow()
 $app = [Diagnostics.Process]::Start($start)
 $crashLog = Join-Path $home_ 'crash.log'
 
 function Alive([string]$step) {
-    $current = [Owned]::GetForegroundWindow()
-    if ($foreground -ne [IntPtr]::Zero -and [Owned]::Owner($current) -eq $app.Id) { [Owned]::SetForegroundWindow($foreground) | Out-Null }
     if ($app.HasExited) { throw "the app is gone after: $step`n$(if (Test-Path $crashLog) { Get-Content $crashLog -Raw })" }
     if (Test-Path $crashLog) { throw "the app crashed during: $step`n$(Get-Content $crashLog -Raw)" }
     Write-Output "ok  $step"
@@ -177,13 +184,7 @@ function Press($root, $what, [string]$step, [int]$seconds = 20) {
     Start-Sleep -Milliseconds 900
     Alive $step
 }
-function SetValue($element, [string]$text) {
-    $previous = [Owned]::GetForegroundWindow()
-    try { $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($text) }
-    finally {
-        if ($previous -ne [IntPtr]::Zero -and [Owned]::Owner([Owned]::GetForegroundWindow()) -eq $app.Id) { [Owned]::SetForegroundWindow($previous) | Out-Null }
-    }
-}
+function SetValue($element, [string]$text) { $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($text) }
 function Fill($root, [scriptblock]$match, [string]$text, [string]$step) {
     $e = Find $root $Editable $match $step
     SetValue $e $text
@@ -430,11 +431,62 @@ function SearchNavigation {
 }
 
 
+function ConversationAcceptance() {
+    Press $window '分享 StuDev' 'open sharing from the window header'
+    $shareLink = Find $window (Is $A::NameProperty 'StuDev 官网链接') $null 'the public site link is available to share'
+    if ($shareLink.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -cne "$($product.origin)/") {
+        throw 'sharing should offer the public site URL'
+    }
+    Capture 'share'
+    Press $window '关闭' 'close sharing'
+    Press $window 'AI' 'the AI board'
+    Fill $window { param($element) $element.Current.Name -eq '搜索对话' } 'TCP' 'find a real conversation by its title'
+    Find $window $Pressable { param($element) $element.Current.Name -like '*TCP*真题*' } 'the saved conversation matches history search' | Out-Null
+    $traceHeadId = 'ai-steps:ai-replay-message-0'
+    $traceHead = Find $window (Is $A::AutomationIdProperty $traceHeadId) $null 'the recorded AI tool calls'
+    if ($traceHead.Current.Name -notmatch '读原文') { throw 'the real AI trace summary omits the recorded reads' }
+    Press $window { param($e) $e.Current.AutomationId -eq $traceHeadId } 'expand the real AI tool-call record'
+    $shownCalls = @($window.FindAll($Tree::Descendants, $Pressable) | Where-Object { $_.Current.AutomationId.StartsWith('ai-call:') })
+    if ($shownCalls.Count -ne $traceCalls.Count) { throw "the AI trace shows $($shownCalls.Count) calls instead of all $($traceCalls.Count)" }
+    $traceReadId = "ai-call:$($traceRead.id)"
+    Press $window { param($e) $e.Current.AutomationId -eq $traceReadId } 'inspect the exact arguments and result of an original-text read'
+    $readArgument = ($traceRead.function.arguments | ConvertFrom-Json).id
+    $traceArguments = Find $window (Is $A::AutomationIdProperty 'ai-call-arguments') $null 'the AI call arguments'
+    $traceResult = Find $window (Is $A::AutomationIdProperty 'ai-call-result') $null 'the AI call result'
+    if (-not $traceArguments.Current.Name.Contains($readArgument) -or -not $traceResult.Current.Name.Contains('TCP')) { throw 'the AI call details lost their original reference or text result' }
+    Capture 'ai-call-details'
+    Press $window '关闭' 'close the AI call details'
+    Press $window { param($e) $e.Current.AutomationId -eq $traceHeadId } 'collapse the AI tool-call record'
+    Alive 'the complete recorded AI calls and their raw JSON details remain inspectable'
+    $resourceId = 'ai-resources:ai-replay-message-0'
+    Find $window (Is $A::AutomationIdProperty $resourceId) { param($e) $e.Current.ItemStatus -eq '已收起' } 'the references start as one folded line' | Out-Null
+    Press $window { param($e) $e.Current.AutomationId -eq $resourceId } 'expand the real reference links'
+    Find $window (Is $A::AutomationIdProperty $resourceId) { param($e) $e.Current.ItemStatus -eq '已展开' } 'the compact reference rows are expanded' | Out-Null
+    Capture 'ai-references'
+    Press $window '新对话' 'return to the welcome screen without deleting the saved chat'
+    InWindow (Find $window (Is $A::NameProperty '找空教室') $null 'the short classroom suggestion') 'the classroom suggestion is fully visible'
+    Capture 'ai-welcome'
+    Press $window '找空教室' 'draft the classroom question'
+    $draft = Find $window (Both $Editable (Is $A::NameProperty '问点什么')) $null 'the conversation input'
+    if ($draft.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value -cne '今天下午哪里有空教室？') {
+        throw 'the suggestion did not fill the editable input'
+    }
+}
+
 try {
     for ($i = 0; -not ($window = Main) -and $i -lt 120; $i++) { Start-Sleep -Milliseconds 250 }
     if (-not $window) { throw 'the main window never appeared' }
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Alive 'open the app'
+    if ($Conversations) {
+        [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
+        ConversationAcceptance
+        Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'open the personal page'
+        Press $window '帮助与关于' 'the Help page'
+        Press $window '返回' 'return beside the Help page title'
+        Write-Output 'Windows conversation and sharing acceptance passed'
+        return
+    }
     if ($RoutesOnly) {
         Press $window 'AI' 'open the saved route links'
         foreach ($case in @(@('楼内位置','1 层 · 教1-101'), @('楼内跨层','2 层 · 教1-201'), @('同一教室','1 层 · 教1-101'))) {
@@ -557,23 +609,7 @@ try {
     Alive 'course to topic to material and back to topic'
     ReferenceGroups
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
-    Press $window 'AI' 'the AI board'
-    $traceHeadId = 'ai-steps:ai-replay-message-0'
-    $traceHead = Find $window (Is $A::AutomationIdProperty $traceHeadId) $null 'the recorded AI tool calls'
-    if ($traceHead.Current.Name -notmatch '读原文') { throw 'the real AI trace summary omits the recorded reads' }
-    Press $window { param($e) $e.Current.AutomationId -eq $traceHeadId } 'expand the real AI tool-call record'
-    $shownCalls = @($window.FindAll($Tree::Descendants, $Pressable) | Where-Object { $_.Current.AutomationId.StartsWith('ai-call:') })
-    if ($shownCalls.Count -ne $traceCalls.Count) { throw "the AI trace shows $($shownCalls.Count) calls instead of all $($traceCalls.Count)" }
-    $traceReadId = "ai-call:$($traceRead.id)"
-    Press $window { param($e) $e.Current.AutomationId -eq $traceReadId } 'inspect the exact arguments and result of an original-text read'
-    $readArgument = ($traceRead.function.arguments | ConvertFrom-Json).id
-    $traceArguments = Find $window (Is $A::AutomationIdProperty 'ai-call-arguments') $null 'the AI call arguments'
-    $traceResult = Find $window (Is $A::AutomationIdProperty 'ai-call-result') $null 'the AI call result'
-    if (-not $traceArguments.Current.Name.Contains($readArgument) -or -not $traceResult.Current.Name.Contains('TCP')) { throw 'the AI call details lost their original reference or text result' }
-    Capture 'ai-call-details'
-    Press $window '关闭' 'close the AI call details'
-    Press $window { param($e) $e.Current.AutomationId -eq $traceHeadId } 'collapse the AI tool-call record'
-    Alive 'the complete recorded AI calls and their raw JSON details remain inspectable'
+    ConversationAcceptance
     Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'the me board'
     Press $window '成员' 'the public member directory remains inside the app'
     Find $window (Is $A::NameProperty '登录后查看成员') $null 'member browsing asks a visitor to sign in' | Out-Null

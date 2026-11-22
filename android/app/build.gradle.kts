@@ -39,7 +39,8 @@ abstract class DesignTokensTask : DefaultTask() {
                         val hex = value.drop(1)
                         val argb = if (hex.length == 8) hex.takeLast(2) + hex.take(6) else "ff$hex"
                         appendLine("val $key = androidx.compose.ui.graphics.Color(0x${argb}L)")
-                    } else appendLine("const val $key = $value")
+                    } else if (value is String) appendLine("const val $key = ${groovy.json.JsonOutput.toJson(value)}")
+                    else appendLine("const val $key = $value")
                 }
                 appendLine("}")
             }

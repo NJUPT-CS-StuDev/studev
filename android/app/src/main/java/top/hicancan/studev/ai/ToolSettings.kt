@@ -102,7 +102,7 @@ internal object CampusToolPreferences {
         val clean = source.copy(name = source.name.trim(), url = source.url.trim(), key = source.key.trim())
         return if (clean.url == original.url && clean.key == original.key) clean else clean.copy(enabled = false, tools = emptyList())
     }
-    PlainSheet(if (existing) "远程 MCP" else "添加远程 MCP", onBack, top = { TextAction("返回", onBack) }) {
+    PlainSheet(if (existing) "远程 MCP" else "添加远程 MCP", onBack, back = onBack) {
         Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(source.name, { changed(source.copy(name = it.take(60))) }, Modifier.fillMaxWidth(),
                 label = { Text("名称") }, singleLine = true, enabled = !connecting, shape = shape)

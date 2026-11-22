@@ -35,6 +35,8 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     internal static Assistant Shared => BuiltIn.Value;
     internal (string ProviderName, string ModelName, string Description) FreeService =>
         (Phrase("freeService", "providerName"), Phrase("freeService", "modelName"), Phrase("freeService", "description"));
+    internal IEnumerable<(string Entry, string Label, string Prompt)> Suggestions =>
+        contract["suggestions"]!.AsArray().Select(item => ((string)item!["entry"]!, (string)item["label"]!, (string)item["prompt"]!));
     private List<string> Lines(string key) => contract[key]!.AsArray().Select(l => (string)l!).ToList();
     private string Phrase(string group, string key) => (string)contract[group]![key]!;
     private static string Fill(string text, Dictionary<string, object?> values) => Regex.Replace(text, @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v?.ToString() ?? "null" : "null");

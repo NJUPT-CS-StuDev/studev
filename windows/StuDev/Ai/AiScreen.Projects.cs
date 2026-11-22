@@ -18,7 +18,7 @@ public sealed partial class AiScreen
     private string? projectStatus;
     private bool showArchived;
     private bool organizing;
-    private bool projectsOpen;
+    private string historyQuery = "";
     private readonly HashSet<string> selectedChats = new(StringComparer.Ordinal);
     private (string Label, string Text)? draftSkill;
 
@@ -176,23 +176,20 @@ public sealed partial class AiScreen
     private void SideNavigation(StackPanel heading)
     {
         var currentProject = projects.Find(activeProject);
-        var row = new Grid { ColumnSpacing = 5, Margin = new Thickness(12, 0, 12, 0) };
+        var row = new Grid { ColumnSpacing = 5 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (currentProject is null)
         {
-            var tabs = Kit.Tabs([("chats", "对话"), ("projects", "项目")], projectsOpen ? "projects" : "chats", selected =>
-            {
-                projectsOpen = selected == "projects";
-                organizing = false; selectedChats.Clear(); showArchived = false;
-                DrawSide();
-            }, gap: 24);
-            Grid.SetColumnSpan(tabs, 2); row.Children.Add(tabs);
+            var title = Kit.Text(showArchived ? "已归档" : "最近", Role.Caption, "muted", bold: true);
+            title.VerticalAlignment = VerticalAlignment.Center;
+            title.Margin = new Thickness(10, 0, 0, 0);
+            Grid.SetColumn(title, 1); row.Children.Add(title);
         }
         else
         {
-            var back = Icon("返回项目列表", Icons.Back, () => { projectsOpen = true; EnterProject(null); }, 16, !busy);
+            var back = Icon("返回全部对话", Icons.Back, () => EnterProject(null), 16, !busy);
             row.Children.Add(back);
             var title = Kit.Text(projectFolder?.Name ?? currentProject.Name, Role.Body, bold: true);
             title.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -207,23 +204,18 @@ public sealed partial class AiScreen
             item.Click += (_, _) => pick();
             menu.Items.Add(item);
         }
-        if (currentProject is null && projectsOpen)
-            Option("打开项目文件夹", () => App.Watch(OpenProjectFolder()));
         if (currentProject is not null)
             Option("项目设置", () => EditProject(currentProject));
         if (projectFolder is not null || currentProject?.Attachments.Count > 0)
             Option("选择技能", PickSkill);
-        if (currentProject is not null || !projectsOpen)
+        if (!Bound(activeProject) && !showArchived && chats.Any(chat => chat.ProjectId == activeProject && !chat.Archived))
+            Option("批量移动", () => { organizing = true; selectedChats.Clear(); DrawSide(); });
+        Option(showArchived ? "返回最近对话" : "查看归档", () =>
         {
-            if (!Bound(activeProject) && !showArchived && chats.Any(chat => chat.ProjectId == activeProject && !chat.Archived))
-                Option("批量移动", () => { organizing = true; selectedChats.Clear(); DrawSide(); });
-            Option(showArchived ? "查看对话" : "已归档", () =>
-            {
-                showArchived = !showArchived; organizing = false; selectedChats.Clear(); DrawSide();
-            });
-        }
+            showArchived = !showArchived; organizing = false; selectedChats.Clear(); DrawSide();
+        });
         Tap? more = null;
-        more = Icon(currentProject is null ? projectsOpen ? "更多项目操作" : "更多对话操作" : "更多项目操作",
+        more = Icon(currentProject is null ? "更多对话操作" : "更多项目操作",
             Icons.More, () => menu.ShowAt(more!), 16, !busy);
         more.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(more, 2); row.Children.Add(more);
@@ -248,7 +240,22 @@ public sealed partial class AiScreen
 
     private void ProjectList(StackPanel list)
     {
-        foreach (var project in projects.All)
+        var title = Kit.Text("项目", Role.Caption, "muted", bold: true);
+        title.VerticalAlignment = VerticalAlignment.Center;
+        var heading = new Grid { Padding = new Thickness(10, 0, 0, 0) };
+        heading.ColumnDefinitions.Add(new ColumnDefinition()); heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        heading.Children.Add(title);
+        var menu = new MenuFlyout();
+        var newProject = new MenuFlyoutItem { Text = "新建项目" };
+        newProject.Click += (_, _) => EditProject(null); menu.Items.Add(newProject);
+        var folder = new MenuFlyoutItem { Text = "打开项目文件夹" };
+        folder.Click += (_, _) => App.Watch(OpenProjectFolder()); menu.Items.Add(folder);
+        Tap? actions = null;
+        actions = Icon("项目操作", Icons.Plus, () => menu.ShowAt(actions!), 16, !busy);
+        Grid.SetColumn(actions, 1); heading.Children.Add(actions);
+        list.Children.Add(heading);
+        foreach (var project in projects.All.Where(project => MatchesHistory(project.Name) ||
+            chats.Any(chat => chat.ProjectId == project.Id && !chat.Archived && MatchesHistory(Chats.TitleOf(chat.Title, chat.Thread)))))
         {
             var label = Kit.Text(project.Name, Role.Label);
             label.VerticalAlignment = VerticalAlignment.Center; label.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -263,11 +270,9 @@ public sealed partial class AiScreen
             row.Click += (_, _) => EnterProject(project.Id);
             list.Children.Add(row);
         }
-        var add = Kit.TextAction("新建项目", () => EditProject(null), Icons.Plus);
-        add.Margin = new Thickness(8, 2, 0, 4);
-        add.IsEnabled = !busy;
-        list.Children.Add(add);
     }
+
+    private bool MatchesHistory(string title) => title.Contains(historyQuery.Trim(), StringComparison.CurrentCultureIgnoreCase);
 
     private async Task OpenProjectFolder()
     {

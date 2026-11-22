@@ -30,6 +30,8 @@ public sealed partial class Shell : Window
     private readonly TextBlock faceName = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel faceRow = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
     private readonly Tap me = new();
+    private readonly Tap share = new();
+    private readonly TextBlock shareLabel = Kit.Text("分享", Role.Label, "muted");
     private readonly ColumnDefinition inset = new() { Width = new GridLength(140) };
     private FrameworkElement? wordmark;
     private string shown = "";
@@ -46,7 +48,7 @@ public sealed partial class Shell : Window
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var bar = new Grid { BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(20, 0, 0, 0) };
-        foreach (var width in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) bar.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+        foreach (var width in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto }) bar.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
         bar.ColumnDefinitions.Add(inset);
         var mark = Kit.Text("StuDev", Role.Body, bold: true); mark.FontSize = 17; mark.FontWeight = Microsoft.UI.Text.FontWeights.Bold; mark.CharacterSpacing = -30;
         mark.VerticalAlignment = VerticalAlignment.Center; mark.Margin = new Thickness(0, 0, 28, 2); mark.IsHitTestVisible = false;
@@ -54,11 +56,19 @@ public sealed partial class Shell : Window
         bar.Children.Add(mark);
         Grid.SetColumn(nav, 1); bar.Children.Add(nav);
         var drag = new Grid { Background = Paint.Clear }; Grid.SetColumn(drag, 2); bar.Children.Add(drag);
+        var shareRow = Kit.Line(5, Kit.Icon(Paint.Glyph("share"), 18, "muted", 24, 1.8), shareLabel);
+        shareRow.VerticalAlignment = shareLabel.VerticalAlignment = VerticalAlignment.Center;
+        share.Content = shareRow; share.Height = 34; share.MinWidth = 36; share.CornerRadius = new CornerRadius(8);
+        share.Padding = new Thickness(7, 0, 7, 0); share.Margin = new Thickness(0, 0, 5, 0);
+        share.VerticalAlignment = VerticalAlignment.Center; share.Ground(Paint.Clear, Paint.Brush("surfaceSunken"));
+        AutomationProperties.SetName(share, "分享 StuDev"); ToolTipService.SetToolTip(share, "分享 StuDev");
+        share.Click += (_, _) => ShareSite();
+        Grid.SetColumn(share, 3); bar.Children.Add(share);
         faceRow.Children.Add(face); faceRow.Children.Add(faceName);
         me.Content = faceRow; me.Height = Paint.Number("size", "search"); me.MinWidth = Paint.Number("size", "target"); me.Padding = new Thickness(4, 0, 12, 0); me.CornerRadius = Kit.Capsule(me.Height); me.VerticalAlignment = VerticalAlignment.Center; me.Margin = new Thickness(0, 0, 8, 0);
         AutomationProperties.SetName(me, "我"); AutomationProperties.SetAutomationId(me, "me");
         me.Click += (_, _) => Open("me");
-        Grid.SetColumn(me, 3); bar.Children.Add(me);
+        Grid.SetColumn(me, 4); bar.Children.Add(me);
         face.Changed += () => AutomationProperties.SetHelpText(me, face.Status);
         Face();
         Me.Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Face);
@@ -131,15 +141,42 @@ public sealed partial class Shell : Window
     {
         if (root.ActualWidth <= 0) return;
         if (wordmark is not null) wordmark.Visibility = root.ActualWidth < 720 ? Visibility.Collapsed : Visibility.Visible;
+        shareLabel.Visibility = root.ActualWidth < 960 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var tap in nav.Children.OfType<Tap>()) tap.Padding = new Thickness(root.ActualWidth < 800 ? 8 : 12, 0, root.ActualWidth < 800 ? 8 : 12, 0);
         // Navigation and a usable title-bar drag area precede the optional nickname.
         var markWidth = wordmark?.Visibility == Visibility.Visible ? wordmark.ActualWidth + 28 : 0;
-        var remaining = root.ActualWidth - inset.Width.Value - 20 - markWidth - nav.ActualWidth - 60 - 8 - Paint.Number("size", "accountBase");
+        var remaining = root.ActualWidth - inset.Width.Value - 20 - markWidth - nav.ActualWidth - share.ActualWidth - 5 - 60 - 8 - Paint.Number("size", "accountBase");
         var compact = remaining < Paint.Number("size", "accountNameMin");
         faceName.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         faceName.MaxWidth = Math.Max(0, Math.Min(remaining, Paint.Number("size", "accountNameMax")));
         faceRow.Spacing = compact ? 0 : 6;
         me.Padding = compact ? new Thickness(4, 0, 4, 0) : new Thickness(4, 0, 12, 0);
+    }
+
+    private void ShareSite()
+    {
+        var address = Product.Origin.TrimEnd('/') + "/";
+        var url = Kit.Field(address, "", "StuDev 官网链接");
+        url.IsReadOnly = true;
+        var status = Kit.Text("", Role.Caption, "muted", wrap: true);
+        var copy = Kit.Action("复制链接", () =>
+        {
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(address);
+            try
+            {
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+                status.Text = "链接已复制";
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                url.Focus(FocusState.Programmatic); url.SelectAll();
+                status.Text = "已选中链接，可手动复制";
+            }
+        }, go: true);
+        var content = Kit.Column(12, Pages.SheetHead(Pages.SheetTitle("分享 StuDev"), Close), url, copy, status);
+        content.Padding = new Thickness(22, 18, 22, 12);
+        Sheet(content, 420);
     }
 
     private void Tabs()
@@ -148,9 +185,13 @@ public sealed partial class Shell : Window
         foreach (var (key, label) in Entries)
         {
             var on = key == shown;
-            var words = Kit.Text(label, Role.Label, on ? "brand" : "muted", bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
-            var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = words, Padding = new Thickness(12, 0, 12, 0), Height = 34, CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center };
+            var tone = on ? "brand" : "muted";
+            var words = Kit.Text(label, Role.Label, tone, bold: on); words.FontSize = 14; words.VerticalAlignment = VerticalAlignment.Center;
+            var content = Kit.Line(6, Kit.Icon(Paint.Glyph(key), 17, tone, 24, 1.8), words);
+            content.VerticalAlignment = VerticalAlignment.Center;
+            var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = content, Padding = new Thickness(12, 0, 12, 0), Height = 34, CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center };
             AutomationProperties.SetName(tap, label); AutomationProperties.SetAutomationId(tap, key);
+            AutomationProperties.SetItemStatus(tap, on ? "当前页面" : "");
             tap.Click += (_, _) => Open(key);
             nav.Children.Add(tap);
         }

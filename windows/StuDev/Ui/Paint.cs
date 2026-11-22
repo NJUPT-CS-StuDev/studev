@@ -19,6 +19,7 @@ public static class Paint
     public static int ToneCount { get; } = Root.GetProperty("course").GetProperty("light").EnumerateObject().Count();
     public static Color Of(string name, bool dark) => Parse(Root.GetProperty("color").GetProperty(dark ? "dark" : "light").GetProperty(name).GetString()!);
     public static Color Scene(string name, bool night) => Parse(Root.GetProperty("scene").GetProperty(night ? "night" : "day").GetProperty(name).GetString()!);
+    public static string Glyph(string name) => Root.GetProperty("glyph").GetProperty(name).GetString()!;
     public static Color ToneOf(int tone, string part, bool dark) =>
         Parse(Root.GetProperty("course").GetProperty(dark ? "dark" : "light").GetProperty($"tone{tone % ToneCount}").GetProperty(part).GetString()!);
     public static double Number(params string[] path) { var at = Root; foreach (var key in path) at = at.GetProperty(key); return at.GetDouble(); }

@@ -37,7 +37,7 @@ import java.util.UUID
     var editing by remember { mutableStateOf<ModelService?>(null) }
     val current = editing
     if (current == null) {
-        PlainSheet("模型服务", onBack, top = { TextAction("返回", onBack) }) {
+        PlainSheet("模型服务", onBack, back = onBack) {
             LazyColumn(Modifier.heightIn(max = 440.dp), contentPadding = PaddingValues(top = 8.dp)) {
                 item {
                     KeyRow(null, "${freeService.providerName} · ${freeService.modelName}", freeService.description,
@@ -102,7 +102,7 @@ import java.util.UUID
             } finally { loading = false }
         }
     }
-    PlainSheet(if (existing) "编辑服务商" else "添加服务商", onBack, top = { TextAction("返回", onBack) }) {
+    PlainSheet(if (existing) "编辑服务商" else "添加服务商", onBack, back = onBack) {
         LazyColumn(Modifier.heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(top = 6.dp, bottom = 8.dp)) {
             item { ServiceField(service.name, { service = service.copy(name = it) }, "服务商名称") }
             item {

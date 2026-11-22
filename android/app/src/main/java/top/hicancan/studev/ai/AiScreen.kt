@@ -15,9 +15,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
@@ -42,12 +51,14 @@ import top.hicancan.studev.account.Accounts
 import top.hicancan.studev.account.PlatformFailure
 import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.app.CampusHeader
+import top.hicancan.studev.app.CampusGlyph
 import top.hicancan.studev.app.Chip
 import top.hicancan.studev.app.Ink
 import top.hicancan.studev.app.Plain
 import top.hicancan.studev.app.PlainSheet
 import top.hicancan.studev.app.Route
 import top.hicancan.studev.app.marks
+import top.hicancan.studev.app.topHairline
 import top.hicancan.studev.world.CampusTools
 import top.hicancan.studev.world.Names
 import top.hicancan.studev.world.TaskProposal
@@ -74,8 +85,6 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
     }
 }
 
-/** What one can ask, offered while the conversation is empty, as AI_EXAMPLES in src/campus/ai/AiApp.tsx. */
-private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午哪里有空教室？", "计网里 TCP 拥塞控制有哪些真题考过？", "按培养方案看大二有哪些核心课？")
 
 /**
  * The fourth entry beside the timetable, the map and search, as src/campus/ai/AiApp.tsx: one conversation over the
@@ -153,7 +162,10 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         thread = next
         val id = current ?: java.util.UUID.randomUUID().toString()
         val before = chats.firstOrNull { it.id == id }
-        chats = listOf(SavedChat(id, before?.title.orEmpty(), System.currentTimeMillis(), next, selection, activeProject)) + chats.filter { it.id != id }
+        val updated = System.currentTimeMillis()
+        val saved = before?.copy(updated = updated, thread = next, selection = selection, projectId = activeProject)
+            ?: SavedChat(id, "", updated, next, selection, activeProject)
+        chats = listOf(saved) + chats.filter { it.id != id }
         current = id
     }
     LaunchedEffect(chats, current, projects, activeProject) {
@@ -161,7 +173,26 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     }
     var waiting by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
-    LaunchedEffect(thread.nodes.size, streaming) { scroll.animateScrollTo(scroll.maxValue) }
+    var followsLatest by remember { mutableStateOf(true) }
+    val tailRoom = with(LocalDensity.current) { 64.dp.roundToPx() }
+    val tailInset = with(LocalDensity.current) { 12.dp.roundToPx() }
+    var answerBottom by remember { mutableIntStateOf(0) }
+    var viewportSize by remember { mutableIntStateOf(0) }
+    var viewport by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val answerTarget by remember(scroll, tailInset) {
+        derivedStateOf { (answerBottom - viewportSize + tailInset).coerceIn(0, scroll.maxValue) }
+    }
+    val scrolling = remember(scroll, tailRoom) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && consumed.y != 0f) followsLatest = kotlin.math.abs(answerTarget - scroll.value) <= tailRoom
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(answerTarget, followsLatest) { if (followsLatest && viewportSize > 0) scroll.scrollTo(answerTarget) }
+    val composeFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
 
     /** Answering after [at] in [base]: each message said grows the branch from there, and is the one shown. */
     suspend fun run(base: ChatThread, at: String, mine: Own?) {
@@ -269,7 +300,9 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             if (current != chat || job != null) return@launch
             val id = java.util.UUID.randomUUID().toString()
             val fromTip = parent == thread.tip()
-            if (start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id, selected) && fromTip) draft = ""
+            if (start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id, selected) && fromTip) {
+                draft = ""; followsLatest = true
+            }
         }
     }
     /** The answer to a question asked again, beside the answer it had. */
@@ -279,6 +312,7 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         if (busy) return
         val chat = chats.firstOrNull { it.id == id }
         if (id == null || id != current) draft = ""
+        followsLatest = true
         thread = chat?.thread ?: ChatThread()
         current = chat?.id ?: java.util.UUID.randomUUID().toString()
         activeProject = if (chat == null) projectId else chat.projectId
@@ -311,7 +345,8 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
         val unavailable = selection.provider != null && catalog.direct(selection) == null
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (unavailable) Plain("当前模型已停用或移除，请重新选择。", 12.sp, marks().danger, modifier = Modifier.padding(horizontal = 8.dp))
-            Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() }, busy = busy, canSend = !unavailable) {
+            Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() },
+                onTools = { keyboard?.hide(); configuringTools = true }, busy = busy, canSend = !unavailable, focus = composeFocus) {
                 ChatModelPicker(catalog, selection, freeService, enabled = !busy) { next ->
                     selection = next
                     chats = chats.map { if (it.id == current) it.copy(selection = next) else it }
@@ -369,11 +404,12 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
     }
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = Ink.paper) {
-            ChatDrawer(chats, projects, courses, current, activeProject, busy, memory,
+            ChatDrawer(chats, projects, courses, current, activeProject, busy,
                 openChat = { open(it) }, newChat = { open(null, it) },
                 openProject = { id -> open(chats.filter { it.projectId == id }.maxByOrNull { it.updated }?.id, id) }, saveProject = ::saveProject,
                 editInstructions = { project -> scope.launch { drawer.close(); projectInstructions = project.id } },
-                rename = { renaming = it }, remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
+                rename = { renaming = it }, updateChat = { next -> chats = chats.map { if (it.id == next.id) next else it } },
+                remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
                 mind = { scope.launch { drawer.close(); minding = true } },
                 configureTools = { scope.launch { drawer.close(); configuringTools = true } },
                 configureModels = { scope.launch { drawer.close(); configuringModels = true } })
@@ -385,30 +421,37 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
             val chat = chats.firstOrNull { it.id == current }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 if (chat != null && openedProject != null) Plain(openedProject.name, 11.sp, Ink.muted, maxLines = 1)
-                Plain(chat?.let { Chats.titleOf(it.title, it.thread) } ?: "AI", 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                if (shown.isNotEmpty() && chat != null) Plain(Chats.titleOf(chat.title, chat.thread), 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
             }
             if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null, activeProject) }
         }
         if (shown.isEmpty()) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+            Column(Modifier.weight(1f).widthIn(max = 768.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
                 Plain(openedProject?.name ?: "有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).semantics { heading() })
                 composer()
-                if (openedProject == null) {
+                if (openedProject == null && draft.isEmpty()) {
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        EXAMPLES.forEach { example ->
-                            Box(Modifier.heightIn(min = 34.dp).clip(RoundedCornerShape(10.dp)).background(Ink.sunken)
-                                .clickable { ask(example) }.padding(horizontal = 11.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-                                Plain(example, 13.5.sp, Ink.muted)
+                        assistant.suggestions.forEach { item ->
+                            val shape = RoundedCornerShape(20.dp)
+                            Row(Modifier.heightIn(min = 38.dp).clip(shape).border(1.dp, Ink.line, shape)
+                                .clickable { draft = item.prompt; composeFocus.requestFocus(); keyboard?.show() }
+                                .padding(horizontal = 11.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                CampusGlyph(item.entry, 16.dp, Ink.muted)
+                                Plain(item.label, 13.sp, Ink.muted)
                             }
                         }
                     }
-                    Plain("可以问课表、空教室和地图，还能查课程知识、培养方案、真题与通知。任务草案经你确认后才会保存。对话保存在当前设备，记忆在登录后同步。", 12.sp, Ink.faint, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), lineHeight = 18.sp)
                 }
+                if (error.isNotEmpty()) Plain(error, 13.sp, marks().danger)
             }
             return@Column
         }
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.weight(1f).widthIn(max = 768.dp).fillMaxWidth().align(Alignment.CenterHorizontally)
+            .onGloballyPositioned { viewport = it; viewportSize = it.size.height }) {
+        Column(Modifier.fillMaxSize().nestedScroll(scrolling).verticalScroll(scroll).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             turns.forEachIndexed { at, (question, replyNodes) ->
                 val last = at == turns.lastIndex
                 val answering = last && busy
@@ -450,12 +493,28 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                 answer?.let { top.hicancan.studev.world.DocText(it, onLink = { href -> openInApp(href, route) }) }
                 if (last) live?.let { top.hicancan.studev.world.Doc(it, live = true, onLink = { href -> openInApp(href, route) }) } ?: run { if (last) streaming?.let { Plain("$it ●", 16.sp, lineHeight = 26.sp) } }
                 if (answering && streaming == null && calls.none { results[it.getValue("id").jsonPrimitive.content] == null }) Thinking()
-                // What it found, to tap: every article it read, the last of anything else.
-                calls.mapNotNull { call -> val id = call.getValue("id").jsonPrimitive.content; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
+                if (last) {
+                    if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
+                        top.hicancan.studev.app.TextAction("重试", { if (!busy) start(thread, question.id) }, refresh = true)
+                    }
+                    Spacer(Modifier.height(1.dp).onGloballyPositioned { end ->
+                        viewport?.takeIf { it.isAttached }?.let { box ->
+                            if (end.isAttached) answerBottom = kotlin.math.ceil(box.localPositionOf(end, Offset(0f, end.size.height.toFloat())).y).toInt() + scroll.value
+                        }
+                    })
+                }
+                if (!answering && replyNodes.isNotEmpty()) Row(Modifier.offset(x = (-8).dp), verticalAlignment = Alignment.CenterVertically) {
+                    answer?.let { CopyIcon(it) }
+                    IconAction(Icons.Outlined.Refresh, "重新回答", enabled = !busy) { again(question.id) }
+                    Branches(thread, replyNodes.first().id, !busy, ::pick)
+                }
+                val links = if (answering) emptyList() else calls.mapNotNull { call -> val id = call.getValue("id").jsonPrimitive.content; val name = call.getValue("function").jsonObject.getValue("name").jsonPrimitive.content
                     results[id]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { (if (name == "read") id else name) to (name to it) } }
-                    .toMap().values.forEach { (name, result) -> Found(name, result, route) }
+                    .toMap().values.flatMap { (name, result) -> resourceLinks(name, result) }.distinctBy { it.href }
+                if (links.isNotEmpty()) Resources(question.id, links, route)
                 val drafts = proposals.filter { proposal -> calls.any { it.getValue("id").jsonPrimitive.content == proposal.call } }
-                if (drafts.isNotEmpty()) Drafts(drafts, saved, onAdd = { keys ->
+                if (!answering && drafts.isNotEmpty()) Drafts(drafts, saved, onAdd = { keys ->
                     keys.forEach { key ->
                         val proposal = proposals.first { it.key == key }; val task = proposal.task
                         val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
@@ -463,19 +522,20 @@ private val EXAMPLES = listOf("这周有哪些截止和考试？", "今天下午
                         else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + key }
                     }
                 }, onDrop = { key -> proposals = proposals.filter { it.key != key } })
-                if (!answering && replyNodes.isNotEmpty()) Row(Modifier.offset(x = (-8).dp), verticalAlignment = Alignment.CenterVertically) {
-                    answer?.let { CopyIcon(it) }
-                    IconAction(Icons.Outlined.Refresh, "重新回答", enabled = !busy) { again(question.id) }
-                    Branches(thread, replyNodes.first().id, !busy, ::pick)
-                }
-            }
-            if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
-                turns.lastOrNull()?.let { (question, _) -> top.hicancan.studev.app.TextAction("重试", { if (!busy) start(thread, question.id) }, refresh = true) }
             }
             Spacer(Modifier.height(8.dp))
         }
-        Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)) { composer() }
+            if (!followsLatest && kotlin.math.abs(answerTarget - scroll.value) > tailRoom) {
+                Surface(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), shape = CircleShape, color = Ink.paper,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Ink.line), shadowElevation = 2.dp) {
+                    IconButton(onClick = { followsLatest = true }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Outlined.ArrowDownward, "回到最新回答", Modifier.size(19.dp), tint = Ink.muted)
+                    }
+                }
+            }
+        }
+        Box(Modifier.widthIn(max = 768.dp).fillMaxWidth().align(Alignment.CenterHorizontally)
+            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)) { composer() }
     }
     }
 }
@@ -538,7 +598,6 @@ private data class OfferedService(val id: String?, val name: String, val models:
     Box {
         Row(Modifier.widthIn(max = 200.dp).clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { query = ""; opened = true }
             .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            if (selected.provider == null) FreeServiceAvatar(Modifier.size(16.dp))
             Plain(label, 12.sp, if (enabled) Ink.text else Ink.muted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
             Icon(Icons.Outlined.KeyboardArrowDown, "选择模型", Modifier.size(16.dp), tint = Ink.muted)
         }
@@ -582,14 +641,23 @@ private data class OfferedService(val id: String?, val name: String, val models:
 }
 
 /** The composer keeps the model choice next to the send control. */
-@Composable private fun Composer(value: String, onChange: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit, busy: Boolean, canSend: Boolean, model: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(28.dp)
+@Composable private fun Composer(value: String, onChange: (String) -> Unit, onSend: () -> Unit, onStop: () -> Unit, onTools: () -> Unit,
+    busy: Boolean, canSend: Boolean, focus: FocusRequester, model: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(24.dp)
     Column(Modifier.fillMaxWidth().shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = .08f), spotColor = Color.Black.copy(alpha = .08f)).clip(shape).background(Ink.paper).border(1.dp, Ink.line.copy(alpha = .6f), shape)
         .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
         val ink = Ink.text
-        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.fillMaxWidth().heightIn(max = 128.dp).padding(top = 5.dp, bottom = 2.dp, end = 8.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 24.sp, color = ink),
+        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.fillMaxWidth().heightIn(min = 32.dp, max = 160.dp)
+            .focusRequester(focus).semantics { contentDescription = "问点什么" }.padding(top = 5.dp, bottom = 2.dp, end = 8.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 24.sp, color = ink),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(ink), decorationBox = { inner -> if (value.isEmpty()) Plain("问点什么", 16.sp, Ink.faint); inner() })
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.heightIn(min = 38.dp).clip(RoundedCornerShape(10.dp)).clickable(enabled = !busy, onClick = onTools)
+                .padding(horizontal = 7.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Build, null, Modifier.size(14.dp), tint = Ink.muted)
+                Plain("工具", 12.sp, Ink.muted)
+            }
+            Spacer(Modifier.weight(1f))
             model()
             val enabled = busy || canSend && value.isNotBlank()
             Box(Modifier.size(38.dp).clip(CircleShape).background(if (enabled) ink else ink.copy(alpha = .18f)).clickable(enabled = enabled) { if (busy) onStop() else onSend() }, contentAlignment = Alignment.Center) {
@@ -622,48 +690,72 @@ private data class OfferedService(val id: String?, val name: String, val models:
     Text("正在想", fontSize = 15.sp, style = androidx.compose.ui.text.TextStyle(brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(muted, ink, muted), start = androidx.compose.ui.geometry.Offset(-200f + 400f * shift, 0f), end = androidx.compose.ui.geometry.Offset(400f * shift, 0f))))
 }
 
-/** What a tool found, as things to tap, as Found in AiApp.tsx: rooms on the map, a route to follow. */
-@Composable private fun Found(name: String, result: JsonElement, route: Route) {
-    if (name == "find_place") {
-        @OptIn(ExperimentalLayoutApi::class)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            (result as? JsonArray)?.take(3)?.forEach { item ->
-                val place = item.jsonObject
-                Column(Modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, Ink.line, RoundedCornerShape(12.dp)).clickable { route.map(place = place.getValue("id").jsonPrimitive.content) }.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                    Plain(place.getValue("name").jsonPrimitive.content, 14.sp, weight = FontWeight.SemiBold)
-                    Plain(listOfNotNull(place["where"]?.jsonPrimitive?.contentOrNull, place["now"]?.jsonPrimitive?.contentOrNull).joinToString(" · "), 12.sp, Ink.muted)
-                }
-            }
+private data class ResourceLink(val href: String, val title: String, val detail: String, val kind: String)
+
+private fun resourceLinks(name: String, result: JsonElement): List<ResourceLink> {
+    fun place(id: String, title: String, detail: String) = ResourceLink("/map/?place=${android.net.Uri.encode(id)}", title, detail, "map")
+    fun JsonObject.text(key: String) = this[key]?.jsonPrimitive?.contentOrNull.orEmpty()
+    fun detail(vararg parts: String) = parts.filter { it.isNotBlank() }.joinToString(" · ")
+    if (name == "find_place" && result is JsonArray) return result.take(3).map { item ->
+        val found = item.jsonObject
+        place(found.text("id"), found.text("name"), detail(found.text("where"), found.text("now")))
+    }
+    val value = result as? JsonObject ?: return emptyList()
+    return when (name) {
+        "free_rooms" -> value["rooms"]?.jsonArray.orEmpty().take(6).map { item ->
+            val room = item.jsonObject
+            val id = room.text("room")
+            place(id, Names.room(id), "空到 ${hm(room.getValue("until").jsonPrimitive.int)}")
         }
-        return
+        "route" -> if (value.text("url").isEmpty()) emptyList() else {
+            val indoor = value.text("scope") == "within-building"
+            val note = if (indoor) detail("同在${value.text("building")}", value.text("to_floor").takeIf { it.isNotEmpty() }?.let { "$it 层" }.orEmpty())
+                else value["duration_s"]?.jsonPrimitive?.doubleOrNull?.let { seconds ->
+                    "${value.text("distance_m")} 米 · ${if (seconds < 60) "不到 1 分钟" else "约 ${kotlin.math.ceil(seconds / 60).toInt()} 分钟"}"
+                }.orEmpty()
+            listOf(ResourceLink(value.text("url"), "${if (indoor) "查看" else "导航到"}${value.text("to")}", note, "map"))
+        }
+        "read" -> if (value.text("url").isEmpty()) emptyList() else
+            listOf(ResourceLink(value.text("url"), value.text("title"), detail(value.text("source"), value.text("date")), "knowledge"))
+        "nearby" -> value["places"]?.jsonArray.orEmpty().take(4).map { item ->
+            val found = item.jsonObject
+            place(found.text("id"), found.text("name"), detail("${found.text("metres")} 米", found.text("now")))
+        }
+        else -> emptyList()
     }
-    val value = result as? JsonObject ?: return
-    @Composable fun Card(title: String, note: String, onClick: () -> Unit) = Column(Modifier.clip(RoundedCornerShape(12.dp)).border(1.dp, Ink.line, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp)) {
-        Plain(title, 14.sp, weight = FontWeight.SemiBold); Plain(note, 12.sp, Ink.muted)
+}
+
+@Composable private fun Resources(question: String, links: List<ResourceLink>, route: Route) {
+    var expanded by remember(question) { mutableStateOf(false) }
+    val one = links.size == 1
+    val label = when {
+        links.all { it.kind == "knowledge" } -> "参考资料"
+        links.all { it.kind == "map" } -> "校园地点"
+        else -> "相关资料与地点"
     }
-    @OptIn(ExperimentalLayoutApi::class)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        when (name) {
-            "free_rooms" -> value["rooms"]?.jsonArray?.take(6)?.forEach { item ->
-                val room = item.jsonObject; val id = room.getValue("room").jsonPrimitive.content; val minutes = room.getValue("minutes").jsonPrimitive.int
-                Card(Names.room(id), "空到 ${hm(room.getValue("until").jsonPrimitive.int)} · ${minutes / 60} 小时 ${minutes % 60} 分") { route.map(place = id) }
-            }
-            "route" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
-                val target = android.net.Uri.parse(url).getQueryParameter("nav")
-                val within = value["scope"]?.jsonPrimitive?.contentOrNull == "within-building"
-                val detail = value["distance_m"]?.jsonPrimitive?.long?.let { metres -> val seconds = value.getValue("duration_s").jsonPrimitive.double; "$metres 米 · ${if (seconds < 60) "不到1分钟" else "约 ${kotlin.math.ceil(seconds / 60).toInt()} 分钟"}" } ?: value["steps"]?.jsonArray.orEmpty().joinToString(" → ") { it.jsonPrimitive.content }
-                Card(if (within) "同在${value["building"]?.jsonPrimitive?.contentOrNull.orEmpty()}" else "导航到${value["arrival"]?.jsonPrimitive?.contentOrNull ?: value["to"]?.jsonPrimitive?.contentOrNull.orEmpty()}", detail) { openInApp(url, route) }
-            }
-            "nearby" -> value["places"]?.jsonArray?.take(4)?.forEach { item ->
-                val place = item.jsonObject
-                Card(place.getValue("name").jsonPrimitive.content, listOfNotNull("${place.getValue("metres").jsonPrimitive.long} 米", place["now"]?.jsonPrimitive?.contentOrNull).joinToString(" · ")) { route.map(place = place.getValue("id").jsonPrimitive.content) }
-            }
-            "read" -> value["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
-                Card(value["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), listOfNotNull(value["source"]?.jsonPrimitive?.contentOrNull, value["date"]?.jsonPrimitive?.contentOrNull).joinToString(" · ")) { openInApp(url, route) }
+    Column(Modifier.widthIn(max = 540.dp).fillMaxWidth().topHairline(Ink.line).padding(top = 4.dp)) {
+        if (!one) Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(7.dp))
+            .clickable { expanded = !expanded }.semantics { testTagsAsResourceId = true }.testTag("ai-resources:$question").padding(horizontal = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.ChevronRight, null, Modifier.size(15.dp), tint = Ink.muted)
+            Plain(label, 13.sp, Ink.muted)
+            Plain("${links.size} 项", 12.sp, Ink.muted)
+        }
+        if (one || expanded) for (item in links) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 42.dp).clip(RoundedCornerShape(7.dp))
+                .clickable { openInApp(item.href, route) }.padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                CampusGlyph(item.kind, 15.dp, Ink.muted)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Plain(item.title, 13.sp, maxLines = 1)
+                    if (item.detail.isNotBlank()) Plain(item.detail, 12.sp, Ink.muted, maxLines = 1)
+                }
+                Icon(if (item.href.startsWith('/')) Icons.Outlined.ChevronRight else Icons.Outlined.OpenInNew, null, Modifier.size(14.dp), tint = Ink.muted)
             }
         }
     }
 }
+
 
 /** What the AI keeps in mind, as MemorySettings in AiApp.tsx: to read, change, empty or turn off. */
 @Composable private fun MemorySettings(memory: Memory, project: String?, onClose: () -> Unit, onSave: (Memory) -> Unit) {

@@ -5,7 +5,9 @@
 // back and forth between them. Conversations are kept on this device and listed at the side (chats.ts), and so is what it
 // keeps in mind about the person (memory.ts). It is told the moment and campus context (assistant.mjs). The model is the
 // free quota, one's own key, or an owner-authorized Local Runtime model source (model.ts).
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { suggestions } from '@/world/assistant.json';
+import tokens from '../../../design/tokens.json';
 import { session } from '../../platform/client/api';
 import { usePreferences } from '@/world/usePreferences';
 import { useTasks } from '@/world/useTasks';
@@ -39,8 +41,6 @@ import { MEMORY_LIMIT, readMemory, remembered, writeMemory, type Memory } from '
 import { Doc, DocStream, docReady, DocText, type Update } from '@/world/doc';
 import '../campus.css';
 
-/** What one can ask, offered while the conversation is empty. */
-const AI_EXAMPLES = ['这周有哪些截止和考试？', '今天下午哪里有空教室？', '计网里 TCP 拥塞控制有哪些真题考过？', '按培养方案看大二有哪些核心课？'];
 const KEY = 'studev_ai_chats';
 const OPEN_PROJECT = 'studev_ai_open_project';
 
@@ -89,21 +89,39 @@ function recent(history: Message[]) {
     return out;
 }
 
-/** What a tool found, as things to tap: rooms on the map, a route to follow. */
-function Found({ name, result }: { name: string; result: unknown }) {
+type ResourceLink = { href: string; title: string; detail: string; kind: 'map' | 'knowledge' };
+
+/** The links a result offers when the reader wants to act on the answer. */
+function resourceLinks({ name, result }: { name: string; result: unknown }): ResourceLink[] {
     const value = result as Record<string, unknown> | null;
-    if (!value || typeof value !== 'object') return null;
-    if (name === 'free_rooms' && Array.isArray(value.rooms)) return <div className="ai-cards">{(value.rooms as { room: string; until: number; minutes: number }[]).slice(0, 6).map(room =>
-        <a key={room.room} className="ai-card" href={`/map/?place=${encodeURIComponent(room.room)}`}><b>{roomLabel(room.room)}</b><small>空到 {hm(room.until)} · {Math.floor(room.minutes / 60)} 小时 {room.minutes % 60} 分</small></a>)}</div>;
-    if (name === 'route' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url}><b>{value.scope === 'within-building' ? '查看' : '导航到'}{String(value.to)}</b>
-        <small>{value.scope === 'within-building' ? `同在${String(value.building)}${value.to_floor ? ` · ${String(value.to_floor)} 层` : ''}`
-            : `${String(value.distance_m)} 米 · ${routeDuration(Number(value.duration_s))}${value.arrival ? `到${String(value.arrival)}` : ''}`}</small></a></div>;
-    if (name === 'read' && typeof value.url === 'string') return <div className="ai-cards"><a className="ai-card" href={value.url} target="_blank" rel="noreferrer"><b>{String(value.title)}</b><small>{[value.source, value.date].filter(Boolean).join(' · ')}</small></a></div>;
-    if (name === 'nearby' && Array.isArray(value.places)) return <div className="ai-cards">{(value.places as { id: string; name: string; metres: number; now?: string }[]).slice(0, 4).map(item =>
-        <a key={item.id} className="ai-card" href={`/map/?place=${encodeURIComponent(item.id)}`}><b>{item.name}</b><small>{[`${item.metres} 米`, item.now].filter(Boolean).join(' · ')}</small></a>)}</div>;
-    if (name === 'find_place' && Array.isArray(result)) return <div className="ai-cards">{(result as { id: string; name: string; where: string; now?: string }[]).slice(0, 3).map(item =>
-        <a key={item.id} className="ai-card" href={`/map/?place=${encodeURIComponent(item.id)}`}><b>{item.name}</b><small>{[item.where, item.now].filter(Boolean).join(' · ')}</small></a>)}</div>;
-    return null;
+    if (!value || typeof value !== 'object') return [];
+    const place = (id: string, title: string, detail: string): ResourceLink => ({ href: `/map/?place=${encodeURIComponent(id)}`, title, detail, kind: 'map' });
+    if (name === 'free_rooms' && Array.isArray(value.rooms)) return (value.rooms as { room: string; until: number }[]).slice(0, 6)
+        .map(room => place(room.room, roomLabel(room.room), `空到 ${hm(room.until)}`));
+    if (name === 'route' && typeof value.url === 'string') return [{ href: value.url, kind: 'map',
+        title: `${value.scope === 'within-building' ? '查看' : '导航到'}${String(value.to)}`,
+        detail: value.scope === 'within-building' ? `同在${String(value.building)}${value.to_floor ? ` · ${String(value.to_floor)} 层` : ''}`
+            : `${String(value.distance_m)} 米 · ${routeDuration(Number(value.duration_s))}` }];
+    if (name === 'read' && typeof value.url === 'string') return [{ href: value.url, kind: 'knowledge', title: String(value.title), detail: [value.source, value.date].filter(Boolean).join(' · ') }];
+    if (name === 'nearby' && Array.isArray(value.places)) return (value.places as { id: string; name: string; metres: number; now?: string }[]).slice(0, 4)
+        .map(item => place(item.id, item.name, [`${item.metres} 米`, item.now].filter(Boolean).join(' · ')));
+    if (name === 'find_place' && Array.isArray(result)) return (result as { id: string; name: string; where: string; now?: string }[]).slice(0, 3)
+        .map(item => place(item.id, item.name, [item.where, item.now].filter(Boolean).join(' · ')));
+    return [];
+}
+
+function Resources({ links }: { links: ResourceLink[] }) {
+    const rows = links.map(item => {
+        const external = !item.href.startsWith('/');
+        return <a key={item.href} className="ai-resource" href={item.href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined} title={item.title}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph[item.kind]} /></svg>
+            <span className="ai-resource-copy"><span>{item.title}</span>{item.detail && <small>{item.detail}</small>}</span>
+            {external ? <span aria-hidden="true">↗</span> : <Chevron />}
+        </a>;
+    });
+    if (rows.length === 1) return <div className="ai-resources">{rows}</div>;
+    const label = links.every(item => item.kind === 'knowledge') ? '参考资料' : links.every(item => item.kind === 'map') ? '校园地点' : '相关资料与地点';
+    return <details className="ai-resources"><summary><Chevron /><span>{label}</span><small>{links.length} 项</small></summary>{rows}</details>;
 }
 
 /** ‹ 2/3 ›: the branches beside one, to go back and forth. */
@@ -134,7 +152,7 @@ function ToolPermission({ mode, disabled, change }: { mode: PermissionMode; disa
     const current = toolPermissionModes.find(item => item.id === mode);
     return <div className="ai-tool-permission" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
         onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); event.currentTarget.querySelector('button')?.focus(); } }}>
-        <button type="button" className="ai-tool-trigger" aria-label={`工具权限，${current?.label}`} aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>{current && PERMISSION_ICONS[current.id]}{current?.label} <Chevron /></button>
+        <button type="button" className="ai-tool-trigger" aria-label={`工具权限，${current?.label}`} title="输入 / 查找工具" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>{current && PERMISSION_ICONS[current.id]}工具 · {current?.label} <Chevron /></button>
         {open && <div className="ai-menu ai-permission-menu" role="group" aria-label="工具权限">
             {toolPermissionModes.map(item => <button type="button" aria-pressed={item.id === mode} key={item.id} onClick={() => { change(item.id); setOpen(false); }}>
                 <span className="ai-permission-icon">{PERMISSION_ICONS[item.id]}</span><span className="ai-permission-copy"><b>{item.label}</b><small>{item.description}</small></span>{item.id === mode && <Tick />}
@@ -173,9 +191,9 @@ function Mentions({ text, tools }: { text: string; tools: ToolItem[] }) {
 
 /** The box one writes in: grows with what is written, sends on Enter, stops while answering. Typing `/` at the start or
  * after a space looks up a tool; the chosen one goes into the sentence as `/工具名`, as many as the question needs. */
-function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable, picker, permission, tools }: { value: string; onChange: (text: string) => void; onSend: (text: string, preferred: string[]) => void; onStop: () => void; busy: boolean; canSend: boolean; unavailable?: string; picker: ReactNode; permission: ReactNode; tools: ToolItem[] }) {
+function Composer({ input, value, onChange, onSend, onStop, busy, canSend, unavailable, picker, permission, tools }: { input: RefObject<HTMLTextAreaElement | null>; value: string; onChange: (text: string) => void; onSend: (text: string, preferred: string[]) => void; onStop: () => void; busy: boolean; canSend: boolean; unavailable?: string; picker: ReactNode; permission: ReactNode; tools: ToolItem[] }) {
     const [active, setActive] = useState(0), [caret, setCaret] = useState(0), [dismissed, setDismissed] = useState(-1);
-    const id = useId(), input = useRef<HTMLTextAreaElement>(null), menu = useRef<HTMLDivElement>(null);
+    const id = useId(), menu = useRef<HTMLDivElement>(null);
     // The `/word` being typed right before the caret, if any.
     const typed = /(?:^|\s)\/([^\s/]*)$/.exec(value.slice(0, caret));
     const slash = typed ? caret - typed[1]!.length - 1 : -1;
@@ -202,7 +220,7 @@ function Composer({ value, onChange, onSend, onStop, busy, canSend, unavailable,
         {unavailable && <p id={`${id}-status`} role="status" className="fine ai-model-status">{unavailable}</p>}
         <div className="ai-compose-field">
         <Mentions text={value} tools={tools} />
-        <textarea ref={input} aria-label="问点什么" aria-describedby={unavailable ? `${id}-status` : undefined} aria-controls={showing ? id : undefined} aria-activedescendant={showing && at >= 0 ? `${id}-${at}` : undefined} value={value} maxLength={4000} rows={1} placeholder="问点什么，输入 / 使用工具"
+        <textarea ref={input} aria-label="问点什么" aria-describedby={unavailable ? `${id}-status` : undefined} aria-controls={showing ? id : undefined} aria-activedescendant={showing && at >= 0 ? `${id}-${at}` : undefined} value={value} maxLength={4000} rows={1} placeholder="问点什么"
             onChange={event => { setActive(0); setDismissed(-1); onChange(event.target.value); track(event); }} onSelect={track} onClick={track}
             onScroll={event => { const mirror = event.currentTarget.previousElementSibling as HTMLElement | null; if (mirror) mirror.scrollTop = event.currentTarget.scrollTop; }}
             onKeyDown={event => {
@@ -295,7 +313,7 @@ function ModelPicker({ settings, choice, disabled, answering, runtimeOff, select
     return <div ref={anchor} className="ai-model" onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(false); }}>
         <button ref={trigger} type="button" aria-label="选择模型" aria-haspopup="listbox" title={title} aria-expanded={showing} className={`ai-model-b ${showing ? 'on' : ''}`} disabled={disabled}
             onClick={() => { if (showing) close(false); else { setQuery(''); setActive(-1); setOpen(true); } }}>
-            {chosen?.kind === 'free' && <FreeServiceAvatar />}<span>{title}</span><Chevron />
+            <span>{title}</span><Chevron />
         </button>
         {showing && <div ref={menu} className={`ai-menu ai-model-menu${placement.down ? ' down' : ''}`} style={{ maxHeight: placement.height }}>
             <input ref={search} type="search" role="combobox" aria-label="搜索模型或服务商" aria-expanded="true" aria-autocomplete="list" aria-controls={id} aria-activedescendant={activeId}
@@ -482,6 +500,7 @@ export default function AiApp() {
     const failedRuntime = useRef<{ request: RuntimeRequest; firstId?: string } | null>(null);
     useEffect(() => { failedRuntime.current = null; }, [choice.provider, choice.model]);
     const end = useRef<HTMLDivElement>(null), scroller = useRef<HTMLDivElement>(null), stuck = useRef(true);
+    const composeInput = useRef<HTMLTextAreaElement>(null);
     const services = useMemo(() => new CampusTools(), []);
     useEffect(() => () => services.dispose(), [services]);
     const latest = useRef(loaded?.line); latest.current = loaded?.line;
@@ -755,14 +774,29 @@ export default function AiApp() {
         setChat(current => ({ ...current, model: next, resetRuntime: next.provider === RUNTIME_PROVIDER && current.thread.nodes.length > 0 }));
         setError('');
     }
-    // The view follows the answer down unless one has scrolled up to read; then a button brings it back.
+    function answerPosition(): number | undefined {
+        const box = scroller.current, anchor = end.current;
+        if (!box || !anchor) return;
+        return Math.max(0, Math.min(box.scrollHeight - box.clientHeight,
+            box.scrollTop + anchor.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom + 12));
+    }
+    function followAnswer(behavior: ScrollBehavior = 'instant') {
+        const top = answerPosition();
+        if (top !== undefined) scroller.current?.scrollTo({ top, behavior });
+    }
+    // Resource rows sit after this target, so neither streaming nor a refresh follows them.
     useEffect(() => {
         const box = scroller.current; if (!box) return;
-        const onScroll = () => { stuck.current = box.scrollTop + box.clientHeight >= box.scrollHeight - 80; setBelow(!stuck.current); };
+        const onScroll = () => {
+            const top = answerPosition();
+            if (top === undefined) return;
+            stuck.current = Math.abs(box.scrollTop - top) < 64;
+            setBelow(!stuck.current);
+        };
         box.addEventListener('scroll', onScroll, { passive: true });
         return () => box.removeEventListener('scroll', onScroll);
     }, []);
-    useEffect(() => { if (stuck.current) end.current?.scrollIntoView({ block: 'end' }); }, [chat, streaming]);
+    useLayoutEffect(() => { if (stuck.current) followAnswer(); }, [chat, streaming, live, drawn, error]);
 
     const execute = useMemo(() => async (name: string, raw: unknown, call = ''): Promise<unknown> => {
         const args = toolArguments(name, raw), line = latest.current;
@@ -965,7 +999,7 @@ export default function AiApp() {
     const blank = !shown.length;
     const locked = busy || savingProject;
     const whyUnavailable = unavailableProject ? '打开主目录后即可继续聊天。' : activeConflict ? '此对话有两个冲突版本，已保存在项目目录。' : runtimeOff ? RUNTIME_DISABLED : undefined;
-    const composer = <Composer key={chat.id} value={draft} onChange={setDraft} onSend={(question, preferred) => void send(question, false, tip(chat.thread), preferred)} onStop={() => stop.current?.abort()} busy={busy} canSend={Boolean(provider && !unavailableProject && !activeConflict && !savingProject)} unavailable={whyUnavailable} tools={availableTools}
+    const composer = <Composer key={chat.id} input={composeInput} value={draft} onChange={setDraft} onSend={(question, preferred) => void send(question, false, tip(chat.thread), preferred)} onStop={() => stop.current?.abort()} busy={busy} canSend={Boolean(provider && !unavailableProject && !activeConflict && !savingProject)} unavailable={whyUnavailable} tools={availableTools}
         permission={<ToolPermission mode={toolPreferences.mode ?? 'read'} disabled={busy} change={mode => {
             try { writeToolPreferences({ ...readToolPreferences(), mode }); } catch { setError('工具权限暂时无法保存。'); }
         }} />}
@@ -1137,7 +1171,10 @@ export default function AiApp() {
         {blank && <div className="ai-hello">
             <h1>{project?.name ?? '有什么可以帮你？'}</h1>
             {composer}
-            {!waiting && !project && <div className="ai-examples">{AI_EXAMPLES.map(example => <button key={example} disabled={runtimeOff} onClick={() => void send(example)}>{example}</button>)}</div>}
+            {!waiting && !project && !draft && <div className="ai-examples">{suggestions.map(({ entry, label, prompt }) =>
+                <button key={entry} type="button" onClick={() => { setDraft(prompt); composeInput.current?.focus(); }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph[entry as keyof typeof tokens.glyph]} /></svg>{label}
+                </button>)}</div>}
             {!project && !prefs.class && <p className="fine">在「我」里选好班级后，即可询问个人课表。</p>}
         </div>}
         {loadError && <p role="status" className="fine">课表还没读完：{loadError}</p>}
@@ -1152,6 +1189,7 @@ export default function AiApp() {
             // What it found, to tap: every article it read, the last of anything else.
             const found = new Map<string, { name: string; result: unknown }>();
             calls.forEach(call => { const result = results.get(call.id); if (result && !(typeof result === 'object' && 'error' in (result as object))) found.set(call.function.name === 'read' ? call.id : call.function.name, { name: call.function.name, result }); });
+            const links = [...new Map([...found.values()].flatMap(resourceLinks).map(item => [item.href, item])).values()];
             const drafts = chat.proposals.filter(item => calls.some(call => call.id === item.call));
             const question = turn.question.message.content ?? '';
             const answering = turn.last && busy;
@@ -1167,20 +1205,21 @@ export default function AiApp() {
                 {answer && drawn && <div className="ai-a"><DocText text={answer} /></div>}
                 {turn.last && live && <div className="ai-a"><Doc blocks={live.blocks} live /></div>}
                 {answering && !live && !doing && <p className="ai-think">{modelStage || '正在想'}</p>}
-                {found.size > 0 && [...found.values()].map(item => <Found key={item.name} name={item.name} result={item.result} />)}
-                {drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
+                {turn.last && error && !runtimeOff && <p role="alert" className="ai-error">{error}<TextAction refresh onClick={retry}>重试</TextAction></p>}
+                {turn.last && <div ref={end} className="ai-answer-end" aria-hidden="true" />}
                 {!answering && turn.replies.length > 0 && <div className="ai-tools">
                     {answer && <CopyButton text={answer} />}
                     <button className="ai-icon" aria-label="重新回答" title="重新回答" disabled={busy} onClick={() => again(turn.question.id)}><Again /></button>
                     <Branches thread={chat.thread} id={turn.replies[0]!.id} onChoose={pick} disabled={busy} />
                 </div>}
+                {!answering && links.length > 0 && <Resources links={links} />}
+                {!answering && drafts.length > 0 && <Drafts drafts={drafts} today={today} onAdd={keys => keys.forEach(confirm)} onDrop={key => setChat(all => ({ ...all, proposals: all.proposals.filter(item => item.key !== key) }))} />}
             </section>;
         })}</div>
-        {error && !runtimeOff && <p role="alert" className="ai-error">{error}{turns.length > 0 && <TextAction refresh onClick={retry}>重试</TextAction>}</p>}
+        {blank && error && !runtimeOff && <p role="alert" className="ai-error">{error}</p>}
         {waiting && <p role="status" className="fine">在新打开的页面登录或注册，回到这里会自动发出：“{waiting.text}”</p>}
-        <div ref={end} className="ai-end" />
         </div></div>
-        {below && !blank && <button className="ai-down" aria-label="回到底部" onClick={() => { stuck.current = true; end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }}><Down /></button>}
+        {below && !blank && <button className="ai-down" aria-label="回到最新回答" onClick={() => { stuck.current = true; followAnswer(); setBelow(false); }}><Down /></button>}
         {!blank && <div className="ai-dock">{composer}</div>}
         </div>
     </div>;

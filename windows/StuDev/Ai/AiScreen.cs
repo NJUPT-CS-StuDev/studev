@@ -34,6 +34,14 @@ public sealed partial class AiScreen : Screen
     private readonly Grid main = new();
     private StackPanel turns = new() { Spacing = 30 };
     private readonly ScrollViewer scroller = new() { HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private TextBox? composeInput;
+    private Tap? latestAnswer;
+    private FrameworkElement? answerEnd;
+    private readonly HashSet<string> openResources = new(StringComparer.Ordinal);
+    private bool followsLatest = true;
+    private bool positioning;
+    private double readingOffset;
+    private int layoutRevision;
     private Border live = new();
     private List<SavedChat> chats = [];
     private string? current;
@@ -76,6 +84,15 @@ public sealed partial class AiScreen : Screen
         Children.Add(side);
         Grid.SetColumn(main, 1); Children.Add(main);
         frame.Tick += (_, _) => { if (liveDirty) { liveDirty = false; DrawLive(); } };
+        scroller.ViewChanged += (_, _) =>
+        {
+            if (positioning || latestAnswer is null) return;
+            var offset = scroller.VerticalOffset;
+            if (Math.Abs(offset - readingOffset) > .5)
+                followsLatest = Math.Abs(AnswerTarget() - offset) <= 64;
+            readingOffset = offset;
+            ShowLatestControl();
+        };
         SizeChanged += (_, change) => { var narrow = change.NewSize.Width < 760; if (compact != narrow) { compact = narrow; conversationsOpen = false; Draw(); } };
         Paint.Turned += Draw;
         Account.Shared.Changed += () => DispatcherQueue.TryEnqueue(Draw);
@@ -168,6 +185,8 @@ public sealed partial class AiScreen : Screen
     {
         if (busy) return;
         var found = chats.FirstOrDefault(c => c.Id == id && c.ProjectId == activeProject);
+        if (found?.Id != current) draft = "";
+        followsLatest = true; readingOffset = 0; openResources.Clear();
         thread = found?.Thread ?? ChatThread.Empty; proposals = found is null ? [] : keptProposals.GetValueOrDefault(found.Id) ?? [];
         choice = found?.Choice ?? ModelChoice.Free; startsRuntime = found?.StartsRuntime == true;
         current = found?.Id ?? Guid.NewGuid().ToString(); error = ""; editing = null; openSteps.Clear();
@@ -203,7 +222,7 @@ public sealed partial class AiScreen : Screen
         if (preferredTools is { Count: > 0 } && preferredTools.Any(name => !ToolsFor(SituationNow(), provider).Any(tool => Assistant.ToolName(tool) == name)))
         { error = "问题里点名的工具暂不可用，请换一个或去掉它。"; Draw(); return; }
         if (provider is null && Account.Shared.User is null) { Me.SignIn.Show(() => Send(asked, parent, clearDraft, preferredTools, skill)); return; }
-        if (clearDraft) { draft = ""; draftSkill = null; }
+        if (clearDraft) { draft = ""; draftSkill = null; followsLatest = true; }
         parent ??= thread.Tip();
         var fork = parent != thread.Tip();
         var id = Guid.NewGuid().ToString();
@@ -526,15 +545,13 @@ public sealed partial class AiScreen : Screen
         {
             Content = Kit.Line(8, Kit.Icon(Icons.Compose, 18, "brand", 20), Kit.Text("新对话", Role.Label, "brand", bold: true)),
             Height = 38, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy,
-            HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Stretch,
-            MinWidth = compact ? 116 : 0,
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
         ((StackPanel)top.Content).VerticalAlignment = VerticalAlignment.Center;
         AutomationProperties.SetName(top, "新对话");
         top.Click += (_, _) =>
         {
             draft = ""; showArchived = false; organizing = false; selectedChats.Clear();
-            if (activeProject is null) projectsOpen = false;
             Open(null);
         };
         var newRow = new Grid { Margin = new Thickness(12, 12, 12, 6), ColumnSpacing = compact ? 8 : 0 };
@@ -549,11 +566,21 @@ public sealed partial class AiScreen : Screen
         }
         var sideHeading = new StackPanel();
         sideHeading.Children.Add(newRow);
-        SideNavigation(sideHeading);
+        var query = Kit.Field(historyQuery, "搜索对话", "搜索对话");
+        var search = Kit.SearchField(query);
+        search.Margin = new Thickness(12, 2, 12, 7);
+        sideHeading.Children.Add(search);
         side.Children.Add(sideHeading);
         var list = new StackPanel { Padding = new Thickness(12, 4, 12, 8), Spacing = 2 };
-        if (projectsOpen && activeProject is null) ProjectList(list);
-        else ChatList(list);
+        void DrawList()
+        {
+            list.Children.Clear();
+            if (activeProject is null && !showArchived && !organizing) ProjectList(list);
+            SideNavigation(list);
+            ChatList(list);
+        }
+        query.TextChanged += (_, _) => { historyQuery = query.Text; DrawList(); };
+        DrawList();
         var scroll = new ScrollViewer { Content = list, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroll, 1); side.Children.Add(scroll);
         var footer = new Grid { Padding = new Thickness(14, 4, 14, 6), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
@@ -571,7 +598,8 @@ public sealed partial class AiScreen : Screen
 
     private void ChatList(StackPanel list)
     {
-        var visible = chats.Where(chat => chat.ProjectId == activeProject && chat.Archived == showArchived).ToList();
+        var visible = chats.Where(chat => chat.ProjectId == activeProject && chat.Archived == showArchived &&
+            MatchesHistory(Chats.TitleOf(chat.Title, chat.Thread))).ToList();
         var pinned = visible.Where(chat => chat.Pinned).OrderByDescending(chat => chat.Updated).ToList();
         var groups = Chats.Groups(visible.Where(chat => !chat.Pinned).ToList(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         if (pinned.Count > 0) groups.Insert(0, ("置顶", pinned));
@@ -608,12 +636,24 @@ public sealed partial class AiScreen : Screen
                     var remove = new MenuFlyoutItem { Text = "删除", Foreground = Paint.Brush("danger") }; remove.Click += (_, _) => Remove(id); menu.Items.Add(remove);
                 }
                 row.ContextFlyout = menu;
-                list.Children.Add(row);
+                var line = new Grid();
+                line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                line.Children.Add(row);
+                Tap? more = null;
+                more = Icon("对话选项", Icons.More, () => menu.ShowAt(more!), 16, !busy);
+                more.Opacity = on || compact ? 1 : 0;
+                more.VerticalAlignment = VerticalAlignment.Center;
+                line.PointerEntered += (_, _) => more.Opacity = 1;
+                line.PointerExited += (_, _) => { if (!on && !compact && more.FocusState == FocusState.Unfocused) more.Opacity = 0; };
+                more.GotFocus += (_, _) => more.Opacity = 1;
+                more.LostFocus += (_, _) => { if (!on && !compact) more.Opacity = 0; };
+                Grid.SetColumn(more, 1); line.Children.Add(more);
+                list.Children.Add(line);
             }
         }
         if (visible.Count == 0)
         {
-            var empty = showArchived ? "暂无归档对话" : "暂无对话";
+            var empty = !string.IsNullOrWhiteSpace(historyQuery) ? "没有找到对话" : showArchived ? "暂无归档对话" : "暂无对话";
             var none = Kit.Text(empty, Role.Label, "muted", wrap: true);
             none.Margin = new Thickness(10, 14, 10, 0); list.Children.Add(none);
         }
@@ -656,6 +696,9 @@ public sealed partial class AiScreen : Screen
 
     private void DrawMain()
     {
+        var keepInputFocus = composeInput?.FocusState is FocusState.Keyboard or FocusState.Pointer;
+        var revision = ++layoutRevision;
+        positioning = true; latestAnswer = null; answerEnd = null;
         main.Children.Clear(); main.RowDefinitions.Clear();
         main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var blank = thread.Path().Count == 0;
@@ -664,7 +707,7 @@ public sealed partial class AiScreen : Screen
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
         if (compact) bar.Children.Add(Icon("打开侧栏", Icons.Note, () => { conversationsOpen = true; Draw(); }, 16));
         if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); bar.Children.Add(title); }
-        main.Children.Add(bar);
+        if (compact || !blank) main.Children.Add(bar);
 
         var column = new StackPanel { Padding = new Thickness(18, 12, 18, 28) };
         var composer = Composer();
@@ -675,29 +718,87 @@ public sealed partial class AiScreen : Screen
             var h = Kit.Text(name, Role.Title, wrap: true);
             h.FontSize = 28; h.HorizontalAlignment = HorizontalAlignment.Center; h.TextAlignment = TextAlignment.Center;
             hello.Children.Add(h); hello.Children.Add(composer);
+            if (activeProject is null)
+            {
+                var input = composeInput!;
+                var questions = new WrapRow { Gap = 8, HorizontalAlignment = HorizontalAlignment.Center };
+                foreach (var suggestion in assistant.Suggestions)
+                {
+                    var words = Kit.Line(6, Kit.Icon(Paint.Glyph(suggestion.Entry), 16, "muted", 24, 1.8),
+                        Kit.Text(suggestion.Label, Role.Caption, "muted"));
+                    words.VerticalAlignment = VerticalAlignment.Center;
+                    var action = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken"))
+                    {
+                        Content = words, Height = 36, CornerRadius = new CornerRadius(18),
+                        Padding = new Thickness(11, 0, 11, 0), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1),
+                    };
+                    AutomationProperties.SetName(action, suggestion.Label);
+                    action.Click += (_, _) =>
+                    {
+                        input.Text = suggestion.Prompt;
+                        input.Focus(FocusState.Programmatic);
+                        input.Select(input.Text.Length, 0);
+                    };
+                    questions.Children.Add(action);
+                }
+                void ShowQuestions() => questions.Visibility = input.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+                input.TextChanged += (_, _) => ShowQuestions();
+                ShowQuestions();
+                hello.Children.Add(questions);
+            }
             if (error.Length > 0) hello.Children.Add(Kit.Text(error, Role.Body, "danger", wrap: true));
             var centred = Pages.Centre(hello, 768); centred.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetRow(centred, 1); main.Children.Add(centred);
+            var welcome = new ScrollViewer { Content = centred, HorizontalScrollMode = ScrollMode.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalContentAlignment = VerticalAlignment.Center };
+            Grid.SetRow(welcome, 1); main.Children.Add(welcome);
+            positioning = false;
+            if (keepInputFocus) DispatcherQueue.TryEnqueue(() => composeInput?.Focus(FocusState.Programmatic));
             return;
         }
         turns = new StackPanel { Spacing = 30 };
         DrawTurns();
         column.Children.Add(turns);
-        if (error.Length > 0)
-        {
-            var row = Kit.Line(10, Kit.Text(error, Role.Body, "danger", wrap: true));
-            ((TextBlock)row.Children[0]).MaxWidth = 600;
-            var lastQuestion = thread.Path().LastOrDefault(n => (string?)n.Message["role"] == "user");
-            if (lastQuestion is not null) row.Children.Add(Kit.TextAction("重试", () => { if (!busy) App.Watch(runtimeRequest is { } failed ? Run(thread, thread.Tip(), retryRequest: failed, firstAssistant: runtimeFirstAssistant) : Run(thread, lastQuestion.Id)); }, Icons.Again));
-            row.Margin = new Thickness(0, 14, 0, 0);
-            column.Children.Add(row);
-        }
         scroller.Content = Pages.Centre(column, 768);
         Grid.SetRow(scroller, 1);
         main.Children.Add(scroller);
+        var latest = Icon("回到最新回答", "M10 4v12m-5-5 5 5 5-5", () =>
+        {
+            followsLatest = true;
+            scroller.ChangeView(null, AnswerTarget(), null, true);
+            ShowLatestControl();
+        });
+        latest.Width = latest.Height = 38; latest.CornerRadius = new CornerRadius(19);
+        latest.Ground(Paint.Brush("paper"), Paint.Brush("surfaceSunken"));
+        latest.BorderBrush = Paint.Brush("line"); latest.BorderThickness = new Thickness(1);
+        latest.HorizontalAlignment = HorizontalAlignment.Right; latest.VerticalAlignment = VerticalAlignment.Bottom;
+        latest.Margin = new Thickness(0, 0, 18, 6);
+        latestAnswer = latest; ShowLatestControl();
+        Grid.SetRow(latest, 1); main.Children.Add(latest);
         var dock = Pages.Centre(composer, 768); dock.Padding = new Thickness(14, 6, 14, 14);
         Grid.SetRow(dock, 2); main.Children.Add(dock);
-        DispatcherQueue.TryEnqueue(() => scroller.ChangeView(null, scroller.ScrollableHeight, null, true));
+        var restoreOffset = readingOffset;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (revision != layoutRevision) return;
+            scroller.UpdateLayout();
+            scroller.ChangeView(null, followsLatest ? AnswerTarget() : Math.Min(restoreOffset, scroller.ScrollableHeight), null, true);
+            readingOffset = scroller.VerticalOffset; positioning = false; ShowLatestControl();
+            if (keepInputFocus) composeInput?.Focus(FocusState.Programmatic);
+        });
+    }
+
+    private void ShowLatestControl()
+    {
+        if (latestAnswer is not null)
+            latestAnswer.Visibility = !followsLatest && Math.Abs(AnswerTarget() - scroller.VerticalOffset) > 64
+                ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private double AnswerTarget()
+    {
+        if (answerEnd is not { IsLoaded: true } anchor || scroller.ViewportHeight <= 0) return scroller.VerticalOffset;
+        var edge = anchor.TransformToVisual(scroller).TransformPoint(new Windows.Foundation.Point(0, anchor.ActualHeight)).Y;
+        return Math.Clamp(scroller.VerticalOffset + edge - scroller.ViewportHeight + 12, 0, scroller.ScrollableHeight);
     }
 
 
@@ -711,8 +812,6 @@ public sealed partial class AiScreen : Screen
         label.MaxWidth = compact ? 168 : 285;
         label.TextTrimming = TextTrimming.CharacterEllipsis;
         var content = Kit.Line(6, label, Kit.Icon(Icons.Chevron, 13, "muted"));
-        if (selected?.IsFree == true)
-            content.Children.Insert(0, ModelSettings.FreeAvatar(16));
         content.VerticalAlignment = VerticalAlignment.Center;
         var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
         { Content = content, MinHeight = 36, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(10), IsEnabled = !busy };
@@ -778,13 +877,14 @@ public sealed partial class AiScreen : Screen
     private Tap PermissionPicker()
     {
         var currentMode = ToolMenu.Modes.First(mode => mode.Id == toolAccess.Mode);
-        var words = Kit.Text(currentMode.Label, Role.Label);
+        var words = Kit.Text($"工具 · {currentMode.Label}", Role.Label, "muted");
         words.VerticalAlignment = VerticalAlignment.Center;
         var caption = Kit.Line(6, words, Kit.Icon(Icons.Chevron, 13, "muted"));
         var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
         { Content = caption, MinHeight = 36, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, IsEnabled = !busy };
         AutomationProperties.SetName(button, $"工具权限，当前 {currentMode.Label}");
         AutomationProperties.SetHelpText(button, currentMode.Description);
+        ToolTipService.SetToolTip(button, "输入 / 查找工具");
         var menu = new MenuFlyout { Placement = FlyoutPlacementMode.TopEdgeAlignedLeft };
         foreach (var mode in ToolMenu.Modes)
         {
@@ -799,7 +899,8 @@ public sealed partial class AiScreen : Screen
 
     private FrameworkElement Composer()
     {
-        var box = new TextBox { Text = draft, PlaceholderText = "问点什么，输入 / 使用工具", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
+        var box = new TextBox { Text = draft, PlaceholderText = "问点什么", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxLength = 4000, MaxHeight = 200, FontSize = 16, BorderThickness = new Thickness(0), Background = Paint.Clear, Padding = new Thickness(0, 7, 0, 7), VerticalAlignment = VerticalAlignment.Center };
+        composeInput = box;
         box.Resources["TextControlBackgroundFocused"] = Paint.Clear; box.Resources["TextControlBackgroundPointerOver"] = Paint.Clear; box.Resources["TextControlBorderBrushFocused"] = Paint.Clear;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, "问点什么");
         var send = new Tap(Paint.Brush("ink")) { Width = 36, Height = 36, CornerRadius = new CornerRadius(18), VerticalAlignment = VerticalAlignment.Bottom, Content = Kit.Icon(busy ? Icons.Square : Icons.Up, 20, "paper", 20, 2) };
@@ -910,9 +1011,10 @@ public sealed partial class AiScreen : Screen
         var model = ModelPicker(); Grid.SetColumn(model, 1); toolbar.Children.Add(model);
         Grid.SetColumn(send, 2); toolbar.Children.Add(send);
         Grid.SetRow(toolbar, 3); Grid.SetColumnSpan(toolbar, 2); grid.Children.Add(toolbar);
-        var shell = new Border { Child = grid, Padding = new Thickness(20, 9, 9, 9), CornerRadius = new CornerRadius(28), Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), Translation = new System.Numerics.Vector3(0, 0, 8) };
+        var shell = new Border { Child = grid, Padding = new Thickness(18, 9, 9, 9), CornerRadius = new CornerRadius(24), Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), Translation = new System.Numerics.Vector3(0, 0, 4) };
         shell.Shadow = new ThemeShadow();
-        box.Loaded += (_, _) => { if (!busy) box.Focus(FocusState.Programmatic); };
+        box.GotFocus += (_, _) => shell.BorderBrush = Paint.Faded("brand", .44);
+        box.LostFocus += (_, _) => shell.BorderBrush = Paint.Brush("line");
         return shell;
     }
 
@@ -1005,14 +1107,22 @@ public sealed partial class AiScreen : Screen
             if (answer is not null) turn.Children.Add(Doc.Make(Doc.Read(answer), link: Link));
             if (last && busy) { turn.Children.Add(live); DrawLive(); }
             if (answering && stream is null && !steps.Any(s => s.Pending) && answer is null) turn.Children.Add(Kit.Text("正在想", Role.Body, "muted"));
+            if (last)
+            {
+                if (error.Length > 0)
+                {
+                    var feedback = Kit.Text(error, Role.Label, "danger", wrap: true);
+                    var retry = Kit.TextAction("重试", () => { if (!busy) App.Watch(runtimeRequest is { } failed ? Run(thread, thread.Tip(), retryRequest: failed, firstAssistant: runtimeFirstAssistant) : Run(thread, question.Id)); }, Icons.Again);
+                    turn.Children.Add(Kit.Column(4, feedback, retry));
+                }
+                answerEnd = new Border { Height = 1, Margin = new Thickness(0, -8, 0, 0) };
+                turn.Children.Add(answerEnd);
+            }
             // What it found, to tap: every article it read, the last of anything else.
             var found = new Dictionary<string, (string Name, JsonNode Result)>();
             foreach (var call in calls)
                 if (results.GetValueOrDefault((string)call["id"]!) is { } result && !(result is JsonObject o && o.ContainsKey("error")))
                     found[(string)call["function"]!["name"]! == "read" ? (string)call["id"]! : (string)call["function"]!["name"]!] = ((string)call["function"]!["name"]!, result);
-            foreach (var (name, result) in found.Values) if (Found(name, result) is { } cards) turn.Children.Add(cards);
-            var drafts = proposals.Where(p => calls.Any(c => (string)c["id"]! == p.Call)).ToList();
-            if (drafts.Count > 0) turn.Children.Add(Drafts(drafts));
             if (!answering && replies.Count > 0)
             {
                 var tools = Kit.Line(2);
@@ -1020,6 +1130,13 @@ public sealed partial class AiScreen : Screen
                 tools.Children.Add(Icon("重新回答", Icons.Again, () => { if (!busy) App.Watch(Run(thread, question.Id, fork: true)); }, enabled: !busy));
                 tools.Children.Add(Branches(replies[0].Id));
                 turn.Children.Add(tools);
+            }
+            if (!answering)
+            {
+                var resources = found.Values.SelectMany(item => ResourceLinks(item.Name, item.Result)).DistinctBy(item => item.Href).ToList();
+                if (resources.Count > 0) turn.Children.Add(ReferenceList(question.Id, resources));
+                var drafts = proposals.Where(p => calls.Any(c => (string)c["id"]! == p.Call)).ToList();
+                if (drafts.Count > 0) turn.Children.Add(Drafts(drafts));
             }
             turns.Children.Add(turn);
         }
@@ -1044,7 +1161,12 @@ public sealed partial class AiScreen : Screen
             return;
         }
         live.Child = Doc.Make(Doc.BlocksOf(lastUpdate), true, Link);
-        scroller.ChangeView(null, scroller.ScrollableHeight, null, true);
+        if (followsLatest && !positioning)
+        {
+            scroller.UpdateLayout();
+            scroller.ChangeView(null, AnswerTarget(), null, true);
+        }
+        ShowLatestControl();
     }
 
     private FrameworkElement Branches(string id)
@@ -1080,39 +1202,91 @@ public sealed partial class AiScreen : Screen
         App.OpenLink(href);
     }
 
-    /** What a tool found, as things to tap: rooms and places on the map, a route to follow, an article to read. */
-    private static FrameworkElement? Found(string name, JsonNode result)
+    private sealed record ResourceLink(string Href, string Title, string Detail, string Kind);
+
+    private static List<ResourceLink> ResourceLinks(string name, JsonNode result)
     {
-        var cards = new WrapRow { Gap = 8 };
-        void Card(string title, string small, Action open)
-        {
-            var body = Kit.Column(2, Kit.Text(title, Role.Body, bold: true), Kit.Text(small, Role.Caption, "muted"));
-            ((TextBlock)body.Children[0]).FontSize = 14.5; ((TextBlock)body.Children[0]).MaxWidth = 280;
-            var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = body, Padding = new Thickness(12, 10, 12, 10), MinWidth = 132, CornerRadius = new CornerRadius(12), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1) };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tap, title);
-            tap.Click += (_, _) => open();
-            cards.Children.Add(tap);
-        }
+        var links = new List<ResourceLink>();
+        static ResourceLink Place(string id, string name, string detail) => new($"/map/?place={Uri.EscapeDataString(id)}", name, detail, "map");
+        static string Details(params string?[] parts) => string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
         switch (name)
         {
             case "free_rooms" when result["rooms"] is JsonArray rooms:
-                foreach (var r in rooms.Take(6)) { var id = (string)r!["room"]!; var minutes = (int)r["minutes"]!; Card(Names.Room(id), $"空到 {Clock.Hm((int)r["until"]!)} · {minutes / 60} 小时 {minutes % 60} 分", () => App.Open("map", ("place", id))); }
+                foreach (var room in rooms.Take(6))
+                {
+                    var id = (string)room!["room"]!;
+                    links.Add(Place(id, Names.Room(id), $"空到 {Clock.Hm((int)room["until"]!)}"));
+                }
                 break;
             case "route" when result["url"] is not null:
-                Card((string?)result["scope"] == "within-building" ? $"同在{(string)result["building"]!}" : $"导航到{(string?)result["arrival"] ?? (string)result["to"]!}", result["distance_m"] is null ? string.Join(" → ", result["steps"]!.AsArray().Select(s => (string)s!)) : $"{(long)result["distance_m"]!} 米 · {((long)result["duration_s"]! < 60 ? "不到1分钟" : $"约 {(int)Math.Ceiling((long)result["duration_s"]! / 60.0)} 分钟")}", () => Link((string)result["url"]!));
+                var indoor = (string?)result["scope"] == "within-building";
+                var floor = result["to_floor"]?.ToString();
+                var detail = indoor ? Details($"同在{(string?)result["building"]}", floor is null ? null : $"{floor} 层")
+                    : result["duration_s"] is { } duration ? $"{(long)result["distance_m"]!} 米 · {((double)duration < 60 ? "不到 1 分钟" : $"约 {Math.Ceiling((double)duration / 60)} 分钟")}" : "";
+                links.Add(new((string)result["url"]!, $"{(indoor ? "查看" : "导航到")}{(string?)result["to"]}", detail, "map"));
                 break;
             case "read" when result["url"] is not null:
-                Card((string)result["title"]!, string.Join(" · ", new[] { (string?)result["source"], (string?)result["date"] }.Where(s => !string.IsNullOrEmpty(s))), () => App.OpenLink((string)result["url"]!));
+                links.Add(new((string)result["url"]!, (string)result["title"]!, Details((string?)result["source"], (string?)result["date"]), "knowledge"));
                 break;
             case "nearby" when result["places"] is JsonArray places:
-                foreach (var p in places.Take(4)) { var id = (string)p!["id"]!; Card((string)p["name"]!, string.Join(" · ", new[] { $"{(long)p["metres"]!} 米", (string?)p["now"] }.Where(s => !string.IsNullOrEmpty(s))), () => App.Open("map", ("place", id))); }
+                foreach (var place in places.Take(4))
+                    links.Add(Place((string)place!["id"]!, (string)place["name"]!, Details($"{(long)place["metres"]!} 米", (string?)place["now"])));
                 break;
             case "find_place" when result is JsonArray found:
-                foreach (var p in found.Take(3)) { var id = (string)p!["id"]!; Card((string)p["name"]!, string.Join(" · ", new[] { (string?)p["where"], (string?)p["now"] }.Where(s => !string.IsNullOrEmpty(s))), () => App.Open("map", ("place", id))); }
+                foreach (var item in found.Take(3))
+                    links.Add(Place((string)item!["id"]!, (string)item["name"]!, Details((string?)item["where"], (string?)item["now"])));
                 break;
-            default: return null;
         }
-        return cards.Children.Count > 0 ? cards : null;
+        return links;
+    }
+
+    private FrameworkElement ReferenceList(string question, List<ResourceLink> links)
+    {
+        var root = new StackPanel { MaxWidth = 540, HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(0, 4, 0, 0), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Paint.Brush("line") };
+        var rows = new StackPanel();
+        foreach (var item in links)
+        {
+            var title = Kit.Text(item.Title, Role.Label);
+            title.FontSize = 13; title.TextTrimming = TextTrimming.CharacterEllipsis; title.VerticalAlignment = VerticalAlignment.Center;
+            var detail = Kit.Text(item.Detail, Role.Caption, "muted");
+            detail.MaxWidth = compact ? 112 : 200; detail.TextTrimming = TextTrimming.CharacterEllipsis; detail.VerticalAlignment = VerticalAlignment.Center;
+            var row = new Grid { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(Kit.Icon(Paint.Glyph(item.Kind), 15, "muted", 24, 1.8));
+            Grid.SetColumn(title, 1); row.Children.Add(title);
+            Grid.SetColumn(detail, 2); row.Children.Add(detail);
+            var arrow = item.Href.StartsWith('/') ? Kit.Icon(Icons.Chevron, 12, "muted") : Kit.Text("↗", Role.Caption, "muted");
+            arrow.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(arrow, 3); row.Children.Add(arrow);
+            var tap = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = row, MinHeight = 34, Padding = new Thickness(6, 4, 6, 4), CornerRadius = new CornerRadius(7) };
+            AutomationProperties.SetName(tap, item.Title);
+            AutomationProperties.SetHelpText(tap, item.Detail);
+            tap.Click += (_, _) => Link(item.Href);
+            rows.Children.Add(tap);
+        }
+        if (links.Count > 1)
+        {
+            var label = links.All(link => link.Kind == "knowledge") ? "参考资料" : links.All(link => link.Kind == "map") ? "校园地点" : "相关资料与地点";
+            var chevron = Kit.Icon(Icons.Chevron, 13, "muted");
+            chevron.RenderTransformOrigin = new Windows.Foundation.Point(.5, .5);
+            var words = Kit.Line(8, chevron, Kit.Text(label, Role.Caption, "muted"), Kit.Text($"{links.Count} 项", Role.Caption, "muted"));
+            var toggle = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = words, Height = 34, Padding = new Thickness(6, 0, 6, 0), CornerRadius = new CornerRadius(7) };
+            AutomationProperties.SetName(toggle, $"{label} {links.Count} 项");
+            AutomationProperties.SetAutomationId(toggle, $"ai-resources:{question}");
+            void Show()
+            {
+                var expanded = openResources.Contains(question);
+                rows.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+                chevron.RenderTransform = new RotateTransform { Angle = expanded ? 90 : 0 };
+                AutomationProperties.SetItemStatus(toggle, expanded ? "已展开" : "已收起");
+            }
+            toggle.Click += (_, _) => { if (!openResources.Remove(question)) openResources.Add(question); Show(); };
+            Show();
+            root.Children.Add(toggle);
+        }
+        root.Children.Add(rows);
+        return root;
     }
 
     /** The tasks one turn drafted, in one card: each to tick, then added together. */

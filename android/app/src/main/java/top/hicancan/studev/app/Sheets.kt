@@ -349,7 +349,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { background = top.hicancan.studev.device.BackgroundSettings.status(context) }
     val title = when (section) { "timetable" -> "课表设置"; "widgets" -> "桌面小组件"; "appearance" -> "外观"; "permissions" -> "提醒与权限"; "about" -> "帮助与关于"; else -> "我" }
     key(section) {
-    PlainSheet(title, { if (section == "home") onClose() else section = "home" }, top = if (section == "home") null else ({ TextAction("返回", { section = "home" }) })) {
+    PlainSheet(title, { if (section == "home") onClose() else section = "home" }, back = if (section == "home") null else ({ section = "home" })) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             if (section == "home") {
                 KeyRow(null, account?.nickname ?: "未登录", if (account == null) "登录后同步任务和课表设置" else "管理账号 · 任务和课表设置自动同步", chevron = true, onClick = { onClose(); onAccount() })
@@ -360,6 +360,9 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 KeyRow(null, "桌面小组件", "把课表和任务放到桌面", chevron = true, onClick = { section = "widgets" })
                 KeyRow(null, "提醒与权限", "课前提醒、通知和后台导航", chevron = true, onClick = { section = "permissions" })
                 KeyRow(null, "检查更新", (if (state.appBehind) "有新版本 ${state.app!!.versionName} · " else "") + "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 数据 ${state.repository?.release?.data_version.orEmpty()}", chevron = true, onClick = { model.refresh() })
+                KeyRow(null, "分享 StuDev", trailing = { CampusGlyph("share", 18.dp, Ink.muted) }, onClick = {
+                    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$PLATFORM_ORIGIN/"), "分享 StuDev"))
+                })
                 KeyRow(null, "帮助与关于", "反馈、资料提交、协议与备案", chevron = true, onClick = { section = "about" })
             }
             if (section == "timetable") {
@@ -427,9 +430,6 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             if (section == "about") {
             KeyRow(null, "意见反馈", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
             KeyRow(null, "提供校园资料", "提交实验课表、讲座、校车或营业时间", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
-            KeyRow(null, "分享 StuDev", PLATFORM_ORIGIN.removePrefix("https://"), chevron = true, onClick = {
-                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$PLATFORM_ORIGIN/"), "分享 StuDev"))
-            })
             KeyRow(null, "学生发展中心", "南邮计软网安", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/club/"))) })
             KeyRow(null, "用户协议", "服务条款与免责声明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/terms/"))) })
             KeyRow(null, "隐私政策", "个人信息保护与权限说明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/privacy/"))) })

@@ -481,6 +481,8 @@
   .picker p{margin:0 0 20px;color:var(--muted);font-size:14px}
   .card-h{display:flex;align-items:flex-start;gap:10px;margin-bottom:2px}
   .card-h h2{margin:0;font-size:20px;line-height:1.25;font-weight:600;flex:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .card-h.has-back{align-items:center;gap:6px}
+  .sheet-back{display:grid;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:8px;color:var(--muted);flex:none}.sheet-back:hover{color:var(--ink);background:var(--surface-sunken)}.sheet-back svg{width:20px;height:20px}
   .x{width:28px;height:28px;display:grid;place-items:center;color:var(--faint);flex:none}
   .x svg{width:15px;height:15px}
   .meta{font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -559,8 +561,9 @@
   .sd.campus-entry.page{padding-top:0}
   .sd.campus-entry .campus-header{display:flex;align-items:center;gap:var(--size-header-gap);flex:none;box-sizing:border-box;height:calc(var(--size-header) + env(safe-area-inset-top,0px));min-height:calc(var(--size-header) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);padding-bottom:0;padding-right:0;container:campus-header / inline-size}
   .sd.campus-entry:not(.page) .campus-header{padding-right:16px}
-  .campus-account-slot{display:flex}
-  .campus-account-slot .avatar-name{max-width:clamp(0px,calc(100cqw - var(--size-header-content) - var(--size-header-gap) - var(--size-account-base)),var(--size-account-name-max))}
+  .campus-account-slot{display:flex;gap:3px}
+  .campus-account-slot .site-share-entry{min-height:var(--size-target)}
+  .campus-account-slot .avatar-name{max-width:clamp(0px,calc(100cqw - var(--size-header-content) - var(--size-header-gap) - var(--size-account-base) - 35px),var(--size-account-name-max))}
   .sd.campus-entry .campus-header .back{margin:0}
   .sd.campus-entry .campus-header h1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sd.campus-entry.search .sfield{height:var(--size-search);margin:0}
@@ -681,7 +684,8 @@
 .ai.blank .ai-scroll{display:flex}.ai.blank .ai-col{flex:1;display:flex;flex-direction:column;justify-content:center;width:100%}
 .ai .ai-hello{display:flex;flex-direction:column;align-items:stretch;gap:16px;padding-bottom:8vh}.ai .ai-hello h1{margin:0 0 6px;text-align:center;font-size:28px;font-weight:600;letter-spacing:-.01em}
 .ai .ai-hello .fine{margin:0;text-align:center}
-.ai .ai-examples{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}.ai .ai-examples button{padding:8px 14px;border-radius:18px;border:1px solid var(--line);color:var(--muted);font-size:13.5px;background:var(--paper);transition:background .15s,color .15s}.ai .ai-examples button:hover{background:var(--surface-sunken);color:var(--ink)}
+.ai .ai-examples{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}.ai .ai-examples button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:5px 11px;border-radius:18px;border:1px solid var(--line);color:var(--muted);font-size:13px;background:var(--paper);transition:background .15s,color .15s}.ai .ai-examples button:hover,.ai .ai-examples button:focus-visible{background:var(--surface-sunken);color:var(--ink)}
+.ai .ai-examples svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ai .ai-turns{display:flex;flex-direction:column;gap:30px}.ai .ai-turn{display:flex;flex-direction:column;gap:12px}
 /* A question: a soft bubble at the right, its actions shown when the pointer comes near. */
 .ai .ai-ask{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
@@ -709,7 +713,18 @@
 @keyframes ai-fade{50%{opacity:.35}}@keyframes ai-breathe{50%{transform:scale(.7);opacity:.55}}@keyframes ai-shine{from{background-position:100% 0}to{background-position:-100% 0}}
 /* The answer reads at the size of the page. */
 .ai .doc{font-size:16px;line-height:1.625}.ai .doc p{margin:0 0 .8em}.ai .doc h2{font-size:1.25em;margin:1.3em 0 .5em}.ai .doc h3{font-size:1.125em;margin:1.2em 0 .45em}.ai .doc hr{margin:1.6em 0}.ai .doc li{margin:.25em 0}
-.ai .ai-cards{display:flex;flex-wrap:wrap;gap:8px}.ai .ai-card{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper);min-width:132px;transition:border-color .15s,background .15s}.ai .ai-card:hover{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 4%,var(--paper))}.ai .ai-card b{font-weight:600;font-size:14px}.ai .ai-card small{color:var(--muted);font-size:12px}
+.ai .ai-answer-end{height:1px;margin-top:-8px;pointer-events:none}
+.ai .ai-resources{align-self:flex-start;width:min(100%,540px);border-top:1px solid var(--line);padding-top:4px}
+.ai .ai-resources>summary,.ai .ai-resource{display:flex;align-items:center;gap:8px;min-height:34px;padding:4px 6px;border-radius:7px;color:var(--muted);font-size:13px;text-decoration:none}
+.ai .ai-resources>summary{cursor:pointer;list-style:none}.ai .ai-resources>summary::-webkit-details-marker{display:none}
+.ai .ai-resources>summary:hover,.ai .ai-resource:hover,.ai .ai-resource:focus-visible{background:var(--surface-sunken);color:var(--ink)}
+.ai .ai-resources svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ai .ai-resources[open]>summary svg{transform:rotate(90deg)}
+.ai .ai-resource-copy{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+.ai .ai-resource-copy>span{min-width:0;color:var(--ink)}
+.ai .ai-resource-copy>span,.ai .ai-resource small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai .ai-resource small,.ai .ai-resources>summary small{font-size:12px;color:var(--muted)}
+@media (max-width:600px){.ai .ai-resource{min-height:42px}.ai .ai-resource-copy{display:grid;gap:1px}.ai .ai-resource-copy>span,.ai .ai-resource small{width:100%}}
 .ai .ai-drafts{border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:var(--paper)}.ai .ai-drafts h3{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--muted)}
 .ai .ai-draft{display:flex;align-items:center;gap:12px;min-height:48px;border-top:1px solid var(--line);cursor:pointer}.ai .ai-draft:first-of-type{border-top:0}.ai .ai-draft input{width:18px;height:18px;accent-color:var(--brand);flex:none}
 .ai .ai-draft-main{flex:1;min-width:0;display:flex;flex-direction:column}.ai .ai-draft-main b{font-weight:500;font-size:15px}.ai .ai-draft-main small{color:var(--muted);font-size:12.5px}.ai .ai-draft.saved b{color:var(--muted)}.ai .ai-drafts .btns{margin-top:10px}
@@ -717,6 +732,7 @@
 /* The box to write in: white, round, lifted by soft shadows rather than a border; one round button. */
 .ai .ai-dock{flex:none;padding:6px 14px 14px}
 .ai .ai-compose{position:relative;margin:0 auto;width:min(768px,100%);display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:2px 6px;align-items:center;padding:9px 9px 9px 18px;border-radius:24px;background:var(--paper);box-shadow:0 0 0 1px var(--line),0 2px 8px rgba(0,0,0,.05),0 4px 60px 6px rgba(0,0,0,.035)}
+.ai .ai-compose:focus-within{box-shadow:0 0 0 1px color-mix(in srgb,var(--brand) 42%,var(--line)),0 4px 24px var(--shadow-soft)}
 .ai .ai-compose .ai-model{grid-column:2}
 .ai .ai-compose .ai-model-status{grid-column:1/-1;margin:3px 8px 2px 0;color:var(--muted);text-align:left}
 .ai .ai-tool-control{display:flex;align-items:center;gap:4px;min-width:0}

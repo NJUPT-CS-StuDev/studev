@@ -10,16 +10,20 @@ import kotlinx.serialization.json.*
  * The conversations kept on this device, as src/campus/ai/chats.ts: each named by its first question until renamed,
  * the newest first, grouped by when they were last spoken in.
  */
-internal data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread, val selection: ModelSelection? = null, val projectId: String? = null) {
+internal data class SavedChat(val id: String, val title: String, val updated: Long, val thread: ChatThread, val selection: ModelSelection? = null, val projectId: String? = null,
+    val pinned: Boolean = false, val archived: Boolean = false) {
     fun toJson() = buildJsonObject {
         put("id", id); put("title", title); put("updated", updated); put("thread", thread.toJson())
         selection?.let { put("selection", Json.encodeToJsonElement(it)) }
         projectId?.let { put("projectId", it) }
+        if (pinned) put("pinned", true)
+        if (archived) put("archived", true)
     }
     companion object {
         fun of(json: JsonObject) = SavedChat(json.getValue("id").jsonPrimitive.content, json["title"]?.jsonPrimitive?.contentOrNull.orEmpty(), json.getValue("updated").jsonPrimitive.long,
             ChatThread.of(json.getValue("thread").jsonObject), json["selection"]?.let { runCatching { Json.decodeFromJsonElement<ModelSelection>(it) }.getOrNull() },
-            json["projectId"]?.jsonPrimitive?.contentOrNull)
+            json["projectId"]?.jsonPrimitive?.contentOrNull, json["pinned"]?.jsonPrimitive?.booleanOrNull == true,
+            json["archived"]?.jsonPrimitive?.booleanOrNull == true)
     }
 }
 

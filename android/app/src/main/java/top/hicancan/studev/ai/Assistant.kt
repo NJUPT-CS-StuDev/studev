@@ -53,6 +53,8 @@ internal fun nativeCalls(text: String): List<JsonObject> {
     }
 }
 
+internal data class ConversationSuggestion(val entry: String, val label: String, val prompt: String)
+
 class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private val names = tools.map(::toolName).toSet()
     private fun lines(key: String) = contract.getValue(key).jsonArray.map { it.jsonPrimitive.content }
@@ -60,6 +62,11 @@ class Assistant(private val contract: JsonObject, val tools: List<JsonObject>) {
     private fun fill(text: String, values: Map<String, Any?>) = Regex("\\{(\\w+)\\}").replace(text) { values[it.groupValues[1]].toString() }
     val diagrams = contract.getValue("diagrams").jsonArray.map { it.jsonPrimitive.content }
     internal val freeService get() = contract.freeService()
+    internal val suggestions = contract.getValue("suggestions").jsonArray.map { value ->
+        val item = value.jsonObject
+        ConversationSuggestion(item.getValue("entry").jsonPrimitive.content, item.getValue("label").jsonPrimitive.content,
+            item.getValue("prompt").jsonPrimitive.content)
+    }
 
     /** The reader's campus and class, for example 仙林校区 TEST000001 班的同学. */
     private fun who(s: Situation): String {
