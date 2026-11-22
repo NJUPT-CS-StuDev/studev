@@ -69,6 +69,9 @@ public sealed class Repository
         }
         var entry = $"{Product.CampusOrigin}/campus-release.json";
         try { if (File.Exists(runtimeFile)) entry = Entry(await File.ReadAllTextAsync(runtimeFile)); } catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException or InvalidOperationException) { }
+        var currentEntry = entry;
+        using var campusCancel = new CancellationTokenSource();
+        var pending = ReadEntry(currentEntry, campusCancel.Token);
         try {
             using var runtimeCancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
             using var runtimeRequest = Get($"{Site}/app-release.json");
@@ -78,11 +81,8 @@ public sealed class Repository
             var runtimeText = await runtimeResponse.Content.ReadAsStringAsync(runtimeCancel.Token);
             entry = Entry(runtimeText); Storage.Write(runtimeFile, runtimeText);
         } catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException or JsonException or KeyNotFoundException or InvalidOperationException) { }
-        using var request = Get(entry);
-        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
-        using var response = await Http.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-        var text = await response.Content.ReadAsStringAsync();
+        if (entry != currentEntry) campusCancel.Cancel();
+        var text = entry == currentEntry ? await pending : await ReadEntry(entry, CancellationToken.None);
         var release = JsonSerializer.Deserialize(text, FactsJson.Default.DataRelease) ?? throw new InvalidDataException("release manifest");
         var origin = new Uri(entry);
         release = release with { Base = new Uri(origin, release.Base).AbsoluteUri,
@@ -92,6 +92,15 @@ public sealed class Repository
         Valid(release);
         if (!Searchable(release)) throw new NotSupportedException("校园数据已经更新，这个版本的 StuDev 读不了，请更新到新版本。");
         return new Repository(release);
+    }
+
+    private static async Task<string> ReadEntry(string entry, CancellationToken cancellation)
+    {
+        using var request = Get(entry);
+        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+        using var response = await Http.SendAsync(request, cancellation);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(cancellation);
     }
 
     /** Whether this app's search engine reads the release's bundles; a release it cannot is one only a newer app can use. */

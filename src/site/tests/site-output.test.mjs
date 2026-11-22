@@ -30,8 +30,8 @@ test('download links name immutable packages without depending on a weekly site 
   walk(parse(await readFile(join(output, 'download/index.html'), 'utf8')), node => {
     if (node.tagName === 'a') hrefs.push(attributes(node).href);
   });
-  assert.deepEqual(hrefs.filter(href => href?.startsWith('/download/windows/')),
-    [`/download/windows/studev-${product.android.versionName}-windows.zip`]);
+  assert.deepEqual(hrefs.filter(href => href?.startsWith(`${product.downloadOrigin}/windows/`)),
+    [`${product.downloadOrigin}/windows/studev-${product.android.versionName}-windows.zip`]);
   assert.ok(hrefs.includes(`${product.downloadOrigin}/studev-${product.android.versionName}.apk`));
   assert.ok(hrefs.every(href => !href?.includes('X-Amz-Expires=')), 'public releases have no expiring build-time download signature');
 });

@@ -117,8 +117,7 @@ $fullApk = Join-Path $tempRoot "studev-$versionName.apk"
 Copy-Item $apk $fullApk
 
 # The Windows app: the kernels from their pinned tags, the parity checks, a NativeAOT build, and a Velopack release whose
-# portable zip, packages and feed go to windows/ on Cloudflare R2 (public at dl.hicancan.top, no egress fee), where the
-# site's /download/windows/ redirects and unzipped copies update themselves. Only the portable zip is offered.
+# portable zip, packages and feed go to windows/ on Cloudflare R2 (public at dl.hicancan.top, no egress fee).
 $env:DOTNET_ROOT = 'D:\Dev\dotnet'
 $env:Path = "D:\Dev\dotnet;$env:USERPROFILE\.dotnet\tools;$env:Path"
 $windows = Join-Path $repo 'windows'
@@ -135,9 +134,9 @@ $windowsScope = @(if ($Conversations) { '-Conversations' })
 if ($LASTEXITCODE -ne 0) { throw 'Windows smoke test failed' }
 $velopack = Join-Path $tempRoot 'windows-releases'
 New-Item -ItemType Directory -Path $velopack -Force | Out-Null
-$feed = "$($product.origin)/download/windows"
+$feed = "$($product.downloadOrigin)/windows"
 # The releases already out, so the new one carries a delta from the last; none yet before the first.
-$known = try { Invoke-WebRequest "$feed/releases.win.json" -MaximumRedirection 5 -ErrorAction Stop | Out-Null; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
+$known = try { Invoke-WebRequest "$feed/releases.win.json" -MaximumRedirection 0 -ErrorAction Stop | Out-Null; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
 if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEXITCODE -ne 0) { throw 'Earlier Windows releases could not be read' } }
 & vpk pack --runtime win-x64 --packId top.hicancan.studev --packVersion $versionName --packDir $publish --mainExe StuDev.exe --packTitle StuDev --packAuthors 'NJUPT StuDev' `
     --icon (Join-Path $windows 'StuDev\Assets\StuDev.ico') --shortcuts 'Desktop,StartMenuRoot' --outputDir $velopack
@@ -154,11 +153,10 @@ $env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id)
 $env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
 $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
-& node (Join-Path $repo 'scripts/release/put.mjs') $fullApk "studev-$versionName.apk"
-if ($LASTEXITCODE -ne 0) { throw 'APK upload or public download check failed' }
-foreach ($file in $made) { & node (Join-Path $repo 'scripts/release/put.mjs') $file.FullName "windows/$($file.Name)"; if ($LASTEXITCODE -ne 0) { throw "Windows upload failed: $($file.Name)" } }
-& node (Join-Path $repo 'scripts/release/put.mjs') $fullPortable "windows/studev-$versionName-windows.zip"
-if ($LASTEXITCODE -ne 0) { throw 'Windows portable upload failed' }
+$uploads = @($fullApk, "studev-$versionName.apk", $fullPortable, "windows/studev-$versionName-windows.zip")
+foreach ($file in $made) { $uploads += @($file.FullName, "windows/$($file.Name)") }
+& node (Join-Path $repo 'scripts/release/put.mjs') @uploads
+if ($LASTEXITCODE -ne 0) { throw 'Release upload or public download verification failed' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
 $assetPaths = @($fullApk, $fullPortable)
 $releaseCommit = (& git -C $repo rev-parse HEAD).Trim()

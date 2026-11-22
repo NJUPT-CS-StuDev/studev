@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, errorText, type OrganizationNode } from './api';
+import { api, errorText, fetchStorageDownload, saveBlob, type OrganizationNode, type StorageDownload } from './api';
 import { isWithin } from '../organizations.mjs';
 import './collections.css';
 
@@ -497,8 +497,9 @@ export default function CollectionsApp() {
   const downloadSingle = async (itemId: string, rid: string, fileId: string, studentId?: string) => {
     try {
       const q = new URLSearchParams({ fileId, ...(studentId ? { studentId } : {}) });
-      const res = await api<{ download: { url: string }; storedName: string }>(`/collections/items/${encodeURIComponent(itemId)}/rounds/${encodeURIComponent(rid)}/download?${q}`);
-      window.open(res.download.url, '_blank', 'noopener');
+      const res = await api<{ download: StorageDownload; storedName: string }>(`/collections/items/${encodeURIComponent(itemId)}/rounds/${encodeURIComponent(rid)}/download?${q}`);
+      const response = await fetchStorageDownload(res.download);
+      saveBlob(await response.blob(), res.storedName);
     } catch (e) {
       notify(errorText(e));
     }
@@ -507,21 +508,31 @@ export default function CollectionsApp() {
   const downloadZip = async (itemId: string, rid: string) => {
     setBusy('正在打包 ZIP…');
     try {
-      const res = await api<{ zipName: string; files: { path: string; url: string }[] }>(`/collections/items/${encodeURIComponent(itemId)}/rounds/${encodeURIComponent(rid)}/files`);
+      const res = await api<{ zipName: string; files: (StorageDownload & { path: string; sizeBytes: number })[] }>(`/collections/items/${encodeURIComponent(itemId)}/rounds/${encodeURIComponent(rid)}/files`);
       if (!res.files.length) { notify('当前批次还没有可打包的提交文件'); return; }
-      const entries: { name: string; data: Uint8Array }[] = [];
-      for (let i = 0; i < res.files.length; i++) {
-        setBusy(`正在拉取文件 (${i + 1}/${res.files.length})…`);
-        const r = await fetch(res.files[i]!.url);
-        if (!r.ok) continue;
-        entries.push({ name: res.files[i]!.path, data: new Uint8Array(await r.arrayBuffer()) });
+      const encoder = new TextEncoder();
+      const zipBytes = res.files.reduce((bytes, file) => bytes + file.sizeBytes + 76 + 2 * encoder.encode(file.path).length, 22);
+      if (res.files.length > 65535 || zipBytes > 0xffffffff) throw new Error('批次超出 ZIP 大小上限，请分别下载文件。');
+      const entries = new Array<{ name: string; data: Uint8Array }>(res.files.length);
+      let next = 0;
+      let done = 0;
+      let failure: unknown;
+      async function downloadFiles() {
+        while (!failure && next < res.files.length) {
+          const index = next++;
+          const file = res.files[index]!;
+          try {
+            const response = await fetchStorageDownload(file);
+            entries[index] = { name: file.path, data: new Uint8Array(await response.arrayBuffer()) };
+            setBusy(`正在拉取文件 (${++done}/${res.files.length})…`);
+          } catch (error) {
+            failure = error;
+          }
+        }
       }
-      const blob = buildZip(entries);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = res.zipName;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      await Promise.all(Array.from({ length: Math.min(6, res.files.length) }, downloadFiles));
+      if (failure) throw failure;
+      saveBlob(buildZip(entries), res.zipName);
       notify(`已打包 ${entries.length} 份文件`);
     } catch (e) {
       notify(errorText(e));

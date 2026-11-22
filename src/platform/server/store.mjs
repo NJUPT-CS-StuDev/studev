@@ -5,7 +5,7 @@ const ROOT = 'platform-v1/';
 export function isConflict(error) {
   return error?.status === 409 || error?.statusCode === 409 || error?.code === 'PRECONDITION_FAILED' || [409, 412].includes(error?.$metadata?.httpStatusCode) || /already exists|precondition|conflict|onlyifnew/i.test(String(error?.message || ''));
 }
-export function createRepository(store, { now = Date.now, secret } = {}) {
+export function createRepository(store, { now = Date.now, secret, revisions } = {}) {
   if (typeof secret !== 'string' || secret.length < 32) fail(503, 'NOT_CONFIGURED', '平台会话配置尚未完成。');
   function validKey(key) {
     if (typeof key !== 'string' || key.length > 520 || key.startsWith('/') || key.includes('..') || /[\x00-\x1f\\]/.test(key)) throw new Error('Invalid internal metadata key');
@@ -22,15 +22,35 @@ export function createRepository(store, { now = Date.now, secret } = {}) {
     return value;
   }
   async function remove(key) { return store.delete(validKey(key)); }
-  async function list(prefix) {
+  async function entries(prefix) {
     const result = await store.list({ prefix: validKey(prefix), consistency: 'strong' });
-    return result.blobs.map((b) => b.key.slice(ROOT.length)).sort();
+    return result.blobs;
   }
-  async function latest(prefix) {
+  async function list(prefix) {
+    return (await entries(prefix)).map((b) => b.key.slice(ROOT.length)).sort();
+  }
+  async function latest(prefix, width = 8) {
     // Only immutable, conditionally reserved revisions decide the latest
     // value. A delayed writer cannot publish an older mutable snapshot.
-    const keys = (await list(`${prefix}/`)).filter((key) => /^\d{8}\.json$/.test(key.slice(prefix.length + 1)));
-    return keys.length ? get(keys.at(-1)) : null;
+    const offset = ROOT.length + prefix.length + 1;
+    let tip;
+    for (const entry of await entries(`${prefix}/`)) {
+      const filename = entry.key.slice(offset);
+      if (filename.length === width + 5 && /^\d+\.json$/.test(filename) && (!tip || entry.key > tip.key)) tip = entry;
+    }
+    if (!tip) return null;
+    const cached = revisions?.get(prefix);
+    if (tip.etag && cached?.key === tip.key && cached.etag === tip.etag) return structuredClone(cached.value);
+    const key = tip.key.slice(ROOT.length);
+    if (!revisions || !tip.etag) return get(key);
+    const raw = await store.get(validKey(key), { type: 'text', consistency: 'strong' });
+    if (raw === null) return null;
+    const value = JSON.parse(raw);
+    if (raw.length <= 8192) {
+      if (!revisions.has(prefix) && revisions.size >= 512) revisions.delete(revisions.keys().next().value);
+      revisions.set(prefix, { ...tip, value: structuredClone(value) });
+    }
+    return value;
   }
   async function append(prefix, value, expectedRevision = 0) {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision >= 99999999) fail(400, 'INVALID_REVISION', '记录版本无效。');

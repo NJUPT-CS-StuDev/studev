@@ -1,6 +1,9 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getStore } from '@edgeone/pages-blob';
+import { Agent } from 'node:https';
+
+const oscaConnections = new Agent({ keepAlive: true, maxSockets: 24 });
 
 export function metadataStore() {
   return getStore({ name: 'studev-collections', consistency: 'strong' });
@@ -11,6 +14,7 @@ export function oscaGateway(config) {
     endpoint: config.endpoint,
     region: config.region,
     forcePathStyle: true,
+    requestHandler: { httpsAgent: oscaConnections },
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',

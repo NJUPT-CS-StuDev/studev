@@ -304,19 +304,29 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
          * The same stable release manifest used by the website's offline worker. Null when the website cannot be
          * reached. Data that is published but cannot be decoded is reported, not skipped: it means this app is behind.
          */
-        suspend fun discover(context: Context, klass: String? = null): Discovery? = withContext(Dispatchers.IO) {
+        suspend fun discover(context: Context, klass: String? = null): Discovery? = coroutineScope {
             // Application updates and campus snapshots have independent lifecycles.
             val runtimeFile = File(context.filesDir, "campus/app.json")
-            val runtime = try {
-                val fresh = download("${BuildConfig.SITE_ORIGIN}/app-release.json", connectTimeoutMs = 2_500).decodeToString()
-                val parsed = appRuntime(fresh)
-                runtimeFile.parentFile?.mkdirs(); runtimeFile.writeText(fresh)
-                parsed
-            } catch (e: CancellationException) { throw e } catch (_: Exception) { runCatching { appRuntime(runtimeFile.readText()) }.getOrNull() }
+            val cached = withContext(Dispatchers.IO) { runCatching { appRuntime(runtimeFile.readText()) }.getOrNull() }
+            val currentEntry = cached?.campus_entry ?: "${BuildConfig.DATA_HOST}/campus-release.json"
+            fun readEntry(entry: String) = try { download(entry).decodeToString() } catch (_: IOException) { null }
+            val pending = async(Dispatchers.IO) { readEntry(currentEntry) }
+            val runtime = withContext(Dispatchers.IO) {
+                try {
+                    val fresh = download("${BuildConfig.SITE_ORIGIN}/app-release.json", connectTimeoutMs = 2_500).decodeToString()
+                    val parsed = appRuntime(fresh)
+                    runtimeFile.parentFile?.mkdirs(); runtimeFile.writeText(fresh)
+                    parsed
+                } catch (e: CancellationException) { throw e } catch (_: Exception) { cached }
+            }
             val app = runtime?.android
-            val entry = runtime?.campus_entry ?: "${BuildConfig.DATA_HOST}/campus-release.json"
-            val text = try { download(entry).decodeToString() } catch (e: CancellationException) { throw e } catch (_: IOException) { return@withContext null }
-            try {
+            val entry = runtime?.campus_entry ?: currentEntry
+            val text = if (entry == currentEntry) pending.await() else {
+                pending.cancel()
+                withContext(Dispatchers.IO) { readEntry(entry) }
+            }
+            if (text == null) return@coroutineScope runtime?.android?.let { Discovery(it, null, unreadable = false) }
+            withContext(Dispatchers.IO) { try {
                 val release = releaseFromManifest(text)?.takeIf(::searchable) ?: return@withContext Discovery(app, null, unreadable = true)
                 val at = URI(entry)
                 Discovery(app, activate(context, release.copy(base = at.resolve(release.base).toString(),
@@ -326,7 +336,7 @@ class AcademicRepository(context: Context, release: DataRelease, fetchBytes: (St
             } catch (e: CancellationException) { throw e }
             catch (_: kotlinx.serialization.SerializationException) { Discovery(app, null, unreadable = true) }
             catch (_: IllegalArgumentException) { Discovery(app, null, unreadable = true) }
-            catch (_: IOException) { Discovery(app, null, unreadable = false) }
+            catch (_: IOException) { Discovery(app, null, unreadable = false) } }
         }
         private fun componentBase(value: String, prefix: String): Boolean = runCatching {
             val uri = URI(value)

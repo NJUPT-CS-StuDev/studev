@@ -367,19 +367,23 @@ export function empty(title: string, description = '') { const box = el('div', u
 export function safeStorageUrl(raw: string): string { const url = new URL(raw); if (url.origin !== 'https://fgws3-ocloud.ihep.ac.cn' || url.username || url.password)
     throw new PlatformError('文件地址无法验证，请联系管理员。'); return url.href; }
 export function saveBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = el('a'); a.href = url; a.download = name.replace(/[\\/\x00-\x1f]/g, '_'); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
-async function downloadFile(submission: Submission, file: SubmissionFile) { const result = await api<{
-    download: {
-        url: string;
-        headers: Record<string, string>;
-        fileName: string;
-    };
-}>(`/submissions/${encodeURIComponent(submission.id)}/files/${encodeURIComponent(file.id)}/download`, {}); let response: Response; try {
-    response = await fetch(safeStorageUrl(result.download.url), { headers: result.download.headers, credentials: 'omit', cache: 'no-store', redirect: 'error' });
+export type StorageDownload = { url: string; headers: Record<string, string> };
+export async function fetchStorageDownload(download: StorageDownload): Promise<Response> {
+    let response: Response;
+    try {
+        response = await fetch(safeStorageUrl(download.url), { headers: download.headers, credentials: 'omit', cache: 'no-store', redirect: 'error' });
+    } catch {
+        throw new PlatformError('文件下载连接失败，请重新点击下载。');
+    }
+    if (!response.ok) throw new PlatformError('下载链接已过期或文件已变化，请重新点击下载。');
+    return response;
 }
-catch {
-    throw new PlatformError('文件下载连接失败，请重新点击下载。');
-} if (!response.ok)
-    throw new PlatformError('下载链接已过期或文件已变化，请重新点击下载。'); saveBlob(await response.blob(), result.download.fileName || file.name); }
+async function downloadFile(submission: Submission, file: SubmissionFile) { const result = await api<{
+    download: StorageDownload & { fileName: string };
+}>(`/submissions/${encodeURIComponent(submission.id)}/files/${encodeURIComponent(file.id)}/download`, {});
+    const response = await fetchStorageDownload(result.download);
+    saveBlob(await response.blob(), result.download.fileName || file.name);
+}
 export function renderFields(root: HTMLElement, fields: Field[], answers: Record<string, unknown> = {}, editing = false) { root.replaceChildren(); for (const field of fields) {
     const wrap = el('div', undefined, 'p-field');
     const id = `answer-${field.id}`;

@@ -28,7 +28,7 @@ function harness() {
     });
     runInNewContext(worker, {
         self: { location: { origin }, clients: { matchAll: async () => [{ postMessage: (message: unknown) => messages.push(message) }], claim: async () => undefined }, addEventListener: (type: string, listener: (event: unknown) => void) => listeners.set(type, listener), skipWaiting: vi.fn() },
-        URL, Request, Response, Headers, caches, fetch, console, Uint8Array, Uint32Array, TextEncoder,
+        URL, Request, Response, Headers, AbortController, caches, fetch, console, Uint8Array, Uint32Array, TextEncoder,
     });
     async function dispatch(type: string, request?: Request) {
         let response: Promise<Response> | undefined;

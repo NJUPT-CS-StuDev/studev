@@ -1,6 +1,7 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
+import product from '../../product.json';
 
 const android = PRODUCT_CONFIG.ANDROID_APP;
 const runtimeRelease = 'https://github.com/hicancan/local-runtime-mcp/releases/latest';
@@ -21,7 +22,7 @@ const clients = [
     description: '原生桌面客户端，常驻托盘，桌面卡片显示下一节课，新版本自动更新。',
     detail: `${android.VERSION} · x64`,
     action: '下载 Windows 版',
-    href: `/download/windows/studev-${android.VERSION}-windows.zip`,
+    href: `${product.downloadOrigin}/windows/studev-${android.VERSION}-windows.zip`,
     package: true,
     icon: 'M3.5 5.5 10.5 4.5v7h-7Zm9-1.3 8-1.2v8.5h-8Zm-9 8.3h7v7l-7-1Zm9 0h8V21l-8-1.2Z',
   },

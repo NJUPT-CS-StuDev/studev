@@ -168,8 +168,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind, loginHead: auth.loginHead };
   }
   async function sessionResponse(user, mfaVerified, body, kind) {
-    await members.publish(user, user);
-    const [started, orgs] = await Promise.all([sessions.start(user, body, { kind, mfaVerified }), loadOrganizations(repo)]);
+    const [started, orgs] = await Promise.all([
+      sessions.start(user, body, { kind, mfaVerified }), loadOrganizations(repo), members.publish(user, user),
+    ]);
     return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) });
   }
   const DIRECTORY_INDEX_KEY = 'identity/directory-index.json';
@@ -393,7 +394,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     // Existing credentials and public reads do not need to initialize the owner
     // again. Registration/login/reset-mail remain the account bootstrap paths.
-    if (method === 'POST' && ['/auth/register', '/auth/login', '/auth/password/forgot'].includes(route)) await bootstrap();
+    if (method === 'POST' && ['/auth/register', '/auth/password/forgot'].includes(route)) await bootstrap();
     if (method === 'POST' && route === '/auth/refresh') {
       const kind = bearerBootstrap(request, path) ? 'bearer' : 'cookie';
       if (kind === 'cookie') requireOrigin(request, env);
@@ -536,9 +537,14 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       await repo.throttle('login-client', clientId(context), 60, 60);
       if (body.qq !== undefined) fail(400, 'INVALID_STUDENT_ID', '请使用学号登录，QQ 仅作为联系方式。');
       const identifier = normalizeStudentId(body.studentId);
-      await repo.throttle('login-account', identifier, 10, 60);
-      const index = await repo.get(studentKey(identifier));
-      const user = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
+      const [, user] = await Promise.all([
+        repo.throttle('login-account', identifier, 10, 60),
+        (async () => {
+          if (identifier === normalizeStudentId(env.PLATFORM_OWNER_STUDENT_ID)) await bootstrap();
+          const index = await repo.get(studentKey(identifier));
+          return index?.id && ID.test(index.id) ? repo.latest(userKey(index.id)) : null;
+        })(),
+      ]);
       const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
       if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
       if (user.totp) {
@@ -548,8 +554,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       return sessionResponse(user, Boolean(user.totp), body, kind);
     }
     if (method === 'GET' && route === '/auth/session') {
-      const auth = await authenticate(request, { required: true, allowEnrollment: true });
-      const orgs = await loadOrganizations(repo);
+      const [auth, orgs] = await Promise.all([authenticate(request, { required: true, allowEnrollment: true }), loadOrganizations(repo)]);
       return response({ user: publicUser(auth.user, orgs), csrfToken: auth.csrfToken, ...setupStatus(auth.user, auth.session) });
     }
     if (method === 'POST' && route === '/auth/logout') {

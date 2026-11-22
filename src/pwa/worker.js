@@ -67,6 +67,9 @@ async function ownRelease() {
         return url.href;
     };
     try { entry = await runtimeEntry(await meta.match(RUNTIME)); } catch { /* first start */ }
+    const currentEntry = entry;
+    const cancel = new AbortController();
+    const pending = fetch(entry, { cache: 'no-cache', signal: cancel.signal }).catch(() => null);
     try {
         const response = await fetch(RUNTIME, { cache: 'no-cache' });
         entry = await runtimeEntry(response.clone());
@@ -74,8 +77,9 @@ async function ownRelease() {
     } catch { /* Saved runtime configuration remains usable offline. */ }
     let response;
     try {
-        response = await fetch(entry, { cache: 'no-cache' });
-        if (!response.ok) throw new Error('release unavailable');
+        if (entry !== currentEntry) cancel.abort();
+        response = entry === currentEntry ? await pending : await fetch(entry, { cache: 'no-cache' });
+        if (!response?.ok) throw new Error('release unavailable');
         await meta.put(entry, response.clone());
     } catch (error) { response = await meta.match(entry); if (!response) throw error; }
     const release = await response.json();

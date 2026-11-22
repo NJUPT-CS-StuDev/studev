@@ -9,6 +9,7 @@ import { createAiService } from './ai.mjs';
 import { createSyncService } from './sync.mjs';
 
 export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now } = {}) {
+  const revisions = new Map();
   return async function handle(context) {
     try {
       const env = context.env || {};
@@ -20,7 +21,7 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (!['GET', 'POST', 'DELETE'].includes(request.method)) fail(405, 'METHOD_NOT_ALLOWED', '不支持此请求方式。');
       if (['POST', 'DELETE'].includes(request.method) && !hasAuthorization(request) && !bearerBootstrap(request, path)) requireOrigin(request, env);
       const store = getStore(env);
-      const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET });
+      const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET, revisions });
       const identity = createIdentity({ repo, env, now });
       // Never fall back to cookies when an Authorization header is present.
       // Validate it before exempting any endpoint from the browser boundary.

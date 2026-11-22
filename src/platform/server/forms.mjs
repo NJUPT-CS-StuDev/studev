@@ -174,9 +174,12 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
     if (!record) fail(404, 'NOT_FOUND', '提交记录不存在。');
     return record;
   }
+  function projectRecord(record, complete, event) {
+    return { id: record.id, formId: record.formId, formTitle: record.schemaSnapshot.title, userId: record.userId, submitterName: record.submitterName, ...(record.submitterIdentity ? { submitterIdentity: identitySnapshot(record.submitterIdentity) } : {}), answers: event?.answers || record.answers, files: record.files.map(({ id, fieldId, name, size, type }) => ({ id, fieldId, name, size, type })), status: event?.status || complete?.status || 'uploading', revision: event?.revision || 0, createdAt: record.createdAt, updatedAt: event?.updatedAt || complete?.completedAt || record.createdAt, ...(event?.review ? { review: event.review } : {}) };
+  }
   async function recordView(record) {
     const [complete, event] = await Promise.all([repo.get(completionKey(record.id)), repo.latest(eventPrefix(record.id))]);
-    return { id: record.id, formId: record.formId, formTitle: record.schemaSnapshot.title, userId: record.userId, submitterName: record.submitterName, ...(record.submitterIdentity ? { submitterIdentity: identitySnapshot(record.submitterIdentity) } : {}), answers: event?.answers || record.answers, files: record.files.map(({ id, fieldId, name, size, type }) => ({ id, fieldId, name, size, type })), status: event?.status || complete?.status || 'uploading', revision: event?.revision || 0, createdAt: record.createdAt, updatedAt: event?.updatedAt || complete?.completedAt || record.createdAt, ...(event?.review ? { review: event.review } : {}) };
+    return projectRecord(record, complete, event);
   }
   async function completionView(record) {
     const view = await recordView(record);
@@ -206,9 +209,10 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
     fail(409, code, code === 'USER_LIMIT_REACHED' ? '你已达到本表的上传授权次数上限，失败或放弃的上传也计入。' : '本表收集授权名额已满，失败或放弃的上传也计入。');
   }
   async function recordsFor(formId) {
-    const keys = (await repo.list(`form-submissions/${formId}/`)).slice(-1000);
-    const values = await Promise.all(keys.map(async (key) => { const index = await repo.get(key); return index ? repo.get(recordKey(index.id)) : null; }));
-    return values.filter(Boolean).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    const prefix = `form-submissions/${formId}/`;
+    const ids = (await repo.list(prefix)).slice(-1000).map((key) => key.slice(prefix.length, -5)).filter((id) => ID.test(id));
+    const values = await mapConcurrent(ids, 24, (id) => repo.get(recordKey(id)));
+    return values.filter((record) => record?.formId === formId).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
   }
   function canSubmit(form) { return form.status === 'published' && (!form.deadline || Date.parse(form.deadline) > now()); }
   async function addForm(input, actor) {
@@ -257,8 +261,9 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
         }
         if (action === 'duplicate' && method === 'POST') return response({ form: publicForm(await addForm({ ...formInput(form), title: `${form.title.slice(0, 94)} · 副本`, status: 'draft', deadline: '' }, session.user)) }, 201);
         if (['submissions', 'export'].includes(action) && method === 'GET') {
-          const records = await recordsFor(form.id); const items = await Promise.all(records.map((record) => recordView(record)));
-          if (action === 'submissions') return response({ items, usage: { authorizations: (await repo.list(`form-quota/${form.id}/`)).length, completed: items.filter((v) => v.status !== 'uploading').length, fileBytes: items.filter((v) => v.status !== 'uploading').reduce((sum, row) => sum + row.files.reduce((n, f) => n + f.size, 0), 0) } });
+          const [records, quotas] = await Promise.all([recordsFor(form.id), action === 'submissions' ? repo.list(`form-quota/${form.id}/`) : []]);
+          const items = await mapConcurrent(records, 16, recordView);
+          if (action === 'submissions') return response({ items, usage: { authorizations: quotas.length, completed: items.filter((v) => v.status !== 'uploading').length, fileBytes: items.filter((v) => v.status !== 'uploading').reduce((sum, row) => sum + row.files.reduce((n, f) => n + f.size, 0), 0) } });
           // A union of immutable schemas preserves labels/values of deleted or renamed fields.
           const signature = (field) => JSON.stringify([field.id, field.type, field.label]);
           const columns = new Map(form.fields.map((f) => [signature(f), f]));
@@ -279,8 +284,9 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
         fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
       }
       if (path === `${API}/forms` && method === 'GET') {
-        const session = await identity.authenticate(request);
-        const forms = await Promise.all((await repo.list('form-index/')).slice(-1000).map(indexedForm));
+        const [session, forms] = await Promise.all([
+          identity.authenticate(request), repo.list('form-index/').then((keys) => mapConcurrent(keys.slice(-1000), 24, indexedForm)),
+        ]);
         return response({ items: forms.filter((f) => canSubmit(f) && (f.access === 'public' || session)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(publicForm) });
       }
       const formRoute = path.match(/^\/api\/platform\/forms\/([^/]+)(?:\/(submissions))?$/);
@@ -306,18 +312,23 @@ export function createFormsService({ repo, identity, env, now = Date.now, getGat
           await claim(`form-quota/${form.id}/`, form.maxSubmissions, ticket, 'FORM_FULL');
           const record = { id, formId: form.id, userId: session.user.id, submitterName, submitterIdentity, answers, files: files.map((file) => ({ ...file, objectKey: `${config.objectPrefix}staging/${id}/${file.id}.${file.extension}` })), schemaSnapshot: publicForm(form), receiptHash: hash(token), createdAt: timestamp, uploadExpiresAt: now() + 300000, objectPrefix: config?.objectPrefix || '' };
           await repo.putNew(recordKey(id), record);
-          await repo.putNew(`form-submissions/${form.id}/${id}.json`, { id });
-          await repo.putNew(`user-submissions/${session.user.id}/${String(9999999999999 - now()).padStart(13, '0')}-${id}.json`, { id });
           const gateway = files.length ? getGateway(config) : null;
-          const uploads = await Promise.all(record.files.map(async (file) => ({ fileId: file.id, ...await gateway.presignUpload({ id: file.id, objectKey: file.objectKey, contentType: file.type, fileSize: file.size, fileName: file.name }, 300) })));
-          return response({ submission: await recordView(record), receiptToken: token, uploads }, 201);
+          const [uploads] = await Promise.all([
+            Promise.all(record.files.map(async (file) => ({ fileId: file.id, ...await gateway.presignUpload({ id: file.id, objectKey: file.objectKey, contentType: file.type, fileSize: file.size, fileName: file.name }, 300) }))),
+            repo.putNew(`form-submissions/${form.id}/${id}.json`, { id }),
+            repo.putNew(`user-submissions/${session.user.id}/${String(9999999999999 - now()).padStart(13, '0')}-${id}.json`, { id }),
+          ]);
+          return response({ submission: projectRecord(record), receiptToken: token, uploads }, 201);
         }
         fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
       }
       if (path === `${API}/me/submissions` && method === 'GET') {
         const session = await identity.authenticate(request, { required: true });
-        const records = await Promise.all((await repo.list(`user-submissions/${session.user.id}/`)).slice(0, 1000).map(async (key) => { const index = await repo.get(key); return index ? getRecord(index.id) : null; }));
-        return response({ items: (await Promise.all(records.filter((r) => r.userId === session.user.id).map((record) => recordView(record)))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+        const prefix = `user-submissions/${session.user.id}/`;
+        const ids = (await repo.list(prefix)).slice(0, 1000).map((key) => key.slice(prefix.length + 14, -5)).filter((id) => ID.test(id));
+        const records = await mapConcurrent(ids, 24, (id) => repo.get(recordKey(id)));
+        const items = await mapConcurrent(records.filter((record) => record?.userId === session.user.id), 16, recordView);
+        return response({ items: items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
       }
       const submissionRoute = path.match(/^\/api\/platform\/submissions\/([^/]+)(?:\/(complete|edit|review)|\/files\/([^/]+)\/(download))?$/);
       if (!submissionRoute) return null;

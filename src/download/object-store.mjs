@@ -25,7 +25,8 @@ export async function signedFetch(store, method, key, { body = '', headers = {},
     const names = Object.keys(all).sort();
     const params = new URLSearchParams(url.search);
     params.sort();
-    const canonical = [method, url.pathname, params.toString(), names.map(name => `${name}:${all[name]}\n`).join(''), names.join(';'), payload].join('\n');
+    const canonicalQuery = [...params].map(([name, value]) => `${encodeSegment(name)}=${encodeSegment(value)}`).join('&');
+    const canonical = [method, url.pathname, canonicalQuery, names.map(name => `${name}:${all[name]}\n`).join(''), names.join(';'), payload].join('\n');
     const signature = createHmac('sha256', signingKey(store.secretKey, day)).update(['AWS4-HMAC-SHA256', stamp, scope, sha256(canonical)].join('\n')).digest('hex');
     const { host: _host, ...sent } = all;
     return fetch(url, { method, signal, body: method === 'GET' || method === 'HEAD' ? undefined : body, headers: { ...sent, authorization: `AWS4-HMAC-SHA256 Credential=${store.accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}` } });

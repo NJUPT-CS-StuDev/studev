@@ -102,7 +102,24 @@ function computeStatus(sub, round) {
 }
 
 function safeFilePart(value) {
-  return String(value || '').replace(/[\\/:*?"<>|\r\n\t]+/g, '').replace(/\s+/g, '').slice(0, 60) || 'item';
+  return String(value || '').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '').replace(/\s+/g, '').slice(0, 60).replace(/^\.+$/, '') || 'item';
+}
+
+function uploadTarget(item, round, session, body, now) {
+  const onBehalf = session.user.role === 'owner' && Boolean(body.studentId);
+  const sid = normSid(onBehalf ? body.studentId : session.user.studentId);
+  if (!/^[A-Z0-9]{1,80}$/.test(sid)) fail(400, 'INVALID_STUDENT_ID', '学号无效。');
+  const recipient = (item.recipients || []).find((student) => student.studentId === sid);
+  if (!onBehalf) {
+    if (round.policy === 'closed') fail(400, 'ROUND_CLOSED', '当前批次已关闭提交。');
+    if (round.policy === 'strict' && round.deadline && now > Date.parse(round.deadline)) fail(400, 'DEADLINE_PASSED', '已超过截止时间，无法提交。');
+    if (item.targetMode !== 'open' && !['owner', 'admin'].includes(session.user.role) && !recipient) {
+      fail(403, 'NOT_IN_RECIPIENTS', '你不在本次收集名单中。');
+    }
+  }
+  const name = onBehalf ? text(body.studentName || recipient?.name || sid, '姓名', 40, true)
+    : (recipient?.name || session.user.realName || session.user.nickname || sid);
+  return { onBehalf, sid, name };
 }
 
 function buildIssuerOptions(user, orgs) {
@@ -186,6 +203,16 @@ function personOrgLabel(user, preferOrgId, orgs) {
   return organization(picked.organizationId, orgs)?.name || '';
 }
 
+function submissionsByStudent(submissions) {
+  const grouped = new Map();
+  for (const submission of submissions) {
+    const own = grouped.get(submission.studentId);
+    if (own) own.push(submission);
+    else grouped.set(submission.studentId, [submission]);
+  }
+  return grouped;
+}
+
 export function createCollectionsService({ repo, identity, env, now = Date.now, getGateway }) {
   async function getOrgs() {
     if (typeof identity.loadOrganizations === 'function') return identity.loadOrganizations();
@@ -256,12 +283,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     const recipientCount = recipientIds.length;
     const rounds = (item.rounds || []).map((rd) => {
       const subs = subsByRound[rd.id] || [];
-      const byStu = new Map();
-      for (const s of subs) {
-        const arr = byStu.get(s.studentId) || [];
-        arr.push(s);
-        byStu.set(s.studentId, arr);
-      }
+      const byStu = submissionsByStudent(subs);
       const statusBySid = {};
       let submittedCount = 0;
       for (const [sid, own] of byStu.entries()) {
@@ -337,11 +359,14 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
 
     // 1. Public list of all collections (single-blob catalog read; supports ?orgId=... & ?refresh=1)
     if (path === API && method === 'GET') {
-      const session = await identity.authenticate(request);
+      const sessionRead = identity.authenticate(request);
+      const refresh = url.searchParams.get('refresh') === '1';
+      const catalogRead = refresh
+        ? sessionRead.then((session) => loadCatalog({ refresh: ['owner', 'admin'].includes(session?.user.role) }))
+        : loadCatalog();
+      const [session, catalog, orgs] = await Promise.all([sessionRead, catalogRead, getOrgs()]);
       const mySid = session ? normSid(session.user.studentId) : '';
       const isStaff = Boolean(session && ['owner', 'admin'].includes(session.user.role));
-      const refresh = url.searchParams.get('refresh') === '1' && isStaff;
-      const [catalog, orgs] = await Promise.all([loadCatalog({ refresh }), getOrgs()]);
       const orgFilter = (url.searchParams.get('orgId') || '').trim();
 
       const allEntries = Object.values(catalog.items || {}).sort(
@@ -514,14 +539,14 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (itemMatch && method === 'GET') {
       const itemId = itemMatch[1];
       if (!ID.test(itemId)) fail(400, 'INVALID_ID', '收集标识无效。');
-      const item = await repo.get(`collections/items/${itemId}.json`);
+      const [session, item, orgs] = await Promise.all([
+        identity.authenticate(request), repo.get(`collections/items/${itemId}.json`), getOrgs(),
+      ]);
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
-      const session = await identity.authenticate(request);
       const mySid = session ? normSid(session.user.studentId) : '';
       const isStaff = Boolean(session && ['owner', 'admin'].includes(session.user.role));
       const refresh = url.searchParams.get('refresh') === '1' && isStaff;
-      const [orgs, allUsers, subsByRound] = await Promise.all([
-        getOrgs(),
+      const [allUsers, subsByRound] = await Promise.all([
         session ? getAllUsers() : Promise.resolve([]),
         loadItemSubmissions(item, { refresh }),
       ]);
@@ -559,11 +584,12 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
 
       const inRecipients = Boolean(mySid && (targetMode === 'open' || (item.recipients || []).some((r) => r.studentId === mySid)));
 
+      const groupedByRound = new Map((item.rounds || []).map((rd) => [rd.id, submissionsByStudent(subsByRound[rd.id] || [])]));
       const roundStats = (item.rounds || []).map((rd) => {
-        const subs = subsByRound[rd.id] || [];
+        const grouped = groupedByRound.get(rd.id);
         let submitted = 0; let late = 0; let missing = 0;
         for (const stu of roster) {
-          const own = subs.filter((s) => s.studentId === stu.studentId);
+          const own = grouped.get(stu.studentId) || [];
           if (rd.files.every((f) => own.some((s) => s.fileId === f.id))) {
             if (own.some((s) => computeStatus(s, rd) === 'late')) late++;
             else submitted++;
@@ -579,7 +605,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const statuses = {};
         const filesByRound = {};
         for (const rd of item.rounds || []) {
-          const own = (subsByRound[rd.id] || []).filter((s) => s.studentId === stu.studentId);
+          const own = groupedByRound.get(rd.id).get(stu.studentId) || [];
           if (rd.files.every((f) => own.some((s) => s.fileId === f.id))) {
             statuses[rd.id] = own.some((s) => computeStatus(s, rd) === 'late') ? 'late' : 'submitted';
           } else {
@@ -712,13 +738,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!rd) fail(404, 'NOT_FOUND', '批次不存在。');
 
       const body = await readJson(request);
-      const isOwnerProxy = session.user.role === 'owner' && Boolean(body.studentId);
-      if (!isOwnerProxy) {
-        if (rd.policy === 'closed') fail(400, 'ROUND_CLOSED', '当前批次已关闭提交。');
-        if (rd.policy === 'strict' && rd.deadline && now() > Date.parse(rd.deadline)) {
-          fail(400, 'DEADLINE_PASSED', '已超过截止时间，无法提交。');
-        }
-      }
+      const { sid, name } = uploadTarget(item, rd, session, body, now());
 
       const fileSlot = (rd.files || []).find((f) => f.id === body.fileId);
       if (!fileSlot) fail(400, 'INVALID_FILE_SLOT', '提交项不存在。');
@@ -733,15 +753,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         fail(400, 'FILE_TOO_LARGE', `文件大小须在 1 B – ${Math.round(fileSlot.maxBytes / 1048576)} MB 之间。`);
       }
 
-      const sid = isOwnerProxy ? normSid(body.studentId) : normSid(session.user.studentId);
-      const recipient = (item.recipients || []).find((r) => r.studentId === sid);
-      if (!isOwnerProxy && item.targetMode !== 'open' && !['owner', 'admin'].includes(session.user.role) && !recipient) {
-        fail(403, 'NOT_IN_RECIPIENTS', '你不在本次收集名单中。');
-      }
-      const realName = isOwnerProxy
-        ? (body.studentName || recipient?.name || sid)
-        : (recipient?.name || session.user.realName || session.user.nickname || sid);
-      const storedName = `${sid}_${safeFilePart(realName)}_${safeFilePart(rd.label)}_${safeFilePart(fileSlot.name)}.${ext}`;
+      const storedName = `${sid}_${safeFilePart(name)}_${safeFilePart(rd.label)}_${safeFilePart(fileSlot.name)}.${ext}`;
       const config = oscaConfig(env, item.id);
       const objectKey = `${config.objectPrefix}${rd.id}/${fileSlot.id}/${sid}_${Date.now()}_${randomUUID().slice(0, 6)}.${ext}`;
       const gateway = getGateway(config);
@@ -766,20 +778,23 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
 
       const config = oscaConfig(env, item.id);
       const objectKey = String(body.objectKey || '');
-      if (!objectKey.startsWith(config.objectPrefix)) fail(400, 'INVALID_OBJECT', '上传凭证无效。');
+      const { onBehalf, sid, name } = uploadTarget(item, rd, session, body, now());
+      const prefix = `${config.objectPrefix}${rd.id}/${fileSlot.id}/${sid}_`;
+      const ext = /^\d+_[a-f0-9]{6}\.([a-z0-9]{1,10})$/.exec(objectKey.slice(prefix.length))?.[1];
+      if (!objectKey.startsWith(prefix) || !fileSlot.extensions.includes(ext)) fail(400, 'INVALID_OBJECT', '上传凭证无效。');
+      const storedName = `${sid}_${safeFilePart(name)}_${safeFilePart(rd.label)}_${safeFilePart(fileSlot.name)}.${ext}`;
+      const originalName = text(body.originalName || storedName, '原文件名', 200, true);
       const gateway = getGateway(config);
-      const head = await gateway.head(objectKey);
-      if (!head) fail(400, 'UPLOAD_INCOMPLETE', '文件尚未完成上传，请重试。');
-
-      const isOwnerProxy = session.user.role === 'owner' && Boolean(body.studentId);
-      const sid = isOwnerProxy ? normSid(body.studentId) : normSid(session.user.studentId);
-      const studentName = isOwnerProxy
-        ? text(body.studentName || sid, '姓名', 40, true)
-        : (session.user.realName || session.user.nickname || sid);
       const subKey = `collections/submissions/${item.id}/${rd.id}/${fileSlot.id}/${sid}.json`;
-      const prev = await repo.get(subKey);
-      const submittedAt = isOwnerProxy && body.submittedAt ? parseDeadline(body.submittedAt) : new Date(now()).toISOString();
-      const revisions = isOwnerProxy && Number.isSafeInteger(body.revisions) && body.revisions >= 1
+      const [head, prev] = await Promise.all([gateway.head(objectKey), repo.get(subKey)]);
+      if (!head) fail(400, 'UPLOAD_INCOMPLETE', '文件尚未完成上传，请重试。');
+      if (!Number.isSafeInteger(head.size) || head.size < 1 || head.size > fileSlot.maxBytes || !/^"[^"\r\n]+"$/.test(head.etag || '')) {
+        fail(409, 'UPLOAD_MISMATCH', '附件大小或存储校验信息无效。');
+      }
+      if (prev?.objectKey === objectKey && prev.etag === head.etag) return response({ submission: prev });
+
+      const submittedAt = onBehalf && body.submittedAt ? parseDeadline(body.submittedAt) : new Date(now()).toISOString();
+      const revisions = onBehalf && Number.isSafeInteger(body.revisions) && body.revisions >= 1
         ? body.revisions
         : (prev ? (prev.revisions || 1) + 1 : 1);
 
@@ -788,12 +803,12 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         roundId: rd.id,
         fileId: fileSlot.id,
         studentId: sid,
-        studentName,
-        originalName: text(body.originalName || body.storedName, '原文件名', 200, true),
-        storedName: text(body.storedName, '规范文件名', 200, true),
+        studentName: name,
+        originalName,
+        storedName,
         objectKey,
         etag: head.etag || '',
-        sizeBytes: Number(head.contentLength || body.sizeBytes || 0),
+        sizeBytes: head.size,
         submittedAt,
         revisions,
         history: prev ? [...(prev.history || []).slice(-9), { objectKey: prev.objectKey, storedName: prev.storedName, sizeBytes: prev.sizeBytes, submittedAt: prev.submittedAt }] : [],
@@ -848,10 +863,11 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const slot = (rd.files || []).find((f) => f.id === sub.fileId);
         const dl = await gateway.presignDownload({ fileName: sub.storedName, finalObjectKey: sub.objectKey }, sub.etag, 300);
         return {
-          path: `${safeFilePart(orgLabel)}/${safeFilePart(slot?.name || sub.fileId)}/${sub.storedName}`,
+          path: `${safeFilePart(orgLabel)}/${safeFilePart(slot?.name || sub.fileId)}/${sub.storedName.replace(/[\\/\x00-\x1f]/g, '_').replace(/^\.+$/, '_')}`,
           storedName: sub.storedName,
           sizeBytes: sub.sizeBytes,
           url: dl.url,
+          headers: dl.headers,
         };
       }));
       return response({ zipName: `${safeFilePart(item.name)}_${safeFilePart(rd.label)}.zip`, files });

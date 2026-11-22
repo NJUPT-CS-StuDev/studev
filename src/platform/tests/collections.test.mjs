@@ -193,13 +193,14 @@ test('unified org-tree × collection model: issuer identity, people recipients, 
   });
   assert.equal(pre1.status, 200);
   assert.equal(pre1.data.storedName, 'B24040202_同学乙_实验2_实验报告.docx');
-  f.objects.set(pre1.data.objectKey, { etag: '"e1"', contentLength: 4096 });
+  f.objects.set(pre1.data.objectKey, { etag: '"e1"', size: 4096 });
   const conf1 = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/confirm`, {
     method: 'POST', user: 'student', csrf: true,
     body: { fileId, objectKey: pre1.data.objectKey, originalName: 'lab2.docx', storedName: pre1.data.storedName, sizeBytes: 4096 },
   });
   assert.equal(conf1.status, 200);
   assert.equal(conf1.data.submission.revisions, 1);
+  assert.equal(conf1.data.submission.sizeBytes, 4096);
 
   // 8. Owner records an authentic historical submission for pending student with exact timestamp
   const preHist = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/presign`, {
@@ -207,7 +208,7 @@ test('unified org-tree × collection model: issuer identity, people recipients, 
     body: { fileId, fileName: 'old.pdf', sizeBytes: 2048, studentId: 'B24040203', studentName: '待注册丙' },
   });
   assert.equal(preHist.status, 200);
-  f.objects.set(preHist.data.objectKey, { etag: '"e3"', contentLength: 2048 });
+  f.objects.set(preHist.data.objectKey, { etag: '"e3"', size: 2048 });
   const confHist = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/confirm`, {
     method: 'POST', user: 'owner', csrf: true,
     body: {

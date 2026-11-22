@@ -17,11 +17,8 @@ export function createSessions({ repo, now, loadUser }) {
   const sessionKey = (id) => `identity/devices/sessions/${id}.json`;
   const revokedKey = (id) => `identity/devices/revoked/${id}.json`;
   const tokenKey = (kind, token) => `identity/devices/${kind}/${digest(token)}.json`;
-  const loginPrefix = (userId) => `identity/devices/logins/${userId}/`;
-  async function loginTip(userId) {
-    const keys = await repo.list(loginPrefix(userId));
-    return keys.length ? repo.get(keys.at(-1)) : null;
-  }
+  const loginPrefix = (userId) => `identity/devices/logins/${userId}`;
+  const loginTip = (userId) => repo.latest(loginPrefix(userId), 12);
   function device(value) {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) fail(400, 'INVALID_DEVICE', '设备标识无效，请重新安装后重试。');
     return digest(value);
@@ -31,11 +28,18 @@ export function createSessions({ repo, now, loadUser }) {
     catch (error) { if (!isConflict(error)) throw error; }
   }
   async function validSession(id, known = {}) {
-    const [original, revoked, state] = await Promise.all([
+    const [original, revoked, state, ticketIdentity] = await Promise.all([
       repo.get(sessionKey(id)), repo.get(revokedKey(id)), repo.latest(`identity/devices/state/${id}`),
+      // A ticket names the immutable session's owner, so these authoritative
+      // reads can run alongside the session reads.
+      known.userId ? Promise.all([
+        loginTip(known.userId),
+        loadUser(known.userId),
+      ]) : null,
     ]);
-    if (!original || original.expiresAt <= now() || revoked || (known.user && original.userId !== known.user.id)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const [tip, user] = await Promise.all([
+    const ownerId = known.userId ?? known.user?.id;
+    if (!original || original.expiresAt <= now() || revoked || (ownerId && original.userId !== ownerId)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const [tip, user] = ticketIdentity ?? await Promise.all([
       known.tip ?? loginTip(original.userId), known.user ?? loadUser(original.userId),
     ]);
     if (!tip || tip.devices[original.deviceHash] !== id) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
@@ -45,12 +49,13 @@ export function createSessions({ repo, now, loadUser }) {
     if (!user || user.status !== 'active' || user.securityVersion !== session.securityVersion) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     return { user, session, loginHead: tip };
   }
+
   async function issue(session) {
     const accessToken = randomBytes(32).toString('base64url'), refreshToken = randomBytes(32).toString('base64url');
     const expiresAt = Math.min(now() + ACCESS_SECONDS * 1000, session.expiresAt);
     await Promise.all([
-      repo.putNew(tokenKey('access', accessToken), { sessionId: session.id, expiresAt }),
-      repo.putNew(tokenKey('refresh', refreshToken), { sessionId: session.id, expiresAt: session.expiresAt }),
+      repo.putNew(tokenKey('access', accessToken), { sessionId: session.id, userId: session.userId, expiresAt }),
+      repo.putNew(tokenKey('refresh', refreshToken), { sessionId: session.id, userId: session.userId, expiresAt: session.expiresAt }),
     ]);
     return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.floor((expiresAt - now()) / 1000), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };
   }
@@ -80,7 +85,7 @@ export function createSessions({ repo, now, loadUser }) {
     // logins conflict rather than bypass replacement or the device ceiling; a
     // late write cannot restore an old head. Never use a mutable snapshot here.
     devices[deviceHash] = session.id;
-    await repo.putNew(`${loginPrefix(user.id)}${String(generation).padStart(12, '0')}.json`, {
+    await repo.putNew(`${loginPrefix(user.id)}/${String(generation).padStart(12, '0')}.json`, {
       devices, generation, expiresAt: session.expiresAt,
     });
     return { credentials: await issue(session), session };
@@ -90,7 +95,7 @@ export function createSessions({ repo, now, loadUser }) {
     if (typeof body.refreshToken !== 'string' || !TOKEN.test(body.refreshToken)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const ticket = await repo.get(tokenKey('refresh', body.refreshToken));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const { session } = await validSession(ticket.sessionId);
+    const { session } = await validSession(ticket.sessionId, { userId: ticket.userId });
     if (session.kind !== kind) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     if (hash !== session.deviceHash) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     try { await repo.putNew(tokenKey('spent', body.refreshToken), { spentAt: now(), expiresAt: session.expiresAt }); }
@@ -105,7 +110,7 @@ export function createSessions({ repo, now, loadUser }) {
     if (typeof token !== 'string' || !TOKEN.test(token)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const ticket = await repo.get(tokenKey('access', token));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const { user, session, loginHead } = await validSession(ticket.sessionId);
+    const { user, session, loginHead } = await validSession(ticket.sessionId, { userId: ticket.userId });
     if (session.kind !== kind) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     return { user, session, sessionId: session.id, kind, mfaVerified: session.mfaVerified, loginHead };
   }

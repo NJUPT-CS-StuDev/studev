@@ -35,3 +35,34 @@ test('a delayed writer cannot restore an older account security revision', async
   assert.equal((await repo.latest(prefix)).revision, 2);
   assert.equal((await repo.latest(prefix)).securityVersion, 'after-password-change');
 });
+
+test('warm immutable reads still check the strong revision list and respect changes and deletion', async () => {
+  const store = memoryBlob();
+  const read = store.get, list = store.list;
+  const calls = [];
+  store.list = async (options) => {
+    assert.equal(options.consistency, 'strong');
+    calls.push('list');
+    const result = await list(options);
+    return { blobs: result.blobs.map(({ key }) => ({ key, etag: key })) };
+  };
+  store.get = async (key, options) => {
+    assert.equal(options.consistency, 'strong');
+    calls.push('get');
+    const value = await read(key, options);
+    return value && options.type === 'text' ? JSON.stringify(value) : value;
+  };
+  const secret = 'synthetic-revision-cache-secret-only';
+  const repo = createRepository(store, { secret, revisions: new Map() });
+  const writer = createRepository(store, { secret });
+  const prefix = 'identity/users/cache-test';
+  await writer.append(prefix, { status: 'active' });
+  (await repo.latest(prefix)).status = 'client mutation';
+  calls.length = 0;
+  assert.equal((await repo.latest(prefix)).status, 'active');
+  assert.deepEqual(calls, ['list']);
+  await writer.append(prefix, { status: 'disabled' }, 1);
+  assert.equal((await repo.latest(prefix)).status, 'disabled');
+  for (const key of await writer.list(`${prefix}/`)) await writer.remove(key);
+  assert.equal(await repo.latest(prefix), null);
+});
