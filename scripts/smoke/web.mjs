@@ -548,8 +548,8 @@ try {
         });
 
         await goto(page, '/');
-        await page.locator('[data-me-name]').waitFor({ state: 'visible' });
-        assert.equal(await page.locator('[data-me-name]').innerText(), '未登录');
+        await page.locator('[data-me]').waitFor({ state: 'visible' });
+        assert.equal(await page.locator('[data-me-name]').textContent(), '未登录');
         await headerAligned(page, '.ph h1');
         await timetableNavigation(page, name);
         await examsHistory(page, name);
