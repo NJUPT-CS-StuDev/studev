@@ -791,14 +791,13 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!Number.isSafeInteger(head.size) || head.size < 1 || head.size > fileSlot.maxBytes || !/^"[^"\r\n]+"$/.test(head.etag || '')) {
         fail(409, 'UPLOAD_MISMATCH', '附件大小或存储校验信息无效。');
       }
-      if (prev?.objectKey === objectKey && prev.etag === head.etag) return response({ submission: prev });
-
       const submittedAt = onBehalf && body.submittedAt ? parseDeadline(body.submittedAt) : new Date(now()).toISOString();
       const revisions = onBehalf && Number.isSafeInteger(body.revisions) && body.revisions >= 1
         ? body.revisions
         : (prev ? (prev.revisions || 1) + 1 : 1);
 
-      const next = {
+      const confirmed = prev?.objectKey === objectKey && prev.etag === head.etag;
+      const next = confirmed ? prev : {
         itemId: item.id,
         roundId: rd.id,
         fileId: fileSlot.id,
@@ -813,7 +812,9 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         revisions,
         history: prev ? [...(prev.history || []).slice(-9), { objectKey: prev.objectKey, storedName: prev.storedName, sizeBytes: prev.sizeBytes, submittedAt: prev.submittedAt }] : [],
       };
-      await repo.put(subKey, next);
+      // A retry can arrive after the canonical write but before the overview
+      // is updated. Restore the overview without recording another revision.
+      if (!confirmed) await repo.put(subKey, next);
       const idx = await repo.get(itemIndexKey(item.id));
       if (idx?.version === 1 && idx.byRound) {
         idx.byRound[rd.id] = idx.byRound[rd.id] || {};
