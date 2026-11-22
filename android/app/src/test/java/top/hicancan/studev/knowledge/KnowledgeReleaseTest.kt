@@ -3,6 +3,7 @@ package top.hicancan.studev.knowledge
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
+import top.hicancan.studev.data.InformationEntityFile
 
 class KnowledgeReleaseTest {
     private fun text(path: String) = checkNotNull(javaClass.classLoader?.getResourceAsStream("data/$path")) {
@@ -17,8 +18,16 @@ class KnowledgeReleaseTest {
         assertTrue(knowledge.courses.isNotEmpty())
         assertTrue(knowledge.topics.isNotEmpty())
         assertTrue(knowledge.materials.isNotEmpty())
-        val codes = curriculum.map { it.code }.toSet()
-        assertTrue(knowledge.courses.all { course -> course.codes.isNotEmpty() && course.codes.all { it in codes } })
+        // The curriculum covers selected majors. Knowledge links to the full campus course-plan catalogue.
+        val planIds = Json.decodeFromString<InformationEntityFile>(text("entities/information.json")).items
+            .filter { it["subtype"]?.jsonPrimitive?.content == "information:course-plan" }
+            .map { it.getValue("id").jsonPrimitive.content }
+            .toSet()
+        for (course in knowledge.courses) {
+            assertTrue("${course.name} has no course codes", course.codes.isNotEmpty())
+            val unknown = course.codes.filterNot { "information/course-plan/$it" in planIds }
+            assertTrue("${course.name} links to unknown course plans: $unknown", unknown.isEmpty())
+        }
         val courses = knowledge.courses.map { it.id }.toSet()
         assertTrue(knowledge.materials.all { it.course in courses })
 

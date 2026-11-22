@@ -163,7 +163,7 @@ val packageAcademicTestFixtures = tasks.register<Sync>("packageAcademicTestFixtu
         releases.resolve(metadata["version"].toString())
     }) {
         include("**/teaching/*/classes/B240402.json", "**/exams/*/classes/*.json")
-        include("knowledge/knowledge.json", "curriculum/courses.json")
+        include("knowledge/knowledge.json", "curriculum/courses.json", "entities/information.json")
         include("knowledge/materials/batch-2/B0300053S/数据结构第5章-树课件.md")
     }
     from(manifest) { rename { "release.json" } }
