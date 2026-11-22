@@ -172,14 +172,44 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     const [started, orgs] = await Promise.all([sessions.start(user, body, { kind, mfaVerified }), loadOrganizations(repo)]);
     return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) });
   }
-  async function saveUser(current, changes) {
+  const DIRECTORY_INDEX_KEY = 'identity/directory-index.json';
+  function directoryEntry(user) {
+    return {
+      id: user.id,
+      qq: user.qq || '',
+      avatarUrl: user.avatarUrl || '',
+      nickname: user.nickname || '',
+      email: user.email || '',
+      emailVerified: user.emailVerified === true,
+      studentId: user.studentId || '',
+      realName: user.realName || '',
+      identityVerified: user.identityVerified === true,
+      memberships: Array.isArray(user.memberships) ? user.memberships : [],
+      signature: user.signature || '',
+      role: user.role,
+      status: user.status,
+      revision: user.revision,
+      totp: Boolean(user.totp),
+      mustChangePassword: Boolean(user.mustChangePassword),
+    };
+  }
+  async function syncDirectoryIndex(usersToUpsert = [], idsToDelete = []) {
+    const existing = await repo.get(DIRECTORY_INDEX_KEY);
+    if (!existing || existing.version !== 1 || !existing.byId) return;
+    for (const u of usersToUpsert) existing.byId[u.id] = directoryEntry(u);
+    for (const id of idsToDelete) delete existing.byId[id];
+    await repo.put(DIRECTORY_INDEX_KEY, existing);
+  }
+  async function saveUser(current, changes, { syncIndex = true } = {}) {
     const next = await repo.append(userKey(current.id), { ...current, ...changes, updatedAt: iso(now) }, current.revision);
     await members.publish(next, current);
+    if (syncIndex) await syncDirectoryIndex([next]);
     return next;
   }
-  async function createUser(user) {
+  async function createUser(user, { syncIndex = true } = {}) {
     const next = await repo.append(userKey(user.id), user, 0);
     await members.publish(next);
+    if (syncIndex) await syncDirectoryIndex([next]);
     return next;
   }
   async function claimStudent(studentId, id) {
@@ -261,10 +291,11 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   async function deleteUser(user) {
     if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
     const orgs = await loadOrganizations(repo);
-    await saveUser(user, { status: 'disabled', securityVersion: secretToken() });
+    await saveUser(user, { status: 'disabled', securityVersion: secretToken() }, { syncIndex: false });
     if (user.qq) await repo.remove(`identity/qq/${user.qq}.json`);
     if (user.studentId) await repo.remove(studentKey(user.studentId));
     for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
+    await syncDirectoryIndex([], [user.id]);
     if (isRosterMember(user, orgs)) await rebuildRoster();
   }
   // After a password changes, the account's mailbox hears of it, so a change nobody asked for is noticed at once.
@@ -275,7 +306,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         ...letter({ greeting: `${user.nickname}，你好：`, lines: [`你的 StuDev 账号（学号 ${user.studentId}）的密码刚刚修改，所有设备都已退出登录。`, '如果是你自己改的，忽略这封信即可。'], action: { label: '不是我改的？重设密码', url: `${origin}/login/` }, footer: '如果不是你本人操作，请立刻用“忘记密码”重设，并联系管理员。' }) });
     } catch { /* The change itself stands even when the note cannot go out. */ }
   }
-  async function loadAllUsers() {
+  async function loadAllUsersCanonical() {
     const [qqKeys, studentKeys] = await Promise.all([repo.list('identity/qq/'), repo.list('identity/student/')]);
     const keys = [...qqKeys, ...studentKeys];
     const indices = [];
@@ -292,9 +323,20 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     for (let offset = 0; offset < uniqueIds.length; offset += 32) users.push(...await Promise.all(uniqueIds.slice(offset, offset + 32).map(id => repo.latest(userKey(id)))));
     return users.filter(Boolean);
   }
+  async function loadAllUsers({ refresh = false } = {}) {
+    if (!refresh) {
+      const cached = await repo.get(DIRECTORY_INDEX_KEY);
+      if (cached?.version === 1 && cached.byId) return Object.values(cached.byId);
+    }
+    const users = await loadAllUsersCanonical();
+    const byId = {};
+    for (const u of users) byId[u.id] = directoryEntry(u);
+    await repo.put(DIRECTORY_INDEX_KEY, { version: 1, byId });
+    return Object.values(byId);
+  }
   async function rebuildRoster() {
     const term = studentCenter.term;
-    const [users, orgs] = await Promise.all([loadAllUsers(), loadOrganizations(repo)]);
+    const [users, orgs] = await Promise.all([loadAllUsersCanonical(), loadOrganizations(repo)]);
     const snapshot = buildRosterSnapshot(users, term, iso(now), origin, orgs);
     await repo.put(`roster/${term}.json`, snapshot);
     return snapshot;
@@ -640,7 +682,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     if (method === 'GET' && route === '/admin/users') {
       await authenticate(request, { staff: true });
-      const [users, orgs] = await Promise.all([loadAllUsers(), loadOrganizations(repo)]);
+      const url = new URL(request.url);
+      const refresh = url.searchParams.get('refresh') === '1';
+      const [users, orgs] = await Promise.all([loadAllUsers({ refresh }), loadOrganizations(repo)]);
       return response({ items: users.map(user => publicUser(user, orgs)) });
     }
     if (method === 'POST' && route === '/admin/users/batch') {
@@ -679,6 +723,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       for (const row of parsed) dedup.set(row.studentId, row);
 
       let created = 0; let updated = 0; let skipped = 0;
+      const touched = [];
       for (const row of dedup.values()) {
         const existingClaim = await repo.get(studentKey(row.studentId));
         const existingUser = existingClaim?.id && ID.test(existingClaim.id) ? await repo.latest(userKey(existingClaim.id)) : null;
@@ -689,7 +734,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
             continue;
           }
           const nextMemberships = [...currentMemberships, { organizationId: targetOrg.id, title, overseesOrganizationId: '', order: 999 }];
-          await saveUser(existingUser, { memberships: nextMemberships });
+          touched.push(await saveUser(existingUser, { memberships: nextMemberships }, { syncIndex: false }));
           updated++;
           continue;
         }
@@ -699,15 +744,16 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         const id = randomUUID();
         if (row.qq) await repo.putNew(`identity/qq/${row.qq}.json`, { id });
         await claimStudent(row.studentId, id);
-        await createUser({
+        touched.push(await createUser({
           id, qq: row.qq, nickname: '', email: row.qq ? `${row.qq}@qq.com` : '', emailVerified: false,
           studentId: row.studentId, realName: row.realName, identityVerified: true,
           memberships: [{ organizationId: targetOrg.id, title, overseesOrganizationId: '', order: 999 }],
           signature: '', role: 'user', status: 'pending', passwordHash: '', mustChangePassword: false,
           securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
-        });
+        }, { syncIndex: false }));
         created++;
       }
+      if (touched.length) await syncDirectoryIndex(touched);
       if (isWithin(targetOrg.id, studentCenter.id, orgs)) await rebuildRoster();
       await repo.audit(auth.user.id, 'identity.users.batch_imported', targetOrg.id, { created, updated, skipped, total: dedup.size });
       return response({ created, updated, skipped, total: dedup.size }, 201);

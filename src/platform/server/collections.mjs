@@ -11,6 +11,8 @@ import {
 } from '../organizations.mjs';
 
 const API = '/api/platform/collections';
+const CATALOG_KEY = 'collections/catalog.json';
+const itemIndexKey = (itemId) => `collections/item-index/${itemId}.json`;
 const ID = /^[a-zA-Z0-9_-]{4,80}$/;
 const MAX_FILE = 50 * 1024 * 1024;
 const DEFAULT_EXTS = ['doc', 'docx', 'pdf', 'zip', 'xlsx', 'pptx', 'jpg', 'png'];
@@ -201,10 +203,130 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return items.filter(Boolean).sort((a, b) => (b.term || '').localeCompare(a.term || '') || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   }
 
-  async function listRoundSubmissions(itemId, roundId) {
+  async function listRoundSubmissionsCanonical(itemId, roundId) {
     const keys = await repo.list(`collections/submissions/${itemId}/${roundId}/`);
-    const rows = await Promise.all(keys.map((k) => repo.get(k)));
+    const rows = [];
+    for (let offset = 0; offset < keys.length; offset += 32) {
+      rows.push(...await Promise.all(keys.slice(offset, offset + 32).map((k) => repo.get(k))));
+    }
     return rows.filter(Boolean);
+  }
+
+  function compactSub(s) {
+    return {
+      fileId: s.fileId,
+      studentId: s.studentId,
+      studentName: s.studentName || '',
+      storedName: s.storedName,
+      objectKey: s.objectKey,
+      etag: s.etag || '',
+      sizeBytes: s.sizeBytes || 0,
+      submittedAt: s.submittedAt || '',
+      revisions: s.revisions || 1,
+    };
+  }
+
+  async function loadItemSubmissions(item, { refresh = false } = {}) {
+    if (!refresh) {
+      const idx = await repo.get(itemIndexKey(item.id));
+      if (idx?.version === 1 && idx.byRound) {
+        const subsByRound = {};
+        for (const rd of item.rounds || []) {
+          subsByRound[rd.id] = Object.values(idx.byRound[rd.id] || {});
+        }
+        return subsByRound;
+      }
+    }
+    const byRound = {};
+    const subsByRound = {};
+    for (const rd of item.rounds || []) {
+      const subs = await listRoundSubmissionsCanonical(item.id, rd.id);
+      subsByRound[rd.id] = subs;
+      const map = {};
+      for (const s of subs) map[`${s.fileId}::${s.studentId}`] = compactSub(s);
+      byRound[rd.id] = map;
+    }
+    await repo.put(itemIndexKey(item.id), { version: 1, byRound });
+    return subsByRound;
+  }
+
+  function buildCatalogEntry(item, subsByRound) {
+    const targetMode = item.targetMode === 'open' ? 'open' : 'selected';
+    const recipientIds = targetMode === 'selected' ? (item.recipients || []).map((r) => r.studentId) : [];
+    const recipientCount = recipientIds.length;
+    const rounds = (item.rounds || []).map((rd) => {
+      const subs = subsByRound[rd.id] || [];
+      const byStu = new Map();
+      for (const s of subs) {
+        const arr = byStu.get(s.studentId) || [];
+        arr.push(s);
+        byStu.set(s.studentId, arr);
+      }
+      const statusBySid = {};
+      let submittedCount = 0;
+      for (const [sid, own] of byStu.entries()) {
+        if (rd.files.every((f) => own.some((s) => s.fileId === f.id))) {
+          submittedCount++;
+          statusBySid[sid] = own.some((s) => computeStatus(s, rd) === 'late') ? 'late' : 'submitted';
+        }
+      }
+      return {
+        id: rd.id,
+        label: rd.label,
+        deadline: rd.deadline,
+        policy: rd.policy,
+        fileCount: rd.files.length,
+        submittedCount,
+        totalCount: targetMode === 'open' ? submittedCount : recipientCount,
+        statusBySid,
+      };
+    });
+    return {
+      id: item.id,
+      term: item.term,
+      termLabel: item.termLabel,
+      code: item.code || '',
+      name: item.name,
+      category: item.category,
+      issuer: item.issuer || {},
+      targetMode,
+      recipientCount,
+      recipientIds,
+      rounds,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  async function loadCatalog({ refresh = false } = {}) {
+    if (!refresh) {
+      const cat = await repo.get(CATALOG_KEY);
+      if (cat?.version === 1 && cat.items) return cat;
+    }
+    const items = await listItems();
+    const entries = {};
+    for (const item of items) {
+      const subsByRound = await loadItemSubmissions(item, { refresh });
+      entries[item.id] = buildCatalogEntry(item, subsByRound);
+    }
+    const cat = { version: 1, items: entries };
+    await repo.put(CATALOG_KEY, cat);
+    return cat;
+  }
+
+  async function syncCatalogItem(item, subsByRound) {
+    const existing = await repo.get(CATALOG_KEY);
+    if (!existing || existing.version !== 1 || !existing.items) return;
+    const subs = subsByRound || await loadItemSubmissions(item);
+    existing.items[item.id] = buildCatalogEntry(item, subs);
+    await repo.put(CATALOG_KEY, existing);
+  }
+
+  async function removeCatalogItem(itemId) {
+    await repo.remove(itemIndexKey(itemId));
+    const existing = await repo.get(CATALOG_KEY);
+    if (!existing || existing.version !== 1 || !existing.items) return;
+    delete existing.items[itemId];
+    await repo.put(CATALOG_KEY, existing);
   }
 
   async function handle(context, path) {
@@ -213,58 +335,45 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     const method = request.method;
     const url = new URL(request.url);
 
-    // 1. Public list of all collections (supports tree-inherited ?orgId=... filtering)
+    // 1. Public list of all collections (single-blob catalog read; supports ?orgId=... & ?refresh=1)
     if (path === API && method === 'GET') {
       const session = await identity.authenticate(request);
       const mySid = session ? normSid(session.user.studentId) : '';
       const isStaff = Boolean(session && ['owner', 'admin'].includes(session.user.role));
-      const [items, orgs] = await Promise.all([listItems(), getOrgs()]);
+      const refresh = url.searchParams.get('refresh') === '1' && isStaff;
+      const [catalog, orgs] = await Promise.all([loadCatalog({ refresh }), getOrgs()]);
       const orgFilter = (url.searchParams.get('orgId') || '').trim();
 
+      const allEntries = Object.values(catalog.items || {}).sort(
+        (a, b) => (b.term || '').localeCompare(a.term || '') || (b.updatedAt || '').localeCompare(a.updatedAt || '')
+      );
       const filtered = orgFilter
-        ? items.filter((item) => item.issuer?.organizationId && isWithin(item.issuer.organizationId, orgFilter, orgs))
-        : items;
+        ? allEntries.filter((item) => item.issuer?.organizationId && isWithin(item.issuer.organizationId, orgFilter, orgs))
+        : allEntries;
 
-      const viewItems = await Promise.all(filtered.map(async (item) => {
+      const viewItems = filtered.map((item) => {
         const targetMode = item.targetMode === 'open' ? 'open' : 'selected';
-        const recipients = targetMode === 'selected' ? (item.recipients || []) : [];
-        const recipientCount = recipients.length;
-        const inRecipients = Boolean(mySid && (targetMode === 'open' || recipients.some((r) => r.studentId === mySid)));
+        const recipientIds = item.recipientIds || [];
+        const inRecipients = Boolean(mySid && (targetMode === 'open' || recipientIds.includes(mySid)));
         const isIssuer = Boolean(session && item.issuer?.userId === session.user.id);
         const inMine = inRecipients || isIssuer;
 
-        const roundsSummary = await Promise.all((item.rounds || []).map(async (rd) => {
-          const subs = await listRoundSubmissions(item.id, rd.id);
-          const doneSids = new Set();
-          const byStu = new Map();
-          for (const s of subs) {
-            const set = byStu.get(s.studentId) || new Set();
-            set.add(s.fileId);
-            byStu.set(s.studentId, set);
-          }
-          for (const [sid, set] of byStu.entries()) {
-            if (rd.files.every((f) => set.has(f.id))) doneSids.add(sid);
-          }
+        const roundsSummary = (item.rounds || []).map((rd) => {
           let myStatus = null;
           if (mySid && inRecipients) {
-            const mySubs = subs.filter((s) => s.studentId === mySid);
-            if (rd.files.every((f) => mySubs.some((s) => s.fileId === f.id))) {
-              myStatus = mySubs.some((s) => computeStatus(s, rd) === 'late') ? 'late' : 'submitted';
-            } else {
-              myStatus = 'missing';
-            }
+            myStatus = rd.statusBySid?.[mySid] || 'missing';
           }
           return {
             id: rd.id,
             label: rd.label,
             deadline: rd.deadline,
             policy: rd.policy,
-            fileCount: rd.files.length,
-            submittedCount: doneSids.size,
-            totalCount: targetMode === 'open' ? doneSids.size : recipientCount,
+            fileCount: rd.fileCount,
+            submittedCount: rd.submittedCount,
+            totalCount: rd.totalCount,
             myStatus,
           };
-        }));
+        });
         return {
           id: item.id,
           term: item.term,
@@ -274,14 +383,14 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
           category: item.category,
           issuer: issuerView(item.issuer, orgs),
           targetMode,
-          recipientCount,
+          recipientCount: item.recipientCount,
           inRecipients,
           isIssuer,
           inMine,
           rounds: roundsSummary,
           updatedAt: item.updatedAt,
         };
-      }));
+      });
 
       return response({
         viewer: session ? {
@@ -385,6 +494,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         updatedAt: timestamp,
       };
       await repo.put(`collections/items/${id}.json`, item);
+      await repo.put(itemIndexKey(id), { version: 1, byRound: Object.fromEntries(rounds.map((r) => [r.id, {}])) });
+      await syncCatalogItem(item, Object.fromEntries(rounds.map((r) => [r.id, []])));
       await repo.audit(session.user.id, 'collection.created', id, { name, organizationId: issuerOrg.id, recipientCount: recipients.length });
       return response({ item: { ...item, issuer: issuerView(item.issuer, orgs) } }, 201);
     }
@@ -396,6 +507,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const itemId = itemMatch[1];
       if (!ID.test(itemId)) fail(400, 'INVALID_ID', '收集标识无效。');
       await repo.remove(`collections/items/${itemId}.json`);
+      await removeCatalogItem(itemId);
       await repo.audit(auth.user.id, 'collection.deleted', itemId);
       return response({ ok: true });
     }
@@ -407,14 +519,15 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const session = await identity.authenticate(request);
       const mySid = session ? normSid(session.user.studentId) : '';
       const isStaff = Boolean(session && ['owner', 'admin'].includes(session.user.role));
-      const [orgs, allUsers] = await Promise.all([getOrgs(), session ? getAllUsers() : Promise.resolve([])]);
+      const refresh = url.searchParams.get('refresh') === '1' && isStaff;
+      const [orgs, allUsers, subsByRound] = await Promise.all([
+        getOrgs(),
+        session ? getAllUsers() : Promise.resolve([]),
+        loadItemSubmissions(item, { refresh }),
+      ]);
       const userBySid = new Map(allUsers.filter((u) => u?.studentId).map((u) => [normSid(u.studentId), u]));
 
       const targetMode = item.targetMode === 'open' ? 'open' : 'selected';
-      const subsByRound = {};
-      for (const rd of item.rounds || []) {
-        subsByRound[rd.id] = await listRoundSubmissions(item.id, rd.id);
-      }
 
       // Build canonical roster of rows for stats & board
       const rosterMap = new Map();
@@ -536,6 +649,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       item.recipients = recipients;
       item.updatedAt = new Date(now()).toISOString();
       await repo.put(`collections/items/${itemId}.json`, item);
+      await syncCatalogItem(item);
       await repo.audit(session.user.id, 'collection.recipients.updated', itemId, { targetMode, recipientCount: recipients.length });
       return response({ targetMode, recipientCount: recipients.length });
     }
@@ -559,6 +673,12 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       item.rounds = [...(item.rounds || []), rd];
       item.updatedAt = new Date(now()).toISOString();
       await repo.put(`collections/items/${itemId}.json`, item);
+      const idx = await repo.get(itemIndexKey(itemId));
+      if (idx?.version === 1 && idx.byRound) {
+        idx.byRound[rd.id] = idx.byRound[rd.id] || {};
+        await repo.put(itemIndexKey(itemId), idx);
+      }
+      await syncCatalogItem(item);
       return response({ round: rd }, 201);
     }
 
@@ -577,6 +697,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if ('label' in body && body.label) rd.label = text(body.label, '批次名称', 40, true);
       item.updatedAt = new Date(now()).toISOString();
       await repo.put(`collections/items/${itemId}.json`, item);
+      await syncCatalogItem(item);
       return response({ round: rd });
     }
 
@@ -678,6 +799,17 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         history: prev ? [...(prev.history || []).slice(-9), { objectKey: prev.objectKey, storedName: prev.storedName, sizeBytes: prev.sizeBytes, submittedAt: prev.submittedAt }] : [],
       };
       await repo.put(subKey, next);
+      const idx = await repo.get(itemIndexKey(item.id));
+      if (idx?.version === 1 && idx.byRound) {
+        idx.byRound[rd.id] = idx.byRound[rd.id] || {};
+        idx.byRound[rd.id][`${fileSlot.id}::${sid}`] = compactSub(next);
+        await repo.put(itemIndexKey(item.id), idx);
+        const subsByRound = {};
+        for (const r of item.rounds || []) subsByRound[r.id] = Object.values(idx.byRound[r.id] || {});
+        await syncCatalogItem(item, subsByRound);
+      } else {
+        await syncCatalogItem(item);
+      }
       return response({ submission: next });
     }
 
@@ -706,7 +838,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
       const rd = (item.rounds || []).find((r) => r.id === roundId);
       if (!rd) fail(404, 'NOT_FOUND', '批次不存在。');
-      const [orgs, allUsers, subs] = await Promise.all([getOrgs(), getAllUsers(), listRoundSubmissions(item.id, rd.id)]);
+      const [orgs, allUsers, subsByRound] = await Promise.all([getOrgs(), getAllUsers(), loadItemSubmissions(item)]);
+      const subs = subsByRound[rd.id] || [];
       const userBySid = new Map(allUsers.filter((u) => u?.studentId).map((u) => [normSid(u.studentId), u]));
       const gateway = getGateway(oscaConfig(env, item.id));
       const files = await Promise.all(subs.map(async (sub) => {
@@ -733,7 +866,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
       const rd = (item.rounds || []).find((r) => r.id === roundId);
       if (!rd) fail(404, 'NOT_FOUND', '批次不存在。');
-      const [orgs, allUsers, subs] = await Promise.all([getOrgs(), getAllUsers(), listRoundSubmissions(item.id, rd.id)]);
+      const [orgs, allUsers, subsByRound] = await Promise.all([getOrgs(), getAllUsers(), loadItemSubmissions(item)]);
+      const subs = subsByRound[rd.id] || [];
       const userBySid = new Map(allUsers.filter((u) => u?.studentId).map((u) => [normSid(u.studentId), u]));
       const rosterMap = new Map();
       if (item.targetMode !== 'open') {
