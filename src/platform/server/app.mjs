@@ -2,6 +2,7 @@ import { AppError, fail, platformOrigin, requireOrigin, response, safeLog } from
 import { createRepository } from './store.mjs';
 import { createIdentity } from './identity.mjs';
 import { createFormsService } from './forms.mjs';
+import { createCollectionsService } from './collections.mjs';
 import { metadataStore, oscaGateway } from './storage.mjs';
 import { hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { createAiService } from './ai.mjs';
@@ -30,6 +31,9 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (aiResponse) return aiResponse;
       const syncResponse = await createSyncService({ identity, repo })(context, path);
       if (syncResponse) return syncResponse;
+      const collections = createCollectionsService({ repo, identity, env, now, getGateway });
+      const collectionsResponse = await collections.handle(context, path);
+      if (collectionsResponse) return collectionsResponse;
       const forms = createFormsService({ repo, identity, env, now, getGateway });
       const formsResponse = await forms.handle(context, path);
       if (formsResponse) return formsResponse;

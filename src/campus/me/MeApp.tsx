@@ -49,6 +49,13 @@ function AccountFace({ account }: { account: CachedAccount | null }) {
     const picture = account ? avatarUrl(account, 100) : '';
     const [failed, setFailed] = useState('');
     useEffect(() => setFailed(''), [picture]);
+    useEffect(() => {
+        if (!failed) return;
+        const retry = () => { if (document.visibilityState === 'visible') setFailed(''); };
+        window.addEventListener('online', retry);
+        document.addEventListener('visibilitychange', retry);
+        return () => { window.removeEventListener('online', retry); document.removeEventListener('visibilitychange', retry); };
+    }, [failed]);
     return <span className="avatar-face" data-me-face>
         {picture && failed !== picture ? <img src={picture} alt="" referrerPolicy="no-referrer" onError={() => setFailed(picture)} />
             : account ? account.nickname?.slice(0, 1) || '我'

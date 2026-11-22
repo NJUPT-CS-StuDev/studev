@@ -102,7 +102,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
         <nav class="site-nav" aria-label="主导航">
           {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph[item.key]} /></svg><span>{item.label}</span></a>)}
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">学生发展中心</a>
-          <a class:list={[{ active: active === 'forms' }]} href="/forms/" data-account-link hidden>表单</a>
+          <a class:list={[{ active: active === 'forms' }]} href="/forms/">收集</a>
         </nav>
         <div class:list={['header-actions', { 'campus-site-actions': campusHeader }]}>
           <button class="theme-entry" type="button" data-theme-toggle aria-label="切换外观"><svg class="theme-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" /></svg><svg class="theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" /><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6" /></svg><svg class="theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10Z" /></svg></button>
