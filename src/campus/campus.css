@@ -638,12 +638,9 @@
 .ai .ai-chat-t{mask-image:none}
 .ai .ai-chat-more:focus-visible{opacity:1}
 .ai .ai-side-footer{border-top:1px solid var(--line);padding-top:5px}
-.ai .ai-side-footer button{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;padding:6px 10px;border:0;border-radius:8px;text-align:start;font-size:13.5px}
-.ai .ai-side-footer button:hover{background:var(--surface-sunken)}
-.ai .ai-side-tools{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
-.ai .ai-side-footer .ai-side-tools button{flex-direction:column;justify-content:center;gap:3px;min-height:52px;padding:6px 4px;border-radius:10px;background:none;color:var(--muted);font-size:12.5px;cursor:pointer}
-.ai .ai-side-footer .ai-side-tools button:hover{background:var(--surface-sunken);color:var(--ink)}
-.ai .ai-side-tools svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.ai .ai-side-footer button{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--muted);text-align:start;font-size:13px}
+.ai .ai-side-footer button:hover{background:var(--surface-sunken);color:var(--ink)}
+.ai .ai-side-footer svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
 .ai .ai-hello h1{overflow-wrap:anywhere}
 .remote-mcp-name{text-align:start;min-width:0;overflow-wrap:anywhere}
 .remote-mcp-switch{display:grid;place-content:center;min-width:44px;min-height:40px}

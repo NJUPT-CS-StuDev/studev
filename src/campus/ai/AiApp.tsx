@@ -147,7 +147,7 @@ const PERMISSION_ICONS: Record<string, ReactNode> = {
     approved: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19 6v5.5c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6Z" /></svg>,
 };
 
-function ToolPermission({ mode, disabled, change }: { mode: PermissionMode; disabled: boolean; change: (mode: PermissionMode) => void }) {
+function ToolPermission({ mode, disabled, change, manage }: { mode: PermissionMode; disabled: boolean; change: (mode: PermissionMode) => void; manage: () => void }) {
     const [open, setOpen] = useState(false);
     const current = toolPermissionModes.find(item => item.id === mode);
     return <div className="ai-tool-permission" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
@@ -158,6 +158,7 @@ function ToolPermission({ mode, disabled, change }: { mode: PermissionMode; disa
                 <span className="ai-permission-icon">{PERMISSION_ICONS[item.id]}</span><span className="ai-permission-copy"><b>{item.label}</b><small>{item.description}</small></span>{item.id === mode && <Tick />}
             </button>)}
             <p className="ai-permission-note">读取：查资料、看网页和文件。写入：记下记忆、添加任务、替你操作。</p>
+            <button type="button" onClick={() => { setOpen(false); manage(); }}>管理工具</button>
         </div>}
     </div>;
 }
@@ -1002,7 +1003,7 @@ export default function AiApp() {
     const composer = <Composer key={chat.id} input={composeInput} value={draft} onChange={setDraft} onSend={(question, preferred) => void send(question, false, tip(chat.thread), preferred)} onStop={() => stop.current?.abort()} busy={busy} canSend={Boolean(provider && !unavailableProject && !activeConflict && !savingProject)} unavailable={whyUnavailable} tools={availableTools}
         permission={<ToolPermission mode={toolPreferences.mode ?? 'read'} disabled={busy} change={mode => {
             try { writeToolPreferences({ ...readToolPreferences(), mode }); } catch { setError('工具权限暂时无法保存。'); }
-        }} />}
+        }} manage={() => setUtility('tools')} />}
         picker={<ModelPicker settings={modelSettings} choice={choice} disabled={false} answering={busy} runtimeOff={runtimeOff} select={setModel} manage={() => setUtility('models')} />} />;
     const current = workspace ? diskBase.current?.chat : kept.chats.find(item => item.id === kept.current);
     const shownChats = (workspace ? workspace.revisions.map(revision => revision.chat) : kept.chats.filter(item => (item.project || undefined) === project?.id))
@@ -1111,11 +1112,7 @@ export default function AiApp() {
                 })()}
             </nav>
             <footer className="ai-side-footer">
-                <div className="ai-side-tools">
-                    <button type="button" onClick={() => { setMinding(true); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12v15l-6-3.6-6 3.6Z" /></svg>{project ? '项目记忆' : '记忆'}</button>
-                    <button type="button" onClick={() => { setUtility('models'); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1L5 10.5l5.1-1.9Z" /><path d="M18.5 16v4M16.5 18h4" /></svg>模型</button>
-                    <button type="button" onClick={() => { setUtility('tools'); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5a4 4 0 0 0-5.3 5.3L4.5 15.5v4h4l4.7-4.7a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.8-.4-.4-2.8Z" /></svg>工具</button>
-                </div>
+                <button type="button" onClick={() => { setMinding(true); setSide(false); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12v15l-6-3.6-6 3.6Z" /></svg>{project ? '项目记忆' : '记忆'}</button>
             </footer>
         </aside>
         {side && <div className="ai-scrim" onClick={() => setSide(false)} />}

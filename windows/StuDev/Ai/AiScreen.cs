@@ -583,17 +583,17 @@ public sealed partial class AiScreen : Screen
         DrawList();
         var scroll = new ScrollViewer { Content = list, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroll, 1); side.Children.Add(scroll);
-        var footer = new Grid { Padding = new Thickness(14, 4, 14, 6), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
-        footer.ColumnDefinitions.Add(new ColumnDefinition());
-        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        footer.Children.Add(Kit.Line(14, Kit.TextAction("模型", () => App.Open("me", "models"), colour: "muted"),
-            Kit.TextAction("工具", () => App.Open("me", "tools"), colour: "muted")));
         if (activeProject is null)
         {
-            var mind = Kit.TextAction("记忆", MemorySheet, colour: "muted");
-            Grid.SetColumn(mind, 1); footer.Children.Add(mind);
+            var words = Kit.Line(8, Kit.Icon("M6 4.5h12v15l-6-3.6-6 3.6Z", 16, "muted", 24, 1.6), Kit.Text("记忆", Role.Caption, "muted"));
+            words.VerticalAlignment = VerticalAlignment.Center;
+            var mind = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
+            { Content = words, MinHeight = 40, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(8), HorizontalContentAlignment = HorizontalAlignment.Left };
+            AutomationProperties.SetName(mind, "记忆");
+            mind.Click += (_, _) => MemorySheet();
+            var footer = new Border { Padding = new Thickness(10, 4, 10, 5), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0), Child = mind };
+            Grid.SetRow(footer, 2); side.Children.Add(footer);
         }
-        Grid.SetRow(footer, 2); side.Children.Add(footer);
     }
 
     private void ChatList(StackPanel list)
@@ -705,6 +705,7 @@ public sealed partial class AiScreen : Screen
         // The bar gives the conversation its name. The picker stays with the question below.
         var bar = new Grid { Padding = new Thickness(14, 8, 14, 0), ColumnSpacing = 6, MinHeight = 48 };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); bar.ColumnDefinitions.Add(new ColumnDefinition());
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (compact) bar.Children.Add(Icon("打开侧栏", Icons.Note, () => { conversationsOpen = true; Draw(); }, 16));
         if (!blank) { var title = Kit.Text(Chats.TitleOf(chats.FirstOrDefault(c => c.Id == current)?.Title ?? "", thread), Role.Body, "ink"); title.FontWeight = FontWeights.Medium; title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); bar.Children.Add(title); }
         if (compact || !blank) main.Children.Add(bar);
@@ -770,10 +771,9 @@ public sealed partial class AiScreen : Screen
         latest.Width = latest.Height = 38; latest.CornerRadius = new CornerRadius(19);
         latest.Ground(Paint.Brush("paper"), Paint.Brush("surfaceSunken"));
         latest.BorderBrush = Paint.Brush("line"); latest.BorderThickness = new Thickness(1);
-        latest.HorizontalAlignment = HorizontalAlignment.Right; latest.VerticalAlignment = VerticalAlignment.Bottom;
-        latest.Margin = new Thickness(0, 0, 18, 6);
+        latest.VerticalAlignment = VerticalAlignment.Center;
         latestAnswer = latest; ShowLatestControl();
-        Grid.SetRow(latest, 1); main.Children.Add(latest);
+        Grid.SetColumn(latest, 2); bar.Children.Add(latest);
         var dock = Pages.Centre(composer, 768); dock.Padding = new Thickness(14, 6, 14, 14);
         Grid.SetRow(dock, 2); main.Children.Add(dock);
         var restoreOffset = readingOffset;
@@ -877,9 +877,10 @@ public sealed partial class AiScreen : Screen
     private Tap PermissionPicker()
     {
         var currentMode = ToolMenu.Modes.First(mode => mode.Id == toolAccess.Mode);
-        var words = Kit.Text($"工具 · {currentMode.Label}", Role.Label, "muted");
+        var words = Kit.Text($"工具 · {currentMode.Label}", Role.Caption, "muted");
         words.VerticalAlignment = VerticalAlignment.Center;
-        var caption = Kit.Line(6, words, Kit.Icon(Icons.Chevron, 13, "muted"));
+        var caption = Kit.Line(6, Kit.Icon("M14.5 5.5a4 4 0 0 0-5.3 5.3L4.5 15.5v4h4l4.7-4.7a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.8-.4-.4-2.8Z", 15, "muted", 24, 1.6),
+            words, Kit.Icon(Icons.Chevron, 13, "muted"));
         var button = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
         { Content = caption, MinHeight = 36, Padding = new Thickness(8, 0, 8, 0), CornerRadius = new CornerRadius(10), HorizontalAlignment = HorizontalAlignment.Left, IsEnabled = !busy };
         AutomationProperties.SetName(button, $"工具权限，当前 {currentMode.Label}");
@@ -893,6 +894,10 @@ public sealed partial class AiScreen : Screen
             item.Click += (_, _) => toolAccess.SetMode(mode.Id);
             menu.Items.Add(item);
         }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var settings = new MenuFlyoutItem { Text = "管理工具" };
+        settings.Click += (_, _) => App.Open("me", "tools");
+        menu.Items.Add(settings);
         button.Click += (_, _) => menu.ShowAt(button);
         return button;
     }

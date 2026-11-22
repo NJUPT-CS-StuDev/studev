@@ -7,9 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -35,7 +33,7 @@ internal data class CourseProject(val code: String, val name: String)
     chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean,
     openChat: (String) -> Unit, newChat: (String?) -> Unit, openProject: (String) -> Unit,
     saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject) -> Unit,
-    rename: (SavedChat) -> Unit, updateChat: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit, configureTools: () -> Unit, configureModels: () -> Unit,
+    rename: (SavedChat) -> Unit, updateChat: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit,
 ) {
     // One list, as on the web: projects on top, each opening in place over its own chats, then the recent chats.
     var open by remember(activeProject) { mutableStateOf(setOfNotNull(activeProject)) }
@@ -167,10 +165,11 @@ internal data class CourseProject(val code: String, val name: String)
             if (recent.isEmpty()) item { Plain(if (query.isNotEmpty()) "没有找到对话" else if (archived) "暂无归档对话" else "暂无对话", 13.sp, Ink.faint, modifier = Modifier.padding(10.dp)) }
         }
         HorizontalDivider(color = Ink.line)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            DrawerTool(Icons.Outlined.BookmarkBorder, if (activeProject == null) "记忆" else "项目记忆", mind)
-            DrawerTool(Icons.Outlined.AutoAwesome, "模型", configureModels)
-            DrawerTool(Icons.Outlined.Build, "工具", configureTools)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = mind).heightIn(min = 44.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Outlined.BookmarkBorder, null, Modifier.size(17.dp), tint = Ink.muted)
+            Plain(if (activeProject == null) "记忆" else "项目记忆", 13.sp, Ink.muted)
         }
     }
 }
@@ -183,15 +182,5 @@ internal data class CourseProject(val code: String, val name: String)
             items(targets, key = { it.id }) { project -> KeyRow(null, project.name, chevron = true, onClick = { move(project.id) }) }
             if (targets.isEmpty() && chats.all { it.projectId == null }) item { Plain("先创建一个项目。", 13.sp, Ink.muted) }
         }
-    }
-}
-
-
-/** One of the three ways into what shapes the AI, as the web's sidebar footer: icon over word, a whole tile to tap. */
-@Composable private fun RowScope.DrawerTool(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Icon(icon, null, Modifier.size(20.dp), tint = Ink.muted)
-        Plain(label, 12.5.sp, Ink.muted)
     }
 }

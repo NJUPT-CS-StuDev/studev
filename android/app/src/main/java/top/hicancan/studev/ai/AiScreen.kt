@@ -347,7 +347,8 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
             if (unavailable) Plain("当前模型已停用或移除，请重新选择。", 12.sp, marks().danger, modifier = Modifier.padding(horizontal = 8.dp))
             Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() },
                 onTools = { keyboard?.hide(); configuringTools = true }, busy = busy, canSend = !unavailable, focus = composeFocus) {
-                ChatModelPicker(catalog, selection, freeService, enabled = !busy) { next ->
+                ChatModelPicker(catalog, selection, freeService, enabled = !busy,
+                    manage = { keyboard?.hide(); configuringModels = true }) { next ->
                     selection = next
                     chats = chats.map { if (it.id == current) it.copy(selection = next) else it }
                     ModelPreferences.update(modelPrefs) { it.copy(preferred = next) }
@@ -410,9 +411,7 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
                 editInstructions = { project -> scope.launch { drawer.close(); projectInstructions = project.id } },
                 rename = { renaming = it }, updateChat = { next -> chats = chats.map { if (it.id == next.id) next else it } },
                 remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
-                mind = { scope.launch { drawer.close(); minding = true } },
-                configureTools = { scope.launch { drawer.close(); configuringTools = true } },
-                configureModels = { scope.launch { drawer.close(); configuringModels = true } })
+                mind = { scope.launch { drawer.close(); minding = true } })
         }
     }) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
@@ -578,7 +577,8 @@ private fun recent(history: List<JsonObject>): List<JsonObject> {
 
 private data class OfferedService(val id: String?, val name: String, val models: List<OfferedModel>)
 
-@Composable private fun ChatModelPicker(catalog: ModelCatalog, selected: ModelSelection, freeService: FreeService, enabled: Boolean, choose: (ModelSelection) -> Unit) {
+@Composable private fun ChatModelPicker(catalog: ModelCatalog, selected: ModelSelection, freeService: FreeService, enabled: Boolean,
+    manage: () -> Unit, choose: (ModelSelection) -> Unit) {
     var opened by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     val label = if (selected.provider == null) freeService.modelName else selected.model.orEmpty().ifBlank { "选择模型" }
@@ -612,7 +612,7 @@ private data class OfferedService(val id: String?, val name: String, val models:
                 Column(Modifier.padding(8.dp)) {
                     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true,
                         placeholder = { Text("搜索模型或服务商") }, shape = RoundedCornerShape(10.dp))
-                    LazyColumn(Modifier.heightIn(max = 263.dp).padding(top = 4.dp)) {
+                    LazyColumn(Modifier.heightIn(max = 222.dp).padding(top = 4.dp)) {
                         for (group in visible) {
                             item(key = "provider:${group.id}") {
                                 Plain(group.name, 12.sp, Ink.muted, modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp))
@@ -634,6 +634,8 @@ private data class OfferedService(val id: String?, val name: String, val models:
                         }
                         if (visible.isEmpty()) item { Plain("没有匹配的模型", 13.sp, Ink.muted, modifier = Modifier.padding(12.dp)) }
                     }
+                    HorizontalDivider(color = Ink.line)
+                    TextButton(onClick = { opened = false; manage() }) { Text("添加或管理模型") }
                 }
             }
         }
