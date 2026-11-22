@@ -167,9 +167,10 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind, loginHead: auth.loginHead };
   }
-  async function sessionResponse(user, mfaVerified, body, kind) {
+  async function sessionResponse(user, body, kind, verified) {
     const [started, orgs] = await Promise.all([
-      sessions.start(user, body, { kind, mfaVerified }), loadOrganizations(repo), members.publish(user, user),
+      sessions.start(user, body, { kind, mfaVerified: Boolean(verified), verified }), loadOrganizations(repo),
+      verified?.then(() => members.publish(user, user)) ?? members.publish(user, user),
     ]);
     return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) });
   }
@@ -540,18 +541,19 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const [, user] = await Promise.all([
         repo.throttle('login-account', identifier, 10, 60),
         (async () => {
-          if (identifier === normalizeStudentId(env.PLATFORM_OWNER_STUDENT_ID)) await bootstrap();
           const index = await repo.get(studentKey(identifier));
-          return index?.id && ID.test(index.id) ? repo.latest(userKey(index.id)) : null;
+          const account = index?.id && ID.test(index.id) ? await repo.latest(userKey(index.id)) : null;
+          if (identifier !== normalizeStudentId(env.PLATFORM_OWNER_STUDENT_ID)) return account;
+          if (account?.role === 'owner' && account.qq === String(env.PLATFORM_OWNER_QQ)) return account;
+          await bootstrap();
+          const owner = await repo.get(studentKey(identifier));
+          return owner?.id && ID.test(owner.id) ? repo.latest(userKey(owner.id)) : null;
         })(),
       ]);
       const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
       if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
-      if (user.totp) {
-        if (!body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
-        await consumeFactor(user, body.totp);
-      }
-      return sessionResponse(user, Boolean(user.totp), body, kind);
+      if (user.totp && !body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
+      return sessionResponse(user, body, kind, user.totp ? consumeFactor(user, body.totp) : null);
     }
     if (method === 'GET' && route === '/auth/session') {
       const [auth, orgs] = await Promise.all([authenticate(request, { required: true, allowEnrollment: true }), loadOrganizations(repo)]);

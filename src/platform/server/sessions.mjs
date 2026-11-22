@@ -59,7 +59,7 @@ export function createSessions({ repo, now, loadUser }) {
     ]);
     return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.floor((expiresAt - now()) / 1000), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };
   }
-  async function start(user, body, { kind, mfaVerified }) {
+  async function start(user, body, { kind, mfaVerified, verified }) {
     const deviceHash = device(body.deviceId);
     const deviceName = text(body.deviceName, '设备名称', 80, true);
     const tip = await loginTip(user.id), devices = {};
@@ -70,6 +70,9 @@ export function createSessions({ repo, now, loadUser }) {
       try { return (await validSession(id, { tip, user })).session; }
       catch (error) { if (error.status === 401) return null; throw error; }
     }));
+    // Read the current device families while the authenticator code is being
+    // reserved. The factor must succeed before any session state is changed.
+    await verified;
     for (const record of existing.filter(Boolean)) {
       if (record.deviceHash === deviceHash) await revoke(record.id, record.expiresAt);
       else devices[record.deviceHash] = record.id;
