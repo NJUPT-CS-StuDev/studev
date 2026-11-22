@@ -15,6 +15,8 @@ import '../platform/members.css';
           <option value="admin">管理员</option>
           <option value="user">普通用户</option>
         </select>
+        <button class="p-button secondary small" type="button" data-members-orgs hidden>组织管理</button>
+        <button class="p-button secondary small" type="button" data-members-import hidden>批量导入</button>
         <button class="p-button secondary small" type="button" data-members-archive hidden>归档本届名册</button>
         <button class="p-button secondary small" type="button" data-members-audit hidden>操作记录</button>
       </div>
@@ -67,6 +69,61 @@ import '../platform/members.css';
         <button class="p-button secondary" value="cancel" formnovalidate>取消</button>
         <button class="p-button" value="confirm" data-confirm-submit>确认</button>
       </div>
+    </form>
+  </dialog>
+  <dialog class="p-modal p-record" data-org-manager-modal aria-labelledby="org-manager-title">
+    <div>
+      <h2 id="org-manager-title" style="margin:0 0 12px">组织树管理</h2>
+      <div data-org-tree-list style="margin-bottom:16px"></div>
+      <form data-org-create-form style="border-top:1px solid var(--line);padding-top:14px">
+        <h3 class="p-section-heading" style="margin-top:0">新增组织</h3>
+        <div class="p-field">
+          <label for="org-parent">上级组织</label>
+          <select id="org-parent" class="p-input" data-org-parent></select>
+        </div>
+        <div class="p-field">
+          <label for="org-name">组织名称</label>
+          <input id="org-name" class="p-input" required maxlength="60" placeholder="例如：计算机学院 / 计算机科学与技术 / B240402 班" data-org-name />
+        </div>
+        <div class="p-field">
+          <label for="org-kind">类型</label>
+          <select id="org-kind" class="p-input" data-org-kind>
+            <option value="academic">教学与班级</option>
+            <option value="club">社团组织</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div class="p-field">
+          <label for="org-titles">可选职务（空格或逗号分隔，可留空）</label>
+          <input id="org-titles" class="p-input" maxlength="200" placeholder="例如：班长 副班长 团支书 学习委员" data-org-titles />
+        </div>
+        <div class="p-actions" style="margin-top:12px">
+          <button class="p-button" type="submit">添加组织</button>
+        </div>
+      </form>
+    </div>
+    <footer class="p-record-footer">
+      <p class="p-message" role="status" aria-live="polite" data-org-manager-status hidden></p>
+      <button class="p-button secondary" type="button" data-org-manager-close>关闭</button>
+    </footer>
+  </dialog>
+  <dialog class="p-modal p-record" data-batch-import-modal aria-labelledby="batch-import-title">
+    <form data-batch-import-form>
+      <h2 id="batch-import-title" style="margin:0 0 12px">批量导入成员</h2>
+      <p class="p-help" style="margin:0 0 12px">预录的成员自动归入所选组织；未注册同学在注册时填写真实学号与姓名后将自动认领账号，已有账号将追加该组织归属。</p>
+      <div class="p-field">
+        <label for="batch-org">归属组织</label>
+        <select id="batch-org" class="p-input" required data-batch-org></select>
+      </div>
+      <div class="p-field">
+        <label for="batch-lines">成员名单（每行：学号 姓名）</label>
+        <textarea id="batch-lines" class="p-input" rows="8" required placeholder="B24040201 张三&#10;B24040202 李四" data-batch-lines></textarea>
+      </div>
+      <footer class="p-record-footer">
+        <p class="p-message" role="status" aria-live="polite" data-batch-import-status hidden></p>
+        <button class="p-button secondary" type="button" data-batch-import-close>关闭</button>
+        <button class="p-button" type="submit">导入</button>
+      </footer>
     </form>
   </dialog>
 

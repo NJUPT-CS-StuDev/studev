@@ -6,8 +6,8 @@ import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mj
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
 import { ROSTER_SCHEMA, archiveKey, buildRosterSnapshot, isRosterMember, publicRoster, qqAvatarUrl, profileNickname, rosterTerm } from './roster.mjs';
-import { membershipView, validateMemberships } from './organizations.mjs';
-import { studentCenter } from '../organizations.mjs';
+import { deleteOrganization, loadOrganizations, membershipView, saveOrganization, validateMemberships } from './organizations.mjs';
+import { flattenOrganizationTree, isWithin, namedOrganizations, organization, studentCenter } from '../organizations.mjs';
 import { avatarBody, createMembers } from './members.mjs';
 
 const API = '/api/platform';
@@ -68,19 +68,19 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   const sessions = createSessions({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
   const authRequests = new WeakMap();
   const authSessionKey = (auth) => `identity/devices/state/${auth.sessionId}`;
-  function publicUser(user) {
+  function publicUser(user, orgs = namedOrganizations) {
     return {
       id: user.id,
-      qq: user.qq,
+      qq: user.qq || '',
       avatarUrl: user.avatarUrl || qqAvatarUrl(user.qq),
       nickname: profileNickname(user),
-      email: user.email,
+      email: user.email || '',
       emailVerified: user.emailVerified === true,
       studentId: user.studentId || '',
       realName: user.realName || '',
       identityVerified: user.identityVerified === true,
       profileComplete: profileComplete(user),
-      memberships: membershipView(user.memberships),
+      memberships: membershipView(user.memberships, orgs),
       signature: user.signature || '',
       role: user.role,
       status: user.status,
@@ -169,8 +169,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   }
   async function sessionResponse(user, mfaVerified, body, kind) {
     await members.publish(user, user);
-    const started = await sessions.start(user, body, { kind, mfaVerified });
-    return credentialResponse(started, { user: publicUser(user), ...setupStatus(user, started.session) });
+    const [started, orgs] = await Promise.all([sessions.start(user, body, { kind, mfaVerified }), loadOrganizations(repo)]);
+    return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) });
   }
   async function saveUser(current, changes) {
     const next = await repo.append(userKey(current.id), { ...current, ...changes, updatedAt: iso(now) }, current.revision);
@@ -260,22 +260,24 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   }
   async function deleteUser(user) {
     if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
+    const orgs = await loadOrganizations(repo);
     await saveUser(user, { status: 'disabled', securityVersion: secretToken() });
-    await repo.remove(`identity/qq/${user.qq}.json`);
+    if (user.qq) await repo.remove(`identity/qq/${user.qq}.json`);
     if (user.studentId) await repo.remove(studentKey(user.studentId));
     for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
-    if (isRosterMember(user)) await rebuildRoster();
+    if (isRosterMember(user, orgs)) await rebuildRoster();
   }
   // After a password changes, the account's mailbox hears of it, so a change nobody asked for is noticed at once.
   async function tellPasswordChanged(user) {
-    if (!mailer.enabled) return;
+    if (!mailer.enabled || !user.email) return;
     try {
       await mailer.deliver({ to: user.email, subject: 'StuDev 密码已修改',
         ...letter({ greeting: `${user.nickname}，你好：`, lines: [`你的 StuDev 账号（学号 ${user.studentId}）的密码刚刚修改，所有设备都已退出登录。`, '如果是你自己改的，忽略这封信即可。'], action: { label: '不是我改的？重设密码', url: `${origin}/login/` }, footer: '如果不是你本人操作，请立刻用“忘记密码”重设，并联系管理员。' }) });
     } catch { /* The change itself stands even when the note cannot go out. */ }
   }
   async function loadAllUsers() {
-    const keys = await repo.list('identity/qq/');
+    const [qqKeys, studentKeys] = await Promise.all([repo.list('identity/qq/'), repo.list('identity/student/')]);
+    const keys = [...qqKeys, ...studentKeys];
     const indices = [];
     for (let offset = 0; offset < keys.length; offset += 32) indices.push(...await Promise.all(keys.slice(offset, offset + 32).map(key => repo.get(key))));
     const seen = new Set();
@@ -292,17 +294,37 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   }
   async function rebuildRoster() {
     const term = studentCenter.term;
-    const users = await loadAllUsers();
-    const snapshot = buildRosterSnapshot(users, term, iso(now), origin);
+    const [users, orgs] = await Promise.all([loadAllUsers(), loadOrganizations(repo)]);
+    const snapshot = buildRosterSnapshot(users, term, iso(now), origin, orgs);
     await repo.put(`roster/${term}.json`, snapshot);
     return snapshot;
   }
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
-    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/members`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
+    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/members`) && !path.startsWith(`${API}/organizations`) && !path.startsWith(`${API}/admin/organizations`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
     const request = context.request;
     const route = path.slice(API.length);
     const method = request.method;
+    if (method === 'GET' && route === '/organizations') {
+      const orgs = await loadOrganizations(repo);
+      return response({ items: flattenOrganizationTree(orgs) });
+    }
+    if (method === 'POST' && route === '/admin/organizations') {
+      const auth = await authenticate(request, { owner: true, csrf: true });
+      const body = await readJson(request, 16384);
+      const saved = await saveOrganization(repo, body);
+      await repo.audit(auth.user.id, 'organization.saved', saved.organization.id, { name: saved.organization.name, parentId: saved.organization.parentId });
+      if (saved.organization.publicRoster) await rebuildRoster();
+      return response(saved, 201);
+    }
+    const orgDelete = route.match(/^\/admin\/organizations\/(.+?)(?:\/delete)?$/);
+    if ((method === 'DELETE' || (method === 'POST' && route.endsWith('/delete'))) && orgDelete) {
+      const auth = await authenticate(request, { owner: true, csrf: true });
+      const targetId = decodeURIComponent(orgDelete[1]);
+      const result = await deleteOrganization(repo, targetId);
+      await repo.audit(auth.user.id, 'organization.deleted', targetId);
+      return response(result);
+    }
     const memberAvatar = route.match(/^\/members\/([a-f0-9-]{36})\/avatar$/);
     if (method === 'GET' && memberAvatar) {
       const user = await repo.latest(userKey(memberAvatar[1]));
@@ -366,7 +388,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     const userLookup = route.match(/^\/admin\/users\/([a-f0-9-]{36})$/);
     if (method === 'GET' && userLookup) {
       await authenticate(request, { staff: true });
-      return response({ user: publicUser(await loadUser(userLookup[1])) });
+      const [user, orgs] = await Promise.all([loadUser(userLookup[1]), loadOrganizations(repo)]);
+      return response({ user: publicUser(user, orgs) });
     }
     if (method === 'POST' && route === '/admin/roster/sync') {
       const auth = await authenticate(request, { owner: true, csrf: true });
@@ -400,10 +423,46 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const studentId = normalizeStudentId(body.studentId), realName = normalizeRealName(body.realName);
       const nickname = text(body.nickname, '昵称', 40);
       await repo.throttle('register-account', qq, 3, 600);
-      // Check if this studentId belongs to a staff-recorded pending roster member
+      // Check if this studentId belongs to a pre-recorded pending account
       const studentClaim = await repo.get(studentKey(studentId));
       const claimedUser = studentClaim?.id && ID.test(studentClaim.id) ? await repo.latest(userKey(studentClaim.id)) : null;
-      if (claimedUser?.status === 'pending') fail(409, 'ACCOUNT_PENDING_REVIEW', '此学号已有预录账号，请联系管理员核实并激活。');
+      if (claimedUser?.status === 'pending') {
+        if (claimedUser.role !== 'user') {
+          fail(409, 'ACCOUNT_PENDING_REVIEW', '此学号已有预录账号，请联系管理员核实并激活。');
+        }
+        if (claimedUser.realName !== realName) {
+          fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '学号与预录姓名不匹配，请核实或联系所有者。');
+        }
+        if (claimedUser.qq && claimedUser.qq !== qq) {
+          fail(409, 'ACCOUNT_PENDING_REVIEW', '此学号已预录绑定其他 QQ，请联系管理员核实。');
+        }
+        const qqIndexKey = `identity/qq/${qq}.json`;
+        const existingQq = await repo.get(qqIndexKey);
+        if (existingQq && existingQq.id !== claimedUser.id) {
+          fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录或联系所有者。');
+        }
+        if (!existingQq) {
+          try { await repo.putNew(qqIndexKey, { id: claimedUser.id }); }
+          catch (error) {
+            if (!isConflict(error)) throw error;
+            const winner = await repo.get(qqIndexKey);
+            if (!winner || winner.id !== claimedUser.id) fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录或联系所有者。');
+          }
+        }
+        const orgs = await loadOrganizations(repo);
+        const activated = await saveUser(claimedUser, {
+          qq,
+          email: `${qq}@qq.com`,
+          nickname,
+          passwordHash: await hashPassword(password),
+          status: 'active',
+          identityVerified: true,
+          securityVersion: secretToken(),
+        });
+        if (isRosterMember(activated, orgs)) await rebuildRoster();
+        await repo.audit(activated.id, 'identity.registered', activated.id, { claimedPending: true });
+        return response({ user: publicUser(activated, orgs) }, 201);
+      }
 
       const indexKey = `identity/qq/${qq}.json`;
       let index = await repo.get(indexKey);
@@ -420,12 +479,13 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const { id } = index, { passwordHash } = index.registration;
       if (await repo.latest(userKey(id))) fail(409, 'QQ_ALREADY_REGISTERED', '此 QQ 号已注册，请登录。');
       await claimStudent(studentId, id);
+      const orgs = await loadOrganizations(repo);
       const user = await createUser({ id, qq, nickname, email: `${qq}@qq.com`, emailVerified: false, role: 'user', status: 'active',
         studentId, realName, identityVerified: false,
         memberships: [], signature: '',
         passwordHash, securityVersion: secretToken(), mustChangePassword: false, totp: null, createdAt: iso(now), updatedAt: iso(now) });
       await repo.audit(id, 'identity.registered', id);
-      return response({ user: publicUser(user) }, 201);
+      return response({ user: publicUser(user, orgs) }, 201);
     }
     if (method === 'POST' && route === '/auth/login') {
       const kind = bearerBootstrap(request, path) ? 'bearer' : 'cookie';
@@ -447,7 +507,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     if (method === 'GET' && route === '/auth/session') {
       const auth = await authenticate(request, { required: true, allowEnrollment: true });
-      return response({ user: publicUser(auth.user), csrfToken: auth.csrfToken, ...setupStatus(auth.user, auth.session) });
+      const orgs = await loadOrganizations(repo);
+      return response({ user: publicUser(auth.user, orgs), csrfToken: auth.csrfToken, ...setupStatus(auth.user, auth.session) });
     }
     if (method === 'POST' && route === '/auth/logout') {
       const auth = await authenticate(request, { required: true, csrf: true, allowEnrollment: true });
@@ -468,10 +529,11 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const nickname = body.nickname === undefined ? current.nickname : text(body.nickname, '昵称', 40);
       const signature = body.signature === undefined ? (current.signature || '') : text(body.signature, '个性签名', 120, false);
       await bindStudent(current, studentId, realName);
+      const orgs = await loadOrganizations(repo);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });
-      if (isRosterMember(user)) await rebuildRoster();
+      if (isRosterMember(user, orgs)) await rebuildRoster();
       await repo.audit(user.id, changedIdentity ? 'identity.profile.bound' : 'identity.profile.updated', user.id, { profileComplete: profileComplete(user), identityVerified: user.identityVerified === true });
-      return response({ user: publicUser(user) });
+      return response({ user: publicUser(user, orgs) });
     }
     if (method === 'POST' && route === '/auth/password/forgot') {
       if (!bearerBootstrap(request, path)) requireOrigin(request, env);
@@ -578,34 +640,104 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     if (method === 'GET' && route === '/admin/users') {
       await authenticate(request, { staff: true });
-      const users = await loadAllUsers();
-      return response({ items: users.map(publicUser) });
+      const [users, orgs] = await Promise.all([loadAllUsers(), loadOrganizations(repo)]);
+      return response({ items: users.map(user => publicUser(user, orgs)) });
+    }
+    if (method === 'POST' && route === '/admin/users/batch') {
+      const auth = await authenticate(request, { owner: true, csrf: true });
+      const body = await readJson(request, 262144);
+      const orgs = await loadOrganizations(repo);
+      const orgId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+      const targetOrg = orgId ? organization(orgId, orgs) : null;
+      if (!targetOrg) fail(400, 'INVALID_ORGANIZATION', '请选择要导入的组织。');
+      const title = typeof body.title === 'string' ? body.title.trim() : '';
+      if (title !== '' && targetOrg.titles.length > 0 && !targetOrg.titles.includes(title)) {
+        fail(400, 'INVALID_POSITION', '请选择该组织的职务。');
+      }
+      const parsed = [];
+      if (Array.isArray(body.members)) {
+        for (const row of body.members) {
+          const sid = normalizeStudentId(row?.studentId);
+          const rn = normalizeRealName(row?.realName || row?.name);
+          const qq = row?.qq ? qqValue(String(row.qq)) : '';
+          parsed.push({ studentId: sid, realName: rn, qq });
+        }
+      } else if (typeof body.lines === 'string') {
+        const rawLines = body.lines.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        for (const line of rawLines) {
+          const parts = line.split(/[\s,\t]+/).filter(Boolean);
+          if (parts.length < 2) fail(400, 'INVALID_FIELD', `格式有误（每行请填“学号 姓名”）：${line}`);
+          parsed.push({
+            studentId: normalizeStudentId(parts[0]),
+            realName: normalizeRealName(parts.slice(1).join(' ')),
+            qq: '',
+          });
+        }
+      }
+      if (!parsed.length || parsed.length > 500) fail(400, 'INVALID_MEMBERS', '单次可导入 1–500 位成员。');
+      const dedup = new Map();
+      for (const row of parsed) dedup.set(row.studentId, row);
+
+      let created = 0; let updated = 0; let skipped = 0;
+      for (const row of dedup.values()) {
+        const existingClaim = await repo.get(studentKey(row.studentId));
+        const existingUser = existingClaim?.id && ID.test(existingClaim.id) ? await repo.latest(userKey(existingClaim.id)) : null;
+        if (existingUser) {
+          const currentMemberships = Array.isArray(existingUser.memberships) ? existingUser.memberships : [];
+          if (currentMemberships.some(m => m.organizationId === targetOrg.id)) {
+            skipped++;
+            continue;
+          }
+          const nextMemberships = [...currentMemberships, { organizationId: targetOrg.id, title, overseesOrganizationId: '', order: 999 }];
+          await saveUser(existingUser, { memberships: nextMemberships });
+          updated++;
+          continue;
+        }
+        if (row.qq && await repo.get(`identity/qq/${row.qq}.json`)) {
+          fail(409, 'QQ_ALREADY_REGISTERED', `QQ ${row.qq} 已存在记录。`);
+        }
+        const id = randomUUID();
+        if (row.qq) await repo.putNew(`identity/qq/${row.qq}.json`, { id });
+        await claimStudent(row.studentId, id);
+        await createUser({
+          id, qq: row.qq, nickname: '', email: row.qq ? `${row.qq}@qq.com` : '', emailVerified: false,
+          studentId: row.studentId, realName: row.realName, identityVerified: true,
+          memberships: [{ organizationId: targetOrg.id, title, overseesOrganizationId: '', order: 999 }],
+          signature: '', role: 'user', status: 'pending', passwordHash: '', mustChangePassword: false,
+          securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
+        });
+        created++;
+      }
+      if (isWithin(targetOrg.id, studentCenter.id, orgs)) await rebuildRoster();
+      await repo.audit(auth.user.id, 'identity.users.batch_imported', targetOrg.id, { created, updated, skipped, total: dedup.size });
+      return response({ created, updated, skipped, total: dedup.size }, 201);
     }
     if (method === 'POST' && route === '/admin/users') {
       const auth = await authenticate(request, { owner: true, csrf: true });
       const body = await readJson(request, 8192);
       const studentId = normalizeStudentId(body.studentId);
       const realName = normalizeRealName(body.realName);
-      const qq = qqValue(body.qq);
       const role = body.role === undefined ? 'admin' : body.role;
       if (!['admin', 'user'].includes(role)) fail(400, 'INVALID_ROLE', '预录成员角色须为成员或管理员。');
-      const memberships = validateMemberships(body.memberships ?? []);
+      const qq = role === 'user' && (body.qq === undefined || body.qq === '') ? '' : qqValue(body.qq);
+      const orgs = await loadOrganizations(repo);
+      const memberships = validateMemberships(body.memberships ?? [], orgs);
       const signature = body.signature === undefined ? '' : text(body.signature, '个性签名', 120, false);
       if (await repo.get(studentKey(studentId))) fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '该学号已存在记录。');
-      if (await repo.get(`identity/qq/${qq}.json`)) fail(409, 'QQ_ALREADY_REGISTERED', '该 QQ 号已存在记录。');
+      if (qq && await repo.get(`identity/qq/${qq}.json`)) fail(409, 'QQ_ALREADY_REGISTERED', '该 QQ 号已存在记录。');
       const id = randomUUID();
-      await repo.putNew(`identity/qq/${qq}.json`, { id });
+      if (qq) await repo.putNew(`identity/qq/${qq}.json`, { id });
       await claimStudent(studentId, id);
       const user = await createUser({
-        id, qq, nickname: '', email: `${qq}@qq.com`, emailVerified: false,
+        id, qq, nickname: '', email: qq ? `${qq}@qq.com` : '', emailVerified: false,
         studentId, realName, identityVerified: true,
         memberships, signature,
         role, status: 'pending', passwordHash: '', mustChangePassword: false,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
       });
-      if (isRosterMember(user)) await rebuildRoster();
+      if (isRosterMember(user, orgs)) await rebuildRoster();
       await repo.audit(auth.user.id, 'identity.user.seeded', id);
-      return response({ user: publicUser(user) }, 201);
+      return response({ user: publicUser(user, orgs) }, 201);
     }
     if (method === 'GET' && route === '/admin/audit') {
       await authenticate(request, { owner: true });
@@ -651,7 +783,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (body.identityVerified !== undefined && typeof body.identityVerified !== 'boolean') fail(400, 'INVALID_FIELD', '身份核验状态无效。');
       let identityVerified = body.identityVerified !== undefined ? body.identityVerified : (identityChanged ? false : (user.identityVerified === true));
       if (identityVerified && !profileComplete({ ...user, studentId, realName })) fail(409, 'PROFILE_REQUIRED', '账号需先补齐学号与真实姓名，再核验身份。');
-      const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships);
+      if (body.memberships !== undefined && auth.user.role !== 'owner') fail(403, 'OWNER_REQUIRED', '组织归属由所有者统一维护。');
+      const orgs = await loadOrganizations(repo);
+      const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships, orgs);
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
       if (studentId && studentId !== user.studentId) {
@@ -662,12 +796,12 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         const previous = await repo.get(studentKey(user.studentId));
         if (previous?.id === user.id) await repo.remove(studentKey(user.studentId));
       }
-      if (isRosterMember(user) || isRosterMember(updated)) await rebuildRoster();
+      if (isRosterMember(user, orgs) || isRosterMember(updated, orgs)) await rebuildRoster();
       await repo.audit(auth.user.id, 'identity.user.updated', user.id, { role, status, previousRole: user.role, previousStatus: user.status });
       if (identityChanged || identityVerified !== (user.identityVerified === true)) await repo.audit(auth.user.id, identityChanged ? 'identity.profile.corrected' : 'identity.verification.updated', user.id, { identityVerified, profileComplete: profileComplete(updated) });
-      return response({ user: publicUser(updated) });
+      return response({ user: publicUser(updated, orgs) });
     }
     fail(404, 'NOT_FOUND', '接口不存在。');
   }
-  return { handle, authenticate, publicUser };
+  return { handle, authenticate, publicUser, loadAllUsers, loadOrganizations: () => loadOrganizations(repo) };
 }

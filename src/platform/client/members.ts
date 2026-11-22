@@ -18,6 +18,8 @@ const view = q<HTMLSelectElement>('#members-view');
 const note = q('[data-members-preview]');
 const audit = q<HTMLButtonElement>('[data-members-audit]');
 const archive = q<HTMLButtonElement>('[data-members-archive]');
+const orgsBtn = q<HTMLButtonElement>('[data-members-orgs]');
+const importBtn = q<HTMLButtonElement>('[data-members-import]');
 const auditPanel = q('[data-members-audit-panel]');
 const filters = q('[data-members-filters]');
 let pending: AbortController | null = null;
@@ -73,6 +75,8 @@ async function load(append = false) {
     filters.hidden = publicView;
     audit.hidden = preview || who.user.role !== 'owner';
     archive.hidden = audit.hidden;
+    orgsBtn.hidden = audit.hidden;
+    importBtn.hidden = audit.hidden;
     form.hidden = !!id;
     count.hidden = !!id;
     list.hidden = !!id;
@@ -148,6 +152,8 @@ audit.addEventListener('click', () => {
     auditPanel.hidden = !auditOpen;
     directory.hidden = auditOpen;
     archive.hidden = auditOpen;
+    orgsBtn.hidden = auditOpen;
+    importBtn.hidden = auditOpen;
     view.disabled = auditOpen;
     audit.textContent = auditOpen ? '返回成员' : '操作记录';
     if (auditOpen) { pending?.abort(); void showAudit(who); } else void load();

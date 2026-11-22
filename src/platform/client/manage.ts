@@ -1,4 +1,4 @@
-import { api, avatarImg, button, el, empty, errorText, formatTime, labels, message, pill, q, type Session, type User } from './api';
+import { api, avatarImg, button, el, empty, errorText, formatTime, labels, message, pill, q, type OrganizationNode, type Session, type User } from './api';
 import { isWithin, namedOrganizations, organizationName, studentCenter } from '../organizations.mjs';
 import { openMemberRecord, valueButton } from './member-record';
 
@@ -7,15 +7,32 @@ const status = q<HTMLElement>('[data-members-status]');
 let preview = false;
 let current: Session | null = null;
 let members: User[] = [];
+let organizations: OrganizationNode[] = [];
 const unassigned = '暂未分配';
 const orgFilter = q<HTMLSelectElement>('[data-manage-org-filter]');
 
+function orgSelectLabel(org: OrganizationNode): string {
+  return `${'　'.repeat(org.depth)}${org.depth ? '└ ' : ''}${org.name}`;
+}
+
 function refreshFilters() {
-  const byId = new Map(namedOrganizations.map(org => [org.id, organizationName(org.id)]));
-  for (const user of members) for (const group of user.memberships || []) byId.set(group.organizationId, group.organizationName);
   const then = orgFilter.value;
-  orgFilter.replaceChildren(new Option('全部组织', ''), ...[...byId].map(([id, name]) => new Option(name, id)));
-  orgFilter.value = byId.has(then) ? then : '';
+  const options: HTMLOptionElement[] = [new Option('全部组织', '')];
+  const seen = new Set<string>();
+  for (const org of organizations) {
+    seen.add(org.id);
+    options.push(new Option(orgSelectLabel(org), org.id));
+  }
+  for (const user of members) {
+    for (const group of user.memberships || []) {
+      if (!seen.has(group.organizationId)) {
+        seen.add(group.organizationId);
+        options.push(new Option(group.organizationName, group.organizationId));
+      }
+    }
+  }
+  orgFilter.replaceChildren(...options);
+  orgFilter.value = seen.has(then) ? then : '';
 }
 
 const archive = q<HTMLButtonElement>('[data-members-archive]');
@@ -25,6 +42,117 @@ archive.addEventListener('click', () => void guard(async () => {
   const { snapshot } = await api<{ snapshot: { term: string; totalCount: number } }>('/admin/roster/archive', {});
   message(status, `已归档 ${snapshot.term} 届名册 · ${snapshot.totalCount} 人。`, 'success');
 }));
+
+// Organization Tree Manager modal (owner only)
+const orgModal = q<HTMLDialogElement>('[data-org-manager-modal]');
+const orgListBox = q<HTMLElement>('[data-org-tree-list]');
+const orgParentSelect = q<HTMLSelectElement>('[data-org-parent]');
+const orgNameInput = q<HTMLInputElement>('[data-org-name]');
+const orgKindSelect = q<HTMLSelectElement>('[data-org-kind]');
+const orgTitlesInput = q<HTMLInputElement>('[data-org-titles]');
+const orgModalStatus = q<HTMLElement>('[data-org-manager-status]');
+const orgCreateForm = q<HTMLFormElement>('[data-org-create-form]');
+q('[data-org-manager-close]').addEventListener('click', () => orgModal.close());
+
+function renderOrgManager() {
+  orgParentSelect.replaceChildren(
+    new Option('作为顶级组织（无上级）', ''),
+    ...organizations.map(org => new Option(orgSelectLabel(org), org.id))
+  );
+  const builtinIds = new Set(namedOrganizations.map(o => o.id));
+  const list = el('div');
+  for (const org of organizations) {
+    const row = el('div', undefined, 'p-record-row');
+    const nameWrap = el('span');
+    nameWrap.style.paddingLeft = `${org.depth * 18}px`;
+    nameWrap.textContent = `${org.depth ? '└ ' : ''}${org.name}`;
+    const meta = el('span', org.titles.length ? org.titles.join(' / ') : (org.kind === 'academic' ? '教学与班级' : org.kind === 'club' ? '社团组织' : '组织'), 'p-muted');
+    meta.style.fontSize = '0.8rem';
+    row.append(nameWrap, meta);
+    const hasChildren = organizations.some(o => o.parentId === org.id);
+    if (!builtinIds.has(org.id) && !hasChildren) {
+      row.append(button('删除', async () => {
+        try {
+          const res = await api<{ items: OrganizationNode[] }>(`/admin/organizations/${encodeURIComponent(org.id)}/delete`, {});
+          organizations = res.items;
+          renderOrgManager();
+          refreshFilters();
+          renderManagedMembers();
+          message(orgModalStatus, `已删除组织「${org.name}」。`, 'success');
+        } catch (e) {
+          message(orgModalStatus, errorText(e), 'error');
+        }
+      }, 'danger small'));
+    } else {
+      row.append(el('span', builtinIds.has(org.id) ? '内置' : '', 'p-muted'));
+    }
+    list.append(row);
+  }
+  orgListBox.replaceChildren(list);
+}
+
+q('[data-members-orgs]').addEventListener('click', () => {
+  message(orgModalStatus);
+  renderOrgManager();
+  orgModal.showModal();
+});
+
+orgCreateForm.addEventListener('submit', event => {
+  event.preventDefault();
+  void (async () => {
+    try {
+      const res = await api<{ organization: OrganizationNode; items: OrganizationNode[] }>('/admin/organizations', {
+        name: orgNameInput.value.trim(),
+        parentId: orgParentSelect.value || null,
+        kind: orgKindSelect.value,
+        titles: orgTitlesInput.value.trim(),
+      });
+      organizations = res.items;
+      orgNameInput.value = '';
+      orgTitlesInput.value = '';
+      renderOrgManager();
+      refreshFilters();
+      message(orgModalStatus, `已添加组织「${res.organization.fullName}」。`, 'success');
+    } catch (e) {
+      message(orgModalStatus, errorText(e), 'error');
+    }
+  })();
+});
+
+// Batch Import Members modal (owner only)
+const importModal = q<HTMLDialogElement>('[data-batch-import-modal]');
+const batchOrgSelect = q<HTMLSelectElement>('[data-batch-org]');
+const batchLinesInput = q<HTMLTextAreaElement>('[data-batch-lines]');
+const batchStatus = q<HTMLElement>('[data-batch-import-status]');
+const batchForm = q<HTMLFormElement>('[data-batch-import-form]');
+q('[data-batch-import-close]').addEventListener('click', () => importModal.close());
+
+q('[data-members-import]').addEventListener('click', () => {
+  message(batchStatus);
+  batchOrgSelect.replaceChildren(
+    new Option('请选择归属组织', ''),
+    ...organizations.map(org => new Option(orgSelectLabel(org), org.id))
+  );
+  batchLinesInput.value = '';
+  importModal.showModal();
+});
+
+batchForm.addEventListener('submit', event => {
+  event.preventDefault();
+  void (async () => {
+    try {
+      const res = await api<{ created: number; updated: number; skipped: number; total: number }>('/admin/users/batch', {
+        organizationId: batchOrgSelect.value,
+        lines: batchLinesInput.value,
+      });
+      batchLinesInput.value = '';
+      await refreshMembers();
+      message(batchStatus, `导入完成：新建 ${res.created} 人，追加归属 ${res.updated} 人，已在组织内 ${res.skipped} 人。`, 'success');
+    } catch (e) {
+      message(batchStatus, errorText(e), 'error');
+    }
+  })();
+});
 
 async function guard(fn: () => Promise<void>) {
   try {
@@ -62,8 +190,12 @@ async function confirmAction(title: string, description: string, password = fals
 let directorySignal: AbortSignal | undefined;
 async function refreshMembers(signal = directorySignal) {
   const visit = directorySignal;
-  const res = await api<{ items: User[] }>('/admin/users', undefined, { signal });
+  const [res, orgRes] = await Promise.all([
+    api<{ items: User[] }>('/admin/users', undefined, { signal }),
+    api<{ items: OrganizationNode[] }>('/organizations', undefined, { signal }),
+  ]);
   if (visit?.aborted) return;
+  organizations = orgRes.items;
   members = res.items.sort((a, b) => (a.realName || a.nickname).localeCompare(b.realName || b.nickname, 'zh-CN') || a.id.localeCompare(b.id));
   refreshFilters();
   renderManagedMembers();
@@ -74,7 +206,8 @@ export function renderManagedMembers() {
   const isOwner = !preview && current.user.role === 'owner';
   const term = q<HTMLInputElement>('[data-members-search]').value.trim().normalize('NFKC').toLowerCase();
   const scope = orgFilter.value;
-  const affiliations = (user: User) => (user.memberships ?? []).filter(row => !scope || isWithin(row.organizationId, scope));
+  const orgList = organizations.length ? organizations : namedOrganizations;
+  const affiliations = (user: User) => (user.memberships ?? []).filter(row => !scope || isWithin(row.organizationId, scope, orgList));
   const roleFilter = q<HTMLSelectElement>('[data-manage-role-filter]').value;
   const visible = members.filter((user) => {
     if (scope && !affiliations(user).length) return false;
@@ -104,7 +237,7 @@ export function renderManagedMembers() {
       members = members.map(member => member.id === updated.id ? updated : member);
       refreshFilters();
       renderManagedMembers();
-    }, focusEdit);
+    }, focusEdit, organizations, isOwner);
 
     const nameCell = el('td');
     const userBox = el('div', undefined, 'p-user-cell');
@@ -264,6 +397,12 @@ const auditLabels: Record<string, string> = {
   'identity.user.updated': '调整成员档案与权限',
   'identity.user.deleted': '删除账号',
   'identity.user.seeded': '预录在编成员',
+  'identity.users.batch_imported': '批量导入成员',
+  'organization.saved': '更新组织树',
+  'organization.deleted': '删除组织',
+  'collection.created': '发布收集',
+  'collection.recipients.updated': '调整收集名单',
+  'collection.deleted': '删除收集',
   'identity.roster.synced': '更新本届名册',
   'identity.roster.archived': '归档本届名册',
   'form.create': '新建表单',

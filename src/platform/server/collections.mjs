@@ -1,9 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { fail, readJson, response, text } from './common.mjs';
+import { loadOrganizations } from './organizations.mjs';
+import {
+  flattenOrganizationTree,
+  isWithin,
+  organization,
+  organizationName,
+  organizationPath,
+  positionLabel,
+} from '../organizations.mjs';
 
 const API = '/api/platform/collections';
 const ID = /^[a-zA-Z0-9_-]{4,80}$/;
-const MAX_FILE = 20 * 1024 * 1024;
+const MAX_FILE = 50 * 1024 * 1024;
 const DEFAULT_EXTS = ['doc', 'docx', 'pdf', 'zip', 'xlsx', 'pptx', 'jpg', 'png'];
 
 function oscaConfig(env, itemId) {
@@ -60,7 +69,7 @@ function parseFiles(value) {
     const id = typeof f?.id === 'string' && /^[a-z0-9_-]{1,24}$/.test(f.id) ? f.id : `f${idx + 1}`;
     const name = text(f?.name, '提交项名称', 60, true);
     const extensions = parseExts(f?.extensions?.length ? f.extensions : DEFAULT_EXTS);
-    const maxBytes = Number.isSafeInteger(f?.maxBytes) && f.maxBytes > 0 && f.maxBytes <= MAX_FILE ? f.maxBytes : MAX_FILE;
+    const maxBytes = Number.isSafeInteger(f?.maxBytes) && f.maxBytes > 0 && f.maxBytes <= MAX_FILE ? f.maxBytes : 20 * 1024 * 1024;
     return { id, name, extensions, maxBytes };
   });
 }
@@ -69,6 +78,19 @@ function parsePolicy(value) {
   const p = value || 'strict';
   if (!['strict', 'allow-late', 'closed'].includes(p)) fail(400, 'INVALID_POLICY', '提交状态无效。');
   return p;
+}
+
+function parseRecipients(value) {
+  if (!Array.isArray(value)) return [];
+  if (value.length > 1000) fail(400, 'TOO_MANY_RECIPIENTS', '单次收集最多选择 1000 人。');
+  const map = new Map();
+  for (const row of value) {
+    const sid = normSid(row?.studentId);
+    if (!/^[A-Z0-9]{4,24}$/.test(sid)) fail(400, 'INVALID_STUDENT_ID', `学号格式无效：${row?.studentId || ''}`);
+    const name = text(row?.name || row?.realName || sid, '姓名', 40, true);
+    map.set(sid, { studentId: sid, name });
+  }
+  return [...map.values()].sort((a, b) => a.studentId.localeCompare(b.studentId));
 }
 
 function computeStatus(sub, round) {
@@ -81,38 +103,102 @@ function safeFilePart(value) {
   return String(value || '').replace(/[\\/:*?"<>|\r\n\t]+/g, '').replace(/\s+/g, '').slice(0, 60) || 'item';
 }
 
+function buildIssuerOptions(user, orgs) {
+  const flat = flattenOrganizationTree(orgs);
+  const options = [];
+  const seen = new Set();
+  const pushOption = (organizationId, title, label) => {
+    const key = `${organizationId}::${title}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const org = organization(organizationId, orgs);
+    if (!org) return;
+    options.push({
+      organizationId: org.id,
+      organizationName: organizationName(org.id, orgs),
+      orgShortName: org.name,
+      title,
+      label,
+    });
+  };
+
+  for (const m of user.memberships || []) {
+    const org = organization(m.organizationId, orgs);
+    if (!org) continue;
+    const pos = positionLabel(m, orgs);
+    pushOption(org.id, pos, pos ? `${org.name} · ${pos}` : org.name);
+    const chain = organizationPath(org.id, orgs);
+    for (let i = chain.length - 2; i >= 0; i--) {
+      const anc = chain[i];
+      const ancTitle = pos ? `${org.name} ${pos}` : org.name;
+      pushOption(anc.id, ancTitle, `${anc.name}（${ancTitle}）`);
+    }
+  }
+
+  if (user.role === 'owner') {
+    for (const org of flat) {
+      if (!options.some((o) => o.organizationId === org.id)) {
+        pushOption(org.id, '', org.fullName);
+      }
+    }
+  }
+  return options;
+}
+
+function canIssueUnder(user, orgId, orgs) {
+  if (user.role === 'owner') return true;
+  return (user.memberships || []).some((m) => isWithin(m.organizationId, orgId, orgs));
+}
+
+function issuerView(issuer, orgs) {
+  if (!issuer?.organizationId) {
+    return {
+      userId: issuer?.userId || '',
+      name: issuer?.name || '',
+      organizationId: '',
+      organizationName: '',
+      orgShortName: '',
+      title: issuer?.title || '',
+    };
+  }
+  const org = organization(issuer.organizationId, orgs);
+  return {
+    userId: issuer.userId || '',
+    name: issuer.name || '',
+    organizationId: issuer.organizationId,
+    organizationName: organizationName(issuer.organizationId, orgs) || issuer.organizationId,
+    orgShortName: org?.name || issuer.organizationId,
+    title: issuer.title || '',
+  };
+}
+
+function personOrgLabel(user, preferOrgId, orgs) {
+  const memberships = user?.memberships || [];
+  if (!memberships.length) return '';
+  if (preferOrgId) {
+    const matching = memberships.find((m) => isWithin(m.organizationId, preferOrgId, orgs));
+    if (matching) return organization(matching.organizationId, orgs)?.name || '';
+  }
+  const academic = memberships.find((m) => organization(m.organizationId, orgs)?.kind === 'academic');
+  const picked = academic || memberships[0];
+  return organization(picked.organizationId, orgs)?.name || '';
+}
+
 export function createCollectionsService({ repo, identity, env, now = Date.now, getGateway }) {
-  async function listGroups() {
-    const keys = await repo.list('collections/groups/');
-    const items = await Promise.all(keys.map((k) => repo.get(k)));
-    return items.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  async function getOrgs() {
+    if (typeof identity.loadOrganizations === 'function') return identity.loadOrganizations();
+    return loadOrganizations(repo);
+  }
+
+  async function getAllUsers() {
+    if (typeof identity.loadAllUsers === 'function') return identity.loadAllUsers();
+    return [];
   }
 
   async function listItems() {
     const keys = await repo.list('collections/items/');
     const items = await Promise.all(keys.map((k) => repo.get(k)));
     return items.filter(Boolean).sort((a, b) => (b.term || '').localeCompare(a.term || '') || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  }
-
-  async function resolveRoster(groupIds) {
-    const allGroups = await listGroups();
-    const byId = new Map(allGroups.map((g) => [g.id, g]));
-    const rosterMap = new Map();
-    const groupNames = [];
-    for (const gid of groupIds || []) {
-      const g = byId.get(gid);
-      if (!g) continue;
-      groupNames.push(g.name);
-      for (const m of g.members || []) {
-        const sid = normSid(m.studentId);
-        if (!sid) continue;
-        rosterMap.set(sid, { studentId: sid, name: m.name || sid, groupName: g.name });
-      }
-    }
-    return {
-      groupNames,
-      roster: [...rosterMap.values()].sort((a, b) => a.groupName.localeCompare(b.groupName, 'zh-CN') || a.studentId.localeCompare(b.studentId)),
-    };
   }
 
   async function listRoundSubmissions(itemId, roundId) {
@@ -127,31 +213,26 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     const method = request.method;
     const url = new URL(request.url);
 
-    // 1. Public list of all collections (no student PII exposed when unauthenticated)
+    // 1. Public list of all collections (supports tree-inherited ?orgId=... filtering)
     if (path === API && method === 'GET') {
       const session = await identity.authenticate(request);
       const mySid = session ? normSid(session.user.studentId) : '';
       const isStaff = Boolean(session && ['owner', 'admin'].includes(session.user.role));
-      const [items, groups] = await Promise.all([listItems(), listGroups()]);
-      const groupById = new Map(groups.map((g) => [g.id, g]));
+      const [items, orgs] = await Promise.all([listItems(), getOrgs()]);
+      const orgFilter = (url.searchParams.get('orgId') || '').trim();
 
-      const viewItems = await Promise.all(items.map(async (item) => {
-        const groupNames = [];
-        let rosterCount = 0;
-        let inMine = false;
-        const seen = new Set();
-        for (const gid of item.groupIds || []) {
-          const g = groupById.get(gid);
-          if (!g) continue;
-          groupNames.push(g.name);
-          for (const m of g.members || []) {
-            const sid = normSid(m.studentId);
-            if (!sid || seen.has(sid)) continue;
-            seen.add(sid);
-            rosterCount++;
-            if (mySid && sid === mySid) inMine = true;
-          }
-        }
+      const filtered = orgFilter
+        ? items.filter((item) => item.issuer?.organizationId && isWithin(item.issuer.organizationId, orgFilter, orgs))
+        : items;
+
+      const viewItems = await Promise.all(filtered.map(async (item) => {
+        const targetMode = item.targetMode === 'open' ? 'open' : 'selected';
+        const recipients = targetMode === 'selected' ? (item.recipients || []) : [];
+        const recipientCount = recipients.length;
+        const inRecipients = Boolean(mySid && (targetMode === 'open' || recipients.some((r) => r.studentId === mySid)));
+        const isIssuer = Boolean(session && item.issuer?.userId === session.user.id);
+        const inMine = inRecipients || isIssuer;
+
         const roundsSummary = await Promise.all((item.rounds || []).map(async (rd) => {
           const subs = await listRoundSubmissions(item.id, rd.id);
           const doneSids = new Set();
@@ -165,7 +246,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
             if (rd.files.every((f) => set.has(f.id))) doneSids.add(sid);
           }
           let myStatus = null;
-          if (mySid && inMine) {
+          if (mySid && inRecipients) {
             const mySubs = subs.filter((s) => s.studentId === mySid);
             if (rd.files.every((f) => mySubs.some((s) => s.fileId === f.id))) {
               myStatus = mySubs.some((s) => computeStatus(s, rd) === 'late') ? 'late' : 'submitted';
@@ -180,21 +261,22 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
             policy: rd.policy,
             fileCount: rd.files.length,
             submittedCount: doneSids.size,
-            totalCount: rosterCount,
+            totalCount: targetMode === 'open' ? doneSids.size : recipientCount,
             myStatus,
           };
         }));
         return {
           id: item.id,
-          kind: item.kind,
           term: item.term,
           termLabel: item.termLabel,
-          code: item.code,
+          code: item.code || '',
           name: item.name,
           category: item.category,
-          groupIds: item.groupIds || [],
-          groupNames,
-          rosterCount,
+          issuer: issuerView(item.issuer, orgs),
+          targetMode,
+          recipientCount,
+          inRecipients,
+          isIssuer,
           inMine,
           rounds: roundsSummary,
           updatedAt: item.updatedAt,
@@ -202,78 +284,121 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       }));
 
       return response({
-        viewer: session ? { studentId: mySid, name: session.user.realName || session.user.nickname, role: session.user.role, isStaff } : null,
+        viewer: session ? {
+          id: session.user.id,
+          studentId: mySid,
+          name: session.user.realName || session.user.nickname,
+          role: session.user.role,
+          isStaff,
+        } : null,
+        organizations: flattenOrganizationTree(orgs),
+        ...(isStaff ? { issuerOptions: buildIssuerOptions(session.user, orgs) } : {}),
         items: viewItems,
-        ...(isStaff ? { groups: groups.map((g) => ({ id: g.id, name: g.name, count: (g.members || []).length })) } : {}),
       });
     }
 
-    // 2. Roster groups management (staff only)
-    if (path === `${API}/groups`) {
-      const session = await identity.authenticate(request, { staff: true, csrf: method === 'POST' });
-      if (method === 'GET') return response({ groups: await listGroups() });
-      if (method === 'POST') {
-        const body = await readJson(request);
-        const name = text(body.name, '名单名称', 60, true);
-        const rawLines = String(body.lines || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-        if (!rawLines.length || rawLines.length > 500) fail(400, 'INVALID_MEMBERS', '请填写 1–500 行名单（每行：学号 姓名）。');
-        const map = new Map();
-        for (const line of rawLines) {
-          const parts = line.split(/[\s,\t]+/).filter(Boolean);
-          const sid = normSid(parts[0]);
-          if (!/^[A-Z0-9]{4,24}$/.test(sid)) fail(400, 'INVALID_STUDENT_ID', `学号格式无效：${parts[0]}`);
-          map.set(sid, { studentId: sid, name: text(parts.slice(1).join(' ') || sid, '姓名', 40, true) });
-        }
-        const id = typeof body.id === 'string' && ID.test(body.id) ? body.id : `grp_${randomUUID().slice(0, 8)}`;
-        const group = {
-          id,
-          name,
-          members: [...map.values()].sort((a, b) => a.studentId.localeCompare(b.studentId)),
-          updatedAt: new Date(now()).toISOString(),
-          updatedBy: session.user.id,
-        };
-        await repo.put(`collections/groups/${id}.json`, group);
-        return response({ group }, 201);
-      }
-    }
-
-    const groupDel = path.match(/^\/api\/platform\/collections\/groups\/([^/]+)$/);
-    if (groupDel && method === 'DELETE') {
-      await identity.authenticate(request, { staff: true, csrf: true });
-      const gid = groupDel[1];
-      if (!ID.test(gid)) fail(400, 'INVALID_ID', '名单标识无效。');
-      await repo.remove(`collections/groups/${gid}.json`);
-      return response({ ok: true });
+    // 2. Staff directory for the Organization Tree People Picker
+    if (path === `${API}/people` && method === 'GET') {
+      await identity.authenticate(request, { staff: true });
+      const [orgs, users] = await Promise.all([getOrgs(), getAllUsers()]);
+      const people = users
+        .filter((u) => u && u.status !== 'disabled' && u.studentId)
+        .map((u) => ({
+          id: u.id,
+          studentId: normSid(u.studentId),
+          name: u.realName || u.nickname || normSid(u.studentId),
+          status: u.status,
+          organizationIds: (u.memberships || []).map((m) => m.organizationId),
+        }))
+        .sort((a, b) => a.studentId.localeCompare(b.studentId));
+      return response({ organizations: flattenOrganizationTree(orgs), people });
     }
 
     // 3. Create a new collection item (staff only)
     if (path === `${API}/items` && method === 'POST') {
       const session = await identity.authenticate(request, { staff: true, csrf: true });
-      const body = await readJson(request);
-      const kind = body.kind === 'org' ? 'org' : 'course';
+      const body = await readJson(request, 262144);
+      const orgs = await getOrgs();
+
       const term = text(body.term, '学期', 24, true);
       const termLabel = text(body.termLabel || term, '学期名称', 60, true);
-      const code = text(body.code, '课程号或组织代号', 32, true).toUpperCase();
+      const code = body.code ? text(body.code, '课程号或代号', 32, false).toUpperCase() : '';
       const name = text(body.name, '名称', 80, true);
       const category = text(body.category, '类别', 32, true);
-      const groupIds = Array.isArray(body.groupIds) ? [...new Set(body.groupIds.filter((g) => typeof g === 'string' && ID.test(g)))] : [];
-      const firstRound = {
-        id: `rd_${randomUUID().slice(0, 8)}`,
-        label: text(body.roundLabel || '第1次', '批次名称', 40, true),
-        deadline: parseDeadline(body.deadline),
-        policy: parsePolicy(body.policy),
-        files: parseFiles(body.files),
-        createdAt: new Date(now()).toISOString(),
-      };
-      const id = `col_${randomUUID().slice(0, 10)}`;
+
+      const issuerOrgId = typeof body.issuerOrganizationId === 'string' ? body.issuerOrganizationId.trim() : '';
+      const issuerOrg = issuerOrgId ? organization(issuerOrgId, orgs) : null;
+      if (!issuerOrg) fail(400, 'INVALID_ISSUER_ORGANIZATION', '请选择发布所属组织。');
+      if (!canIssueUnder(session.user, issuerOrg.id, orgs)) {
+        fail(403, 'FORBIDDEN_ISSUER_ORGANIZATION', '你只能以本人所属组织或其上级组织身份发布收集。');
+      }
+      const issuerTitle = body.issuerTitle ? text(body.issuerTitle, '发布职务', 40, false) : '';
+
+      const targetMode = body.targetMode === 'open' ? 'open' : 'selected';
+      const recipients = targetMode === 'selected' ? parseRecipients(body.recipients) : [];
+      if (targetMode === 'selected' && recipients.length === 0) {
+        fail(400, 'RECIPIENTS_REQUIRED', '请至少选择一位应交人员，或切换为不限名单的公开收集。');
+      }
+
       const timestamp = new Date(now()).toISOString();
-      const item = { id, kind, term, termLabel, code, name, category, groupIds, rounds: [firstRound], createdAt: timestamp, updatedAt: timestamp, createdBy: session.user.id };
+      let rounds;
+      if (Array.isArray(body.rounds) && body.rounds.length > 0) {
+        if (body.rounds.length > 30) fail(400, 'TOO_MANY_ROUNDS', '单次最多创建 30 个批次。');
+        rounds = body.rounds.map((r, idx) => ({
+          id: typeof r?.id === 'string' && ID.test(r.id) ? r.id : `rd_${randomUUID().slice(0, 8)}`,
+          label: text(r?.label || `第${idx + 1}次`, '批次名称', 40, true),
+          deadline: parseDeadline(r?.deadline),
+          policy: parsePolicy(r?.policy),
+          files: parseFiles(r?.files),
+          createdAt: timestamp,
+        }));
+      } else {
+        rounds = [{
+          id: `rd_${randomUUID().slice(0, 8)}`,
+          label: text(body.roundLabel || '第1次', '批次名称', 40, true),
+          deadline: parseDeadline(body.deadline),
+          policy: parsePolicy(body.policy),
+          files: parseFiles(body.files),
+          createdAt: timestamp,
+        }];
+      }
+
+      const requestedId = typeof body.id === 'string' && ID.test(body.id) && session.user.role === 'owner' ? body.id : '';
+      const id = requestedId || `col_${randomUUID().slice(0, 10)}`;
+      const item = {
+        id,
+        term,
+        termLabel,
+        code,
+        name,
+        category,
+        issuer: {
+          userId: session.user.id,
+          name: session.user.realName || session.user.nickname || session.user.studentId,
+          organizationId: issuerOrg.id,
+          title: issuerTitle,
+        },
+        targetMode,
+        recipients,
+        rounds,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
       await repo.put(`collections/items/${id}.json`, item);
-      return response({ item }, 201);
+      await repo.audit(session.user.id, 'collection.created', id, { name, organizationId: issuerOrg.id, recipientCount: recipients.length });
+      return response({ item: { ...item, issuer: issuerView(item.issuer, orgs) } }, 201);
     }
 
-    // 4. Item detail & board (GET public summary / signed-in live board)
+    // 4. Item detail & board (GET public summary / signed-in live board) + DELETE (owner)
     const itemMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)$/);
+    if (itemMatch && method === 'DELETE') {
+      const auth = await identity.authenticate(request, { owner: true, csrf: true });
+      const itemId = itemMatch[1];
+      if (!ID.test(itemId)) fail(400, 'INVALID_ID', '收集标识无效。');
+      await repo.remove(`collections/items/${itemId}.json`);
+      await repo.audit(auth.user.id, 'collection.deleted', itemId);
+      return response({ ok: true });
+    }
     if (itemMatch && method === 'GET') {
       const itemId = itemMatch[1];
       if (!ID.test(itemId)) fail(400, 'INVALID_ID', '收集标识无效。');
@@ -282,13 +407,44 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const session = await identity.authenticate(request);
       const mySid = session ? normSid(session.user.studentId) : '';
       const isStaff = Boolean(session && ['owner', 'admin'].includes(session.user.role));
-      const { groupNames, roster } = await resolveRoster(item.groupIds);
-      const inRoster = Boolean(mySid && roster.some((r) => r.studentId === mySid));
+      const [orgs, allUsers] = await Promise.all([getOrgs(), session ? getAllUsers() : Promise.resolve([])]);
+      const userBySid = new Map(allUsers.filter((u) => u?.studentId).map((u) => [normSid(u.studentId), u]));
 
+      const targetMode = item.targetMode === 'open' ? 'open' : 'selected';
       const subsByRound = {};
       for (const rd of item.rounds || []) {
         subsByRound[rd.id] = await listRoundSubmissions(item.id, rd.id);
       }
+
+      // Build canonical roster of rows for stats & board
+      const rosterMap = new Map();
+      if (targetMode === 'selected') {
+        for (const r of item.recipients || []) {
+          const sid = normSid(r.studentId);
+          rosterMap.set(sid, { studentId: sid, name: r.name || sid });
+        }
+      }
+      // Include any actual submitter (for open collections or students removed after submitting)
+      for (const subs of Object.values(subsByRound)) {
+        for (const s of subs) {
+          if (!rosterMap.has(s.studentId)) {
+            const u = userBySid.get(s.studentId);
+            rosterMap.set(s.studentId, { studentId: s.studentId, name: s.studentName || u?.realName || u?.nickname || s.studentId });
+          }
+        }
+      }
+
+      const issuerOrgId = item.issuer?.organizationId || '';
+      const roster = [...rosterMap.values()].map((stu) => {
+        const u = userBySid.get(stu.studentId);
+        return {
+          studentId: stu.studentId,
+          name: stu.name,
+          orgLabel: personOrgLabel(u, issuerOrgId, orgs) || '其他',
+        };
+      }).sort((a, b) => a.orgLabel.localeCompare(b.orgLabel, 'zh-CN') || a.studentId.localeCompare(b.studentId));
+
+      const inRecipients = Boolean(mySid && (targetMode === 'open' || (item.recipients || []).some((r) => r.studentId === mySid)));
 
       const roundStats = (item.rounds || []).map((rd) => {
         const subs = subsByRound[rd.id] || [];
@@ -305,7 +461,6 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         return { roundId: rd.id, total: roster.length, submitted, late, missing };
       });
 
-      // Only signed-in users see the per-student board; unauthenticated visitors see aggregate stats only
       const board = session ? roster.map((stu) => {
         const isMe = stu.studentId === mySid;
         const statuses = {};
@@ -330,7 +485,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
           studentId: isStaff || isMe ? stu.studentId : `${stu.studentId.slice(0, 5)}****${stu.studentId.slice(-2)}`,
           rawStudentId: isStaff || isMe ? stu.studentId : undefined,
           name: stu.name,
-          groupName: stu.groupName,
+          orgLabel: stu.orgLabel,
           isMe,
           statuses,
           filesByRound,
@@ -338,14 +493,54 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       }) : null;
 
       return response({
-        viewer: session ? { studentId: mySid, name: session.user.realName || session.user.nickname, role: session.user.role, isStaff, inRoster } : null,
-        item: { ...item, groupNames, rosterCount: roster.length },
+        viewer: session ? {
+          id: session.user.id,
+          studentId: mySid,
+          name: session.user.realName || session.user.nickname,
+          role: session.user.role,
+          isStaff,
+          inRecipients,
+        } : null,
+        item: {
+          id: item.id,
+          term: item.term,
+          termLabel: item.termLabel,
+          code: item.code || '',
+          name: item.name,
+          category: item.category,
+          issuer: issuerView(item.issuer, orgs),
+          targetMode,
+          recipientCount: targetMode === 'open' ? roster.length : (item.recipients || []).length,
+          ...(isStaff ? { recipients: item.recipients || [] } : {}),
+          rounds: item.rounds || [],
+        },
         roundStats,
         board,
       });
     }
 
-    // 5. Add a new round to an item (staff only)
+    // 5. Update recipients on an existing collection (staff only)
+    const recMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/recipients$/);
+    if (recMatch && method === 'POST') {
+      const session = await identity.authenticate(request, { staff: true, csrf: true });
+      const itemId = recMatch[1];
+      const item = await repo.get(`collections/items/${itemId}.json`);
+      if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
+      const body = await readJson(request, 262144);
+      const targetMode = body.targetMode === 'open' ? 'open' : 'selected';
+      const recipients = targetMode === 'selected' ? parseRecipients(body.recipients) : [];
+      if (targetMode === 'selected' && recipients.length === 0) {
+        fail(400, 'RECIPIENTS_REQUIRED', '请至少选择一位应交人员，或切换为公开收集。');
+      }
+      item.targetMode = targetMode;
+      item.recipients = recipients;
+      item.updatedAt = new Date(now()).toISOString();
+      await repo.put(`collections/items/${itemId}.json`, item);
+      await repo.audit(session.user.id, 'collection.recipients.updated', itemId, { targetMode, recipientCount: recipients.length });
+      return response({ targetMode, recipientCount: recipients.length });
+    }
+
+    // 6. Add a new round to an item (staff only)
     const addRound = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds$/);
     if (addRound && method === 'POST') {
       await identity.authenticate(request, { staff: true, csrf: true });
@@ -354,7 +549,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
       const body = await readJson(request);
       const rd = {
-        id: `rd_${randomUUID().slice(0, 8)}`,
+        id: typeof body.id === 'string' && ID.test(body.id) ? body.id : `rd_${randomUUID().slice(0, 8)}`,
         label: text(body.label || `第${(item.rounds || []).length + 1}次`, '批次名称', 40, true),
         deadline: parseDeadline(body.deadline),
         policy: parsePolicy(body.policy),
@@ -367,7 +562,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return response({ round: rd }, 201);
     }
 
-    // 6. Update round deadline/policy (staff only)
+    // 7. Update round deadline/policy (staff only)
     const roundUpdate = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds\/([^/]+)$/);
     if (roundUpdate && method === 'POST') {
       await identity.authenticate(request, { staff: true, csrf: true });
@@ -385,7 +580,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return response({ round: rd });
     }
 
-    // 7. Presign upload to OSCA 1TB (signed-in student)
+    // 8. Presign upload to OSCA 1TB (signed-in student, or owner recording on behalf of a student)
     const presignMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds\/([^/]+)\/presign$/);
     if (presignMatch && method === 'POST') {
       const session = await identity.authenticate(request, { required: true, csrf: true });
@@ -394,12 +589,16 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
       const rd = (item.rounds || []).find((r) => r.id === roundId);
       if (!rd) fail(404, 'NOT_FOUND', '批次不存在。');
-      if (rd.policy === 'closed') fail(400, 'ROUND_CLOSED', '当前批次已关闭提交。');
-      if (rd.policy === 'strict' && rd.deadline && now() > Date.parse(rd.deadline)) {
-        fail(400, 'DEADLINE_PASSED', '已超过截止时间，无法提交。');
-      }
 
       const body = await readJson(request);
+      const isOwnerProxy = session.user.role === 'owner' && Boolean(body.studentId);
+      if (!isOwnerProxy) {
+        if (rd.policy === 'closed') fail(400, 'ROUND_CLOSED', '当前批次已关闭提交。');
+        if (rd.policy === 'strict' && rd.deadline && now() > Date.parse(rd.deadline)) {
+          fail(400, 'DEADLINE_PASSED', '已超过截止时间，无法提交。');
+        }
+      }
+
       const fileSlot = (rd.files || []).find((f) => f.id === body.fileId);
       if (!fileSlot) fail(400, 'INVALID_FILE_SLOT', '提交项不存在。');
       const originalName = text(body.fileName, '文件名', 200, true);
@@ -413,13 +612,17 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         fail(400, 'FILE_TOO_LARGE', `文件大小须在 1 B – ${Math.round(fileSlot.maxBytes / 1048576)} MB 之间。`);
       }
 
-      const sid = normSid(session.user.studentId);
-      const { roster } = await resolveRoster(item.groupIds);
-      const entry = roster.find((r) => r.studentId === sid);
-      const realName = entry?.name || session.user.realName || session.user.nickname || sid;
+      const sid = isOwnerProxy ? normSid(body.studentId) : normSid(session.user.studentId);
+      const recipient = (item.recipients || []).find((r) => r.studentId === sid);
+      if (!isOwnerProxy && item.targetMode !== 'open' && !['owner', 'admin'].includes(session.user.role) && !recipient) {
+        fail(403, 'NOT_IN_RECIPIENTS', '你不在本次收集名单中。');
+      }
+      const realName = isOwnerProxy
+        ? (body.studentName || recipient?.name || sid)
+        : (recipient?.name || session.user.realName || session.user.nickname || sid);
       const storedName = `${sid}_${safeFilePart(realName)}_${safeFilePart(rd.label)}_${safeFilePart(fileSlot.name)}.${ext}`;
       const config = oscaConfig(env, item.id);
-      const objectKey = `${config.objectPrefix}${rd.id}/${fileSlot.id}/${sid}_${Date.now()}.${ext}`;
+      const objectKey = `${config.objectPrefix}${rd.id}/${fileSlot.id}/${sid}_${Date.now()}_${randomUUID().slice(0, 6)}.${ext}`;
       const gateway = getGateway(config);
       const contentType = typeof body.contentType === 'string' && body.contentType ? body.contentType : 'application/octet-stream';
       const upload = await gateway.presignUpload({ id: fileSlot.id, objectKey, contentType, fileSize: sizeBytes, fileName: storedName }, 300);
@@ -427,7 +630,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return response({ upload, objectKey, storedName, fileId: fileSlot.id });
     }
 
-    // 8. Confirm upload (atomic replace current submission, preserving history)
+    // 9. Confirm upload (atomic replace current submission, preserving history)
     const confirmMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds\/([^/]+)\/confirm$/);
     if (confirmMatch && method === 'POST') {
       const session = await identity.authenticate(request, { required: true, csrf: true });
@@ -447,29 +650,38 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const head = await gateway.head(objectKey);
       if (!head) fail(400, 'UPLOAD_INCOMPLETE', '文件尚未完成上传，请重试。');
 
-      const sid = normSid(session.user.studentId);
+      const isOwnerProxy = session.user.role === 'owner' && Boolean(body.studentId);
+      const sid = isOwnerProxy ? normSid(body.studentId) : normSid(session.user.studentId);
+      const studentName = isOwnerProxy
+        ? text(body.studentName || sid, '姓名', 40, true)
+        : (session.user.realName || session.user.nickname || sid);
       const subKey = `collections/submissions/${item.id}/${rd.id}/${fileSlot.id}/${sid}.json`;
       const prev = await repo.get(subKey);
-      const submittedAt = new Date(now()).toISOString();
+      const submittedAt = isOwnerProxy && body.submittedAt ? parseDeadline(body.submittedAt) : new Date(now()).toISOString();
+      const revisions = isOwnerProxy && Number.isSafeInteger(body.revisions) && body.revisions >= 1
+        ? body.revisions
+        : (prev ? (prev.revisions || 1) + 1 : 1);
+
       const next = {
         itemId: item.id,
         roundId: rd.id,
         fileId: fileSlot.id,
         studentId: sid,
+        studentName,
         originalName: text(body.originalName || body.storedName, '原文件名', 200, true),
         storedName: text(body.storedName, '规范文件名', 200, true),
         objectKey,
         etag: head.etag || '',
         sizeBytes: Number(head.contentLength || body.sizeBytes || 0),
         submittedAt,
-        revisions: prev ? (prev.revisions || 1) + 1 : 1,
+        revisions,
         history: prev ? [...(prev.history || []).slice(-9), { objectKey: prev.objectKey, storedName: prev.storedName, sizeBytes: prev.sizeBytes, submittedAt: prev.submittedAt }] : [],
       };
       await repo.put(subKey, next);
       return response({ submission: next });
     }
 
-    // 9. Single file download (owner/admin or submitter themselves)
+    // 10. Single file download (owner/admin or submitter themselves)
     const dlMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds\/([^/]+)\/download$/);
     if (dlMatch && method === 'GET') {
       const session = await identity.authenticate(request, { required: true });
@@ -485,7 +697,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return response({ download, storedName: sub.storedName });
     }
 
-    // 10. Batch presigned file list for client-side ZIP packaging (staff only)
+    // 11. Batch presigned file list for client-side ZIP packaging (staff only)
     const filesMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds\/([^/]+)\/files$/);
     if (filesMatch && method === 'GET') {
       await identity.authenticate(request, { staff: true });
@@ -494,16 +706,16 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
       const rd = (item.rounds || []).find((r) => r.id === roundId);
       if (!rd) fail(404, 'NOT_FOUND', '批次不存在。');
-      const { roster } = await resolveRoster(item.groupIds);
-      const rosterBySid = new Map(roster.map((r) => [r.studentId, r]));
-      const subs = await listRoundSubmissions(item.id, rd.id);
+      const [orgs, allUsers, subs] = await Promise.all([getOrgs(), getAllUsers(), listRoundSubmissions(item.id, rd.id)]);
+      const userBySid = new Map(allUsers.filter((u) => u?.studentId).map((u) => [normSid(u.studentId), u]));
       const gateway = getGateway(oscaConfig(env, item.id));
       const files = await Promise.all(subs.map(async (sub) => {
-        const stu = rosterBySid.get(sub.studentId);
+        const u = userBySid.get(sub.studentId);
+        const orgLabel = personOrgLabel(u, item.issuer?.organizationId || '', orgs) || '其他';
         const slot = (rd.files || []).find((f) => f.id === sub.fileId);
         const dl = await gateway.presignDownload({ fileName: sub.storedName, finalObjectKey: sub.objectKey }, sub.etag, 300);
         return {
-          path: `${stu?.groupName || '其他'}/${slot?.name || sub.fileId}/${sub.storedName}`,
+          path: `${safeFilePart(orgLabel)}/${safeFilePart(slot?.name || sub.fileId)}/${sub.storedName}`,
           storedName: sub.storedName,
           sizeBytes: sub.sizeBytes,
           url: dl.url,
@@ -512,7 +724,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return response({ zipName: `${safeFilePart(item.name)}_${safeFilePart(rd.label)}.zip`, files });
     }
 
-    // 11. Export CSV statistics (staff only)
+    // 12. Export CSV statistics (staff only)
     const csvMatch = path.match(/^\/api\/platform\/collections\/items\/([^/]+)\/rounds\/([^/]+)\/csv$/);
     if (csvMatch && method === 'GET') {
       await identity.authenticate(request, { staff: true });
@@ -521,16 +733,28 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!item) fail(404, 'NOT_FOUND', '收集项目不存在。');
       const rd = (item.rounds || []).find((r) => r.id === roundId);
       if (!rd) fail(404, 'NOT_FOUND', '批次不存在。');
-      const { roster } = await resolveRoster(item.groupIds);
-      const subs = await listRoundSubmissions(item.id, rd.id);
+      const [orgs, allUsers, subs] = await Promise.all([getOrgs(), getAllUsers(), listRoundSubmissions(item.id, rd.id)]);
+      const userBySid = new Map(allUsers.filter((u) => u?.studentId).map((u) => [normSid(u.studentId), u]));
+      const rosterMap = new Map();
+      if (item.targetMode !== 'open') {
+        for (const r of item.recipients || []) rosterMap.set(r.studentId, r);
+      }
+      for (const s of subs) {
+        if (!rosterMap.has(s.studentId)) {
+          const u = userBySid.get(s.studentId);
+          rosterMap.set(s.studentId, { studentId: s.studentId, name: s.studentName || u?.realName || s.studentId });
+        }
+      }
       const subMap = new Map(subs.map((s) => [`${s.fileId}::${s.studentId}`, s]));
-      const rows = [['学号', '姓名', '分组', '提交项', '状态', '规范文件名', '文件大小(B)', '提交时间', '版本']];
+      const rows = [['学号', '姓名', '所属组织', '提交项', '状态', '规范文件名', '文件大小(B)', '提交时间', '版本']];
       const cn = { submitted: '已提交', late: '迟交', missing: '未提交' };
-      for (const stu of roster) {
+      const sortedRoster = [...rosterMap.values()].sort((a, b) => a.studentId.localeCompare(b.studentId));
+      for (const stu of sortedRoster) {
+        const orgLabel = personOrgLabel(userBySid.get(stu.studentId), item.issuer?.organizationId || '', orgs) || '其他';
         for (const f of rd.files || []) {
           const sub = subMap.get(`${f.id}::${stu.studentId}`);
           const st = computeStatus(sub, rd);
-          rows.push([stu.studentId, stu.name, stu.groupName, f.name, cn[st], sub?.storedName || '', sub?.sizeBytes ?? '', sub?.submittedAt || '', sub?.revisions ?? 0]);
+          rows.push([stu.studentId, stu.name, orgLabel, f.name, cn[st], sub?.storedName || '', sub?.sizeBytes ?? '', sub?.submittedAt || '', sub?.revisions ?? 0]);
         }
       }
       return new Response(`\uFEFF${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`, {

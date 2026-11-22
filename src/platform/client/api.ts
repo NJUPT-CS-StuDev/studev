@@ -1,6 +1,17 @@
 type Role = 'owner' | 'admin' | 'user';
 export interface MemberProfile { id: string; nickname: string; signature: string; avatarUrl: string; }
 export interface MemberPage { items: MemberProfile[]; total: number; offset: number; limit: number; }
+export interface OrganizationNode {
+    id: string;
+    name: string;
+    parentId: string | null;
+    kind: 'club' | 'academic' | 'other';
+    publicRoster: boolean;
+    order: number;
+    titles: string[];
+    depth: number;
+    fullName: string;
+}
 export interface Membership {
     organizationId: string;
     organizationName: string;
