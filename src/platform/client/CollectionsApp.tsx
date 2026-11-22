@@ -115,7 +115,8 @@ function buildZip(entries: { name: string; data: Uint8Array }[]): Blob {
 export default function CollectionsApp() {
   const [listData, setListData] = useState<ListResponse | null>(null);
   const [detail, setDetail] = useState<DetailResponse | null>(null);
-  const [view, setView] = useState<'mine' | 'all' | 'manage'>('mine');
+  const [scope, setScope] = useState<'mine' | 'all'>('mine');
+  const [drawer, setDrawer] = useState<'none' | 'groups' | 'create'>('none');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState('ALL');
@@ -161,8 +162,7 @@ export default function CollectionsApp() {
     try {
       const data = await api<ListResponse>('/collections');
       setListData(data);
-      if (!data.viewer) setView('all');
-      else if (!data.viewer.isStaff && view === 'manage') setView('mine');
+      if (!data.viewer) setScope('all');
     } catch (e) {
       notify(errorText(e));
     } finally {
@@ -203,7 +203,7 @@ export default function CollectionsApp() {
 
   const viewer = detail?.viewer ?? listData?.viewer ?? null;
   const isStaff = Boolean(viewer?.isStaff);
-  const effectiveView: 'mine' | 'all' | 'manage' = !viewer ? 'all' : (!isStaff && view === 'manage' ? 'mine' : view);
+  const effectiveScope: 'mine' | 'all' = viewer ? scope : 'all';
 
   const handleUpload = async (file: File | undefined) => {
     if (!file || !pendingUpload.current) return;
@@ -291,6 +291,7 @@ export default function CollectionsApp() {
           policy: 'strict', files: [{ name: cFileName, extensions: cFileExts }],
         },
       });
+      setDrawer('none');
       notify('已发布收集');
       await loadList();
       await loadDetail(res.item.id);
@@ -345,7 +346,7 @@ export default function CollectionsApp() {
     navigator.clipboard.writeText(txt).then(() => notify(`已复制 ${list.length} 人未交名单`)).catch(() => notify(txt));
   };
 
-  const visibleItems = (listData?.items || []).filter((it) => effectiveView !== 'mine' || it.inMine);
+  const visibleItems = (listData?.items || []).filter((it) => effectiveScope !== 'mine' || it.inMine);
   const byTerm = new Map<string, CollectionItemSummary[]>();
   for (const it of visibleItems) {
     const arr = byTerm.get(it.termLabel) || [];
@@ -361,25 +362,83 @@ export default function CollectionsApp() {
     <div className="col-app">
       <input ref={fileInput} type="file" hidden onChange={(e) => { void handleUpload(e.target.files?.[0]); e.target.value = ''; }} />
 
-      <div className="col-bar">
-        <div className="col-seg" role="tablist">
-          {viewer && <button className={effectiveView === 'mine' ? 'on' : ''} onClick={() => { setView('mine'); setSelectedId(null); setDetail(null); }}>与我相关</button>}
-          <button className={effectiveView === 'all' ? 'on' : ''} onClick={() => { setView('all'); setSelectedId(null); setDetail(null); }}>全部收集</button>
-          {isStaff && <button className={effectiveView === 'manage' ? 'on' : ''} onClick={() => { setView('manage'); setSelectedId(null); setDetail(null); }}>我要收</button>}
-        </div>
-        {!viewer && <a className="col-btn primary" href={`/login/?next=${encodeURIComponent(location.pathname + location.search)}`}>登录</a>}
-        {busy && <span className="col-meta">{busy}</span>}
-      </div>
-
       {!selectedId || !detail ? (
         <>
-          <header className="p-heading" style={{ marginBottom: 16 }}>
-            <div>
-              <h1>{effectiveView === 'manage' ? '我要收' : effectiveView === 'mine' ? '与我相关' : '全部收集'}</h1>
+          <div className="col-bar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: '-.02em', lineHeight: 1.2 }}>收集</h1>
+              {viewer && (
+                <div className="col-seg" role="tablist" aria-label="范围筛选">
+                  <button className={effectiveScope === 'mine' ? 'on' : ''} onClick={() => setScope('mine')}>与我相关</button>
+                  <button className={effectiveScope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>全部</button>
+                </div>
+              )}
             </div>
-          </header>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {busy && <span className="col-meta">{busy}</span>}
+              {!viewer && <a className="col-btn primary" href={`/login/?next=${encodeURIComponent(location.pathname + location.search)}`}>登录</a>}
+              {isStaff && (
+                <>
+                  <button className="col-btn" onClick={() => setDrawer((d) => (d === 'groups' ? 'none' : 'groups'))}>名单</button>
+                  <button className="col-btn primary" onClick={() => setDrawer((d) => (d === 'create' ? 'none' : 'create'))}>+ 发布收集</button>
+                </>
+              )}
+            </div>
+          </div>
 
-          {effectiveView === 'mine' && openTodos.length > 0 && (
+          {isStaff && drawer === 'groups' && (
+            <section className="col-panel" style={{ marginTop: 0 }}>
+              <div className="col-panel-h">
+                <h3>名单</h3>
+                <span className="col-meta">{(listData?.groups || []).length} 组</span>
+              </div>
+              <div className="col-chips" style={{ marginBottom: 12 }}>
+                {(listData?.groups || []).map((g) => <span key={g.id} className="col-chip">{g.name} · {g.count} 人</span>)}
+              </div>
+              <div className="col-form-row" style={{ alignItems: 'flex-start' }}>
+                <label className="col-field">名称<input placeholder="例如：B240402" value={gName} onChange={(e) => setGName(e.target.value)} /></label>
+                <label className="col-field" style={{ flex: 1, minWidth: 220 }}>
+                  成员（每行：学号 姓名；未注册同学注册后自动匹配）
+                  <textarea rows={4} style={{ padding: 8, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 12.5 }} placeholder={"B24040201 张三\nB24040202 李四"} value={gLines} onChange={(e) => setGLines(e.target.value)} />
+                </label>
+                <button className="col-btn primary" style={{ marginTop: 20 }} onClick={() => void saveGroup()}>保存名单</button>
+              </div>
+            </section>
+          )}
+
+          {isStaff && drawer === 'create' && (
+            <section className="col-panel" style={{ marginTop: 0 }}>
+              <div className="col-panel-h"><h3>发布新收集</h3></div>
+              <div className="col-form-row">
+                <label className="col-field">归属<select value={cKind} onChange={(e) => setCKind(e.target.value as 'course' | 'org')}><option value="course">课程</option><option value="org">社团组织</option></select></label>
+                <label className="col-field">学期<input value={cTerm} onChange={(e) => setCTerm(e.target.value)} /></label>
+                <label className="col-field">学期显示名<input value={cTermLabel} onChange={(e) => setCTermLabel(e.target.value)} /></label>
+                <label className="col-field">{cKind === 'course' ? '课程号' : '组织代号'}<input value={cCode} onChange={(e) => setCCode(e.target.value)} /></label>
+                <label className="col-field">名称<input value={cName} onChange={(e) => setCName(e.target.value)} /></label>
+                <label className="col-field">类别<input value={cCategory} onChange={(e) => setCCategory(e.target.value)} /></label>
+                <label className="col-field">首个批次<input value={cRoundLabel} onChange={(e) => setCRoundLabel(e.target.value)} /></label>
+                <label className="col-field">提交文件<input value={cFileName} onChange={(e) => setCFileName(e.target.value)} /></label>
+                <label className="col-field">允许后缀<input value={cFileExts} onChange={(e) => setCFileExts(e.target.value)} /></label>
+                <label className="col-field">截止时间<input type="datetime-local" value={cDeadline} onChange={(e) => setCDeadline(e.target.value)} /></label>
+              </div>
+              {(listData?.groups || []).length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 13 }}>
+                  <span className="col-meta">面向名单：</span>
+                  {(listData?.groups || []).map((g) => (
+                    <label key={g.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={cGroupIds.includes(g.id)} onChange={(e) => setCGroupIds((cur) => e.target.checked ? [...cur, g.id] : cur.filter((x) => x !== g.id))} />
+                      {g.name} ({g.count})
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 12 }}>
+                <button className="col-btn primary" onClick={() => void createItem()}>发布</button>
+              </div>
+            </section>
+          )}
+
+          {effectiveScope === 'mine' && openTodos.length > 0 && (
             <section className="col-todo">
               <h4>待交</h4>
               <div className="col-todo-list">
@@ -398,61 +457,8 @@ export default function CollectionsApp() {
             </section>
           )}
 
-          {effectiveView === 'manage' && (
-            <section className="col-panel" style={{ marginTop: 0 }}>
-              <div className="col-panel-h">
-                <h3>名单</h3>
-                <span className="col-meta">{(listData?.groups || []).length} 组</span>
-              </div>
-              <div className="col-chips" style={{ marginBottom: 12 }}>
-                {(listData?.groups || []).map((g) => <span key={g.id} className="col-chip">{g.name} · {g.count} 人</span>)}
-              </div>
-              <details style={{ marginBottom: 14 }}>
-                <summary style={{ cursor: 'pointer', color: 'var(--brand)', fontSize: 13, fontWeight: 500 }}>+ 导入或更新名单（同学注册后自动匹配）</summary>
-                <div className="col-form-row" style={{ marginTop: 10, alignItems: 'flex-start' }}>
-                  <label className="col-field">名称<input placeholder="例如：B240402" value={gName} onChange={(e) => setGName(e.target.value)} /></label>
-                  <label className="col-field" style={{ flex: 1, minWidth: 220 }}>
-                    成员（每行：学号 姓名）
-                    <textarea rows={4} style={{ padding: 8, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 12.5 }} placeholder={"B24040201 张三\nB24040202 李四"} value={gLines} onChange={(e) => setGLines(e.target.value)} />
-                  </label>
-                  <button className="col-btn primary" style={{ marginTop: 20 }} onClick={() => void saveGroup()}>保存名单</button>
-                </div>
-              </details>
-
-              <details>
-                <summary style={{ cursor: 'pointer', color: 'var(--brand)', fontSize: 13, fontWeight: 500 }}>+ 发布新收集</summary>
-                <div className="col-form-row" style={{ marginTop: 10 }}>
-                  <label className="col-field">归属<select value={cKind} onChange={(e) => setCKind(e.target.value as 'course' | 'org')}><option value="course">课程</option><option value="org">社团组织</option></select></label>
-                  <label className="col-field">学期<input value={cTerm} onChange={(e) => setCTerm(e.target.value)} /></label>
-                  <label className="col-field">学期显示名<input value={cTermLabel} onChange={(e) => setCTermLabel(e.target.value)} /></label>
-                  <label className="col-field">{cKind === 'course' ? '课程号' : '组织代号'}<input value={cCode} onChange={(e) => setCCode(e.target.value)} /></label>
-                  <label className="col-field">名称<input value={cName} onChange={(e) => setCName(e.target.value)} /></label>
-                  <label className="col-field">类别<input value={cCategory} onChange={(e) => setCCategory(e.target.value)} /></label>
-                  <label className="col-field">首个批次<input value={cRoundLabel} onChange={(e) => setCRoundLabel(e.target.value)} /></label>
-                  <label className="col-field">提交文件<input value={cFileName} onChange={(e) => setCFileName(e.target.value)} /></label>
-                  <label className="col-field">允许后缀<input value={cFileExts} onChange={(e) => setCFileExts(e.target.value)} /></label>
-                  <label className="col-field">截止时间<input type="datetime-local" value={cDeadline} onChange={(e) => setCDeadline(e.target.value)} /></label>
-                </div>
-                {(listData?.groups || []).length > 0 && (
-                  <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 13 }}>
-                    <span className="col-meta">面向名单：</span>
-                    {(listData?.groups || []).map((g) => (
-                      <label key={g.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={cGroupIds.includes(g.id)} onChange={(e) => setCGroupIds((cur) => e.target.checked ? [...cur, g.id] : cur.filter((x) => x !== g.id))} />
-                        {g.name} ({g.count})
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <div style={{ marginTop: 12 }}>
-                  <button className="col-btn primary" onClick={() => void createItem()}>发布</button>
-                </div>
-              </details>
-            </section>
-          )}
-
           {loading && !listData ? <p className="col-meta">正在加载…</p> : visibleItems.length === 0 ? (
-            <p className="col-meta">{effectiveView === 'mine' ? '当前没有分配给你的收集，可以切换到「全部收集」浏览。' : '还没有发布收集项目。'}</p>
+            <p className="col-meta">{effectiveScope === 'mine' ? '当前没有分配给你的收集，可以切换到「全部」浏览。' : '还没有发布收集项目。'}</p>
           ) : (
             [...byTerm.entries()].map(([termLabel, list]) => (
               <section key={termLabel}>
@@ -513,80 +519,82 @@ export default function CollectionsApp() {
               </div>
             )}
 
-            {effectiveView === 'manage' ? (
-              <section className="col-panel">
-                <div className="col-panel-h">
-                  <h3>{activeRound.label}</h3>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <section className="col-panel">
+              <div className="col-panel-h">
+                <h3>{activeRound.label}</h3>
+                <span className="col-meta">截止：{formatDateTime(activeRound.deadline)}</span>
+              </div>
+              {!viewer ? (
+                <div className="col-slot">
+                  <div className="col-slot-info">
+                    <div className="col-slot-title">{activeRound.files.map((f) => f.name).join(' / ')}</div>
+                    <div className="col-slot-req">登录后自动匹配你的学号并提交。</div>
+                  </div>
+                  <a className="col-btn primary" href={`/login/?next=${encodeURIComponent(`${location.pathname}?id=${detail.item.id}`)}`}>登录提交</a>
+                </div>
+              ) : activeRound.files.map((f) => {
+                const sub = myRow?.filesByRound[activeRound.id]?.find((s) => s.fileId === f.id) || null;
+                const st: Status = sub ? (activeRound.deadline && Date.parse(sub.submittedAt) > Date.parse(activeRound.deadline) ? 'late' : 'submitted') : 'missing';
+                return (
+                  <div key={f.id} className="col-slot">
+                    <div className="col-slot-info">
+                      <div className="col-slot-title">{f.name} <span className={`col-badge ${st}`}>{STATUS_LABEL[st]}</span></div>
+                      <div className="col-slot-req">.{f.extensions.join(' / .')} · 上限 {Math.round(f.maxBytes / 1048576)} MB</div>
+                      {sub && (
+                        <div className="col-slot-file">
+                          <button type="button" style={{ border: 0, background: 'none', padding: 0, color: 'var(--brand)', font: 'inherit', cursor: 'pointer' }} onClick={() => void downloadSingle(detail.item.id, activeRound.id, f.id)}>{sub.storedName}</button>
+                          <span className="col-meta">{formatBytes(sub.sizeBytes)} · {formatDateTime(sub.submittedAt)}{sub.revisions > 1 ? ` · 第 ${sub.revisions} 版` : ''}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      {activeRound.policy !== 'closed' ? (
+                        <button className={`col-btn ${sub ? '' : 'primary'}`} onClick={() => { pendingUpload.current = { itemId: detail.item.id, roundId: activeRound.id, fileId: f.id }; fileInput.current?.click(); }}>
+                          {sub ? '替换提交' : '上传文件'}
+                        </button>
+                      ) : <span className="col-meta">已关闭</span>}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {isStaff && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <button className="col-btn" onClick={copyMissing}>复制未交名单 ({stat.missing})</button>
                     <a className="col-btn" href={`/api/platform/collections/items/${encodeURIComponent(detail.item.id)}/rounds/${encodeURIComponent(activeRound.id)}/csv`}>导出 CSV</a>
                     <button className="col-btn primary" onClick={() => void downloadZip(detail.item.id, activeRound.id)}>打包下载 ZIP</button>
                   </div>
-                </div>
-                <div className="col-form-row">
-                  <label className="col-field">截止时间<input type="datetime-local" value={dlDraft} onChange={(e) => setDlDraft(e.target.value)} /></label>
-                  <label className="col-field">
-                    状态
-                    <select value={polDraft} onChange={(e) => setPolDraft(e.target.value as RoundPolicy)}>
-                      <option value="strict">开放提交（到点截止）</option>
-                      <option value="allow-late">开放提交（超时记为迟交）</option>
-                      <option value="closed">已关闭</option>
-                    </select>
-                  </label>
-                  <button className="col-btn primary" onClick={() => void saveRound()}>保存</button>
-                </div>
-                <details style={{ marginTop: 14 }}>
-                  <summary style={{ cursor: 'pointer', color: 'var(--brand)', fontSize: 13, fontWeight: 500 }}>+ 新建批次</summary>
-                  <div className="col-form-row" style={{ marginTop: 10 }}>
-                    <label className="col-field">名称<input placeholder={`例如：第${detail.item.rounds.length + 1}次`} value={nrLabel} onChange={(e) => setNrLabel(e.target.value)} /></label>
-                    <label className="col-field">提交文件<input value={nrFile} onChange={(e) => setNrFile(e.target.value)} /></label>
-                    <label className="col-field">允许后缀<input value={nrExts} onChange={(e) => setNrExts(e.target.value)} /></label>
-                    <label className="col-field">截止时间<input type="datetime-local" value={nrDl} onChange={(e) => setNrDl(e.target.value)} /></label>
-                    <button className="col-btn primary" onClick={() => void createRound()}>创建</button>
-                  </div>
-                </details>
-              </section>
-            ) : (
-              <section className="col-panel">
-                <div className="col-panel-h">
-                  <h3>{activeRound.label}</h3>
-                  <span className="col-meta">截止：{formatDateTime(activeRound.deadline)}</span>
-                </div>
-                {!viewer ? (
-                  <div className="col-slot">
-                    <div className="col-slot-info">
-                      <div className="col-slot-title">{activeRound.files.map((f) => f.name).join(' / ')}</div>
-                      <div className="col-slot-req">登录后自动匹配你的学号并提交。</div>
-                    </div>
-                    <a className="col-btn primary" href={`/login/?next=${encodeURIComponent(`${location.pathname}?id=${detail.item.id}`)}`}>登录提交</a>
-                  </div>
-                ) : activeRound.files.map((f) => {
-                  const sub = myRow?.filesByRound[activeRound.id]?.find((s) => s.fileId === f.id) || null;
-                  const st: Status = sub ? (activeRound.deadline && Date.parse(sub.submittedAt) > Date.parse(activeRound.deadline) ? 'late' : 'submitted') : 'missing';
-                  return (
-                    <div key={f.id} className="col-slot">
-                      <div className="col-slot-info">
-                        <div className="col-slot-title">{f.name} <span className={`col-badge ${st}`}>{STATUS_LABEL[st]}</span></div>
-                        <div className="col-slot-req">.{f.extensions.join(' / .')} · 上限 {Math.round(f.maxBytes / 1048576)} MB</div>
-                        {sub && (
-                          <div className="col-slot-file">
-                            <button type="button" style={{ border: 0, background: 'none', padding: 0, color: 'var(--brand)', font: 'inherit', cursor: 'pointer' }} onClick={() => void downloadSingle(detail.item.id, activeRound.id, f.id)}>{sub.storedName}</button>
-                            <span className="col-meta">{formatBytes(sub.sizeBytes)} · {formatDateTime(sub.submittedAt)}{sub.revisions > 1 ? ` · 第 ${sub.revisions} 版` : ''}</span>
-                          </div>
-                        )}
+                  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 12 }}>
+                    <details>
+                      <summary style={{ cursor: 'pointer', color: 'var(--muted)', fontSize: 13 }}>修改截止与状态</summary>
+                      <div className="col-form-row" style={{ marginTop: 10 }}>
+                        <label className="col-field">截止时间<input type="datetime-local" value={dlDraft} onChange={(e) => setDlDraft(e.target.value)} /></label>
+                        <label className="col-field">
+                          状态
+                          <select value={polDraft} onChange={(e) => setPolDraft(e.target.value as RoundPolicy)}>
+                            <option value="strict">开放提交（到点截止）</option>
+                            <option value="allow-late">开放提交（超时记为迟交）</option>
+                            <option value="closed">已关闭</option>
+                          </select>
+                        </label>
+                        <button className="col-btn primary" onClick={() => void saveRound()}>保存</button>
                       </div>
-                      <div>
-                        {activeRound.policy !== 'closed' ? (
-                          <button className={`col-btn ${sub ? '' : 'primary'}`} onClick={() => { pendingUpload.current = { itemId: detail.item.id, roundId: activeRound.id, fileId: f.id }; fileInput.current?.click(); }}>
-                            {sub ? '替换提交' : '上传文件'}
-                          </button>
-                        ) : <span className="col-meta">已关闭</span>}
+                    </details>
+                    <details>
+                      <summary style={{ cursor: 'pointer', color: 'var(--brand)', fontSize: 13 }}>+ 新建批次</summary>
+                      <div className="col-form-row" style={{ marginTop: 10 }}>
+                        <label className="col-field">名称<input placeholder={`例如：第${detail.item.rounds.length + 1}次`} value={nrLabel} onChange={(e) => setNrLabel(e.target.value)} /></label>
+                        <label className="col-field">提交文件<input value={nrFile} onChange={(e) => setNrFile(e.target.value)} /></label>
+                        <label className="col-field">允许后缀<input value={nrExts} onChange={(e) => setNrExts(e.target.value)} /></label>
+                        <label className="col-field">截止时间<input type="datetime-local" value={nrDl} onChange={(e) => setNrDl(e.target.value)} /></label>
+                        <button className="col-btn primary" onClick={() => void createRound()}>创建</button>
                       </div>
-                    </div>
-                  );
-                })}
-              </section>
-            )}
+                    </details>
+                  </div>
+                </div>
+              )}
+            </section>
 
             <div className="col-stats">
               <div className="col-stat"><small>提交率</small><b>{pct}%</b></div>
