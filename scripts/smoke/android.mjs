@@ -505,6 +505,7 @@ async function shareAcceptance() {
     await tap('未登录', 'open the first-level personal menu');
     await scrollFind('分享 StuDev', 'sharing is available in the first-level menu', 8, 1, .28);
     await scrollTap('帮助与关于', 'open about from the first-level menu');
+    await find('报告问题或提出建议', 'the feedback row says what can be submitted');
     if (screen().some(node => node.text === '分享 StuDev')) throw new Error('the Help page still contains the moved share action');
     capture('help-back');
     await tap('返回', 'return beside the Help page title');

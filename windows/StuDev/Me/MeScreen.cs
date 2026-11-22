@@ -151,7 +151,7 @@ public sealed partial class MeScreen : Screen
         }
         if (section == "about")
         {
-            Row("", Value("意见反馈"), () => Browse(Form("feedback", "Windows · 我")));
+            Row("", Value("意见反馈", "报告问题或提出建议"), () => Browse(Form("feedback", "Windows · 我")));
             Row("", Value("提供校园资料", "提交实验课表、讲座、校车或营业时间"), () => Browse(Form("data")));
             Row("", Value("学生发展中心", "南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
             Row("", Value("下载 StuDev", "网页、Android 和 Windows"), () => Browse($"{Repository.Site}/download/"));

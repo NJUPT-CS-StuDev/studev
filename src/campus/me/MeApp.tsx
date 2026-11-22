@@ -154,7 +154,7 @@ function MePanel({ account, onClose }: { account: CachedAccount | null; onClose:
             <button className="kv" onClick={() => setLayering(true)}><span className="v">冲突时的显示顺序</span><Chevron /></button>
             </>}
             {section === 'about' && <>
-            <a className="kv" href={formLink('feedback', { where: '网页 · 我' })}><span className="v">意见反馈</span><Chevron /></a>
+            <a className="kv" href={formLink('feedback', { where: '网页 · 我' })}><span className="v">意见反馈<small>报告问题或提出建议</small></span><Chevron /></a>
             <a className="kv" href={formLink('data')}><span className="v">提供校园资料<small>实验课表、讲座、校车、营业时间等</small></span><Chevron /></a>
             <a className="kv" href={PRODUCT_CONFIG.ANDROID_APP.DOWNLOAD_URL}><span className="v">下载 App<small>提醒和桌面小组件</small></span><Chevron /></a>
             <a className="kv" href="/about/"><span className="v">关于 StuDev</span><Chevron /></a>

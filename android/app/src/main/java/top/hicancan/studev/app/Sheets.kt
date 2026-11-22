@@ -428,7 +428,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             })
             }
             if (section == "about") {
-            KeyRow(null, "意见反馈", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
+            KeyRow(null, "意见反馈", "报告问题或提出建议", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
             KeyRow(null, "提供校园资料", "提交实验课表、讲座、校车或营业时间", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
             KeyRow(null, "学生发展中心", "南邮计软网安", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/club/"))) })
             KeyRow(null, "用户协议", "服务条款与免责声明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/terms/"))) })

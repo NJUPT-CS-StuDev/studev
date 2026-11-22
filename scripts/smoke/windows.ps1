@@ -483,6 +483,8 @@ try {
         ConversationAcceptance
         Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'open the personal page'
         Press $window '帮助与关于' 'the Help page'
+        Find $window (Is $A::NameProperty '报告问题或提出建议') $null 'the feedback row says what can be submitted' | Out-Null
+        Capture 'help-back'
         Press $window '返回' 'return beside the Help page title'
         Write-Output 'Windows conversation and sharing acceptance passed'
         return
