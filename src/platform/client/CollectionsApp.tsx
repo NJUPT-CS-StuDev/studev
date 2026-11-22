@@ -325,8 +325,28 @@ function OrgPeoplePicker({ organizations, people, selected, onChange }: OrgPeopl
   );
 }
 
+const LIST_CACHE_KEY = 'studev_collections_list_v2';
+const detailCache = new Map<string, DetailResponse>();
+
+function readListCache(): ListResponse | null {
+  try {
+    const raw = sessionStorage.getItem(LIST_CACHE_KEY) || localStorage.getItem(LIST_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as ListResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeListCache(data: ListResponse) {
+  try {
+    const raw = JSON.stringify(data);
+    sessionStorage.setItem(LIST_CACHE_KEY, raw);
+    localStorage.setItem(LIST_CACHE_KEY, raw);
+  } catch { /* ignore quota */ }
+}
+
 export default function CollectionsApp() {
-  const [listData, setListData] = useState<ListResponse | null>(null);
+  const [listData, setListData] = useState<ListResponse | null>(() => readListCache());
   const [detail, setDetail] = useState<DetailResponse | null>(null);
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [orgFilter, setOrgFilter] = useState('');
@@ -386,10 +406,11 @@ export default function CollectionsApp() {
   };
 
   const loadList = async () => {
-    setLoading(true);
+    if (!listData) setLoading(true);
     try {
       const data = await api<ListResponse>('/collections');
       setListData(data);
+      writeListCache(data);
       if (!data.viewer) setScope('all');
       if (data.issuerOptions?.length && !cIssuerKey) {
         const first = data.issuerOptions[0]!;
@@ -403,9 +424,17 @@ export default function CollectionsApp() {
   };
 
   const loadDetail = async (id: string, preferRound?: string) => {
-    setLoading(true);
+    const cached = detailCache.get(id);
+    if (cached) {
+      setDetail(cached);
+      setSelectedId(id);
+      setRoundId(preferRound || cached.item.rounds[cached.item.rounds.length - 1]?.id || null);
+    } else {
+      setLoading(true);
+    }
     try {
       const data = await api<DetailResponse>(`/collections/items/${encodeURIComponent(id)}`);
+      detailCache.set(id, data);
       setDetail(data);
       setSelectedId(id);
       const target = preferRound || data.item.rounds[data.item.rounds.length - 1]?.id || null;
@@ -753,7 +782,6 @@ export default function CollectionsApp() {
                         <div className="col-chips">
                           <span className={`col-chip ${hasOpen ? 'open' : ''}`}>{it.category} · {it.rounds.length} 批{hasOpen ? ' · 进行中' : ''}</span>
                           <span className="col-chip">{it.targetMode === 'open' ? '公开收集' : `${it.recipientCount} 人`}</span>
-                          {it.isIssuer && isStaff && <span className="col-chip">我发起的</span>}
                         </div>
                       </button>
                     );
@@ -905,9 +933,9 @@ export default function CollectionsApp() {
 
             <div className="col-stats">
               <div className="col-stat"><small>提交率</small><b>{pct}%</b></div>
-              <div className="col-stat"><small>已提交</small><b style={{ color: 'var(--col-ok)' }}>{stat.submitted}</b></div>
-              <div className="col-stat"><small>迟交</small><b style={{ color: 'var(--col-late)' }}>{stat.late}</b></div>
-              <div className="col-stat"><small>未提交</small><b style={{ color: 'var(--col-miss)' }}>{stat.missing}</b></div>
+              <div className="col-stat"><small>已提交</small><b style={{ color: stat.submitted > 0 ? 'var(--col-ok)' : 'var(--muted)' }}>{stat.submitted}</b></div>
+              <div className="col-stat"><small>迟交</small><b style={{ color: stat.late > 0 ? 'var(--col-late)' : 'var(--muted)' }}>{stat.late}</b></div>
+              <div className="col-stat"><small>未提交</small><b style={{ color: stat.missing > 0 ? 'var(--col-miss)' : 'var(--muted)' }}>{stat.missing}</b></div>
             </div>
 
             {detail.board ? (

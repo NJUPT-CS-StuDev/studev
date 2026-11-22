@@ -12,11 +12,15 @@
   --col-warn: #E3B341; --col-warn-bg: #332710;
 }
 .col-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+@media (max-width: 999.98px) {
+  .col-bar, .col-back { margin-right: var(--size-account-base); }
+}
 .col-seg { display: inline-flex; padding: 2px; border-radius: var(--radius-pill); background: var(--surface-sunken); gap: 2px; }
 .col-seg button { border: 0; background: transparent; padding: 4px 12px; border-radius: var(--radius-pill); font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; }
 .col-seg button.on { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
-.col-select { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; max-width: 240px; }
-.col-select:hover { color: var(--ink); background: var(--surface-sunken); }
+.col-select { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--paper); color: var(--ink); font: inherit; font-size: 12.5px; max-width: 240px; }
+.col-select option { background: var(--paper); color: var(--ink); }
+.col-select:hover { background: var(--surface-sunken); }
 
 .col-todo { padding: 0 0 20px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
 .col-todo h4 { margin: 0 0 10px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
