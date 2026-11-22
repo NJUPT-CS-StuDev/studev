@@ -20,14 +20,13 @@ public sealed partial class AiScreen
     private bool organizing;
     private string historyQuery = "";
     private readonly HashSet<string> selectedChats = new(StringComparer.Ordinal);
-    private (string Label, string Text)? draftSkill;
 
     private bool Bound(string? id) => projects.Find(id)?.Folder is not null;
 
     private void ReadProject()
     {
         chats.RemoveAll(chat => Bound(chat.ProjectId));
-        projectHeads.Clear(); projectFolder = null; projectStatus = null; projectMemory = null;
+        projectFolder = null; projectStatus = null; projectMemory = null;
         if (projects.Find(activeProject) is not { } project) return;
         try
         {
@@ -56,7 +55,7 @@ public sealed partial class AiScreen
             projectMemory = folder.Memory();
             projectFolder = folder;
             chats.AddRange(loaded);
-            foreach (var entry in heads) projectHeads.Add(entry.Key, entry.Value);
+            foreach (var entry in heads) projectHeads[entry.Key] = entry.Value;
         }
         catch (Exception failure) when (ProjectFolder.IsProblem(failure)) { projectStatus = ProjectMessage(failure, "项目文件夹暂时无法读取。"); }
     }
@@ -66,8 +65,6 @@ public sealed partial class AiScreen
 
     private void EnterProject(string? id)
     {
-        if (busy) return;
-        if (activeProject != id) draft = "";
         activeProject = id; showArchived = false; organizing = false; selectedChats.Clear();
         ReadProject(); Open(null);
     }
@@ -114,7 +111,10 @@ public sealed partial class AiScreen
 
     private void UpdateChat(SavedChat changed)
     {
-        if (busy || !PersistProjectChat(changed)) { Draw(); return; }
+        var current = chats.FirstOrDefault(chat => chat.Id == changed.Id && chat.ProjectId == changed.ProjectId);
+        if (current is null) return;
+        changed = current with { Title = changed.Title, Pinned = changed.Pinned, Archived = changed.Archived };
+        if (!PersistProjectChat(changed)) { Draw(); return; }
         chats = chats.Select(chat => chat.Id == changed.Id && chat.ProjectId == changed.ProjectId ? changed : chat).ToList();
         if (!Bound(changed.ProjectId)) WriteChats();
         Draw();
@@ -189,7 +189,7 @@ public sealed partial class AiScreen
         }
         else
         {
-            var back = Icon("返回全部对话", Icons.Back, () => EnterProject(null), 16, !busy);
+            var back = Icon("返回全部对话", Icons.Back, () => EnterProject(null), 16);
             row.Children.Add(back);
             var title = Kit.Text(projectFolder?.Name ?? currentProject.Name, Role.Body, bold: true);
             title.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -216,7 +216,7 @@ public sealed partial class AiScreen
         });
         Tap? more = null;
         more = Icon(currentProject is null ? "更多对话操作" : "更多项目操作",
-            Icons.More, () => menu.ShowAt(more!), 16, !busy);
+            Icons.More, () => menu.ShowAt(more!), 16);
         more.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(more, 2); row.Children.Add(more);
         heading.Children.Add(row);
@@ -251,7 +251,7 @@ public sealed partial class AiScreen
         var folder = new MenuFlyoutItem { Text = "打开项目文件夹" };
         folder.Click += (_, _) => App.Watch(OpenProjectFolder()); menu.Items.Add(folder);
         Tap? actions = null;
-        actions = Icon("项目操作", Icons.Plus, () => menu.ShowAt(actions!), 16, !busy);
+        actions = Icon("项目操作", Icons.Plus, () => menu.ShowAt(actions!), 16);
         Grid.SetColumn(actions, 1); heading.Children.Add(actions);
         list.Children.Add(heading);
         foreach (var project in projects.All.Where(project => MatchesHistory(project.Name) ||
@@ -265,7 +265,7 @@ public sealed partial class AiScreen
             body.Children.Add(Kit.Icon(Icons.Folder, 16, project.Folder is null ? "muted" : "brand", 20));
             Grid.SetColumn(label, 1); body.Children.Add(label);
             var row = new Tap(Paint.Clear, Paint.Brush("surfaceSunken"))
-            { Content = body, Height = 36, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(9), IsEnabled = !busy };
+            { Content = body, Height = 36, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(9) };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, project.Name);
             row.Click += (_, _) => EnterProject(project.Id);
             list.Children.Add(row);
@@ -276,10 +276,9 @@ public sealed partial class AiScreen
 
     private async Task OpenProjectFolder()
     {
-        if (busy) return;
         try
         {
-            if (await PickFolder("打开 StuDev 项目文件夹") is not { } path || busy) return;
+            if (await PickFolder("打开 StuDev 项目文件夹") is not { } path) return;
             var folder = ProjectFolder.Open(path);
             var known = projects.Find(folder.Id);
             if (known is not null && known.Folder is null && chats.Any(chat => chat.ProjectId == folder.Id))
@@ -293,7 +292,6 @@ public sealed partial class AiScreen
 
     private void EditProject(AiProject? project)
     {
-        if (busy) return;
         var existing = project is null ? null : projects.Find(project.Id);
         if (project is not null && existing is null) return;
         var resolved = existing is not null && existing.Id == projectFolder?.Id ? projectFolder : null;
@@ -381,7 +379,7 @@ public sealed partial class AiScreen
     {
         try
         {
-            if (await PickFolder("选择存放项目和对话的文件夹") is not { } path || busy) return;
+            if (await PickFolder("选择存放项目和对话的文件夹") is not { } path) return;
             var folder = ProjectFolder.Open(path, project);
             var localInstructions = Storage.Read(LocalInstructions(project.Id));
             if (localInstructions is not null)
@@ -421,7 +419,7 @@ public sealed partial class AiScreen
     {
         try
         {
-            if (await PickFolder("授权项目访问另一个文件夹") is not { } path || busy) return;
+            if (await PickFolder("授权项目访问另一个文件夹") is not { } path) return;
             var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
             var updated = project with { Attachments = [.. project.Attachments.Where(item => !item.Equals(folder, StringComparison.OrdinalIgnoreCase)), folder] };
             projects.Put(updated); EditProject(updated);
@@ -460,7 +458,7 @@ public sealed partial class AiScreen
 
     private void PickSkill()
     {
-        if (busy || projects.Find(activeProject) is not { } project) return;
+        if (projects.Find(activeProject) is not { } project) return;
         var body = Kit.Column(6, Pages.SheetHead(Pages.SheetTitle("选择项目技能"), () => App.Window?.Close()));
         body.Padding = new Thickness(22, 20, 22, 18);
         void Add(string label, Func<string?> read)
@@ -491,8 +489,8 @@ public sealed partial class AiScreen
 
     private void MoveChats(List<string> ids)
     {
-        if (busy || Bound(activeProject)) return;
-        var sources = chats.Where(chat => ids.Contains(chat.Id) && chat.ProjectId == activeProject).ToList();
+        if (Bound(activeProject)) return;
+        var sources = chats.Where(chat => ids.Contains(chat.Id) && chat.ProjectId == activeProject && !Running(chat.Id)).ToList();
         if (sources.Count == 0) return;
         var body = Kit.Column(8, Pages.SheetHead(Pages.SheetTitle("移动到项目"), () => App.Window?.Close()));
         body.Padding = new Thickness(22, 20, 22, 18);

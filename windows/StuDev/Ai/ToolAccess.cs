@@ -52,8 +52,6 @@ internal sealed class ToolAccess
     public IEnumerable<BrowserCapability> BrowserAvailable => catalogue.Where(tool => allowedBrowser.Contains(tool.Name));
     public bool CampusAllowed(string name) => !disabledCampus.Contains(name);
     public bool BrowserAllowed(string name) => allowedBrowser.Contains(name);
-    public bool AskForBrowser => mode == "review";
-    public bool AskForMemory(bool explicitlyEnabled) => mode != "approved" || !explicitlyEnabled;
 
     public void SetMode(string value)
     {

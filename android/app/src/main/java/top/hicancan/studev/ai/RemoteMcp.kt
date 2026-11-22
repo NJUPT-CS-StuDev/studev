@@ -271,13 +271,14 @@ internal object RemoteMcp {
 
     fun history(messages: List<JsonObject>, active: Set<String>): List<JsonObject> {
         val dropped = mutableSetOf<JsonElement>()
+        val completed = messages.filter { it["role"] == JsonPrimitive("tool") }.mapNotNull { it["tool_call_id"] }.toSet()
         return messages.mapNotNull { message ->
             if (message["role"] == JsonPrimitive("tool") && message["tool_call_id"] in dropped) return@mapNotNull null
             val calls = message["tool_calls"] as? JsonArray ?: return@mapNotNull message
             val kept = calls.filter { value ->
                 val call = value.jsonObject
                 val name = call["function"]?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull.orEmpty()
-                val allowed = !name.startsWith("mcp_") || name in active
+                val allowed = call["id"] in completed && (!name.startsWith("mcp_") || name in active)
                 if (!allowed) call["id"]?.let(dropped::add)
                 allowed
             }

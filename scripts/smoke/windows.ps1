@@ -1,7 +1,7 @@
 # The Windows app as it ships, opened and used before it is released, in a home of its own so no one's records are
 # touched: a class chosen, the four boards, a search, and a desktop widget opened on one of its lessons. After every
 # step the app must still be running and must not have written a crash log. Usage: pwsh windows.ps1 -Exe <StuDev.exe>
-param([Parameter(Mandatory)] [string]$Exe, [switch]$KeepData, [switch]$Online, [switch]$RoutesOnly, [switch]$Conversations)
+param([Parameter(Mandatory)] [string]$Exe, [switch]$KeepData, [switch]$Online, [switch]$RoutesOnly, [switch]$Conversations, [switch]$ParallelReplies)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows-isolation.ps1')
 $tempBase = 'D:\Temp\codex\studev-windows-smoke'
@@ -9,7 +9,7 @@ if (![SmokeDesktop]::IsIsolated()) {
     if ($env:STUDEV_SMOKE_DESKTOP) { throw 'The app can only be tested on an isolated, non-input desktop.' }
     New-Item -ItemType Directory -Path $tempBase -Force | Out-Null
     $options = @{ Exe = (Resolve-Path -LiteralPath $Exe).Path }
-    foreach ($name in 'KeepData', 'Online', 'RoutesOnly', 'Conversations') {
+    foreach ($name in 'KeepData', 'Online', 'RoutesOnly', 'Conversations', 'ParallelReplies') {
         if ($PSBoundParameters[$name]) { $options[$name] = $true }
     }
     Invoke-OnSmokeDesktop $PSCommandPath $options $tempBase
@@ -100,6 +100,23 @@ for ($traceIndex = 0; $traceIndex -lt $traceMessages.Count; $traceIndex++) {
 $traceCalls = @($traceMessages | ForEach-Object { if ($_.ContainsKey('tool_calls')) { $_.tool_calls } })
 $traceRead = $traceCalls | Where-Object { $_.function.name -eq 'read' } | Select-Object -First 1
 if (-not $traceRead -or $traceMessages[-1].role -ne 'assistant') { throw 'the real AI conversation fixture is incomplete' }
+$fixture = $null
+if ($ParallelReplies) {
+    $fixtureStart = [Diagnostics.ProcessStartInfo]::new((Get-Command node).Source)
+    $fixtureStart.CreateNoWindow = $true
+    $fixtureStart.ArgumentList.Add((Join-Path $PSScriptRoot 'replies.mjs'))
+    $fixtureStart.ArgumentList.Add($home_)
+    $fixture = [Diagnostics.Process]::Start($fixtureStart)
+    for ($tryPort = 0; $tryPort -lt 60 -and !(Test-Path (Join-Path $home_ 'port')); $tryPort++) { Start-Sleep -Milliseconds 100 }
+    if ($fixture.HasExited -or !(Test-Path (Join-Path $home_ 'port'))) { throw 'The local reply stream did not start' }
+    $port = [int](Get-Content -LiteralPath (Join-Path $home_ 'port') -Raw)
+    $runtime = @{ id = 'runtime'; name = '并发验收'; address = "http://127.0.0.1:$port/v1"; key = 'test-only'; enabled = $true; models = @(@{id='fixture'; enabled=$true}) }
+    $catalog = @{ providers = @($runtime); runtimeEnabled = $true } | ConvertTo-Json -Depth 8 -Compress
+    Add-Type -AssemblyName System.Security.Cryptography.ProtectedData
+    New-Item -ItemType Directory -Path (Join-Path $home_ 'ai') -Force | Out-Null
+    $protected = [Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($catalog), [Text.Encoding]::UTF8.GetBytes('studev-windows-v1'), [Security.Cryptography.DataProtectionScope]::CurrentUser)
+    [IO.File]::WriteAllBytes((Join-Path $home_ 'ai/providers.bin'), $protected)
+}
 if ($RoutesOnly) {
     # Ordinary public links exercise the same native entry used by actual AI route cards.
     $links = @(
@@ -114,6 +131,17 @@ if ($RoutesOnly) {
     $traceChosen = @{ ''='route-links-question'; 'route-links-question'='route-links' }
 }
 $traceSeed = @{ current = 'ai-replay'; chats = @(@{ id = 'ai-replay'; title = ''; updated = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); proposals = @(); thread = @{ nodes = $traceNodes; chosen = $traceChosen } }) }
+if ($ParallelReplies) {
+    $traceSeed.current = 'parallel-a'
+    $traceSeed.chats = @(
+        foreach ($letter in 'a','b') {
+            $node = "intro-$letter"
+            @{ id = "parallel-$letter"; title = "并发会话 $letter"; updated = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+                modelChoice = @{ providerId = 'runtime'; modelId = 'fixture' }; proposals = @()
+                thread = @{ nodes = @(@{ id = $node; parent = ''; message = @{ role='user'; content="第 $letter 个会话" } }); chosen = @{ '' = $node } } }
+        }
+    )
+}
 New-Item -ItemType Directory -Path (Join-Path $home_ 'ai') -Force | Out-Null
 $traceSeed | ConvertTo-Json -Depth 50 -Compress | Set-Content -LiteralPath (Join-Path $home_ 'ai/chats.json') -Encoding utf8NoBOM
 # Before publication, exercise the exact compiled release through the normal offline cache.
@@ -473,11 +501,51 @@ function ConversationAcceptance() {
     }
 }
 
+function ParallelAcceptance() {
+    function Seen([string]$id) {
+        $seenFile = Join-Path $home_ "$id.started"
+        for ($poll = 0; $poll -lt 75 -and !(Test-Path -LiteralPath $seenFile); $poll++) { Start-Sleep -Milliseconds 100 }
+        if (!(Test-Path -LiteralPath $seenFile)) { throw "Conversation $id never sent its request" }
+    }
+    Press $window 'AI' 'open the conversation board'
+    Fill $window { param($e) $e.Current.Name -eq '问点什么' } '这周有哪些考试' 'ask in the first conversation'
+    Press $window '发送' 'start the first held response'
+    Seen 'a'
+    Find $window $Pressable { param($e) $e.Current.Name -like '工具权限*' -and $e.Current.IsEnabled } 'tool settings remain available' | Out-Null
+    Find $window $Pressable { param($e) $e.Current.Name -like '选择模型*' -and $e.Current.IsEnabled } 'the model picker remains available' | Out-Null
+    Press $window '新对话' 'open a new conversation while the first runs'
+    Press $window '并发会话 b' 'open a second conversation while the first runs'
+    Fill $window { param($e) $e.Current.Name -eq '问点什么' } '今天哪里有空教室' 'ask in the second conversation'
+    Press $window '发送' 'start the second held response without releasing the first'
+    Seen 'b'
+    Press $window { param($e) $e.Current.AutomationId -eq 'search' } 'navigate away during both replies'
+    Press $window 'AI' 'return to ongoing replies'
+    Press $window '并发会话 a' 'reopen the first reply'
+    Press $window '停止' 'stop only the first reply'
+    Find $window (Is $A::NameProperty '发送') $null 'the first request stopped' | Out-Null
+    Press $window '并发会话 b' 'reopen the independent second reply'
+    Find $window (Is $A::NameProperty '停止') $null 'the second request is still writing' | Out-Null
+    Set-Content -LiteralPath (Join-Path $home_ 'b.finish') -Value ''
+    Find $window (Is $A::NameProperty '发送') $null 'the second reply completed' | Out-Null
+    $record = Get-Content -LiteralPath (Join-Path $home_ 'ai/chats.json') -Raw | ConvertFrom-Json -AsHashtable
+    $answersA = @(($record.chats | Where-Object id -ceq 'parallel-a').thread.nodes.message | Where-Object role -ceq 'assistant' | ForEach-Object content)
+    $answersB = @(($record.chats | Where-Object id -ceq 'parallel-b').thread.nodes.message | Where-Object role -ceq 'assistant' | ForEach-Object content)
+    if ($answersA.Count -ne 1 -or $answersB.Count -ne 1 -or $answersA[0] -cne '考试的部分回答' -or $answersB[0] -cne '空教室的完整回答') {
+        throw "Replies were not saved to their own conversations: $answersA / $answersB"
+    }
+    Write-Output 'Windows independent streamed replies passed'
+}
+
 try {
     for ($i = 0; -not ($window = Main) -and $i -lt 120; $i++) { Start-Sleep -Milliseconds 250 }
     if (-not $window) { throw 'the main window never appeared' }
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 600, 880)
     Alive 'open the app'
+    if ($ParallelReplies) {
+        [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
+        ParallelAcceptance
+        return
+    }
     if ($Conversations) {
         [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
         ConversationAcceptance
@@ -635,6 +703,7 @@ try {
     throw
 } finally {
     if (-not $app.HasExited) { $app.Kill(); $app.WaitForExit(5000) | Out-Null }
+    if ($fixture -and !$fixture.HasExited) { $fixture.Kill(); $fixture.WaitForExit(5000) | Out-Null }
     $resolvedHome = (Resolve-Path -LiteralPath $home_).Path
     if (-not $resolvedHome.StartsWith($tempBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unexpected smoke directory: $resolvedHome" }
     if ($KeepData) { Write-Output "Smoke data retained at $resolvedHome" }

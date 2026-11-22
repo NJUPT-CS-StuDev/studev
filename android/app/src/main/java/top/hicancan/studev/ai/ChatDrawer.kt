@@ -30,7 +30,7 @@ internal data class CourseProject(val code: String, val name: String)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ChatDrawer(
-    chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, busy: Boolean,
+    chats: List<SavedChat>, projects: List<ChatProject>, suggestions: List<CourseProject>, activeChat: String?, activeProject: String?, running: Set<String>,
     openChat: (String) -> Unit, newChat: (String?) -> Unit, openProject: (String) -> Unit,
     saveProject: (ChatProject?, String, String?) -> ChatProject, editInstructions: (ChatProject) -> Unit,
     rename: (SavedChat) -> Unit, updateChat: (SavedChat) -> Unit, remove: (SavedChat) -> Unit, move: (Set<String>) -> Unit, mind: () -> Unit,
@@ -78,18 +78,19 @@ internal data class CourseProject(val code: String, val name: String)
         val on = chat.id == activeChat
         val toggle = { if (selection != null) marked = if (chat.id in selection) selection - chat.id else selection + chat.id }
         Row(Modifier.fillMaxWidth().padding(start = if (indent) 18.dp else 0.dp).clip(RoundedCornerShape(10.dp)).background(if (on) Ink.sunken else Color.Transparent)
-            .clickable(enabled = !busy) { if (selection == null) openChat(chat.id) else toggle() }.padding(start = 8.dp),
+            .clickable(enabled = selection == null || chat.id !in running) { if (selection == null) openChat(chat.id) else toggle() }.padding(start = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            if (selection != null) Checkbox(chat.id in selection, { toggle() }, enabled = !busy)
+            if (selection != null) Checkbox(chat.id in selection, { toggle() }, enabled = chat.id !in running)
             Plain(Chats.titleOf(chat.title, chat.thread), 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
+            if (chat.id in running) Plain("回答中", 11.sp, Ink.brand, modifier = Modifier.padding(start = 5.dp))
             if (selection == null) Box {
-                IconButton({ more = true }, Modifier.size(38.dp), enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "更多", Modifier.size(18.dp), tint = Ink.muted) }
+                IconButton({ more = true }, Modifier.size(38.dp)) { Icon(Icons.Outlined.MoreHoriz, "更多", Modifier.size(18.dp), tint = Ink.muted) }
                 DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
                     DropdownMenuItem({ Text("重命名") }, { more = false; rename(chat) })
                     DropdownMenuItem({ Text(if (chat.pinned) "取消置顶" else "置顶") }, { more = false; updateChat(chat.copy(pinned = !chat.pinned)) })
                     DropdownMenuItem({ Text(if (chat.archived) "取消归档" else "归档") }, { more = false; updateChat(chat.copy(archived = !chat.archived)) })
-                    DropdownMenuItem({ Text(if (chat.projectId == null) "移至项目" else "移至其他项目或移出") }, { more = false; move(setOf(chat.id)) })
-                    DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; remove(chat) })
+                    DropdownMenuItem({ Text(if (chat.projectId == null) "移至项目" else "移至其他项目或移出") }, { more = false; move(setOf(chat.id)) }, enabled = chat.id !in running)
+                    DropdownMenuItem({ Text("删除", color = marks().danger) }, { more = false; remove(chat) }, enabled = chat.id !in running)
                 }
             }
         }
@@ -98,12 +99,12 @@ internal data class CourseProject(val code: String, val name: String)
     Column(Modifier.fillMaxHeight().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             if (marked == null) {
-                TextButton(onClick = { newChat(null) }, enabled = !busy) {
+                TextButton(onClick = { newChat(null) }) {
                     Icon(Icons.Outlined.EditNote, null, Modifier.size(19.dp), tint = Ink.brand)
                     Spacer(Modifier.width(5.dp)); Plain("新对话", 14.sp, Ink.brand, FontWeight.SemiBold)
                 }
                 Box {
-                    IconButton(onClick = { historyMenu = true }, enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "更多对话操作", tint = Ink.muted) }
+                    IconButton(onClick = { historyMenu = true }) { Icon(Icons.Outlined.MoreHoriz, "更多对话操作", tint = Ink.muted) }
                     DropdownMenu(historyMenu, { historyMenu = false }, containerColor = Ink.paper) {
                         DropdownMenuItem({ Text(if (archived) "返回最近对话" else "查看归档") }, { historyMenu = false; archived = !archived })
                         if (!archived && matches.isNotEmpty()) DropdownMenuItem({ Text("多选对话") }, { historyMenu = false; marked = emptySet() })
@@ -112,7 +113,7 @@ internal data class CourseProject(val code: String, val name: String)
             } else {
                 TextAction("取消", { marked = null })
                 val selected = marked.orEmpty()
-                TextAction("移动（${selected.size}）", { move(selected); marked = null }, enabled = selected.isNotEmpty() && !busy)
+                TextAction("移动（${selected.size}）", { move(selected); marked = null }, enabled = selected.any { it !in running })
             }
         }
         OutlinedTextField(historyQuery, { historyQuery = it }, Modifier.fillMaxWidth().padding(bottom = 7.dp),
@@ -125,7 +126,7 @@ internal data class CourseProject(val code: String, val name: String)
                         Plain("项目", 12.sp, Ink.faint)
                         Icon(if (projectsShown) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.ChevronRight, null, Modifier.size(14.dp), tint = Ink.faint)
                     }
-                    TextAction("新建", { renaming = null; naming = true }, enabled = !busy, muted = true)
+                    TextAction("新建", { renaming = null; naming = true }, muted = true)
                 }
             }
             if (projectsShown && !archived) for (project in visibleProjects) {
@@ -134,12 +135,12 @@ internal data class CourseProject(val code: String, val name: String)
                 item(key = "project:${project.id}") {
                     var more by remember { mutableStateOf(false) }
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (project.id == activeProject) Ink.sunken else Color.Transparent)
-                        .clickable(enabled = !busy) { open = if (expanded) open - project.id else open + project.id }.padding(start = 8.dp),
+                        .clickable { open = if (expanded) open - project.id else open + project.id }.padding(start = 8.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (expanded) Icons.Outlined.FolderOpen else Icons.Outlined.Folder, null, Modifier.size(18.dp), tint = Ink.muted)
                         Plain(project.name, 14.5.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 10.dp))
                         Box {
-                            IconButton({ more = true }, Modifier.size(38.dp), enabled = !busy) { Icon(Icons.Outlined.MoreHoriz, "项目选项", Modifier.size(18.dp), tint = Ink.muted) }
+                            IconButton({ more = true }, Modifier.size(38.dp)) { Icon(Icons.Outlined.MoreHoriz, "项目选项", Modifier.size(18.dp), tint = Ink.muted) }
                             DropdownMenu(more, { more = false }, containerColor = Ink.paper) {
                                 DropdownMenuItem({ Text("在此项目中新建对话") }, { more = false; newChat(project.id) })
                                 DropdownMenuItem({ Text("重命名") }, { more = false; renaming = project; naming = true })

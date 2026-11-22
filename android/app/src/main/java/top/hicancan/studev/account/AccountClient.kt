@@ -1,8 +1,13 @@
 package top.hicancan.studev.account
 
 import top.hicancan.studev.BuildConfig
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -47,6 +52,7 @@ class HttpsPlatformStreamer : PlatformStreamer {
     override suspend fun stream(path: String, body: JsonObject, bearer: String, onEvent: (String, JsonObject) -> Unit): PlatformReply? = withContext(Dispatchers.IO) {
         require(path.startsWith('/') && !path.startsWith("//") && !path.contains('\\'))
         val connection = URI(BuildConfig.PLATFORM_HOST + "/api/platform" + path).toURL().openConnection() as HttpURLConnection
+        val cancelled = launch(start = CoroutineStart.UNDISPATCHED) { try { awaitCancellation() } finally { connection.disconnect() } }
         try {
             connection.connectTimeout = 15_000; connection.readTimeout = 90_000
             connection.instanceFollowRedirects = false; connection.requestMethod = "POST"; connection.doOutput = true
@@ -61,6 +67,7 @@ class HttpsPlatformStreamer : PlatformStreamer {
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                 var event: String? = null
                 while (true) {
+                    currentCoroutineContext().ensureActive()
                     val line = reader.readLine() ?: break
                     when {
                         line.startsWith("event: ") -> event = line.removePrefix("event: ")
@@ -70,7 +77,7 @@ class HttpsPlatformStreamer : PlatformStreamer {
                 }
             }
             null
-        } finally { connection.disconnect() }
+        } finally { cancelled.cancel(); connection.disconnect() }
     }
 }
 

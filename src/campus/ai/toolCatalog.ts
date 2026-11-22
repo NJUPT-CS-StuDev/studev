@@ -114,15 +114,16 @@ export function reachOf(runtime: LocalRuntimeSnapshot, preferences: ToolPreferen
         remote: [...new Set(remote.map(tool => tool.connection.name))].slice(0, 24) };
 }
 
-/** Strip earlier calls and their results together when this model will not have the corresponding capability. */
+/** Strip unfinished calls and pairs this model cannot use. */
 export function toolHistory(messages: Message[], available: ReadonlySet<string>, hosted: boolean): Message[] {
     const removed = new Set<string>();
+    const completed = new Set(messages.filter(message => message.role === 'tool').map(message => message.tool_call_id));
     return messages.flatMap(message => {
         if (message.role === 'tool' && message.tool_call_id && removed.has(message.tool_call_id)) return [];
         if (!message.tool_calls) return [message];
         const tool_calls = message.tool_calls.filter(call => {
             const name = call.function.name;
-            if (!(name.startsWith('mcp_') || name.startsWith('web_')) || available.has(name) && !(hosted && name.startsWith('web_'))) return true;
+            if (completed.has(call.id) && (!(name.startsWith('mcp_') || name.startsWith('web_')) || available.has(name) && !(hosted && name.startsWith('web_')))) return true;
             removed.add(call.id);
             return false;
         });

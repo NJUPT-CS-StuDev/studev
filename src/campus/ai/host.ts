@@ -11,6 +11,7 @@ async function show() {
     if (!host) return;
     const open = here();
     host.hidden = !open;
+    document.documentElement.toggleAttribute('data-ai-busy', host.hasAttribute('data-ai-busy'));
     document.documentElement.toggleAttribute('data-ai-open', open);
     if (open) document.documentElement.removeAttribute('data-ai-done');
     if (open && !root) {
@@ -22,4 +23,4 @@ async function show() {
 document.addEventListener('astro:page-load', () => void show());
 void show();
 // A whole-page load would end the answer: ask first.
-window.addEventListener('beforeunload', event => { if (document.documentElement.hasAttribute('data-ai-busy')) event.preventDefault(); });
+window.addEventListener('beforeunload', event => { if (document.getElementById('ai-host')?.hasAttribute('data-ai-busy')) event.preventDefault(); });

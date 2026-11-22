@@ -80,3 +80,75 @@ export async function inspectAiTrace(page, { root, output, name }) {
     assert(following && remaining > 64, 'return to the answer text leaves the open resource list below the viewport');
     return `five navigation icons, an editable campus suggestion, searchable history and ${calls.length} recorded calls`;
 }
+
+export async function inspectParallelReplies(browser, origin) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+    const endpoint = 'https://conversation-review.test';
+    const a = '这周有哪些考试', b = '今天哪里有空教室';
+    const calls = new Map();
+    const gates = new Map([a, b].map(question => [question, Promise.withResolvers()]));
+    await context.addInitScript(base => localStorage.setItem('studev_ai_model', JSON.stringify({
+        providers: [{ id: 'review', kind: 'api', name: '验收模型', base, key: 'test-only', enabled: true,
+            models: ['fixture-a', 'fixture-b'].map(id => ({ id, name: id, enabled: true })) }],
+        selection: { provider: 'review', model: 'fixture-a' },
+    })), endpoint);
+    await context.route(`${endpoint}/**`, async route => {
+        const request = route.request().postDataJSON();
+        const question = request.messages.findLast(message => message.role === 'user').content;
+        assert(gates.has(question), 'only the two expected messages were sent');
+        calls.set(question, request);
+        const answer = await gates.get(question).promise;
+        if (answer === null) { await route.abort().catch(() => {}); return; }
+        await route.fulfill({ contentType: 'text/event-stream',
+            body: `data: ${JSON.stringify({ choices: [{ delta: { content: answer }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n` });
+    });
+    try {
+        const page = await context.newPage();
+        await page.goto(new URL('/ai/', origin).href, { waitUntil: 'networkidle' });
+        const composer = page.getByRole('textbox', { name: '问点什么', exact: true });
+        const send = page.getByRole('button', { name: '发送', exact: true });
+        const stop = page.getByRole('button', { name: '停止', exact: true });
+        const open = text => page.locator('.ai-chat-t').filter({ hasText: text }).click();
+        await composer.fill(a);
+        await send.click();
+        await stop.waitFor();
+        await page.getByRole('button', { name: '选择模型', exact: true }).click();
+        await page.getByRole('option', { name: 'fixture-b', exact: true }).click();
+        await page.getByRole('button', { name: /工具权限，/ }).click();
+        await page.getByRole('button', { name: '管理工具', exact: true }).waitFor();
+        await page.getByRole('button', { name: /工具权限，/ }).click();
+        await page.locator('.ai-side-new').click();
+        await composer.fill(b);
+        await send.click();
+        await stop.waitFor();
+        for (let n = 0; calls.size < 2 && n < 100; n++) await new Promise(resolve => setTimeout(resolve, 100));
+        assert.equal(calls.size, 2, 'both streams begin while the other is held');
+        assert.equal(calls.get(a).model, 'fixture-a');
+        assert.equal(calls.get(b).model, 'fixture-b');
+        assert(calls.get(a).messages.every(message => message.content !== b));
+        assert(calls.get(b).messages.every(message => message.content !== a));
+        await page.locator('.site-nav').getByRole('link', { name: '搜索', exact: true }).click();
+        await page.waitForURL('**/search/');
+        await page.locator('.site-nav').getByRole('link', { name: 'AI', exact: true }).click();
+        await page.waitForURL('**/ai/');
+        await open(a);
+        await stop.click();
+        await send.waitFor();
+        gates.get(a).resolve(null);
+        await open(b);
+        await stop.waitFor();
+        gates.get(b).resolve('空教室的完整回答');
+        await page.getByText('空教室的完整回答', { exact: true }).waitFor();
+        await open(a);
+        assert.equal(await page.getByText('空教室的完整回答', { exact: true }).count(), 0);
+        await page.waitForFunction(({ a, b }) => {
+            const kept = JSON.parse(localStorage.getItem('studev_ai_chats'));
+            const chat = question => kept?.chats.find(item => item.thread.nodes.some(node => node.message.content === question));
+            return chat(a)?.thread.nodes.every(node => node.message.role !== 'assistant') &&
+                chat(b)?.thread.nodes.some(node => node.message.content === '空教室的完整回答');
+        }, { a, b });
+    } finally {
+        for (const gate of gates.values()) gate.resolve(null);
+        await context.close();
+    }
+}

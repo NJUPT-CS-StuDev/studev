@@ -49,6 +49,15 @@ interface Chat { id: string; thread: Thread; proposals: Proposal[]; forks: strin
 /** Every conversation kept, and the one open (none: a new one, kept once something is asked in it). */
 interface Kept { chats: Saved<Proposal>[]; current: string | null }
 interface ProjectView { id: string; chat?: string; revision?: string }
+type Approval = { label: string; detail: string; finish: (allow: boolean) => void };
+type Waiting = { text: string; preferred?: string[] };
+type Failure = { request: RuntimeRequest; firstId?: string; model: ModelSelection };
+type Reply = {
+    controller: AbortController; from: string; fresh: Set<string>;
+    chat: Chat; said: string; live: Update | null; stage: string;
+    approval?: Approval; project?: string; bound: boolean; tip: string;
+};
+type Conversation = { draft: string; error: string; reply?: Reply; failure?: Failure; waiting?: Waiting };
 function rememberedProject(): ProjectView | undefined {
     try {
         const view = JSON.parse(localStorage.getItem(OPEN_PROJECT) ?? 'null');
@@ -62,6 +71,7 @@ function rememberProject(id: string | undefined, chat?: string, revision?: strin
     } catch { /* Directory access stays available during this page visit. */ }
 }
 const newId = () => crypto.randomUUID();
+const sameModel = (a: ModelSelection | undefined, b: ModelSelection) => a?.provider === b.provider && a.model === b.model;
 const empty = (): Chat => ({ id: newId(), thread: emptyThread(), proposals: [], forks: [], runtimeModels: [] });
 const opened = (saved: Saved<Proposal>): Chat => ({ id: saved.id, thread: saved.thread, proposals: saved.proposals, forks: saved.forks ?? [], runtimeModels: saved.runtimeModels ?? [], model: saved.model, resetRuntime: saved.resetRuntime });
 function readKept(): Kept {
@@ -200,7 +210,7 @@ function Composer({ input, value, onChange, onSend, onStop, busy, canSend, unava
     const slash = typed ? caret - typed[1]!.length - 1 : -1;
     const query = typed?.[1];
     const matching = tools.filter(tool => !query || `${tool.label} ${tool.group}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-    const showing = !busy && query !== undefined && slash !== dismissed && matching.length > 0, at = Math.min(active, matching.length - 1);
+    const showing = query !== undefined && slash !== dismissed && matching.length > 0, at = Math.min(active, matching.length - 1);
     const question = value.trim();
     useEffect(() => { if (showing) menu.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' }); }, [showing, at]);
     function select(tool: ToolItem) {
@@ -229,7 +239,7 @@ function Composer({ input, value, onChange, onSend, onStop, busy, canSend, unava
                 if (showing && event.key === 'Escape') { event.preventDefault(); setDismissed(slash); }
                 else if (showing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
                     event.preventDefault(); setActive((at + (event.key === 'ArrowDown' ? 1 : matching.length - 1)) % matching.length);
-                } else if ((event.key === 'Enter' && !event.shiftKey) || (showing && event.key === 'Tab')) { event.preventDefault(); submit(); }
+                } else if ((event.key === 'Enter' && !event.shiftKey && (!busy || showing)) || (showing && event.key === 'Tab')) { event.preventDefault(); submit(); }
             }} />
         </div>
         <div className="ai-tool-control">
@@ -423,7 +433,6 @@ export default function AiApp() {
     const runtimeStatusRef = useRef(runtimeStatus); runtimeStatusRef.current = runtimeStatus;
     const [remoteTools, setRemoteTools] = useState<RemoteTool[]>([]);
     const [utility, setUtility] = useState<'tools' | 'models'>();
-    const [approval, setApproval] = useState<{ label: string; detail: string; finish: (allow: boolean) => void } | null>(null);
     const canUseBrowser = Boolean(own || runtime);
     useEffect(() => {
         const refresh = () => setTools(readToolPreferences());
@@ -459,47 +468,56 @@ export default function AiApp() {
     }, []);
     // Opening a conversation shows it as it was; only what is said in it moves it to the top of the list.
     const opening = useRef(true);
-    const [draft, setDraft] = useState(''), [streaming, setStreaming] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
-    // Said on the page root, which outlives the app pages' swaps: the header marks the AI tab while it writes, and once
-    // it finished while one was elsewhere.
+    const conversations = useRef(new Map<string, Conversation>());
+    const [, redraw] = useState(0);
+    function viewOf(id: string) {
+        let view = conversations.current.get(id);
+        if (!view) { view = { draft: '', error: '' }; conversations.current.set(id, view); }
+        return view;
+    }
+    const view = viewOf(chat.id), reply = view.reply;
+    const busy = Boolean(reply), draft = view.draft, error = view.error;
+    function setDraft(next: string | ((draft: string) => string)) {
+        view.draft = typeof next === 'function' ? next(view.draft) : next;
+        redraw(value => value + 1);
+    }
+    function setError(next: string) { view.error = next; redraw(value => value + 1); }
+    const running = [...conversations.current.values()].some(item => item.reply);
     const wasBusy = useRef(false);
     useEffect(() => {
         const root = document.documentElement;
-        root.toggleAttribute('data-ai-busy', busy);
-        if (wasBusy.current && !busy && !root.hasAttribute('data-ai-open')) root.setAttribute('data-ai-done', '');
-        wasBusy.current = busy;
-    }, [busy]);
-    const [modelStage, setModelStage] = useState('');
-    const [waiting, setWaiting] = useState<{ text: string; preferred?: string[] } | null>(null), [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
-    // While answering after a message, only what this answer says shows after it, not the answer it had before.
-    const [from, setFrom] = useState<string | null>(null);
-    const fresh = useRef(new Set<string>());
-    // The document kernel, loaded once; nothing is shown as raw text while it loads, and an answer waits for it.
+        document.getElementById('ai-host')?.toggleAttribute('data-ai-busy', running);
+        root.toggleAttribute('data-ai-busy', running);
+        if (wasBusy.current && !running && !root.hasAttribute('data-ai-open')) root.setAttribute('data-ai-done', '');
+        wasBusy.current = running;
+    }, [running]);
+    useEffect(() => {
+        if (!modelSettings.runtimeEnabled)
+            for (const item of conversations.current.values())
+                if (item.reply?.chat.model?.provider === RUNTIME_PROVIDER) item.reply.controller.abort();
+    }, [modelSettings.runtimeEnabled]);
+    const waiting = view.waiting;
+    const [editing, setEditing] = useState<string | null>(null), [below, setBelow] = useState(false);
     const [drawn, setDrawn] = useState(false);
-    const [live, setLive] = useState<Update | null>(null);
-    // The answer being written, so a page closed mid-sentence keeps what was said: written straight to storage as the
-    // page goes, since nothing asynchronous runs then.
-    const writing = useRef<{ chat: string; thread: Thread; tip: string; said: string } | null>(null);
+    // Flush partial replies for every open request when the document goes away.
     useEffect(() => {
         const keep = () => {
-            const now = writing.current;
-            if (!now?.said.trim()) return;
             try {
-                const all = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { chats?: Saved<Proposal>[]; current?: string | null };
-                const chats = all.chats?.map(item => item.id === now.chat
-                    ? { ...item, thread: append(now.thread, now.tip, newId(), { role: 'assistant', content: `${now.said}\n\n（回答没有写完，页面就关了。）` }), updated: Date.now() } : item);
-                if (chats) localStorage.setItem(KEY, JSON.stringify({ ...all, chats }));
-            } catch { /* Storage unavailable: nothing more can be kept. */ }
+                const all = readKept();
+                const chats = all.chats.map(item => {
+                    const now = conversations.current.get(item.id)?.reply;
+                    if (!now || now.bound || !now.said.trim()) return item;
+                    const thread = append(now.chat.thread, now.tip, newId(), { role: 'assistant', content: now.said });
+                    return { ...item, thread, updated: Date.now() };
+                });
+                localStorage.setItem(KEY, JSON.stringify({ ...all, chats }));
+            } catch { /* Storage unavailable. */ }
         };
         window.addEventListener('pagehide', keep);
         return () => window.removeEventListener('pagehide', keep);
     }, []);
     useEffect(() => { void docReady().then(() => setDrawn(true)); }, []);
-    const stop = useRef<AbortController | null>(null);
-    useEffect(() => { if (runtimeOff) stop.current?.abort(); }, [runtimeOff]);
-    // Only the failed request is kept in memory, so an explicit retry keeps its accepted dialogue and completed tools.
-    const failedRuntime = useRef<{ request: RuntimeRequest; firstId?: string } | null>(null);
-    useEffect(() => { failedRuntime.current = null; }, [choice.provider, choice.model]);
+    const recorded = useRef(new WeakSet<Chat>());
     const end = useRef<HTMLDivElement>(null), scroller = useRef<HTMLDivElement>(null), stuck = useRef(true);
     const composeInput = useRef<HTMLTextAreaElement>(null);
     const services = useMemo(() => new CampusTools(), []);
@@ -508,23 +526,21 @@ export default function AiApp() {
     const latestTerm = useRef(term); latestTerm.current = term;
     useEffect(() => {
         if (opening.current) { opening.current = false; return; }
-        if (!chat.thread.nodes.length) return;
+        if (!chat.thread.nodes.length || recorded.current.has(chat)) return;
         if (workspace) {
-            if (diskDirty.current === chat || busy) return;
+            if (diskDirty.current === chat) return;
             diskDirty.current = chat;
             const root = workspace.folder;
             const { id } = chat;
-            setSavingProject(true);
             diskWrite.current = diskWrite.current.then(async () => {
                 const base = diskBase.current?.chat.id === id ? diskBase.current : undefined;
                 const saved = { ...base?.chat, ...chat, title: base?.chat.title ?? '', updated: Date.now() };
                 const name = await saveProjectChat(root, saved, base?.name);
-                diskBase.current = { name, chat: saved };
-                rememberProject(projectId, id, name);
+                if (activeChat.current === id) { diskBase.current = { name, chat: saved }; rememberProject(projectId, id, name); }
                 setWorkspace(work => work?.folder === root ? { ...work, revisions: [{ name, chat: saved }, ...work.revisions.filter(revision => revision.chat.id !== id)] } : work);
             }).catch(failure => {
                 setProjectError(failure instanceof Error ? failure.message : '无法保存这段项目对话。');
-            }).finally(() => setSavingProject(false));
+            });
             return;
         }
         if (project?.folder) return;
@@ -534,7 +550,7 @@ export default function AiApp() {
             const saved = { ...before, ...chat, project: projectId, title: before?.title ?? '', updated: Date.now() };
             return { chats: [saved, ...all.chats.filter(item => item.id !== id)], current: id };
         });
-    }, [chat, workspace, project?.folder, projectId, busy]);
+    }, [chat, workspace, project?.folder, projectId]);
     // One record for every tab: another tab's change is read in, and a write that changes nothing is skipped, so two open
     // tabs never overwrite each other's chats with an older copy.
     useEffect(() => { try { const text = JSON.stringify(kept); if (localStorage.getItem(KEY) !== text) localStorage.setItem(KEY, text); } catch { /* Kept for this page only. */ } }, [kept]);
@@ -549,17 +565,21 @@ export default function AiApp() {
         return () => window.removeEventListener('storage', update);
     }, []);
     const open = (id: string | null, inProject = projectId, work: Workspace<Proposal> | null | undefined = workspace, revision?: ChatRevision<Proposal>) => {
-        if (busy) return;
-        const found = revision?.chat ?? kept.chats.find(item => item.id === id);
+        const found = revision?.chat ?? keptNow.current.chats.find(item => item.id === id);
         diskBase.current = revision;
         opening.current = true;
-        const next = found ? opened(found) : empty();
+        const live = id === null ? undefined : conversations.current.get(id)?.reply?.chat;
+        const next = live ? { ...live, model: found?.model ?? live.model, resetRuntime: found?.resetRuntime ?? live.resetRuntime } : found ? opened(found) : empty();
+        const previousId = activeChat.current;
+        activeChat.current = next.id;
+        const previous = conversations.current.get(previousId);
+        if (!chat.thread.nodes.length && previousId !== next.id && !previous?.reply && !previous?.waiting) conversations.current.delete(previousId);
         diskDirty.current = next;
-        setChat(next); failedRuntime.current = null;
+        setChat(next);
         rememberProject(inProject, found?.id, revision?.name);
         setProjectId(inProject); setSideView(inProject ? 'project' : 'chats'); setWorkspace(work ?? undefined); setMulti(null); setSkill(undefined); setListMenu(false);
         setKept(all => ({ ...all, current: found && !work ? found.id : null }));
-        setError(''); setEditing(null); setDraft(''); setWaiting(null); setSide(false); setMenu(null); stuck.current = true;
+        setEditing(null); setSide(false); setMenu(null); setBelow(false); stuck.current = true;
     };
     const ordinary = () => { setProjectError(''); open(null, '', null); };
     function showList(view: 'chats' | 'projects') {
@@ -682,6 +702,7 @@ export default function AiApp() {
     }
     /** A project goes; its chats stay, back among the recent ones. A folder keeps its own files. */
     function removeProject(target: Project) {
+        if ([...conversations.current.values()].some(item => item.reply?.project === target.id)) return;
         setProjectMenu(null);
         setProjects(current => { const all = current.filter(item => item.id !== target.id); saveProjects(all); return all; });
         setKept(all => ({ ...all, chats: all.chats.map(item => item.project === target.id ? { ...item, project: undefined } : item) }));
@@ -700,23 +721,25 @@ export default function AiApp() {
         setProjects(ranked); saveProjects(ranked);
     }
     function takeOutOfProject(id: string) {
+        if (conversations.current.get(id)?.reply) return;
         setKept(all => ({ ...all, chats: all.chats.map(record => record.id === id ? { ...record, project: undefined } : record) }));
         if (id === chat.id && projectId) ordinary();
     }
     async function moveChats(target: Project, chosen: string[] = moving) {
-        const ids = new Set(chosen);
-        let next = { ...kept, chats: kept.chats.map(item => ids.has(item.id) ? { ...item, project: target.id } : item) };
+        const ids = new Set(chosen.filter(id => !conversations.current.get(id)?.reply));
+        if (!ids.size) return;
         if (target.folder) {
             const root = await savedFolder(target.id);
             if (!root || await root.queryPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('先打开目标项目并授权目录，然后重试。');
             const work = await openWorkspace<Proposal>(root);
             if (work.project.id !== target.id) throw new Error('当前文件夹属于另一个项目。');
-            for (const item of next.chats.filter(item => ids.has(item.id))) await saveProjectChat(work.folder, item);
-            next = { chats: next.chats.filter(item => !ids.has(item.id)), current: ids.has(kept.current ?? '') ? null : kept.current };
+            for (const item of keptNow.current.chats.filter(item => ids.has(item.id))) await saveProjectChat(work.folder, { ...item, project: target.id });
         }
-        localStorage.setItem(KEY, JSON.stringify(next));
         if (ids.has(chat.id)) ordinary();
-        setKept(next); setMoving([]); setMulti(null);
+        setKept(all => ({ current: ids.has(all.current ?? '') ? null : all.current,
+            chats: target.folder ? all.chats.filter(item => !ids.has(item.id))
+                : all.chats.map(item => ids.has(item.id) ? { ...item, project: target.id } : item) }));
+        setMoving([]); setMulti(null);
     }
     async function projectAction(action: () => Promise<void>) {
         setProjectError(''); setSavingProject(true);
@@ -752,13 +775,15 @@ export default function AiApp() {
             const name = await saveProjectChat(work.folder, next, revision.name);
             if (diskBase.current?.name === revision.name) diskBase.current = { name, chat: next };
             setWorkspace({ ...work, revisions: [{ name, chat: next }, ...work.revisions.filter(existing => existing.name !== revision.name)] });
-        } else setKept(all => ({ ...all, chats: all.chats.map(record => record.id === item.id ? next : record) }));
+        } else setKept(all => ({ ...all, chats: all.chats.map(record => record.id === item.id ? { ...record, ...update } : record) }));
         setMenu(null);
     }
     const remove = (id: string) => {
+        if (conversations.current.get(id)?.reply) return;
+        conversations.current.delete(id);
         const removed = kept.chats.find(item => item.id === id);
         setKept(all => ({ chats: all.chats.filter(item => item.id !== id), current: all.current === id ? null : all.current }));
-        if (kept.current === id) { opening.current = true; setChat(empty()); failedRuntime.current = null; }
+        if (activeChat.current === id) open(null);
         setMenu(null);
         if (removed?.runtimeModels?.length) void closeRuntimeChat(removed.id, removed.forks ?? [], removed.runtimeModels).catch(failure => setError(failure instanceof Error ? failure.message : '部分模型页面尚未关闭。'));
     };
@@ -773,7 +798,8 @@ export default function AiApp() {
         try { writeModelSettings(settings); }
         catch { setError('无法保存模型设置，请检查浏览器存储权限。'); return; }
         setChat(current => ({ ...current, model: next, resetRuntime: next.provider === RUNTIME_PROVIDER && current.thread.nodes.length > 0 }));
-        setError('');
+        view.failure = undefined;
+        if (!busy) setError('');
     }
     function answerPosition(): number | undefined {
         const box = scroller.current, anchor = end.current;
@@ -797,9 +823,9 @@ export default function AiApp() {
         box.addEventListener('scroll', onScroll, { passive: true });
         return () => box.removeEventListener('scroll', onScroll);
     }, []);
-    useLayoutEffect(() => { if (stuck.current) followAnswer(); }, [chat, streaming, live, drawn, error]);
+    useLayoutEffect(() => { if (stuck.current) followAnswer(); }, [chat, reply?.said, reply?.live, drawn, error, reply?.approval]);
 
-    const execute = useMemo(() => async (name: string, raw: unknown, call = ''): Promise<unknown> => {
+    const execute = async (name: string, raw: unknown, call: string, add: (proposal: Proposal) => void): Promise<unknown> => {
         const args = toolArguments(name, raw), line = latest.current;
         if (name === 'search') return services.query(String(args.query), args.in === undefined ? undefined : String(args.in));
         if (name === 'read') return services.read(String(args.id), args.offset as number | undefined);
@@ -812,8 +838,22 @@ export default function AiApp() {
         if (name === 'route') return services.route(args);
         if (name === 'remember') {
             if (!memoryNow.current.on) throw new Error('记忆已关闭。');
-            const text = remembered(scopedMemory.current.text, String(args.fact));
-            await saveScopedMemory({ on: true, text });
+            const fact = String(args.fact);
+            if (workspace) {
+                const current = await openWorkspace<Proposal>(workspace.folder);
+                const text = remembered(current.memory ?? '', fact);
+                await writeProjectMemory(workspace.folder, current.memory ?? '', text);
+                setWorkspace(value => value?.folder === workspace.folder ? { ...value, memory: text } : value);
+            } else if (project) {
+                setProjects(all => {
+                    const changed = all.map(item => item.id === project.id ? { ...item, memory: remembered(item.memory ?? '', fact) } : item);
+                    saveProjects(changed);
+                    return changed;
+                });
+            } else {
+                memoryNow.current = { ...memoryNow.current, text: remembered(memoryNow.current.text, fact) };
+                setMemory(memoryNow.current);
+            }
             return { remembered: true };
         }
         if (!line) throw new Error('请先在“我”里选择班级，等待课表读取完成。');
@@ -823,19 +863,23 @@ export default function AiApp() {
         if (name === 'suggest_slots') return schedulingTool(line, args);
         if (name === 'propose_task') {
             const proposal = taskProposal(args, { ...line, tasks: readTasks().filter(task => !task.deleted) }); const key = newTaskId();
-            setChat(current => ({ ...current, proposals: [...current.proposals, { ...proposal, key, call }] }));
+            add({ ...proposal, key, call });
             return { state: 'awaiting_user_confirmation', proposal: key, task: proposal.task };
         }
         throw new Error('未知工具。');
-    }, [services]);
+    };
 
     // Only the shared quota waits for sign-in. Switching source never silently sends that pending question elsewhere.
     useEffect(() => {
-        if (!free && waiting) { setDraft(current => current || waiting.text); setWaiting(null); }
+        if (!free && waiting) { view.waiting = undefined; setDraft(current => current || waiting.text); }
     }, [free, waiting]);
     useEffect(() => {
         if (!waiting || !free) return;
-        const back = async () => { if (document.visibilityState === 'visible' && await session()) { const question = waiting; setWaiting(null); void send(question.text, true, tip(chat.thread), question.preferred); } };
+        const back = async () => {
+            if (document.visibilityState !== 'visible' || !await session() || activeChat.current !== chat.id || view.waiting !== waiting) return;
+            view.waiting = undefined;
+            void send(waiting.text, true, tip(chat.thread), waiting.preferred);
+        };
         window.addEventListener('focus', back); document.addEventListener('visibilitychange', back);
         return () => { window.removeEventListener('focus', back); document.removeEventListener('visibilitychange', back); };
     });
@@ -847,43 +891,103 @@ export default function AiApp() {
             memory: memoryNow.current.on ? scopedMemory.current.text : null, instructions: projectInstructions(note) };
     };
     const availableTools = toolCatalog(situation(), toolPreferences, canUseBrowser ? browserTools : [], remoteTools);
-    function approve(tool: ToolItem, args: unknown, signal: AbortSignal): Promise<boolean> {
+    function approve(reply: Reply, tool: ToolItem, args: unknown): Promise<boolean> {
+        const signal = reply.controller.signal;
         if (signal.aborted) return Promise.resolve(false);
         const fact = (args as { fact?: unknown } | null)?.fact;
         const detail = tool.remote ? `将以下参数发送给 ${tool.remote.connection.name}，并把返回的内容交给当前模型。\n${JSON.stringify(args).slice(0, 480)}`
             : tool.browser ? '读取结果会交给当前模型。' : typeof fact === 'string' ? fact : '把一条信息写入你的记忆。';
         return new Promise(resolve => {
             const cancel = () => finish(false);
-            const finish = (allow: boolean) => { signal.removeEventListener('abort', cancel); setApproval(null); resolve(allow); };
+            const finish = (allow: boolean) => { signal.removeEventListener('abort', cancel); reply.approval = undefined; redraw(value => value + 1); resolve(allow); };
             signal.addEventListener('abort', cancel, { once: true });
-            setApproval({ label: tool.label, detail, finish });
+            reply.approval = { label: tool.label, detail, finish }; redraw(value => value + 1);
         });
     }
     /** Answering after `at` in `base`: each message said grows the branch from there, and is the one shown. */
-    async function run(base: Thread, at: string, options: { fork?: boolean; retry?: boolean } = {}) {
-        if (activeConflict || unavailableProject) return;
+    async function run(base: Thread, at: string, options: { fork?: boolean; retry?: boolean; signIn?: Waiting; clearDraft?: boolean } = {}) {
+        if (view.reply || activeConflict || unavailableProject) return;
         if (!provider) { setError(runtimeOff ? RUNTIME_DISABLED : '所选模型已停用或移除，请重新选择。'); return; }
+        const contextAtSend = situation();
+        const preferences = readToolPreferences();
         if (skill) setSkill(undefined);
-        let thread = base, tipId = at;
-        const retried = runtime && options.retry ? failedRuntime.current : null;
-        const pending = runtime && !options.fork ? failedRuntime.current : null;
+        const origin = chat.id, location = projectId, work = workspace;
+        let revision = diskBase.current?.chat.id === origin ? diskBase.current : undefined;
+        const previous = view.failure;
+        const matchingModel = sameModel(previous?.model, choice);
+        const retried = runtime && options.retry && matchingModel ? previous : undefined;
+        const pending = runtime && !options.fork && matchingModel ? previous : undefined;
         let firstId = options.fork ? newId() : pending?.firstId && !base.nodes.some(node => node.id === pending.firstId) ? pending.firstId : undefined;
         const reset = runtime && chat.resetRuntime && !options.fork && !retried;
-        const cid = firstId ?? retried?.request.conversation_id ?? (reset ? at : conversationId(base, at, chat.id, chat.forks));
-        if (options.fork || reset) setChat(current => ({ ...current, forks: [...current.forks, cid], resetRuntime: false }));
-        if (!options.retry) failedRuntime.current = null;
-        const grow = (message: Message) => { const id = message.role === 'assistant' && firstId ? firstId : newId(); if (message.role === 'assistant') firstId = undefined; fresh.current.add(id); thread = append(thread, tipId, id, message); tipId = id; setChat(current => ({ ...current, thread })); writing.current = { chat: chat.id, thread, tip: tipId, said: '' }; };
-        writing.current = workspace ? null : { chat: chat.id, thread, tip: tipId, said: '' };
-        fresh.current = new Set(); setFrom(at);
-        const turn = lineage(thread, at);
+        const cid = firstId ?? retried?.request.conversation_id ?? (reset ? at : conversationId(base, at, origin, chat.forks));
+        const controller = new AbortController();
+        const run: Reply = { controller, from: at, fresh: new Set(), said: '', stage: '', live: null, project: location, bound: Boolean(work), tip: at,
+            chat: { ...chat, thread: base, model: choice,
+                forks: options.fork || reset ? [...chat.forks, cid] : chat.forks, resetRuntime: reset ? false : chat.resetRuntime } };
+        view.reply = run;
+        view.error = '';
+        view.failure = undefined;
+        setEditing(null);
+        stuck.current = true;
+        redraw(value => value + 1);
+        const turn = lineage(base, at);
         const preferred = turn.findLast(node => node.message.role === 'user')?.preferredTools ?? [];
         let history = turn.map(node => node.message);
-        setChat(current => ({ ...current, thread, model: choice })); setBusy(true); setError(''); setEditing(null); stuck.current = true;
-        const controller = new AbortController(); stop.current = controller;
-        let said = '';
+        function record() {
+            const next = run.chat;
+            if (activeChat.current === origin) setChat(active => {
+                if (active.id !== origin) return active;
+                const changed = { ...next, model: active.model ?? next.model, resetRuntime: active.model && !sameModel(active.model, choice) ? active.resetRuntime : next.resetRuntime };
+                recorded.current.add(changed);
+                return changed;
+            });
+            if (!work) {
+                if (activeChat.current === origin && location) rememberProject(location, origin);
+                setKept(all => {
+                    const before = all.chats.find(item => item.id === origin);
+                    const saved = { ...before, ...next, model: before?.model ?? next.model,
+                        resetRuntime: before?.model && !sameModel(before.model, choice) ? before.resetRuntime : next.resetRuntime,
+                        project: location, title: before?.title ?? '', updated: Date.now() };
+                    return { chats: [saved, ...all.chats.filter(item => item.id !== origin)],
+                        current: activeChat.current === origin ? origin : all.current };
+                });
+                return Promise.resolve();
+            }
+            const write = diskWrite.current.then(async () => {
+                const edited = activeChat.current === origin && diskBase.current?.chat.id === origin ? diskBase.current : revision;
+                const model = edited?.chat.model;
+                const saved = { ...edited?.chat, ...next, model: model ?? next.model,
+                    resetRuntime: model && !sameModel(model, choice) ? edited?.chat.resetRuntime : next.resetRuntime,
+                    title: edited?.chat.title ?? '', updated: Date.now() };
+                const name = await saveProjectChat(work.folder, saved, edited?.name);
+                revision = { name, chat: saved };
+                if (activeChat.current === origin) { diskBase.current = revision; rememberProject(location, origin, name); }
+                setWorkspace(current => current?.project.id === work.project.id ? {
+                    ...current, revisions: [{ name, chat: saved }, ...current.revisions.filter(item => item.name !== edited?.name && item.name !== name)],
+                } : current);
+            });
+            diskWrite.current = write.catch(() => {});
+            return write;
+        }
+        async function grow(message: Message) {
+            const id = message.role === 'assistant' && firstId ? firstId : newId();
+            if (message.role === 'assistant') firstId = undefined;
+            run.fresh.add(id);
+            run.chat = { ...run.chat, thread: append(run.chat.thread, run.tip, id, message) };
+            run.tip = id;
+            await record();
+        }
         try {
+            if (options.signIn && !await session()) {
+                if (controller.signal.aborted) return;
+                view.waiting = options.signIn;
+                if (activeChat.current === origin) window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank');
+                return;
+            }
+            controller.signal.throwIfAborted();
+            if (options.clearDraft) view.draft = '';
+            await record();
             await docReady();
-            const preferences = readToolPreferences();
             const probeRuntime = async (): Promise<LocalRuntimeSnapshot> => {
                 const needLive = runtimeStatusRef.current.state === 'unknown' || Boolean(canUseBrowser && preferences.runtime);
                 if (!needLive) return runtimeStatusRef.current;
@@ -905,7 +1009,7 @@ export default function AiApp() {
             setBrowserTools(granted);
             setRemoteTools(external);
             const reach = reachOf(runtimeNow, preferences, canUseBrowser, external);
-            const catalog = toolCatalog(situation(), preferences, granted, external);
+            const catalog = toolCatalog(contextAtSend, preferences, granted, external);
             const modelTools = catalog.map(tool => tool.definition);
             const byName = new Map(catalog.map(tool => [tool.definition.function.name, tool]));
             history = toolHistory(history, new Set(byName.keys()), free);
@@ -916,68 +1020,75 @@ export default function AiApp() {
             if (retried?.request.tools?.some(tool => !byName.has(tool.function.name))) throw new Error('工具授权已变化，请生成新的回答。');
             for (let round = 0; round < ROUNDS; round++) {
                 const last = round === ROUNDS - 1;
-                said = ''; setStreaming(''); setLive(null); setModelStage('');
+                controller.signal.throwIfAborted();
+                run.said = ''; run.live = null; run.stage = ''; redraw(value => value + 1);
                 const doc = new DocStream();
-                const onDelta = (piece: string) => { said += piece; setStreaming(said); setLive(doc.push(piece)); if (writing.current) writing.current.said = said; };
+                const onDelta = (piece: string) => { run.said += piece; run.live = doc.push(piece); if (activeChat.current === origin) redraw(value => value + 1); };
                 const context = { tools: modelTools.filter(tool => !denied.has(tool.function.name)), external: external.map(tool => tool.definition), preferred: round === 0 ? preferred : undefined, reach };
-                const request = runtime ? round === 0 && retried ? retried.request : runtimeRequest(choice.model, history, situation(), last, cid, context) : null;
+                const request = runtime ? round === 0 && retried ? retried.request : runtimeRequest(choice.model, history, contextAtSend, last, cid, context) : null;
                 if (request) {
-                    failedRuntime.current = { request, firstId };
-                    setChat(current => current.runtimeModels.includes(request.model) ? current : { ...current, runtimeModels: [...current.runtimeModels, request.model] });
+                    view.failure = { request, firstId, model: choice };
+                    if (!run.chat.runtimeModels.includes(request.model)) run.chat = { ...run.chat, runtimeModels: [...run.chat.runtimeModels, request.model] };
                 }
-                const answer = await (request ? askRuntime(request, onDelta, controller.signal, options.retry === true && round === 0, setModelStage)
-                    : own ? askOwn(own, history, situation(), last, onDelta, controller.signal, context) : ask(history, situation(), last, onDelta, controller.signal, context)).finally(() => doc.free());
-                failedRuntime.current = null;
-                setStreaming(null); setLive(null);
-                history = [...history, answer]; grow(answer);
+                const answer = await (request ? askRuntime(request, onDelta, controller.signal, Boolean(retried) && round === 0, stage => { run.stage = stage; if (activeChat.current === origin) redraw(value => value + 1); })
+                    : own ? askOwn(own, history, contextAtSend, last, onDelta, controller.signal, context) : ask(history, contextAtSend, last, onDelta, controller.signal, context)).finally(() => doc.free());
+                view.failure = undefined;
+                run.said = ''; run.live = null;
+                history = [...history, answer]; await grow(answer);
                 if (!answer.tool_calls?.length) return;
                 for (const call of answer.tool_calls) {
+                    controller.signal.throwIfAborted();
                     const tool = byName.get(call.function.name);
                     let value: unknown;
                     try {
                         if (!tool || readToolPreferences().disabledCampus.includes(call.function.name)) throw new Error('这个工具已停用或不在本轮授权中。');
                         const args = JSON.parse(call.function.arguments);
                         if (denied.has(call.function.name)) throw new Error('本轮已跳过这项工具。');
-                        if (needsToolConfirmation(readToolPreferences().mode ?? 'read', tool) && !await approve(tool, args, controller.signal)) {
+                        if (needsToolConfirmation(preferences.mode ?? 'read', tool) && !await approve(run, tool, args)) {
                             denied.add(call.function.name); throw new Error('本轮已跳过这项工具。');
                         }
                         if (controller.signal.aborted) return;
                         if (readToolPreferences().disabledCampus.includes(call.function.name)) throw new Error('这个工具已停用。');
                         value = tool.browser ? { tool: tool.label, data: await invokeBrowserTool(tool.browser, args, controller.signal) }
-                            : tool.remote ? await invokeRemoteTool(tool.remote, args, controller.signal) : await execute(call.function.name, args, call.id);
-                    } catch (failure) { value = { error: failure instanceof Error ? failure.message : '工具执行失败。', ...(tool?.browser || tool?.remote ? { tool: tool.label } : {}), ...(failure instanceof UnknownReference ? { code: failure.code } : {}) }; }
+                            : tool.remote ? await invokeRemoteTool(tool.remote, args, controller.signal) : await execute(call.function.name, args, call.id, proposal => { run.chat = { ...run.chat, proposals: [...run.chat.proposals, proposal] }; });
+                    } catch (failure) {
+                        controller.signal.throwIfAborted();
+                        value = { error: failure instanceof Error ? failure.message : '工具执行失败。', ...(tool?.browser || tool?.remote ? { tool: tool.label } : {}), ...(failure instanceof UnknownReference ? { code: failure.code } : {}) };
+                    }
                     const result: Message = { role: 'tool', tool_call_id: call.id, content: JSON.stringify(value) };
-                    history = [...history, result]; grow(result);
+                    history = [...history, result]; await grow(result);
                 }
             }
         } catch (failure) {
             // Stopped: what was said so far stays, as an answer cut short.
-            if (controller.signal.aborted) { if (said) grow({ role: 'assistant', content: said }); return; }
-            setError(failure instanceof Error ? failure.message : 'AI 暂时无法响应。');
-        // What was being written stays in `writing` past a failure: leaving the page cuts the request before `pagehide`,
-        // and that is when it is kept. A finished answer or a stop has already put it in the thread and emptied it.
-        } finally { setStreaming(null); setLive(null); setModelStage(''); setBusy(false); setFrom(null); stop.current = null; }
+            if (controller.signal.aborted) {
+                view.failure = undefined;
+                if (run.said) {
+                    try { await grow({ role: 'assistant', content: run.said }); }
+                    catch (error) { view.error = error instanceof Error ? error.message : '无法保存未完成的回答。'; }
+                }
+                return;
+            }
+            view.error = failure instanceof Error ? failure.message : 'AI 暂时无法响应。';
+        } finally { view.reply = undefined; redraw(value => value + 1); }
     }
     /** A question asked after `parent` (the end of the conversation, or before a question being changed). */
-    async function send(question: string, signedIn = false, parent = tip(chat.thread), preferred?: string[]) {
+    function send(question: string, signedIn = false, parent = tip(chat.thread), preferred?: string[]) {
         if (unavailableProject || activeConflict || savingProject) return;
         const asked = question.trim();
-        if (!asked || busy) return;
+        if (!asked || view.reply) return;
         if (!provider) { setError(runtimeOff ? RUNTIME_DISABLED : '所选模型已停用或移除，请重新选择。'); return; }
         // The shared quota requires sign-in. Other sources keep their own authorization boundary.
-        if (free && !signedIn) {
-            const signed = await session();
-            if (activeChat.current !== chat.id) return;
-            if (!signed) { setWaiting({ text: asked, preferred }); window.open(`/login/?next=${encodeURIComponent('/signed-in/')}`, '_blank'); return; }
-        }
-        if (parent === tip(chat.thread)) setDraft('');
+        const clearDraft = parent === tip(chat.thread);
         const id = newId();
-        void run(append(chat.thread, parent, id, { role: 'user', content: asked }, preferred), id, { fork: parent !== tip(chat.thread) });
+        void run(append(chat.thread, parent, id, { role: 'user', content: asked }, preferred), id, {
+            fork: !clearDraft, clearDraft, signIn: free && !signedIn ? { text: asked, preferred } : undefined,
+        });
     }
     /** The answer to a question asked again, beside the answer it had. */
     const again = (question: string) => { if (!busy) void run(chat.thread, question, { fork: true }); };
     const retry = () => { if (!busy) void run(chat.thread, tip(chat.thread), { retry: true }); };
-    const pick = (id: string) => { if (!busy) { setChat(current => ({ ...current, thread: choose(current.thread, id) })); failedRuntime.current = null; setError(''); } };
+    const pick = (id: string) => { if (!busy) { setChat(current => ({ ...current, thread: choose(current.thread, id) })); view.failure = undefined; setError(''); } };
     function confirm(key: string) {
         const proposal = chat.proposals.find(item => item.key === key); if (!proposal || proposal.saved) return;
         const current = proposal.id ? readTasks().find(task => task.id === proposal.id && !task.deleted) : undefined;
@@ -986,8 +1097,8 @@ export default function AiApp() {
         setChat(all => ({ ...all, proposals: all.proposals.map(item => item.key === key ? { ...item, saved: true } : item) }));
     }
     let shown = path(chat.thread);
-    const cut = from === null ? -1 : shown.findIndex(node => node.id === from);
-    if (cut >= 0 && shown[cut + 1] && !fresh.current.has(shown[cut + 1]!.id)) shown = shown.slice(0, cut + 1);
+    const cut = reply ? shown.findIndex(node => node.id === reply.from) : -1;
+    if (cut >= 0 && shown[cut + 1] && !reply?.fresh.has(shown[cut + 1]!.id)) shown = shown.slice(0, cut + 1);
     const results = new Map(shown.filter(node => node.message.role === 'tool').map(node => [node.message.tool_call_id!, parse(node.message.content)]));
     const today = momentNow().date;
     // One turn: a question, and everything that answered it, however many rounds of looking up it took.
@@ -998,10 +1109,10 @@ export default function AiApp() {
     });
     if (turns.length) turns.at(-1)!.last = true;
     const blank = !shown.length;
-    const locked = busy || savingProject;
+    const locked = savingProject;
     const whyUnavailable = unavailableProject ? '打开主目录后即可继续聊天。' : activeConflict ? '此对话有两个冲突版本，已保存在项目目录。' : runtimeOff ? RUNTIME_DISABLED : undefined;
-    const composer = <Composer key={chat.id} input={composeInput} value={draft} onChange={setDraft} onSend={(question, preferred) => void send(question, false, tip(chat.thread), preferred)} onStop={() => stop.current?.abort()} busy={busy} canSend={Boolean(provider && !unavailableProject && !activeConflict && !savingProject)} unavailable={whyUnavailable} tools={availableTools}
-        permission={<ToolPermission mode={toolPreferences.mode ?? 'read'} disabled={busy} change={mode => {
+    const composer = <Composer key={chat.id} input={composeInput} value={draft} onChange={setDraft} onSend={(question, preferred) => void send(question, false, tip(chat.thread), preferred)} onStop={() => reply?.controller.abort()} busy={busy} canSend={Boolean(provider && !unavailableProject && !activeConflict && !savingProject)} unavailable={whyUnavailable} tools={availableTools}
+        permission={<ToolPermission mode={toolPreferences.mode ?? 'read'} disabled={false} change={mode => {
             try { writeToolPreferences({ ...readToolPreferences(), mode }); } catch { setError('工具权限暂时无法保存。'); }
         }} manage={() => setUtility('tools')} />}
         picker={<ModelPicker settings={modelSettings} choice={choice} disabled={false} answering={busy} runtimeOff={runtimeOff} select={setModel} manage={() => setUtility('models')} />} />;
@@ -1014,21 +1125,21 @@ export default function AiApp() {
         const revision = workspace?.revisions.find(entry => entry.chat === item);
         const key = revision?.name ?? item.id;
         const conflicted = (counts.get(item.id) ?? 0) > 1;
-        return <div key={key} className={`ai-chat ${item === current ? 'on' : ''} ${menu === key ? 'menu' : ''}`} draggable={!revision && !renaming}
+        return <div key={key} className={`ai-chat ${item === current ? 'on' : ''} ${menu === key ? 'menu' : ''}`} draggable={!revision && !renaming && !conversations.current.get(item.id)?.reply}
             onDragStart={event => { event.dataTransfer.setData('text/studev-chat', item.id); event.dataTransfer.effectAllowed = 'move'; }}>
             {multi && !workspace && <input type="checkbox" aria-label={`选择${titleOf(item)}`} checked={multi.includes(item.id)} onChange={event => setMulti(event.target.checked ? [...multi, item.id] : multi.filter(id => id !== item.id))} />}
             {renaming === key
                 ? <input className="ai-rename" autoFocus defaultValue={titleOf(item)} maxLength={60} onBlur={event => rename(item, event.target.value, revision)}
                     onKeyDown={event => { if (event.key === 'Enter') rename(item, event.currentTarget.value, revision); if (event.key === 'Escape') setRenaming(null); }} />
-                : <button className="ai-chat-t" disabled={locked} onClick={() => open(item.id, revision ? projectId : item.project || '', revision ? workspace ?? null : null, revision)} title={titleOf(item)}>{titleOf(item)}{conflicted && <small>冲突 · {revision?.name.slice(-6)}</small>}</button>}
+                : <button className="ai-chat-t" disabled={locked} onClick={() => open(item.id, revision ? projectId : item.project || '', revision ? workspace ?? null : null, revision)} title={titleOf(item)}>{titleOf(item)}{conversations.current.get(item.id)?.reply && <small>{conversations.current.get(item.id)?.reply?.approval ? '等待确认' : '回答中'}</small>}{conflicted && <small>冲突 · {revision?.name.slice(-6)}</small>}</button>}
             {!multi && <button className="ai-chat-more" aria-label="更多" disabled={locked} onClick={() => setMenu(menu === key ? null : key)}><Dots /></button>}
             {menu === key && <div className="ai-menu" role="menu">
-                <button role="menuitem" disabled={conflicted} onClick={() => { setRenaming(key); setMenu(null); }}>重命名</button>
-                <button role="menuitem" disabled={conflicted} onClick={() => void projectAction(() => changeChat(item, { pinned: !item.pinned }, revision))}>{item.pinned ? '取消置顶' : '置顶'}</button>
-                <button role="menuitem" disabled={conflicted} onClick={() => void projectAction(() => changeChat(item, { archived: !item.archived }, revision))}>{item.archived ? '取消归档' : '归档'}</button>
-                {!workspace && <button role="menuitem" onClick={() => { setMoving([item.id]); setMenu(null); }}>{item.project ? '移至其他项目' : '移至项目'}</button>}
-                {!workspace && item.project && <button role="menuitem" onClick={() => { setKept(all => ({ ...all, chats: all.chats.map(record => record.id === item.id ? { ...record, project: undefined } : record) })); setMenu(null); if (item.id === chat.id) ordinary(); }}>从项目中移除</button>}
-                {!workspace && <button role="menuitem" className="danger" onClick={() => remove(item.id)}>删除</button>}
+                <button role="menuitem" disabled={conflicted || Boolean(revision && conversations.current.get(item.id)?.reply)} onClick={() => { setRenaming(key); setMenu(null); }}>重命名</button>
+                <button role="menuitem" disabled={conflicted || Boolean(revision && conversations.current.get(item.id)?.reply)} onClick={() => void projectAction(() => changeChat(item, { pinned: !item.pinned }, revision))}>{item.pinned ? '取消置顶' : '置顶'}</button>
+                <button role="menuitem" disabled={conflicted || Boolean(revision && conversations.current.get(item.id)?.reply)} onClick={() => void projectAction(() => changeChat(item, { archived: !item.archived }, revision))}>{item.archived ? '取消归档' : '归档'}</button>
+                {!workspace && <button role="menuitem" disabled={Boolean(conversations.current.get(item.id)?.reply)} onClick={() => { setMoving([item.id]); setMenu(null); }}>{item.project ? '移至其他项目' : '移至项目'}</button>}
+                {!workspace && item.project && <button role="menuitem" disabled={Boolean(conversations.current.get(item.id)?.reply)} onClick={() => { takeOutOfProject(item.id); setMenu(null); }}>从项目中移除</button>}
+                {!workspace && <button role="menuitem" className="danger" disabled={Boolean(conversations.current.get(item.id)?.reply)} onClick={() => remove(item.id)}>删除</button>}
             </div>}
         </div>;
     }
@@ -1153,10 +1264,6 @@ export default function AiApp() {
         {utility && <Sheet title={utility === 'tools' ? '工具' : '模型'} onClose={() => setUtility(undefined)}>
             {utility === 'tools' ? <ToolSettings /> : <ModelSettingsPanel />}
         </Sheet>}
-        {approval && <Sheet title={`允许${approval.label}？`} onClose={() => approval.finish(false)}>
-            <p className="fine lead">{approval.detail}</p>
-            <div className="ai-tool-actions"><button type="button" className="btn" onClick={() => approval.finish(false)}>跳过</button><button type="button" className="btn primary" onClick={() => approval.finish(true)}>允许本次</button></div>
-        </Sheet>}
         {minding && <MemorySettings memory={{ on: memory.on, text: scopedMemory.current.text }} isProject={Boolean(project)} onClose={() => setMinding(false)} onSave={next => void projectAction(async () => { await saveScopedMemory(next); setMinding(false); })} />}
         <div className="ai-main">
         <CampusHeader className="ai-bar">
@@ -1200,8 +1307,12 @@ export default function AiApp() {
                     <ol>{steps.map((step, i) => <li key={calls[i]!.id} className={step.failed ? 'failed' : step.pending ? 'doing' : ''}><details><summary><b>{step.label}</b>{step.detail && <span>{step.detail}</span>}</summary><p>调用参数</p><pre>{showArguments(calls[i]!.function.arguments)}</pre><p>调用结果</p><pre>{step.pending ? '正在等待结果…' : JSON.stringify(results.get(calls[i]!.id), null, 2)}</pre></details></li>)}</ol>
                 </details>}
                 {answer && drawn && <div className="ai-a"><DocText text={answer} /></div>}
-                {turn.last && live && <div className="ai-a"><Doc blocks={live.blocks} live /></div>}
-                {answering && !live && !doing && <p className="ai-think">{modelStage || '正在想'}</p>}
+                {turn.last && reply?.live && <div className="ai-a"><Doc blocks={reply.live.blocks} live /></div>}
+                {answering && reply?.approval && <div className="ai-approval">
+                    <p><b>允许{reply.approval.label}？</b></p><p className="fine">{reply.approval.detail}</p>
+                    <div className="ai-tool-actions"><button type="button" className="btn" onClick={() => reply.approval?.finish(false)}>跳过</button><button type="button" className="btn primary" onClick={() => reply.approval?.finish(true)}>允许本次</button></div>
+                </div>}
+                {answering && !reply?.live && !reply?.approval && !doing && <p className="ai-think">{reply?.stage || '正在想'}</p>}
                 {turn.last && error && !runtimeOff && <p role="alert" className="ai-error">{error}<TextAction refresh onClick={retry}>重试</TextAction></p>}
                 {turn.last && <div ref={end} className="ai-answer-end" aria-hidden="true" />}
                 {!answering && turn.replies.length > 0 && <div className="ai-tools">

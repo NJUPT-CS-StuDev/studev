@@ -39,6 +39,7 @@ sealed interface UpdateNews {
 }
 class CampusModel(application: Application) : AndroidViewModel(application) {
     val settings = CampusSettings(application)
+    internal val conversations by lazy { top.hicancan.studev.ai.Conversations(application, this, viewModelScope) }
     /** One's own tasks, on this device. */
     val tasks = top.hicancan.studev.me.TaskStore(application)
     private val sync = top.hicancan.studev.me.Sync(tasks, settings, top.hicancan.studev.account.Accounts.get(application), viewModelScope) {

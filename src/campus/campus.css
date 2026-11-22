@@ -705,6 +705,8 @@
 .ai .ai-steps li.doing span:after{content:"……"}.ai .ai-steps .failed,.ai .ai-steps .failed b{color:var(--danger)}
 .ai .ai-steps li>details{min-width:0;width:100%}.ai .ai-steps li summary{display:flex;align-items:baseline;text-align:left}.ai .ai-steps li p{font-size:12px;margin:10px 0 4px}.ai .ai-steps pre{max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;margin:0;padding:10px;background:var(--surface-sunken);border-radius:8px}
 .ai .ai-think{margin:0;font-size:15px;width:max-content}
+.ai .ai-approval{padding:12px 0;border-block:1px solid var(--line)}
+.ai .ai-approval p{margin:0 0 8px;overflow-wrap:anywhere}
 .ai .ai-a .ai-plain{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.625;font-size:16px}
 .ai .ai-dot{display:inline-block;width:.6em;height:.6em;margin-left:4px;border-radius:50%;background:var(--ink);vertical-align:.05em;animation:ai-breathe 1.2s ease-in-out infinite}
 @keyframes ai-fade{50%{opacity:.35}}@keyframes ai-breathe{50%{transform:scale(.7);opacity:.55}}@keyframes ai-shine{from{background-position:100% 0}to{background-position:-100% 0}}

@@ -41,14 +41,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import top.hicancan.studev.account.Accounts
-import top.hicancan.studev.account.PlatformFailure
 import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.app.CampusHeader
 import top.hicancan.studev.app.CampusGlyph
@@ -59,7 +53,6 @@ import top.hicancan.studev.app.PlainSheet
 import top.hicancan.studev.app.Route
 import top.hicancan.studev.app.marks
 import top.hicancan.studev.app.topHairline
-import top.hicancan.studev.world.CampusTools
 import top.hicancan.studev.world.Names
 import top.hicancan.studev.world.TaskProposal
 import top.hicancan.studev.world.hm
@@ -97,35 +90,37 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
  * signing in opens over it and the question goes on.
  */
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
-@Composable fun AiScreen(model: CampusModel, route: Route) {
+@Composable internal fun AiScreen(model: CampusModel, route: Route, conversations: Conversations = model.conversations) {
     val context = LocalContext.current
-    val client = remember { Accounts.get(context) }
+    val client = conversations.client
     val account by client.user.collectAsState()
     LaunchedEffect(client) { client.current() }
     val scope = rememberCoroutineScope()
-    val kept = remember { context.getSharedPreferences("ai_chat", android.content.Context.MODE_PRIVATE) }
-    val modelPrefs = remember(context) { ModelPreferences.get(context) }
+    val modelPrefs = conversations.modelPrefs
     val catalog by rememberModelCatalog(modelPrefs)
-    var draft by remember { mutableStateOf("") }
-    val start = remember { readChats(kept, catalog.preferred) }
-    var chats by remember { mutableStateOf(start.chats) }
-    var projects by remember { mutableStateOf(start.projects) }
-    var current by remember { mutableStateOf<String?>(start.current ?: java.util.UUID.randomUUID().toString()) }
-    var activeProject by remember { mutableStateOf(start.currentProject) }
-    var thread by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.thread ?: ChatThread()) }
-    var selection by remember { mutableStateOf(chats.firstOrNull { it.id == current }?.selection ?: catalog.forNewChat()) }
+    val chats = conversations.chats
+    val projects = conversations.projects
+    val current = conversations.current
+    val activeProject = conversations.activeProject
+    val view = remember(current) { conversations.view(current) }
+    val thread = chats.firstOrNull { it.id == current }?.thread ?: ChatThread()
+    val busy = view.job != null
+    val from = view.from
+    val fresh = view.fresh
+    val streaming = view.streaming
+    val live = view.live
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     var moving by remember { mutableStateOf<Set<String>?>(null) }
     var configuringModels by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { Instructions.fold(context, model.settings.state.value.memory.text)?.let { text -> model.settings.update { it.copy(memory = it.memory.copy(text = text)) } } }
     var projectInstructions by remember { mutableStateOf<String?>(null) }
     var configuringTools by remember { mutableStateOf(false) }
-    val toolPrefs = remember(context) { CampusToolPreferences.store(context) }
-    val remotePrefs = remember(context) { RemoteMcpPreferences.store(context) }
+    val toolPrefs = conversations.toolPrefs
+    val remotePrefs = conversations.remotePrefs
     var configuredRemote by remember(remotePrefs) { mutableStateOf(RemoteMcpPreferences.read(remotePrefs)) }
     val remoteLabels = remember(configuredRemote) { RemoteMcp.known(configuredRemote).associate { it.id to it.label } }
     val drawer = rememberDrawerState(DrawerValue.Closed)
-    val assistant = remember(context) { Assistant.load(context) }
+    val assistant = conversations.assistant
     val freeService = remember(assistant) { assistant.freeService }
     val preferences by model.settings.state.collectAsState()
     val academic by model.state.collectAsState()
@@ -137,42 +132,10 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
         }.distinctBy { it.code }.sortedBy { it.name }
     }
     var minding by remember { mutableStateOf(false) }
-    var streaming by remember { mutableStateOf<String?>(null) }
-    var live by remember { mutableStateOf<List<JsonObject>?>(null) }
-    var proposals by remember { mutableStateOf<List<TaskProposal>>(emptyList()) }
-    var saved by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var error by remember { mutableStateOf("") }
-    var job by remember { mutableStateOf<Job?>(null) }
-    var editing by remember { mutableStateOf<String?>(null) }
-    var inspectingCall by remember { mutableStateOf<CallInspection?>(null) }
-    // While answering after a message, only what this answer says shows after it, not the answer it had before.
-    var from by remember { mutableStateOf<String?>(null) }
-    val fresh = remember { mutableSetOf<String>() }
-    val busy = job != null
-    val tools = remember { CampusTools(context, { model.state.value.repository }, { model.myLine(model.state.value, model.settings.state.value) }, model.tasks,
-        remember = { fact ->
-            val now = model.settings.state.value.memory
-            check(now.on) { "记忆已关闭。" }
-            val id = activeProject
-            if (id == null) model.settings.update { it.copy(memory = it.memory.copy(text = Memory.remembered(it.memory.text, fact))) }
-            else projects = projects.map { if (it.id == id) it.copy(memory = Memory.remembered(it.memory, fact)) else it }
-        }) { proposal -> proposals = proposals + proposal } }
-    DisposableEffect(tools) { onDispose { tools.close() } }
-    fun recordThread(next: ChatThread) {
-        thread = next
-        val id = current ?: java.util.UUID.randomUUID().toString()
-        val before = chats.firstOrNull { it.id == id }
-        val updated = System.currentTimeMillis()
-        val saved = before?.copy(updated = updated, thread = next, selection = selection, projectId = activeProject)
-            ?: SavedChat(id, "", updated, next, selection, activeProject)
-        chats = listOf(saved) + chats.filter { it.id != id }
-        current = id
-    }
-    LaunchedEffect(chats, current, projects, activeProject) {
-        kept.edit().putString("chats", KeptChats(chats, current, projects, activeProject).toJson().toString()).remove("thread").remove("messages").apply()
-    }
+    var editing by remember(current) { mutableStateOf<String?>(null) }
+    var inspectingCall by remember(current) { mutableStateOf<CallInspection?>(null) }
     var waiting by remember { mutableStateOf<String?>(null) }
-    val scroll = rememberScrollState()
+    val scroll = key(current) { rememberScrollState() }
     var followsLatest by remember { mutableStateOf(true) }
     val tailRoom = with(LocalDensity.current) { 64.dp.roundToPx() }
     val tailInset = with(LocalDensity.current) { 12.dp.roundToPx() }
@@ -194,145 +157,43 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
     val composeFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    /** Answering after [at] in [base]: each message said grows the branch from there, and is the one shown. */
-    suspend fun run(base: ChatThread, at: String, mine: Own?) {
-        var tipId = at
-        fun grow(message: JsonObject) {
-            val id = java.util.UUID.randomUUID().toString()
-            fresh += id; recordThread(thread.append(tipId, id, message)); tipId = id
-        }
-        recordThread(base); fresh.clear(); from = at; editing = null
-        val remote = RemoteMcp.active(RemoteMcpPreferences.read(remotePrefs)).associateBy { it.id }
-        var history = recent(RemoteMcp.history(base.lineage(at).map { it.message }, remote.keys))
-        val settings = model.settings.state.value
-        val week = model.state.value.term?.let { top.hicancan.studev.world.CampusDay.weekOf(it.weeks, top.hicancan.studev.world.CampusDay.now().toLocalDate())?.week ?: 0 }
-        val project = projects.firstOrNull { it.id == activeProject }
-        val instructionText = Instructions.forChat(project)
-        val remembered = settings.memory.takeIf { it.on }?.let { project?.memory ?: it.text }
-        val situation = Situation(week, settings.klass, settings.campus, remembered, instructionText)
-        val campus = assistant.toolsFor(situation, CampusToolPreferences.disabled(toolPrefs))
-        val names = campus.map(::toolName).toSet()
-        val external = remote.values.map { it.definition() }
-        val offered = names + remote.keys
-        val available = campus + external
-        tools.definitions = campus
-        var said = ""
-        try {
-            repeat(Assistant.ROUNDS) { round ->
-                val last = round == Assistant.ROUNDS - 1
-                said = ""; streaming = ""; live = null
-                var answer: JsonObject? = null
-                var failed: String? = null
-                val doc = top.hicancan.docstream.DocStream()
-                fun onDelta(piece: String) { said += piece; streaming = said; live = top.hicancan.studev.world.Docs.blocksOf(doc.push(piece)) }
-                try {
-                    if (mine != null) answer = assistant.askOwn(mine, history, situation, last, available, onDelta = ::onDelta)
-                    else client.stream("/ai", buildJsonObject {
-                        put("messages", JsonArray(history)); put("last", last); put("situation", situation.toJson())
-                        put("toolNames", JsonArray(offered.map(::JsonPrimitive)))
-                        if (external.isNotEmpty()) put("externalTools", JsonArray(external))
-                    }) { event, data ->
-                        when (event) {
-                            "delta" -> onDelta(data["content"]?.jsonPrimitive?.contentOrNull.orEmpty())
-                            "message" -> answer = data["message"]?.jsonObject
-                            "error" -> failed = data["message"]?.jsonPrimitive?.contentOrNull
-                        }
-                    }
-                } finally { doc.close() }
-                streaming = null; live = null
-                failed?.let { throw IllegalStateException(it) }
-                val reply = answer ?: throw IllegalStateException("回答中断了，请重试。")
-                history = history + reply; grow(reply)
-                val calls = reply["tool_calls"]?.jsonArray.orEmpty()
-                if (calls.isEmpty()) return
-                for (item in calls) {
-                    val call = item.jsonObject; val function = call.getValue("function").jsonObject
-                    val result = try {
-                        val name = function.getValue("name").jsonPrimitive.content
-                        val args = Json.parseToJsonElement(function.getValue("arguments").jsonPrimitive.content).jsonObject
-                        val callId = call.getValue("id").jsonPrimitive.content
-                        val callTarget = remote[name]
-                        if (callTarget != null) {
-                            check(callTarget in RemoteMcp.active(RemoteMcpPreferences.read(remotePrefs))) { "这个远程工具已停用。" }
-                            RemoteMcp.call(callTarget, args)
-                        } else {
-                            check(name in names && name !in CampusToolPreferences.disabled(toolPrefs)) { "这个工具已停用或不在本轮授权中。" }
-                            // Remember updates the active project's UI state. Index tools stay on IO.
-                            if (name == "remember") tools.execute(name, args, callId)
-                            else withContext(Dispatchers.IO) { tools.execute(name, args, callId) }
-                        }
-                    }
-                    catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { buildJsonObject { put("error", if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "工具执行失败。" else "校园数据暂不可读，请重试。"); if (e is top.hicancan.studev.world.UnknownReference) put("code", "unknown-reference") } }
-                    val message = buildJsonObject { put("role", "tool"); put("tool_call_id", call.getValue("id")); put("content", result.toString()) }
-                    history = history + message; grow(message)
-                }
-            }
-        } catch (e: CancellationException) {
-            // Stopped: what was said so far stays, as an answer cut short.
-            if (said.isNotEmpty()) grow(buildJsonObject { put("role", "assistant"); put("content", said) })
-            throw e
-        } finally { streaming = null; live = null }
-    }
-    fun start(base: ChatThread, at: String, selected: ModelSelection = selection): Boolean {
-        val mine = ModelPreferences.read(modelPrefs).direct(selected)
-        if (selected.provider != null && mine == null) {
-            error = "当前模型已停用或移除，请重新选择。"
-            return false
-        }
-        error = ""
-        job = scope.launch {
-            try { run(base, at, mine) }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = if (e is PlatformFailure || e is IllegalStateException) e.message.orEmpty() else "AI 暂不可用，请稍后重试。" }
-            finally { job = null; from = null }
-        }
-        return true
-    }
-    /** A question asked after [parent] (the end of the conversation, or before a question being changed). */
-    fun ask(question: String, parent: String = thread.tip()) {
+    /** Sign-in attaches the pending question to the conversation that requested it. */
+    fun ask(question: String, parent: String = thread.tip(), signedIn: Boolean = false) {
         if (question.isBlank() || busy) return
-        val selected = selection
-        val chat = current
-        scope.launch {
-            // One's own key needs no sign-in; the free quota is shared, so it is asked when signed in.
-            if (selected.provider == null && client.current() == null) { waiting = question; return@launch }
-            if (current != chat || job != null) return@launch
-            val id = java.util.UUID.randomUUID().toString()
-            val fromTip = parent == thread.tip()
-            if (start(thread.append(parent, id, buildJsonObject { put("role", "user"); put("content", question.trim()) }), id, selected) && fromTip) {
-                draft = ""; followsLatest = true
-            }
+        val selected = view.selection
+        if (!signedIn && selected.provider == null && account == null) { waiting = question; return }
+        val id = java.util.UUID.randomUUID().toString()
+        val fromTip = parent == thread.tip()
+        if (conversations.start(current, activeProject, thread.append(parent, id, buildJsonObject {
+            put("role", "user"); put("content", question.trim())
+        }), id, view, selected)) {
+            editing = null
+            if (fromTip) { view.draft = ""; followsLatest = true }
         }
     }
-    /** The answer to a question asked again, beside the answer it had. */
-    fun again(question: String) { if (!busy) start(thread, question) }
-    fun pick(id: String) { if (!busy) { recordThread(thread.choose(id)); error = "" } }
+    fun again(question: String) { if (!busy) { editing = null; followsLatest = true; conversations.start(current, activeProject, thread, question, view) } }
+    fun pick(id: String) {
+        if (!busy) { conversations.recordThread(current, activeProject, view.selection, thread.choose(id)); view.error = "" }
+    }
     fun open(id: String?, projectId: String? = null) {
-        if (busy) return
-        val chat = chats.firstOrNull { it.id == id }
-        if (id == null || id != current) draft = ""
         followsLatest = true
-        thread = chat?.thread ?: ChatThread()
-        current = chat?.id ?: java.util.UUID.randomUUID().toString()
-        activeProject = if (chat == null) projectId else chat.projectId
-        selection = chat?.selection ?: catalog.forNewChat()
-        proposals = emptyList(); saved = emptySet(); error = ""; editing = null
+        conversations.open(id, projectId)
         scope.launch { drawer.close() }
     }
     fun removeChat(chat: SavedChat) {
-        chats = chats.filter { it.id != chat.id }
+        if (chat.id in conversations.running) return
+        conversations.forget(chat.id)
         if (current == chat.id) open(null, chat.projectId)
     }
     fun saveProject(project: ChatProject?, name: String, course: String?): ChatProject {
         if (course != null) projects.firstOrNull { it.course == course }?.let { return it }
         val next = project?.copy(name = name) ?: ChatProject(java.util.UUID.randomUUID().toString(), name, course)
-        projects = if (project == null) listOf(next) + projects else projects.map { if (it.id == next.id) next else it }
+        conversations.replaceProjects(if (project == null) listOf(next) + projects else projects.map { if (it.id == next.id) next else it })
         return next
     }
     waiting?.let { question ->
         BackHandler { waiting = null }
-        top.hicancan.studev.account.AccountScreen(client, onBack = { waiting = null }, onSignedIn = { waiting = null; ask(question) })
+        top.hicancan.studev.account.AccountScreen(client, onBack = { waiting = null }, onSignedIn = { waiting = null; ask(question, signedIn = true) })
         return
     }
     var shown = thread.path()
@@ -342,17 +203,17 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
     val turns = mutableListOf<Pair<ChatNode, MutableList<ChatNode>>>()
     shown.forEach { node -> if (node.message["role"]?.jsonPrimitive?.content == "user") turns += node to mutableListOf() else turns.lastOrNull()?.second?.add(node) }
     val composer: @Composable () -> Unit = {
-        val unavailable = selection.provider != null && catalog.direct(selection) == null
+        val unavailable = view.selection.provider != null && catalog.direct(view.selection) == null
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (unavailable) Plain("当前模型已停用或移除，请重新选择。", 12.sp, marks().danger, modifier = Modifier.padding(horizontal = 8.dp))
-            Composer(draft, { draft = it.take(4000) }, onSend = { ask(draft) }, onStop = { job?.cancel() },
+            Composer(view.draft, { view.draft = it.take(4000) }, onSend = { ask(view.draft) }, onStop = { view.job?.cancel() },
                 onTools = { keyboard?.hide(); configuringTools = true }, busy = busy, canSend = !unavailable, focus = composeFocus) {
-                ChatModelPicker(catalog, selection, freeService, enabled = !busy,
+                ChatModelPicker(catalog, view.selection, freeService, enabled = true,
                     manage = { keyboard?.hide(); configuringModels = true }) { next ->
-                    selection = next
-                    chats = chats.map { if (it.id == current) it.copy(selection = next) else it }
+                    view.selection = next
+                    conversations.replaceChats(conversations.chats.map { if (it.id == current) it.copy(selection = next) else it })
                     ModelPreferences.update(modelPrefs) { it.copy(preferred = next) }
-                    error = ""
+                    if (!busy) view.error = ""
                 }
             }
         }
@@ -361,7 +222,7 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
         val id = openedProject?.id
         if (id == null) model.settings.update { it.copy(memory = next) }
         else {
-            projects = projects.map { if (it.id == id) it.copy(memory = next.text) else it }
+            conversations.replaceProjects(projects.map { if (it.id == id) it.copy(memory = next.text) else it })
             model.settings.update { it.copy(memory = it.memory.copy(on = next.on)) }
         }
         minding = false
@@ -375,15 +236,15 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
         key(project.id) {
             InstructionSheet("项目指令", "只用于「${project.name}」里的对话。", project.instructions, Instructions.PROJECT_LIMIT,
                 onClose = { projectInstructions = null }) { edited ->
-                projects = projects.map { if (it.id == project.id) it.copy(instructions = edited) else it }
+                conversations.replaceProjects(projects.map { if (it.id == project.id) it.copy(instructions = edited) else it })
                 projectInstructions = null
             }
         }
     }
     moving?.let { ids ->
         MoveChatsSheet(chats.filter { it.id in ids }, projects, onClose = { moving = null }) { target ->
-            chats = chats.map { if (it.id in ids) it.copy(projectId = target) else it }
-            if (current?.let(ids::contains) == true) activeProject = target
+            val movable = ids - conversations.running
+            conversations.replaceChats(chats.map { if (it.id in movable) it.copy(projectId = target) else it }, if (current in movable) target else activeProject)
             moving = null
         }
     }
@@ -400,16 +261,16 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
         var name by remember(chat.id) { mutableStateOf(Chats.titleOf(chat.title, chat.thread)) }
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text("重命名") },
             text = { OutlinedTextField(name, { name = it.take(60) }, singleLine = true) },
-            confirmButton = { TextButton({ chats = chats.map { if (it.id == chat.id) it.copy(title = name.trim()) else it }; renaming = null }) { Text("好") } },
+            confirmButton = { TextButton({ conversations.replaceChats(chats.map { if (it.id == chat.id) it.copy(title = name.trim()) else it }); renaming = null }) { Text("好") } },
             dismissButton = { TextButton({ renaming = null }) { Text("取消") } })
     }
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = Ink.paper) {
-            ChatDrawer(chats, projects, courses, current, activeProject, busy,
+            ChatDrawer(chats, projects, courses, current, activeProject, conversations.running,
                 openChat = { open(it) }, newChat = { open(null, it) },
                 openProject = { id -> open(chats.filter { it.projectId == id }.maxByOrNull { it.updated }?.id, id) }, saveProject = ::saveProject,
                 editInstructions = { project -> scope.launch { drawer.close(); projectInstructions = project.id } },
-                rename = { renaming = it }, updateChat = { next -> chats = chats.map { if (it.id == next.id) next else it } },
+                rename = { renaming = it }, updateChat = { next -> conversations.replaceChats(chats.map { if (it.id == next.id) it.copy(pinned = next.pinned, archived = next.archived) else it }) },
                 remove = ::removeChat, move = { ids -> scope.launch { drawer.close(); moving = ids } },
                 mind = { scope.launch { drawer.close(); minding = true } })
         }
@@ -422,7 +283,7 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
                 if (chat != null && openedProject != null) Plain(openedProject.name, 11.sp, Ink.muted, maxLines = 1)
                 if (shown.isNotEmpty() && chat != null) Plain(Chats.titleOf(chat.title, chat.thread), 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
             }
-            if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话", enabled = !busy) { open(null, activeProject) }
+            if (shown.isNotEmpty()) IconAction(Icons.Outlined.EditNote, "新对话") { open(null, activeProject) }
         }
         if (shown.isEmpty()) {
             Column(Modifier.weight(1f).widthIn(max = 768.dp).fillMaxWidth().align(Alignment.CenterHorizontally).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 32.dp),
@@ -430,12 +291,12 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
                 Plain(openedProject?.name ?: "有什么可以帮你？", 26.sp, weight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally).semantics { heading() })
                 composer()
-                if (openedProject == null && draft.isEmpty()) {
+                if (openedProject == null && view.draft.isEmpty()) {
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         assistant.suggestions.forEach { item ->
                             val shape = RoundedCornerShape(20.dp)
                             Row(Modifier.heightIn(min = 38.dp).clip(shape).border(1.dp, Ink.line, shape)
-                                .clickable { draft = item.prompt; composeFocus.requestFocus(); keyboard?.show() }
+                                .clickable { view.draft = item.prompt; composeFocus.requestFocus(); keyboard?.show() }
                                 .padding(horizontal = 11.dp, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 CampusGlyph(item.entry, 16.dp, Ink.muted)
@@ -444,7 +305,7 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
                         }
                     }
                 }
-                if (error.isNotEmpty()) Plain(error, 13.sp, marks().danger)
+                if (view.error.isNotEmpty()) Plain(view.error, 13.sp, marks().danger)
             }
             return@Column
         }
@@ -493,9 +354,9 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
                 if (last) live?.let { top.hicancan.studev.world.Doc(it, live = true, onLink = { href -> openInApp(href, route) }) } ?: run { if (last) streaming?.let { Plain("$it ●", 16.sp, lineHeight = 26.sp) } }
                 if (answering && streaming == null && calls.none { results[it.getValue("id").jsonPrimitive.content] == null }) Thinking()
                 if (last) {
-                    if (error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Plain(error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
-                        top.hicancan.studev.app.TextAction("重试", { if (!busy) start(thread, question.id) }, refresh = true)
+                    if (view.error.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Plain(view.error, 14.sp, marks().danger, modifier = Modifier.weight(1f))
+                        top.hicancan.studev.app.TextAction("重试", { if (!busy) conversations.start(current, activeProject, thread, question.id, view) }, refresh = true)
                     }
                     Spacer(Modifier.height(1.dp).onGloballyPositioned { end ->
                         viewport?.takeIf { it.isAttached }?.let { box ->
@@ -512,15 +373,15 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
                     results[id]?.takeIf { (it as? JsonObject)?.containsKey("error") != true }?.let { (if (name == "read") id else name) to (name to it) } }
                     .toMap().values.flatMap { (name, result) -> resourceLinks(name, result) }.distinctBy { it.href }
                 if (links.isNotEmpty()) Resources(question.id, links, route)
-                val drafts = proposals.filter { proposal -> calls.any { it.getValue("id").jsonPrimitive.content == proposal.call } }
-                if (!answering && drafts.isNotEmpty()) Drafts(drafts, saved, onAdd = { keys ->
+                val drafts = view.proposals.filter { proposal -> calls.any { it.getValue("id").jsonPrimitive.content == proposal.call } }
+                if (!answering && drafts.isNotEmpty()) Drafts(drafts, view.saved, onAdd = { keys ->
                     keys.forEach { key ->
-                        val proposal = proposals.first { it.key == key }; val task = proposal.task
+                        val proposal = view.proposals.first { it.key == key }; val task = proposal.task
                         val current = proposal.id?.let { id -> model.tasks.all.value.find { it.id == id && it.deleted != true } }
-                        if (proposal.id != null && current?.modified != proposal.expected) error = "这个任务已经改过了，请让 AI 重新起草。"
-                        else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); saved = saved + key }
+                        if (proposal.id != null && current?.modified != proposal.expected) view.error = "这个任务已经改过了，请让 AI 重新起草。"
+                        else { model.tasks.save(task.copy(id = proposal.id ?: model.tasks.newId(), done = if (task.done == "awaiting-confirmation") top.hicancan.studev.world.Tasks.stamp(java.time.Instant.now()) else task.done)); view.saved = view.saved + key }
                     }
-                }, onDrop = { key -> proposals = proposals.filter { it.key != key } })
+                }, onDrop = { key -> view.proposals = view.proposals.filter { it.key != key } })
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -537,21 +398,6 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
             .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp)) { composer() }
     }
     }
-}
-
-/** The conversations kept on this device, and the one open; one kept before there could be many becomes the first. */
-private fun readChats(kept: android.content.SharedPreferences, imported: ModelSelection): KeptChats = runCatching {
-    kept.getString("chats", null)?.let { text -> KeptChats.of(Json.parseToJsonElement(text).jsonObject, imported) }
-        ?: (kept.getString("thread", null)?.let { ChatThread.of(Json.parseToJsonElement(it).jsonObject) }
-            ?: kept.getString("messages", null)?.let { old -> Json.parseToJsonElement(old).jsonArray.map { it.jsonObject }.let { ChatThread.chain(it, it.map { java.util.UUID.randomUUID().toString() }) } })
-            ?.takeIf { it.nodes.isNotEmpty() }?.let { thread -> val id = java.util.UUID.randomUUID().toString(); KeptChats(listOf(SavedChat(id, "", System.currentTimeMillis(), thread, imported)), id) }
-}.getOrNull() ?: KeptChats()
-
-/** At most this many messages go to the model, whole turns kept: a tool result never stays without its call. */
-private fun recent(history: List<JsonObject>): List<JsonObject> {
-    var out = history
-    while (out.size > 24) { val next = out.indexOfFirst { it !== out.first() && it["role"]?.jsonPrimitive?.content == "user" }; if (next < 0) break; out = out.drop(next) }
-    return out
 }
 
 @Composable private fun IconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) =
@@ -654,7 +500,7 @@ private data class OfferedService(val id: String?, val name: String, val models:
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, lineHeight = 24.sp, color = ink),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(ink), decorationBox = { inner -> if (value.isEmpty()) Plain("问点什么", 16.sp, Ink.faint); inner() })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.heightIn(min = 38.dp).clip(RoundedCornerShape(10.dp)).clickable(enabled = !busy, onClick = onTools)
+            Row(Modifier.heightIn(min = 38.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onTools)
                 .padding(horizontal = 7.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Build, null, Modifier.size(14.dp), tint = Ink.muted)
                 Plain("工具", 12.sp, Ink.muted)
