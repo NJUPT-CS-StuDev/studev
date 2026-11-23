@@ -142,9 +142,8 @@ function render() {
     document.querySelectorAll<HTMLElement>('[data-owner-only]').forEach((n) => (n.hidden = false));
   }
   q('[data-password-totp]').hidden = !user.totpEnabled;
-  q<HTMLInputElement>('#password-totp').required = user.totpEnabled;
   q('[data-mfa-state]').textContent = user.totpEnabled
-    ? '已开启双重验证。新设备登录和修改密码时，需要输入动态验证码或恢复码。'
+    ? '已开启双重验证（登录与修改密码时校验 6 位动态码）。'
     : user.role === 'owner'
       ? '平台所有者账号须绑定动态验证器。'
       : '可绑定认证器，登录时使用动态验证码或恢复码。';

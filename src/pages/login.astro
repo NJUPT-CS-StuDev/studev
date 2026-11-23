@@ -24,10 +24,8 @@ import '../platform/platform.css';
           </div>
         </div>
         <div class="p-field" data-login-totp hidden>
-          <label for="login-totp">动态验证码或恢复码</label>
+          <label for="login-totp">双重验证码</label>
           <input id="login-totp" name="totp" autocomplete="one-time-code" maxlength="64" placeholder="6 位动态码或恢复码" />
-          <label class="p-checkbox" for="login-trust-device"><input id="login-trust-device" type="checkbox" />信任此设备 30 天</label>
-          <p class="p-help">只在自己的设备上勾选。</p>
         </div>
         <button class="p-button wide" type="submit">立即登录</button>
       </form>

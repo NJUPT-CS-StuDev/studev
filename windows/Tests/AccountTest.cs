@@ -25,51 +25,6 @@ internal static class AccountTest
     {
         void Same(string label, object? actual, object? expected) => equal("account " + label, actual, JsonSerializer.SerializeToNode(expected, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
         {
-            StoredAccount saved = new("test-device", null);
-            var alice = User with { TotpEnabled = true };
-            var bob = User with { Id = "user-b", StudentId = "B240001" };
-            var requests = new List<(string Path, JsonObject? Body)>();
-            var trustIsValid = true;
-            Task<(int Status, JsonObject Body)> Dispatch(string path, JsonObject? body, string? bearer)
-            {
-                requests.Add((path, body));
-                if (path == "/auth/trusted-devices") return Ok(new() { ["items"] = new JsonArray(new JsonObject { ["id"] = Family, ["deviceName"] = "Windows", ["kind"] = "bearer", ["current"] = true, ["createdAt"] = "2026-11-16T00:00:00.000Z", ["expiresAt"] = Now + 600_000 }) });
-                if (path == $"/auth/trusted-devices/{Family}/revoke") { trustIsValid = false; return Ok(new()); }
-                if (path == "/auth/password") return Task.FromResult((401, Failure("MFA_REQUIRED")));
-                if (path != "/auth/login") return Ok(new());
-                var signIn = (string?)body?["studentId"] == alice.StudentId ? alice : bob;
-                var code = (string?)body?["totp"];
-                if (signIn.TotpEnabled && code is null && (!trustIsValid || (string?)body?["trustedDeviceToken"] != "test-trust")) return Task.FromResult((401, Failure("MFA_REQUIRED")));
-                var result = Credentials(); result["user"] = UserBody(signIn)["user"]!.DeepClone();
-                if (code == "123456" && (bool?)body?["trustDevice"] == true) result["trustedDeviceToken"] = "test-trust";
-                return Ok(result);
-            }
-            Account Client() => new(saved, value => saved = value, Dispatch, () => Now);
-            var account = Client();
-            Same("a new device sends neither factor nor trust request without input", await Code(() => account.SignIn(alice.StudentId, "test-password", "", true)), "MFA_REQUIRED");
-            Same("an unchecked challenge sent no trust request", requests.Last().Body!.ContainsKey("trustDevice"), false);
-            await account.SignIn(alice.StudentId.ToLowerInvariant(), "test-password", "123456", true);
-            Same("opt-in sends trust only alongside a factor", (bool?)requests.Last().Body!["trustDevice"], true);
-            await account.SignOut();
-            var stored = JsonSerializer.Serialize(saved, StorageJson.Default.StoredAccount);
-            saved = JsonSerializer.Deserialize(stored, StorageJson.Default.StoredAccount)!;
-            Same("the protected record keeps trust and clears the session", saved.Session is null && saved.TrustedDevices?.GetValueOrDefault(alice.StudentId) == "test-trust", true);
-            account = Client();
-            await account.SignIn(bob.StudentId, "test-password", "");
-            Same("another account never receives the first account's trust", requests.Last().Body!.ContainsKey("trustedDeviceToken"), false);
-            await account.SignOut();
-            await account.SignIn(alice.StudentId, "test-password", "");
-            Same("trusted login sends the token without an authenticator prompt", (string?)requests.Last().Body!["trustedDeviceToken"], "test-trust");
-            Same("sensitive actions surface fresh factor demands without refreshing", await Code(() => account.ChangePassword("test-password", "new-test-password", "")), "MFA_REQUIRED");
-            Same("sensitive action does not send trust", requests.Last().Body!.ContainsKey("trustedDeviceToken"), false);
-            var trusted = await account.TrustedDevices();
-            Same("trusted list marks this device", trusted[0].Current, true);
-            await account.RevokeTrust(trusted[0]);
-            Same("revoking trust keeps the current session and removes the protected token", account.User?.Id == alice.Id && saved.TrustedDevices is null, true);
-            await account.SignOut();
-            Same("next login after revoking trust must use a factor", await Code(() => account.SignIn(alice.StudentId, "test-password", "")), "MFA_REQUIRED");
-        }
-        {
             StoredAccount? saved = null; var calls = new List<string>();
             var account = new Account(new("test-device", null), value => saved = value, (path, body, bearer) =>
             {

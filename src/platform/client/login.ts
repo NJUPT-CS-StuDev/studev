@@ -2,30 +2,21 @@ import { api, avatarImg, busy, el, errorText, initPasswordToggles, message, q, s
 const status = q<HTMLElement>('[data-auth-status]');
 const login = q<HTMLFormElement>('[data-login-form]');
 const register = q<HTMLFormElement>('[data-register-form]');
-const loginFactor = q<HTMLInputElement>('#login-totp');
-const trustDevice = q<HTMLInputElement>('#login-trust-device');
 let mfaStudentId = '';
 let authRevision = 0;
 function resetLoginFactor() {
     authRevision++;
     mfaStudentId = '';
-    loginFactor.value = '';
-    loginFactor.required = false;
-    trustDevice.checked = false;
+    const input = q<HTMLInputElement>('#login-totp');
+    input.value = '';
+    input.required = false;
     q('[data-login-totp]').hidden = true;
-}
-function showLoginFactor(studentId: string) {
-    mfaStudentId = studentId;
-    q('[data-login-totp]').hidden = false;
-    loginFactor.required = true;
-    loginFactor.focus();
 }
 function showTab(name: string) { resetLoginFactor(); login.hidden = name !== 'login'; register.hidden = name !== 'register'; document.querySelectorAll<HTMLButtonElement>('[data-auth-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.authTab === name))); message(status); }
 document.querySelectorAll<HTMLButtonElement>('[data-auth-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.authTab || 'login')));
 if (new URLSearchParams(location.search).get('tab') === 'register') showTab('register');
 q<HTMLInputElement>('#login-student-id').addEventListener('input', resetLoginFactor);
 q<HTMLInputElement>('#login-student-id').addEventListener('change', resetLoginFactor);
-q<HTMLInputElement>('#login-password').addEventListener('input', resetLoginFactor);
 let qqPreviewTimer = 0;
 q<HTMLInputElement>('#register-qq').addEventListener('input', () => {
   const qq = q<HTMLInputElement>('#register-qq').value.trim();
@@ -57,10 +48,11 @@ q<HTMLInputElement>('#register-qq').addEventListener('input', () => {
 login.addEventListener('submit', async (e) => { e.preventDefault(); const b = q<HTMLButtonElement>('button[type=submit]', login); const studentId = q<HTMLInputElement>('#login-student-id').value.trim().toUpperCase(); if (mfaStudentId !== studentId) resetLoginFactor(); const revision = authRevision; try {
     await busy(b, async () => { const data = await api<Session & {
         mfaRequired?: boolean;
-    }>('/auth/login', { studentId, password: q<HTMLInputElement>('#login-password').value,
-        ...(mfaStudentId === studentId ? { totp: loginFactor.value.trim() || undefined, trustDevice: trustDevice.checked } : {}),
-    }); if (revision !== authRevision) return; if (data.mfaRequired) {
-        showLoginFactor(studentId);
+    }>('/auth/login', { studentId, password: q<HTMLInputElement>('#login-password').value, totp: mfaStudentId === studentId ? q<HTMLInputElement>('#login-totp').value.trim() || undefined : undefined }); if (revision !== authRevision) return; if (data.mfaRequired) {
+        mfaStudentId = studentId;
+        q('[data-login-totp]').hidden = false;
+        q<HTMLInputElement>('#login-totp').required = true;
+        q<HTMLInputElement>('#login-totp').focus();
         message(status, '密码已验证，请输入验证器动态码或恢复码。');
         return;
       }
@@ -85,7 +77,10 @@ catch (e) {
         code?: string;
     }).code;
     if (code === 'MFA_REQUIRED' || code === 'TOTP_REQUIRED') {
-        showLoginFactor(studentId);
+        mfaStudentId = studentId;
+        q('[data-login-totp]').hidden = false;
+        q<HTMLInputElement>('#login-totp').required = true;
+        q<HTMLInputElement>('#login-totp').focus();
     }
     message(status, errorText(e), 'error');
 } });

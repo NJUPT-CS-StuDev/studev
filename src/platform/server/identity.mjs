@@ -3,7 +3,6 @@ import { digest, hashPassword, safeEqual, validPasswordHash, verifyPassword } fr
 import { fail, platformOrigin, readJson, requireOrigin, response, text } from './common.mjs';
 import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
-import { createTrustedDevices } from './trusted-devices.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
 import { hasPublishedRosterAppointment, publishRosterPerson, readRosterPeople, rosterView, qqAvatarUrl, profileNickname } from './roster.mjs';
@@ -61,14 +60,12 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
   const members = createMembers(repo, origin);
   const local = origin.startsWith('http://');
   const cookieName = local ? 'studev_platform_dev' : '__Host-studev_platform';
-  const trustCookieName = local ? 'studev_trusted_dev' : '__Host-studev_trusted';
   const sessionSecret = env.PLATFORM_SESSION_SECRET;
   if (typeof sessionSecret !== 'string' || sessionSecret.length < 32 || !validPasswordHash(env.PLATFORM_OWNER_PASSWORD_HASH) || !QQ.test(String(env.PLATFORM_OWNER_QQ || '')) || !/^[A-Za-z0-9+/]{43}=$/.test(String(env.PLATFORM_ENCRYPTION_KEY || ''))) {
     fail(503, 'NOT_CONFIGURED', '平台身份配置尚未完成。');
   }
   let bootstrapPromise;
   const sessions = createSessions({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
-  const trustedDevices = createTrustedDevices({ repo, now, isCurrentSession: sessions.isCurrent });
   const authRequests = new WeakMap();
   const authSessionKey = (auth) => `identity/devices/state/${auth.sessionId}`;
   function appointmentYear() {
@@ -129,12 +126,11 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     const parts = String(value || '').split('.');
     return parts.length === 2 && TOKEN.test(parts[0]) && TOKEN.test(parts[1]) ? { accessToken: parts[0], refreshToken: parts[1] } : null;
   }
-  function credentialResponse({ credentials, session }, body = {}, trust) {
+  function credentialResponse({ credentials, session }, body = {}) {
     const payload = { ...body, deviceSessionId: session.id, csrfToken: session.csrfToken };
-    if (session.kind === 'bearer') return response({ ...payload, ...credentials, ...(trust && { trustedDeviceToken: trust.token }) });
+    if (session.kind === 'bearer') return response({ ...payload, ...credentials });
     const result = response(payload);
     result.headers.set('Set-Cookie', sessionCookie(cookieName, `${credentials.accessToken}.${credentials.refreshToken}`, Math.max(0, Math.floor((session.expiresAt - now()) / 1000))));
-    if (trust) result.headers.append('Set-Cookie', sessionCookie(trustCookieName, trust.token, Math.max(0, Math.floor((trust.expiresAt - now()) / 1000))));
     return result;
   }
   function signedOutResponse(kind) {
@@ -175,13 +171,12 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     }
     return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind, loginHead: auth.loginHead };
   }
-  async function sessionResponse(user, body, kind, verified, trusted) {
+  async function sessionResponse(user, body, kind, verified) {
     const [started, orgs] = await Promise.all([
-      sessions.start(user, body, { kind, mfaVerified: Boolean(verified || trusted), verified }), loadOrganizations(repo),
+      sessions.start(user, body, { kind, mfaVerified: Boolean(verified), verified }), loadOrganizations(repo),
       verified?.then(() => members.publish(user, user)) ?? members.publish(user, user),
     ]);
-    const trust = verified && body.trustDevice === true ? await trustedDevices.grant(user, started.session) : undefined;
-    return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) }, trust);
+    return credentialResponse(started, { user: publicUser(user, orgs), ...setupStatus(user, started.session) });
   }
   const DIRECTORY_INDEX_KEY = 'identity/directory-index.json';
   function directoryEntry(user) {
@@ -264,12 +259,8 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     }
     await claimStudent(studentId, current.id);
   }
-  function requireFactorCode(code) {
-    if (code === undefined || code === null || (typeof code === 'string' && !code.trim())) fail(401, 'MFA_REQUIRED', '请输入你的动态验证码或恢复码。');
-  }
   async function consumeFactor(user, code) {
     if (!user.totp) fail(400, 'TOTP_NOT_ENABLED', '尚未绑定认证器。');
-    requireFactorCode(code);
     if (typeof code !== 'string' || code.length > 64) fail(401, 'MFA_INVALID', '动态验证码或恢复码无效。');
     const normalized = code.trim().toUpperCase();
     const recoveryHash = digest(`${user.id}:${normalized}`);
@@ -284,11 +275,6 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     }
     try { await repo.putNew(key, { usedAt: iso(now) }); }
     catch (error) { if (isConflict(error)) fail(401, 'MFA_REPLAYED', '此验证码已使用，请使用下一个验证码或未使用的恢复码。'); throw error; }
-  }
-  async function authorizeCredentialChange(user, code) {
-    if (!user.totp) fail(403, 'TOTP_NOT_ENABLED', '请先在账号安全中绑定验证器，再办理此操作。');
-    await repo.throttle('management-factor', user.id, 8, 60);
-    await consumeFactor(user, code);
   }
   async function loadUser(id) {
     if (!ID.test(id)) fail(404, 'USER_NOT_FOUND', '账号不存在。');
@@ -425,21 +411,6 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const auth = await authenticate(request, { required: true });
       return response({ items: (await sessions.list(auth.user, auth.loginHead)).map(item => ({ ...item, current: item.id === auth.sessionId })) });
     }
-    if (method === 'GET' && route === '/auth/trusted-devices') {
-      const auth = await authenticate(request, { required: true });
-      return response({ items: await trustedDevices.list(auth.user, auth.session) });
-    }
-    const trustedDevice = route.match(/^\/auth\/trusted-devices\/([a-f0-9-]{36})\/revoke$/);
-    if (method === 'POST' && trustedDevice) {
-      const auth = await authenticate(request, { required: true, csrf: true });
-      await trustedDevices.revoke(auth.user, trustedDevice[1]);
-      await repo.audit(auth.user.id, 'identity.trust.revoked', trustedDevice[1]);
-      const result = response({ ok: true });
-      if (auth.kind === 'cookie' && cookieValue(request, trustCookieName)?.startsWith(`${trustedDevice[1]}.`)) {
-        result.headers.set('Set-Cookie', sessionCookie(trustCookieName, '', 0));
-      }
-      return result;
-    }
     const device = route.match(/^\/auth\/devices\/([a-f0-9-]{36})\/revoke$/);
     if (method === 'POST' && device) {
       const auth = await authenticate(request, { required: true, csrf: true });
@@ -553,11 +524,8 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       ]);
       const correct = await verifyPassword(body.password, user?.passwordHash || env.PLATFORM_OWNER_PASSWORD_HASH);
       if (!correct || !user || user.studentId !== identifier || user.status !== 'active') fail(401, 'LOGIN_FAILED', '学号或密码不正确，或账号尚未激活/已停用。');
-      if (!user.totp) return sessionResponse(user, body, kind);
-      if (body.totp) return sessionResponse(user, body, kind, consumeFactor(user, body.totp));
-      const trust = kind === 'cookie' ? cookieValue(request, trustCookieName) : body.trustedDeviceToken;
-      if (!await trustedDevices.verify(user, trust, kind, body.deviceId)) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
-      return sessionResponse(user, body, kind, undefined, true);
+      if (user.totp && !body.totp) fail(401, 'MFA_REQUIRED', '请填写认证器动态验证码或恢复码。');
+      return sessionResponse(user, body, kind, user.totp ? consumeFactor(user, body.totp) : null);
     }
     if (method === 'GET' && route === '/auth/session') {
       const [auth, orgs] = await Promise.all([authenticate(request, { required: true, allowEnrollment: true }), loadOrganizations(repo)]);
@@ -641,11 +609,9 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const body = await readJson(request, 8192);
       await repo.throttle('password-change', auth.user.id, 5, 60);
       if (!await verifyPassword(body.currentPassword, auth.user.passwordHash)) fail(401, 'PASSWORD_INVALID', '当前密码不正确。');
-      const newPassword = validatePassword(body.newPassword);
-      if (auth.user.totp) requireFactorCode(body.totp);
-      if (safeEqual(body.currentPassword, newPassword)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
-      if (auth.user.totp) await consumeFactor(auth.user, body.totp);
-      const passwordHash = await hashPassword(newPassword);
+      if (auth.user.totp && !auth.mfaVerified) await consumeFactor(auth.user, body.totp);
+      const passwordHash = await hashPassword(validatePassword(body.newPassword));
+      if (await verifyPassword(body.newPassword, auth.user.passwordHash)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
       await saveUser(auth.user, { passwordHash, mustChangePassword: false, securityVersion: secretToken() });
       await repo.audit(auth.user.id, 'identity.password.changed', auth.user.id);
       await tellPasswordChanged(auth.user);
@@ -785,7 +751,6 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const signature = body.signature === undefined ? '' : text(body.signature, '个性签名', 120, false);
       if (await repo.get(studentKey(studentId))) fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '该学号已存在记录。');
       if (qq && await repo.get(`identity/qq/${qq}.json`)) fail(409, 'QQ_ALREADY_REGISTERED', '该 QQ 号已存在记录。');
-      if (role === 'admin') await authorizeCredentialChange(auth.user, body.totp);
       const id = randomUUID();
       if (qq) await repo.putNew(`identity/qq/${qq}.json`, { id });
       await claimStudent(studentId, id);
@@ -816,15 +781,12 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       }
       const body = await readJson(request, 8192);
       if (management[2] === '/reset-password') {
-        const password = validatePassword(body.password);
-        await authorizeCredentialChange(auth.user, body.totp);
-        const passwordHash = await hashPassword(password);
+        const passwordHash = await hashPassword(validatePassword(body.password));
         await saveUser(user, { passwordHash, mustChangePassword: true, securityVersion: secretToken() });
         await repo.audit(auth.user.id, 'identity.password.reset', user.id);
         return response({ ok: true });
       }
       if (management[2] === '/reset-totp') {
-        await authorizeCredentialChange(auth.user, body.totp);
         await saveUser(user, { totp: null, securityVersion: secretToken() });
         await repo.audit(auth.user.id, 'identity.totp.reset', user.id);
         return response({ ok: true });
@@ -851,7 +813,6 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships, orgs, appointmentYear());
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
-      if (role !== user.role) await authorizeCredentialChange(auth.user, body.totp);
       if (studentId && studentId !== user.studentId) {
         await bindStudent(user, studentId, realName);
       }

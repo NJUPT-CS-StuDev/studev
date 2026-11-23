@@ -43,8 +43,7 @@ function fixture({ mailer } = {}) {
     const confirmed = await call('/auth/totp/confirm', 'POST', { code: factor(setup.secret) }, auth);
     const current = await call('/auth/session', 'GET', undefined, auth);
     await call('/auth/profile', 'POST', { studentId: 'TESTOWNER01', realName: '合成测试所有者', revision: current.user.revision }, auth);
-    return { ...auth, ...(await call('/auth/session', 'GET', undefined, auth)), secret: setup.secret, recoveryCodes: confirmed.recoveryCodes, cookie: auth.cookie,
-      nextFactor: () => { advance(); return factor(setup.secret); } };
+    return { ...auth, ...(await call('/auth/session', 'GET', undefined, auth)), secret: setup.secret, recoveryCodes: confirmed.recoveryCodes, cookie: auth.cookie };
   }
   async function member(qq = '10000222') {
     const { user } = await call('/auth/register', 'POST', { qq, nickname: 'Synthetic member', password: MEMBER_PASSWORD, role: 'owner' });
@@ -113,112 +112,6 @@ test('recovery codes are atomic single-use even when two logins race', async () 
   assert.equal(attempts.find((value) => value.status === 'rejected').reason.code, 'MFA_REPLAYED');
 });
 
-test('browser trust is opt-in, cookie-only, device-bound, and independently revocable after sign-out', async () => {
-  const f = fixture(), owner = await f.owner();
-  const deviceId = crypto.randomUUID();
-  const body = { studentId: owner.user.studentId, password: CHANGED, deviceId };
-  const signIn = (options = {}, cookie) => f.call('/auth/login', 'POST', { ...body, ...options }, undefined, cookie ? { Cookie: cookie } : {});
-  await rejects(signIn({ trustDevice: true }), 'MFA_REQUIRED', 401);
-  const unremembered = await signIn({ totp: owner.nextFactor() });
-  assert.equal(unremembered.headers.getSetCookie().length, 1);
-  await f.call('/auth/logout', 'POST', {}, unremembered);
-  const optedIn = await signIn({ totp: owner.nextFactor(), trustDevice: true });
-  assert.equal(optedIn.headers.getSetCookie().length, 2);
-  assert.equal(Object.hasOwn(optedIn, 'trustedDeviceToken'), false);
-  const header = optedIn.headers.getSetCookie()[1];
-  assert.match(header, /^__Host-studev_trusted=[A-Za-z0-9_.-]+; Path=\/; HttpOnly; SameSite=Strict; Max-Age=2592000; Secure$/);
-  const tokenCookie = header.split(';')[0];
-  const token = tokenCookie.split('=')[1];
-  const secret = token.split('.')[1];
-  assert.ok(!JSON.stringify([...f.values]).includes(secret));
-  const trusted = (await f.call('/auth/trusted-devices', 'GET', undefined, optedIn)).items;
-  assert.equal(trusted.length, 1);
-  assert.equal(trusted[0].current, true);
-  assert.deepEqual(Object.keys(trusted[0]).sort(), ['createdAt', 'current', 'deviceName', 'expiresAt', 'id', 'kind']);
-  assert.equal((await f.call('/auth/trusted-devices', 'GET', undefined, owner)).items[0].current, false);
-  await f.call('/auth/logout', 'POST', {}, optedIn);
-  await rejects(signIn({ password: INITIAL }, tokenCookie), 'LOGIN_FAILED', 401);
-  await rejects(signIn({ deviceId: crypto.randomUUID() }, tokenCookie), 'MFA_REQUIRED', 401);
-  await rejects(signIn({ trustedDeviceToken: token }), 'MFA_REQUIRED', 401);
-  const remembered = await signIn({ trustDevice: true }, tokenCookie);
-  assert.equal(remembered.mfaVerified, true);
-  assert.equal(remembered.headers.getSetCookie().length, 1);
-  assert.equal((await f.call('/auth/trusted-devices', 'GET', undefined, remembered)).items[0].expiresAt, trusted[0].expiresAt);
-  const replacement = await signIn({ totp: owner.nextFactor(), trustDevice: true });
-  const replacementCookie = replacement.headers.getSetCookie()[1].split(';')[0];
-  const [current, ...others] = (await f.call('/auth/trusted-devices', 'GET', undefined, replacement)).items;
-  assert.notEqual(current.id, trusted[0].id);
-  assert.equal(others.length, 0);
-  await rejects(signIn({}, tokenCookie), 'MFA_REQUIRED', 401);
-  const revoke = `/auth/trusted-devices/${current.id}/revoke`;
-  const member = await f.member();
-  await rejects(f.call(revoke, 'POST', {}, member), 'DEVICE_NOT_FOUND', 404);
-  await rejects(f.call(revoke, 'POST', {}, owner, { 'X-CSRF-Token': '' }), 'CSRF_REJECTED', 403);
-  assert.equal((await f.call(revoke, 'POST', {}, owner)).ok, true);
-  assert.deepEqual((await f.call('/auth/trusted-devices', 'GET', undefined, replacement)).items, []);
-  assert.equal((await f.call('/auth/session', 'GET', undefined, replacement)).status, 200);
-  await rejects(signIn({}, replacementCookie), 'MFA_REQUIRED', 401);
-});
-
-test('sensitive operations consume an action factor even after a trusted administrator login', async () => {
-  const f = fixture(), owner = await f.owner(), member = await f.member();
-  const login = { studentId: owner.user.studentId, password: CHANGED, deviceId: crypto.randomUUID() };
-  const optedIn = await f.call('/auth/login', 'POST', { ...login, totp: owner.nextFactor(), trustDevice: true });
-  const trustedCookie = optedIn.headers.getSetCookie()[1].split(';')[0];
-  const auth = await f.call('/auth/login', 'POST', login, undefined, { Cookie: trustedCookie });
-  const adminPath = `/admin/users/${member.user.id}`;
-  const newAdmin = { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999' };
-  await rejects(f.call('/admin/users', 'POST', newAdmin, auth), 'MFA_REQUIRED', 401);
-  await rejects(f.call('/admin/users', 'POST', { ...newAdmin, role: 'admin' }, auth), 'MFA_REQUIRED', 401);
-  assert.equal((await f.call('/admin/users', 'POST', { ...newAdmin, role: 'user' }, auth)).user.role, 'user');
-  await rejects(f.call(adminPath, 'POST', { revision: member.user.revision, role: 'admin' }, auth), 'MFA_REQUIRED', 401);
-  await rejects(f.call(`${adminPath}/reset-totp`, 'POST', {}, auth), 'MFA_REQUIRED', 401);
-  await rejects(f.call(`${adminPath}/reset-password`, 'POST', { password: MEMBER_PASSWORD }, auth), 'MFA_REQUIRED', 401);
-  const newPassword = 'brand-new-synthetic-owner-password';
-  const changePassword = { currentPassword: CHANGED, newPassword };
-  await rejects(f.call('/auth/password', 'POST', changePassword, auth), 'MFA_REQUIRED', 401);
-  await rejects(f.call('/auth/password', 'POST', { currentPassword: CHANGED, newPassword: CHANGED }, auth), 'MFA_REQUIRED', 401);
-  const factor = owner.nextFactor();
-  assert.equal((await f.call(adminPath, 'POST', { revision: member.user.revision, role: 'admin', totp: factor }, auth)).user.role, 'admin');
-  await rejects(f.call('/auth/password', 'POST', { ...changePassword, totp: factor }, auth), 'MFA_REPLAYED', 401);
-  const directAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD, trustDevice: true });
-  assert.equal(directAdmin.headers.getSetCookie().length, 1);
-  const ordinary = await f.member('10000223');
-  await rejects(f.call(`/admin/users/${ordinary.user.id}/reset-totp`, 'POST', {}, directAdmin), 'TOTP_NOT_ENABLED', 403);
-  assert.equal((await f.call('/auth/password', 'POST', { ...changePassword, totp: owner.nextFactor() }, auth)).status, 200);
-  await rejects(f.call('/auth/login', 'POST', { ...login, password: newPassword }, undefined, { Cookie: trustedCookie }), 'MFA_REQUIRED', 401);
-});
-
-test('a delayed trust opt-in cannot remove a newer grant or overwrite the newer browser login', async () => {
-  const f = fixture(), owner = await f.owner();
-  const originalList = f.store.list;
-  const activated = Promise.withResolvers(), release = Promise.withResolvers();
-  const path = `platform-v1/identity/devices/trusted/${owner.user.id}/`;
-  let waiting = false;
-  f.store.list = async (options) => {
-    if (!waiting && options.prefix === path) {
-      waiting = true;
-      activated.resolve();
-      await release.promise;
-    }
-    return originalList(options);
-  };
-  const credentials = { studentId: owner.user.studentId, password: CHANGED, deviceId: crypto.randomUUID(), trustDevice: true };
-  const older = rejects(f.call('/auth/login', 'POST', { ...credentials, totp: owner.nextFactor() }), 'REVISION_CONFLICT', 409);
-  await activated.promise;
-  try {
-    const newer = await f.call('/auth/login', 'POST', { ...credentials, totp: owner.nextFactor() });
-    const tokenCookie = newer.headers.getSetCookie()[1].split(';')[0];
-    release.resolve();
-    await older;
-    const { items } = await f.call('/auth/trusted-devices', 'GET', undefined, newer);
-    assert.equal(items.length, 1);
-    assert.equal((await f.call('/auth/login', 'POST', { ...credentials, trustDevice: false }, undefined, { Cookie: tokenCookie })).mfaVerified, true);
-  } finally {
-    release.resolve();
-  }
-});
-
 test('open registration creates ordinary users with unverified derived contact email', async () => {
   const f = fixture();
   const member = await f.member();
@@ -260,7 +153,7 @@ test('a blank nickname defaults to the final character of the name', async () =>
 
 test('promotion revokes sessions; admin authority works without mandatory TOTP while optional TOTP is enforced when enabled', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
-  const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin', totp: owner.nextFactor(), memberships: [{ organizationId: 'student-development/operations', title: '部长' }] }, owner);
+  const promoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: member.user.revision, role: 'admin', memberships: [{ organizationId: 'student-development/operations', title: '部长' }] }, owner);
   assert.equal(promoted.user.role, 'admin');
   await rejects(f.call('/auth/session', 'GET', undefined, member), 'TOKEN_INVALID', 401);
   const directAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
@@ -309,7 +202,7 @@ test('last owner cannot be disabled, downgraded, or created through role editing
 test('controlled password reset revokes sessions and forces change before user business access', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member();
   const temporary = 'synthetic-reset-password-123';
-  await f.call(`/admin/users/${member.user.id}/reset-password`, 'POST', { password: temporary, totp: owner.nextFactor() }, owner);
+  await f.call(`/admin/users/${member.user.id}/reset-password`, 'POST', { password: temporary }, owner);
   await rejects(f.call('/auth/session', 'GET', undefined, member), 'TOKEN_INVALID', 401);
   const limited = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: temporary });
   assert.equal(limited.passwordChangeRequired, true);
@@ -325,8 +218,8 @@ test('TOTP reset revokes sessions; admin can log in without TOTP while owner can
   const setup = await f.call('/auth/totp/setup', 'POST', { password: MEMBER_PASSWORD }, member);
   await f.call('/auth/totp/confirm', 'POST', { code: f.factor(setup.secret) }, member);
   const refreshed = await f.call('/auth/session', 'GET', undefined, member);
-  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin', totp: owner.nextFactor(), memberships: [{ organizationId: 'student-development/operations', title: '部长' }] }, owner);
-  await f.call(`/admin/users/${member.user.id}/reset-totp`, 'POST', { totp: owner.nextFactor() }, owner);
+  await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: refreshed.user.revision, role: 'admin', memberships: [{ organizationId: 'student-development/operations', title: '部长' }] }, owner);
+  await f.call(`/admin/users/${member.user.id}/reset-totp`, 'POST', {}, owner);
   const resetAdmin = await f.call('/auth/login', 'POST', { studentId: member.user.studentId, password: MEMBER_PASSWORD });
   assert.equal(resetAdmin.enrollmentRequired, false);
   assert.equal((await f.identity.authenticate(f.request('/admin/forms', 'GET', undefined, resetAdmin), { staff: true })).user.role, 'admin');
@@ -444,10 +337,10 @@ test('normal login accepts only normalized student ID and independently checks t
 
 test('pre-recorded staff use managed password and status operations to activate, then must change the temporary password', async () => {
   const f = fixture(), owner = await f.owner();
-  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin', totp: owner.nextFactor(), memberships: [{ organizationId: 'student-development/operations', title: '部员' }] }, owner);
+  const seeded = await f.call('/admin/users', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', role: 'admin', memberships: [{ organizationId: 'student-development/operations', title: '部员' }] }, owner);
   assert.equal(seeded.user.status, 'pending');
   await rejects(f.call('/auth/register', 'POST', { studentId: 'STAFF00001', realName: '预录管理员', qq: '10009999', nickname: '有人', password: MEMBER_PASSWORD }), 'ACCOUNT_PENDING_REVIEW', 409);
-  await f.call(`/admin/users/${seeded.user.id}/reset-password`, 'POST', { password: MEMBER_PASSWORD, totp: owner.nextFactor() }, owner);
+  await f.call(`/admin/users/${seeded.user.id}/reset-password`, 'POST', { password: MEMBER_PASSWORD }, owner);
   const latest = await f.call(`/admin/users/${seeded.user.id}`, 'GET', undefined, owner);
   await f.call(`/admin/users/${seeded.user.id}`, 'POST', { revision: latest.user.revision, status: 'active' }, owner);
   const login = await f.call('/auth/login', 'POST', { studentId: 'STAFF00001', password: MEMBER_PASSWORD });
@@ -533,14 +426,13 @@ test('every password change or reset mails the account, and a mail failure never
 
 test('admin role is independent of position, and owner can update full identity without resetting password', async () => {
   const f = fixture(), owner = await f.owner(), member = await f.member('10000888');
-  assert.equal((await f.call('/admin/users', 'POST', { studentId: 'NODEPT01', realName: '无职务', qq: '10008881', totp: owner.nextFactor() }, owner)).user.role, 'admin');
+  assert.equal((await f.call('/admin/users', 'POST', { studentId: 'NODEPT01', realName: '无职务', qq: '10008881', role: 'admin' }, owner)).user.role, 'admin');
   const updated = await f.call(`/admin/users/${member.user.id}`, 'POST', {
     revision: member.user.revision,
     studentId: 'NEWID0888',
     realName: '已更名成员',
     identityVerified: true,
     role: 'admin',
-    totp: owner.nextFactor(),
     memberships: [
       { organizationId: 'student-development', title: '执行主席' },
       { organizationId: 'student-development/media', title: '部员' },
@@ -570,7 +462,7 @@ test('admin role is independent of position, and owner can update full identity 
   assert.equal((await f.call('/public/roster')).totalCount, 0);
   assert.equal((await f.call('/public/roster?year=2026-2027')).totalCount, 1);
   assert.deepEqual((await f.call('/auth/session', 'GET', undefined, relogin)).user.memberships, []);
-  const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: unplaced.user.revision, role: 'user', totp: owner.nextFactor() }, owner);
+  const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: unplaced.user.revision, role: 'user' }, owner);
   assert.equal(demoted.user.role, 'user');
 });
 

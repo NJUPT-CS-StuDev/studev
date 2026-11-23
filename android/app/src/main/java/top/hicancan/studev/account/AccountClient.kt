@@ -15,7 +15,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.net.HttpURLConnection
 import java.net.URI
-import java.text.Normalizer
 import java.util.UUID
 import java.io.InputStream
 import java.io.ByteArrayOutputStream
@@ -41,8 +40,7 @@ sealed interface AccountPresence {
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
-@Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null,
-    val trustedDevices: Map<String, String> = emptyMap())
+@Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null)
 interface AccountStorage { suspend fun read(): StoredAccount; suspend fun write(value: StoredAccount) }
 data class PlatformReply(val status: Int, val body: JsonObject)
 class PlatformFailure(val status: Int, val code: String, message: String) : Exception(message)
@@ -156,29 +154,14 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         now() + value.getValue("expiresIn").jsonPrimitive.long * 1000,
         value.getValue("deviceSessionId").jsonPrimitive.content, user,
     )
-    private fun accountKey(studentId: String) = Normalizer.normalize(studentId, Normalizer.Form.NFKC).trim().uppercase()
-
-    suspend fun signIn(studentId: String, password: String, totp: String, deviceName: String, trustDevice: Boolean = false): AccountState = lock.withLock {
+    suspend fun signIn(studentId: String, password: String, totp: String, deviceName: String): AccountState = lock.withLock {
         val stored = restore()
-        val id = accountKey(studentId)
-        val factor = totp.trim()
-        val remembered = stored.trustedDevices[id]
-        val reply = transport.send("/auth/login", buildJsonObject {
-            put("studentId", id); put("password", password); put("deviceId", stored.deviceId); put("deviceName", deviceName.take(80))
-            if (factor.isEmpty()) remembered?.let { put("trustedDeviceToken", it) }
-            else {
-                put("totp", factor)
-                if (trustDevice) put("trustDevice", true)
-            }
-        }, null)
-        val value = try { checked(reply) } catch (failure: PlatformFailure) {
-            if (factor.isEmpty() && remembered != null && failure.code == "MFA_REQUIRED") keep(stored.copy(trustedDevices = stored.trustedDevices - id))
-            throw failure
-        }
+        val value = checked(transport.send("/auth/login", buildJsonObject {
+            put("studentId", studentId.trim()); put("password", password); put("deviceId", stored.deviceId); put("deviceName", deviceName.take(80))
+            if (totp.isNotBlank()) put("totp", totp.trim())
+        }, null))
         val state = accountJson.decodeFromJsonElement<AccountState>(value)
-        val newToken = value["trustedDeviceToken"]?.jsonPrimitive?.contentOrNull
-        val trust = newToken?.let { stored.trustedDevices + (id to it) } ?: stored.trustedDevices
-        keep(stored.copy(session = tokens(value, state.user), trustedDevices = trust))
+        keep(stored.copy(session = tokens(value, state.user)))
         state
     }
     suspend fun register(studentId: String, realName: String, nickname: String, qq: String, password: String) {
@@ -198,17 +181,6 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     }
     suspend fun devices(): List<AccountDevice> = accountJson.decodeFromJsonElement(request("/auth/devices", authenticated = true).getValue("items"))
     suspend fun revokeDevice(id: String) { request("/auth/devices/$id/revoke", buildJsonObject {}, authenticated = true) }
-    suspend fun trustedDevices(): List<AccountDevice> = accountJson.decodeFromJsonElement(request("/auth/trusted-devices", authenticated = true).getValue("items"))
-    suspend fun revokeTrustedDevice(device: AccountDevice) {
-        val credential = access()
-        authenticatedRequest("/auth/trusted-devices/${device.id}/revoke", buildJsonObject {}, credential)
-        if (device.current) lock.withLock {
-            val stored = restore()
-            if (stored.session?.deviceSessionId == credential.deviceSessionId) {
-                keep(stored.copy(trustedDevices = stored.trustedDevices - accountKey(credential.user.studentId)))
-            }
-        }
-    }
     suspend fun forget() = lock.withLock { val stored = restore(); keep(stored.copy(session = null)) }
     private suspend fun access(forceFor: AccountSession? = null): AccountSession = lock.withLock {
         val stored = restore()
