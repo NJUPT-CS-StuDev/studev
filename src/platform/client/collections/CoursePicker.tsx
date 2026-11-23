@@ -27,6 +27,7 @@ export default function CollectionCoursePicker({ value, onChange }: {
     const inputId = useId();
     const [input, setInput] = useState('');
     const [state, setState] = useState<SearchState>();
+    const [attempt, setAttempt] = useState(0);
     const query = input.normalize('NFKC').trim();
 
     useEffect(() => {
@@ -55,7 +56,7 @@ export default function CollectionCoursePicker({ value, onChange }: {
             window.clearTimeout(timer);
             if (requestId !== undefined) client?.cancel(requestId);
         };
-    }, [query, value]);
+    }, [attempt, query, value]);
 
     const result = state?.query === query ? state : undefined;
     return <div className="collection-course-picker">
@@ -69,6 +70,13 @@ export default function CollectionCoursePicker({ value, onChange }: {
                 onChange={event => setInput(event.target.value)} />
             {query && <div aria-live="polite" aria-busy={!result}>
                 {result?.error || (!result ? '正在查找课程…' : !result.items.length ? '未找到课程。' : '')}
+                {result?.error && <button type="button" onClick={() => {
+                    const failed = courseClient;
+                    courseClient = undefined;
+                    void failed?.then(client => client.dispose()).catch(() => undefined);
+                    setState(undefined);
+                    setAttempt(attempt + 1);
+                }}>重试课程搜索</button>}
                 {!!result?.items.length && <ul className="collection-course-results" aria-label="匹配课程">
                     {result.items.map(course => <li key={course.id}>
                         <button type="button" onClick={() => { setInput(''); onChange(course); }}>
