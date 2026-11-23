@@ -21,6 +21,10 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (['POST', 'DELETE'].includes(request.method) && !hasAuthorization(request) && !bearerBootstrap(request, path)) requireOrigin(request, env);
       const store = getStore(env);
       const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET, revisions });
+      if (request.method !== 'GET' && (path === '/api/platform/collections' || path.startsWith('/api/platform/collections/')) &&
+          (await repo.get('cutover/collection-submissions.json'))?.paused === true) {
+        fail(503, 'COLLECTIONS_UPDATING', '收集正在更新，请稍后再试。');
+      }
       const identity = createIdentity({ repo, env, now, academicYear });
       // Never fall back to cookies when an Authorization header is present.
       // Validate it before exempting any endpoint from the browser boundary.
