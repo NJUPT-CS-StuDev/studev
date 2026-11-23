@@ -61,6 +61,12 @@ try {
     await page.goto(new URL(name === 'phone' ? '/history/' : '/history/#people', origin).href);
     if (name === 'phone') {
       await page.getByRole('tab', { name: /大事记/ }).waitFor();
+      await page.setViewportSize({ ...viewport, width: 320 });
+      assert(await page.locator('.club-nav a').evaluateAll(links => links.every(link => {
+        const bounds = link.getBoundingClientRect();
+        return link.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
+      })), 'the phone header leaves every student development center link tappable');
+      await page.setViewportSize(viewport);
       assert.equal(calls.length, 0, 'reading the timeline does not request platform data');
       await page.getByRole('tab', { name: /成员名册/ }).click();
     }

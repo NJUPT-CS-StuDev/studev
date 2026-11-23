@@ -56,9 +56,9 @@ export interface Issuer {
 }
 
 export interface IssuerOption { organizationId: string; title: string; label: string }
-export interface Recipient { studentId: string; name: string }
+export interface Recipient { studentId: string; name: string; groupId?: string; groupLabel?: string }
 export interface DirectoryPerson extends Recipient { organizationIds: string[] }
-export interface Directory { organizations: OrganizationNode[]; people: DirectoryPerson[] }
+export interface Directory { organizations: OrganizationNode[]; scopeIds: string[]; people: DirectoryPerson[] }
 export interface Viewer { id: string; role: Role; isStaff: boolean; canPublish: boolean }
 
 export interface Item<CurrentRound extends RoundSummary = RoundSummary> {
@@ -72,6 +72,9 @@ export interface Item<CurrentRound extends RoundSummary = RoundSummary> {
     visibility: 'public' | 'members';
     status: Status;
     targetMode: TargetMode;
+    audienceOrganizationId?: string | null;
+    showProgress?: boolean;
+    canViewProgress?: boolean;
     publishedAt: string;
     updatedAt: string;
     revision: number;
@@ -93,15 +96,72 @@ export interface Catalog extends WorkspaceData {
     issuerOptions: IssuerOption[];
 }
 
-export interface RoundStats { roundId: string; total: number; submitted: number; late: number; missing: number }
-export interface BoardRow { studentId: string; name: string; orgLabel: string; statuses: Record<string, SubmissionStatus | 'missing'> }
+export interface ProgressCounts {
+    total: number | null;
+    submitted: number;
+    missing: number | null;
+    late: number;
+    records: number;
+}
+export interface ProgressGroup extends ProgressCounts { id: string; label: string }
+export interface RoundProgress extends ProgressCounts {
+    groups: ProgressGroup[];
+    ownStatus: SubmissionStatus | 'missing' | null;
+    ownLate: boolean;
+}
+export interface BoardRow { studentId: string; name: string; orgId?: string; orgLabel: string; statuses: Record<string, SubmissionStatus | 'missing'> }
 export interface Detail extends WorkspaceData {
     item: Item<Round>;
     mySubmissions: Submission[];
 }
 
-export type BoardSubmission = Pick<Submission, 'id' | 'studentId' | 'studentName' | 'status' | 'submittedAt' | 'late'> & { hasFiles: boolean };
-export interface RoundBoardData { items: BoardSubmission[]; board: BoardRow[]; roundStats: RoundStats[] }
+export type BoardSubmission = Pick<Submission, 'id' | 'studentId' | 'studentName' | 'status' | 'submittedAt' | 'late'> &
+    { hasFiles: boolean; personId?: string; complete?: boolean };
+export interface RoundBoardData { items: BoardSubmission[]; board: BoardRow[]; progress: RoundProgress }
+
+export interface BoardTableRow {
+    id: string;
+    studentId?: string;
+    personId?: string;
+    name: string;
+    groupId: string;
+    groupLabel: string;
+    status: SubmissionStatus | 'missing';
+    late: boolean;
+    submissionId?: string;
+    submittedAt?: string;
+    expected: boolean;
+    complete?: boolean;
+    hasFiles?: boolean;
+}
+
+const boardOrder = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
+export const studentKey = (id?: string) => (id || '').normalize('NFKC').trim().toUpperCase();
+
+export function comparePeople(left: BoardTableRow, right: BoardTableRow) {
+    return Number(!left.studentId) - Number(!right.studentId)
+        || boardOrder.compare(studentKey(left.studentId), studentKey(right.studentId))
+        || boardOrder.compare(left.name, right.name)
+        || (right.submittedAt || '').localeCompare(left.submittedAt || '');
+}
+
+export function groupBoardRows(rows: BoardTableRow[]) {
+    const groups = new Map<string, { id: string; label: string; rows: BoardTableRow[] }>();
+    for (const row of rows) {
+        const group = groups.get(row.groupId) ?? { id: row.groupId, label: row.groupLabel || '待核对', rows: [] };
+        group.rows.push(row);
+        groups.set(row.groupId, group);
+    }
+    return [...groups.values()].sort((left, right) => Number(!left.id) - Number(!right.id)
+        || boardOrder.compare(left.label, right.label) || left.id.localeCompare(right.id));
+}
+
+export function matchesBoardFilter(row: { status: string; submissionId?: string; late: boolean }, filter: string) {
+    if (filter === 'all') return true;
+    if (filter === 'submitted') return !!row.submissionId && row.status !== 'missing' && row.status !== 'uploading';
+    if (filter === 'late') return row.status !== 'missing' && row.late;
+    return row.status === filter;
+}
 
 export interface SubmissionFile { id: string; fieldId: string; name: string; size: number; type: string }
 export interface Submission {

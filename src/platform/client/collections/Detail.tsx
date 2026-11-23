@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarClock, ClipboardList, Copy, Download, FileArchive, Pencil, Plus, Settings2, Trash2, Undo2, UsersRound } from 'lucide-react';
 import { api, errorText } from '../api';
-import { pinnedCollections, semesterLabel } from '../../collections.mjs';
-import { downloadZip } from './attachments';
+import { collectionProgress, pinnedCollections, semesterLabel } from '../../collections.mjs';
+import ExportDialog from './ExportDialog';
+import './Board.css';
+import { GroupProgress, ParticipantProgress, ProgressSummary } from './Progress';
 import { AnswerForm, ReceiptSummary, badge } from './Submission';
 import { Dialog } from './Dialog';
-import { collectionLoginUrl, collectionStatus, displayTime, itemRoute, itemState, roundState, roundRoute, toCollectionUrl, type BoardSubmission, type Detail as CollectionDetail, type Item, type Policy, type Round, type RoundBoardData, type Submission, type SubmissionStatus } from './model';
+import { collectionLoginUrl, collectionStatus, comparePeople, displayTime, groupBoardRows, itemRoute, itemState, matchesBoardFilter, roundState, roundRoute, studentKey, submissionRoute, toCollectionUrl, type BoardTableRow, type Detail as CollectionDetail, type Item, type Policy, type Round, type RoundBoardData, type Submission } from './model';
 import type { EditorMode } from './Editor';
 
 export type Navigate = (url: string, replace?: boolean) => void;
@@ -30,81 +32,168 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     const [loadError, setLoadError] = useState('');
     const [actionError, setActionError] = useState('');
     const [filter, setFilter] = useState('all');
+    const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+    const [flat, setFlat] = useState(false);
     const [opened, setOpened] = useState('');
     const [current, setCurrent] = useState<Submission>();
     const [viewError, setViewError] = useState('');
     const [viewAttempt, retryView] = useState(0);
     const [limit, setLimit] = useState(25);
-    const [transfer, setTransfer] = useState<AbortController>();
+    const [exporting, setExporting] = useState(false);
     const [message, setMessage] = useState('');
     const [attempt, retry] = useState(0);
     useEffect(() => {
         const controller = new AbortController();
         api<RoundBoardData>(`${path}/submissions`, undefined, { signal: controller.signal }).then(result => {
             if (!controller.signal.aborted) { setResults(result); setLoadError(''); }
-        }).catch(error => { if (!controller.signal.aborted) setLoadError(errorText(error)); });
+        }).catch(error => {
+            if (!controller.signal.aborted) setLoadError(errorText(error));
+        });
         return () => controller.abort();
     }, [path, version, attempt]);
-    useEffect(() => () => transfer?.abort(), [transfer]);
-    const submissions = results?.items || [];
-    const byStudent = new Map<string, BoardSubmission>();
-    for (const record of submissions) {
-        if (!record.studentId) continue;
-        const current = byStudent.get(record.studentId);
-        if (!current || current.submittedAt < record.submittedAt) byStudent.set(record.studentId, record);
-    }
-    const stat = results?.roundStats.find(value => value.roundId === round.id);
+
     const selected = detail.item.targetMode === 'selected';
-    const people = (results?.board || []).map(person => ({ id: `person-${person.studentId}`, name: person.name, studentId: person.studentId, organization: person.orgLabel, submission: byStudent.get(person.studentId), status: person.statuses[round.id] || 'missing' }));
-    const records = submissions.map(submission => ({ id: submission.id, name: submission.studentName || '填写者', studentId: submission.studentId, organization: '', submission, status: submission.status }));
-    const rows = selected ? round.submissionMode === 'replace' ? people : [...records, ...people.filter(person => person.status === 'missing')] : records;
-    const visible = rows.filter(row => filter === 'all' || row.status === filter || row.submission?.status === filter || filter === 'late' && row.submission?.late);
+    const rows = useMemo(() => {
+        if (!results) return [];
+        const roster = new Map(detail.item.recipients?.map(person => [studentKey(person.studentId), person]));
+        const people = new Map(results.board.filter(person => person.studentId).map(person => [studentKey(person.studentId), person]));
+        const records: BoardTableRow[] = results.items.map(submission => {
+            const student = studentKey(submission.studentId);
+            const recipient = roster.get(student);
+            const person = people.get(student);
+            return {
+                id: submission.id,
+                studentId: submission.studentId || undefined,
+                personId: submission.personId,
+                name: person?.name || submission.studentName || '填写者',
+                groupId: person?.orgId || recipient?.groupId || '',
+                groupLabel: person?.orgLabel || recipient?.groupLabel || (selected ? '待核对' : ''),
+                status: submission.complete === false ? 'uploading' : submission.status,
+                complete: submission.complete,
+                hasFiles: submission.hasFiles,
+                late: submission.complete !== false && submission.late,
+                submissionId: submission.id,
+                submittedAt: submission.submittedAt,
+                expected: !!recipient,
+            };
+        });
+        if (!selected) return records.sort(comparePeople);
+
+        const latest = new Map<string, BoardTableRow>();
+        for (const record of records) {
+            if (!record.expected) continue;
+            const student = studentKey(record.studentId);
+            const previous = latest.get(student);
+            // Prefer an effective receipt. A partial imported record still has
+            // a detail page, while it leaves the recipient on the missing list.
+            const effective = matchesBoardFilter(record, 'submitted');
+            const previousEffective = previous && matchesBoardFilter(previous, 'submitted');
+            if (!previous || (effective && !previousEffective)
+                || (effective === previousEffective && (previous.submittedAt || '') < (record.submittedAt || ''))) {
+                latest.set(student, record);
+            }
+        }
+        const expectedRows: BoardTableRow[] = [...roster].map(([student, recipient]) => {
+            const person = people.get(student);
+            const record = latest.get(student);
+            const status = person?.statuses[round.id] || 'missing';
+            return {
+                ...record,
+                id: `person-${student}`,
+                studentId: recipient.studentId,
+                name: recipient.name,
+                groupId: person?.orgId || recipient.groupId || '',
+                groupLabel: person?.orgLabel || recipient.groupLabel || '待核对',
+                status,
+                late: status !== 'missing' && !!record?.late,
+                expected: true,
+            };
+        });
+        if (round.submissionMode === 'replace') {
+            return [...expectedRows, ...records.filter(record => !record.expected)].sort(comparePeople);
+        }
+        const waiting = expectedRows.filter(row => row.status === 'missing')
+            .map(row => ({ ...row, submissionId: undefined, submittedAt: undefined }));
+        return [...records, ...waiting].sort(comparePeople);
+    }, [detail.item.recipients, results, round.id, round.submissionMode, selected]);
+
+    const groups = useMemo(() => groupBoardRows(rows), [rows]);
+    const groupProgress = results?.progress.groups || [];
+    const hasGroups = groupProgress.some(group => !!group.id);
+    const activeGroup = groupProgress.find(group => group.id === activeGroupId);
+    const scopeGroupId = activeGroup?.id ?? null;
+    const scopedRows = groups.find(group => group.id === scopeGroupId)?.rows ?? rows;
+    const stats = activeGroup ?? results?.progress;
+    const groupedView = hasGroups && !flat && !activeGroup;
+    const orderedRows = groupedView ? groups.flatMap(group => group.rows) : scopedRows;
+    const visible = orderedRows.filter(row => matchesBoardFilter(row, filter));
+    const visibleSet = new Set(visible.slice(0, limit).map(row => row.id));
+    const tableGroups = groupedView
+        ? groups.map(group => ({ id: group.id, label: group.label, rows: group.rows.filter(row => visibleSet.has(row.id)) })).filter(group => group.rows.length)
+        : [{ id: '', label: '', rows: visible.slice(0, limit) }];
+    const missing = useMemo(() => collectionProgress(scopedRows, selected).missingRows, [scopedRows, selected]);
+
     useEffect(() => {
         if (!opened) return;
         const controller = new AbortController();
-        api<{ submission: Submission }>(`/collections/submissions/${encodeURIComponent(opened)}`, undefined, { signal: controller.signal })
+        api<{ submission: Submission }>(submissionRoute(opened), undefined, { signal: controller.signal })
             .then(result => { if (!controller.signal.aborted) { setCurrent(result.submission); setViewError(''); } })
             .catch(error => { if (!controller.signal.aborted) setViewError(errorText(error)); });
         return () => controller.abort();
     }, [opened, viewAttempt, version]);
-    async function zip() {
+
+    function chooseGroup(id: string | null) {
+        setActiveGroupId(id);
+        setLimit(25);
+        setMessage('');
         setActionError('');
-        const controller = new AbortController();
-        setTransfer(controller);
-        setMessage('正在准备附件…');
-        try { await downloadZip(path, detail.item.name + ' - ' + round.label, setMessage, controller.signal); setMessage('附件已打包'); }
-        catch (error) { if (!controller.signal.aborted) setActionError(errorText(error)); setMessage(''); }
-        finally { setTransfer(undefined); }
     }
+
     async function copyMissing() {
         setActionError('');
         try {
-            await navigator.clipboard.writeText(rows.filter(row => row.status === 'missing').map(row => `${row.studentId}\t${row.name}`).join('\n'));
-            setMessage('未交名单已复制');
-        } catch (error) { setActionError(errorText(error)); }
+            await navigator.clipboard.writeText(missing.map(row => `${row.studentId}\t${row.name}`).join('\n'));
+            setMessage(activeGroup ? `已复制${activeGroup.label}的未交名单` : '已复制全部未交名单');
+        } catch (error) {
+            setActionError(errorText(error));
+        }
     }
+
     return <section className="cw-board">
-        <div className="cw-stats">
-            <div><span>已提交</span><strong>{stat?.submitted ?? '—'}</strong></div>
-            {selected && <><div><span>未提交</span><strong>{stat?.missing ?? '—'}</strong></div>
-                <div><span>提交进度</span><strong>{stat?.total ? `${Math.round(100 * stat.submitted / stat.total)}%` : '—'}</strong></div></>}
-            <div><span>补交</span><strong>{stat?.late ?? '—'}</strong></div>
-        </div>
+        <ProgressSummary label={activeGroup ? `${activeGroup.label}统计` : '批次汇总'} selected={selected} counts={stats} />
+        {hasGroups && <div className="cw-board-groups">
+            <div className="cw-board-group-head"><h3>按组织查看</h3>
+                <button type="button" className="cw-button cw-board-all" aria-pressed={scopeGroupId === null} onClick={() => chooseGroup(null)}>全部组织</button>
+            </div>
+            <div className="cw-board-group-list">{groupProgress.map(group => <button type="button" className="cw-board-group-card" key={group.id}
+                aria-pressed={scopeGroupId === group.id} onClick={() => chooseGroup(group.id)}>
+                <GroupProgress group={group} />
+            </button>)}</div>
+        </div>}
         <div className="cw-panel">
-            <div className="cw-board-head"><h2>提交记录</h2><div className="cw-inline">
-                {selected && !!stat?.missing && <button type="button" className="cw-button" onClick={copyMissing}><Copy size={16} />复制未交名单</button>}
-                <a className="cw-button" href={`/api/platform${path}/csv`}><Download size={16} />导出 CSV</a>
-                {submissions.some(record => record.hasFiles) && <button type="button" className="cw-button" onClick={() => { if (transfer) transfer.abort(); else void zip(); }}><FileArchive size={16} />{transfer ? '取消打包' : '打包附件'}</button>}
+            <div className="cw-board-head"><h2>{activeGroup ? `${activeGroup.label} · 提交记录` : '提交记录'}</h2><div className="cw-inline">
+                {selected && missing.length > 0 && <button type="button" className="cw-button" onClick={copyMissing}><Copy size={16} />复制未交名单</button>}
+                <a className="cw-button" href={`/api/platform${path}/csv`} title="下载整个批次的提交记录"><Download size={16} />{hasGroups ? '全批次 CSV' : '导出 CSV'}</a>
+                {results && (rows.length > 0 || selected) && <button type="button" className="cw-button cw-primary" onClick={() => setExporting(true)}><FileArchive size={16} />打包附件</button>}
             </div></div>
-            <div className="cw-board-controls"><label>提交状态 <select value={filter} onChange={event => { setFilter(event.target.value); setLimit(25); }}>
-                <option value="all">全部状态</option><option value="submitted">已提交</option><option value="late">补交</option>{selected && <option value="missing">未提交</option>}
-                {round.requireReview && <><option value="pending_review">待审核</option><option value="accepted">已通过</option><option value="rejected">已退回</option></>}
-            </select></label>{message && <span role="status">{message}</span>}{actionError && <span role="alert" className="cw-failure">{actionError}</span>}</div>
+            <div className="cw-board-controls">
+                <label>提交状态 <select value={filter} onChange={event => { setFilter(event.target.value); setLimit(25); }}>
+                    <option value="all">全部状态</option><option value="submitted">已提交</option><option value="late">补交</option>{selected && <option value="missing">未提交</option>}
+                    {round.requireReview && <><option value="pending_review">待审核</option><option value="accepted">已通过</option><option value="rejected">已退回</option></>}
+                </select></label>
+                {hasGroups && !activeGroup && <label>查看方式 <select value={flat ? 'flat' : 'grouped'} onChange={event => { setFlat(event.target.value === 'flat'); setLimit(25); }}>
+                    <option value="grouped">按组织分组</option><option value="flat">按学号平铺</option>
+                </select></label>}
+                {message && <span role="status">{message}</span>}{actionError && <span role="alert" className="cw-failure">{actionError}</span>}
+            </div>
             {loadError && <div className="cw-inline"><p className="cw-failure" role="alert">{loadError}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>}
             {visible.length ? <div className="cw-table-scroll"><table><thead><tr><th scope="col">填写者</th><th scope="col">状态</th><th scope="col">提交时间</th><th scope="col"><span className="cw-sr-only">操作</span></th></tr></thead>
-                <tbody>{visible.slice(0, limit).map(row => <tr key={row.id}><td><b>{row.name}</b>{row.studentId && <small className="cw-mono">{row.studentId}</small>}{row.organization && <small>{row.organization}</small>}</td>
-                    <td>{badge(row.submission?.status || row.status as SubmissionStatus | 'missing', row.submission?.late)}</td><td>{row.submission ? displayTime(row.submission.submittedAt) : '—'}</td>
-                    <td>{row.submission && <button type="button" className="cw-plain" aria-haspopup="dialog" onClick={() => { setCurrent(undefined); setViewError(''); setOpened(row.submission!.id); }}>查看</button>}</td></tr>)}</tbody></table></div>
+                {tableGroups.map(group => <tbody key={group.id}>
+                    {group.label && <tr className="cw-board-group-label"><th colSpan={4} scope="rowgroup">{group.label}</th></tr>}
+                    {group.rows.map(row => <tr key={row.id}><td><b>{row.name}</b>{row.studentId && <small className="cw-mono">{row.studentId}</small>}{flat && row.groupLabel && <small>{row.groupLabel}</small>}</td>
+                        <td>{badge(row.status, row.late)}</td><td>{row.submittedAt ? displayTime(row.submittedAt) : '—'}</td>
+                        <td>{row.submissionId && <button type="button" className="cw-plain" aria-haspopup="dialog" onClick={() => { setCurrent(undefined); setViewError(''); setOpened(row.submissionId!); }}>查看</button>}</td></tr>)}
+                </tbody>)}</table></div>
                 : <p className="cw-muted cw-board-empty">{results ? '当前没有符合条件的记录。' : loadError ? '提交记录暂不可用。' : '正在加载提交记录…'}</p>}
             {visible.length > limit && <button type="button" className="cw-button cw-more" onClick={() => setLimit(limit + 25)}>显示更多（{limit}/{visible.length}）</button>}
             {opened && <Dialog title="提交详情" onClose={() => setOpened('')} wide><div className="cw-board-receipt">
@@ -112,6 +201,8 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
                     : viewError ? <><p role="alert" className="cw-failure">{viewError}</p><button type="button" className="cw-button" onClick={() => { setViewError(''); retryView(value => value + 1); }}>重试</button></>
                     : <p className="cw-muted" role="status">正在加载提交内容…</p>}
             </div></Dialog>}
+            {exporting && <ExportDialog path={path} title={detail.item.name} round={round} rows={rows} activeGroupId={scopeGroupId}
+                activeFilter={filter} selected={selected} onClose={() => setExporting(false)} />}
         </div>
     </section>;
 }
@@ -121,7 +212,7 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
     authorize: () => Promise<void>; onChanged: (id?: string) => void; onRoundPolicyChanged: (updated: Item<Round>, roundId: string, policy: Policy) => void; onDeleted: () => void;
 }) {
     const { item, viewer } = detail;
-    const [panel, setPanel] = useState<'board' | 'fill'>(receiptId ? 'fill' : 'board');
+    const [panel, setPanel] = useState<'board' | 'fill'>(item.canManage && !receiptId ? 'board' : 'fill');
     const [saved, setSaved] = useState<Record<string, Submission>>({});
     const [editingRound, setEditingRound] = useState('');
     const [savedNotice, setSavedNotice] = useState<{ roundId: string; message: string }>();
@@ -132,6 +223,7 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
     const [changeError, setChangeError] = useState('');
     const [timingUpdate, setTimingUpdate] = useState<{ roundId: string; busy: boolean; error?: string }>();
     const manage = item.canManage;
+    const participantProgress = !manage && !!item.canViewProgress;
     const draft = item.status === 'draft';
     const pinned = pinnedCollections.includes(item.id);
     const actionLabel = draft ? '删除草稿' : '取消发布';
@@ -150,7 +242,7 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
     const own = [...byId.values()].sort((left, right) => right.submittedAt.localeCompare(left.submittedAt));
     const prior = round?.submissionMode === 'replace' ? own[0] : undefined;
     const displayedOwn = [...own].sort((left, right) => Number(right.id === receiptId) - Number(left.id === receiptId));
-    const showFill = !manage || panel === 'fill';
+    const showFill = panel === 'fill' || (!manage && !participantProgress);
     const limitReached = !!round && round.submissionMode === 'multiple' && own.length >= round.maxPerUser;
     const writing = editingRound === round?.id;
     const showComposer = !own.length || writing;
@@ -231,7 +323,7 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
                             ? <button type="button" className="cw-fact-action" aria-label={`修改截止时间，当前 ${deadlineLabel}`} onClick={() => edit('deadline')}>{deadlineLabel}<Pencil size={15} /></button>
                             : <strong>{deadlineLabel}</strong>}</div>
                         <div><span><UsersRound size={16} />填写对象</span>{manage && !pinned
-                            ? <button type="button" className="cw-fact-action" onClick={() => edit('recipients')}>{item.targetMode === 'selected' ? `${item.recipientCount} 人` : '登录后可填写'}<Pencil size={15} /></button>
+                            ? <button type="button" className="cw-fact-action" aria-label="编辑收集的填写对象，各批次共用" onClick={() => edit('recipients')}>{item.targetMode === 'selected' ? `${item.recipientCount} 人` : '登录后可填写'}<Pencil size={15} /></button>
                             : <strong>{item.targetMode === 'selected' ? '指定成员' : '登录后可填写'}</strong>}</div>
                     </div>
                     {manage && <div className="cw-inline">
@@ -240,9 +332,10 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
                     </div>}
                     {timingUpdate?.roundId === round.id && timingUpdate.error && <p className="cw-failure" role="alert">{timingUpdate.error}</p>}
                 </section>
-                {manage && <div className="cw-segment" role="group" aria-label="批次内容">
-                    <button type="button" aria-pressed={panel === 'board'} onClick={() => setPanel('board')}>提交记录</button>
-                    <button type="button" aria-pressed={panel === 'fill'} onClick={() => setPanel('fill')}>{canSubmit ? '填写表单' : '查看表单'}</button>
+                {(manage || participantProgress) && <div className="cw-segment" role="group" aria-label="批次内容">
+                    {manage && <button type="button" aria-pressed={panel === 'board'} onClick={() => setPanel('board')}>提交记录</button>}
+                    <button type="button" aria-pressed={panel === 'fill'} onClick={() => setPanel('fill')}>{!manage && displayedOwn.length ? '我的提交' : canSubmit ? '填写表单' : '查看表单'}</button>
+                    {participantProgress && <button type="button" aria-pressed={panel === 'board'} onClick={() => setPanel('board')}>提交进度</button>}
                 </div>}
                 {showFill ? <div className="cw-panel cw-fill-panel">
                     {displayedOwn.length > 0 && <>
@@ -262,7 +355,8 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
                             }} />
                     </>}
                     {submitNote && <p className="cw-muted">{submitNote}</p>}
-                </div> : <RoundBoard key={round.id} detail={detail} round={round} version={version} authorize={authorize} refresh={() => onChanged()} />}
+                </div> : manage ? <RoundBoard key={round.id} detail={detail} round={round} version={version} authorize={authorize} refresh={() => onChanged()} />
+                    : <ParticipantProgress key={round.id} path={roundRoute(item.id, round.id)} selected={item.targetMode === 'selected'} version={version} />}
             </div>}
         </div>
         {confirm && <Dialog title={actionLabel} busy={changing} onClose={() => setConfirm(false)}>

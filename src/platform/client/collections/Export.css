@@ -1,0 +1,163 @@
+.cw-dialog:has(.cw-export) {
+    width: min(980px, calc(100% - 28px));
+}
+
+.cw-export-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+    padding: 18px;
+}
+
+.cw-export-settings {
+    display: grid;
+    gap: 15px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.cw-export-field,
+.cw-export-preview {
+    display: grid;
+    gap: 7px;
+}
+
+.cw-export-field > label:not(.cw-check) {
+    font-weight: 600;
+}
+
+.cw-export-field p,
+.cw-export-preview p {
+    margin: 0;
+}
+
+.cw-export-tokens,
+.cw-export-presets,
+.cw-export-folder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.cw-export-tokens button {
+    min-height: 31px;
+    padding: 4px 8px;
+    font-size: 13px;
+}
+
+.cw-export-folders {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cw-export-folders li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+.cw-export-folders li > span:first-child,
+.cw-export-tree span,
+.cw-export-tree > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cw-export-folder-actions .cw-icon {
+    min-width: 28px;
+    height: 28px;
+    padding: 3px;
+}
+
+.cw-export-preview {
+    position: sticky;
+    top: 60px;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-sunken);
+}
+
+.cw-export-preview > .cw-button {
+    justify-self: start;
+}
+
+.cw-export-tree {
+    margin-top: 3px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow-wrap: anywhere;
+    max-height: 420px;
+    overflow: auto;
+}
+
+.cw-export-tree > div {
+    margin-bottom: 5px;
+    font-weight: 650;
+}
+
+.cw-export-tree ul {
+    display: grid;
+    gap: 4px;
+    margin: 4px 0 0 7px;
+    padding-left: 9px;
+    border-left: 1px solid var(--line);
+    list-style: none;
+}
+
+.cw-export-tree svg,
+.cw-export-folders svg {
+    flex: none;
+}
+
+.cw-export-footer {
+    position: sticky;
+    z-index: 1;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 18px;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+}
+
+.cw-export-footer > span:first-child {
+    margin-right: auto;
+}
+
+@media (max-width: 680px) {
+    .cw-export-body {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        padding: 12px;
+    }
+
+    .cw-export-preview {
+        position: static;
+    }
+
+    .cw-export-tree {
+        max-height: 300px;
+    }
+
+    .cw-export-footer {
+        padding-inline: 12px;
+    }
+}

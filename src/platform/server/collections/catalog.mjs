@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { fail } from '../common.mjs';
-import { roundAcceptsSubmissions } from '../../collections.mjs';
+import { collectionProgress, roundAcceptsSubmissions } from '../../collections.mjs';
 import { activeMemberships } from '../../organizations.mjs';
-import { canManage, isRecipient, issuerView } from './definition.mjs';
+import { canManage, canSeeProgress, isRecipient, issuerView } from './definition.mjs';
 import { collectionId, collectionKeys as keys, mapConcurrent, parseHistoryKey, studentId } from './records.mjs';
 import { ownsSubmission, submissionView, submissionWasLate } from './submissions.mjs';
 
@@ -123,8 +123,10 @@ export function itemView(item, viewer, organizations, ownRecords, now, detail = 
   return {
     id, name, description, tags, term, course, issuer: safeIssuer,
     visibility, status, targetMode, publishedAt, updatedAt, revision, recipientCount: recipients.length,
-    ...(manage && detail ? { recipients } : {}),
+    ...(manage && detail ? { recipients, showProgress: item.showProgress === true,
+      audienceOrganizationId: targetMode === 'selected' ? item.audienceOrganizationId || issuer.organizationId : null } : {}),
     canManage: manage, inRecipients: isRecipient(item, actor),
+    ...(detail ? { canViewProgress: manage || canSeeProgress(item, viewer) } : {}),
     rounds: rounds.map((round) => ({
       ...(detail ? round : {}),
       ...roundSummary(item, round, actor, ownByRound, now, detail),
@@ -132,34 +134,52 @@ export function itemView(item, viewer, organizations, ownRecords, now, detail = 
   };
 }
 
-export function boardFor(item, records, rounds = item.rounds) {
-  const people = new Map(item.recipients.map(({ studentId, name }) =>
-    [studentId, { studentId, name, orgLabel: '', statuses: Object.create(null) }]));
-  const byRound = new Map(rounds.map((round) => [round.id, new Map()]));
-  const recipientIds = new Set(people.keys());
+const order = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
+
+export function boardFor(item, round, records, viewer, manage) {
+  const selected = item.targetMode === 'selected';
+  const roster = new Map(item.recipients.map(person => [person.studentId, person]));
+  const people = new Map(item.recipients.map(person => [person.studentId, person]));
+  const groups = new Map();
+  const rows = [];
+  const latest = new Map();
+  const add = (row, person) => {
+    rows.push(row);
+    if (!selected) return;
+    const id = person?.groupId || '';
+    if (!groups.has(id)) groups.set(id, { id, label: person?.groupLabel || '待核对', rows: [] });
+    groups.get(id).rows.push(row);
+  };
+  for (const person of roster.values()) {
+    add({ id: person.studentId, studentId: person.studentId, expected: true, status: 'missing', late: false }, person);
+  }
+  let own;
   for (const record of records) {
     const key = record.studentId || record.userId || record.id;
-    if (!people.has(key)) people.set(key, { studentId: record.studentId, name: record.studentName || '', orgLabel: '', statuses: Object.create(null) });
-    const byPerson = byRound.get(record.roundId);
-    if (byPerson && !byPerson.has(key) && recordComplete(record)) byPerson.set(key, record);
-  }
-  const roundStats = rounds.map((round) => {
-    const byPerson = byRound.get(round.id);
-    let submitted = 0, late = 0;
-    for (const [key, person] of people) {
-      const record = byPerson.get(key);
-      person.statuses[round.id] = statusFor(record);
-      if (!record || (item.targetMode === 'selected' && !recipientIds.has(key))) continue;
-      submitted++;
-      if (submissionWasLate(record)) late++;
+    const person = roster.get(key);
+    if (manage && !people.has(key)) people.set(key, { studentId: record.studentId, name: record.studentName || '' });
+    const complete = recordComplete(record);
+    add({ id: record.id, studentId: record.studentId, personId: record.userId, expected: !!person, submissionId: record.id,
+      submittedAt: record.submittedAt, complete, status: record.status, late: submissionWasLate(record) }, person);
+    if (complete) {
+      if (!latest.has(key)) latest.set(key, record);
+      if (!own && ownsSubmission(record, viewer.user)) own = record;
     }
-    const total = item.targetMode === 'selected' ? recipientIds.size : submitted;
-    return { roundId: round.id, total, submitted, late, missing: Math.max(0, total - submitted) };
-  });
-  return {
-    board: [...people.values()].sort((a, b) => String(a.studentId).localeCompare(String(b.studentId)) || a.name.localeCompare(b.name)),
-    roundStats,
-  };
+  }
+  const { counts } = collectionProgress(rows, selected);
+  const progress = { ...counts, groups: [...groups.values()].map(({ id, label, rows }) => {
+    const { counts } = collectionProgress(rows, true);
+    return { id, label, ...counts };
+  }).sort((a, b) => Number(!a.id) - Number(!b.id) || order.compare(a.label, b.label)),
+  ownStatus: own?.status ?? (isRecipient(item, viewer.user) ? 'missing' : null),
+  ownLate: own ? submissionWasLate(own) : false };
+  if (!manage) return { progress };
+  const board = [...people].map(([key, person]) => ({
+    studentId: person.studentId, name: person.name,
+    ...(person.groupId ? { orgId: person.groupId } : {}), orgLabel: person.groupLabel || '',
+    statuses: { [round.id]: statusFor(latest.get(key)) },
+  })).sort((a, b) => order.compare(a.studentId || '', b.studentId || '') || order.compare(a.name, b.name));
+  return { progress, board };
 }
 
 export async function historyItems(repo, records) {

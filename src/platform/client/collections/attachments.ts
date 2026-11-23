@@ -68,56 +68,82 @@ export async function downloadFile(submissionId: string, file: { id: string; nam
   saveBlob(await response.blob(), download.fileName || file.name);
 }
 
-const segment = (part: string) => part.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/^[. ]+|[. ]+$/g, '') || '附件';
+export interface ExportAttachment {
+    id: string;
+    revision: number;
+    fieldId: string;
+    fieldLabel?: string;
+    name: string;
+    size: number;
+    type: string;
+    studentId?: string;
+    studentName?: string;
+    submissionId: string;
+    answers?: Record<string, unknown>;
+}
 
-export async function downloadZip(path: string, name: string, progress: (message: string) => void, signal: AbortSignal) {
-  const { files } = await api<{ files: { name: string; size: number; studentId?: string; submissionId: string; download: StorageDownload }[] }>(`${path}/files`, undefined, { signal });
-  if (!files.length) throw new Error('本批次暂无可下载的附件。');
-  const names = new Set<string>();
-  const encoder = new TextEncoder();
-  const entries = files.map(file => {
-    const folder = segment(file.studentId || file.submissionId);
-    const base = `${folder}/${segment(file.name)}`;
-    let path = base;
-    for (let suffix = 2; names.has(path.toLowerCase()); suffix++) path = `${folder}/${suffix}-${segment(file.name)}`;
-    names.add(path.toLowerCase());
-    return { path, file };
-  });
-  const totalBytes = entries.reduce((bytes, entry) => bytes + entry.file.size + 76 + 2 * encoder.encode(entry.path).length, 22);
-  if (files.length > 65535 || totalBytes > 0xffffffff) throw new Error('批次附件超过 ZIP 容量，请单独下载。');
+export type ZipEntry<File extends ExportAttachment = ExportAttachment> = { path: string; file: File } | { path: string; text: string };
+export type SignedAttachment = Pick<ExportAttachment, 'id' | 'submissionId' | 'revision'> & { download: StorageDownload };
+export const exportAttachmentKey = (file: Pick<ExportAttachment, 'id' | 'submissionId' | 'revision'>) =>
+    `${file.submissionId}/${file.revision}/${file.id}`;
 
-  const archive = new Array<{ name: string; data: Blob; crc: number }>(files.length);
-  let next = 0;
-  let done = 0;
-  let failure: unknown;
-  async function downloadFiles() {
-    while (!failure && next < entries.length) {
-      const index = next++;
-      const { file, path } = entries[index]!;
-      try {
-        signal.throwIfAborted();
-        const response = await fetchStorageDownload(file.download, signal);
-        if (!response.body) throw new Error('未收到附件内容，请重新下载。');
-        let crc = 0xffffffff;
-        let bytes = 0;
-        const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-          transform(chunk, out) {
-            signal.throwIfAborted();
-            bytes += chunk.byteLength;
-            if (bytes > file.size) throw new Error('附件内容大小发生变化，请重新下载。');
-            for (const byte of chunk) crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
-            out.enqueue(chunk);
-          },
-        }), { signal });
-        const data = await new Response(body).blob();
-        if (bytes !== file.size) throw new Error('附件内容大小发生变化，请重新下载。');
-        archive[index] = { name: path, data, crc: (crc ^ 0xffffffff) >>> 0 };
-        progress(`正在下载附件 ${++done}/${files.length}`);
-      } catch (error) { failure ||= error; }
+export function zipSegment(value: string) {
+    const name = [...value.normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f]/gu, '_')
+        .replace(/^[. ]+|[. ]+$/g, '')].slice(0, 75).join('').replace(/[. ]+$/g, '') || '未填写';
+    return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) ? '_' + name : name;
+}
+
+export async function downloadZip(entries: ZipEntry<ExportAttachment & SignedAttachment>[], name: string, progress: (message: string) => void, signal: AbortSignal) {
+    if (!entries.length) throw new Error('当前范围没有可打包的内容。');
+    const encoder = new TextEncoder();
+    const sizes = entries.map(entry => 'file' in entry ? entry.file.size : encoder.encode(entry.text).length);
+    const totalBytes = entries.reduce((bytes, entry, index) => bytes + sizes[index]! + 76 + 2 * encoder.encode(entry.path).length, 22);
+    if (entries.length > 65535 || totalBytes > 0xffffffff) throw new Error('附件超过 ZIP 容量，请分批下载。');
+
+    const archive = new Array<{ name: string; data: Blob; crc: number }>(entries.length);
+    const fileCount = entries.filter(entry => 'file' in entry).length;
+    let next = 0;
+    let done = 0;
+    let failure: unknown;
+    async function writeEntries() {
+        while (!failure && next < entries.length) {
+            const index = next++;
+            const entry = entries[index]!;
+            try {
+                signal.throwIfAborted();
+                let crc = 0xffffffff;
+                const updateCrc = (chunk: Uint8Array) => {
+                    for (const byte of chunk) crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+                };
+                let data: Blob;
+                if ('text' in entry) {
+                    const bytes = encoder.encode(entry.text);
+                    updateCrc(bytes);
+                    data = new Blob([bytes], { type: 'text/plain;charset=utf-8' });
+                } else {
+                    const response = await fetchStorageDownload(entry.file.download, signal);
+                    if (!response.body) throw new Error('未收到附件内容，请重新下载。');
+                    const fileSize = entry.file.size;
+                    let bytes = 0;
+                    const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+                        transform(chunk, out) {
+                            signal.throwIfAborted();
+                            bytes += chunk.byteLength;
+                            if (bytes > fileSize) throw new Error('附件内容大小发生变化，请刷新预览。');
+                            updateCrc(chunk);
+                            out.enqueue(chunk);
+                        },
+                    }), { signal });
+                    data = await new Response(body).blob();
+                    if (bytes !== fileSize) throw new Error('附件内容大小发生变化，请刷新预览。');
+                    progress('正在取附件 ' + (++done) + '/' + fileCount);
+                }
+                archive[index] = { name: entry.path, data, crc: (crc ^ 0xffffffff) >>> 0 };
+            } catch (error) { failure ||= error; }
+        }
     }
-  }
-  await Promise.all(Array.from({ length: Math.min(6, files.length) }, downloadFiles));
-  if (failure) throw failure;
-  signal.throwIfAborted();
-  saveBlob(buildZip(archive), name + '.zip');
+    await Promise.all(Array.from({ length: Math.min(6, entries.length) }, writeEntries));
+    if (failure) throw failure;
+    signal.throwIfAborted();
+    saveBlob(buildZip(archive), zipSegment(name.replace(/\.zip$/i, '')) + '.zip');
 }

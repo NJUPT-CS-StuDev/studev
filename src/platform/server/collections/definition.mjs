@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { fail, text } from '../common.mjs';
-import { activeMemberships, flattenOrganizationTree, isWithin, organization, organizationName, positionLabel } from '../../organizations.mjs';
+import { activeMemberships, flattenOrganizationTree, isWithin, organization, organizationName, organizationPath, positionLabel } from '../../organizations.mjs';
 import { deadlineReached, isSemester, pinnedCollections } from '../../collections.mjs';
 import { boolean, fields, integer, validObject } from './fields.mjs';
 import { collectionId, studentId } from './records.mjs';
@@ -39,6 +39,13 @@ export function canSee(item, viewer, orgs) {
   if (item.status === 'draft' || !item.publishedAt) return false;
   if (item.visibility === 'public') return true;
   return isRecipient(item, viewer.user);
+}
+
+export function canSeeProgress(item, viewer) {
+  const { user } = viewer;
+  return Boolean(item.showProgress && item.status !== 'draft' && item.publishedAt &&
+    /^[A-Z0-9]{4,24}$/.test(studentId(user?.studentId)) &&
+    (item.targetMode === 'open' || user.identityVerified) && isRecipient(item, user));
 }
 
 function publishChoices(user, orgs, today) {
@@ -88,13 +95,37 @@ function dateTime(value) {
   return new Date(value).toISOString();
 }
 
-function recipients(value) {
+function recipientGroup(user, scope, orgs, today) {
+  const branches = new Map();
+  for (const { organizationId } of activeMemberships(user?.memberships, today)) {
+    const path = organizationPath(organizationId, orgs);
+    const index = path.findIndex(node => node.id === scope);
+    if (index < 0) continue;
+    const branch = path[index + 1] ?? path[index];
+    branches.set(branch.id, branch);
+  }
+  if (branches.size > 1) branches.delete(scope);
+  return branches.size === 1 ? branches.values().next().value : null;
+}
+
+async function recipients(value, previous, scope, viewer, orgs, loadUsers) {
   if (!Array.isArray(value) || !value.length || value.length > 1000) fail(400, 'INVALID_RECIPIENTS', '应交名单须包含 1–1000 人。');
   const result = new Map();
   for (const row of value) {
     const id = studentId(row?.studentId);
     if (!/^[A-Z0-9]{4,24}$/.test(id)) fail(400, 'INVALID_STUDENT_ID', '应交名单的学号无效。');
     result.set(id, { studentId: id, name: text(row.name || id, '姓名', 40, true) });
+  }
+  const saved = new Map(previous.filter(row => row.groupId).map(row => [row.studentId, row]));
+  const needsGroup = [...result.values()].filter(row => !saved.has(row.studentId));
+  const directory = needsGroup.length ? new Map((await loadUsers())
+    .filter(user => user.studentId && user.status !== 'disabled')
+    .map(user => [studentId(user.studentId), user])) : new Map();
+  for (const recipient of result.values()) {
+    const snapshot = saved.get(recipient.studentId);
+    const group = snapshot ? { id: snapshot.groupId, name: snapshot.groupLabel } :
+      recipientGroup(directory.get(recipient.studentId), scope, orgs, viewer.today);
+    if (group) Object.assign(recipient, { groupId: group.id, groupLabel: group.name });
   }
   return [...result.values()].sort((a, b) => a.studentId.localeCompare(b.studentId));
 }
@@ -129,10 +160,11 @@ export function roundInput(body, { now, existing, id = existing?.id ?? randomUUI
   };
 }
 
-export function itemInput(body, now, existing = null) {
+export async function itemInput(body, now, existing, viewer, orgs, issuer, loadUsers) {
   const targetMode = choice(body.targetMode ?? existing?.targetMode ?? 'open', ['open', 'selected'], '受众');
   const status = choice(body.status ?? existing?.status ?? 'draft', ['draft', 'published', 'closed'], '收集状态');
   const visibility = choice(body.visibility ?? existing?.visibility ?? 'members', ['public', 'members'], '可见范围');
+  const showProgress = boolean(body.showProgress, existing?.showProgress === true);
   const term = body.term ?? existing?.term;
   if (!isSemester(term)) fail(400, 'INVALID_SEMESTER', '请选择收集所属的学期。');
   if (existing && existing.status !== 'draft' && status === 'draft') {
@@ -161,6 +193,25 @@ export function itemInput(body, now, existing = null) {
     }
   }
   if (!rounds) fail(400, 'INVALID_ROUNDS', '请设置至少一轮。');
+  const savedRecipients = existing?.recipients ?? [];
+  const previousScope = existing?.audienceOrganizationId || existing?.issuer.organizationId;
+  if (targetMode === 'selected' && body.audienceOrganizationId != null && typeof body.audienceOrganizationId !== 'string') {
+    fail(400, 'INVALID_AUDIENCE', '请选择应交名单所属的组织。');
+  }
+  const audienceOrganizationId = targetMode === 'selected'
+    ? (body.audienceOrganizationId ?? existing?.audienceOrganizationId) || issuer.organizationId : null;
+  const scopeChanged = audienceOrganizationId !== previousScope;
+  if (audienceOrganizationId && (scopeChanged || body.recipients != null)) {
+    if (scopeChanged && !orgs.some(org => org.id === audienceOrganizationId)) {
+      fail(400, 'INVALID_AUDIENCE', '请选择应交名单所属的组织。');
+    }
+    if (!canManage({ issuer: { organizationId: audienceOrganizationId } }, viewer, orgs)) {
+      fail(403, 'AUDIENCE_FORBIDDEN', '此账号无权管理所选应交组织。');
+    }
+  }
+  const roster = targetMode !== 'selected' ? [] : body.recipients == null && savedRecipients.length && !scopeChanged
+    ? savedRecipients : await recipients(body.recipients ?? savedRecipients, scopeChanged ? [] : savedRecipients,
+      audienceOrganizationId, viewer, orgs, loadUsers);
   const tags = body.tags ?? existing?.tags ?? [];
   if (!Array.isArray(tags) || tags.length > 20) fail(400, 'INVALID_TAGS', '最多可添加 20 个标签。');
   return {
@@ -170,8 +221,8 @@ export function itemInput(body, now, existing = null) {
     term,
     course: Object.hasOwn(body, 'course') && (body.course?.id !== null || body.course?.code !== existing?.course?.code || body.course?.name !== existing?.course?.name)
       ? courseReference(body.course) : existing?.course ?? null,
-    targetMode, status, visibility, rounds,
-    recipients: targetMode === 'selected' ? recipients(body.recipients ?? existing?.recipients) : [],
+    targetMode, status, visibility, rounds, audienceOrganizationId, showProgress,
+    recipients: roster,
     publishedAt: existing?.publishedAt || (status === 'published' ? now : ''),
     createdAt: existing?.createdAt || now,
     updatedAt: now,

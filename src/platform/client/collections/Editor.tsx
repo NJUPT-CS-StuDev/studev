@@ -7,11 +7,11 @@ import { loadCalendar, type CalendarTerm } from '@/world/data';
 import { momentNow } from '@/world/time';
 import CoursePicker, { type CollectionCourse } from './CoursePicker';
 import { Dialog } from './Dialog';
-import { deadlineInput, deadlineValue, itemRoute, roundRoute, type Catalog, type Directory, type Field, type FieldType, type Item, type Round, type TargetMode } from './model';
+import { deadlineInput, deadlineValue, itemRoute, roundRoute, type Catalog, type Directory, type Field, type FieldType, type Item, type Recipient, type Round, type TargetMode } from './model';
 
 export type EditorMode = 'create' | 'item' | 'recipients' | 'new-round' | 'round' | 'deadline';
 const fieldLabels: Record<FieldType, string> = { text: '单行文字', textarea: '多行文字', select: '单选', checkbox: '多选', number: '数字', date: '日期', file: '附件' };
-const titles: Record<EditorMode, string> = { create: '新建收集', item: '收集设置', recipients: '填写对象', 'new-round': '新增批次', round: '编辑批次', deadline: '截止时间' };
+const titles: Record<EditorMode, string> = { create: '新建收集', item: '收集设置', recipients: '收集的填写对象', 'new-round': '新增批次', round: '编辑批次', deadline: '截止时间' };
 const defaultField = (): Field => ({ id: `f-${crypto.randomUUID().slice(0, 12)}`, type: 'text', label: '', required: true });
 const draftRound = (label: string): Round => ({ id: '', label, deadline: '', policy: 'strict', fields: [defaultField()], requireReview: false, allowEdit: false, maxPerUser: 1, maxSubmissions: 500, submissionMode: 'replace' });
 const lines = (raw: string) => raw.split(/[,，\n]/).map(value => value.trim()).filter(Boolean);
@@ -21,7 +21,13 @@ const semesterId = ({ number, start }: CalendarTerm) => {
     return `${year}-${year + 1}-${number}`;
 };
 
-function RecipientPicker({ selected, onChange }: { selected: Map<string, string>; onChange: (value: Map<string, string>) => void }) {
+function RecipientPicker({ selected, onChange, organizationId, issuerId, onOrganizationChange }: {
+    selected: Map<string, Recipient>;
+    onChange: (value: Map<string, Recipient>) => void;
+    organizationId: string;
+    issuerId: string;
+    onOrganizationChange: (id: string) => void;
+}) {
     const [directory, setDirectory] = useState<Directory>();
     const [failure, setFailure] = useState('');
     const [attempt, retry] = useState(0);
@@ -36,35 +42,60 @@ function RecipientPicker({ selected, onChange }: { selected: Map<string, string>
         api<Directory>('/collections/people').then(value => { if (current) setDirectory(value); }).catch(error => { if (current) setFailure(errorText(error)); });
         return () => { current = false; };
     }, [attempt]);
-    const parents = new Map(directory?.organizations.map(org => [org.id, org.parentId]));
-    const belongs = (id: string) => {
-        for (let node: string | null | undefined = id; node; node = parents.get(node)) {
-            if (node === scope) return true;
+    const organizations = new Map(directory?.organizations.map(org => [org.id, org]));
+    const belongs = (id: string, parent: string) => {
+        for (let node: string | null | undefined = id; node; node = organizations.get(node)?.parentId) {
+            if (node === parent) return true;
         }
         return false;
     };
     const search = query.trim().normalize('NFKC').toLowerCase();
-    const candidates = onlySelected ? [...selected].map(([studentId, name]) => ({ studentId, name, organizationIds: [] })) : directory?.people || [];
-    const matches = candidates.filter(person => (onlySelected || !scope || person.organizationIds.some(belongs))
+    const rosterScope = organizationId || issuerId;
+    const effectiveScope = scope && (!rosterScope || belongs(scope, rosterScope)) ? scope : rosterScope;
+    const scopeIds = new Set(directory?.scopeIds);
+    const organizationOptions = directory?.organizations.filter(org => scopeIds.has(org.id)) ?? [];
+    const candidates = onlySelected ? [...selected.values()].map(person => ({ ...person, organizationIds: [] })) : directory?.people || [];
+    const matches = candidates.filter(person => (onlySelected || !effectiveScope || person.organizationIds.some(id => belongs(id, effectiveScope)))
         && (!search || `${person.name} ${person.studentId}`.toLowerCase().includes(search)));
-    const setPeople = (people: { studentId: string; name: string }[], checked: boolean) => {
+    const setPeople = (people: Recipient[], checked: boolean) => {
         const next = new Map(selected);
         for (const person of people) {
-            if (checked) next.set(person.studentId, person.name);
-            else next.delete(person.studentId);
+            if (!checked) {
+                next.delete(person.studentId);
+                continue;
+            }
+            if (next.has(person.studentId)) continue;
+            next.set(person.studentId, { studentId: person.studentId, name: person.name });
         }
         onChange(next);
     };
     const manualId = studentId.normalize('NFKC').trim().toUpperCase();
     const allSelected = matches.length > 0 && matches.every(person => selected.has(person.studentId));
     return <div className="cw-directory">
+        <label>名单所属组织<select value={organizationId} disabled={!directory} onChange={event => {
+            onOrganizationChange(event.target.value);
+            setScope('');
+            setPage(1);
+        }}>
+            <option value="">发布组织{organizations.get(issuerId) ? ` · ${organizations.get(issuerId)!.name}` : ''}</option>
+            {organizationId && !organizationOptions.some(org => org.id === organizationId) && <option value={organizationId}>
+                {organizations.get(organizationId)?.fullName || '当前所属组织'}
+            </option>}
+            {organizationOptions.filter(org => org.id !== issuerId).map(org => <option key={org.id} value={org.id}>{org.fullName}</option>)}
+        </select><small className="cw-muted">各批次共用这份名单，进度按这个组织下的分支统计。</small></label>
         <div className="cw-inline"><b>已选 {selected.size} 人</b><button type="button" className="cw-button" aria-pressed={onlySelected} onClick={() => { showOnlySelected(!onlySelected); setPage(1); }}>{onlySelected ? '查看组织名单' : '查看已选'}</button></div>
-        <div className="cw-form-grid">{!onlySelected && <label>组织<select value={scope} onChange={event => { setScope(event.target.value); setPage(1); }}><option value="">所有可访问组织</option>{directory?.organizations.map(org => <option key={org.id} value={org.id}>{'　'.repeat(org.depth)}{org.name}</option>)}</select></label>}
+        <div className="cw-form-grid">{!onlySelected && <label>筛选分支<select value={effectiveScope === rosterScope ? '' : scope} onChange={event => { setScope(event.target.value); setPage(1); }}><option value="">全部分支</option>{organizationOptions.filter(org => org.id !== rosterScope && (!rosterScope || belongs(org.id, rosterScope))).map(org => <option key={org.id} value={org.id}>{org.fullName}</option>)}</select></label>}
             <label>搜索成员<input type="search" placeholder="学号或姓名" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label></div>
         {failure && <div className="cw-inline"><span role="alert">{failure}</span><button type="button" className="cw-button" onClick={() => { setFailure(''); retry(attempt + 1); }}>重试</button></div>}
         {matches.length > 0 ? <div className="cw-people">
             <label className="cw-check"><input type="checkbox" checked={allSelected} onChange={() => setPeople(matches, !allSelected)} />{onlySelected ? '移除所有匹配成员时取消勾选' : `选择匹配的 ${matches.length} 人`}</label>
-            {matches.slice(0, page * 30).map(person => <label key={person.studentId} className="cw-check"><input type="checkbox" checked={selected.has(person.studentId)} onChange={event => setPeople([person], event.target.checked)} />{person.name}<span className="cw-mono cw-muted">{person.studentId}</span></label>)}
+            {matches.slice(0, page * 30).map(person => {
+                const saved = selected.get(person.studentId);
+                return <div key={person.studentId} className="cw-inline">
+                    <label className="cw-check"><input type="checkbox" checked={!!saved} onChange={event => setPeople([person], event.target.checked)} />{person.name}<span className="cw-mono cw-muted">{person.studentId}</span></label>
+                    {onlySelected && saved?.groupLabel && <span className="cw-muted">{saved.groupLabel}</span>}
+                </div>;
+            })}
             {page * 30 < matches.length && <button type="button" className="cw-button" onClick={() => setPage(page + 1)}>显示更多</button>}
         </div> : <p className="cw-muted">{directory || onlySelected ? '未找到匹配成员' : failure ? '组织目录暂不可用' : '正在加载组织目录…'}</p>}
         <div className="cw-directory-add"><label>补充学号<input value={studentId} onChange={event => setStudentId(event.target.value)} /></label><label>姓名<input value={name} onChange={event => setName(event.target.value)} /></label>
@@ -137,9 +168,12 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
     const semesters = [...new Set([selectedTerm, DATA_RELEASE.teaching, ...calendar.map(semesterId), ...catalog?.items.map(value => value.term) || []])].sort().reverse();
     const pinned = !!item && pinnedCollections.includes(item.id);
     const [visibility, setVisibility] = useState<Item['visibility']>(item?.visibility || 'members');
+    const [showProgress, setShowProgress] = useState(item?.showProgress ?? false);
     const [status, setStatus] = useState<Item['status']>(item?.status || 'draft');
     const [targetMode, setTarget] = useState<TargetMode>(item?.targetMode || 'open');
-    const [recipients, setRecipients] = useState(() => new Map((item?.recipients || []).map(person => [person.studentId, person.name])));
+    const issuerId = item?.issuer.organizationId || options[issuerChoice]?.organizationId || '';
+    const [audienceOrganizationId, setAudienceOrganization] = useState(() => item?.audienceOrganizationId === item?.issuer.organizationId ? '' : item?.audienceOrganizationId || '');
+    const [recipients, setRecipients] = useState(() => new Map((item?.recipients || []).map(person => [person.studentId, person])));
     const [round, setRound] = useState(() => currentRound && mode !== 'new-round' ? currentRound : draftRound(mode === 'new-round' ? `第 ${(item?.rounds.length || 0) + 1} 批` : '填写'));
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -148,8 +182,9 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
         event.preventDefault();
         if (busy) return;
         const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value');
-        const targets = { targetMode, recipients: targetMode === 'selected' ? [...recipients].map(([studentId, name]) => ({ studentId, name })) : [] };
-        const details = { name, description, tags: lines(tags), course, term: selectedTerm, visibility };
+        const targets = { targetMode, audienceOrganizationId, recipients: targetMode === 'selected'
+            ? [...recipients.values()].map(({ studentId, name }) => ({ studentId, name })) : [] };
+        const details = { name, description, tags: lines(tags), course, term: selectedTerm, visibility, showProgress };
         const policy = round.policy === 'allow-late' && round.deadline !== currentRound?.deadline ? 'strict' : round.policy;
         const roundBody = { label: round.label, deadline: round.deadline, policy, fields: round.fields, requireReview: round.requireReview, allowEdit: round.allowEdit, maxPerUser: round.maxPerUser, maxSubmissions: round.maxSubmissions, submissionMode: round.submissionMode };
         setError('');
@@ -186,11 +221,14 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
                 <div className="cw-form-grid"><label>学期<select required value={selectedTerm} onChange={event => setTerm(event.target.value)}>{semesters.map(id => <option key={id} value={id}>{semesterLabel(id)}</option>)}</select></label>
                     <label>可见范围<select value={visibility} disabled={pinned} onChange={event => setVisibility(event.target.value as Item['visibility'])}><option value="members">登录用户</option><option value="public">公开</option></select></label></div>
                 <CoursePicker value={course} onChange={setCourse} />
+                <div><label className="cw-check"><input type="checkbox" checked={showProgress} onChange={event => setShowProgress(event.target.checked)} />允许参与者查看提交进度</label>
+                    <small className="cw-muted">适用于全部批次。参与者可查看汇总人数，填写内容和附件仍只对本人和有管理权限的人开放。</small></div>
                 {!creating && <label>发布状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">已发布</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}
             </>}
             {targetFields && <>
                 <label>填写对象<select value={targetMode} onChange={event => setTarget(event.target.value as TargetMode)}><option value="open">登录后可填写</option><option value="selected">指定成员</option></select></label>
-                {targetMode === 'selected' && <RecipientPicker selected={recipients} onChange={setRecipients} />}
+                {targetMode === 'selected' && <RecipientPicker selected={recipients} onChange={setRecipients}
+                    organizationId={audienceOrganizationId} issuerId={issuerId} onOrganizationChange={setAudienceOrganization} />}
             </>}
             {(roundFields || mode === 'deadline') && <>
                 {roundFields && <><h3>批次设置</h3><label>批次名称<input required maxLength={80} value={round.label} onChange={event => changeRound({ label: event.target.value })} /></label></>}

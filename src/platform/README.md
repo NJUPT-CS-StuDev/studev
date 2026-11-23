@@ -128,8 +128,11 @@ data contributions. Links use `/forms/?id=<collection>&round=<round>` and may
 prefill public answer fields with `a.<field>=<value>`.
 
 A collection has an issuing organization, audience, academic semester, status,
-tags and one or more rounds. The public campus entries stay at the top of the
-catalog. Other collections are grouped by semester and ordered by publication
+tags and one or more rounds. A collection with a specified audience keeps one
+shared roster for all rounds. Its audience organization determines the grouping
+scope in the organization tree. Changes to the roster affect the progress counts
+of all rounds and retain any submissions already made. The public campus entries
+stay at the top of the catalog. Other collections are grouped by semester and ordered by publication
 within each semester. Search matches tags and courses. The optional course
 reference copies the stable campus course ID, code and display name, and remains
 usable across search index updates.
@@ -141,12 +144,18 @@ usable across search index updates.
 - A draft may be permanently deleted if it has no submissions or outstanding
   upload authorizations. A student with verified identity can retrieve earlier
   submissions filed against their student ID before they had an account.
-- Owners can manage every collection. Admins manage collections they authored
-  or whose issuing organizations fall within their assignments. Admins publish
+- Owners can manage every collection. Admins manage collections whose issuing
+  organizations fall within their current assignments. Admins publish
   within those assignments. The people picker exposes only the authorized
   directory scope.
 - Collection reads and writes use the signed-in account's role. The same
   role checks apply to every record, progress report and download.
+- Participant progress is disabled by default and can be enabled for all rounds
+  in a collection. A participant with a verified student ID on the roster sees
+  counts for the round and each group, plus their own status. Open collections
+  show submitter and submission counts to signed-in accounts that can submit.
+  Other participants' names, student identifiers, answers and attachment metadata
+  remain staff-only.
 - Round fields cover text, long text, single choice, multiple choice, number,
   date and attachments. Each round defines its deadline, late policy, edit and
   review rules, and quotas. A published round with `strict` automatically
@@ -173,8 +182,9 @@ All API paths below are relative to `/api/platform/collections`.
 | `POST /items/<id>/duplicate` | New draft with copied collection fields and cleared deadlines |
 | `POST /items/<id>/rounds`, `POST /items/<id>/rounds/<round>` | Add or revise a round using the collection revision |
 | `POST /items/<id>/rounds/<round>/submissions` | Validate answers and attachment descriptors, then either finalize or issue the upload receipt |
-| `GET /items/<id>/rounds/<round>/submissions` | Staff report with compact record summaries, progress board, statistics and quota usage |
-| `GET /items/<id>/rounds/<round>/csv`, `GET /items/<id>/rounds/<round>/files` | Staff CSV or signed attachment manifest |
+| `GET /items/<id>/rounds/<round>/submissions` | Staff report with compact records and quota usage, or the aggregate progress allowed for the participant |
+| `GET /items/<id>/rounds/<round>/csv` | Staff CSV |
+| `POST /items/<id>/rounds/<round>/files` | Staff attachment manifest for selected submissions and naming fields, or download authorization for exactly the requested file revisions |
 | `GET /mine`, `GET /submissions/<id>` | Own history or one authorized record |
 | `POST /submissions/<receiptId>/complete`, `POST /submissions/<receiptId>/cancel` | Confirm an upload or return its unused place |
 | `POST /submissions/<id>/edit`, `POST /submissions/<id>/review` | Edit answers or record a staff review at the current submission revision |
@@ -202,7 +212,9 @@ and submission revisions support concurrent editors, review, and retained
 schema snapshots. The catalog reads definition heads and the caller's history.
 Staff reports read only the requested round. Course search reads the public
 campus release locally. Attachments stay in the existing private 1 TB OSCA
-bucket.
+bucket. The browser builds ZIPs from the authorized files. Its preview uses the
+same paths and counts as the archive. Folder order, filename fields and root
+summary files can be saved as a personal scheme in the browser.
 
 The private data pipeline consumes approved campus contributions. Run the export
 with `STUDEV_PRIVATE_DIR` pointing to the existing private storage.

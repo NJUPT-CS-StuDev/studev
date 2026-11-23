@@ -23,7 +23,7 @@ const tabs = [
   { href: '/ai/', label: 'AI', key: 'ai', glyph: tokens.glyph.ai },
   { href: '/forms/', label: '收集', key: 'forms', glyph: 'M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 3h8v4H8zM8 12h8M8 16h8' },
 ] as const;
-const clubKeys = ['club', 'study', 'develop', 'life', 'history'];
+const clubPage = ['club', 'study', 'develop', 'life', 'history'].includes(active);
 const clubNav = [
   { href: '/study/', label: '学习', key: 'study' },
   { href: '/develop/', label: '开发', key: 'develop' },
@@ -97,12 +97,12 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:card" content="summary" />
   </head>
   <body>
-    <header class:list={['site-header', { 'site-header-account': active === 'account' }]}>
+    <header class:list={['site-header', { 'site-header-account': active === 'account', 'site-header-club': clubPage }]}>
       <div class="header-inner">
         <a class="wordmark" href="/" aria-label={`${PRODUCT_CONFIG.APP_NAME} 首页`}>{PRODUCT_CONFIG.APP_NAME}</a>
         <nav class="site-nav" aria-label="主导航">
           {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} data-astro-reload={item.key === "forms" ? true : undefined} data-astro-prefetch={item.key === "forms" ? "false" : undefined} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
-          <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">学生发展中心</a>
+          <a class:list={[{ active: clubPage }]} href="/club/">学生发展中心</a>
         </nav>
         <div class:list={['header-actions', { 'campus-site-actions': campusHeader }]}>
           <button class="theme-entry" type="button" data-theme-toggle aria-label="切换外观"><svg class="theme-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" /></svg><svg class="theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" /><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6" /></svg><svg class="theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10Z" /></svg></button>
@@ -111,7 +111,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
           {personalMenu && <span class="site-account"><MeApp campus={campusHeader} client:only="react"><span slot="fallback" class="avatar avatar-loading" role="status" aria-label="正在加载个人菜单" aria-busy="true"><span class="avatar-face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg></span><span class="avatar-name">加载中</span></span></MeApp></span>}
         </div>
       </div>
-      {clubKeys.includes(active) && <nav class="club-nav" aria-label="学生发展中心栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
+      {clubPage && <nav class="club-nav" aria-label="学生发展中心栏目">{clubNav.map((item) => <a class:list={[{ active: active === item.key }]} href={item.href}>{item.label}</a>)}</nav>}
     </header>
     <main class:list={[fill && 'main-fill']}><slot /></main>
     {appPage && <div id="ai-host" class="ai-host" transition:persist="ai-host" hidden></div>}

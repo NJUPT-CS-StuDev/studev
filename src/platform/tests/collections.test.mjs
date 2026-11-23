@@ -9,7 +9,7 @@ import { createIdentity } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
 import { hashPassword } from '../server/crypto.mjs';
 import { AppError, fail } from '../server/common.mjs';
-import { loadOrganizations } from '../server/organizations.mjs';
+import { loadOrganizations, saveOrganization } from '../server/organizations.mjs';
 import { memoryBlob, memoryGateway, testEnvironment } from './fixtures.mjs';
 
 const ORIGIN = 'https://studev.test';
@@ -97,7 +97,7 @@ test('collection reads and writes use the signed-in role and organization scope'
   assert.equal((await f.call(f.itemPath(privateItem), { user: 'outsider' })).status, 404);
   assert.equal((await f.call(f.itemPath(draft), { user: 'alice' })).status, 404);
   const staff = (await f.call(f.itemPath(privateItem), { user: 'admin' })).data.item;
-  assert.deepEqual(staff.recipients, [{ studentId: 'TEST1001', name: '甲学生' }]);
+  assert.deepEqual(staff.recipients, [{ studentId: 'TEST1001', name: '甲学生', groupId: orgA, groupLabel: '运营支持部' }]);
   const owner = (await f.call('?view=guest', { user: 'owner' })).data;
   assert.deepEqual(owner.viewer, { id: f.users.owner.id, role: 'owner', isStaff: true, canPublish: true });
   assert.equal(Object.hasOwn(owner, 'view'), false);
@@ -112,6 +112,110 @@ test('collection reads and writes use the signed-in role and organization scope'
   assert.equal((await f.call('/items', { user: 'admin', body: {
     name: '越权', term: '2026-2027-1', issuerOrganizationId: orgB, rounds: [{ label: '填表', fields: [note] }],
   } })).status, 403);
+});
+
+test('selected recipients use a saved organization label without broadening collection access', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ user: 'admin', targetMode: 'selected', recipients: [
+    { studentId: 'TEST1001', name: '甲学生', groupId: orgA, groupLabel: '伪造名称' },
+    { studentId: 'TEST1002', name: '乙学生' },
+  ] });
+  const getBoard = () => f.call(f.roundPath(item) + '/submissions', { user: 'admin' });
+  const name = (await loadOrganizations(f.repo)).find(org => org.id === orgA).name;
+  assert.deepEqual(item.recipients[0], { studentId: 'TEST1001', name: '甲学生', groupId: orgA, groupLabel: name });
+  await f.submit(item, 'alice');
+  let report = (await getBoard()).data;
+  assert.equal(report.board[0].orgId, orgA);
+  assert.equal(report.board[0].orgLabel, name);
+  assert.equal(report.board[1].orgId, undefined);
+  assert.equal(report.items[0].complete, true);
+  assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'bob' })).status, 403);
+  assert.equal((await f.call(f.itemPath(item), { user: 'bob' })).data.item.recipients, undefined);
+
+  await saveOrganization(f.repo, { id: orgA, parentId: 'student-development', name: '更新后的组名' });
+  const untouched = await f.call(f.itemPath(item), { user: 'admin', body: { revision: item.revision, name: '改收集名称' } });
+  assert.equal(untouched.status, 200);
+  assert.deepEqual(untouched.data.item.recipients, item.recipients);
+  const roster = await f.call(f.itemPath(item), { user: 'admin', body: { revision: untouched.data.item.revision,
+    recipients: [{ studentId: 'TEST1001', name: '甲学生', groupId: orgA }] } });
+  assert.equal(roster.status, 200);
+  assert.equal(roster.data.item.recipients[0].groupLabel, name);
+  const forged = await f.call(f.itemPath(item), { user: 'admin', body: { revision: roster.data.item.revision,
+    recipients: [{ studentId: 'TEST1001', name: '甲学生', groupId: orgB }] } });
+  assert.equal(forged.data.item.recipients[0].groupId, orgA);
+  const forbidden = await f.call(f.itemPath(item), { user: 'admin', body: { revision: forged.data.item.revision,
+    audienceOrganizationId: orgB } });
+  assert.equal(forbidden.data.error, 'AUDIENCE_FORBIDDEN');
+  report = (await getBoard()).data;
+  assert.equal(report.board[0].orgLabel, name);
+});
+
+test('participant progress shares the scoped roster counts and exposes no other participant data', async () => {
+  const f = await collectionsFixture();
+  const parent = 'network';
+  const classOne = 'network/class1';
+  const classTwo = 'network/class2';
+  const subgroup = 'network/class1/group-a';
+  for (const [id, name, parentId] of [
+    [parent, '计算机科学与技术', null], [classOne, '1 班', parent], [classTwo, '2 班', parent], [subgroup, 'A 组', classOne],
+  ]) await saveOrganization(f.repo, { id, name, parentId, kind: 'academic' });
+  f.users.alice.memberships.push({ organizationId: subgroup }, { organizationId: parent });
+  f.users.bob.memberships.push({ organizationId: classTwo });
+  f.users.bob.identityVerified = true;
+  const item = await f.create({ visibility: 'public', targetMode: 'selected', audienceOrganizationId: parent, recipients: [
+    { studentId: 'TEST1001', name: '甲学生', groupId: classTwo }, { studentId: 'TEST1002', name: '乙学生' },
+    { studentId: 'TEST1003', name: '丙学生' },
+  ] });
+  const path = f.itemPath(item);
+  const round = f.roundPath(item);
+  const board = round + '/submissions';
+  assert.equal(item.showProgress, false);
+  assert.deepEqual(item.recipients.map(row => row.groupId), [classOne, classTwo, undefined]);
+  assert.equal((await f.call(board, { user: 'bob' })).status, 403);
+  assert.equal((await f.call(path, { user: 'bob' })).data.item.canViewProgress, false);
+  const on = (await f.call(path, { user: 'owner', body: { revision: item.revision, showProgress: true } })).data.item;
+  assert.equal(on.showProgress, true);
+  assert.equal((await f.call(board)).status, 403);
+  assert.equal((await f.call(board, { user: 'outsider' })).status, 403);
+  assert.equal((await f.call(board, { user: 'alice' })).status, 403);
+  f.users.alice.identityVerified = true;
+  const record = await f.submit(item, 'alice');
+  const staff = (await f.call(board, { user: 'owner' })).data.progress;
+  assert.deepEqual(staff.groups, [
+    { id: classOne, label: '1 班', total: 1, submitted: 1, missing: 0, late: 0, records: 1 },
+    { id: classTwo, label: '2 班', total: 1, submitted: 0, missing: 1, late: 0, records: 0 },
+    { id: '', label: '待核对', total: 1, submitted: 0, missing: 1, late: 0, records: 0 },
+  ]);
+  assert.equal((await f.call(path, { user: 'alice' })).data.item.canViewProgress, true);
+  const own = (await f.call(board, { user: 'alice' })).data;
+  assert.deepEqual(own, { progress: { ...staff, ownStatus: 'submitted' } });
+  const other = (await f.call(board, { user: 'bob' })).data;
+  assert.deepEqual(other, { progress: { ...staff, ownStatus: 'missing' } });
+  for (const privateValue of ['甲学生', 'TEST1001', record.data.submission.id, '完成']) {
+    assert.ok(!JSON.stringify(other).includes(privateValue));
+  }
+  assert.equal((await f.call(round + '/csv', { user: 'bob' })).status, 403);
+  assert.equal((await f.call(round + '/files', { user: 'bob', body: { submissionIds: [record.data.submission.id] } })).status, 403);
+  const stopped = (await f.call(round, { user: 'owner', body: { revision: on.revision, policy: 'closed' } })).data.item;
+  assert.equal((await f.call(board, { user: 'bob' })).status, 200);
+  assert.equal((await f.call(path + '/unpublish', { user: 'owner', body: { revision: stopped.revision } })).status, 200);
+  assert.equal((await f.call(board, { user: 'alice' })).status, 404);
+  assert.equal((await f.call(path, { user: 'alice' })).data.mySubmissions.length, 1);
+});
+
+test('open progress counts distinct people and successful submissions without an expected count', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ visibility: 'public', showProgress: true, round: { submissionMode: 'multiple', maxPerUser: 3 } });
+  assert.equal((await f.submit(item, 'alice')).status, 201);
+  assert.equal((await f.submit(item, 'alice')).status, 201);
+  const path = f.roundPath(item) + '/submissions';
+  assert.deepEqual((await f.call(path, { user: 'alice' })).data, {
+    progress: { total: null, submitted: 1, missing: null, late: 0, records: 2, groups: [], ownStatus: 'submitted', ownLate: false },
+  });
+  assert.equal((await f.call(path, { user: 'bob' })).data.progress.ownStatus, 'missing');
+  const disabled = await f.call(f.itemPath(item), { user: 'owner', body: { revision: item.revision, showProgress: false } });
+  assert.equal(disabled.status, 200);
+  assert.equal((await f.call(path, { user: 'alice' })).status, 403);
 });
 
 test('compact reads reuse current revisions without exposing withdrawn items or full submission content', async () => {
@@ -176,7 +280,7 @@ test('stopping keeps access and withdrawal preserves private receipts, review an
   assert.equal(reviewed.data.submission.review.comment, '通过');
   const report = await f.call(f.roundPath(item) + '/submissions', { user: 'admin' });
   assert.equal(report.data.board[0].statuses[item.rounds[0].id], 'accepted');
-  assert.equal(report.data.roundStats[0].submitted, 1);
+  assert.equal(report.data.progress.submitted, 1);
   assert.equal(report.data.items[0].createdAt, inserted.data.submission.createdAt);
   assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'alice' })).status, 403);
   const path = f.itemPath(item);
@@ -275,7 +379,7 @@ test('deadline closes at the cutoff and late reopening keeps submissions indepen
   assert.equal((await f.call(path)).status, 200);
   assert.equal((await f.submit(item, 'bob')).data.error, 'COLLECTION_CLOSED');
   const board = (await f.call(roundPath + '/submissions', { user: 'admin' })).data;
-  assert.equal(board.roundStats[0].late, 2);
+  assert.equal(board.progress.late, 2);
   assert.equal(board.items.find((row) => row.id === uploaded.id).late, true);
 });
 
@@ -326,7 +430,64 @@ test('signed uploads survive a deadline, finalize concurrently and leave only th
   const owns = await f.call(download, { user: 'alice', body: {} });
   assert.equal(owns.status, 200);
   assert.equal(owns.data.download.headers['If-Match'], [...f.gateway.objects.values()][0].etag);
-  assert.equal((await f.call(f.roundPath(item) + '/files', { user: 'owner' })).data.files[0].name, '材料.txt');
+  assert.equal((await f.call(f.roundPath(item) + '/files', { user: 'owner', body: { submissionIds: [id] } })).data.files[0].name, '材料.txt');
+});
+
+test('scoped file exports validate every selected submission before signing attachments', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ visibility: 'public', round: { fields: [note, { ...note, id: 'private-note' }, attachment] } });
+  async function upload(user, note) {
+    const started = await f.submit(item, user, {
+      answers: { note, 'private-note': '不用于命名' },
+      files: [{ fieldId: 'upload', name: '材料.txt', size: 7, type: 'text/plain' }],
+    });
+    assert.equal(started.status, 201);
+    f.gateway.upload(f.gateway.uploads.at(-1), 'fixture');
+    assert.equal((await f.complete(started.data)).status, 200);
+    return started.data.submission.id;
+  }
+  const first = await upload('alice', '甲实验组');
+  const second = await upload('bob', '乙实验组');
+  const otherItem = await f.create();
+  const outside = (await f.submit(otherItem, 'alice')).data.submission.id;
+  const path = f.roundPath(item) + '/files';
+  const sign = f.gateway.presignDownload;
+  let signed = 0;
+  f.gateway.presignDownload = (...args) => { signed++; return sign(...args); };
+
+  assert.equal((await f.call(path, { user: 'owner', body: { submissionIds: [first, outside] } })).data.error, 'EXPORT_SUBMISSION_NOT_FOUND');
+  assert.equal((await f.call(path, { user: 'alice', body: { submissionIds: [first] } })).status, 403);
+  assert.equal((await f.call(path, { user: 'owner', body: { submissionIds: [first] }, csrf: false })).status, 403);
+  assert.equal((await f.call(path, { user: 'owner', body: { submissionIds: 'all' } })).data.error, 'INVALID_EXPORT_SELECTION');
+  assert.equal((await f.call(path, { user: 'owner', body: { submissionIds: [first], answerFieldIds: ['*'] } })).data.error, 'INVALID_EXPORT_FIELDS');
+  assert.deepEqual((await f.call(path, { user: 'owner', body: { submissionIds: [] } })).data.files, []);
+  assert.equal(signed, 0);
+
+  const scoped = await f.call(path, { user: 'owner', body: { submissionIds: [first, first], answerFieldIds: ['note'] } });
+  assert.equal(scoped.status, 200);
+  const [{ id, submissionId, revision, fieldLabel, answers, download }] = scoped.data.files;
+  assert.equal(submissionId, first);
+  assert.equal(fieldLabel, '附件');
+  assert.deepEqual(answers, { note: '甲实验组' });
+  assert.equal(download, undefined);
+  const all = await f.call(path, { user: 'owner', body: { submissionIds: [first, second] } });
+  assert.equal(signed, 0);
+  assert.deepEqual(new Set(all.data.files.map(file => file.submissionId)), new Set([first, second]));
+  assert.ok(all.data.files.every(file => !Object.hasOwn(file, 'answers')));
+  assert.equal((await f.call(path, { user: 'owner' })).status, 405);
+
+  const selected = { id, submissionId, revision };
+  assert.equal((await f.call(path, { user: 'alice', body: { attachments: [selected] } })).status, 403);
+  assert.equal((await f.call(path, { user: 'owner', body: { attachments: [selected] }, csrf: false })).status, 403);
+  assert.equal((await f.call(path, { user: 'owner', body: { attachments: [selected, { ...selected, revision: revision + 1 }] } })).data.error, 'EXPORT_CHANGED');
+  assert.equal((await f.call(path, { user: 'owner', body: { attachments: [{ ...selected, submissionId: outside }] } })).data.error, 'EXPORT_CHANGED');
+  assert.equal((await f.call(path, { user: 'owner', body: { attachments: [{ ...selected, id: 'wrong' }] } })).data.error, 'EXPORT_CHANGED');
+  assert.equal(signed, 0);
+  const authorized = await f.call(path, { user: 'owner', body: { attachments: [selected] } });
+  assert.equal(authorized.status, 200);
+  assert.equal(signed, 1);
+  assert.deepEqual(Object.keys(authorized.data.files[0]).sort(), ['download', 'id', 'revision', 'submissionId']);
+  assert.ok(authorized.data.files[0].download.headers['If-Match']);
 });
 
 test('an attachment copy with changed bytes and an ambiguous commit retain distinct safety guarantees', async () => {

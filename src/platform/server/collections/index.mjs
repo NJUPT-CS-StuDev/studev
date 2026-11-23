@@ -3,9 +3,9 @@ import { fail, readJson, response } from '../common.mjs';
 import { chinaDay, flattenOrganizationTree, isWithin } from '../../organizations.mjs';
 import { pinnedCollections } from '../../collections.mjs';
 import { boardFor, boardRecords, catalogItems, definitions, directoryPeople, historyItems, itemView, myRecords, ownHistory, readItem, readRound, roundRecords } from './catalog.mjs';
-import { canManage, canSee, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
-import { collectionCsv, fileManifest } from './exports.mjs';
-import { collectionKeys as keys, mapConcurrent, readSubmission } from './records.mjs';
+import { canManage, canSee, canSeeProgress, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
+import { collectionCsv, fileManifest, signAttachments } from './exports.mjs';
+import { collectionKeys as keys, mapConcurrent, readSubmission, submissionId } from './records.mjs';
 import { roundQuota } from './quota.mjs';
 import { canEditSubmission, collectionSubmissions, ownsSubmission, submissionView } from './submissions.mjs';
 
@@ -74,6 +74,38 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ deleted: true });
   }
 
+  async function exportFiles(request, actor, itemId, roundId) {
+    const { submissionIds, answerFieldIds = [], attachments } = await readJson(request, 2 * 1024 * 1024);
+    const signing = attachments !== undefined;
+    if (signing && (submissionIds !== undefined || !Array.isArray(attachments) || attachments.length > 10000 ||
+        attachments.some(value => !value || typeof value.id !== 'string' || !value.id || value.id.length > 128 ||
+          typeof value.submissionId !== 'string' || !submissionId.test(value.submissionId) ||
+          !Number.isSafeInteger(value.revision) || value.revision < 1))) {
+      fail(400, 'INVALID_EXPORT_FILES', '请选择有效的附件。');
+    }
+    const ids = signing ? attachments.map(value => value.submissionId) : submissionIds;
+    if (!Array.isArray(ids) || ids.some(value => typeof value !== 'string' || !submissionId.test(value))) {
+      fail(400, 'INVALID_EXPORT_SELECTION', '请选择有效的提交记录。');
+    }
+    const selection = new Set(ids);
+    if (selection.size > 1000) fail(400, 'INVALID_EXPORT_SELECTION', '请选择有效的提交记录。');
+    if (!Array.isArray(answerFieldIds) || answerFieldIds.length > 30 ||
+        answerFieldIds.some(value => typeof value !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(value))) {
+      fail(400, 'INVALID_EXPORT_FIELDS', '请选择有效的命名字段。');
+    }
+    const heads = selection.size ? await repo.heads(keys.round(itemId, roundId)) : new Map();
+    const picked = new Map([...heads].filter(([id]) => selection.has(id)));
+    const records = await roundRecords(repo, itemId, roundId, picked);
+    if (records.length !== selection.size) {
+      if (signing) fail(409, 'EXPORT_CHANGED', '提交记录或附件已有变动，请重新查看打包预览。');
+      fail(404, 'EXPORT_SUBMISSION_NOT_FOUND', '有选中的提交记录不在本轮次。');
+    }
+    if (!signing) return response({ files: fileManifest(records, new Set(answerFieldIds)) });
+    const files = await signAttachments(records, attachments, submissions.download);
+    if (files.length) await repo.audit(actor, 'collection.export', itemId, { roundId, kind: 'files', count: records.length });
+    return response({ files });
+  }
+
   async function routeItem(context, viewer, orgs, route, receivedAt, item, own) {
     const { request } = context;
     const [ , id, operation, roundId, action ] = route;
@@ -92,30 +124,35 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (action === 'submissions' && request.method === 'POST') {
       return response(await submissions.begin(context, item, round, viewer.user, receivedAt), 201);
     }
+    if (action === 'submissions' && request.method === 'GET') {
+      if (!manage && !canSeeProgress(item, viewer)) fail(403, 'STAFF_REQUIRED', '此账号无权查看本次收集的提交进度。');
+      const board = measure('board', () => boardRecords(repo, id, roundId));
+      if (!manage) return response(boardFor(item, round, await board, viewer, false));
+      const [records, quota] = await Promise.all([
+        board,
+        roundQuota(repo, id, roundId, now).status(),
+        submissions.cleanup(context, id, roundId),
+      ]);
+      return response({
+        items: records.map(({ id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles, complete, userId }) => ({
+          id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles, complete,
+          ...(studentId ? {} : { personId: userId }),
+        })),
+        ...boardFor(item, round, records, viewer, true),
+        usage: { authorizations: quota.active + records.length, pending: quota.active,
+          completed: records.length, fileBytes: records.reduce((total, record) => total + record.fileBytes, 0) },
+      });
+    }
     if (!manage) fail(403, 'STAFF_REQUIRED', '此账号无权管理这项收集。');
     if (!operation && request.method === 'DELETE') {
       const body = await readJson(request);
       return deleteDraft(item, body.revision, viewer.user);
     }
-    if (action && request.method === 'GET') {
-      if (action === 'submissions') {
-        const [records, quota] = await Promise.all([
-          measure('board', () => boardRecords(repo, id, roundId)),
-          roundQuota(repo, id, roundId, now).status(),
-          submissions.cleanup(context, id, roundId),
-        ]);
-        return response({ items: records.map(({ id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles }) => ({
-          id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles,
-        })),
-          ...boardFor(item, records, [round]),
-          usage: { authorizations: quota.active + records.length, pending: quota.active,
-            completed: records.length, fileBytes: records.reduce((total, record) => total + record.fileBytes, 0) },
-        });
-      }
+    if (action === 'files' && request.method === 'POST') return exportFiles(request, viewer.user, id, roundId);
+    if (action === 'csv' && request.method === 'GET') {
       const records = await roundRecords(repo, id, roundId);
       await repo.audit(viewer.user, 'collection.export', id, { roundId, kind: action, count: records.length });
-      if (action === 'csv') return collectionCsv(item, round, records);
-      return response({ files: await fileManifest(records, submissions.download) });
+      return collectionCsv(item, round, records);
     }
     if (request.method !== 'POST' || action) fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
     const body = await readJson(request, 256 * 1024);
@@ -148,11 +185,11 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       update.rounds = round ? item.rounds.map((row) => row.id === round.id ? next : row) : [...item.rounds, next];
     } else {
       if (body.rounds !== undefined) fail(400, 'UPDATE_ROUND_REQUIRED', '请通过轮次操作修改已有轮次。');
-      Object.assign(update, itemInput(body, time, item));
       if (body.issuerOrganizationId !== undefined &&
           (body.issuerOrganizationId !== item.issuer.organizationId || (body.issuerTitle ?? '') !== item.issuer.title)) {
         update.issuer = publishedIssuer(body, viewer, orgs);
       }
+      Object.assign(update, await itemInput(body, time, item, viewer, orgs, update.issuer, identity.loadAllUsers));
     }
     const result = await repo.append(keys.definition(id), update, body.revision);
     await repo.audit(viewer.user, 'collection.update', id, { roundId, status: result.status, revision: result.revision });
@@ -219,13 +256,15 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const allowed = viewer.user.role === 'owner' ? null : new Set(issuerOptions.map(({ organizationId }) => organizationId));
         return response({
           organizations: flattenOrganizationTree(orgs),
+          scopeIds: issuerOptions.map(({ organizationId }) => organizationId),
           people: directoryPeople(await identity.loadAllUsers(), allowed, viewer.today),
         });
       }
       if (onCreate) {
         if (!isManagement(viewer.user.role)) fail(403, 'STAFF_REQUIRED', '此账号无权发布收集。');
         const body = await readJson(request, 256 * 1024);
-        return createItem({ ...itemInput(body, timestamp()), issuer: publishedIssuer(body, viewer, orgs) }, viewer, orgs);
+        const issuer = publishedIssuer(body, viewer, orgs);
+        return createItem({ ...await itemInput(body, timestamp(), null, viewer, orgs, issuer, identity.loadAllUsers), issuer }, viewer, orgs);
       }
       if (itemMatch) return routeItem(context, viewer, orgs, itemMatch, receivedAt, item, own);
       return routeSubmission(request, viewer, orgs, submissionMatch, receivedAt);
