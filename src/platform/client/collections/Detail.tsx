@@ -5,10 +5,14 @@ import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import { downloadZip } from './attachments';
 import { AnswerForm, ReceiptSummary, badge } from './Submission';
 import { Dialog } from './Dialog';
-import { collectionLoginUrl, collectionStatus, displayTime, itemRoute, roundIsOpen, roundRoute, toCollectionUrl, type Detail as CollectionDetail, type Round, type RoundBoardData, type Submission, type SubmissionStatus } from './model';
+import { collectionLoginUrl, collectionStatus, displayTime, itemRoute, itemState, roundState, roundRoute, toCollectionUrl, type Detail as CollectionDetail, type Item, type Policy, type Round, type RoundBoardData, type Submission, type SubmissionStatus } from './model';
 import type { EditorMode } from './Editor';
 
 export type Navigate = (url: string, replace?: boolean) => void;
+
+export function CollectionBadge({ state }: { state: keyof typeof collectionStatus }) {
+    return <span className={`cw-status cw-status-${state}`}>{collectionStatus[state]}</span>;
+}
 
 export function WorkspaceLink({ href, navigate, children, className, current }: { href: string; navigate: Navigate; children: React.ReactNode; className?: string; current?: boolean }) {
     return <a href={href} className={className} aria-current={current ? 'page' : undefined} onClick={event => {
@@ -51,7 +55,7 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     const people = (results?.board || []).map(person => ({ id: `person-${person.studentId}`, name: person.name, studentId: person.studentId, organization: person.orgLabel, submission: byStudent.get(person.studentId), status: person.statuses[round.id] || 'missing' }));
     const records = submissions.map(submission => ({ id: submission.id, name: submission.studentName || '填写者', studentId: submission.studentId, organization: '', submission, status: submission.status }));
     const rows = selected ? round.submissionMode === 'replace' ? people : [...records, ...people.filter(person => person.status === 'missing')] : records;
-    const visible = rows.filter(row => filter === 'all' || row.status === filter || row.submission?.status === filter);
+    const visible = rows.filter(row => filter === 'all' || row.status === filter || row.submission?.status === filter || filter === 'late' && row.submission?.late);
     const current = submissions.find(item => item.id === opened);
     async function zip() {
         setActionError('');
@@ -74,7 +78,7 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
             <div><span>已提交</span><strong>{stat?.submitted ?? '—'}</strong></div>
             {selected && <><div><span>未提交</span><strong>{stat?.missing ?? '—'}</strong></div>
                 <div><span>提交进度</span><strong>{stat?.total ? `${Math.round(100 * stat.submitted / stat.total)}%` : '—'}</strong></div></>}
-            <div><span>迟交</span><strong>{stat?.late ?? '—'}</strong></div>
+            <div><span>补交</span><strong>{stat?.late ?? '—'}</strong></div>
         </div>
         <div className="cw-panel">
             <div className="cw-board-head"><h2>提交记录</h2><div className="cw-inline">
@@ -83,13 +87,13 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
                 {submissions.some(record => record.files.length > 0) && <button type="button" className="cw-button" onClick={() => { if (transfer) transfer.abort(); else void zip(); }}><FileArchive size={16} />{transfer ? '取消打包' : '打包附件'}</button>}
             </div></div>
             <div className="cw-board-controls"><label>提交状态 <select value={filter} onChange={event => { setFilter(event.target.value); setLimit(25); }}>
-                <option value="all">全部状态</option><option value="submitted">已提交</option><option value="late">迟交</option>{selected && <option value="missing">未提交</option>}
+                <option value="all">全部状态</option><option value="submitted">已提交</option><option value="late">补交</option>{selected && <option value="missing">未提交</option>}
                 {round.requireReview && <><option value="pending_review">待审核</option><option value="accepted">已通过</option><option value="rejected">已退回</option></>}
             </select></label>{message && <span role="status">{message}</span>}{actionError && <span role="alert" className="cw-failure">{actionError}</span>}</div>
             {loadError && <div className="cw-inline"><p className="cw-failure" role="alert">{loadError}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>}
             {visible.length ? <div className="cw-table-scroll"><table><thead><tr><th scope="col">填写者</th><th scope="col">状态</th><th scope="col">提交时间</th><th scope="col"><span className="cw-sr-only">操作</span></th></tr></thead>
                 <tbody>{visible.slice(0, limit).map(row => <tr key={row.id}><td><b>{row.name}</b>{row.studentId && <small className="cw-mono">{row.studentId}</small>}{row.organization && <small>{row.organization}</small>}</td>
-                    <td>{badge(row.submission?.status || row.status as SubmissionStatus | 'missing')}</td><td>{row.submission ? displayTime(row.submission.submittedAt) : '—'}</td>
+                    <td>{badge(row.submission?.status || row.status as SubmissionStatus | 'missing', row.submission?.late)}</td><td>{row.submission ? displayTime(row.submission.submittedAt) : '—'}</td>
                     <td>{row.submission && <button type="button" className="cw-plain" aria-haspopup="dialog" onClick={() => setOpened(row.submission!.id)}>查看</button>}</td></tr>)}</tbody></table></div>
                 : <p className="cw-muted cw-board-empty">{results ? '当前没有符合条件的记录。' : loadError ? '提交记录暂不可用。' : '正在加载提交记录…'}</p>}
             {visible.length > limit && <button type="button" className="cw-button cw-more" onClick={() => setLimit(limit + 25)}>显示更多（{limit}/{visible.length}）</button>}
@@ -98,12 +102,11 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     </section>;
 }
 
-export function Details({ detail, chosenRound, receiptId, version, navigate, edit, authorize, onChanged, onDeleted }: {
-    detail: CollectionDetail; chosenRound: string; receiptId: string; version: number; navigate: Navigate; edit: (mode: EditorMode) => void;
-    authorize: () => Promise<void>; onChanged: (id?: string) => void; onDeleted: () => void;
+export function Details({ detail, round, now, receiptId, version, navigate, edit, authorize, onChanged, onRoundPolicyChanged, onDeleted }: {
+    detail: CollectionDetail; round?: Round; now: number; receiptId: string; version: number; navigate: Navigate; edit: (mode: EditorMode) => void;
+    authorize: () => Promise<void>; onChanged: (id?: string) => void; onRoundPolicyChanged: (updated: Item<Round>, roundId: string, policy: Policy) => void; onDeleted: () => void;
 }) {
     const { item, view } = detail;
-    const round = item.rounds.find(value => value.id === chosenRound) || item.rounds.find(value => value.open) || item.rounds[0];
     const [panel, setPanel] = useState<'board' | 'fill'>(receiptId ? 'fill' : 'board');
     const [latest, setLatest] = useState<Submission>();
     const [replaceRound, setReplace] = useState('');
@@ -113,12 +116,19 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
     const [confirm, setConfirm] = useState(false);
     const [changing, setChanging] = useState(false);
     const [changeError, setChangeError] = useState('');
+    const [timingUpdate, setTimingUpdate] = useState<{ roundId: string; busy: boolean; error?: string }>();
     const manage = item.canManage;
     const draft = item.status === 'draft';
     const pinned = pinnedCollections.includes(item.id);
     const actionLabel = draft ? '删除草稿' : '取消发布';
     const preview = detail.viewer && view !== detail.viewer.role;
-    const accepts = !!round && (round.open ?? roundIsOpen(item, round));
+    const state = round ? roundState(item, round, now) : 'closed';
+    const deadlineLabel = round?.deadline ? displayTime(round.deadline) : '未设截止时间';
+    const accepts = state === 'collecting' || state === 'makeup';
+    const timingAction = state === 'makeup' ? { label: '停止补交', policy: 'strict' }
+        : state === 'expired' ? { label: '开放补交', policy: 'allow-late' }
+        : state === 'collecting' ? { label: '停止收集', policy: 'closed' }
+        : { label: '恢复收集', policy: 'strict' };
     const canSubmit = !!detail.viewer && !preview && view !== 'guest' && accepts && (item.targetMode === 'open' || item.inRecipients);
     const mostRecent = (latest?.roundId === round?.id ? latest : undefined);
     const self = detail.mySubmissions.filter(submission => submission.roundId === round?.id);
@@ -129,10 +139,22 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
     const limitReached = !!round && round.submissionMode === 'multiple' && round.maxPerUser > 0 && own.length >= round.maxPerUser;
     const loginUrl = !detail.viewer && accepts ? collectionLoginUrl() : undefined;
     let submitNote = '';
-    if (!accepts) submitNote = '本批次当前不收集提交。';
+    if (!accepts) submitNote = state === 'expired' ? '本批次已截止。' : '本批次当前不收集提交。';
     else if (preview) submitNote = '预览视角下可以查看填写内容。';
     else if (detail.viewer && !canSubmit) submitNote = '本批次面向指定填写对象。';
     else if (limitReached) submitNote = '已达到本批次的个人提交次数上限。';
+    else if (state === 'makeup') submitNote = canSubmit ? '本次提交将记为补交。' : '补交已开放，登录后可填写。';
+    async function changeTiming() {
+        if (!round || timingUpdate?.busy) return;
+        setTimingUpdate({ roundId: round.id, busy: true });
+        try {
+            await authorize();
+            const { item: updated } = await api<{ item: Item<Round> }>(roundRoute(item.id, round.id), { revision: item.revision, policy: timingAction.policy });
+            const changed = updated.rounds.find(value => value.id === round.id);
+            if (changed) onRoundPolicyChanged(updated, round.id, changed.policy);
+            setTimingUpdate(undefined);
+        } catch (error) { setTimingUpdate({ roundId: round.id, busy: false, error: errorText(error) }); }
+    }
     async function duplicate() {
         setFailure('');
         setDuplicating(true);
@@ -165,7 +187,7 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
         <WorkspaceLink className="cw-back" href={toCollectionUrl()} navigate={navigate}><ArrowLeft size={17} />全部收集</WorkspaceLink>
         <div className="cw-detail-head">
             <div className="cw-detail-title"><div className="cw-inline cw-meta-line">
-                <span className={`cw-status cw-status-${item.status}`}>{collectionStatus[item.status]}</span>
+                <CollectionBadge state={itemState(item, now)} />
                 <span>{semesterLabel(item.term)}</span>
                 {item.course && <span className="cw-tag"><span className="cw-mono">{item.course.code}</span> {item.course.name}</span>}
                 {item.tags.map(tag => <span className="cw-tag" key={tag}>{tag}</span>)}
@@ -188,15 +210,19 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
             </aside>
             {round && <div className="cw-round">
                 <section className="cw-round-head cw-panel">
-                    <h2>{round.label}</h2><div className="cw-round-facts">
+                    <div className="cw-round-title"><h2>{round.label}</h2><CollectionBadge state={state} /></div><div className="cw-round-facts">
                         <div><span><CalendarClock size={16} />截止时间</span>{manage
-                            ? <button type="button" className="cw-fact-action" aria-label={`修改截止时间，当前 ${displayTime(round.deadline)}`} onClick={() => edit('deadline')}>{displayTime(round.deadline)}<Pencil size={15} /></button>
-                            : <strong>{displayTime(round.deadline)}</strong>}</div>
+                            ? <button type="button" className="cw-fact-action" aria-label={`修改截止时间，当前 ${deadlineLabel}`} onClick={() => edit('deadline')}>{deadlineLabel}<Pencil size={15} /></button>
+                            : <strong>{deadlineLabel}</strong>}</div>
                         <div><span><UsersRound size={16} />填写对象</span>{manage && !pinned
                             ? <button type="button" className="cw-fact-action" onClick={() => edit('recipients')}>{item.targetMode === 'selected' ? `${item.recipientCount} 人` : '所有可访问用户'}<Pencil size={15} /></button>
                             : <strong>{item.targetMode === 'selected' ? '指定成员' : '所有可访问用户'}</strong>}</div>
                     </div>
-                    {manage && <button type="button" className="cw-button" onClick={() => edit('round')}>编辑批次</button>}
+                    {manage && <div className="cw-inline">
+                        {item.status === 'published' && <button type="button" className="cw-button" disabled={timingUpdate?.busy} onClick={changeTiming}>{timingUpdate?.busy && timingUpdate.roundId === round.id ? '正在处理…' : timingAction.label}</button>}
+                        <button type="button" className="cw-button" onClick={() => edit('round')}>编辑批次</button>
+                    </div>}
+                    {timingUpdate?.roundId === round.id && timingUpdate.error && <p className="cw-failure" role="alert">{timingUpdate.error}</p>}
                 </section>
                 {manage && <div className="cw-segment" role="group" aria-label="批次内容">
                     <button type="button" aria-pressed={panel === 'board'} onClick={() => setPanel('board')}>提交记录</button>
@@ -206,7 +232,7 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
                     <h2>{prior ? '我的提交' : '填写内容'}</h2>
                     {displayedOwn.map(record => <ReceiptSummary key={record.id} submission={record} manage={false} editable={canSubmit && round.allowEdit} authorize={authorize} onChanged={() => { setLatest(undefined); onChanged(); }} />)}
                     {prior && canSubmit && !replace && <button type="button" className="cw-button" onClick={() => setReplace(round.id)}>重新填写</button>}
-                    {(!prior || replace) && <AnswerForm key={`${round.id}/${prior?.id || ''}`} round={round} path={roundRoute(item.id, round.id)} replacing={prior} canSubmit={canSubmit && !limitReached}
+                    {(!prior || replace) && <AnswerForm key={`${round.id}/${prior?.id || ''}`} round={round} path={roundRoute(item.id, round.id)} replacing={prior} canSubmit={canSubmit && !limitReached} makeup={state === 'makeup'}
                         loginUrl={loginUrl} authorize={authorize} onSaved={submission => { setLatest(submission); setReplace(''); onChanged(); }} />}
                     {submitNote && <p className="cw-muted">{submitNote}</p>}
                 </div> : <RoundBoard key={round.id} detail={detail} round={round} version={version} authorize={authorize} refresh={() => onChanged()} />}

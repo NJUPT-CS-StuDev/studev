@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { fail, text } from '../common.mjs';
 import { activeMemberships, chinaDay, flattenOrganizationTree, isWithin, organization, organizationName, positionLabel } from '../../organizations.mjs';
-import { isSemester, pinnedCollections } from '../../collections.mjs';
+import { deadlineReached, isSemester, pinnedCollections } from '../../collections.mjs';
 import { boolean, fields, integer, validObject } from './fields.mjs';
 import { collectionId, studentId } from './records.mjs';
 
@@ -55,11 +55,6 @@ export function canSee(item, viewer, orgs) {
   if (item.status === 'draft' || !item.publishedAt) return false;
   if (item.visibility === 'public') return true;
   return viewer.view !== 'guest' && isRecipient(item, viewer.user);
-}
-
-export function openRound(item, round, now) {
-  return item.status === 'published' && round.policy !== 'closed' &&
-    (round.policy === 'allow-late' || !round.deadline || Date.parse(round.deadline) > now);
 }
 
 export function publishChoices(user, view, orgs, today) {
@@ -129,12 +124,17 @@ function courseReference(value) {
   return { id: value.id, code, name: text(value.name, '课程名称', 160, true) };
 }
 
-export function roundInput(body, id = randomUUID()) {
+export function roundInput(body, { now, existing, id = existing?.id ?? randomUUID() }) {
+  const deadline = dateTime(body.deadline);
+  const policy = choice(body.policy ?? 'strict', ['strict', 'allow-late', 'closed'], '提交规则');
+  const unchangedLate = existing?.policy === 'allow-late' && deadline === existing.deadline;
+  if (policy === 'allow-late' && !unchangedLate && !deadlineReached(deadline, now)) {
+    fail(409, 'LATE_REQUIRES_DEADLINE', '原截止时间到达后才能开放补交。');
+  }
   return {
     id,
     label: text(body.label, '轮次名称', 80, true),
-    deadline: dateTime(body.deadline),
-    policy: choice(body.policy ?? 'strict', ['strict', 'allow-late', 'closed'], '提交规则'),
+    deadline, policy,
     fields: fields(body.fields),
     requireReview: boolean(body.requireReview),
     allowEdit: boolean(body.allowEdit),
@@ -168,7 +168,7 @@ export function itemInput(body, now, existing = null) {
       if (!validObject(row) || (row.id !== undefined && (!collectionId.test(row.id) || seen.has(row.id)))) {
         fail(400, 'INVALID_ROUNDS', '轮次标识无效或重复。');
       }
-      const round = roundInput(row, row.id);
+      const round = roundInput(row, { now: Date.parse(now), id: row.id });
       seen.add(round.id);
       return round;
     });

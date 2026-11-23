@@ -10,8 +10,9 @@ type Files = Record<string, File[]>;
 const stringValue = (value: unknown) => typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 const choices = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
-export function badge(status: Submission['status'] | 'missing') {
-    return <span className={`cw-status cw-status-${status}`}>{submissionStatus[status]}</span>;
+export function badge(status: Submission['status'] | 'missing', late = false) {
+    return <span className="cw-submission-status"><span className={`cw-status cw-status-${status}`}>{submissionStatus[status]}</span>
+        {late && status !== 'late' && <span className="cw-status cw-status-late">{submissionStatus.late}</span>}</span>;
 }
 
 function prefilled(fields: Field[]): Answers {
@@ -81,8 +82,8 @@ function AnswerFields({ fields, answers, disabled, files, kept, onAnswer, onFile
 type Receipt = { receiptId?: string; receiptToken?: string; uploads: Upload[]; submission: Submission };
 type Pending = { receipt: Receipt; files: File[]; uploaded: Set<number> };
 
-export function AnswerForm({ round, path, replacing, canSubmit, loginUrl, authorize, onSaved }: {
-    round: Round; path: string; replacing?: Submission; canSubmit: boolean; loginUrl?: string; authorize: () => Promise<void>; onSaved: (submission: Submission) => void;
+export function AnswerForm({ round, path, replacing, canSubmit, makeup, loginUrl, authorize, onSaved }: {
+    round: Round; path: string; replacing?: Submission; canSubmit: boolean; makeup: boolean; loginUrl?: string; authorize: () => Promise<void>; onSaved: (submission: Submission) => void;
 }) {
     const [answers, setAnswers] = useState(() => ({ ...prefilled(round.fields), ...Object.fromEntries(Object.entries(replacing?.answers || {}).filter(([id]) => round.fields.some(field => field.id === id && field.type !== 'file'))) }));
     const [files, setFiles] = useState<Files>({});
@@ -98,7 +99,7 @@ export function AnswerForm({ round, path, replacing, canSubmit, loginUrl, author
     }, [pending]);
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!canSubmit || busy) return;
+        if ((!canSubmit && !pending) || busy) return;
         setFailure('');
         const reject = (message: string) => { throw new Error(message); };
         setBusy('正在提交…');
@@ -139,7 +140,7 @@ export function AnswerForm({ round, path, replacing, canSubmit, loginUrl, author
                 if (failed?.status === 'rejected') throw failed.reason;
             }
             setBusy('正在确认提交…');
-            const submission = receipt.receiptToken && receipt.receiptId ? { ...receipt.submission, ...(await api<{ submission: Pick<Submission, 'status' | 'revision' | 'submittedAt'> }>(`${submissionRoute(receipt.receiptId)}/complete`, { receiptToken: receipt.receiptToken })).submission } : receipt.submission;
+            const submission = receipt.receiptToken && receipt.receiptId ? { ...receipt.submission, ...(await api<{ submission: Pick<Submission, 'status' | 'revision' | 'submittedAt' | 'late'> }>(`${submissionRoute(receipt.receiptId)}/complete`, { receiptToken: receipt.receiptToken })).submission } : receipt.submission;
             setPending(undefined);
             onSaved(submission);
         } catch (error) { setFailure(errorText(error)); }
@@ -150,7 +151,7 @@ export function AnswerForm({ round, path, replacing, canSubmit, loginUrl, author
             onFile={(id, value) => setFiles(previous => ({ ...previous, [id]: value }))} onKeep={id => setKept(previous => previous.filter(file => file.id !== id))} />
         {failure && <p role="alert" className="cw-failure">{failure}</p>}
         <div className="cw-inline">
-            {canSubmit ? <button className="cw-button cw-primary" type="submit" formNoValidate={!!pending} disabled={!!busy}><Send size={16} />{busy || (pending ? '重试提交' : replacing ? '更新提交' : '提交')}</button>
+            {canSubmit || pending ? <button className="cw-button cw-primary" type="submit" formNoValidate={!!pending} disabled={!!busy}><Send size={16} />{busy || (pending ? '重试提交' : makeup ? '提交补交' : replacing ? '更新提交' : '提交')}</button>
                 : loginUrl && <a href={loginUrl} className="cw-button cw-primary">登录后填写</a>}
             {pending && !busy && <button type="button" className="cw-button" onClick={() => { setPending(undefined); setFailure(''); }}>重新填写</button>}
         </div>
@@ -163,7 +164,7 @@ export function ReceiptSummary({ submission, manage, editable, authorize, onChan
     const [editing, edit] = useState(false);
     const [reviewing, review] = useState(false);
     return <article className="cw-receipt">
-        <header className="cw-inline"><span><CheckCircle2 size={17} />{submission.studentName || '提交记录'}</span>{badge(submission.status)}<span className="cw-muted">{displayTime(submission.submittedAt)}</span></header>
+        <header className="cw-inline"><span><CheckCircle2 size={17} />{submission.studentName || '提交记录'}</span>{badge(submission.status, submission.late)}<span className="cw-muted">{displayTime(submission.submittedAt)}</span></header>
         {submission.fields.some(field => field.type !== 'file') && <dl>{submission.fields.filter(field => field.type !== 'file').map(field => {
             const value = submission.answers[field.id];
             return <div key={field.id}><dt>{field.label}</dt><dd>{(Array.isArray(value) ? choices(value).join('、') : stringValue(value)) || '—'}</dd></div>;

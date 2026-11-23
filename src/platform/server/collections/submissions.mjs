@@ -1,7 +1,8 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
 import { fail, readJson, text } from '../common.mjs';
 import { isConflict } from '../store.mjs';
-import { isRecipient, openRound } from './definition.mjs';
+import { isRecipient } from './definition.mjs';
 import { answersInput, fileInput } from './fields.mjs';
 import { collectionKeys as keys, locateSubmission, mapConcurrent, studentId, submissionId } from './records.mjs';
 
@@ -39,23 +40,28 @@ export function ownsSubmission(record, user) {
 export function submissionView(record, item, round) {
   const { id, itemId, roundId, studentId, studentName, answers, fields, submittedAt, createdAt, updatedAt, status, revision, review } = record;
   return { id, itemId, roundId, itemName: item?.name, roundLabel: round?.label, studentId, studentName,
-    answers, fields, submittedAt, createdAt, updatedAt, status, revision, ...(review ? { review } : {}),
+    answers, fields, submittedAt, createdAt, updatedAt, status, late: submissionWasLate(record), revision, ...(review ? { review } : {}),
     files: record.files.map(({ id, fieldId, name, size, type }) => ({ id, fieldId, name, size, type })),
   };
 }
 
-function receiptView({ id, itemId, roundId, status, revision, submittedAt, updatedAt }) {
-  return { id, itemId, roundId, status, revision, submittedAt, updatedAt };
+function receiptView(record) {
+  const { id, itemId, roundId, status, revision, submittedAt, updatedAt } = record;
+  return { id, itemId, roundId, status, late: submissionWasLate(record), revision, submittedAt, updatedAt };
 }
 
-export function submissionStatus(round, timestamp) {
-  if (round.requireReview) return 'pending_review';
-  return round.deadline && Date.parse(timestamp) > Date.parse(round.deadline) ? 'late' : 'submitted';
+export function submissionWasLate(record) {
+  return record.status === 'late' || deadlineReached(record.deadline, Date.parse(record.submittedAt));
+}
+
+function submissionStatus(record) {
+  if (record.requireReview) return 'pending_review';
+  return submissionWasLate(record) ? 'late' : 'submitted';
 }
 
 export function canEditSubmission(record, item, round, actor, now) {
   return ownsSubmission(record, actor) && isRecipient(item, actor) && round.allowEdit &&
-    record.allowEdit !== false && openRound(item, round, now);
+    record.allowEdit !== false && roundAcceptsSubmissions(item, round, now);
 }
 
 async function claim(repo, prefix, maximum, ticket, code, previouslyReserved = false) {
@@ -108,9 +114,10 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
   const gateway = () => getGateway(oscaConfig(env));
   const receiptTokenFor = (id) => createHmac('sha256', env.PLATFORM_SESSION_SECRET).update('collection receipt: ' + id).digest('base64url');
 
-  async function begin(request, item, round, actor) {
+  async function begin(request, item, round, actor, receivedAt) {
     if (!isRecipient(item, actor)) fail(404, 'NOT_FOUND', '收集不存在或无权提交。');
-    if (!openRound(item, round, now())) fail(409, 'COLLECTION_CLOSED', '本轮当前不接受提交。');
+    if (!roundAcceptsSubmissions(item, round, receivedAt)) fail(409, 'COLLECTION_CLOSED', '本轮当前不接受提交。');
+    const submittedAt = new Date(receivedAt).toISOString();
     const body = await readJson(request);
     const sid = studentId(actor.studentId);
     if (!/^[A-Z0-9]{4,24}$/.test(sid)) fail(403, 'IDENTITY_REQUIRED', '请先完成学号认证。');
@@ -136,14 +143,14 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
     const record = {
       id, itemId: item.id, roundId: round.id, userId: actor.id, studentId: sid,
       studentName: actor.realName || actor.nickname || sid, answers, fields: round.fields,
-      status: 'uploading', createdAt: existing?.createdAt || issuedAt, submittedAt: issuedAt, updatedAt: issuedAt, files: kept,
+      status: 'uploading', createdAt: existing?.createdAt || submittedAt, submittedAt, updatedAt: issuedAt, files: kept,
       allowEdit: round.allowEdit, requireReview: round.requireReview, deadline: round.deadline,
     };
     const expectedRevision = existing?.revision || 0;
     if (!inputs.length) {
       await locateSubmission(repo, record);
       const result = await repo.append(keys.submission(item.id, round.id, id),
-        { ...record, status: submissionStatus(record, issuedAt) }, expectedRevision);
+        { ...record, status: submissionStatus(record) }, expectedRevision);
       return { submission: submissionView(result, item, round), uploads: [] };
     }
     const objectPrefix = configuration ? configuration.prefix + 'collection/' + item.id + '/' + round.id + '/' : '';
@@ -216,7 +223,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
       });
       await locateSubmission(repo, record);
       const value = { ...record, receiptId: id, files: [...record.files, ...copies],
-        status: submissionStatus(record, record.submittedAt), updatedAt: iso(),
+        status: submissionStatus(record), updatedAt: iso(),
       };
       // A transport error can conceal a successful commit. Retain the candidate
       // objects until the occupied immutable revision proves who owns them.
@@ -237,15 +244,19 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
     }
   }
 
-  async function change(request, record, item, round, actor, action) {
+  async function change(request, record, item, round, actor, action, receivedAt) {
     const body = await readJson(request);
     const updatedAt = iso();
     const next = { ...record, updatedAt };
     if (action === 'edit') {
-      if (!canEditSubmission(record, item, round, actor, now())) fail(409, 'EDIT_CLOSED', '本轮当前不允许修改。');
+      if (!canEditSubmission(record, item, round, actor, receivedAt)) fail(409, 'EDIT_CLOSED', '本轮当前不允许修改。');
       if (body.files !== undefined) fail(400, 'FILES_IMMUTABLE', '请在本轮重新提交附件。');
       next.answers = answersInput(body.answers, record.fields);
-      next.status = submissionStatus(record, record.submittedAt);
+      if (deadlineReached(round.deadline, receivedAt)) {
+        next.deadline = round.deadline;
+        next.submittedAt = new Date(receivedAt).toISOString();
+      }
+      next.status = submissionStatus(next);
       delete next.review;
     } else {
       if (!record.requireReview && !round.requireReview) fail(409, 'REVIEW_NOT_REQUIRED', '本轮提交无需审核。');

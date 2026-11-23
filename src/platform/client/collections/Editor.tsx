@@ -105,9 +105,9 @@ function FieldsEditor({ fields, onChange }: { fields: Field[]; onChange: (value:
     </div>;
 }
 
-function Timing({ value, patch }: { value: Round; patch: (value: Partial<Round>) => void }) {
-    return <div className="cw-form-grid"><label>截止时间（北京时间）<input type="datetime-local" value={deadlineInput(value.deadline)} onChange={event => patch({ deadline: deadlineValue(event.target.value) })} /></label>
-        <label>提交规则<select value={value.policy} onChange={event => patch({ policy: event.target.value as Round['policy'] })}><option value="strict">到期停止</option><option value="allow-late">允许迟交</option><option value="closed">停止提交</option></select></label></div>;
+function Timing({ value, patch, reopened }: { value: Round; patch: (value: Partial<Round>) => void; reopened: boolean }) {
+    return <div className="cw-form-grid"><label>截止时间（北京时间）<input type="datetime-local" value={deadlineInput(value.deadline)} onChange={event => patch({ deadline: deadlineValue(event.target.value) })} />
+        <small className="cw-muted">{reopened ? '修改截止时间后将按新的截止时间收集。' : '到期自动停止收集。留空则由管理者手动停止。'}</small></label></div>;
 }
 
 export function CollectionEditor({ mode, catalog, item, currentRound, authorize, onClose, onSaved }: {
@@ -150,7 +150,8 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
         const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value');
         const targets = { targetMode, recipients: targetMode === 'selected' ? [...recipients].map(([studentId, name]) => ({ studentId, name })) : [] };
         const details = { name, description, tags: lines(tags), course, term: selectedTerm, visibility };
-        const roundBody = { label: round.label, deadline: round.deadline, policy: round.policy, fields: round.fields, requireReview: round.requireReview, allowEdit: round.allowEdit, maxPerUser: round.maxPerUser, maxSubmissions: round.maxSubmissions, submissionMode: round.submissionMode };
+        const policy = round.policy === 'allow-late' && round.deadline !== currentRound?.deadline ? 'strict' : round.policy;
+        const roundBody = { label: round.label, deadline: round.deadline, policy, fields: round.fields, requireReview: round.requireReview, allowEdit: round.allowEdit, maxPerUser: round.maxPerUser, maxSubmissions: round.maxSubmissions, submissionMode: round.submissionMode };
         setError('');
         setBusy(true);
         try {
@@ -167,7 +168,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
                 } else {
                     const roundEdit = mode === 'round' || mode === 'deadline';
                     const path = roundEdit ? roundRoute(item.id, round.id) : itemRoute(item.id);
-                    const body = mode === 'round' ? roundBody : mode === 'deadline' ? { deadline: round.deadline, policy: round.policy } : mode === 'recipients' ? targets : { ...details, status };
+                    const body = mode === 'round' ? roundBody : mode === 'deadline' ? { deadline: round.deadline, policy } : mode === 'recipients' ? targets : { ...details, status };
                     await api(path, { ...body, revision: item.revision });
                     onSaved(item.id, currentRound?.id);
                 }
@@ -185,7 +186,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
                 <div className="cw-form-grid"><label>学期<select required value={selectedTerm} onChange={event => setTerm(event.target.value)}>{semesters.map(id => <option key={id} value={id}>{semesterLabel(id)}</option>)}</select></label>
                     <label>可见范围<select value={visibility} disabled={pinned} onChange={event => setVisibility(event.target.value as Item['visibility'])}><option value="members">登录用户</option><option value="public">公开</option></select></label></div>
                 <CoursePicker value={course} onChange={setCourse} />
-                {!creating && <label>收集状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">收集中</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}
+                {!creating && <label>发布状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">已发布</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}
             </>}
             {targetFields && <>
                 <label>填写对象<select value={targetMode} onChange={event => setTarget(event.target.value as TargetMode)}><option value="open">所有具有访问权限的人</option><option value="selected">指定成员</option></select></label>
@@ -193,7 +194,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
             </>}
             {(roundFields || mode === 'deadline') && <>
                 {roundFields && <><h3>批次设置</h3><label>批次名称<input required maxLength={80} value={round.label} onChange={event => changeRound({ label: event.target.value })} /></label></>}
-                <Timing value={round} patch={changeRound} />
+                <Timing value={round} patch={changeRound} reopened={currentRound?.policy === 'allow-late' && mode !== 'new-round'} />
                 {roundFields && <><div className="cw-form-grid"><label>每人提交方式<select value={round.submissionMode} onChange={event => changeRound({ submissionMode: event.target.value as Round['submissionMode'] })}><option value="replace">保留一份</option><option value="multiple">可提交多份</option></select></label>
                     {round.submissionMode === 'multiple' && <label>每人最多提交<input type="number" min="1" max="20" required value={round.maxPerUser} onChange={event => changeRound({ maxPerUser: +event.target.value })} /></label>}
                     <label>本批次最多提交<input type="number" min="1" max="1000" required value={round.maxSubmissions} onChange={event => changeRound({ maxSubmissions: +event.target.value })} /></label></div>

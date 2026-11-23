@@ -11,3 +11,12 @@ export function semesterLabel(id) {
   const [start, end, number] = id.split('-');
   return `${start}–${end} 学年第${number === '1' ? '一' : '二'}学期`;
 }
+
+export function deadlineReached(deadline, now) {
+  return Boolean(deadline && Date.parse(deadline) <= now);
+}
+
+export function roundAcceptsSubmissions(item, round, now) {
+  return item.status === 'published' && round.policy !== 'closed' &&
+    (round.policy === 'allow-late' || !deadlineReached(round.deadline, now));
+}

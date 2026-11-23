@@ -139,7 +139,12 @@ usable across search index updates.
   role checks apply to every record, progress report and download.
 - Round fields cover text, long text, single choice, multiple choice, number,
   date and attachments. Each round defines its deadline, late policy, edit and
-  review rules, and quotas. Replacement rounds keep a single submission per
+  review rules, and quotas. A published round with `strict` automatically
+  stops accepting submissions at its deadline. Managers can set `allow-late`
+  after the deadline to reopen it while retaining the original cutoff, or use
+  `closed` to stop it manually. Rounds without a deadline remain open until
+  stopped. Catalog and detail responses include the server time used for
+  their round statuses. Replacement rounds keep a single submission per
   student. Multiple-submission rounds reserve a slot against both the person
   and round limits. Issued authorizations count toward those limits.
 
@@ -167,8 +172,12 @@ Submit with `{ answers, files, keepFiles? }`. Each new file supplies
 `{ fieldId, name, size, type }`. A submission with no new files commits within
 that request. When new files are present, PUT them to the returned signed URLs
 in order, then send `{ receiptToken }` to `POST /submissions/<receiptId>/complete`.
-A valid receipt can confirm its upload after the login session expires. The
-receipt response contains the submission ID, status and timestamps. Answers,
+A valid receipt can confirm its upload after the login session or collection
+deadline passes. Timeliness uses the server time when the submission request
+arrives. Reopened submissions at or after the cutoff are late, including saved
+changes to answers. A submission's deadline snapshot keeps its late flag
+stable through review and later changes to round settings. The receipt response
+contains the submission ID, status, late flag and timestamps. Answers,
 identity and attachment names require account authorization. File uploads and
 downloads go directly to OSCA. The backend verifies and freezes uploaded
 content and binds signed downloads to the saved ETag.

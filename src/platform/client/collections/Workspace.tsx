@@ -3,9 +3,9 @@ import { ArrowLeft, ArrowRight, ClipboardList, Eye, MapPin, MessageSquare, Plus,
 import { api, errorText, PlatformError, session } from '../api';
 import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
-import { Details, WorkspaceLink, type Navigate } from './Detail';
+import { CollectionBadge, Details, WorkspaceLink, type Navigate } from './Detail';
 import { badge } from './Submission';
-import { collectionLoginUrl, collectionStatus, displayTime, itemRoute, roundIsOpen, toCollectionUrl, viewLabels, type Catalog, type Detail, type Item, type Submission, type View, type WorkspaceView } from './model';
+import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, roundState, toCollectionUrl, viewLabels, type Catalog, type Detail, type Item, type Round, type Submission, type View, type WorkspaceView } from './model';
 
 const CollectionEditor = lazy(() => import('./Editor').then(module => ({ default: module.CollectionEditor })));
 
@@ -30,10 +30,14 @@ function mineHref(query: URLSearchParams) {
     return `/forms/?${params}`;
 }
 
-function ItemRow({ item, navigate }: { item: Item; navigate: Navigate }) {
-    const open = item.rounds.filter(round => round.open ?? roundIsOpen(item, round));
-    const next = [...open].filter(round => round.deadline && Date.parse(round.deadline) > Date.now()).sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
-    const received = item.rounds.filter(round => round.myStatus && round.myStatus !== 'missing');
+function ItemRow({ item, now, navigate }: { item: Item; now: number; navigate: Navigate }) {
+    const state = itemState(item, now);
+    const accepting = item.rounds.filter(round => roundState(item, round, now) === state);
+    const deadlines = accepting.map(round => round.deadline).filter(Boolean).sort();
+    const date = state === 'collecting' ? deadlines[0] : deadlines.at(-1);
+    const time = state === 'collecting' ? date ? `截止 ${displayTime(date)}` : '不限时'
+        : date && (state === 'makeup' || state === 'expired') ? `${state === 'makeup' ? '原截止' : '截止'} ${displayTime(date)}`
+        : item.publishedAt ? displayTime(item.publishedAt).split(' ')[0] : '—';
     return <WorkspaceLink href={toCollectionUrl(item.id)} navigate={navigate} className="cw-item">
         <span className="cw-item-icon"><ClipboardList size={21} /></span>
         <span className="cw-item-body">
@@ -44,13 +48,13 @@ function ItemRow({ item, navigate }: { item: Item; navigate: Navigate }) {
                 <span>{[item.issuer.orgShortName || item.issuer.organizationName, item.issuer.title].filter(Boolean).join(' · ')}</span>
             </span>
         </span>
-        <span className="cw-item-time">{next ? `截止 ${displayTime(next.deadline)}` : open.length ? open.some(round => !round.deadline) ? '不限时' : '可迟交' : item.publishedAt ? displayTime(item.publishedAt).split(' ')[0] : '—'}</span>
-        <span className={`cw-status cw-status-${item.status === 'published' && !open.length ? 'closed' : item.status}`}>{item.status === 'published' && !open.length ? '已截止' : received.length && received.length === item.rounds.length && !item.canManage ? '已提交' : collectionStatus[item.status]}</span>
+        <span className="cw-item-time">{time}</span>
+        <CollectionBadge state={state} />
         <ArrowRight className="cw-item-arrow" size={17} />
     </WorkspaceLink>;
 }
 
-function List({ catalog, query, navigate }: { catalog: Catalog; query: URLSearchParams; navigate: Navigate }) {
+function List({ catalog, now, query, navigate }: { catalog: Catalog; now: number; query: URLSearchParams; navigate: Navigate }) {
     const [text, setText] = useState('');
     const search = searchText(text);
     const matches = useMemo(() => catalog.items.filter(item => !search || searchText([item.name, item.description, item.course?.code, item.course?.name, ...item.tags, item.issuer.organizationName].join(' ')).includes(search)), [catalog.items, search]);
@@ -74,7 +78,7 @@ function List({ catalog, query, navigate }: { catalog: Catalog; query: URLSearch
             </section>}
             {groups.map(([term, items]) => <section className="cw-group" key={term}>
                 <div className="cw-group-head"><h2>{semesterLabel(term)}</h2><span>{items.length} 项</span></div>
-                <div className="cw-items">{items.map(item => <ItemRow key={item.id} item={item} navigate={navigate} />)}</div>
+                <div className="cw-items">{items.map(item => <ItemRow key={item.id} item={item} now={now} navigate={navigate} />)}</div>
             </section>)}
             {!matches.length && <div className="cw-empty"><ClipboardList size={30} /><h2>{search ? '找不到匹配的收集' : '暂无可查看的收集'}</h2>
                 {search ? <button type="button" className="cw-button" onClick={() => setText('')}>清除搜索</button> : catalog.view === 'guest' && !catalog.viewer && <a className="cw-button" href="/login/?next=%2Fforms%2F">登录查看开放给你的收集</a>}</div>}
@@ -101,20 +105,21 @@ function Mine({ info, navigate }: { info: WorkspaceView; navigate: Navigate }) {
             : !items ? <p className="cw-muted" role="status">正在加载提交记录…</p> : !items.length ? <p className="cw-empty">暂无提交记录。</p> : <div className="cw-items">
                 {items.map(item => <WorkspaceLink key={item.id} href={`${toCollectionUrl(item.itemId, item.roundId)}&receipt=${encodeURIComponent(item.id)}`} navigate={navigate} className="cw-item">
                     <span className="cw-item-icon"><ClipboardList size={21} /></span><span className="cw-item-body"><span className="cw-item-title">{item.itemName || '查看收集'}</span><span className="cw-item-info">{item.roundLabel}</span></span>
-                    <span className="cw-item-time">{displayTime(item.submittedAt)}</span>{badge(item.status)}<ArrowRight className="cw-item-arrow" size={17} />
+                    <span className="cw-item-time">{displayTime(item.submittedAt)}</span>{badge(item.status, item.late)}<ArrowRight className="cw-item-arrow" size={17} />
                 </WorkspaceLink>)}</div>}
     </section>;
 }
 
 export default function Workspace() {
     const [query, setQuery] = useState(() => new URLSearchParams(location.search));
-    const [catalog, setCatalog] = useState<{ view: string; version: number; data: Catalog }>();
+    const [catalog, setCatalog] = useState<{ view: string; version: number; data: Catalog; receivedAt: number }>();
     const [viewControls, setViewControls] = useState<Pick<WorkspaceView, 'viewer' | 'views'>>();
-    const [detail, setDetail] = useState<{ key: string; data: Detail }>();
+    const [detail, setDetail] = useState<{ key: string; data: Detail; receivedAt: number }>();
     const [failure, setFailure] = useState<{ key: string; message: string; status?: number }>();
     const [editor, setEditor] = useState<EditorMode>();
     const [version, refresh] = useState(0);
     const [notice, setNotice] = useState('');
+    const [clockTick, tick] = useState(0);
     const root = useRef<HTMLDivElement>(null);
     const focusedPage = useRef('');
     const authorization = useRef<ReturnType<typeof session> | null>(null);
@@ -126,6 +131,23 @@ export default function Workspace() {
     const activeCatalog = catalog?.view === requestedView ? catalog.data : undefined;
     const activeDetail = detail?.key === detailKey ? detail.data : undefined;
     const info = activeDetail || activeCatalog;
+    const clock = id ? activeDetail && detail : activeCatalog && catalog;
+    const now = clock ? clock.data.serverTime + performance.now() - clock.receivedAt : Date.now();
+    const timingItems: Item[] = activeDetail ? [activeDetail.item] : id ? [] : activeCatalog?.items || [];
+    let nextDeadline = Infinity;
+    for (const item of timingItems) {
+        if (item.status !== 'published') continue;
+        for (const round of item.rounds) {
+            const deadline = Date.parse(round.deadline);
+            if (deadline > now) nextDeadline = Math.min(nextDeadline, deadline);
+        }
+    }
+    useEffect(() => {
+        if (!clock || !Number.isFinite(nextDeadline)) return;
+        const remaining = nextDeadline - clock.data.serverTime - performance.now() + clock.receivedAt;
+        const timeout = setTimeout(() => tick(value => value + 1), Math.min(2_147_483_647, Math.ceil(remaining)));
+        return () => clearTimeout(timeout);
+    }, [clock, nextDeadline, clockTick]);
     const viewChoice = info || viewControls;
     const viewValue = info?.view || requestedView || viewChoice?.viewer?.role || 'guest';
     const catalogFresh = !!activeCatalog && catalog?.version === version;
@@ -147,7 +169,7 @@ export default function Workspace() {
         if (!needsCatalog) return;
         const controller = new AbortController();
         api<Catalog>(`/collections${viewQuery}`, undefined, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) { setCatalog({ view: requestedView, version, data }); setViewControls({ viewer: data.viewer, views: data.views }); setFailure(previous => previous?.key === requestedView ? undefined : previous); }
+            if (!controller.signal.aborted) { setCatalog({ view: requestedView, version, data, receivedAt: performance.now() }); setViewControls({ viewer: data.viewer, views: data.views }); setFailure(previous => previous?.key === requestedView ? undefined : previous); }
         }).catch(error => { if (!controller.signal.aborted) setFailure({ key: requestedView, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
     }, [needsCatalog, requestedView, viewQuery, version]);
@@ -155,7 +177,7 @@ export default function Workspace() {
         if (!id) return;
         const controller = new AbortController();
         api<Detail>(`${itemRoute(id)}${viewQuery}`, undefined, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) { setDetail({ key: detailKey, data }); setViewControls({ viewer: data.viewer, views: data.views }); setFailure(previous => previous?.key === detailKey ? undefined : previous); }
+            if (!controller.signal.aborted) { setDetail({ key: detailKey, data, receivedAt: performance.now() }); setViewControls({ viewer: data.viewer, views: data.views }); setFailure(previous => previous?.key === detailKey ? undefined : previous); }
         }).catch(error => { if (!controller.signal.aborted) setFailure({ key: detailKey, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
     }, [id, requestedView, detailKey, viewQuery, version]);
@@ -186,7 +208,7 @@ export default function Workspace() {
     }
     const navigate: Navigate = updateQuery;
     const item = activeDetail?.item;
-    const round = item?.rounds.find(value => value.id === roundId) || item?.rounds.find(value => value.open) || item?.rounds[0];
+    const round = item && chooseRound(item, roundId);
     const isPreview = info?.viewer && info.view !== info.viewer.role;
     const showPublish = !id && !mine && info?.viewer?.canPublish && !isPreview;
     return <div className="cw-workspace" ref={root}>
@@ -206,16 +228,24 @@ export default function Workspace() {
         </div>
         {isPreview && <p className="cw-preview" role="status"><Eye size={17} />正在预览{viewLabels[info.view]}视角</p>}
         {notice && <p role="status" className="cw-notice">{notice}</p>}
-        {id && activeDetail ? <Details key={detailKey} detail={activeDetail} chosenRound={roundId} receiptId={query.get('receipt') || ''} navigate={navigate} version={version} edit={setEditor} authorize={authorize} onChanged={created => {
+        {id && activeDetail ? <Details key={detailKey} detail={activeDetail} round={round} now={now} receiptId={query.get('receipt') || ''} navigate={navigate} version={version} edit={setEditor} authorize={authorize} onChanged={created => {
             if (created) navigate(toCollectionUrl(created));
             refresh(value => value + 1);
+        }} onRoundPolicyChanged={(updated: Item<Round>, roundId, policy) => {
+            setDetail(previous => previous?.key === detailKey && previous.data.item.revision < updated.revision ? {
+                ...previous, data: { ...previous.data, item: {
+                    ...previous.data.item, revision: updated.revision, updatedAt: updated.updatedAt,
+                    rounds: previous.data.item.rounds.map(round => round.id === roundId ? { ...round, policy } : round),
+                } },
+            } : previous);
+            setCatalog(undefined);
         }} onDeleted={() => {
             setDetail(undefined);
             setCatalog(undefined);
             navigate(toCollectionUrl(), true);
             setNotice('草稿已删除');
             refresh(value => value + 1);
-        }} /> : !id && mine && info ? <Mine key={requestedView} info={info} navigate={navigate} /> : !id && activeCatalog ? <List key={requestedView} catalog={activeCatalog} query={query} navigate={navigate} />
+        }} /> : !id && mine && info ? <Mine key={requestedView} info={info} navigate={navigate} /> : !id && activeCatalog ? <List key={requestedView} catalog={activeCatalog} now={now} query={query} navigate={navigate} />
             : currentError ? <div className="cw-empty"><p className="cw-failure" role="alert">{currentError.message}</p><div className="cw-inline"><button type="button" className="cw-button" onClick={() => refresh(version + 1)}>重试</button>
                 {id && <WorkspaceLink className="cw-button" href={toCollectionUrl()} navigate={navigate}>返回收集</WorkspaceLink>}
                 {(currentError.status === 401 || (id && !viewChoice?.viewer && (!requestedView || requestedView === 'guest') && currentError.status === 404)) && <a className="cw-button cw-primary" href={collectionLoginUrl(query)}>登录后查看</a>}

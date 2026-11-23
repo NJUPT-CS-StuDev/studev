@@ -51,6 +51,9 @@ async function pickReleasedCourse(dialog, course) {
 
 const title = '统一收集验收';
 const privateTitle = '仅指定成员的收集';
+const expiredTitle = '已过截止的收集';
+const stoppedTitle = '未设截止但已停止的收集';
+const timedTitle = '即将截止的收集';
 const pinnedTitles = ['地点拍照', '意见反馈', '补充校园数据'];
 const memberName = '合成成员';
 const peerSecret = '另一账号的私有答案';
@@ -96,13 +99,17 @@ async function collectionFixture() {
   const { item: privateItem } = await post(owner, '/collections/items', {
     ...common, name: privateTitle, visibility: 'members', targetMode: 'selected', recipients: [{ studentId: member.sid, name: memberName }],
   }, 201);
+  const deadline = new Date(clock - 60_000).toISOString();
+  const { item: expired } = await post(owner, '/collections/items', { ...common, name: expiredTitle, visibility: 'public', rounds: [{ ...round, deadline, requireReview: true }] }, 201);
+  const { item: stopped } = await post(owner, '/collections/items', { ...common, name: stoppedTitle, visibility: 'public', rounds: [{ ...round, policy: 'closed' }] }, 201);
+  await post(owner, '/collections/items', { ...common, name: timedTitle, visibility: 'public', rounds: [{ ...round, deadline: new Date(clock + 30_000).toISOString() }] }, 201);
   const repo = createRepository(store, { secret: env.PLATFORM_SESSION_SECRET });
   const definition = await repo.latest(collectionKeys.definition(item.id));
   for (const [index, id] of pinnedCollections.entries()) {
     await repo.append(collectionKeys.definition(id), { ...definition, id, name: pinnedTitles[index], tags: [] });
   }
   const prior = await post(peer.actor, roundPath(item) + '/submissions', { answers: { answer: peerSecret }, files: [] }, 201);
-  return { handle, env, owner, guest, member: member.actor, item, privateItem, peerSubmission: prior.submission.id };
+  return { handle, env, owner, guest, member: member.actor, item, privateItem, expired, stopped, deadline, peerSubmission: prior.submission.id };
 }
 
 async function collections(page, fixture, actor, { identity, reads = [] } = {}) {
@@ -130,6 +137,7 @@ async function checkCollection(viewport, name) {
   const { item, privateItem } = fixture;
   const guest = await newPage(viewport);
   const guestReads = [];
+  await guest.page.clock.install({ time: new Date('2040-01-01T00:00:00Z') });
   await collections(guest.page, fixture, fixture.guest, { reads: guestReads });
   await guest.page.goto(origin+'/search/');
   const nav = name === 'phone' ? guest.page.locator('.phone-tabs') : guest.page.locator('.site-nav');
@@ -152,6 +160,16 @@ async function checkCollection(viewport, name) {
   await parts.getByRole('link', { name: new RegExp(title) }).waitFor();
   assert.equal(await pinned.count(), 0);
   await search.clear();
+  const elapsedRow = parts.getByRole('link', { name: new RegExp(expiredTitle) });
+  const stoppedRow = parts.getByRole('link', { name: new RegExp(stoppedTitle) });
+  const timedRow = parts.getByRole('link', { name: new RegExp(timedTitle) });
+  await elapsedRow.getByText('已截止', { exact: true }).waitFor();
+  await stoppedRow.getByText('已停止', { exact: true }).waitFor();
+  await timedRow.getByText('收集中', { exact: true }).waitFor();
+  const catalogReads = guestReads.filter(read => read.path === '/api/platform/collections').length;
+  await guest.page.clock.fastForward(31_000);
+  await timedRow.getByText('已截止', { exact: true }).waitFor();
+  assert.equal(guestReads.filter(read => read.path === '/api/platform/collections').length, catalogReads, 'cutoff updates locally without polling or trusting the client wall clock');
   const width = await parts.boundingBox();
   assert(width && width.width >= (name === 'phone' ? viewport.width - 48 : 1100), 'collection list uses the available screen');
   assert(await guest.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'collection list has no horizontal page overflow');
@@ -268,7 +286,48 @@ async function checkCollection(viewport, name) {
     await shot(staff.page, name + '-collection-board');
     await staffParts.getByRole('button', { name: /修改截止时间/ }).click();
     const deadline = staff.page.getByRole('dialog', { name: '截止时间' });
+    await deadline.getByText('到期自动停止收集。留空则由管理者手动停止。').waitFor();
     await deadline.getByRole('button', { name: '取消' }).click();
+
+    await staff.page.goto(origin + '/forms/?id=' + fixture.stopped.id);
+    await staffParts.locator('.cw-detail-head').getByText('已停止', { exact: true }).waitFor();
+    await staffParts.getByRole('button', { name: /修改截止时间.*未设截止时间/ }).waitFor();
+    await staffParts.getByRole('button', { name: '恢复收集', exact: true }).click();
+    await staffParts.locator('.cw-detail-head').getByText('收集中', { exact: true }).waitFor();
+    await staffParts.getByRole('button', { name: '停止收集', exact: true }).click();
+    await staffParts.locator('.cw-detail-head').getByText('已停止', { exact: true }).waitFor();
+    assert.equal((await fixture.owner.call('/collections/items/' + fixture.stopped.id)).body.item.rounds[0].deadline, '');
+
+    await staff.page.goto(origin + '/forms/?id=' + fixture.expired.id);
+    await staffParts.locator('.cw-detail-head').getByText('已截止', { exact: true }).waitFor();
+    await staffParts.locator('.cw-round-head').getByText('已截止', { exact: true }).waitFor();
+    const cutoff = await staffParts.getByRole('button', { name: /修改截止时间/ }).innerText();
+    await staffParts.getByRole('button', { name: '开放补交', exact: true }).click();
+    await staffParts.locator('.cw-detail-head').getByText('补交中', { exact: true }).waitFor();
+    assert.equal(await staffParts.getByRole('button', { name: /修改截止时间/ }).innerText(), cutoff);
+    const reopened = await fixture.owner.call('/collections/items/' + fixture.expired.id);
+    assert.equal(reopened.body.item.rounds[0].deadline, fixture.deadline);
+    const lateMember = await newPage(viewport);
+    await collections(lateMember.page, fixture, fixture.member);
+    await lateMember.page.goto(origin + '/forms/?id=' + fixture.expired.id);
+    const lateParts = lateMember.page.locator('.cw-workspace');
+    await lateParts.getByText('本次提交将记为补交。', { exact: true }).waitFor();
+    await lateParts.getByRole('textbox', { name: /^填写内容/ }).fill('补交验收答案');
+    await lateParts.getByRole('button', { name: '提交补交', exact: true }).click();
+    const lateReceipt = lateParts.locator('.cw-receipt');
+    await lateReceipt.getByText('补交', { exact: true }).waitFor();
+    await lateReceipt.getByText('待审核', { exact: true }).waitFor();
+    await lateReceipt.getByText('补交验收答案', { exact: true }).waitFor();
+    assert.deepEqual(lateMember.errors, []);
+    await lateMember.context.close();
+    await staffParts.getByRole('button', { name: '停止补交', exact: true }).click();
+    await staffParts.locator('.cw-detail-head').getByText('已截止', { exact: true }).waitFor();
+    const restopped = await fixture.owner.call('/collections/items/' + fixture.expired.id);
+    assert.equal(restopped.body.item.rounds[0].deadline, fixture.deadline);
+    assert.equal(restopped.body.item.rounds[0].policy, 'strict');
+    assert.equal(restopped.body.item.rounds[0].open, false);
+    record('desktop: automatic cutoff, manually stopped legacy rounds, reopen and stop makeup without moving the deadline');
+    await staff.page.goto(origin + '/forms/?id=' + item.id);
     await staffParts.getByRole('combobox', { name: '视角' }).selectOption('user');
     await staffParts.getByText(/正在预览用户视角/).waitFor();
     assert.equal(await staffParts.getByRole('button', { name: '收集设置' }).count(), 0);

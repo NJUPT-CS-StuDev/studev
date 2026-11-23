@@ -1,4 +1,5 @@
 import { mapConcurrent } from './records.mjs';
+import { submissionWasLate } from './submissions.mjs';
 
 function csvCell(value) {
   let safe = Array.isArray(value) ? value.join('；') : String(value ?? '');
@@ -23,10 +24,10 @@ export function collectionCsv(item, round, records) {
       return totals.get(label) > 1 ? label + '（版本 ' + part + '）' : label;
     });
   };
-  const rows = [['提交编号', '学号', '姓名', '提交时间', '状态', '审核说明', ...getLabels()]];
+  const rows = [['提交编号', '学号', '姓名', '提交时间', '状态', '是否补交', '审核说明', ...getLabels()]];
   for (const record of records) {
     const known = new Set(record.fields.map(signature));
-    rows.push([record.id, record.studentId, record.studentName, record.submittedAt, record.status, record.review?.comment,
+    rows.push([record.id, record.studentId, record.studentName, record.submittedAt, record.status, submissionWasLate(record) ? '是' : '否', record.review?.comment,
       ...[...columns].map(([key, field]) => {
         if (!known.has(key)) return '';
         if (field.type === 'file') return record.files.filter((file) => file.fieldId === field.id).map((file) => file.name).join('；');

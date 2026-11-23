@@ -1,4 +1,5 @@
 import { roleLabels, type OrganizationNode } from '../api';
+import { deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
 import type { CollectionCourse } from './CoursePicker';
 
 export const viewLabels = { guest: '访客', ...roleLabels };
@@ -9,8 +10,8 @@ export type Policy = 'strict' | 'allow-late' | 'closed';
 export type SubmissionStatus = 'uploading' | 'submitted' | 'late' | 'pending_review' | 'accepted' | 'rejected';
 export type FieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'number' | 'date' | 'file';
 
-export const collectionStatus: Record<Status, string> = { draft: '草稿', published: '收集中', closed: '已停止' };
-export const submissionStatus: Record<SubmissionStatus | 'missing', string> = { uploading: '待完成', submitted: '已提交', late: '迟交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', missing: '未提交' };
+export const collectionStatus = { draft: '草稿', collecting: '收集中', makeup: '补交中', expired: '已截止', closed: '已停止' };
+export const submissionStatus: Record<SubmissionStatus | 'missing', string> = { uploading: '待完成', submitted: '已提交', late: '补交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', missing: '未提交' };
 
 export interface Field {
     id: string;
@@ -90,6 +91,7 @@ export interface WorkspaceView {
 }
 
 export interface Catalog extends WorkspaceView {
+    serverTime: number;
     items: Item[];
     organizations: OrganizationNode[];
     issuerOptions: IssuerOption[];
@@ -98,6 +100,7 @@ export interface Catalog extends WorkspaceView {
 export interface RoundStats { roundId: string; total: number; submitted: number; late: number; missing: number }
 export interface BoardRow { studentId: string; name: string; orgLabel: string; statuses: Record<string, SubmissionStatus | 'missing'> }
 export interface Detail extends WorkspaceView {
+    serverTime: number;
     item: Item<Round>;
     mySubmissions: Submission[];
 }
@@ -118,6 +121,7 @@ export interface Submission {
     files: SubmissionFile[];
     submittedAt: string;
     status: SubmissionStatus;
+    late: boolean;
     revision: number;
     review?: { status: string; comment: string };
 }
@@ -141,8 +145,24 @@ export function deadlineValue(value: string) {
     return value ? new Date(`${value}+08:00`).toISOString() : '';
 }
 
-export const roundIsOpen = (item: Item, round: RoundSummary) => item.status === 'published' && round.policy !== 'closed'
-    && (!round.deadline || round.policy === 'allow-late' || Date.parse(round.deadline) > Date.now());
+export function roundState(item: Item, round: RoundSummary, now: number): keyof typeof collectionStatus {
+    if (item.status !== 'published') return item.status;
+    const expired = deadlineReached(round.deadline, now);
+    if (roundAcceptsSubmissions(item, round, now)) return expired ? 'makeup' : 'collecting';
+    return expired ? 'expired' : 'closed';
+}
+
+export function itemState(item: Item, now: number): keyof typeof collectionStatus {
+    if (item.status !== 'published') return item.status;
+    const states = item.rounds.map(round => roundState(item, round, now));
+    if (states.includes('collecting')) return 'collecting';
+    if (states.includes('makeup')) return 'makeup';
+    return states.length && states.every(state => state === 'expired') ? 'expired' : 'closed';
+}
+
+export function chooseRound(item: Item<Round>, id: string) {
+    return item.rounds.find(round => round.id === id) || item.rounds.find(round => round.open) || item.rounds[0];
+}
 
 export function collectionLoginUrl(query = new URLSearchParams(location.search)) {
     const params = new URLSearchParams(query);

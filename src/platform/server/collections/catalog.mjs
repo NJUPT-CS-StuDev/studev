@@ -1,8 +1,9 @@
 import { fail } from '../common.mjs';
+import { roundAcceptsSubmissions } from '../../collections.mjs';
 import { activeMemberships } from '../../organizations.mjs';
-import { canManage, isRecipient, issuerView, openRound } from './definition.mjs';
+import { canManage, isRecipient, issuerView } from './definition.mjs';
 import { collectionId, collectionKeys as keys, mapConcurrent, parseHistoryKey, studentId } from './records.mjs';
-import { ownsSubmission, submissionView } from './submissions.mjs';
+import { ownsSubmission, submissionView, submissionWasLate } from './submissions.mjs';
 
 const recency = (a, b) => String(b.submittedAt).localeCompare(String(a.submittedAt)) || b.id.localeCompare(a.id);
 
@@ -60,7 +61,7 @@ function roundSummary(item, round, actor, byRound, now) {
   const myRecord = byRound.get(round.id);
   const { id, label, deadline, policy, fields } = round;
   return {
-    id, label, deadline, policy, open: openRound(item, round, now), fieldCount: fields.length,
+    id, label, deadline, policy, open: roundAcceptsSubmissions(item, round, now), fieldCount: fields.length,
     fileCount: fields.filter((field) => field.type === 'file').length,
     ...(item.targetMode === 'selected' ? { totalCount: item.recipients.length } : {}),
     myStatus: eligible || myRecord ? statusFor(myRecord) : null,
@@ -109,7 +110,7 @@ export function boardFor(item, records, rounds = item.rounds) {
       person.statuses[round.id] = statusFor(record);
       if (!record || (item.targetMode === 'selected' && !recipientIds.has(key))) continue;
       submitted++;
-      if (round.deadline && Date.parse(record.submittedAt) > Date.parse(round.deadline)) late++;
+      if (submissionWasLate(record)) late++;
     }
     const total = item.targetMode === 'selected' ? recipientIds.size : submitted;
     return { roundId: round.id, total, submitted, late, missing: Math.max(0, total - submitted) };

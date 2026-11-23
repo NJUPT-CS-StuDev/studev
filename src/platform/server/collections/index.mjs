@@ -26,16 +26,19 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (!records.has(record.itemId)) records.set(record.itemId, []);
       records.get(record.itemId).push(record);
     }
-    return response({ ...viewerInfo(viewer, orgs), organizations: flattenOrganizationTree(orgs),
-      items: items.map((item) => itemView(item, viewer, orgs, records.get(item.id) || [], now())),
+    const serverTime = now();
+    return response({ ...viewerInfo(viewer, orgs), serverTime, organizations: flattenOrganizationTree(orgs),
+      items: items.map((item) => itemView(item, viewer, orgs, records.get(item.id) || [], serverTime)),
     });
   }
 
   async function detail(item, viewer, orgs, knownRecords) {
     const mine = knownRecords ?? await myRecords(repo, viewer, new Set([item.id]));
+    const serverTime = now();
     return response({
       ...viewerInfo(viewer, orgs),
-      item: itemView(item, viewer, orgs, mine, now(), true),
+      serverTime,
+      item: itemView(item, viewer, orgs, mine, serverTime, true),
       mySubmissions: ownHistory(new Map([[item.id, item]]), mine),
     });
   }
@@ -74,7 +77,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ deleted: true });
   }
 
-  async function routeItem(request, viewer, orgs, route) {
+  async function routeItem(request, viewer, orgs, route, receivedAt) {
     const [ , id, operation, roundId, action ] = route;
     if (roundId && operation !== 'rounds') fail(404, 'NOT_FOUND', '接口不存在。');
     const item = await readItem(repo, id);
@@ -90,7 +93,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (directDetail) return detail(item, viewer, orgs);
     const round = roundId ? readRound(item, roundId) : null;
     if (action === 'submissions' && request.method === 'POST') {
-      return response(await submissions.begin(request, item, round, viewer.user), 201);
+      return response(await submissions.begin(request, item, round, viewer.user, receivedAt), 201);
     }
     if (!manage) fail(403, 'STAFF_REQUIRED', '此账号无权管理这项收集。');
     if (!operation && request.method === 'DELETE') {
@@ -135,7 +138,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     }
     const update = { ...item, updatedAt: time };
     if (operation === 'rounds') {
-      const next = roundInput({ ...round, ...body }, round?.id);
+      const next = roundInput({ ...round, ...body }, { now: Date.parse(time), existing: round });
       if (!round && item.rounds.length >= 100) fail(409, 'ROUND_LIMIT_REACHED', '每项收集最多设置 100 轮。');
       if (round && next.submissionMode !== round.submissionMode &&
         (await repo.list(keys.quota(id, roundId, 'all'))).length) {
@@ -155,7 +158,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ item: itemView(result, viewer, orgs, [], now(), true) }, !round && operation === 'rounds' ? 201 : 200);
   }
 
-  async function routeSubmission(request, viewer, orgs, route) {
+  async function routeSubmission(request, viewer, orgs, route, receivedAt) {
     const [ , id, action, fileId, download ] = route;
     const record = await readSubmission(repo, id);
     const item = await readItem(repo, record.itemId);
@@ -170,13 +173,14 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (download) return response({ download: await submissions.download(record.files.find((file) => file.id === fileId)) });
     if (action === 'review' && !manage) fail(403, 'STAFF_REQUIRED', '没有审核此提交的权限。');
     if (action === 'edit' && !own) fail(404, 'NOT_FOUND', '提交记录不存在或无权修改。');
-    if (action) return response({ submission: await submissions.change(request, record, item, round, viewer.user, action) });
+    if (action) return response({ submission: await submissions.change(request, record, item, round, viewer.user, action, receivedAt) });
     fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
   }
 
   return {
     async handle(context, path) {
       if (path !== API && !path.startsWith(API + '/')) return null;
+      const receivedAt = now();
       const request = context.request;
       const url = new URL(request.url);
       const post = request.method === 'POST';
@@ -190,7 +194,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (submissionMatch?.[2] === 'complete' && post) return response({ submission: await submissions.complete(context, submissionMatch[1]) });
       if (!onCatalog && !onCreate && !onPeople && !onMine && !itemMatch && !submissionMatch) return null;
       const [viewer, orgs, available] = await Promise.all([
-        collectionViewer(identity, request, url, { required: write || onPeople || onMine || Boolean(submissionMatch), mutation: write, today: chinaDay(now()) }),
+        collectionViewer(identity, request, url, { required: write || onPeople || onMine || Boolean(submissionMatch), mutation: write, today: chinaDay(receivedAt) }),
         identity.loadOrganizations(),
         onCatalog || onMine ? definitions(repo) : null,
       ]);
@@ -213,8 +217,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const body = await readJson(request, 256 * 1024);
         return createItem({ ...itemInput(body, timestamp()), issuer: publishedIssuer(body, viewer, orgs) }, viewer, orgs);
       }
-      if (itemMatch) return routeItem(request, viewer, orgs, itemMatch);
-      return routeSubmission(request, viewer, orgs, submissionMatch);
+      if (itemMatch) return routeItem(request, viewer, orgs, itemMatch, receivedAt);
+      return routeSubmission(request, viewer, orgs, submissionMatch, receivedAt);
     },
   };
 }

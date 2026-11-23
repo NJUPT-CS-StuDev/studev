@@ -188,22 +188,82 @@ test('draft deletion removes definition content and protects outstanding upload 
   for (const [index, key] of keys.entries()) assert.deepEqual(await f.repo.get(key), { deleted: true, revision: index + 1 });
 });
 
+test('deadline closes at the cutoff and late reopening keeps submissions independently of review and schedule edits', async () => {
+  const f = await collectionsFixture();
+  const deadline = '2026-11-22T12:00:10.000Z';
+  const item = await f.create({ visibility: 'public', user: 'admin', round: { deadline, requireReview: true, allowEdit: true } });
+  const path = f.itemPath(item);
+  const roundPath = f.roundPath(item);
+  const patch = (body) => f.call(roundPath, { user: 'admin', body });
+  assert.equal((await patch({ revision: item.revision, policy: 'allow-late' })).data.error, 'LATE_REQUIRES_DEADLINE');
+  const undated = await f.create();
+  assert.equal((await f.call(f.roundPath(undated), { user: 'owner', body: { revision: undated.revision, policy: 'allow-late' } })).data.error, 'LATE_REQUIRES_DEADLINE');
+  const { data: { submission: onTime } } = await f.submit(item, 'alice');
+  assert.equal(onTime.late, false);
+  f.advance(9_999);
+  assert.equal((await f.call(path)).data.item.rounds[0].open, true);
+  f.advance(1);
+  const read = (await f.call(path)).data;
+  assert.equal(read.serverTime, Date.parse(deadline));
+  assert.equal(read.item.status, 'published');
+  assert.equal(read.item.rounds[0].open, false);
+  const catalog = await f.call();
+  assert.equal(catalog.data.serverTime, read.serverTime);
+  assert.equal(catalog.data.items.find((row) => row.id === item.id).rounds[0].open, false);
+  assert.equal((await f.submit(item, 'bob')).data.error, 'COLLECTION_CLOSED');
+  const edit = () => f.call('/submissions/' + onTime.id + '/edit', { user: 'alice', body: { revision: onTime.revision, answers: { note: '补交修改' } } });
+  assert.equal((await edit()).data.error, 'EDIT_CLOSED');
+  assert.equal((await f.call(roundPath, { user: 'alice', body: { revision: item.revision, policy: 'allow-late' } })).status, 403);
+  const { data: { item: reopened } } = await patch({ revision: item.revision, policy: 'allow-late' });
+  assert.equal(reopened.rounds[0].open, true);
+  assert.equal(reopened.rounds[0].deadline, deadline);
+  const { data: { submission: edited } } = await edit();
+  assert.equal(edited.createdAt, onTime.createdAt);
+  assert.equal(edited.submittedAt, deadline);
+  assert.equal(edited.late, true);
+  const { data: { submission: uploaded } } = await f.submit(item, 'bob');
+  assert.equal(uploaded.submittedAt, deadline);
+  assert.equal(uploaded.status, 'pending_review');
+  assert.equal(uploaded.late, true);
+  const { data: { submission: approved } } = await f.call('/submissions/' + uploaded.id + '/review', {
+    user: 'admin', body: { revision: uploaded.revision, status: 'accepted' },
+  });
+  assert.equal(approved.status, 'accepted');
+  assert.equal(approved.late, true);
+  const future = '2026-12-01T12:00:00.000Z';
+  assert.equal((await patch({ revision: reopened.revision, deadline: future })).data.error, 'LATE_REQUIRES_DEADLINE');
+  const { data: { item: stopped } } = await patch({ revision: reopened.revision, deadline: future, policy: 'closed' });
+  assert.equal(stopped.rounds[0].open, false);
+  assert.equal((await f.call(path)).status, 200);
+  assert.equal((await f.submit(item, 'bob')).data.error, 'COLLECTION_CLOSED');
+  const board = (await f.call(roundPath + '/submissions', { user: 'admin' })).data;
+  assert.equal(board.roundStats[0].late, 2);
+  assert.equal(board.items.find((row) => row.id === uploaded.id).late, true);
+});
+
 test('signed uploads survive a deadline, finalize concurrently and leave only their immutable final attachment', async () => {
   const f = await collectionsFixture();
   const deadline = '2026-11-22T12:00:10Z';
   const item = await f.create({ round: { deadline, fields: [note, attachment] } });
+  const list = f.store.list;
+  f.store.list = async (options) => {
+    if (options.prefix.includes('/rate/collection-submit/')) f.advance(10_000);
+    return list(options);
+  };
   const result = await f.submit(item, 'alice', { answers: { note: '私密' }, files: [{ fieldId: 'upload', name: '材料.txt', size: 7, type: 'text/plain' }] });
+  f.store.list = list;
   assert.equal(result.status, 201);
   assert.equal(result.data.submission.status, 'uploading');
   assert.equal((await f.complete(result.data)).data.error, 'UPLOAD_MISMATCH');
   const upload = f.gateway.uploads.at(-1);
   f.gateway.upload(upload, 'fixture');
-  f.advance(11000);
+  f.advance(1000);
   assert.equal((await f.submit(item, 'bob')).data.error, 'COLLECTION_CLOSED');
   const completions = await Promise.all([f.complete(result.data), f.complete(result.data)]);
   for (const completed of completions) {
     assert.equal(completed.status, 200);
     assert.equal(completed.data.submission.status, 'submitted');
+    assert.equal(completed.data.submission.late, false);
     for (const key of ['studentId', 'studentName', 'files', 'answers']) assert.ok(!Object.hasOwn(completed.data.submission, key));
   }
   assert.deepEqual(completions[0].data, completions[1].data);
