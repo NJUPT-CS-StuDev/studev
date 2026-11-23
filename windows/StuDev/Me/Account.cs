@@ -21,8 +21,6 @@ public sealed record AccountUser(string Id, string Nickname, string StudentId = 
     [JsonIgnore] public string Letter => System.Globalization.StringInfo.GetNextTextElement(Nickname.Length > 0 ? Nickname : "我");
 }
 public sealed record AccountMembership(string OrganizationName, string Position = "");
-public sealed record PublicMember(string Id, string Nickname, string Signature, string AvatarUrl);
-public sealed record MemberPage(List<PublicMember> Items, int Total, int Offset, int Limit);
 public sealed record AccountState(AccountUser User, bool EnrollmentRequired = false, bool PasswordChangeRequired = false, bool ProfileRequired = false, bool MfaRequired = false);
 public sealed record AccountDevice(string Id, string DeviceName, string Kind, bool Current, string CreatedAt, long ExpiresAt);
 public sealed record AccountSession(string AccessToken, string RefreshToken, long ExpiresAt, string DeviceSessionId, AccountUser User,
@@ -157,8 +155,6 @@ public sealed class Account
     }
 
     public async Task<JsonObject> Request(string path, JsonObject? body = null) => (await Authenticated(path, body)).Body;
-    public async Task<MemberPage> Members(string query = "", int offset = 0) => (await Request($"/members?query={Uri.EscapeDataString(query)}&offset={offset}&limit=50")).Deserialize(StorageJson.Default.MemberPage)!;
-    public async Task<PublicMember> Member(string id) => (await Request($"/members/{Uri.EscapeDataString(id)}"))["member"].Deserialize(StorageJson.Default.PublicMember)!;
 
     /** The account as the platform now has it, kept. */
     public async Task<AccountState> State()

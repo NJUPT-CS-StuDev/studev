@@ -57,10 +57,10 @@ refreshes with Web Locks and persists a non-secret pending marker before spendin
 the refresh ticket, requiring sign-in after an interrupted rotation. No credentials
 enter browser localStorage. All navigation/session checks use that same client.
 
-Roles are platform-wide: `owner` > `admin` > `user`. The owner manages roles
-and other administrators. Owners and admins manage forms and may list or look up
-users through `/admin/users` and `/admin/users/<id>`; admins may edit ordinary
-users. Account responses carry `memberships` for the subject of that account
+Platform roles descend from `owner` through `admin` to `user`. The owner manages
+roles and other administrators. Owners and admins may list or look up users
+through `/admin/users` and `/admin/users/<id>`. Admins may edit ordinary users.
+Account responses carry `memberships` for the subject of that account
 response. Organizations can contain other organizations. Each membership has one
 organization ID, a title in that organization, an optional `overseesOrganizationId`
 for a direct child, and a roster order. A member can hold appointments in both a
@@ -89,9 +89,7 @@ Member reads use `members/<id>/<account-revision>.json`, never private account
 history; account changes publish the minimal public projection at that revision.
 An inactive projection hides disabled/deleted accounts, and an older delayed
 publisher cannot replace a newer revision. Unchanged public fields need no new
-projection. Existing accounts are populated once before the new application is
-published. Form receipts never expose
-an authenticated submitter's identity or contact details to their holder.
+projection.
 
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
 output and function together.
@@ -116,20 +114,82 @@ message bodies. Free inference is bounded per account, including continuation
 requests after tool calls. A device using its own provider key calls that
 provider directly; neither its key nor its conversation goes through this API.
 
-Every form is answered by someone signed in; `access` says only who can see it
-(`public`: anyone, who signs in when they submit; `members`: signed-in people).
-The campus's own three forms are named in `product.json` under `forms`: feedback,
-photos of places and data the teaching office does not publish. The web and
-native Android entries read them, and fill fields they know (`a.<field>=` in the
-link). The data form's approved material goes to the private data pipeline. Review does not directly change
-public campus facts. Export approved material with `STUDEV_PRIVATE_DIR` pointing
-to the existing external private storage:
+## Collections
+
+Collections live at `/forms/` on desktop and mobile Web. Android and Windows
+open a collection in the browser and share the account service with Web.
+The product configuration identifies the campus feedback, location photos and
+data contributions. Links use `/forms/?id=<collection>&round=<round>` and may
+prefill public answer fields with `a.<field>=<value>`.
+
+A collection has an issuing organization, audience, lifecycle, optional
+semester and tags, and one or more rounds. A course tag copies the stable
+campus course ID, code and display name selected from the local release search.
+Collections retain this saved reference across search index updates. Tags and
+time grouping affect display. Server permissions come from the collection
+audience and the effective account view.
+
+- Visitors browse published public collections. An authenticated recipient can
+  browse member collections and submit in an open round. Archived collections
+  remain visible to managing staff and prior participants retain access to their
+  own submission history. A student with a staff-verified identity can retrieve
+  historical submissions recorded against their student ID before they had an
+  account.
+- Owners can manage every collection. Admins manage collections they authored
+  or whose issuing organizations fall within their assignments. Admins publish
+  within those assignments. The people picker exposes only the authorized
+  directory scope.
+- Reads accept `view=guest|user|admin|owner`. Signed-in users can preview views
+  lower than their account role. Mutations require their actual view. The
+  role checks apply to every record, archive, progress report and download.
+- Round fields cover text, long text, single choice, multiple choice, number,
+  date and attachments. Each round defines its deadline, late policy, edit and
+  review rules, and quotas. Replacement rounds keep a single submission per
+  student. Multiple-submission rounds reserve a slot against both the person
+  and round limits. Issued authorizations count toward those limits.
+
+All API paths below are relative to `/api/platform/collections`.
+
+| Request | Result |
+| --- | --- |
+| `GET /` | Scoped catalog with available views, organization list, summary rounds and the viewer's own statuses |
+| `GET /items/<id>` | Collection definition and own submissions. Recipient names and IDs are available in the authorized management view |
+| `GET /people` | Scoped staff directory for recipient selection |
+| `POST /items` | New draft or published collection with issuing identity, rounds and audience |
+| `POST /items/<id>` | Collection metadata, audience or lifecycle update using the current revision |
+| `POST /items/<id>/duplicate` | New draft with copied collection fields and cleared deadlines |
+| `POST /items/<id>/rounds`, `POST /items/<id>/rounds/<round>` | Add or revise a round using the collection revision |
+| `POST /items/<id>/rounds/<round>/submissions` | Validate answers and attachment descriptors, then either finalize or issue the upload receipt |
+| `GET /items/<id>/rounds/<round>/submissions` | Staff report with records, progress board, statistics and quota usage |
+| `GET /items/<id>/rounds/<round>/csv`, `GET /items/<id>/rounds/<round>/files` | Staff CSV or signed attachment manifest |
+| `GET /mine`, `GET /submissions/<id>` | Own history or one authorized record |
+| `POST /submissions/<id>/edit`, `POST /submissions/<id>/review` | Edit answers or record a staff review at the current submission revision |
+| `POST /submissions/<id>/files/<file>/download` | Authorize one private immutable attachment download |
+
+Submit with `{ answers, files, keepFiles? }`. Each new file supplies
+`{ fieldId, name, size, type }`. A submission with no new files commits within
+that request. When new files are present, PUT them to the returned signed URLs
+in order, then send `{ receiptToken }` to `POST /submissions/<receiptId>/complete`.
+A valid receipt can confirm its upload after the login session expires. The
+receipt response contains the submission ID, status and timestamps. Answers,
+identity and attachment names require account authorization. File uploads and
+downloads go directly to OSCA. The backend verifies and freezes uploaded
+content and binds signed downloads to the saved ETag.
+
+Metadata uses one canonical EdgeOne Blob collection model. Immutable definition
+and submission revisions support concurrent editors, review, and retained
+schema snapshots. The catalog reads definition heads and the caller's history.
+Staff reports read only the requested round. Course search reads the public
+campus release locally. Attachments stay in the existing private 1 TB OSCA
+bucket.
+
+The private data pipeline consumes approved campus contributions. Run the export
+with `STUDEV_PRIVATE_DIR` pointing to the existing private storage.
 
 ```powershell
 node scripts/platform/export-contributions.mjs --output <the private evidence directory for contributions>
 ```
 
-The export includes public answers, original files and review provenance; account
-identity and signed download credentials stay out of the acquisition evidence.
-The private pipeline places a reviewed lab sheet with its other lab evidence. The normal evidence parser and
-release pipeline then apply, including stopping on undecided cells.
+The export carries public answers, original files and review provenance.
+Account identity and signed download credentials stay private. The evidence
+parser and release pipeline handle reviewed materials and stop on undecided cells.

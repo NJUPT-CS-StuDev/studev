@@ -162,6 +162,6 @@ public sealed partial class MeScreen
             }
         }
         if (facts.Count == 0) page.Children.Add(Pages.Empty("暂无这个班级的实验安排。"));
-        page.Children.Add(Kit.Row("", Value("提供实验课表", "上传新实验表，审核后更新"), () => Browse(Form("data"))));
+        page.Children.Add(Kit.Row("", Value("提供实验课表", "在浏览器提交，审核后更新课表"), () => App.OpenLink(CollectionLink("data"))));
     }
 }

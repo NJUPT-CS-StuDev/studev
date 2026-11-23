@@ -26,8 +26,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (savedInstanceState == null) readLink(intent) else { place = savedInstanceState.getString("pendingPlace") }
         setContent { StuDevTheme {
-            AccountHost(campusLink = place) { onAccount, onForm, onMembers ->
-                CampusApp(place, onDeepLinkHandled = { place = null }, onAccount = onAccount, onForm = onForm, onMembers = onMembers)
+            AccountHost(campusLink = place) { onAccount ->
+                CampusApp(place, onDeepLinkHandled = { place = null }, onAccount = onAccount)
             }
         } }
     }

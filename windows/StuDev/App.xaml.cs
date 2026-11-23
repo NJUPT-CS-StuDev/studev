@@ -53,7 +53,7 @@ public partial class App : Application
                 case "/knowledge": Open("knowledge", "/knowledge/" + uri.Query + uri.Fragment); return;
                 case "/search": Open("search", uri); return;
                 case "/ai": Open("ai"); return;
-                case "/account": case "/login": case "/members": Open("me", uri); return;
+                case "/account": case "/login": Open("me", uri); return;
             }
         }
         _ = Windows.System.Launcher.LaunchUriAsync(uri);

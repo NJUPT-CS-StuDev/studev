@@ -11,15 +11,11 @@ import { copyFile, readdir, rm } from 'node:fs/promises';
 
 const excludedSitemapPaths = new Set([
   '/404',
-  '/submit',
-  '/admin',
   '/login',
   '/signed-in',
   '/account',
   '/members',
   '/forms',
-  '/fill',
-  '/submissions',
   '/life/organizational-genesis',
   '/life/anti-formalism-council',
 ]);

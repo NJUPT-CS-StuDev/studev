@@ -25,17 +25,13 @@ internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = tru
     val signature: String = "", val email: String = "", val status: String = "active", val profileComplete: Boolean = true,
     val memberships: List<AccountMembership> = emptyList())
 @Serializable data class AccountMembership(val organizationName: String, val position: String = "")
-/** The server resolves the public nickname, including its default. */
-@Serializable data class PublicMember(val id: String, val nickname: String, val signature: String, val avatarUrl: String)
 fun avatarLetter(nickname: String): String = if (nickname.isEmpty()) "我" else java.text.BreakIterator.getCharacterInstance(java.util.Locale.ROOT).run {
     setText(nickname); first(); nickname.substring(0, next())
 }
-@Serializable data class MemberPage(val items: List<PublicMember>, val total: Int, val offset: Int, val limit: Int)
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
-@Serializable data class UploadReceipt(val userId: String, val token: String)
-@Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null, val uploads: Map<String, UploadReceipt> = emptyMap())
+@Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null)
 interface AccountStorage { suspend fun read(): StoredAccount; suspend fun write(value: StoredAccount) }
 data class PlatformReply(val status: Int, val body: JsonObject)
 class PlatformFailure(val status: Int, val code: String, message: String) : Exception(message)
@@ -114,15 +110,6 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     /** Every change to the stored account goes through here, so [user] always says what is stored. */
     private suspend fun keep(stored: StoredAccount) { storage.write(stored); signedIn.value = stored.session?.user }
     suspend fun current(): AccountUser? = lock.withLock { storage.read().session?.user.also { signedIn.value = it } }
-    /** Upload receipts share the account's encrypted storage and are available only to their original account. */
-    suspend fun keepUpload(id: String, token: String, owner: String) = lock.withLock {
-        val stored = storage.read()
-        val user = stored.session?.user ?: throw PlatformFailure(401, "LOGIN_REQUIRED", "请先登录。")
-        require(user.id == owner) { "登录账号已更改，请回到原账号确认上传。" }
-        keep(stored.copy(uploads = stored.uploads + (id to UploadReceipt(user.id, token))))
-    }
-    suspend fun uploadReceipt(id: String): String? = lock.withLock { val stored = storage.read(); stored.uploads[id]?.takeIf { it.userId == stored.session?.user?.id }?.token }
-    suspend fun forgetUpload(id: String) = lock.withLock { val stored = storage.read(); keep(stored.copy(uploads = stored.uploads - id)) }
     private fun checked(reply: PlatformReply): JsonObject {
         if (reply.status !in 200..299) {
             val error = reply.body["error"]?.jsonObject
@@ -194,8 +181,6 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         if (!authenticated) return checked(transport.send(path, body, null))
         return authenticatedRequest(path, body, access())
     }
-    suspend fun members(query: String = "", offset: Int = 0): MemberPage = accountJson.decodeFromJsonElement(request("/members?query=${java.net.URLEncoder.encode(query, "UTF-8")}&offset=$offset&limit=50", authenticated = true))
-    suspend fun member(id: String): PublicMember = accountJson.decodeFromJsonElement(request("/members/${java.net.URLEncoder.encode(id, "UTF-8")}", authenticated = true).getValue("member"))
     /** An event stream for someone signed in, renewing the pass once if it ran out before the stream began. */
     suspend fun stream(path: String, body: JsonObject, onEvent: (String, JsonObject) -> Unit) {
         val credential = access()

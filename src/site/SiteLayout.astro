@@ -16,11 +16,12 @@ const campusHeader = ['timetable', 'knowledge', 'search', 'ai'].includes(active)
 // The five app pages swap in place, so an answer the AI is writing goes on while one looks at the timetable or map.
 const appPage = ['timetable', 'map', 'knowledge', 'search', 'ai'].includes(active);
 const tabs = [
-  { href: '/', label: '课表', key: 'timetable' },
-  { href: '/map/', label: '地图', key: 'map' },
-  { href: '/knowledge/', label: '知识', key: 'knowledge' },
-  { href: '/search/', label: '搜索', key: 'search' },
-  { href: '/ai/', label: 'AI', key: 'ai' },
+  { href: '/', label: '课表', key: 'timetable', glyph: tokens.glyph.timetable },
+  { href: '/map/', label: '地图', key: 'map', glyph: tokens.glyph.map },
+  { href: '/knowledge/', label: '知识', key: 'knowledge', glyph: tokens.glyph.knowledge },
+  { href: '/search/', label: '搜索', key: 'search', glyph: tokens.glyph.search },
+  { href: '/ai/', label: 'AI', key: 'ai', glyph: tokens.glyph.ai },
+  { href: '/forms/', label: '收集', key: 'forms', glyph: 'M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 3h8v4H8zM8 12h8M8 16h8' },
 ] as const;
 const clubKeys = ['club', 'study', 'develop', 'life', 'history'];
 const clubNav = [
@@ -96,13 +97,12 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:card" content="summary" />
   </head>
   <body>
-    <header class="site-header">
+    <header class:list={['site-header', { 'site-header-account': active === 'account' }]}>
       <div class="header-inner">
         <a class="wordmark" href="/" aria-label={`${PRODUCT_CONFIG.APP_NAME} 首页`}>{PRODUCT_CONFIG.APP_NAME}</a>
         <nav class="site-nav" aria-label="主导航">
-          {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph[item.key]} /></svg><span>{item.label}</span></a>)}
+          {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">学生发展中心</a>
-          <a class:list={[{ active: active === 'forms' }]} href="/forms/">收集</a>
         </nav>
         <div class:list={['header-actions', { 'campus-site-actions': campusHeader }]}>
           <button class="theme-entry" type="button" data-theme-toggle aria-label="切换外观"><svg class="theme-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" /></svg><svg class="theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6" /><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6" /></svg><svg class="theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A7.8 7.8 0 0 1 9.5 4.5a7.8 7.8 0 1 0 10 10Z" /></svg></button>
@@ -133,7 +133,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       <button type="button" aria-label="不再显示" data-app-offer-close>×</button>
     </aside>}
     <nav class="phone-tabs" aria-label="主导航">
-      {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={tokens.glyph[item.key]} /></svg><span>{item.label}</span></a>)}
+      {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
     </nav>
     <dialog class="site-share" id="share-studev" aria-labelledby="share-studev-title">
       <form method="dialog">
@@ -150,6 +150,6 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <script>import './theme-toggle';</script>
     <script>import '../platform/client/auth-status';</script>
     {appPage && <script>import '../campus/ai/host';</script>}
-    {active !== 'download' && active !== 'login' && active !== 'search' && <script>import { warmSearch } from '../campus/world/search'; warmSearch();</script>}
+    {active !== 'download' && active !== 'login' && active !== 'search' && active !== 'forms' && <script>import { warmSearch } from '../campus/world/search'; warmSearch();</script>}
   </body>
 </html>

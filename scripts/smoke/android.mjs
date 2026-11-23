@@ -443,11 +443,11 @@ async function routeDetails() {
     await tap('关闭路线规划', 'close the completed route preview');
 }
 async function entryLinks() {
-    for (const path of ['/ai/', '/knowledge/', '/members/', '/account/', '/login/']) {
+    for (const path of ['/ai/', '/knowledge/', '/account/', '/login/']) {
         const handlers = adb('shell', 'cmd', 'package', 'query-activities', '--brief', '-a', 'android.intent.action.VIEW', '-c', 'android.intent.category.BROWSABLE', '-d', quote(origin + path));
         if (!handlers.includes(`${app}/`)) throw new Error(`the native entry is not registered: ${path}`);
     }
-    for (const path of ['/admin/', '/club/']) {
+    for (const path of ['/forms/', '/members/', '/club/']) {
         const handlers = adb('shell', 'cmd', 'package', 'query-activities', '--brief', '-a', 'android.intent.action.VIEW', '-c', 'android.intent.category.BROWSABLE', '-d', quote(origin + path));
         if (handlers.includes(`${app}/`)) throw new Error(`an unsupported site page was captured by the native app: ${path}`);
     }
@@ -460,11 +460,8 @@ async function entryLinks() {
     capture('entry-knowledge');
     await link('/account/', 'open the account shared address');
     await find('登录 StuDev', 'the account link reaches native sign-in');
-    await link('/members/', 'open members over an already-open account');
-    await find('登录后查看成员', 'the new member address replaces the old account layer');
-    capture('entry-members');
-    await link('/login/', 'open sign-in over an already-open member page');
-    await find('登录 StuDev', 'the native sign-in address replaces members');
+    await link('/login/', 'open the canonical native sign-in address');
+    await find('登录 StuDev', 'the native sign-in address opens the account layer');
     capture('entry-account');
     healthy('shared addresses select their native screens and preserve site-only boundaries');
     await tap('返回', 'leave sign-in after entry acceptance');
@@ -535,11 +532,9 @@ async function personalViews() {
     capture('personal-settings');
     adb('shell', 'input', 'keyevent', '4');
     await find('课表设置', 'back from about to the personal home');
-    await tap('成员', 'open members inside the app');
-    await find('登录后查看成员', 'members asks a visitor to sign in');
-    capture('members-sign-in');
-    await tap('返回', 'return from member browsing');
-    await find('课表设置', 'members returns to the same personal home');
+    await scrollFind('在浏览器查看和填写收集', 'collections have a visible browser entry');
+    await scrollFind('在浏览器查看成员', 'members have a visible browser entry');
+    capture('collaboration-browser-entries');
     adb('shell', 'input', 'keyevent', '4');
     await find('课表', 'return from personal settings');
 }

@@ -14,7 +14,6 @@ public sealed partial class MeScreen : Screen
     private readonly Campus campus = Campus.Shared;
     private string section = "home";
     private AccountScreen? accountPage;
-    private MembersScreen? membersPage;
 
     public MeScreen()
     {
@@ -27,27 +26,20 @@ public sealed partial class MeScreen : Screen
     }
     public override void Shown(object? argument)
     {
-        accountPage?.Leave(); membersPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
+        accountPage?.Leave(); section = "home"; App.Window?.AccountPages(false); Draw();
         if (argument is "account") Go("account");
         if (argument is "models") Go("models");
         if (argument is "tools") Go("tools");
-        if (argument is Uri address)
-        {
-            if (address.AbsolutePath.TrimEnd('/') == "/members") Go("members", memberAddress: address);
-            else Go("account", System.Web.HttpUtility.ParseQueryString(address.Query)["tab"]);
-        }
+        if (argument is Uri address) Go("account", System.Web.HttpUtility.ParseQueryString(address.Query)["tab"]);
     }
-    private void Go(string next, string? accountTab = null, Uri? memberAddress = null)
+    private void Go(string next, string? accountTab = null)
     {
         if (section == "account" && next != "account") accountPage?.Leave();
-        if (section == "members" && next != "members") membersPage?.Leave();
         section = next; App.Window?.AccountPages(section == "account"); Draw();
         if (section == "account") accountPage!.Shown(accountTab);
-        if (section == "members") membersPage!.Shown(memberAddress);
     }
-    private static string Form(string kind, string? where = null) =>
-        $"{Repository.Site}/fill/?id={Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
-    private static async void Browse(string url) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+    private static string CollectionLink(string kind, string? where = null) =>
+        $"/forms/?id={Product.Root.GetProperty("forms").GetProperty(kind).GetString()}{(where is null ? "" : $"&a.where={Uri.EscapeDataString(where)}")}";
     private static UIElement Value(string text, string? small = null, string colour = "ink")
     {
         var v = Kit.Column(2, Kit.Text(text, Role.Label, colour, wrap: true));
@@ -78,12 +70,6 @@ public sealed partial class MeScreen : Screen
             if (!Children.Contains(accountPage)) { Children.Clear(); Children.Add(accountPage); }
             return;
         }
-        if (section == "members")
-        {
-            membersPage ??= new MembersScreen(() => Go("home"));
-            if (!Children.Contains(membersPage)) { Children.Clear(); Children.Add(membersPage); }
-            return;
-        }
         Children.Clear();
         var page = new StackPanel();
         var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型", "tools" => "工具", _ => "我" };
@@ -107,7 +93,8 @@ public sealed partial class MeScreen : Screen
         if (section == "home")
         {
             Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(() => Go("account")); else Go("account"); });
-            Row("", Value("成员", user?.Role is "admin" or "owner" ? "查看成员，管理身份与角色" : "查看大家的头像、昵称和签名"), () => Go("members"));
+            Row("", Value("收集", "在浏览器查看和填写收集"), () => App.OpenLink("/forms/"));
+            Row("", Value("成员", "在浏览器查看成员"), () => App.OpenLink("/members/"));
             Row("", Value("课表设置", campus.Preferences.Class is { } klass ? $"{klass} · {info?.Major}" : "选择班级、调整课程与实验"), () => Go("timetable"));
             Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
             Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);
@@ -151,12 +138,12 @@ public sealed partial class MeScreen : Screen
         }
         if (section == "about")
         {
-            Row("", Value("意见反馈", "报告问题或提出建议"), () => Browse(Form("feedback", "Windows · 我")));
-            Row("", Value("提供校园资料", "提交实验课表、讲座、校车或营业时间"), () => Browse(Form("data")));
-            Row("", Value("学生发展中心", "南邮计软网安"), () => Browse($"{Repository.Site}/club/"));
-            Row("", Value("下载 StuDev", "网页、Android 和 Windows"), () => Browse($"{Repository.Site}/download/"));
-            Row("", Value("用户协议"), () => Browse($"{Repository.Site}/terms/"));
-            Row("", Value("隐私政策"), () => Browse($"{Repository.Site}/privacy/"));
+            Row("", Value("意见反馈", "在浏览器报告问题或提出建议"), () => App.OpenLink(CollectionLink("feedback", "Windows · 我")));
+            Row("", Value("提供校园资料", "在浏览器提交实验课表、讲座、校车或营业时间"), () => App.OpenLink(CollectionLink("data")));
+            Row("", Value("学生发展中心", "南邮计软网安"), () => App.OpenLink("/club/"));
+            Row("", Value("下载 StuDev", "网页、Android 和 Windows"), () => App.OpenLink("/download/"));
+            Row("", Value("用户协议"), () => App.OpenLink("/terms/"));
+            Row("", Value("隐私政策"), () => App.OpenLink("/privacy/"));
             page.Children.Add(Kit.Text($"StuDev {Updates.Version} · 数据 {campus.Repository?.Release.DataVersion ?? "—"}", Role.Caption, "muted"));
         }
         Children.Add(Pages.Frame(page, 680));

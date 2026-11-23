@@ -40,4 +40,4 @@ export const PRODUCT_CONFIG = {
  */
 export type FormKind = keyof typeof product.forms;
 export const formLink = (kind: FormKind, fill: Record<string, string> = {}) =>
-    `/fill/?${new URLSearchParams({ id: product.forms[kind], ...Object.fromEntries(Object.entries(fill).map(([field, value]) => [`a.${field}`, value])) })}`;
+    `/forms/?${new URLSearchParams({ id: product.forms[kind], ...Object.fromEntries(Object.entries(fill).map(([field, value]) => [`a.${field}`, value])) })}`;

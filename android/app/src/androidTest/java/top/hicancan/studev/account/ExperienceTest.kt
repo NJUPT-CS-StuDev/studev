@@ -16,59 +16,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ExperienceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
-    @Test fun publicFormCanBeFilledBeforeAccountStorageReturns() {
-        val identityStarted = CompletableDeferred<Unit>()
-        val identityGate = CompletableDeferred<Unit>()
-        val definitionStarted = CompletableDeferred<Unit>()
-        val definitionGate = CompletableDeferred<Unit>()
-        val storage = object : AccountStorage {
-            override suspend fun read(): StoredAccount {
-                identityStarted.complete(Unit)
-                identityGate.await()
-                return StoredAccount(deviceId = "synthetic-form-installation")
-            }
-            override suspend fun write(value: StoredAccount) = Unit
-        }
-        val formId = "00000000-0000-4000-8000-000000000001"
-        val client = AccountClient(storage, PlatformTransport { path, body, bearer ->
-            assertEquals("/forms/$formId", path)
-            assertNull(body); assertNull(bearer)
-            definitionStarted.complete(Unit)
-            definitionGate.await()
-            PlatformReply(200, buildJsonObject {
-                put("canSubmit", true)
-                put("form", buildJsonObject {
-                    put("id", formId); put("title", "问题反馈")
-                    put("fields", buildJsonArray { add(buildJsonObject {
-                        put("id", "note"); put("type", "textarea"); put("label", "问题说明"); put("required", true)
-                    }) })
-                })
-            })
-        })
-        try {
-            compose.runOnUiThread { compose.activity.setContent {
-                StuDevTheme { FormScreen(client, FormRequest(formId), onBack = {}) }
-            } }
-            compose.waitUntil(10_000) { identityStarted.isCompleted && definitionStarted.isCompleted }
-            compose.onNodeWithText("正在加载表单…").assertIsDisplayed()
-            compose.onAllNodes(hasText("正在提交", substring = true)).assertCountEquals(0)
-
-            compose.runOnIdle { definitionGate.complete(Unit) }
-            val answer = hasSetTextAction() and hasText("问题说明 *")
-            compose.waitUntil(10_000) { compose.onAllNodes(answer).fetchSemanticsNodes().isNotEmpty() }
-            assertFalse("the account read is still pending while fields are usable", identityGate.isCompleted)
-            compose.onNode(answer).assertIsDisplayed().assertIsEnabled().performTextInput("先把问题写下来")
-            compose.onNode(answer).assertTextContains("先把问题写下来")
-            compose.onAllNodes(hasText("正在提交", substring = true)).assertCountEquals(0)
-
-            compose.runOnIdle { identityGate.complete(Unit) }
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("提交").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNode(answer).assertTextContains("先把问题写下来")
-        } finally {
-            definitionGate.complete(Unit); identityGate.complete(Unit)
-        }
-    }
-
     @Test fun cachedAccountAndNavigationRemainUsableWhileVerificationAndDevicesWait() {
         val account = AccountUser(id = "synthetic-user", nickname = "缓存同学", studentId = "TEST123456", realName = "合成测试成员", qq = "100002")
         var stored = StoredAccount(deviceId = "synthetic-account-installation", session = AccountSession(

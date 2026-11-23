@@ -1,4 +1,4 @@
-type Role = 'owner' | 'admin' | 'user';
+export type Role = 'owner' | 'admin' | 'user';
 export interface MemberProfile { id: string; nickname: string; signature: string; avatarUrl: string; }
 export interface MemberPage { items: MemberProfile[]; total: number; offset: number; limit: number; }
 export interface OrganizationNode {
@@ -48,70 +48,13 @@ export interface Session {
     mfaRequired?: boolean;
     profileRequired?:boolean;
 }
-export interface Field {
-    id: string;
-    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'number' | 'date' | 'file';
-    label: string;
-    description?: string;
-    required: boolean;
-    options?: string[];
-    maxLength?: number;
-    min?: number;
-    max?: number;
-    maxFiles?: number;
-    maxFileBytes?: number;
-    extensions?: string[];
-}
-export interface FormDefinition {
-    id: string;
-    title: string;
-    description: string;
-    status: 'draft' | 'published' | 'closed' | 'archived';
-    access: 'public' | 'members';
-    deadline: string;
-    requireReview: boolean;
-    allowEdit: boolean;
-    maxPerUser: number;
-    maxSubmissions: number;
-    fields: Field[];
-    revision: number;
-    createdAt?: string;
-    updatedAt?: string;
-}
-export interface SubmissionFile {
-    id: string;
-    fieldId: string;
-    name: string;
-    size: number;
-    type: string;
-}
-export interface Submission {
-    id: string;
-    formId: string;
-    formTitle: string;
-    userId?: string;
-    submitterName: string;
-    submitterIdentity?: {studentId:string;realName:string;identityVerified:boolean};
-    answers: Record<string, unknown>;
-    files: SubmissionFile[];
-    status: string;
-    revision: number;
-    createdAt: string;
-    updatedAt: string;
-    review?: {
-        comment?: string;
-        status?: string;
-        createdAt?: string;
-        updatedAt?: string;
-    };
-}
-export interface SubmitterContact {qq:string;email:string;emailVerified:boolean;nickname:string;studentId?:string;realName?:string;identityVerified?:boolean;}
 export class PlatformError extends Error {
     constructor(message: string, public status = 0, public code = '') { super(message); this.name = 'PlatformError'; }
 }
 let currentSession: Session | null = null;
 let sessionRequest: Promise<Session | null> | null = null;
-export const labels: Record<string, string> = { owner: '所有者', admin: '管理员', user: '用户', draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档', public: '公开', members: '仅登录可见', uploading: '待完成', submitted: '已提交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', active: '启用', disabled: '停用', pending: '待注册' };
+export const roleLabels = { owner: '所有者', admin: '管理员', user: '用户' } satisfies Record<Role, string>;
+export const labels: Record<string, string> = { ...roleLabels, active: '启用', disabled: '停用', pending: '待注册' };
 function extractQq(user: { qq?: string; avatarUrl?: string }): string {
     if (user.qq && /^[1-9]\d{4,11}$/.test(user.qq.trim())) return user.qq.trim();
     const match = user.avatarUrl?.match(/[?&]nk=([1-9]\d{4,11})\b/);
@@ -251,12 +194,14 @@ async function refreshCookieSession(generation: string | null) {
 export async function api<T>(path: string, body?: unknown, options: RequestInit = {}, retry = true): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
     throw new PlatformError('请求路径无效。'); let response: Response; let generation: string | null; try {
     if (path === '/auth/login') body = { ...(body as object), ...browserDevice() };
-    if (!['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path)) {
+    const explicitGuestRead = body === undefined && (!options.method || options.method === 'GET') &&
+        /^\/collections(?:\/items\/[A-Za-z0-9_-]+)?\?view=guest$/.test(path);
+    if (!explicitGuestRead && !['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path)) {
         await navigator.locks.request('studev-session-refresh', () => {
             if (localStorage.getItem('studev_session_refresh_pending')) throw new PlatformError('登录验证未完成，请重新登录。', 401, 'AUTH_REQUIRED');
         });
     }
-    generation = localStorage.getItem('studev_session_generation');
+    generation = explicitGuestRead ? null : localStorage.getItem('studev_session_generation');
     response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 catch (error) {
@@ -287,9 +232,7 @@ catch {
 }
 return data as T; }
 async function loadSession(): Promise<Session | null> {
-    // PlatformShell and each functional page ask for the session at the same
-    // time. Share that in-flight request so one navigation performs one Blob
-    // backed authentication lookup.
+    // Share the in-flight session lookup across components on the same page.
     sessionRequest ||= (async () => {
         try {
             currentSession = await api<Session>('/auth/session');
@@ -368,147 +311,13 @@ export function safeStorageUrl(raw: string): string { const url = new URL(raw); 
     throw new PlatformError('文件地址无法验证，请联系管理员。'); return url.href; }
 export function saveBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = el('a'); a.href = url; a.download = name.replace(/[\\/\x00-\x1f]/g, '_'); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
 export type StorageDownload = { url: string; headers: Record<string, string> };
-export async function fetchStorageDownload(download: StorageDownload): Promise<Response> {
+export async function fetchStorageDownload(download: StorageDownload, signal?: AbortSignal): Promise<Response> {
     let response: Response;
     try {
-        response = await fetch(safeStorageUrl(download.url), { headers: download.headers, credentials: 'omit', cache: 'no-store', redirect: 'error' });
+        response = await fetch(safeStorageUrl(download.url), { headers: download.headers, signal, credentials: 'omit', cache: 'no-store', redirect: 'error' });
     } catch {
         throw new PlatformError('文件下载连接失败，请重新点击下载。');
     }
     if (!response.ok) throw new PlatformError('下载链接已过期或文件已变化，请重新点击下载。');
     return response;
 }
-async function downloadFile(submission: Submission, file: SubmissionFile) { const result = await api<{
-    download: StorageDownload & { fileName: string };
-}>(`/submissions/${encodeURIComponent(submission.id)}/files/${encodeURIComponent(file.id)}/download`, {});
-    const response = await fetchStorageDownload(result.download);
-    saveBlob(await response.blob(), result.download.fileName || file.name);
-}
-export function renderFields(root: HTMLElement, fields: Field[], answers: Record<string, unknown> = {}, editing = false) { root.replaceChildren(); for (const field of fields) {
-    const wrap = el('div', undefined, 'p-field');
-    const id = `answer-${field.id}`;
-    const label = el('label', field.label);
-    label.htmlFor = id;
-    if (field.required)
-        label.append(el('span', '*', 'p-required'));
-    wrap.append(label);
-    const value = answers[field.id];
-    if (field.type === 'checkbox') {
-        const group = el('div', undefined, 'p-option-group');
-        group.id = id;
-        group.setAttribute('role', 'group');
-        group.setAttribute('aria-label', field.label);
-        for (const option of field.options || []) {
-            const item = el('label', undefined, 'p-checkbox');
-            const input = el('input');
-            input.type = 'checkbox';
-            input.name = field.id;
-            input.value = option;
-            input.checked = Array.isArray(value) && value.includes(option);
-            item.append(input, el('span', option));
-            group.append(item);
-        }
-        wrap.append(group);
-    }
-    else {
-        let input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-        if (field.type === 'textarea') {
-            input = el('textarea');
-            input.rows = 4;
-            input.maxLength = field.maxLength || 4000;
-        }
-        else if (field.type === 'select') {
-            input = el('select');
-            const placeholder = el('option', '请选择');
-            placeholder.value = '';
-            input.append(placeholder);
-            for (const option of field.options || []) {
-                const n = el('option', option);
-                n.value = option;
-                input.append(n);
-            }
-        }
-        else {
-            input = el('input');
-            input.type = field.type === 'file' ? 'file' : field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
-            if (field.type === 'file') {
-                input.multiple = (field.maxFiles || 1) > 1;
-                input.accept = (field.extensions || []).map(v => v.startsWith('.') ? v : `.${v}`).join(',');
-                input.disabled = editing;
-            }
-            else if (field.type === 'number') {
-                if (field.min !== undefined)
-                    input.min = String(field.min);
-                if (field.max !== undefined)
-                    input.max = String(field.max);
-                input.step = 'any';
-            }
-            else if (field.type === 'text') {
-                input.maxLength = field.maxLength || 1000;
-            }
-        }
-        input.id = id;
-        input.name = field.id;
-        input.required = field.required && !(editing && field.type === 'file');
-        if (field.type !== 'file')
-            input.value = value === undefined || value === null ? '' : String(value);
-        wrap.append(input);
-        if (field.type === 'file') {
-            const help = el('p', editing ? '附件保留原件；需要更换附件时请新建一条提交。' : `最多 ${field.maxFiles || 1} 个文件，每个不超过 ${bytes(field.maxFileBytes || 20971520)}。${field.extensions?.length ? `支持 ${field.extensions.join('、')}。` : ''}`, 'p-help');
-            wrap.append(help);
-            const summary = el('p', '', 'p-help');
-            input.addEventListener('change', () => { summary.textContent = Array.from((input as HTMLInputElement).files || []).map(f => `${f.name} · ${bytes(f.size)}`).join('；'); });
-            wrap.append(summary);
-        }
-    }
-    if (field.description) {
-        const help = el('p', field.description, 'p-help');
-        help.id = `help-${field.id}`;
-        wrap.append(help);
-        wrap.querySelector('input,select,textarea')?.setAttribute('aria-describedby', help.id);
-    }
-    root.append(wrap);
-} }
-export function readAnswers(root: ParentNode, fields: Field[]): Record<string, unknown> { const values: Record<string, unknown> = {}; for (const f of fields) {
-    if (f.type === 'file')
-        continue;
-    if (f.type === 'checkbox') {
-        const selected = Array.from(root.querySelectorAll<HTMLInputElement>(`input[name="${f.id}"]:checked`)).map(v => v.value);
-        if (f.required && !selected.length)
-            throw new PlatformError(`请选择“${f.label}”。`);
-        values[f.id] = selected;
-    }
-    else {
-        const n = q<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[name="${f.id}"]`, root);
-        values[f.id] = f.type === 'number' && n.value !== '' ? Number(n.value) : n.value;
-    }
-} return values; }
-export function renderSubmission(root: HTMLElement, submission: Submission, form: FormDefinition, onError: (e: unknown) => void) { const meta = el('dl', undefined, 'p-meta'); for (const [k, v] of [['回执编号', submission.id], ['填写者', submission.submitterName || '—'], ['提交时间', formatTime(submission.createdAt)], ['状态', labels[submission.status] || submission.status]])
-    meta.append(el('dt', k), el('dd', v)); if(submission.submitterIdentity){meta.append(el('dt','提交时学号'),el('dd',submission.submitterIdentity.studentId),el('dt','提交时姓名'),el('dd',submission.submitterIdentity.realName));} root.append(meta, el('hr', undefined, 'p-divider')); for (const field of form.fields) {
-    if (field.type === 'file')
-        continue;
-    const v = submission.answers[field.id];
-    const block = el('div', undefined, 'p-field');
-    block.append(el('span', field.label, 'p-label'), el('div', Array.isArray(v) ? v.join('、') : v === undefined || v === '' ? '—' : String(v), 'p-description'));
-    root.append(block);
-} if (submission.files?.length) {
-    root.append(el('h3', '附件'));
-    const list = el('ul', undefined, 'p-file-list');
-    for (const file of submission.files) {
-        const item = el('li');
-        const text = el('span', `${file.name} · ${bytes(file.size)}`);
-        const b = button('下载', async () => { try {
-            await busy(b, () => downloadFile(submission, file));
-        }
-        catch (e) {
-            onError(e);
-        } });
-        item.append(text, b);
-        list.append(item);
-    }
-    root.append(list);
-} if (submission.review) {
-    const review = el('div', undefined, 'p-message');
-    review.append(el('strong', '处理结果'), el('p', submission.review.comment || labels[submission.review.status || submission.status] || '已处理'));
-    root.append(review);
-} }

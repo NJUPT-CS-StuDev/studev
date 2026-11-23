@@ -31,10 +31,10 @@ test('mutations require exact valid origin and reject cross-site fetches', () =>
 });
 test('atomic immutable revisions reject a concurrent stale writer and isolate platform namespace', async () => {
   const store = memoryStore(), repo = createRepository(store, { secret: 'x'.repeat(48) });
-  await repo.append('forms/example', { title: 'one', revision: 99 });
-  const writes = await Promise.allSettled([repo.append('forms/example', { title: 'two' }, 1), repo.append('forms/example', { title: 'three' }, 1)]);
+  await repo.append('collection/definitions/example', { title: 'one', revision: 99 });
+  const writes = await Promise.allSettled([repo.append('collection/definitions/example', { title: 'two' }, 1), repo.append('collection/definitions/example', { title: 'three' }, 1)]);
   assert.equal(writes.filter((r) => r.status === 'fulfilled').length, 1);
-  assert.equal((await repo.latest('forms/example')).revision, 2);
+  assert.equal((await repo.latest('collection/definitions/example')).revision, 2);
   assert.ok([...store.values.keys()].every((key) => key.startsWith('platform-v1/')));
   await assert.rejects(repo.list('../collections/'), /Invalid internal/);
 });

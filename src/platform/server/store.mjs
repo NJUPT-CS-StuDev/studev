@@ -39,6 +39,21 @@ export function createRepository(store, { now = Date.now, secret, revisions } = 
       if (filename.length === width + 5 && /^\d+\.json$/.test(filename) && (!tip || entry.key > tip.key)) tip = entry;
     }
     if (!tip) return null;
+    return readRevision(tip);
+  }
+  // A single strong listing supplies the heads of independent records under a
+  // collection, so the caller need not list once for every row it displays.
+  async function heads(prefix) {
+    const latest = new Map();
+    for (const entry of await entries(`${prefix}/`)) {
+      if (!/\/\d{8}\.json$/.test(entry.key)) continue;
+      const group = entry.key.slice(ROOT.length + prefix.length + 1, -14);
+      if (group && (!latest.has(group) || latest.get(group).key < entry.key)) latest.set(group, entry);
+    }
+    return latest;
+  }
+  async function readRevision(tip) {
+    const prefix = tip.key.slice(0, tip.key.lastIndexOf('/'));
     const cached = revisions?.get(prefix);
     if (tip.etag && cached?.key === tip.key && cached.etag === tip.etag) return structuredClone(cached.value);
     const key = tip.key.slice(ROOT.length);
@@ -88,11 +103,11 @@ export function createRepository(store, { now = Date.now, secret, revisions } = 
     fail(429, 'RATE_LIMITED', '操作过于频繁，请稍后重试。');
   }
   async function audit(actor, action, target, details = {}) {
-    const allowed = ['role', 'status', 'previousRole', 'previousStatus', 'formId', 'submissionId', 'revision', 'count', 'fieldCount'];
+    const allowed = ['role', 'status', 'previousRole', 'previousStatus', 'itemId', 'roundId', 'kind', 'submissionId', 'revision', 'count', 'fieldCount'];
     const identityFlags = ['identityVerified', 'profileComplete'];
     const safe = Object.fromEntries(Object.entries(details).filter(([key, v]) => identityFlags.includes(key) ? typeof v === 'boolean' : allowed.includes(key) && (typeof v === 'number' || typeof v === 'boolean' || (typeof v === 'string' && v.length <= 100))));
     const id = `${String(9999999999999 - now()).padStart(13, '0')}-${randomUUID()}`;
     return putNew(`audit/${id}.json`, { id, actorId: typeof actor === 'string' ? actor.slice(0, 80) : actor?.id || 'system', action: String(action).slice(0, 80), target: String(target).slice(0, 160), details: safe, createdAt: new Date(now()).toISOString() });
   }
-  return { get, put, putNew, remove, list, latest, append, throttle, audit };
+  return { get, put, putNew, remove, list, latest, heads, readRevision, append, throttle, audit };
 }

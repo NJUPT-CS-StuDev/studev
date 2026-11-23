@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -58,15 +59,15 @@ private const val RULER_END = 22 * 60
 private class LabelInfo(val id: String, val text: String, val at: DoubleArray, val height: Double, val minZoom: Double, val priority: Int, val teach: Boolean, val place: Boolean)
 private class Placed(val key: String, val text: String, val count: Int?, val x: Int, val y: Int, val kind: String, val tap: (() -> Unit)?)
 
-/** Pick a moment, unfold campus, building, floor and room. */
 /** A photo of a place, sent with where it is, as photoLink in src/campus/map/MapApp.tsx. */
-private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within: top.hicancan.studev.data.Place? = null): top.hicancan.studev.account.FormRequest {
+private fun photoLink(place: Place, name: String, within: Place? = null): String {
     val centre = place.centre ?: within?.centre
     val fill = listOfNotNull("place" to "$name · ${place.id}", centre?.let { "position" to "%.6f,%.6f".format(java.util.Locale.ROOT, it[1], it[0]) })
-    return top.hicancan.studev.account.FormRequest(top.hicancan.studev.account.Forms.ids.getValue("place"), fill.toMap())
+    return collectionLink(BuildConfig.FORM_PLACE, fill)
 }
 
-@Composable fun MapScreen(route: Route, state: AcademicState, settings: PersonalSettings, campus: CampusPackage, now: Moment, runtime: NavigationRuntime, onPick: () -> Unit, onHinted: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit) {
+/** Pick a moment, unfold campus, building, floor and room. */
+@Composable fun MapScreen(route: Route, state: AcademicState, settings: PersonalSettings, campus: CampusPackage, now: Moment, runtime: NavigationRuntime, onPick: () -> Unit, onHinted: () -> Unit) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val dark = isSystemInDarkTheme()
@@ -349,7 +350,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                         Ruler(state.periods, moment, now) { route.moment = moment.date to it }
                     }
                     Box(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                        Panel(route, state, campus, selected, openBuilding, picked, floor, floors, inBuilding, classrooms, roomById, day, moment, reader, freeBy, runtime, scene, onForm,
+                        Panel(route, state, campus, selected, openBuilding, picked, floor, floors, inBuilding, classrooms, roomById, day, moment, reader, freeBy, runtime, scene,
                             events.filter { !it.over(now.date) }.sortedBy { it.at ?: "~" }, onEvent = { event -> openEvent = event; mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(LatLng(event.lat, event.lng), 17.5)) }) { snap = it }
                     }
                 }
@@ -478,8 +479,9 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
 }
 
 @Composable private fun Panel(route: Route, state: AcademicState, campus: CampusPackage, selected: Place?, building: Place?, picked: Place?, floor: Int?, floors: List<Int>, inBuilding: List<Room>, classrooms: List<Room>, roomById: Map<String, Room>,
-                              day: RoomDay?, moment: Moment, reader: RoomReader?, freeBy: Map<String, Pair<Int, Int>>, runtime: NavigationRuntime, scene: Scene?, onForm: (top.hicancan.studev.account.FormRequest) -> Unit,
+                              day: RoomDay?, moment: Moment, reader: RoomReader?, freeBy: Map<String, Pair<Int, Int>>, runtime: NavigationRuntime, scene: Scene?,
                               events: List<CampusEvent>, onEvent: (CampusEvent) -> Unit, onSnap: (Int) -> Unit) {
+    val browser = LocalUriHandler.current
     val mark = marks()
     fun openRoom(id: String) { route.place = id; route.floor = null; onSnap(1) }
     if (reader == null) return
@@ -502,7 +504,10 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                     if (current != null) ActionButton("这间的课表", modifier = Modifier.weight(1f)) { route.timetable("room", picked.id, at = moment.date) }
                     ActionButton("去这里", go = true, modifier = Modifier.weight(1f)) { route.nav = picked.id }
                 }
-                KeyRow(null, "给这里拍张照", "门牌、入口拍清楚，大家更好找", chevron = true, onClick = { onForm(photoOf(picked, picked.title?.let { "$it ${picked.names.firstOrNull().orEmpty()}" } ?: Names.room(picked.id), building)) })
+                KeyRow(null, "给这里拍张照", "在浏览器提交门牌或入口照片", chevron = true, onClick = {
+                    val name = picked.title?.let { "$it ${picked.names.firstOrNull().orEmpty()}" } ?: Names.room(picked.id)
+                    browser.openUri(photoLink(picked, name, building))
+                })
             }
             items(current?.occupants.orEmpty(), key = { it.occupant.id + it.start }) { row ->
                 Row(Modifier.fillMaxWidth().topHairline(Ink.line).clickable { route.timetable("course", Names.course(row.occupant.course)) }.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -557,7 +562,7 @@ private fun photoOf(place: top.hicancan.studev.data.Place, name: String, within:
                 }
                 ActionButton("去这里", go = true, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) { route.nav = selected.id }
                 KeyRow(null, "这里的一切", chevron = true, onClick = { route.search(within = selected.id) })
-                KeyRow(null, "给这里拍张照", "楼门、入口、店面，大家更好找", chevron = true, onClick = { onForm(photoOf(selected, selected.displayName(campus.byId))) })
+                KeyRow(null, "给这里拍张照", "在浏览器提交楼门、入口或店面照片", chevron = true, onClick = { browser.openUri(photoLink(selected, selected.displayName(campus.byId))) })
                 selected.hours?.let { hours -> DayOfWeek.entries.forEach { day ->
                     Row(Modifier.fillMaxWidth().topHairline(Ink.line).padding(vertical = 5.dp)) {
                         Plain(WEEKDAYS[day.value], 13.sp, Ink.muted, modifier = Modifier.weight(1f))

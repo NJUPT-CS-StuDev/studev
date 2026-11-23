@@ -1,8 +1,7 @@
 import { AppError, fail, platformOrigin, requireOrigin, response, safeLog } from './common.mjs';
 import { createRepository } from './store.mjs';
 import { createIdentity } from './identity.mjs';
-import { createFormsService } from './forms.mjs';
-import { createCollectionsService } from './collections.mjs';
+import { createCollectionsService } from './collections/index.mjs';
 import { metadataStore, oscaGateway } from './storage.mjs';
 import { hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { createAiService } from './ai.mjs';
@@ -22,12 +21,6 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (['POST', 'DELETE'].includes(request.method) && !hasAuthorization(request) && !bearerBootstrap(request, path)) requireOrigin(request, env);
       const store = getStore(env);
       const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET, revisions });
-      const collectionWrite = request.method !== "GET"
-        && /^\/api\/platform\/(?:collections|forms|submissions|admin\/forms)(?:\/|$)/.test(path)
-        && !path.endsWith("/download");
-      if (collectionWrite && (await repo.get("cutover/collection.json"))?.paused === true) {
-        fail(503, "COLLECTION_MIGRATING", "收集正在升级，暂时无法保存，请保留页面，稍后重试。");
-      }
       const identity = createIdentity({ repo, env, now });
       // Never fall back to cookies when an Authorization header is present.
       // Validate it before exempting any endpoint from the browser boundary.
@@ -41,9 +34,6 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       const collections = createCollectionsService({ repo, identity, env, now, getGateway });
       const collectionsResponse = await collections.handle(context, path);
       if (collectionsResponse) return collectionsResponse;
-      const forms = createFormsService({ repo, identity, env, now, getGateway });
-      const formsResponse = await forms.handle(context, path);
-      if (formsResponse) return formsResponse;
       fail(404, 'NOT_FOUND', '接口不存在。');
     } catch (error) {
       if (error instanceof AppError) return response({ error: { code: error.code, message: error.message } }, error.status);

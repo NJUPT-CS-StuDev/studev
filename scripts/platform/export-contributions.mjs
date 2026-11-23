@@ -8,7 +8,7 @@ import { loginOwner } from './bootstrap-owner.mjs';
 import { privateFile } from '../private/files.mjs';
 
 export async function exportContributions(client, output) {
-  const result = await client.call(`/admin/forms/${product.forms.data}/submissions`, { expected: 200 });
+  const result = await client.call(`/collections/items/${product.forms.data}/rounds/main/submissions`, { expected: 200 });
   const accepted = result.body.items.filter(record => record.status === 'accepted');
   let count = 0;
   for (const record of accepted) {
@@ -21,7 +21,7 @@ export async function exportContributions(client, output) {
       const safeName = basename(file.name.replaceAll('\\', '/')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 150);
       if (!safeName) throw new Error('Attachment has no usable name');
       const path = `${file.id}-${safeName}`;
-      const signed = (await client.call(`/submissions/${record.id}/files/${file.id}/download`, { method: 'POST', body: {}, expected: 200 })).body.download;
+      const signed = (await client.call(`/collections/submissions/${record.id}/files/${file.id}/download`, { method: 'POST', body: {}, expected: 200 })).body.download;
       const url = new URL(signed.url);
       if (url.protocol !== 'https:' || url.username || url.password || signed.method !== 'GET') throw new Error('Invalid attachment download');
       let response;
@@ -35,7 +35,7 @@ export async function exportContributions(client, output) {
       files.push({ id: file.id, name: file.name, path, size, type: file.type });
     }
     // Acquisition evidence contains the public material and its review, never student identity or signed links.
-    await writeFile(join(folder, 'submission.json'), JSON.stringify({ id: record.id, formId: record.formId, status: record.status, answers: record.answers, review: record.review, createdAt: record.createdAt, files }, null, 2) + '\n');
+    await writeFile(join(folder, 'submission.json'), JSON.stringify({ id: record.id, formId: record.itemId, status: record.status, answers: record.answers, review: record.review, createdAt: record.createdAt, files }, null, 2) + '\n');
     count++;
   }
   return { accepted: count, output };

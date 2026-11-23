@@ -62,7 +62,7 @@ import top.hicancan.studev.world.Moment
 }
 
 /** The five campus entries share one shell. */
-@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: (() -> Unit) -> Unit, model: CampusModel = viewModel()) {
+@Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { model.resume() }
     val state by model.state.collectAsStateWithLifecycle()
@@ -122,7 +122,7 @@ import top.hicancan.studev.world.Moment
         // The bar below counts as room already given: a keyboard rising over it lifts the page only by what it covers beyond.
         Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding()).consumeWindowInsets(PaddingValues(bottom = padding.calculateBottomPadding()))) {
             // The native map keeps its surface while another entry is on top of it.
-            if (mapOpened) campus?.let { loaded -> key(loaded.repository.release.map_base) { MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }, onForm = onForm) } }
+            if (mapOpened) campus?.let { loaded -> key(loaded.repository.release.map_base) { MapScreen(route, state, settings, loaded, now, runtime, onPick = { route.tab = "map" }, onHinted = { model.settings.update { it.copy(ballHinted = true) } }) } }
             when (route.tab) {
                 "timetable" -> views.SaveableStateProvider("timetable") {
                     Surface(Modifier.fillMaxSize(), color = Ink.paper) { TimetableScreen(route, model, state, settings, now, walk) { event, line -> open = event to line } }
@@ -137,7 +137,7 @@ import top.hicancan.studev.world.Moment
     }
     }
     open?.let { (event, line) -> EventSheet(event, line, route.whoType == "me", route, model, settings, state, now, onOpen = { open = it to line }) { open = null } }
-    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount, onForm = onForm, onMembers = { onMembers { me = true } }) { me = false }
+    if (me) MeSheet(state, settings, model, now, route, onPickClass = { picking = true }, onAccount = onAccount) { me = false }
     if (picking) ClassPickSheet(state, { model.chooseClass(it) }) { picking = false }
     if (state.appRequired) AppRequired(state.app!!)
     else model.update.collectAsStateWithLifecycle().value?.let { news -> UpdateDialog(news, model::closeUpdate) }

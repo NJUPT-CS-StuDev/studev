@@ -1,15 +1,17 @@
 // Isolated browser transport gates exercise the normal platform client while independent reads are pending.
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createPlatformHandler } from '../../src/platform/server/app.mjs';
+import { totpCode } from '../../src/platform/server/totp.mjs';
+import { memoryBlob, memoryGateway, requestClient, testEnvironment } from '../../src/platform/tests/fixtures.mjs';
 const origin = process.env.STUDEV_WEB_URL || 'http://127.0.0.1:4322';
 const output = process.env.STUDEV_WEB_SMOKE_DIR || 'D:/Temp/codex/studev-web-experience';
 await mkdir(output, {recursive:true});
 const gate = () => { let release; const ready = new Promise(resolve => {release=resolve;}); return {ready,release}; };
 const user = { id:'browser-test', studentId:'B240000', realName:'验收用户', nickname:'验收用户', qq:'', email:'', role:'admin', status:'active', profileComplete:true, identityVerified:true, revision:1, totpEnabled:false, mustChangePassword:false, signature:'' };
 const current = {user,csrfToken:'browser-transport-test',mfaVerified:true};
-const form = {id:'browser-test',title:'页面验收表单',description:'填写过程中保留内容。',status:'published',access:'public',deadline:'',requireReview:false,allowEdit:false,maxPerUser:1,maxSubmissions:100,revision:1,fields:[{id:'question',type:'text',label:'填写内容',required:true}]};
 const device = {id:'test-device',deviceName:'验收浏览器',createdAt:'2026-11-16T00:00:00Z',expiresAt:Date.parse('2026-12-16T00:00:00Z'),kind:'cookie',current:true};
 const browser = await chromium.launch({channel:'msedge',headless:true});
 const passed=[];
@@ -21,38 +23,240 @@ async function newPage(viewport) {
   return {context,page,errors};
 }
 async function shot(page,name){await page.screenshot({path:join(output,name+'.png'),animations:'disabled'});}
-try {
-  for(const [name,viewport] of [['phone',{width:390,height:844}],['desktop',{width:1440,height:1000}]]) {
-    const {context,page,errors}=await newPage(viewport);
-    const identity=gate();let sessions=0,syncs=0,authenticated=false;
-    await page.route('**/api/platform/**',async route=>{
-      const path=new URL(route.request().url()).pathname;
-      if(path.endsWith('/auth/session')){sessions++;await identity.ready;await route.fulfill(authenticated?{json:current}:{status:401,json:{error:{message:'请登录。',code:'AUTH_REQUIRED'}}});}
-      else if(path.endsWith('/forms/browser-test'))await route.fulfill({json:{form,canSubmit:true}});
-      else if(path.endsWith('/sync')){syncs++;await route.fulfill({json:{tasks:[],settings:{}}});}
-      else await route.fulfill({status:404,json:{error:{message:'Unexpected platform read'}}});
-    });
-    await page.goto(origin+'/fill/?id=browser-test');
-    const answer=page.getByRole('textbox', {name:/^填写内容/});
-    await answer.fill('身份查询期间填写的内容');
-    assert(await page.locator('[data-fill-submit]').isDisabled());
-    assert(!(await page.locator('[data-fill-status]').textContent()).includes('提交'));
-    await shot(page,`${name}-form-pending-identity`);
-    identity.release();
-    await page.waitForFunction(()=>!document.querySelector('[data-fill-submit]').disabled);
-    assert.equal(await answer.inputValue(),'身份查询期间填写的内容');
-    assert.equal(sessions,1,'navigation and form share one in-flight session');
-    authenticated=true;
-    await page.reload();
-    await page.waitForFunction(()=>!document.querySelector('[data-fill-submit]').disabled);
-    assert.equal(syncs,0,'a form does not start unrelated campus sync');
-    const syncResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/platform/sync');
-    await page.locator('[data-me]').click();
-    await syncResponse;
-    assert.equal(syncs,1,'opening campus settings explicitly starts its synchronization');
-    assert.deepEqual(errors,[]);await context.close();
-    record(`${name}: public form editable before identity completes, submission phase honest, one session request`);
 
+async function releasedCourses() {
+  if (!process.argv.includes('--course')) return [];
+  const release = JSON.parse(await readFile(new URL('../../src/data/campus-release.json', import.meta.url), 'utf8'));
+  const file = new URL('../../public' + release.base + '/entities/information.json', import.meta.url);
+  const { items } = JSON.parse(await readFile(file, 'utf8'));
+  const facts = items.filter(item => item.subtype === 'information:course-plan' && /^[A-Z0-9]{6,16}$/.test(item.id.split('/').at(-1)) && item.names.length).slice(0, 2);
+  assert.equal(facts.length, 2, 'the released campus facts contain two courses');
+  return facts.map(({ id, names }) => ({ id, code: id.split('/').at(-1), name: names[0] }));
+}
+
+async function pickReleasedCourse(dialog, course) {
+  const input = dialog.getByRole('searchbox', { name: /课程/ });
+  const option = dialog.getByRole('button', { name: course.name + ' ' + course.code, exact: true });
+  const started = performance.now();
+  await input.fill(course.code);
+  await option.waitFor({ timeout: 60_000 });
+  const elapsed = Math.round(performance.now() - started);
+  await option.click();
+  await dialog.getByText(course.name + ' · ' + course.code, { exact: true }).waitFor();
+  return elapsed;
+}
+
+const title = '统一收集验收';
+const privateTitle = '仅指定成员的收集';
+const memberName = '合成成员';
+const peerSecret = '另一账号的私有答案';
+const round = {
+  id: 'round-one', label: '问卷填写', deadline: '', policy: 'strict', submissionMode: 'replace',
+  fields: [{ id: 'answer', type: 'text', label: '填写内容', required: true }],
+};
+const roundPath = item => '/collections/items/' + item.id + '/rounds/' + round.id;
+
+async function collectionFixture() {
+  const { env, password } = await testEnvironment();
+  const store = memoryBlob(), gateway = memoryGateway(), clock = Date.UTC(2026, 10, 22, 12);
+  const handle = createPlatformHandler({ getStore: () => store, getGateway: () => gateway, now: () => clock });
+  const client = () => requestClient(handle, env);
+  const owner = client(), guest = client();
+  const post = async (actor, path, body, status = 200) => {
+    const result = await actor.call(path, { method: 'POST', body });
+    assert.equal(result.status, status, path + ' ' + JSON.stringify(result.body.error || {}));
+    return result.body;
+  };
+  const studentId = env.PLATFORM_OWNER_STUDENT_ID;
+  const ownerPassword = password + '-new';
+  await post(owner, '/auth/login', { studentId, password });
+  await post(owner, '/auth/password', { currentPassword: password, newPassword: ownerPassword });
+  await post(owner, '/auth/login', { studentId, password: ownerPassword });
+  const setup = await post(owner, '/auth/totp/setup', { password: ownerPassword });
+  await post(owner, '/auth/totp/confirm', { code: totpCode(setup.secret, Math.floor(clock / 30_000)) });
+  const ownerState = await owner.call('/auth/session');
+  await post(owner, '/auth/profile', { studentId, realName: env.PLATFORM_OWNER_REAL_NAME, revision: ownerState.body.user.revision });
+
+  async function register(qq, name) {
+    const actor = client(), sid = 'TEST' + qq;
+    await post(actor, '/auth/register', { qq, nickname: name, studentId: sid, realName: name, password }, 201);
+    await post(actor, '/auth/login', { studentId: sid, password });
+    return { actor, sid };
+  }
+  const [member, peer] = await Promise.all([register('100002', memberName), register('100003', '合成同行成员')]);
+  const catalog = await owner.call('/collections');
+  assert.equal(catalog.status, 200);
+  const { organizationId, title: issuerTitle } = catalog.body.issuerOptions[0];
+  const common = { status: 'published', issuerOrganizationId: organizationId, issuerTitle, rounds: [round], tags: ['问卷验收'], term: '2026-2027-1', termLabel: '验收学期' };
+  const { item } = await post(owner, '/collections/items', { ...common, name: title, visibility: 'public' }, 201);
+  const { item: privateItem } = await post(owner, '/collections/items', {
+    ...common, name: privateTitle, visibility: 'members', targetMode: 'selected', recipients: [{ studentId: member.sid, name: memberName }],
+  }, 201);
+  const prior = await post(peer.actor, roundPath(item) + '/submissions', { answers: { answer: peerSecret }, files: [] }, 201);
+  return { handle, env, owner, guest, member: member.actor, item, privateItem, peerSubmission: prior.submission.id };
+}
+
+async function collections(page, fixture, actor, { identity, reads = [] } = {}) {
+  await page.route('**/api/platform/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    reads.push({ path: url.pathname, method: request.method(), query: url.search });
+    const path = url.pathname.slice('/api/platform'.length);
+    if (path === '/auth/session' && identity) await identity.ready;
+    const headers = new Headers(request.headers());
+    headers.set('Origin', fixture.env.PLATFORM_ORIGIN);
+    if (actor.cookie) headers.set('Cookie', actor.cookie);
+    const result = await fixture.handle({
+      request: new Request(fixture.env.PLATFORM_ORIGIN + url.pathname + url.search, {
+        method: request.method(), headers, body: request.postDataBuffer() || undefined,
+      }),
+      env: fixture.env, clientIp: 'isolated-browser',
+    });
+    await route.fulfill({ status: result.status, headers: Object.fromEntries(result.headers), body: Buffer.from(await result.arrayBuffer()) });
+  });
+}
+
+async function checkCollection(viewport, name) {
+  const fixture = await collectionFixture();
+  const { item, privateItem } = fixture;
+  const guest = await newPage(viewport);
+  const guestReads = [];
+  await collections(guest.page, fixture, fixture.guest, { reads: guestReads });
+  await guest.page.goto(origin+'/search/');
+  const nav = name === 'phone' ? guest.page.locator('.phone-tabs') : guest.page.locator('.site-nav');
+  await nav.getByRole('link', { name: '收集', exact: true }).click();
+  await guest.page.waitForURL(url => url.pathname === '/forms/');
+  const parts = guest.page.locator('.cw-workspace');
+  await parts.getByRole('heading', { name: '验收学期', exact: true }).waitFor();
+  assert.equal(await parts.getByRole('link', { name: new RegExp(privateTitle) }).count(), 0);
+  assert.equal(await nav.getByRole('link', { name:'收集', exact: true }).getAttribute('aria-current'), 'page');
+  await parts.getByRole('button', { name:'按标签', exact: true }).click();
+  await parts.getByRole('heading', { name: '问卷验收', exact: true }).waitFor();
+  const width = await parts.boundingBox();
+  assert(width && width.width >= (name === 'phone' ? viewport.width - 48 : 1100), 'collection list uses the available screen');
+  assert(await guest.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'collection list has no horizontal page overflow');
+  await shot(guest.page, name + '-collection-catalog');
+  await parts.getByRole('link', { name: new RegExp(title) }).click();
+  await parts.getByRole('heading', { name: title, exact: true }).waitFor();
+  const login = parts.getByRole('link', { name: '登录后填写' });
+  assert.equal(new URL(await login.getAttribute('href'), origin).searchParams.get('next'), '/forms/?id=' + item.id);
+  assert(await parts.getByRole('textbox', { name: /^填写内容/ }).isDisabled());
+  assert.equal(await parts.getByText(peerSecret).count(), 0);
+  assert.equal(guestReads.filter(read => read.path === '/api/platform/auth/session').length, 0);
+  const secret = await fixture.guest.call('/collections/submissions/' + fixture.peerSubmission);
+  assert.equal(secret.status, 401);
+  await guest.page.goto(origin + '/forms/?id=' + privateItem.id);
+  await parts.getByRole('alert').filter({ hasText: /不存在或无权查看/ }).waitFor();
+  assert.deepEqual(guest.errors, []);
+  await guest.context.close();
+
+  const member = await newPage(viewport), identity = gate(), memberReads = [];
+  await collections(member.page, fixture, fixture.member, { identity, reads: memberReads });
+  await member.page.goto(origin + '/forms/?id=' + item.id + '&a.answer=' + encodeURIComponent('地图预填内容'));
+  const memberParts = member.page.locator('.cw-workspace');
+  const answer = memberParts.getByRole('textbox', { name: /^填写内容/ });
+  await answer.waitFor();
+  assert.equal(memberReads.filter(read => read.path === '/api/platform/collections').length, 0, 'a direct collection link loads just its detail');
+  assert.equal(await answer.inputValue(), '地图预填内容');
+  assert.equal(await memberParts.getByRole('button', { name: '收集设置' }).count(), 0);
+  assert.equal(await memberParts.getByText(peerSecret).count(), 0);
+  assert.equal(memberReads.filter(read => read.path === '/api/platform/auth/session').length, 0);
+  await answer.fill('登录验证期间保留这段内容');
+  await memberParts.getByRole('button', { name: '提交', exact: true }).click();
+  await memberParts.getByRole('button', { name: /正在提交/ }).waitFor();
+  assert.equal(await answer.inputValue(), '登录验证期间保留这段内容');
+  assert.equal(memberReads.filter(read => read.method === 'POST').length, 0);
+  try {
+    assert(await memberParts.getByRole('button', { name: /正在提交/ }).isDisabled());
+  } finally {
+    identity.release();
+  }
+  await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).waitFor();
+  assert.equal(memberReads.filter(read => read.path === '/api/platform/auth/session').length, 1);
+  assert.equal(memberReads.filter(read => read.method === 'POST').length, 1, 'plain answers save with one write');
+  assert.equal(memberReads.filter(read => read.path === '/api/platform/sync').length, 0);
+  assert.equal((await fixture.member.call('/collections/submissions/' + fixture.peerSubmission)).status, 404);
+  await member.page.reload();
+  await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).waitFor();
+  await shot(member.page, name + '-collection-own-submission');
+  await memberParts.getByRole('combobox', { name: '视角' }).selectOption('guest');
+  await memberParts.getByText(/正在预览访客视角/).waitFor();
+  assert.equal(await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).count(), 0);
+  assert.equal(await memberParts.getByRole('button', { name: '提交', exact: true }).count(), 0);
+  await memberParts.getByRole('link', { name: '全部收集' }).click();
+  await memberParts.getByRole('link', { name: new RegExp(title) }).waitFor();
+  assert.equal(await memberParts.getByRole('link', { name: new RegExp(privateTitle) }).count(), 0);
+  await memberParts.getByRole('combobox', { name: '视角' }).selectOption('user');
+  await memberParts.getByRole('link', { name: new RegExp(privateTitle) }).waitFor();
+  await memberParts.getByRole('link', { name: '我的提交' }).click();
+  await memberParts.getByRole('heading', { name: '我的提交', exact: true }).waitFor();
+  await memberParts.getByRole('link', { name: new RegExp(title) }).waitFor();
+  assert.deepEqual(member.errors, []);
+  await member.context.close();
+  record(name + ': collection navigation, grouping, prefill, one write, guest and member privacy');
+
+  if (name === 'desktop') {
+    const staff = await newPage(viewport), staffReads = [];
+    await collections(staff.page, fixture, fixture.owner, { reads: staffReads });
+    await staff.page.goto(origin + '/forms/');
+    const staffParts = staff.page.locator('.cw-workspace');
+    await staffParts.getByRole('button', { name: '新建收集' }).click();
+    const dialog = staff.page.getByRole('dialog', { name: '新建收集' });
+    await dialog.getByRole('textbox', { name: '名称', exact: true }).fill('统一入口的草稿');
+    await dialog.getByRole('textbox', { name: /字段名称|字段标题/ }).fill('草稿字段');
+    const [firstCourse, course] = await releasedCourses();
+    let courseTiming;
+    if (course) {
+      const firstMs = await pickReleasedCourse(dialog, firstCourse);
+      await dialog.getByRole('button', { name: '移除课程' }).click();
+      courseTiming = { firstMs, nextCodeMs: await pickReleasedCourse(dialog, course) };
+    }
+    const draftResponse = staff.page.waitForResponse(response => response.url().endsWith('/api/platform/collections/items') && response.request().method() === 'POST');
+    await dialog.getByRole('button', { name: '保存草稿' }).click();
+    const savedDraft = await draftResponse;
+    assert.equal(savedDraft.status(), 201, JSON.stringify((await savedDraft.json()).error || {}));
+    await staffParts.getByRole('heading', { name: '统一入口的草稿', exact: true }).waitFor();
+    const draftId = new URL(staff.page.url()).searchParams.get('id');
+    assert(draftId, 'draft has a canonical collection URL');
+    if (course) {
+      const saved = await fixture.owner.call('/collections/items/' + draftId);
+      assert.equal(saved.status, 200);
+      assert.deepEqual(saved.body.item.course, course);
+      record('real WASM course-code search and saved campus fact ID ' + JSON.stringify(courseTiming));
+    }
+    assert.equal((await fixture.guest.call('/collections/items/' + draftId)).status, 404);
+    await staffParts.getByRole('button', { name: '新增批次' }).click();
+    const addRound = staff.page.getByRole('dialog', { name: '新增批次' });
+    await addRound.getByRole('textbox', { name: '批次名称' }).fill('草稿的第二轮');
+    await addRound.getByRole('textbox', { name: '字段名称' }).fill('第二轮字段');
+    await addRound.getByRole('button', { name: '保存', exact: true }).click();
+    await staffParts.getByRole('heading', { name: '草稿的第二轮', exact: true }).waitFor();
+    assert(new URL(staff.page.url()).searchParams.has('round'));
+    await staff.page.goto(origin + '/forms/?id=' + item.id);
+    const peerRow = staffParts.getByRole('row', { name: /合成同行成员/ });
+    await peerRow.getByRole('button', { name: '查看', exact: true }).click();
+    const receipt = staff.page.getByRole('dialog', { name: '提交详情' });
+    await receipt.getByText(peerSecret, { exact: true }).waitFor();
+    await receipt.getByRole('button', { name: '关闭', exact: true }).click();
+    assert.equal(staffReads.filter(read => read.method === 'GET' && read.path === '/api/platform' + roundPath(item) + '/submissions').length, 1);
+    assert(!staffReads.some(read => read.query.includes('board=1')));
+    await shot(staff.page, name + '-collection-board');
+    await staffParts.getByRole('button', { name: /修改截止时间/ }).click();
+    const deadline = staff.page.getByRole('dialog', { name: '截止时间' });
+    await deadline.getByRole('button', { name: '取消' }).click();
+    await staffParts.getByRole('combobox', { name: '视角' }).selectOption('user');
+    await staffParts.getByText(/正在预览用户视角/).waitFor();
+    assert.equal(await staffParts.getByRole('button', { name: '收集设置' }).count(), 0);
+    assert.equal(await staffParts.getByText(peerSecret).count(), 0);
+    assert.deepEqual(staff.errors, []);
+    await staff.context.close();
+    record('desktop: owner creates a private draft and second round, opens the deadline editor and previews user view');
+  }
+}
+const layouts = [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]];
+try {
+  for (const [name, viewport] of layouts) await checkCollection(viewport, name);
+  for (const [name, viewport] of layouts) {
     const account=await newPage(viewport), counts={session:0,devices:0,members:0},unexpected=[];
     let deviceGate=null, failAccount=false;
     await account.page.route('**/api/platform/**',async route=>{
@@ -64,8 +268,8 @@ try {
     });
     await account.page.goto(origin+'/account/');
     await account.page.getByRole('heading',{name:'我的账号',exact:true}).waitFor();
-    assert.equal(await account.page.locator('[data-me]').count(),0,'the account destination has no repeated personal-menu entry');
-    assert.equal(await account.page.locator('astro-island[component-url*="MeApp"]').count(),0,'the account destination mounts no unused campus preferences island');
+    await account.page.locator('[data-me]').waitFor();
+    assert.equal(await account.page.locator('[data-me]').count(), 1, 'the account page keeps the single shared header control');
     assert.equal(new URL(account.page.url()).pathname,'/account/','a real session is not rejected for missing localStorage hints');
     assert.deepEqual(counts,{session:1,devices:0,members:0},'profile does not fetch devices or the staff roster');
     await shot(account.page,`${name}-account-profile`);

@@ -681,10 +681,9 @@ try {
     [Owned]::ResizeForTest([Owned]::Of([uint32]$app.Id, 'StuDev')[0], 1280, 880)
     ConversationAcceptance
     Press $window { param($e) $e.Current.AutomationId -eq 'me' } 'the me board'
-    Press $window '成员' 'the public member directory remains inside the app'
-    Find $window (Is $A::NameProperty '登录后查看成员') $null 'member browsing asks a visitor to sign in' | Out-Null
-    Capture 'members-sign-in'
-    Press $window '返回' 'return from members to personal settings'
+    Find $window (Both $Pressable (Is $A::NameProperty '收集')) $null 'collections have a browser entry' | Out-Null
+    Find $window (Both $Pressable (Is $A::NameProperty '成员')) $null 'members have a browser entry' | Out-Null
+    Capture 'collaboration-browser-entries'
     Press $window '桌面小组件' 'the widgets sheet'
     $adds = @($window.FindAll($Tree::Descendants, (Both $Pressable (Is $A::NameProperty '添加'))))
     if ($adds.Count -lt 2) { throw 'the widgets sheet offers no list and calendar to add' }

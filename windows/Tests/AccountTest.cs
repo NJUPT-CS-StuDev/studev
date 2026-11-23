@@ -166,18 +166,5 @@ internal static class AccountTest
             Same("TOTP codes need no second network response", calls, 1);
         }
         Same("avatar fallback preserves complete emoji", (User with { Nickname = "😀同学" }).Letter, "😀");
-        {
-            var calls = new List<string>();
-            var member = new PublicMember("public-a", "灿", "一起学习", "https://studev.example/api/platform/members/public-a/avatar");
-            var account = new Account(Stored(), _ => { }, (path, body, bearer) =>
-            {
-                calls.Add(path);
-                return Ok(path.StartsWith("/members?") ? new() { ["items"] = new JsonArray(JsonSerializer.SerializeToNode(member, StorageJson.Default.PublicMember)), ["total"] = 1, ["offset"] = 0, ["limit"] = 50 } : new() { ["member"] = JsonSerializer.SerializeToNode(member, StorageJson.Default.PublicMember) });
-            }, () => Now);
-            var page = await account.Members("灿");
-            Same("public members list keeps safe projection", page.Items[0], member);
-            Same("public member detail unwraps its response", await account.Member("public-a"), member);
-            Same("member lookup never uses private user management", calls.All(path => path.StartsWith("/members")), true);
-        }
     }
 }

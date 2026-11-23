@@ -1,237 +1,294 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCollectionsService } from '../server/collections.mjs';
+import { randomUUID } from 'node:crypto';
+import { createCollectionsService } from '../server/collections/index.mjs';
+import { collectionKeys, locateSubmission } from '../server/collections/records.mjs';
 import { createIdentity } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
 import { hashPassword } from '../server/crypto.mjs';
 import { AppError, fail } from '../server/common.mjs';
-import { loadOrganizations, saveOrganization } from '../server/organizations.mjs';
+import { loadOrganizations } from '../server/organizations.mjs';
+import { memoryBlob, memoryGateway, testEnvironment } from './fixtures.mjs';
 
 const ORIGIN = 'https://studev.test';
+const ROOT = '/api/platform/collections';
+const orgA = 'student-development/operations';
+const orgB = 'student-development/media';
+const note = { id: 'note', type: 'text', label: '说明', required: true };
+const attachment = { id: 'upload', type: 'file', label: '附件', required: true, extensions: ['txt'] };
 
-function memoryStore() {
-  const data = new Map();
-  return {
-    data,
-    async get(key) { return data.has(key) ? structuredClone(data.get(key)) : null; },
-    async setJSON(key, value) { data.set(key, structuredClone(value)); },
-    async list({ prefix }) { return { blobs: [...data.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })) }; },
-    async delete(key) { data.delete(key); },
-  };
-}
-
-function collectionsFixture() {
+async function collectionsFixture() {
   let clock = Date.UTC(2026, 10, 22, 12);
-  const store = memoryStore();
-  const objects = new Map();
-  const users = {
-    owner: {
-      id: 'owner-1', role: 'owner', status: 'active', studentId: 'B24040201', realName: '班长甲', nickname: '班长甲',
-      memberships: [
-        { organizationId: 'student-development', title: '执行主席', overseesOrganizationId: 'student-development/operations', order: 1 },
-        { organizationId: 'class:B240402', title: '班长', overseesOrganizationId: '', order: 999 },
-      ],
-    },
-    admin: {
-      id: 'admin-1', role: 'admin', status: 'active', studentId: 'B24040101', realName: '一班学委', nickname: '一班学委',
-      memberships: [{ organizationId: 'class:B240401', title: '学习委员', overseesOrganizationId: '', order: 999 }],
-    },
-    student: {
-      id: 'stu-2', role: 'user', status: 'active', studentId: 'B24040202', realName: '同学乙', nickname: '同学乙',
-      memberships: [{ organizationId: 'class:B240402', title: '', overseesOrganizationId: '', order: 999 }],
-    },
-    pending: {
-      id: 'stu-3', role: 'user', status: 'pending', studentId: 'B24040203', realName: '待注册丙', nickname: '',
-      memberships: [{ organizationId: 'class:B240402', title: '', overseesOrganizationId: '', order: 999 }],
-    },
-  };
-  const repo = createRepository(store, { secret: 'synthetic-tests-only-secret-'.repeat(3), now: () => clock });
+  const store = memoryBlob(), gateway = memoryGateway();
+  const { env } = await testEnvironment();
+  const owner = { id: 'owner-test', studentId: 'OWNER01', realName: '所有者姓名', nickname: '所有者昵称', identityVerified: true, role: 'owner', memberships: [] };
+  const admin = { id: 'admin-test', studentId: 'ADMIN01', realName: '甲部门管理员', role: 'admin', memberships: [{ organizationId: orgA, title: '部长' }] };
+  const outsider = { id: 'other-admin', studentId: 'ADMIN02', realName: '乙部门管理员', role: 'admin', memberships: [{ organizationId: orgB, title: '部长' }] };
+  const alice = { id: 'alice-test', studentId: 'TEST1001', realName: '甲学生', role: 'user', memberships: [{ organizationId: orgA }] };
+  const bob = { id: 'bob-test', studentId: 'TEST1002', realName: '乙学生', role: 'user', memberships: [{ organizationId: orgB }] };
+  const users = { owner, admin, outsider, alice, bob };
+  const repo = createRepository(store, { secret: env.PLATFORM_SESSION_SECRET, now: () => clock });
   const identity = {
-    async authenticate(request, { required = false, staff = false, owner = false, csrf = false } = {}) {
-      const u = users[request.headers.get('x-user') || ''];
-      if (!u && (required || staff || owner || csrf)) fail(401, 'AUTH_REQUIRED', '登录');
-      if (!u) return null;
-      if (owner && u.role !== 'owner') fail(403, 'OWNER_REQUIRED', '无权');
-      if (staff && !['owner', 'admin'].includes(u.role)) fail(403, 'STAFF_REQUIRED', '无权');
-      if (csrf && request.headers.get('x-csrf-token') !== 'csrf-ok') fail(403, 'CSRF_REJECTED', 'CSRF');
-      return { user: u };
+    async authenticate(request, { required = false, csrf = false } = {}) {
+      const user = users[request.headers.get('x-user')];
+      if (!user && (required || csrf)) fail(401, 'AUTH_REQUIRED', '登录');
+      if (!user) return null;
+      if (csrf && request.headers.get('x-csrf-token') !== 'valid') fail(403, 'CSRF_REJECTED', 'CSRF');
+      return { user };
     },
     async loadAllUsers() { return Object.values(users); },
-    async loadOrganizations() { return loadOrganizations(repo); },
+    loadOrganizations: () => loadOrganizations(repo),
   };
-  const getGateway = () => ({
-    async presignUpload({ objectKey, fileName }) {
-      return { url: `https://osca.test/put/${encodeURIComponent(objectKey)}`, headers: { 'x-name': fileName } };
-    },
-    async head(objectKey) { return objects.get(objectKey) || null; },
-    async presignDownload({ finalObjectKey }) {
-      return { url: `https://osca.test/get/${encodeURIComponent(finalObjectKey)}` };
-    },
-  });
-  const env = { OSCA_ENDPOINT: 'https://osca.test/', OSCA_BUCKET: 'studev-test', OSCA_ACCESS_KEY_ID: 'k', OSCA_SECRET_ACCESS_KEY: 's' };
-  const svc = createCollectionsService({ repo, identity, env, now: () => clock, getGateway });
+  const svc = createCollectionsService({ repo, identity, env, now: () => clock, getGateway: () => gateway });
 
-  async function call(path, { method = 'GET', user = '', body, csrf = false } = {}) {
+  async function call(path = '', { user, body, csrf = true, method = body === undefined ? 'GET' : 'POST' } = {}) {
     const headers = new Headers({ origin: ORIGIN });
     if (user) headers.set('x-user', user);
-    if (csrf) headers.set('x-csrf-token', 'csrf-ok');
+    if (csrf) headers.set('x-csrf-token', 'valid');
     if (body !== undefined) headers.set('content-type', 'application/json');
-    const request = new Request(`${ORIGIN}${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    const request = new Request(ORIGIN + ROOT + path, { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
     try {
-      const res = await svc.handle({ request, env }, new URL(request.url).pathname);
-      const ct = res.headers.get('content-type') || '';
-      return { status: res.status, data: ct.includes('json') ? await res.json() : await res.text() };
-    } catch (e) {
-      if (e instanceof AppError) return { status: e.status, data: { error: { code: e.code, message: e.message } } };
-      throw e;
+      const result = await svc.handle({ request, env }, new URL(request.url).pathname);
+      if (!result) return { status: 404 };
+      const data = result.headers.get('content-type').includes('json') ? await result.json() : Buffer.from(await result.arrayBuffer()).toString('utf8');
+      return { status: result.status, data };
+    } catch (error) {
+      if (error instanceof AppError) return { status: error.status, data: { error: error.code } };
+      throw error;
     }
   }
-  return { call, repo, objects, advance: (ms) => { clock += ms; } };
+  async function create({ user = 'owner', round = {}, ...input } = {}) {
+    const result = await call('/items', { user, body: {
+      name: '采集', status: 'published', visibility: 'members', targetMode: 'open',
+      issuerOrganizationId: orgA, issuerTitle: user === 'admin' ? '部长' : '',
+      rounds: [{ label: '首轮', fields: [note], ...round }], ...input,
+    } });
+    assert.equal(result.status, 201, JSON.stringify(result.data));
+    return result.data.item;
+  }
+  const itemPath = (item) => '/items/' + item.id;
+  const roundPath = (item) => itemPath(item) + '/rounds/' + item.rounds[0].id;
+  const submit = (item, user, body = { answers: { note: '完成' }, files: [] }) => call(roundPath(item) + '/submissions', { user, body });
+  const complete = ({ receiptId, receiptToken }) => call('/submissions/' + receiptId + '/complete', { body: { receiptToken } });
+  return { users, repo, store, gateway, call, create, itemPath, roundPath, submit, complete, advance: (ms) => { clock += ms; } };
 }
 
-test('unified org-tree × collection model: issuer identity, people recipients, tree filtering, uploads, owner recording, and exports', async () => {
-  const f = collectionsFixture();
-
-  // Build 3-level academic tree: 计算机学院 › 计算机科学与技术 › B240401 / B240402
-  await saveOrganization(f.repo, { id: 'college:cs', name: '计算机学院', parentId: null, kind: 'academic', publicRoster: false });
-  await saveOrganization(f.repo, { id: 'major:cs-cst', name: '计算机科学与技术', parentId: 'college:cs', kind: 'academic', publicRoster: false });
-  await saveOrganization(f.repo, { id: 'class:B240401', name: 'B240401 班', parentId: 'major:cs-cst', kind: 'academic', publicRoster: false, titles: ['班长', '学习委员'] });
-  await saveOrganization(f.repo, { id: 'class:B240402', name: 'B240402 班', parentId: 'major:cs-cst', kind: 'academic', publicRoster: false, titles: ['班长', '学习委员'] });
-
-  // 1. Staff fetches people directory for the org-tree picker
-  const dirRes = await f.call('/api/platform/collections/people', { user: 'owner' });
-  assert.equal(dirRes.status, 200);
-  assert.equal(dirRes.data.people.length, 4);
-  assert.ok(dirRes.data.organizations.some((o) => o.id === 'class:B240402' && o.depth === 2));
-
-  // 2. Non-owner admin cannot publish under an unrelated org (student-development), CAN publish under own org or ancestor
-  const forbidden = await f.call('/api/platform/collections/items', {
-    method: 'POST', user: 'admin', csrf: true,
-    body: {
-      issuerOrganizationId: 'student-development', issuerTitle: '主席',
-      term: '2026-2027-1', termLabel: '2026–2027 学年第一学期',
-      name: '越权测试', category: '材料',
-      targetMode: 'open', roundLabel: '第1次', files: [{ name: '文件', extensions: ['pdf'] }],
-    },
+test('the collection catalog and direct reads project only the effective view and organization scope', async () => {
+  const f = await collectionsFixture();
+  const publicItem = await f.create({ visibility: 'public' });
+  const privateItem = await f.create({
+    user: 'admin', targetMode: 'selected', recipients: [{ studentId: 'TEST1001', name: '甲学生' }],
+    tags: ['课程实验'], course: { id: 'information/course-plan/JS160201S', code: 'JS160201S', name: '计算机网络' },
   });
-  assert.equal(forbidden.status, 403);
+  const draft = await f.create({ status: 'draft' });
+  const archived = await f.create({ status: 'archived' });
+  assert.deepEqual((await f.call()).data.items.map(({ id }) => id), [publicItem.id]);
+  assert.deepEqual((await f.call('', { user: 'bob' })).data.items.map(({ id }) => id), [publicItem.id]);
+  const mine = (await f.call(f.itemPath(privateItem), { user: 'alice' })).data.item;
+  assert.equal(mine.inRecipients, true);
+  assert.equal(mine.recipients, undefined);
+  assert.equal(mine.course.code, 'JS160201S');
+  assert.deepEqual(mine.tags, ['课程实验']);
+  assert.equal((await f.call(f.itemPath(privateItem), { user: 'outsider' })).status, 404);
+  for (const item of [draft, archived]) assert.equal((await f.call(f.itemPath(item), { user: 'alice' })).status, 404);
+  const staff = (await f.call(f.itemPath(privateItem), { user: 'admin' })).data.item;
+  assert.deepEqual(staff.recipients, [{ studentId: 'TEST1001', name: '甲学生' }]);
+  const preview = await f.call('?view=guest', { user: 'owner' });
+  assert.equal(preview.data.viewer.canPublish, false);
+  assert.deepEqual(preview.data.views, ['owner', 'admin', 'user', 'guest']);
+  assert.deepEqual(preview.data.items.map(({ id }) => id), [publicItem.id]);
+  assert.ok(!JSON.stringify(preview.data.items).includes('所有者名称'));
+  assert.equal((await f.call('?view=admin', { user: 'alice' })).status, 403);
+  assert.equal((await f.call(f.itemPath(publicItem) + '?view=user', { user: 'owner', body: { revision: 1, status: 'closed' } })).status, 403);
+  assert.equal((await f.call('/people?view=user', { user: 'owner' })).status, 403);
+  const directory = (await f.call('/people', { user: 'admin' })).data.people;
+  assert.deepEqual(directory.map(({ studentId }) => studentId).sort(), ['ADMIN01', 'TEST1001']);
+  assert.equal((await f.call('/items', { user: 'admin', body: {
+    name: '越权', issuerOrganizationId: orgB, rounds: [{ label: '填表', fields: [note] }],
+  } })).status, 403);
+});
 
-  // 3. Class monitor publishes under B240402 · 班长 with explicit people recipients (decoupled from org/title)
-  const itemRes = await f.call('/api/platform/collections/items', {
-    method: 'POST', user: 'owner', csrf: true,
-    body: {
-      issuerOrganizationId: 'class:B240402', issuerTitle: '班长',
-      term: '2026-2027-1', termLabel: '2026–2027 学年第一学期',
-      code: 'JS160201S', name: '计算机通信与网络', category: '课程实验',
-      targetMode: 'selected',
-      recipients: [
-        { studentId: 'B24040201', name: '班长甲' },
-        { studentId: 'B24040202', name: '同学乙' },
-        { studentId: 'B24040203', name: '待注册丙' },
-      ],
-      roundLabel: '实验2',
-      deadline: '2026-11-25T15:59:00.000Z', policy: 'strict',
-      files: [{ name: '实验报告', extensions: ['doc', 'docx', 'pdf'] }],
-    },
-  });
-  assert.equal(itemRes.status, 201);
-  assert.equal(itemRes.data.item.issuer.organizationName, '计算机学院 › 计算机科学与技术 › B240402 班');
-  assert.equal(itemRes.data.item.issuer.title, '班长');
-  const itemId = itemRes.data.item.id;
-  const roundId = itemRes.data.item.rounds[0].id;
-  const fileId = itemRes.data.item.rounds[0].files[0].id;
+test('one text commit supplies immutable historical answers, scoped review, archival and safe CSV', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ user: 'admin', round: { requireReview: true, allowEdit: true } });
+  const inserted = await f.submit(item, 'alice', { answers: { note: '  =FORMULA(1) ' }, files: [],
+    studentId: 'FAKE01', studentName: '伪造姓名' });
+  assert.equal(inserted.status, 201);
+  assert.equal(inserted.data.receiptId, undefined);
+  assert.equal(inserted.data.submission.studentId, 'TEST1001');
+  assert.deepEqual(inserted.data.submission.answers, { note: '=FORMULA(1)' });
+  assert.equal(inserted.data.submission.status, 'pending_review');
+  const { id, revision } = inserted.data.submission;
+  const recordPath = '/submissions/' + id;
+  assert.equal((await f.call(recordPath, { user: 'bob' })).status, 404);
+  assert.equal((await f.call(recordPath, { user: 'outsider' })).status, 404);
+  assert.equal((await f.call(recordPath, { user: 'alice' })).data.canEdit, true);
+  assert.equal((await f.call(recordPath + '/review', { user: 'alice', body: { revision, status: 'accepted' } })).status, 403);
+  const nextFields = [{ id: 'note', label: '补充说明', type: 'checkbox', options: ['以后使用'] }];
+  const changed = await f.call(f.roundPath(item), { user: 'admin', body: { revision: item.revision, fields: nextFields } });
+  assert.equal(changed.status, 200);
+  const csv = await f.call(f.roundPath(item) + '/csv', { user: 'owner' });
+  assert.equal(csv.status, 200);
+  assert.ok(csv.data.startsWith('\uFEFF'));
+  assert.ok(csv.data.includes('"补充说明"'));
+  assert.ok(csv.data.includes('"说明"'));
+  assert.ok(csv.data.includes("'=FORMULA(1)"));
+  const edited = await f.call(recordPath + '/edit', { user: 'alice', body: { revision, answers: { note: '更正' } } });
+  assert.equal(edited.status, 200);
+  const reviewed = await f.call(recordPath + '/review', { user: 'admin', body: { revision: edited.data.submission.revision, status: 'accepted', comment: '通过' } });
+  assert.equal(reviewed.status, 200);
+  assert.equal(reviewed.data.submission.review.comment, '通过');
+  const report = await f.call(f.roundPath(item) + '/submissions', { user: 'admin' });
+  assert.equal(report.data.board[0].statuses[item.rounds[0].id], 'accepted');
+  assert.equal(report.data.roundStats[0].submitted, 1);
+  assert.equal(report.data.items[0].createdAt, inserted.data.submission.createdAt);
+  assert.equal((await f.call(f.roundPath(item) + '/submissions?view=user', { user: 'admin' })).status, 403);
+  const archived = await f.call(f.itemPath(item), { user: 'admin', body: { revision: changed.data.item.revision, status: 'archived' } });
+  assert.equal(archived.status, 200);
+  assert.equal((await f.call(f.itemPath(item), { user: 'bob' })).status, 404);
+  assert.equal((await f.call(f.itemPath(item) + '?view=guest', { user: 'alice' })).status, 404);
+  assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'alice' })).status, 404);
+  assert.equal((await f.call('', { user: 'alice' })).data.items.some(({ id }) => id === item.id), false);
+  const historical = (await f.call(f.itemPath(item), { user: 'alice' })).data;
+  assert.equal(historical.item.status, 'archived');
+  assert.equal(historical.item.canManage, false);
+  assert.deepEqual(historical.mySubmissions.map((row) => row.id), [id]);
+  assert.equal((await f.call('/mine', { user: 'alice' })).data.items[0].status, 'accepted');
+  assert.equal((await f.call(recordPath, { user: 'alice' })).data.canEdit, false);
+  const duplicate = await f.call(f.itemPath(item) + '/duplicate', { user: 'admin', body: {} });
+  assert.equal(duplicate.status, 201);
+  assert.equal(duplicate.data.item.status, 'draft');
+});
 
-  // 4. Owner also publishes a club collection under student-development/operations
-  const clubRes = await f.call('/api/platform/collections/items', {
-    method: 'POST', user: 'owner', csrf: true,
-    body: {
-      issuerOrganizationId: 'student-development/operations', issuerTitle: '分管主席',
-      term: '2026-2027-1', termLabel: '2026–2027 学年第一学期',
-      name: '换届总结材料', category: '活动材料',
-      targetMode: 'open', roundLabel: '第1次', files: [{ name: '总结', extensions: ['pdf', 'docx'] }],
-    },
-  });
-  assert.equal(clubRes.status, 201);
+test('signed uploads survive a deadline, finalize concurrently and leave only their immutable final attachment', async () => {
+  const f = await collectionsFixture();
+  const deadline = '2026-11-22T12:00:10Z';
+  const item = await f.create({ round: { deadline, fields: [note, attachment] } });
+  const result = await f.submit(item, 'alice', { answers: { note: '私密' }, files: [{ fieldId: 'upload', name: '材料.txt', size: 7, type: 'text/plain' }] });
+  assert.equal(result.status, 201);
+  assert.equal(result.data.submission.status, 'uploading');
+  assert.equal((await f.complete(result.data)).data.error, 'UPLOAD_MISMATCH');
+  const upload = f.gateway.uploads.at(-1);
+  f.gateway.upload(upload, 'fixture');
+  f.advance(11000);
+  assert.equal((await f.submit(item, 'bob')).data.error, 'COLLECTION_CLOSED');
+  const completions = await Promise.all([f.complete(result.data), f.complete(result.data)]);
+  for (const completed of completions) {
+    assert.equal(completed.status, 200);
+    assert.equal(completed.data.submission.status, 'submitted');
+    for (const key of ['studentId', 'studentName', 'files', 'answers']) assert.ok(!Object.hasOwn(completed.data.submission, key));
+  }
+  assert.deepEqual(completions[0].data, completions[1].data);
+  assert.equal(f.gateway.objects.has(upload.objectKey), false);
+  assert.equal(f.gateway.objects.size, 1);
+  assert.equal((await f.complete(result.data)).status, 200);
+  const { id, files: [file] } = result.data.submission;
+  const download = '/submissions/' + id + '/files/' + file.id + '/download';
+  assert.equal((await f.call(download, { body: {} })).status, 401);
+  assert.equal((await f.call(download, { user: 'bob', body: {} })).status, 404);
+  assert.equal((await f.call(download, { user: 'alice', body: {}, csrf: false })).status, 403);
+  const owns = await f.call(download, { user: 'alice', body: {} });
+  assert.equal(owns.status, 200);
+  assert.equal(owns.data.download.headers['If-Match'], [...f.gateway.objects.values()][0].etag);
+  assert.equal((await f.call(f.roundPath(item) + '/files', { user: 'owner' })).data.files[0].name, '材料.txt');
+});
 
-  // 5. Tree-inherited filtering on public GET /collections
-  const allList = await f.call('/api/platform/collections');
-  assert.equal(allList.data.items.length, 2);
-  const collegeList = await f.call('/api/platform/collections?orgId=college:cs');
-  assert.equal(collegeList.data.items.length, 1);
-  assert.equal(collegeList.data.items[0].id, itemId);
-  const majorList = await f.call('/api/platform/collections?orgId=major:cs-cst');
-  assert.equal(majorList.data.items.length, 1);
-  assert.equal(majorList.data.items[0].id, itemId);
-  const clubParentList = await f.call('/api/platform/collections?orgId=student-development');
-  assert.equal(clubParentList.data.items.length, 1);
-  assert.equal(clubParentList.data.items[0].id, clubRes.data.item.id);
-  const otherClassList = await f.call('/api/platform/collections?orgId=class:B240401');
-  assert.equal(otherClassList.data.items.length, 0);
+test('an attachment copy with changed bytes and an ambiguous commit retain distinct safety guarantees', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment] } });
+  const result = await f.submit(item, 'alice', { answers: { note: '安全' }, files: [{ fieldId: 'upload', name: '材料.txt', size: 7, type: 'text/plain' }] });
+  const upload = f.gateway.uploads.at(-1);
+  f.gateway.upload(upload, 'fixture');
+  const originalCopy = f.gateway.copy;
+  f.gateway.copy = async (...args) => { f.gateway.upload(upload, 'changed'); await originalCopy(...args); };
+  assert.equal((await f.complete(result.data)).data.error, 'UPLOAD_CHANGED');
+  assert.equal([...f.gateway.objects.keys()].filter((key) => key.includes('/final/')).length, 0);
+  f.gateway.copy = originalCopy;
+  const originalSet = f.store.setJSON;
+  f.store.setJSON = async (key, ...args) => {
+    await originalSet(key, ...args);
+    if (key.includes('/collection/submissions/') && key.endsWith('/00000001.json')) throw new Error('response not received');
+  };
+  await assert.rejects(f.complete(result.data), /response not received/);
+  assert.equal([...f.gateway.objects.keys()].filter((key) => key.includes('/final/')).length, 1);
+  f.store.setJSON = originalSet;
+  assert.equal((await f.complete(result.data)).status, 200);
+});
 
-  // 6. Public detail exposes zero PII
-  const pubDetail = await f.call(`/api/platform/collections/items/${itemId}`);
-  assert.equal(pubDetail.status, 200);
-  assert.equal(pubDetail.data.board, null);
-  assert.equal(pubDetail.data.roundStats[0].total, 3);
+test('multiple quotas reserve from one bounded set under concurrency and replacement holds one place', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { submissionMode: 'multiple', maxPerUser: 2, maxSubmissions: 3 } });
+  const sameUser = await Promise.all(Array.from({ length: 5 }, () => f.submit(item, 'alice')));
+  assert.equal(sameUser.filter((response) => response.status === 201).length, 2);
+  assert.equal(sameUser.filter((response) => response.data.error === 'USER_LIMIT_REACHED').length, 3);
+  const concurrent = await Promise.all([f.submit(item, 'bob'), f.submit(item, 'bob')]);
+  assert.equal(concurrent.filter((response) => response.status === 201).length, 1);
+  assert.equal(concurrent.filter((response) => response.data.error === 'COLLECTION_FULL').length, 1);
+  const count = await f.call(f.roundPath(item) + '/submissions', { user: 'owner' });
+  assert.equal(count.data.usage.authorizations, 3);
+  const lower = await f.call(f.roundPath(item), { user: 'owner', body: { revision: item.revision, maxSubmissions: 1 } });
+  assert.equal(lower.status, 200);
+  assert.equal((await f.submit(item, 'admin')).data.error, 'COLLECTION_FULL');
+  const replacement = await f.create({ round: { maxSubmissions: 1 } });
+  const before = await f.submit(replacement, 'alice');
+  const after = await f.submit(replacement, 'alice', { answers: { note: '替换' }, files: [] });
+  assert.equal(before.status, 201);
+  assert.equal(after.status, 201);
+  assert.equal(after.data.submission.id, before.data.submission.id);
+  assert.equal(after.data.submission.revision, 2);
+  assert.equal((await f.submit(replacement, 'bob')).data.error, 'COLLECTION_FULL');
+});
 
-  // 7. Student sees their own assignment, rejects bad extension, uploads & replaces
-  const stuList = await f.call('/api/platform/collections', { user: 'student' });
-  const stuCourse = stuList.data.items.find((i) => i.id === itemId);
-  assert.equal(stuCourse.inMine, true);
-  assert.equal(stuCourse.rounds[0].myStatus, 'missing');
+test('only verified identities inherit unclaimed historical submissions, while anonymous history stays staff-only', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ visibility: 'public' });
+  const time = new Date().toISOString();
+  const seed = async (studentId, userId = null) => {
+    const record = { id: randomUUID(), itemId: item.id, roundId: item.rounds[0].id, userId, studentId,
+      studentName: '历史记录', answers: { note: '历史内容' }, files: [], fields: [note], createdAt: time, submittedAt: time, status: 'submitted' };
+    await locateSubmission(f.repo, record);
+    await f.repo.append(collectionKeys.submission(item.id, record.roundId, record.id), record);
+    if (studentId && !userId) {
+      await f.repo.putNew(collectionKeys.student(studentId) + item.id + '/' + record.roundId + '/' + record.id + '.json', {});
+      await f.repo.putNew(collectionKeys.replacement(item.id, record.roundId, studentId), { id: record.id });
+    }
+    return record.id;
+  };
+  const historic = await seed('TEST1001');
+  const anonymous = await seed('');
+  assert.equal((await f.call('/mine', { user: 'alice' })).data.items.length, 0);
+  assert.equal((await f.call('/submissions/' + historic, { user: 'alice' })).status, 404);
+  f.users.alice.identityVerified = true;
+  assert.deepEqual((await f.call('/mine', { user: 'alice' })).data.items.map(({ id }) => id), [historic]);
+  assert.equal((await f.call('/submissions/' + historic, { user: 'alice' })).status, 200);
+  assert.equal((await f.call('/submissions/' + anonymous, { user: 'alice' })).status, 404);
+  assert.equal((await f.call('/submissions/' + anonymous, { user: 'owner' })).status, 200);
+  const replaced = await f.submit(item, 'alice');
+  assert.equal(replaced.status, 201);
+  assert.equal(replaced.data.submission.id, historic);
+  assert.equal((await f.call('/mine', { user: 'alice' })).data.items.length, 1);
+  f.users.alice.identityVerified = false;
+  assert.equal((await f.call('/submissions/' + historic, { user: 'alice' })).status, 200);
+});
 
-  const badExt = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/presign`, {
-    method: 'POST', user: 'student', csrf: true,
-    body: { fileId, fileName: 'screenshot.png', sizeBytes: 1024 },
-  });
-  assert.equal(badExt.status, 400);
-  assert.equal(badExt.data.error.code, 'INVALID_EXTENSION');
-
-  const pre1 = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/presign`, {
-    method: 'POST', user: 'student', csrf: true,
-    body: { fileId, fileName: 'lab2.docx', sizeBytes: 4096 },
-  });
-  assert.equal(pre1.status, 200);
-  assert.equal(pre1.data.storedName, 'B24040202_同学乙_实验2_实验报告.docx');
-  f.objects.set(pre1.data.objectKey, { etag: '"e1"', size: 4096 });
-  const conf1 = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/confirm`, {
-    method: 'POST', user: 'student', csrf: true,
-    body: { fileId, objectKey: pre1.data.objectKey, originalName: 'lab2.docx', storedName: pre1.data.storedName, sizeBytes: 4096 },
-  });
-  assert.equal(conf1.status, 200);
-  assert.equal(conf1.data.submission.revisions, 1);
-  assert.equal(conf1.data.submission.sizeBytes, 4096);
-
-  // 8. Owner records an authentic historical submission for pending student with exact timestamp
-  const preHist = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/presign`, {
-    method: 'POST', user: 'owner', csrf: true,
-    body: { fileId, fileName: 'old.pdf', sizeBytes: 2048, studentId: 'B24040203', studentName: '待注册丙' },
-  });
-  assert.equal(preHist.status, 200);
-  f.objects.set(preHist.data.objectKey, { etag: '"e3"', size: 2048 });
-  const confHist = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/confirm`, {
-    method: 'POST', user: 'owner', csrf: true,
-    body: {
-      fileId, objectKey: preHist.data.objectKey, originalName: 'old.pdf', storedName: preHist.data.storedName,
-      sizeBytes: 2048, studentId: 'B24040203', studentName: '待注册丙', submittedAt: '2026-04-10T08:00:00.000Z', revisions: 2,
-    },
-  });
-  assert.equal(confHist.status, 200);
-  assert.equal(confHist.data.submission.submittedAt, '2026-04-10T08:00:00.000Z');
-  assert.equal(confHist.data.submission.revisions, 2);
-
-  // 9. Staff exports CSV & ZIP file list
-  const csvRes = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/csv`, { user: 'owner' });
-  assert.equal(csvRes.status, 200);
-  assert.match(csvRes.data, /B24040202_同学乙_实验2_实验报告\.docx/);
-  assert.match(csvRes.data, /B24040203_待注册丙_实验2_实验报告\.pdf/);
-  const filesRes = await f.call(`/api/platform/collections/items/${itemId}/rounds/${roundId}/files`, { user: 'owner' });
-  assert.equal(filesRes.status, 200);
-  assert.equal(filesRes.data.files.length, 2);
+test('field and answer primitives reject malformed schemas and inconsistent payloads', async () => {
+  const f = await collectionsFixture();
+  const schema = { name: '校验', issuerOrganizationId: orgA, rounds: [{ label: '一轮', fields: [note, note] }] };
+  assert.equal((await f.call('/items', { user: 'owner', body: schema })).status, 400);
+  assert.equal((await f.call('/items', { user: 'owner', body: { ...schema, rounds: [{ label: '一轮', fields: [{ ...note, id: undefined }] }] } })).status, 400);
+  const item = await f.create({ round: { fields: [
+    { id: 'day', type: 'date', label: '日期', required: true },
+    { id: 'qty', type: 'number', label: '数量', min: 0, max: 3 },
+    { id: 'choices', type: 'checkbox', label: '选项', options: ['甲', '乙'] },
+  ] } });
+  for (const answers of [
+    { day: '2026-02-30' }, { day: '2026-11-22', qty: 4 }, { day: '2026-11-22', injected: true },
+    { day: '2026-11-22', choices: ['甲', '甲'] },
+  ]) assert.equal((await f.submit(item, 'alice', { answers })).status, 400);
 });
 
 test('dynamic org tree, batch pre-import without QQ, and seamless pending student self-activation', async () => {
-  const store = memoryStore();
+  const store = memoryBlob();
   const clock = Date.UTC(2026, 10, 22, 12);
   const ownerPasswordHash = await hashPassword('OwnerSecretPass123!');
   const env = {

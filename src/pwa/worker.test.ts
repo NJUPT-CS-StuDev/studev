@@ -79,7 +79,7 @@ describe('offline worker', () => {
     });
     it('does not intercept or cache account, form or submission requests', async () => {
         const app = harness();
-        for (const path of ['/account/', '/forms/', '/fill/?id=private', '/api/forms', '/submissions/']) {
+        for (const path of ['/account/', '/forms/?id=private', '/api/platform/collections', '/members/']) {
             expect(await app.dispatch('fetch', new Request(`${origin}${path}`))).toBeUndefined();
         }
         expect(app.fetch).not.toHaveBeenCalled();

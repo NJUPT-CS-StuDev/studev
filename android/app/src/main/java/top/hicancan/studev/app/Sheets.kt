@@ -21,12 +21,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Surface
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import top.hicancan.studev.BuildConfig
 import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
@@ -294,7 +296,8 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
  * Lab sheets come from a college's laboratory centre, not the teaching office: each is the person's to take or leave
  * whole, and what they took off one lab or one sitting at a time comes back from here.
  */
-@Composable fun LabSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onClose: () -> Unit) {
+@Composable fun LabSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, onClose: () -> Unit) {
+    val browser = LocalUriHandler.current
     var extraClass by remember { mutableStateOf("") }
     val choices = settings.labs
     val catalog = top.hicancan.studev.timetable.CourseCatalog
@@ -314,7 +317,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
                 trailing = { Toggle(on) { next -> update { if (next) it.copy(off = it.off - name) else it.copy(off = (it.off + name).distinct()) } } })
         }
         if (sheets.isEmpty()) Plain("你的班级不在已收到的实验表里。", 13.sp, Ink.faint)
-        KeyRow(null, "有新版实验表，或你的班不在里面", "传上来，审核后所有人的课表都会更新", chevron = true, onClick = { onForm(top.hicancan.studev.account.FormRequest("data")) })
+        KeyRow(null, "有新版实验表，或你的班不在里面", "在浏览器提交，审核后更新课表", chevron = true, onClick = { browser.openUri(collectionLink(BuildConfig.FORM_DATA)) })
         val dropped = state.labs.filter { catalog.labCourseKey(it) in choices.drop }.distinctBy(catalog::labCourseKey)
         if (dropped.isNotEmpty()) Plain("去掉的实验", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
         dropped.forEach { lab -> val key = catalog.labCourseKey(lab)
@@ -325,7 +328,8 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     }
 }
 
-@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onForm: (top.hicancan.studev.account.FormRequest) -> Unit, onMembers: () -> Unit, onClose: () -> Unit) {
+@Composable fun MeSheet(state: AcademicState, settings: PersonalSettings, model: CampusModel, now: Moment, route: Route, onPickClass: () -> Unit, onAccount: () -> Unit, onClose: () -> Unit) {
+    val browser = LocalUriHandler.current
     var section by remember { mutableStateOf("home") }
     var layering by remember { mutableStateOf(false) }
     var labsOpen by remember { mutableStateOf(false) }
@@ -333,7 +337,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     var coursesOpen by remember { mutableStateOf(false) }
     var calendarOpen by remember { mutableStateOf(false) }
     if (calendarOpen) { top.hicancan.studev.timetable.CalendarSheet(state, settings, model) { calendarOpen = false }; return }
-    if (labsOpen) { LabSheet(state, settings, model, onForm = { onClose(); onForm(it) }) { labsOpen = false }; return }
+    if (labsOpen) { LabSheet(state, settings, model) { labsOpen = false }; return }
     if (coursesOpen && state.term != null) {
         top.hicancan.studev.timetable.ManagedCoursesSheet(state, settings, model, onAdd = { onClose(); route.search(scope = "academic", source = "courses", focus = true) }) { coursesOpen = false }
         return
@@ -354,7 +358,8 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             if (section == "home") {
                 KeyRow(null, account?.nickname ?: "未登录", if (account == null) "登录后同步任务和课表设置" else "管理账号 · 任务和课表设置自动同步", chevron = true, onClick = { onClose(); onAccount() })
                 Spacer(Modifier.height(12.dp))
-                KeyRow(null, "成员", if (account?.role == "admin" || account?.role == "owner") "查看成员，管理身份与角色" else "查看大家的头像、昵称和签名", chevron = true, onClick = { onClose(); onMembers() })
+                KeyRow(null, "收集", "在浏览器查看和填写收集", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/forms/") })
+                KeyRow(null, "成员", "在浏览器查看成员", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/members/") })
                 KeyRow(null, "课表设置", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "选择班级、调整课程与实验" }, chevron = true, onClick = { section = "timetable" })
                 KeyRow(null, "外观", "跟随系统、浅色或深色", chevron = true, onClick = { section = "appearance" })
                 KeyRow(null, "桌面小组件", "把课表和任务放到桌面", chevron = true, onClick = { section = "widgets" })
@@ -428,8 +433,10 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             })
             }
             if (section == "about") {
-            KeyRow(null, "意见反馈", "报告问题或提出建议", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("feedback", "where" to "App ${top.hicancan.studev.BuildConfig.VERSION_NAME} · 我")) })
-            KeyRow(null, "提供校园资料", "提交实验课表、讲座、校车或营业时间", chevron = true, onClick = { onClose(); onForm(top.hicancan.studev.account.FormRequest("data")) })
+            KeyRow(null, "意见反馈", "在浏览器报告问题或提出建议", chevron = true, onClick = {
+                browser.openUri(collectionLink(BuildConfig.FORM_FEEDBACK, listOf("where" to "App ${BuildConfig.VERSION_NAME} · 我")))
+            })
+            KeyRow(null, "提供校园资料", "在浏览器提交实验课表、讲座、校车或营业时间", chevron = true, onClick = { browser.openUri(collectionLink(BuildConfig.FORM_DATA)) })
             KeyRow(null, "学生发展中心", "南邮计软网安", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/club/"))) })
             KeyRow(null, "用户协议", "服务条款与免责声明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/terms/"))) })
             KeyRow(null, "隐私政策", "个人信息保护与权限说明", chevron = true, onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$PLATFORM_ORIGIN/privacy/"))) })

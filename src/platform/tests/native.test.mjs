@@ -96,7 +96,7 @@ test('browser and native password attempts share account rate limits', async () 
 
 test('every existing mutating endpoint still rejects cross-origin cookies, including spoofed bearer and native bootstrap', async () => {
   const f = await fixture(), id = '00000000-0000-0000-0000-000000000001';
-  const paths = ['/auth/register', '/auth/login', '/auth/logout', '/auth/profile', '/auth/password', '/auth/totp/setup', '/auth/totp/confirm', '/auth/totp/disable', '/admin/roster/sync', '/admin/users', `/admin/users/${id}`, `/admin/users/${id}/reset-password`, `/admin/users/${id}/reset-totp`, `/admin/users/${id}/delete`, '/admin/forms', `/admin/forms/${id}`, `/admin/forms/${id}/delete`, `/admin/forms/${id}/duplicate`, `/forms/${id}/submissions`, `/submissions/${id}/complete`, `/submissions/${id}/edit`, `/submissions/${id}/review`, `/submissions/${id}/files/${id}/download`, '/auth/login', '/auth/refresh', `/auth/devices/${id}/revoke`];
+  const paths = ['/auth/register', '/auth/login', '/auth/logout', '/auth/profile', '/auth/password', '/auth/totp/setup', '/auth/totp/confirm', '/auth/totp/disable', '/admin/roster/sync', '/admin/users', `/admin/users/${id}`, `/admin/users/${id}/reset-password`, `/admin/users/${id}/reset-totp`, `/admin/users/${id}/delete`, '/collections/items', `/collections/items/${id}`, `/collections/items/${id}/duplicate`, `/collections/items/${id}/rounds`, `/collections/items/${id}/rounds/main`, `/collections/items/${id}/rounds/main/submissions`, `/collections/submissions/${id}/complete`, `/collections/submissions/${id}/edit`, `/collections/submissions/${id}/review`, `/collections/submissions/${id}/files/${id}/download`, '/auth/login', '/auth/refresh', `/auth/devices/${id}/revoke`];
   for (const path of paths) {
     for (const headers of [{ Origin: 'https://evil.invalid' }, { Origin: '' }, { Origin: 'https://studev.test', 'Sec-Fetch-Site': 'cross-site' }]) {
       const result = await f.browser.call(path, { method: 'POST', body: {}, headers });
@@ -105,23 +105,15 @@ test('every existing mutating endpoint still rejects cross-origin cookies, inclu
     const spoof = await f.browser.call(path, { method: 'POST', body: {}, headers: { Origin: 'https://evil.invalid', Authorization: 'Bearer invalid' } });
     assert.equal(spoof.status, 401, path);
   }
-  for (const path of [`/admin/forms/${id}`, `/admin/users/${id}`]) {
-    assert.equal((await f.browser.call(path, { method: 'DELETE', body: {}, headers: { Origin: 'https://evil.invalid' } })).status, 403);
-  }
+  assert.equal((await f.browser.call(`/admin/users/${id}`, { method: 'DELETE', body: {}, headers: { Origin: 'https://evil.invalid' } })).status, 403);
 });
 
-test('bearer form authorization, submission and downloads use the unchanged form service', async () => {
-  const f = await fixture(), key = `identity/users/${f.user.id}`, user = await f.repo.latest(key);
-  await f.repo.append(key, { ...user, role: 'admin', securityVersion: 'promoted' }, user.revision);
-  const { body: auth } = await f.login();
-  const form = await f.call('/admin/forms', { title: 'App 填写', status: 'published', access: 'members', fields: [{ id: 'note', type: 'text', label: '说明', required: true }] }, auth.accessToken);
-  assert.equal(form.status, 201);
-  const submitted = await f.call(`/forms/${form.body.form.id}/submissions`, { answers: { note: '原生客户端提交' }, files: [] }, auth.accessToken);
-  assert.equal(submitted.status, 201);
-  const completed = await f.call(`/submissions/${submitted.body.submission.id}/complete`, { receiptToken: submitted.body.receiptToken }, auth.accessToken);
-  assert.equal(completed.status, 200);
-  assert.equal((await f.call('/me/submissions', undefined, auth.accessToken)).body.items.length, 1);
-  assert.equal((await f.call(`/admin/forms/${form.body.form.id}/delete`, {}, auth.accessToken)).status, 403);
+test('native accounts share identity with browser collections without elevating their role', async () => {
+  const f = await fixture(), { body: auth } = await f.login();
+  assert.equal((await f.call('/collections', undefined, auth.accessToken)).body.viewer.id, f.user.id);
+  assert.equal((await f.call('/collections/mine', undefined, auth.accessToken)).status, 200);
+  assert.equal((await f.call('/collections?view=owner', undefined, auth.accessToken)).status, 403);
+  assert.equal((await f.call('/collections/items', {}, auth.accessToken)).status, 403);
 });
 
 test('native recovery codes remain single-use, setup gates mint no credentials, and device re-login replaces its old family', async () => {

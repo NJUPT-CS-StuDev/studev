@@ -33,6 +33,19 @@ describe('account request renewal', () => {
         expect(localStorage.getItem('studev_session_refresh_pending')).toBeNull();
     });
 
+    it('allows only explicit public collection reads while renewal is incomplete', async () => {
+        localStorage.setItem('studev_session_refresh_pending', '1');
+        const fetch = vi.fn(async () => Response.json({ view: 'guest' }));
+        vi.stubGlobal('fetch', fetch);
+        for (const path of ['/collections?view=guest', '/collections/items/public-demo?view=guest']) {
+            await expect(api(path)).resolves.toEqual({ view: 'guest' });
+        }
+        await expect(api('/collections')).rejects.toMatchObject({ status: 401 });
+        await expect(api('/collections/people?view=guest')).rejects.toMatchObject({ status: 401 });
+        await expect(api('/collections/items/public-demo?view=guest', {})).rejects.toMatchObject({ status: 401 });
+        expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
     it('does not loop when the renewed session is refused', async () => {
         const expired = () => Response.json({ error: { code: 'TOKEN_INVALID' } }, { status: 401 });
         const fetch = vi.fn().mockResolvedValueOnce(expired()).mockResolvedValueOnce(Response.json({ ok: true })).mockResolvedValueOnce(expired());
