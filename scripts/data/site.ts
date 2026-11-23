@@ -3,7 +3,7 @@
 import { cp, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { offlineRelease } from '../../src/pwa/release.ts';
-import type { CampusRelease } from '../../src/campus/world/release.ts';
+import { CAMPUS_POINTER_PATH, campusPointer, type CampusRelease } from '../../src/campus/world/release.ts';
 import product from '../../product.json' with { type: 'json' };
 
 export const componentPath = (base: string) => new URL(base, product.campusOrigin).pathname;
@@ -19,8 +19,10 @@ const config = { headers: [
         { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
         { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
     ] },
-    // Revalidated on every read; "no-cache" would also keep the edge from compressing it (500 KB instead of 60 KB).
-    { source: '/campus-release.json', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }] },
+    // Current locators revalidate; versioned resources stay immutable.
+    ...['/campus-release.json', CAMPUS_POINTER_PATH].map(source => ({
+        source, headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }],
+    })),
 ] };
 
 /** The current pointer and its resources become public in one atomic deployment.
@@ -37,7 +39,10 @@ export async function prepareSite(destination: string, release?: CampusRelease, 
     await copy(snapshot.base, true);
     for (const base of [snapshot.map_base, snapshot.knowledge_base, snapshot.search_base, snapshot.texts_base]) await copy(base);
     if (snapshot.search_stable_base) await copy(snapshot.search_stable_base);
-    await write(join(out, 'campus-release.json'), snapshot);
+    await Promise.all([
+        write(join(out, 'campus-release.json'), snapshot),
+        write(join(out, CAMPUS_POINTER_PATH), campusPointer(snapshot)),
+    ]);
     await write(join(out, 'edgeone.json'), config);
     await writeFile(join(out, 'index.html'), '<!doctype html><meta charset="utf-8"><title>StuDev data</title>');
     await write(join(out, '.edgeone/project.json'), { Name: product.dataProject.name, ProjectId: product.dataProject.id });

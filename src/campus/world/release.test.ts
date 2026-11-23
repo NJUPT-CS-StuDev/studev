@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
 import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
-import { releaseAt, resourceAt, validRelease } from './release';
+import { campusPointer, releaseAt, resourceAt, validRelease } from './release';
 
 it('resolves every public component of the actual snapshot against the discovered data entry', async () => {
     const snapshot = JSON.parse(await readFile('src/data/campus-release.json', 'utf8'));
@@ -16,6 +16,11 @@ it('resolves every public component of the actual snapshot against the discovere
     expect(validRelease({ ...snapshot, map_base: 'https://another.example' + snapshot.map_base })).toBe(false);
     expect(validRelease({ ...snapshot, texts_base: '/texts/../private' })).toBe(false);
     expect(validRelease({ ...snapshot, base: '/data/some-other-revision' })).toBe(false);
+    const pointer = JSON.parse(JSON.stringify(campusPointer(snapshot)));
+    expect(validRelease(pointer)).toBe(true);
+    const { core: _core, all: _all, bytes: _bytes, ...expected } = snapshot;
+    expect(pointer).toEqual(expected);
+    expect(Buffer.byteLength(JSON.stringify(pointer))).toBeLessThan(2048);
 });
 
 it('keeps a real knowledge filename containing a hash in the request path', () => {
