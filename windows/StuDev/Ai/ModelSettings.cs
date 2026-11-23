@@ -58,7 +58,7 @@ internal static class ModelSettings
         var title = provider?.Name ?? (runtime ? ModelProviders.RuntimeName : "添加 API 服务商");
         var name = Kit.Field(provider?.Name ?? "", "例如 DeepSeek、腾讯云", "服务商名称");
         var address = Kit.Field(provider?.Address ?? (runtime ? Models.Runtime.Base : ""), "https://api.deepseek.com", "接口地址");
-        var secretLabel = runtime ? "模型专用密钥" : "API Key";
+        var secretLabel = runtime ? "模型专用密钥" : "API 密钥";
         var secret = new PasswordBox { Password = provider?.Key ?? "", PlaceholderText = secretLabel, MinHeight = Paint.Number("size", "control"), FontSize = 14.5 };
         AutomationProperties.SetName(secret, secretLabel);
         var enabled = new CheckBox { Content = "启用服务商", IsChecked = provider?.Enabled ?? true };
@@ -106,7 +106,7 @@ internal static class ModelSettings
             var root = address.Text.Trim();
             var key = secret.Password.Trim();
             button.IsEnabled = false;
-            Report("正在拉取模型列表…");
+            Report("正在加载模型列表…");
             try
             {
                 var found = await Models.FetchModelsAsync(Http, root, key, runtime, cancelDiscovery.Token);
@@ -114,16 +114,16 @@ internal static class ModelSettings
                 var existing = models.Select(model => model.Id).ToHashSet(StringComparer.Ordinal);
                 models.AddRange(found.Where(existing.Add).Select(id => new ProviderModel(id, false)));
                 ShowModels();
-                Report($"已获取 {found.Count} 个模型。勾选后可在聊天中选择。");
+                Report($"找到 {found.Count} 个模型。勾选后可在对话中使用。");
             }
             catch (InvalidOperationException failure) { if (!cancelDiscovery.IsCancellationRequested) Report(failure.Message, true); }
-            catch (OperationCanceledException) { if (!cancelDiscovery.IsCancellationRequested) Report("模型列表请求超时。", true); }
+            catch (OperationCanceledException) { if (!cancelDiscovery.IsCancellationRequested) Report("加载模型列表超时，请重试。", true); }
             catch (Exception failure) when (failure is IOException or HttpRequestException or JsonException)
             { if (!cancelDiscovery.IsCancellationRequested) Report("未能读取模型列表，请检查接口地址，或手动添加模型。", true); }
             finally { button.IsEnabled = true; }
         }
         Tap? pull = null;
-        pull = Kit.Action("拉取模型列表", () => App.Watch(Discover(pull!)));
+        pull = Kit.Action("获取模型列表", () => App.Watch(Discover(pull!)));
         column.Children.Add(Label("启用的模型"));
         column.Children.Add(pull);
         column.Children.Add(new ScrollViewer { Content = list, MaxHeight = 180, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
@@ -153,7 +153,7 @@ internal static class ModelSettings
             var label = runtime ? ModelProviders.RuntimeName : name.Text.Trim();
             var root = address.Text.Trim();
             var key = secret.Password.Trim();
-            if (label.Length == 0) { Report("请为服务商填写名称。", true); return; }
+            if (label.Length == 0) { Report("请输入服务商名称。", true); return; }
             if (Models.AddressError(root, runtime) is { } wrong) { Report(wrong, true); return; }
             if (key.Length == 0) { Report($"请填写{secretLabel}。", true); return; }
             var id = provider?.Id ?? (runtime ? ModelProviders.RuntimeId : Guid.NewGuid().ToString("N"));
@@ -165,7 +165,7 @@ internal static class ModelSettings
             if (provider is null) return;
             var content = Kit.Column(12,
                 Pages.SheetHead(Pages.SheetTitle("移除服务商"), () => App.Window?.Close()),
-                Kit.Text($"移除「{provider.Name}」及本机密钥。现有聊天需要重新选择模型才能继续。", Role.Body, wrap: true),
+                Kit.Text($"移除「{provider.Name}」及本机密钥。继续已有对话前，请重新选择模型。", Role.Body, wrap: true),
                 Kit.Line(8, Kit.Action("取消", () => App.Window?.Close()),
                     Kit.Action("移除", () => { service.Remove(provider.Id); App.Window?.Close(); refresh(); }, colour: "danger")));
             content.Padding = new Thickness(22, 20, 22, 18);

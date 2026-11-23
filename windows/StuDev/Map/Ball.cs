@@ -47,8 +47,8 @@ public sealed partial class Ball : Grid
         turn.Data = Turning();
         canvas.Children.Add(turn); canvas.Children.Add(shade); canvas.Children.Add(body); canvas.Children.Add(gloss); canvas.Children.Add(ring); canvas.Children.Add(north);
         Children.Add(canvas);
-        AutomationProperties.SetName(this, "拖动旋转视角，点按回正");
-        ToolTipService.SetToolTip(this, "拖动小球旋转视角 · 点按回正\n也可以按住右键拖动地图");
+        AutomationProperties.SetName(this, "拖动旋转视角，点击恢复默认视角");
+        ToolTipService.SetToolTip(this, "拖动小球或按住鼠标右键拖动地图，可旋转视角。点击小球即可恢复默认视角。");
         PointerEntered += (_, _) => turn.Opacity = 1;
         PointerExited += (_, _) => { if (from is null) turn.Opacity = 0; };
         PointerPressed += Pressed; PointerMoved += Moved; PointerReleased += Released; PointerCanceled += (_, _) => from = null;

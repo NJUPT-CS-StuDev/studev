@@ -217,7 +217,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
     if (failed) {
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Plain("知识暂时无法加载", 14.sp, Ink.muted)
+                Plain("暂时打不开课程资料", 14.sp, Ink.muted)
                 TextAction("重试", { loadRevision++ }, refresh = true)
             }
         }
@@ -290,7 +290,7 @@ private fun materialParts(blocks: List<JsonObject>): List<MatPart> {
         Column(Modifier.weight(1f).align(Alignment.CenterHorizontally).widthIn(max = 748.dp).fillMaxWidth().then(anchors)
             .verticalScroll(scrollState).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when {
-                textErr -> Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("内容暂时无法加载", 14.sp, Ink.muted); TextAction("重试", { textRevision++ }, refresh = true) }
+                textErr -> Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("暂时打不开这份内容", 14.sp, Ink.muted); TextAction("重试", { textRevision++ }, refresh = true) }
                 text == null -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Plain(topic?.title ?: material?.title ?: course.name, 22.sp, weight = FontWeight.SemiBold); Plain("正在打开…", 14.sp, Ink.muted) }
                 topic != null -> TopicDetail(topic, text!!, index, course, courseTone, onDocLink, imageBytes, { path -> repo?.bytes("knowledge/$path")?.decodeToString() }) { t, m, a ->
                     route.knowledge(course = course.id, topic = t, material = m, anchor = a)
@@ -711,7 +711,7 @@ private fun referencePreviews(blocks: List<JsonObject>): Map<String, ReferencePr
             Plain("${refs.size} 处", 12.sp, Ink.muted)
         }
         if (refs.size > 3) Plain(if (expanded) "收起" else "展开全部 ${refs.size} 处", 13.sp, Ink.brand, modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 8.dp))
-        if (previewError) KeyRow(null, "题干预览暂时无法加载", trailing = { TextAction("重试", { attempt++ }, refresh = true) })
+        if (previewError) KeyRow(null, "暂时看不了题目预览", trailing = { TextAction("重试", { attempt++ }, refresh = true) })
         (if (expanded) refs else refs.take(3)).forEach { ref ->
             val preview = previews[ref.anchor]
             val title = preview?.let { listOf(it.context, it.title).filter(String::isNotBlank).joinToString(" · ") } ?: ref.heading

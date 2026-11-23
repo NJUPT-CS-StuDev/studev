@@ -15,7 +15,7 @@ public sealed partial class MeScreen
     {
         if (campus.Term is not { } term) { page.Children.Add(Pages.Empty("选择班级后即可管理课程。")); return; }
         var edits = Choices.Edits(campus.Preferences, term.Term);
-        page.Children.Add(Kit.Line(8, Kit.Button("从全校添加", () => App.Open("search", "course")), Kit.Button("自定义课程", () => CustomEditor())));
+        page.Children.Add(Kit.Line(8, Kit.Button("搜索全校课程", () => App.Open("search", "course")), Kit.Button("自定义课程", () => CustomEditor())));
         var query = Kit.Field(courseQuery, "搜索课程、代码或教师", "搜索我的课程");
         var search = Kit.SearchField(query); search.Margin = new Thickness(0, 14, 0, 8); page.Children.Add(search);
         page.Children.Add(Kit.Row("", Switched("显示已隐藏的课程", null, showHidden, on => { showHidden = on; Draw(); })));
@@ -29,11 +29,11 @@ public sealed partial class MeScreen
             {
                 var first = course.Meetings[0];
                 var name = course.Source == "custom" ? first.Course.Name : edits.Names?.GetValueOrDefault(CourseTones.Identity(first.Course.Code, first.Course.Name)) ?? Names.Course(first.Course.Name);
-                var source = course.Source switch { "class" => "班级课程", "custom" => "自定义课程", _ => "全校选课" };
+                var source = course.Source switch { "class" => "班级课程", "custom" => "自定义课程", _ => "从全校课程添加" };
                 var said = $"{(course.Hidden ? "已隐藏 · " : "")}{source} · {string.Join('、', course.Meetings.Select(m => Clock.Weekdays[m.Weekday]).Distinct())}";
                 list.Children.Add(Kit.Row("", Value(name, said), () => CourseDetails(course)));
             }
-            if (groups.Count == 0) list.Children.Add(Pages.Empty(courseQuery.Length == 0 ? "暂无课程，可从全校添加或自定义课程。" : "没有找到这门课程。"));
+            if (groups.Count == 0) list.Children.Add(Pages.Empty(courseQuery.Length == 0 ? "还没有课程。可搜索全校课程，也可添加自定义课程。" : "没有找到这门课程。"));
         }
         query.TextChanged += (_, _) => { courseQuery = query.Text.Trim(); Results(); };
         Results();
@@ -94,11 +94,11 @@ public sealed partial class MeScreen
                 var on = Choices.Labs([lab], choices).Count > 0;
                 Row("", $"{Clock.DateLabel(Clock.Parse(lab.Date))} {lab.Start}–{lab.End}", $"{lab.Project} · {(lab.Room is { } room ? Names.Room(room) : lab.Location)}{(!on ? " · 已隐藏" : "")}");
             }
-            Row("", "管理相关实验", "理论课的选择不影响实验", () => { App.Window?.Close(); Go("labs"); });
+            Row("", "管理相关实验", "实验显示设置独立于理论课", () => { App.Window?.Close(); Go("labs"); });
         }
         body.Children.Add(new Border { Height = 16 });
         if (custom is not null) Row("", "删除自定义课程", null, () => { Choices.Hide(campus.Preferences, term.Term, course.Id); App.Window?.Close(); Draw(); });
-        else Row("", course.Hidden ? "恢复到课表" : course.Source == "added" ? "移除添加的课程" : "隐藏这门课", "只调整个人课表，实验另行选择", () => { if (course.Hidden) Choices.Restore(campus.Preferences, term.Term, course.Id); else Choices.Hide(campus.Preferences, term.Term, course.Id); App.Window?.Close(); Draw(); });
+        else Row("", course.Hidden ? "恢复到课表" : course.Source == "added" ? "移除添加的课程" : "隐藏这门课", "只调整你的课表，相关实验保持原设置", () => { if (course.Hidden) Choices.Restore(campus.Preferences, term.Term, course.Id); else Choices.Hide(campus.Preferences, term.Term, course.Id); App.Window?.Close(); Draw(); });
         App.Window?.Sheet(body, 560);
     }
     private void CustomEditor(CustomCourse? course = null)
@@ -107,7 +107,7 @@ public sealed partial class MeScreen
         var body = new StackPanel { Padding = new Thickness(20, 18, 20, 22), Spacing = 8 };
         body.Children.Add(Pages.SheetHead(Pages.SheetTitle(course is null ? "添加自定义课程" : "编辑课程"), () => App.Window?.Close()));
         var name = Kit.Field(course?.Name ?? "", "课程名称", "课程名称"); body.Children.Add(name);
-        body.Children.Add(Pages.Section("上课日"));
+        body.Children.Add(Pages.Section("每周几上课"));
         var days = new WrapRow(); var checks = new Dictionary<int, CheckBox>();
         for (var day = 1; day <= 7; day++) { var check = new CheckBox { Content = Clock.Weekdays[day], IsChecked = course?.Days.Contains(day) ?? day == 1 }; checks[day] = check; days.Children.Add(check); }
         body.Children.Add(days);
@@ -124,7 +124,7 @@ public sealed partial class MeScreen
         {
             var picked = checks.Where(c => c.Value.IsChecked == true).Select(c => c.Key).ToList();
             var parsed = Courses.Weeks(weeks.Text, term.Weeks.Count);
-            if (name.Text.Trim().Length == 0 || picked.Count == 0 || parsed is null || from > to) { error.Text = "请填写课程名称，选择上课日，并检查教学周与节次。"; return; }
+            if (name.Text.Trim().Length == 0 || picked.Count == 0 || parsed is null || from > to) { error.Text = "请填写课程名称，选择星期，并检查周次和节次。"; return; }
             string? Optional(string text, int limit = 60) => text.Trim().Length == 0 ? null : text.Trim()[..Math.Min(limit, text.Trim().Length)];
             Choices.SaveCustom(campus.Preferences, term.Term, new(course?.Id ?? Guid.NewGuid().ToString(), name.Text.Trim()[..Math.Min(60, name.Text.Trim().Length)], picked, [from, to], parsed, Optional(room.Text), Optional(teacher.Text, 40)));
             App.Window?.Close(); Draw();
@@ -140,12 +140,12 @@ public sealed partial class MeScreen
     }
     private void LabsPage(StackPanel page)
     {
-        page.Children.Add(Kit.Text("实验与理论课分别选择；隐藏理论课不会取消实验安排。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("可以单独选择要显示的实验。隐藏理论课不会影响实验安排。", Role.Label, "muted", wrap: true));
         var choices = campus.Preferences.Get("labs", StorageJson.Default.LabChoices) ?? new();
         foreach (var name in choices.Classes ?? []) page.Children.Add(Kit.Row("", Value($"其他班级 · {name}"), () => SetLabs(c => c with { Classes = (c.Classes ?? []).Where(k => k != name).ToList() })));
         var extra = Kit.Field("", "添加其他班实验，如 B240402", "实验班级");
         var addError = Kit.Text("", Role.Caption, "danger", wrap: true);
-        page.Children.Add(Kit.Line(8, extra, Kit.Button("添加", () => { var name = extra.Text.Trim().ToUpperInvariant(); if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Z]\d{6}(\([A-Z]{2}\))?$")) { addError.Text = "请填写完整班级号。"; return; } SetLabs(c => c with { Classes = [.. (c.Classes ?? []).Append(name).Distinct()] }); })));
+        page.Children.Add(Kit.Line(8, extra, Kit.Button("添加", () => { var name = extra.Text.Trim().ToUpperInvariant(); if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Z]\d{6}(\([A-Z]{2}\))?$")) { addError.Text = "请输入完整班号。"; return; } SetLabs(c => c with { Classes = [.. (c.Classes ?? []).Append(name).Distinct()] }); })));
         page.Children.Add(addError);
         if (campus.Error is not null) page.Children.Add(Kit.Row("", Value("实验安排暂时无法加载"), campus.Retry));
         var facts = LabFacts();

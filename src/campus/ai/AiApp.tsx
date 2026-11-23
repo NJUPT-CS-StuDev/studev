@@ -1016,7 +1016,7 @@ export default function AiApp() {
             if (!runtime) history = recent(history);
             const denied = new Set<string>();
             const missing = preferred.find(name => !byName.has(name));
-            if (missing) throw new Error('问题里点名的工具暂不可用，请换一个或去掉它。');
+            if (missing) throw new Error('你在问题里选的工具暂时用不了。可以换一个，或去掉工具再试。');
             if (retried?.request.tools?.some(tool => !byName.has(tool.function.name))) throw new Error('工具授权已变化，请生成新的回答。');
             for (let round = 0; round < ROUNDS; round++) {
                 const last = round === ROUNDS - 1;

@@ -135,7 +135,7 @@ public sealed partial class TimetableScreen : Screen
         catch (Exception error) when (error is System.Net.Http.HttpRequestException or IOException or TaskCanceledException or System.Text.Json.JsonException)
         {
             if (who != next) return;
-            othersError = "连不上 StuDev，暂时看不到这份课表。";
+            othersError = "这份课表暂时无法加载，请检查网络后重试。";
         }
         Draw();
     }
@@ -198,7 +198,7 @@ public sealed partial class TimetableScreen : Screen
         if (who is { } other)
         {
             if (othersError is { } message) { Children.Add(Pages.Frame(Pages.Empty(message, Kit.TextAction("重试", () => { othersError = null; Gather(other); Draw(); }, Icons.Again)))); return; }
-            if (others is null) { Children.Add(Pages.Frame(Pages.Header(other.Title, "正在读取这份课表…", Kit.Button("我的课表", Mine)))); return; }
+            if (others is null) { Children.Add(Pages.Frame(Pages.Header(other.Title, "正在加载课表…", Kit.Button("我的课表", Mine)))); return; }
             if (scale == "list") scale = "week";
         }
         if ((who is null ? campus.Line : others) is not { } line || campus.Term is not { } term) return;
@@ -225,9 +225,9 @@ public sealed partial class TimetableScreen : Screen
         var examsAhead = line.Exams.Count(exam => string.CompareOrdinal(exam.Date, Clock.Text(now.Date)) >= 0);
         var subtitle = scale switch
         {
-            "list" => pending > 0 ? $"{pending} 件要做" : "没有要做的事",
-            "exam" => examsAhead > 0 ? $"{examsAhead} 场待考" : "暂无待考",
-            "term" => $"本学期 · {(nowWeek is { } n ? $"第 {n} / {term.Weeks.Count} 周" : $"{term.Weeks.Count} 周")}{(last is { } l ? $" · 课上到 {Clock.DateLabel(l)}" : "")}",
+            "list" => pending > 0 ? $"{pending} 项待办" : "暂无待办任务",
+            "exam" => examsAhead > 0 ? $"{examsAhead} 场待考" : "暂无待考安排",
+            "term" => $"本学期 · {(nowWeek is { } n ? $"第 {n} / {term.Weeks.Count} 周" : $"{term.Weeks.Count} 周")}{(last is { } l ? $" · 上课至 {Clock.DateLabel(l)}" : "")}",
             "week" => $"{(ahead == 1 ? "下周 · " : ahead > 1 ? $"{ahead} 周后 · " : "")}{Clock.DateLabel(monday)} – {Clock.DateLabel(monday.AddDays(6))}",
             _ => week is { } dw ? $"第 {dw} 周" : "假期",
         };
@@ -284,7 +284,7 @@ public sealed partial class TimetableScreen : Screen
             }
         }
         if (preview is { } previewId) {
-            var words = previewRows is { Count: > 0 } ? $"预览 · {Names.Course(previewRows[0].Course.Name)}" : previewError ?? "正在读取预览…";
+            var words = previewRows is { Count: > 0 } ? $"预览 · {Names.Course(previewRows[0].Course.Name)}" : previewError ?? "正在加载课表预览…";
             var previewBar = Kit.Column(8, Kit.Text(words, Role.Body, bold: true));
             var buttons = Kit.Line(12, Kit.TextAction("取消预览", () => { preview = null; previewRows = null; Draw(); }));
             if (previewRows is { Count: > 0 }) {

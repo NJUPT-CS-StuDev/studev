@@ -111,7 +111,7 @@ import java.util.UUID
             }
             item {
                 ServiceField(service.key, { service = service.copy(key = it); result = "" }, "API Key", enabled = !loading, password = true)
-                Plain("密钥保存在这台设备上。聊天请求直接发给此服务商。", 12.sp, Ink.muted, modifier = Modifier.padding(top = 4.dp))
+                Plain("密钥只存在这台设备。对话内容会直接发给这个服务商。", 12.sp, Ink.muted, modifier = Modifier.padding(top = 4.dp))
             }
             item { KeyRow(null, "启用服务商", trailing = { Toggle(service.enabled) { service = service.copy(enabled = it) } }) }
             item {
@@ -146,7 +146,7 @@ import java.util.UUID
         }
     }
     if (removing) AlertDialog(onDismissRequest = { removing = false }, containerColor = Ink.paper,
-        title = { Text("删除服务商？") }, text = { Text("已选用 ${service.name} 的对话会保留，继续发送前可以重新选择模型。") },
+        title = { Text("删除服务商？") }, text = { Text("已选用 ${service.name} 的对话会保留，下次发消息前，请另选一个模型。") },
         confirmButton = { TextButton(onRemove) { Text("删除", color = marks().danger) } },
         dismissButton = { TextButton({ removing = false }) { Text("取消") } })
 }

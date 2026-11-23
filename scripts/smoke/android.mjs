@@ -125,7 +125,7 @@ function screen() {
     });
 }
 function healthy(step, nodes = screen(), quiet = false) {
-    const error = nodes.find(node => /暂时无法加载|没能加载|没能打开|搜索需要联网|搜索数据有误|地图加载失败|无法规划|找不到路线|没有可用路线/.test(node.text));
+    const error = nodes.find(node => /暂时无法加载|暂时打不开|暂时看不了|暂时搜不出结果|没能加载|没能打开|搜索需要联网|搜索数据有误|地图加载失败|无法规划|找不到路线|没有可用路线/.test(node.text));
     if (error) throw new Error(`${step}: ${error.text}`);
     alive(step, quiet);
 }
@@ -540,7 +540,7 @@ async function personalViews() {
     capture('personal-settings');
     adb('shell', 'input', 'keyevent', '4');
     await find('课表设置', 'back from about to the personal home');
-    await scrollFind('在浏览器查看和填写收集', 'collections have a visible browser entry');
+    await scrollFind('在浏览器打开收集页面', 'collections have a visible browser entry');
     await scrollFind('在浏览器查看成员', 'members have a visible browser entry');
     capture('collaboration-browser-entries');
     adb('shell', 'input', 'keyevent', '4');
@@ -642,6 +642,9 @@ if (resume) {
     const expected = /versionCode='(\d+)'/.exec(badging)?.[1];
     const installedVersion = /versionCode=(\d+)/.exec(adb('shell', 'dumpsys', 'package', app))?.[1];
     if (!expected || installedVersion !== expected) throw new Error('resume requires the same installed application version');
+    adb('shell', 'am', 'force-stop', app);
+    adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1');
+    await sleep(3000);
     console.log(`resuming the remaining acceptance flow of ${app} ${expected} on ${serial}`);
 } else {
 const installed = adb('shell', 'pm', 'list', 'packages', app).split(/\r?\n/).includes(`package:${app}`);
@@ -680,7 +683,7 @@ for (const [scale, name] of [['天', 'day'], ['周', 'week'], ['学期', 'term']
 await tap('学期', 'open the academic year calendar');
 await tap(node => node.text.startsWith('第一学期'), 'open the published first term');
 await scrollTap(node => node.text.includes('算法与数据结构设计') || node.words.includes('算法与数据结构设计'), 'open the real practice course details');
-await find('不占课表格子', 'practice notes match the term');
+await find('课表没有固定时段', 'practice notes match the term');
 await find(node => node['content-desc'] === '陈兴国 的课表', 'the practice teacher links to a timetable');
 capture('practice-detail');
 adb('shell', 'input', 'keyevent', '4');

@@ -245,7 +245,7 @@ public sealed partial class AiScreen : Screen
         if (Bound(activeProject) && projectFolder is null) { error = "请重新打开这个项目文件夹。"; Draw(); return; }
         if (providers.Resolve(choice, out var provider) is { } unavailable) { error = unavailable; Draw(); return; }
         if (preferredTools is { Count: > 0 } && preferredTools.Any(name => !ToolsFor(SituationNow(), provider).Any(tool => Assistant.ToolName(tool) == name)))
-        { error = "问题里点名的工具暂不可用，请换一个或去掉它。"; Draw(); return; }
+        { error = "选中的工具暂时无法使用，请移除或更换工具后再发送。"; Draw(); return; }
         if (provider is null && Account.Shared.User is null)
         {
             _ = Selected;
@@ -317,7 +317,7 @@ public sealed partial class AiScreen : Screen
         Situation situation;
         try { situation = SituationNow(instructions: true, skill); }
         catch (Exception failure) when (ProjectFolder.IsProblem(failure))
-        { error = ProjectMessage(failure, "未能读取本轮指令。"); Draw(); return; }
+        { error = ProjectMessage(failure, "无法读取这次提问的指令。"); Draw(); return; }
         var available = ToolsFor(situation, provider);
         var permission = toolAccess.Mode;
         var names = available.Select(Assistant.ToolName).ToHashSet(StringComparer.Ordinal);
@@ -327,9 +327,9 @@ public sealed partial class AiScreen : Screen
         var lineage = start.Lineage(at);
         var preferredTools = lineage.LastOrDefault(node => (string?)node.Message["role"] == "user")?.PreferredTools ?? [];
         if (preferredTools.Any(name => !names.Contains(name)))
-        { error = "问题里点名的工具暂不可用，请换一个或去掉它。"; Draw(); return; }
+        { error = "选中的工具暂时无法使用，请移除或更换工具后再发送。"; Draw(); return; }
         if (retryRequest?["tools"] is JsonArray previous && previous.OfType<JsonObject>().Any(tool => !names.Contains(Assistant.ToolName(tool))))
-        { error = "可用工具已更新，请重新发送本轮。"; Draw(); return; }
+        { error = "可用工具有变化，请重新发送问题。"; Draw(); return; }
         var id = current ??= Guid.NewGuid().ToString();
         var state = Selected;
         if (state.Reply is not null) return;
@@ -455,12 +455,12 @@ public sealed partial class AiScreen : Screen
             if (reply.Said.Length > 0)
             {
                 try { Grow(new JsonObject { ["role"] = "assistant", ["content"] = reply.Said }); }
-                catch (Exception failure) when (ProjectFolder.IsProblem(failure)) { state.Error = ProjectMessage(failure, "未能保存未完成的回答。"); }
+                catch (Exception failure) when (ProjectFolder.IsProblem(failure)) { state.Error = ProjectMessage(failure, "未能保存部分回答。"); }
             }
             state.RuntimeRequest = null; state.RuntimeFirstAssistant = null;
         }
         catch (Exception failure) when (failure is InvalidOperationException or HttpRequestException or IOException or PlatformFailure or JsonException)
-        { state.Error = failure is IOException && folder is not null ? ProjectMessage(failure, "未能保存项目对话。") : failure is HttpRequestException or IOException ? "连不上 AI，检查一下网络。" : failure.Message; }
+        { state.Error = failure is IOException && folder is not null ? ProjectMessage(failure, "未能保存项目对话。") : failure is HttpRequestException or IOException ? "暂时连不上 AI，请检查网络后重试。" : failure.Message; }
         finally { state.Reply = null; if (conversations.Values.All(item => item.Reply is null)) frame.Stop(); RefreshConversation(id); }
     }
 
@@ -484,7 +484,7 @@ public sealed partial class AiScreen : Screen
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", mine.Key);
         HttpResponseMessage response;
         try { response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel); }
-        catch (HttpRequestException) { throw new InvalidOperationException("连不上你填的接口地址，检查一下地址和网络。"); }
+        catch (HttpRequestException) { throw new InvalidOperationException("无法连接模型服务，请检查接口地址和网络。"); }
         using (response)
         {
             if (!response.IsSuccessStatusCode)
@@ -494,9 +494,9 @@ public sealed partial class AiScreen : Screen
                 if (mine.Runtime) throw new InvalidOperationException(assistant.RuntimeError(code, detail ?? $"本地模型未能完成请求（{(int)response.StatusCode}）。"));
                 throw new InvalidOperationException((int)response.StatusCode switch
                 {
-                    401 => "API Key 不对，请在 AI 页的「模型」里修改。", 402 => "你的 API 余额不足。", 429 => "你的 API 请求太频繁，稍后再试。",
+                    401 => "API 密钥无效，请在「模型」设置中更新密钥。", 402 => "模型服务账户余额不足。", 429 => "请求过于频繁，请稍后再试。",
                     404 => "接口或模型不存在" + (detail is not null ? $"：{detail}" : "，检查地址和模型名。"),
-                    var status => $"你的 API 没有回答（{status}）" + (detail is not null ? $"：{detail}" : ""),
+                    var status => $"模型服务未返回回答（{status}）" + (detail is not null ? $"：{detail}" : ""),
                 });
             }
             var completion = assistant.Read(mine.Runtime, last ? [] : available.Select(Assistant.ToolName));
@@ -558,7 +558,7 @@ public sealed partial class AiScreen : Screen
             var proposal = proposals.FirstOrDefault(p => p.Key == key);
             if (proposal is null || proposal.Saved) continue;
             var now = proposal.Id is null ? null : campus.Tasks.All.FirstOrDefault(t => t.Id == proposal.Id && t.Deleted != true);
-            if (proposal.Id is not null && now?.Modified != proposal.Expected) { error = "这个任务已经改过了，请让 AI 重新起草。"; continue; }
+            if (proposal.Id is not null && now?.Modified != proposal.Expected) { error = "任务有变动，请让 AI 重新起草。"; continue; }
             campus.Tasks.Put(proposal.Task with { Id = proposal.Id ?? TaskRules.NewId(), Done = proposal.Task.Done == "awaiting-confirmation" ? Preferences.Stamp() : proposal.Task.Done });
             proposals = proposals.Select(p => p.Key == key ? p with { Saved = true } : p).ToList();
         }
@@ -1118,7 +1118,7 @@ public sealed partial class AiScreen : Screen
                 var bubble = new Border { CornerRadius = new CornerRadius(22), Padding = new Thickness(16, 10, 16, 10), Background = Paint.Faded("brand", .1), HorizontalAlignment = HorizontalAlignment.Right, MaxWidth = 560,
                     Child = new TextBlock { Text = text, FontSize = 16, LineHeight = 26, TextWrapping = TextWrapping.Wrap, Foreground = Paint.Brush("ink"), IsTextSelectionEnabled = true } };
                 ask.Children.Add(bubble);
-                var tools = Kit.Line(2, Icon("复制", Icons.Copy, () => Copy(text)), Icon("改问题", Icons.Pencil, () => { editing = question.Id; DrawMain(); }, enabled: !busy));
+                var tools = Kit.Line(2, Icon("复制", Icons.Copy, () => Copy(text)), Icon("编辑问题", Icons.Pencil, () => { editing = question.Id; DrawMain(); }, enabled: !busy));
                 tools.Children.Insert(0, Branches(question.Id)); tools.HorizontalAlignment = HorizontalAlignment.Right; tools.Opacity = 0;
                 ask.PointerEntered += (_, _) => tools.Opacity = 1; ask.PointerExited += (_, _) => tools.Opacity = 0;
                 ask.Children.Add(tools);
@@ -1185,7 +1185,7 @@ public sealed partial class AiScreen : Screen
                 turn.Children.Add(live);
                 DrawLive();
             }
-            if (answering && ActiveReply is { Stream: null, Approval: null } && !steps.Any(s => s.Pending) && answer is null) turn.Children.Add(Kit.Text("正在想", Role.Body, "muted"));
+            if (answering && ActiveReply is { Stream: null, Approval: null } && !steps.Any(s => s.Pending) && answer is null) turn.Children.Add(Kit.Text("正在准备回答", Role.Body, "muted"));
             if (last)
             {
                 if (error.Length > 0)
@@ -1294,7 +1294,7 @@ public sealed partial class AiScreen : Screen
                 foreach (var room in rooms.Take(6))
                 {
                     var id = (string)room!["room"]!;
-                    links.Add(Place(id, Names.Room(id), $"空到 {Clock.Hm((int)room["until"]!)}"));
+                    links.Add(Place(id, Names.Room(id), $"空闲至 {Clock.Hm((int)room["until"]!)}"));
                 }
                 break;
             case "route" when result["url"] is not null:
@@ -1375,10 +1375,10 @@ public sealed partial class AiScreen : Screen
         var picked = open.Select(d => d.Key).ToHashSet();
         var today = CampusDay.Today();
         var column = new StackPanel();
-        var h = Kit.Text(open.Count > 0 ? $"起草了 {drafts.Count} 个任务" : $"任务已添加 · {drafts.Count} 个任务", Role.Label, "muted", bold: true); h.Margin = new Thickness(0, 0, 0, 6);
+        var h = Kit.Text(open.Count > 0 ? $"已起草 {drafts.Count} 项任务" : $"已添加 {drafts.Count} 项任务", Role.Label, "muted", bold: true); h.Margin = new Thickness(0, 0, 0, 6);
         column.Children.Add(h);
         Tap? add = null;
-        void Count() { if (add is not null) { ((TextBlock)add.Content).Text = picked.Count == open.Count ? "添加全部任务" : $"添加 {picked.Count} 个任务"; add.IsEnabled = picked.Count > 0; add.Opacity = picked.Count > 0 ? 1 : .5; } }
+        void Count() { if (add is not null) { ((TextBlock)add.Content).Text = picked.Count == open.Count ? "添加全部任务" : $"添加 {picked.Count} 项任务"; add.IsEnabled = picked.Count > 0; add.Opacity = picked.Count > 0 ? 1 : .5; } }
         for (var i = 0; i < drafts.Count; i++)
         {
             var d = drafts[i]; var t = d.Task;
@@ -1399,7 +1399,7 @@ public sealed partial class AiScreen : Screen
             if (!d.Saved)
             {
                 var drop = new Tap(Paint.Clear, Paint.Brush("surfaceSunken")) { Content = Kit.Icon(Icons.Cross, 12, "faint"), Width = 28, Height = 28, CornerRadius = new CornerRadius(6) };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(drop, "不要这个");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(drop, "取消选择此任务");
                 var key = d.Key; drop.Click += (_, _) => { proposals = proposals.Where(p => p.Key != key).ToList(); Keep(); DrawTurns(); };
                 Grid.SetColumn(drop, 2); row.Children.Add(drop);
             }

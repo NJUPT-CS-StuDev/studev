@@ -10,7 +10,7 @@ public sealed partial class AccountScreen
     private void Security(StackPanel page)
     {
         var me = user!;
-        page.Children.Add(Kit.Text("管理密码和认证器。安全设置变更后，其他设备可能需要重新登录。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("修改密码或认证器设置后，其他设备可能需要重新登录。", Role.Label, "muted", wrap: true));
         SecretField(page, "当前密码", password, text => password = text, "account-current-password");
         if (me.TotpEnabled)
         {
@@ -23,7 +23,7 @@ public sealed partial class AccountScreen
         page.Children.Add(Pages.Section("修改密码"));
         SecretField(page, "新密码", newPassword, text => newPassword = text, "account-new-password");
         SecretField(page, "确认新密码", confirmPassword, text => confirmPassword = text, "account-confirm-password");
-        page.Children.Add(Kit.Text("使用 12–256 个字符，且不要使用学校统一身份认证密码。", Role.Caption, "muted", wrap: true));
+        page.Children.Add(Kit.Text("密码须为 12 至 256 个字符，请勿使用学校统一身份认证密码。", Role.Caption, "muted", wrap: true));
         Action(page, "修改密码并重新登录", "account-change-password", () =>
         {
             if (newPassword != confirmPassword) { error = "两次输入的新密码不一致。"; UpdateStatus(); return; }
@@ -49,14 +49,14 @@ public sealed partial class AccountScreen
             if (secret.Length == 0)
                 Action(page, "绑定认证器", "account-setup-totp", () => Run("正在准备认证器…", async () =>
                 {
-                    secret = await Account.Shared.SetupTotp(password); code = ""; notice = "请在认证器中添加密钥，再填写动态码。";
+                    secret = await Account.Shared.SetupTotp(password); code = ""; notice = "请在认证器中添加密钥，再输入动态验证码。";
                 }), () => state is not null && !state.PasswordChangeRequired && password.Length > 0);
             else
             {
-                page.Children.Add(Kit.Text("在认证器中手动添加：名称 StuDev，类型基于时间，SHA1，6 位，每 30 秒更新。", Role.Caption, "muted", wrap: true));
+                page.Children.Add(Kit.Text("在认证器中选择手动添加。名称填 StuDev，类型选基于时间，算法选 SHA-1，验证码为 6 位，每 30 秒更新。", Role.Caption, "muted", wrap: true));
                 var key = Kit.Text(secret, Role.Label, wrap: true); key.IsTextSelectionEnabled = true; key.FontFamily = Kit.Mono;
                 AutomationProperties.SetAutomationId(key, "account-totp-secret"); page.Children.Add(key);
-                var factor = Kit.Field(code, "6 位动态码", "认证器的 6 位动态码"); factor.MaxLength = 6;
+                var factor = Kit.Field(code, "6 位动态验证码", "认证器的 6 位动态验证码"); factor.MaxLength = 6;
                 AutomationProperties.SetAutomationId(factor, "account-enrollment-code");
                 factor.TextChanged += (_, _) => { code = factor.Text; EnableControls(); }; Watch(factor); page.Children.Add(factor);
                 Action(page, "确认绑定", "account-confirm-totp", () => Run("正在绑定认证器…", async () =>
@@ -82,10 +82,10 @@ public sealed partial class AccountScreen
             page.Children.Add(Kit.Hairline());
             page.Children.Add(Pages.Section("注销账号"));
             var mailbox = me.Email.Length > 0 ? me.Email : $"{me.Qq}@qq.com";
-            page.Children.Add(Kit.Text($"确认信会发到 {mailbox}。在邮件中确认后，账号、学号绑定和登录设备将被删除，无法恢复。", Role.Label, "muted", wrap: true));
-            Action(page, "发送注销确认信", "account-request-deletion", () => Confirm("申请注销账号？", $"确认信将发送到 {mailbox}，30 分钟内有效。只有在邮件中确认后才会注销账号。", "发送确认信", () => Run("正在发送确认信…", async () =>
+            page.Children.Add(Kit.Text($"确认邮件会发到 {mailbox}。在邮件中确认注销后，账号和学号绑定会删除，所有设备都会退出登录。注销后无法恢复。", Role.Label, "muted", wrap: true));
+            Action(page, "发送注销确认邮件", "account-request-deletion", () => Confirm("申请注销账号？", $"确认邮件将发到 {mailbox}，链接 30 分钟内有效。请在邮件中确认注销。", "发送确认邮件", () => Run("正在发送确认邮件…", async () =>
             {
-                await Account.Shared.RequestDeletion(password); password = ""; notice = $"注销确认信已发到 {mailbox}，请在 30 分钟内打开。";
+                await Account.Shared.RequestDeletion(password); password = ""; notice = $"注销确认邮件已发到 {mailbox}。请在 30 分钟内打开邮件并确认。";
             })), () => state is not null && password.Length > 0, colour: "danger");
         }
     }

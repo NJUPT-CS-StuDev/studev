@@ -14,7 +14,7 @@ public static class CourseSheet
     {
         var body = new StackPanel { Padding = new Thickness(20, 18, 20, 22), Spacing = 8 };
         body.Children.Add(Pages.SheetHead(Pages.SheetTitle(name), () => App.Window?.Close()));
-        var content = new StackPanel(); content.Children.Add(Kit.Text("正在读取上课安排…", Role.Label, "muted")); body.Children.Add(content);
+        var content = new StackPanel(); content.Children.Add(Kit.Text("正在加载上课安排…", Role.Label, "muted")); body.Children.Add(content);
         App.Window?.Sheet(body, 560);
         _ = Load(content, name);
     }
@@ -26,7 +26,7 @@ public static class CourseSheet
         {
             var rows = (await repository.Meetings()).Where(meeting => Names.Course(meeting.Course.Name) == name).ToList();
             content.Children.Clear();
-            if (rows.Count == 0) { content.Children.Add(Pages.Empty("暂未查到上课安排。")); return; }
+            if (rows.Count == 0) { content.Children.Add(Pages.Empty("没有找到这门课的上课安排。")); return; }
             content.Children.Add(Kit.Row("课程", Kit.Text("查看全部上课时段", Role.Label), () => { App.Window?.Close(); App.OpenLink($"/?who=course:{Uri.EscapeDataString(name)}&scale=week"); }));
             content.Children.Add(Pages.Section("选择教学班"));
             foreach (var group in rows.GroupBy(meeting => meeting.TeachingClass.Id))

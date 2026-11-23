@@ -36,17 +36,17 @@ public sealed partial class AiScreen
                 return;
             }
             var folder = ProjectFolder.Open(path);
-            if (folder.Id != project.Id) throw new IOException("项目文件夹已对应其他项目，请重新选择。");
+            if (folder.Id != project.Id) throw new IOException("该文件夹已用于另一个项目，请选择其他文件夹。");
             var loaded = new List<SavedChat>();
             var heads = new Dictionary<string, ProjectChat>(StringComparer.Ordinal);
             foreach (var group in folder.Heads().GroupBy(chat => chat.Id))
             {
-                if (group.Skip(1).Any()) projectStatus = "有对话在另一端同时修改，原版本均已保留。";
+                if (group.Skip(1).Any()) projectStatus = "部分对话在其他设备上也有修改，已保留各个版本。";
                 var newest = group.OrderByDescending(chat => (long)chat.Document["updated"]!).ThenBy(chat => chat.BaseName, StringComparer.Ordinal).First();
                 var chat = SavedChat.OfProject(newest.Document, project.Id);
                 if (chats.Any(local => local.Id == chat.Id))
                 {
-                    projectStatus = "本机和项目文件夹有同一对话，请先整理其原始位置。";
+                    projectStatus = "本机和项目文件夹都保存了这段对话，请先核对两处的内容。";
                     continue;
                 }
                 keptProposals[chat.Id] = ReadProposals(newest.Document);
@@ -227,7 +227,7 @@ public sealed partial class AiScreen
                 () => { showArchived = false; organizing = false; selectedChats.Clear(); DrawSide(); }, colour: "muted"));
             tools.Margin = new Thickness(16, 0, 12, 0);
             if (organizing && selectedChats.Count > 0)
-                tools.Children.Add(Kit.TextAction($"移动 {selectedChats.Count} 项", () => MoveChats([.. selectedChats]), colour: "brand"));
+                tools.Children.Add(Kit.TextAction($"移动 {selectedChats.Count} 段对话", () => MoveChats([.. selectedChats]), colour: "brand"));
             heading.Children.Add(tools);
         }
         if (projectStatus is { } status)
@@ -314,7 +314,7 @@ public sealed partial class AiScreen
                 folders.Children.Add(Kit.Text("主目录 · " + path, Role.Caption, "muted", wrap: true));
                 if (resolved is not null) folderActions.Children.Add(Kit.TextAction("项目文件",
                     () => new ProjectFiles(resolved, true, () => EditProject(existing)).Show(), colour: "ink"));
-                folderActions.Children.Add(Kit.TextAction("重读项目文件", () =>
+                folderActions.Children.Add(Kit.TextAction("重新加载项目文件", () =>
                 {
                     App.Window?.Close();
                     var openChat = current;

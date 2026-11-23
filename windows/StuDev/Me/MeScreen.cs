@@ -72,7 +72,7 @@ public sealed partial class MeScreen : Screen
         }
         Children.Clear();
         var page = new StackPanel();
-        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台运行", "about" => "帮助与关于", "account" => "账号", "models" => "模型", "tools" => "工具", _ => "我" };
+        var title = section switch { "timetable" => "课表设置", "courses" => "我的课程", "labs" => "实验安排", "appearance" => "外观", "device" => "提醒与后台", "about" => "帮助与关于", "account" => "账号", "models" => "模型", "tools" => "工具", _ => "我" };
         void Back()
         {
             if (section is "tools" or "models") App.Open("ai");
@@ -92,22 +92,22 @@ public sealed partial class MeScreen : Screen
         var info = campus.Classes.FirstOrDefault(c => c.Id == campus.Preferences.Class);
         if (section == "home")
         {
-            Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "管理账号 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(() => Go("account")); else Go("account"); });
-            Row("", Value("收集", "在浏览器查看和填写收集"), () => App.OpenLink("/forms/"));
+            Row("", Value(user?.Nickname ?? "未登录", user is null ? "登录后同步任务和课表设置" : "账号设置 · 任务和课表设置自动同步"), () => { if (user is null) SignIn.Show(() => Go("account")); else Go("account"); });
+            Row("", Value("收集", "在浏览器打开收集页面"), () => App.OpenLink("/forms/"));
             Row("", Value("成员", "在浏览器查看成员"), () => App.OpenLink("/members/"));
             Row("", Value("课表设置", campus.Preferences.Class is { } klass ? $"{klass} · {info?.Major}" : "选择班级、调整课程与实验"), () => Go("timetable"));
             Row("", Value("外观", "跟随系统、浅色或深色"), () => Go("appearance"));
             Row("", Value("桌面小组件", "把课表和任务放到桌面"), WidgetSheet.Open);
-            Row("", Value("提醒与后台运行", "课前提醒、托盘和开机启动"), () => Go("device"));
-            if (Updates.Ready is { } ready) Row("", Value($"新版本 {ready} 已准备好", "点击立即重启更新"), Updates.RestartNow);
+            Row("", Value("提醒与后台", "课前提醒、托盘和开机启动"), () => Go("device"));
+            if (Updates.Ready is { } ready) Row("", Value($"新版本 {ready} 已准备好", "重启后更新"), Updates.RestartNow);
             else Row("", Value("检查更新", $"StuDev {Updates.Version} · 数据 {campus.Repository?.Release.DataVersion ?? "—"}"), () => UpdateSheet.Check(campus));
-            Row("", Value("帮助与关于", "反馈、资料提交、协议"), () => Go("about"));
+            Row("", Value("帮助与关于", "意见反馈、提交资料与服务协议"), () => Go("about"));
         }
         if (section == "timetable")
         {
             Row("班级", Value(campus.Preferences.Class ?? "选择班级", info?.Major), PickClass);
-            Row("", Value("我的课程", "查看详情，添加、隐藏或修改个人安排"), () => Go("courses"));
-            Row("", Value("实验安排", "实验与理论课分别选择"), () => Go("labs"));
+            Row("", Value("我的课程", "添加、隐藏课程或调整上课安排"), () => Go("courses"));
+            Row("", Value("实验安排", "单独选择要显示的实验"), () => Go("labs"));
             var order = campus.Line?.Order ?? CampusLine.LayerOrder;
             Row("", Value("时间冲突时的显示顺序", string.Join(" › ", order.Select(o => KindNames[o]))), () => Layering(order));
             if (campus.Run is { } run && campus.Term is { } term)
@@ -120,7 +120,7 @@ public sealed partial class MeScreen : Screen
             {
                 var edits = Choices.Edits(campus.Preferences, current.Term);
                 if (edits.Added.Count + edits.Hidden.Count + (edits.Names?.Count ?? 0) > 0)
-                    Row("", Value("恢复班级课程", "撤销选课、隐藏和名称调整，保留自定义课程"), () => Choices.Edit(campus.Preferences, current.Term, e => new([], [], null, e.Custom)));
+                    Row("", Value("恢复班级课程", "恢复班级课表，保留自定义课程"), () => Choices.Edit(campus.Preferences, current.Term, e => new([], [], null, e.Custom)));
             }
         }
         if (section == "courses") CoursesPage(page);
@@ -133,13 +133,13 @@ public sealed partial class MeScreen : Screen
             var device = Device.Settings;
             Row("", Switched("课前提醒", "课程、实验和考试开始前提醒", device.Reminders, on => Device.Set(Device.Settings with { Reminders = on })));
             if (device.Reminders) Row("提前时间", ChoiceField("提前时间", [("5", "5 分钟"), ("10", "10 分钟"), ("15", "15 分钟"), ("30", "30 分钟")], device.Lead.ToString(), value => Device.Set(Device.Settings with { Lead = int.Parse(value) })));
-            Row("", Switched("关闭窗口后留在托盘", "桌面小组件和提醒继续工作；可从托盘菜单退出", device.Tray, on => Device.Set(Device.Settings with { Tray = on })));
-            Row("", Switched("开机启动", "登录 Windows 时启动，保留在托盘", Device.StartsAtSignIn, on => Device.StartsAtSignIn = on));
+            Row("", Switched("关闭窗口后留在托盘", "关窗后仍可使用桌面小组件和提醒，可在托盘菜单中退出", device.Tray, on => Device.Set(Device.Settings with { Tray = on })));
+            Row("", Switched("开机启动", "登录 Windows 后在后台启动", Device.StartsAtSignIn, on => Device.StartsAtSignIn = on));
         }
         if (section == "about")
         {
             Row("", Value("意见反馈", "在浏览器报告问题或提出建议"), () => App.OpenLink(CollectionLink("feedback", "Windows · 我")));
-            Row("", Value("提供校园资料", "在浏览器提交实验课表、讲座、校车或营业时间"), () => App.OpenLink(CollectionLink("data")));
+            Row("", Value("提供校园资料", "在浏览器提交实验课表、讲座信息、校车时刻或营业时间"), () => App.OpenLink(CollectionLink("data")));
             Row("", Value("学生发展中心", "南邮计软网安"), () => App.OpenLink("/club/"));
             Row("", Value("下载 StuDev", "网页、Android 和 Windows"), () => App.OpenLink("/download/"));
             Row("", Value("用户协议"), () => App.OpenLink("/terms/"));
@@ -159,7 +159,7 @@ public sealed partial class MeScreen : Screen
     {
         var column = new StackPanel { Padding = new Thickness(20, 18, 20, 20), Spacing = 4 };
         column.Children.Add(Pages.SheetHead(Pages.SheetTitle("时间冲突时的显示顺序"), () => App.Window?.Close()));
-        column.Children.Add(Kit.Text("同时有多项安排时，优先显示排在前面的类型。点击安排可查看同时段的其他事项。", Role.Label, "muted", wrap: true));
+        column.Children.Add(Kit.Text("同一时间有多项安排时，课表优先显示排在前面的类型。点击该安排可查看其余项目。", Role.Label, "muted", wrap: true));
         for (var at = 0; at < order.Count; at++)
         {
             var value = new Grid(); value.ColumnDefinitions.Add(new ColumnDefinition()); value.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

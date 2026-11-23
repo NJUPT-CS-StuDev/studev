@@ -161,15 +161,15 @@ private fun marked(text: String, ranges: List<Pair<Int, Int>>, mark: SpanStyle):
         } catch (error: SearchException) {
             android.util.Log.e("Search", "Search data could not be read", error)
             answer = null
-            failure = key to "搜索数据有误，暂时无法显示结果"
+            failure = key to "暂时搜不出结果，请稍后再试"
         } catch (error: kotlinx.serialization.SerializationException) {
             android.util.Log.e("Search", "Search data could not be read", error)
             answer = null
-            failure = key to "搜索数据有误，暂时无法显示结果"
+            failure = key to "暂时搜不出结果，请稍后再试"
         } catch (error: DataCorruptionException) {
             android.util.Log.e("Search", "Search data could not be read", error)
             answer = null
-            failure = key to "搜索数据有误，暂时无法显示结果"
+            failure = key to "暂时搜不出结果，请稍后再试"
         }
     }
     LaunchedEffect(page) { list.scrollToItem(0) }

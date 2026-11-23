@@ -74,7 +74,7 @@ public static class TaskSheet
             }
             var parsed = QuickTasks.Parse(text, now, quick);
             var said = ReadBack(parsed, now, courses);
-            if (said.Count == 0) { read.Children.Add(Kit.Text("没有读出日期，会放进“还没排日期”", Role.Caption, "faint")); return; }
+            if (said.Count == 0) { read.Children.Add(Kit.Text("未识别到日期，将放入「未安排」", Role.Caption, "faint")); return; }
             foreach (var item in said) read.Children.Add(Chip(item, "brand", null));
             var title = Kit.Text(parsed.Title, Role.Label, bold: true); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(2, 0, 0, 0);
             read.Children.Add(title);
@@ -104,7 +104,7 @@ public static class TaskSheet
         var adder = Adder(campus, line, now, task => Open(campus, task.Id, now));
         adder.Margin = new Thickness(0, 0, 4, 0);
         column.Children.Add(adder);
-        var hint = Kit.Text("说出日期和时间就安排上了，“前”是截止；#课程 归到一门课，! 越多越重要。", Role.Caption, "faint", wrap: true); hint.Margin = new Thickness(0, 0, 4, 0);
+        var hint = Kit.Text("输入日期和时间可安排任务。用“前”标明截止时间，用 # 关联课程，用 ! 设置优先级。", Role.Caption, "faint", wrap: true); hint.Margin = new Thickness(0, 0, 4, 0);
         column.Children.Add(hint);
         App.Window?.Sheet(column, 520);
     }
@@ -210,7 +210,7 @@ public static class TaskSheet
             {
                 slots.Children.Clear();
                 var found = Planning.Available(line, new SlotRequest(Clock.Text(now.Date), Clock.Text(now.Date.AddDays(6)), duration, Exclude: task.Id, Due: task.Due), now).Take(6).ToList();
-                if (found.Count == 0) slots.Children.Add(Kit.Text("截止前的七天里没有合适的空闲，可以缩短用时。", Role.Caption, "muted", wrap: true));
+                if (found.Count == 0) slots.Children.Add(Kit.Text("截止前 7 天内没有合适的空闲时段，可尝试缩短用时。", Role.Caption, "muted", wrap: true));
                 foreach (var slot in found)
                     slots.Children.Add(Kit.Row("", Kit.Column(2, Kit.Text($"{Clock.DayWord(slot.Date, now.Date)} {Clock.Hm(slot.Start)}–{Clock.Hm(slot.End)}", Role.Label),
                         Kit.Text(slot.Penalty > 0 ? $"与 {slot.Clashes.Count} 项“尽量避开”的安排重叠" : "这段时间没有别的安排", Role.Caption, "muted")), () => Save(task with { Date = slot.Date, Start = slot.Start, End = slot.End }, null)));
@@ -240,18 +240,18 @@ public static class TaskSheet
             {
                 var time = TimeField(dueSet.Time, "时间", minutes => Save(task with { Due = dueSet with { Time = minutes, Remind = null } }, "due"), true);
                 time.Width = 120;
-                var small = Kit.Text("留空就是当天结束前", Role.Caption, "faint"); small.VerticalAlignment = VerticalAlignment.Center;
+                var small = Kit.Text("留空则在当天结束时截止", Role.Caption, "faint"); small.VerticalAlignment = VerticalAlignment.Center;
                 p.Children.Add(Kit.Line(8, Label("时间"), time, small));
                 p.Children.Add(Label("提醒"));
                 var options = dueSet.Time is not null ? TaskRules.TimedReminders : TaskRules.DayReminders;
                 p.Children.Add(Kit.Picks([.. options.Select(r => (UIElement)Kit.Pick(r.Name, dueSet.Remind?.Contains(r.Minutes) == true, () => Save(task with { Due = dueSet with { Remind = Toggle(dueSet.Remind, r.Minutes) } }, "due")))]));
-                p.Children.Add(Kit.Picks(Kit.Pick("不设截止", false, () => Save(task with { Due = null }, "due"))));
+                p.Children.Add(Kit.Picks(Kit.Pick("不设截止时间", false, () => Save(task with { Due = null }, "due"))));
             }
         }
         if (panel == "priority")
             Panel().Children.Add(Kit.Picks([.. Priorities.Select(pr => (UIElement)Kit.Pick(pr.Name, (task.Priority ?? 0) == pr.Value, () => Save(task with { Priority = pr.Value == 0 ? null : pr.Value }, null)))]));
         if (panel == "course")
-            Panel().Children.Add(Kit.Picks([Kit.Pick("不属于哪门课", task.Course is null, () => Save(task with { Course = null }, null)),
+            Panel().Children.Add(Kit.Picks([Kit.Pick("不关联课程", task.Course is null, () => Save(task with { Course = null }, null)),
                 .. courses.Select(kv => (UIElement)Kit.Pick(Names.CourseShort(kv.Value), task.Course == kv.Key, () => Save(task with { Course = kv.Key }, null)))]));
 
         // Its steps, each with its box; a new one typed at the end.

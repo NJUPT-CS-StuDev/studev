@@ -182,7 +182,7 @@ public abstract partial class DeskWidget : Window
         var settings = Settings;
         var menu = new MenuFlyout();
         var open = new MenuFlyoutItem { Text = "打开 StuDev" }; open.Click += (_, _) => { App.Window?.Bring(); App.Open("timetable"); };
-        var top = new ToggleMenuFlyoutItem { Text = "保持在最上层", IsChecked = settings.OnTop };
+        var top = new ToggleMenuFlyoutItem { Text = "窗口置顶", IsChecked = settings.OnTop };
         top.Click += (_, _) => Device.PutWidget(Settings with { OnTop = top.IsChecked });
         var locked = new ToggleMenuFlyoutItem { Text = "锁定位置和大小", IsChecked = settings.Locked };
         locked.Click += (_, _) => Device.PutWidget(Settings with { Locked = locked.IsChecked });
@@ -193,7 +193,7 @@ public abstract partial class DeskWidget : Window
             item.Click += (_, _) => Device.PutWidget(Settings with { Opacity = level });
             opacity.Items.Add(item);
         }
-        var remove = new MenuFlyoutItem { Text = "移除这个小组件" }; remove.Click += (_, _) => Device.RemoveWidget(Id);
+        var remove = new MenuFlyoutItem { Text = "移除小组件" }; remove.Click += (_, _) => Device.RemoveWidget(Id);
         menu.Items.Add(open); menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(top); menu.Items.Add(locked); menu.Items.Add(opacity);
         menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(remove);
@@ -207,7 +207,7 @@ public abstract partial class DeskWidget : Window
         var now = Moment.Now();
         title.Text = Views.First(v => v.Key == View).Name;
         subtitle.Text = Subtitle(campus.Line, now);
-        if (campus.Line is not { } line) { Empty(campus.Preferences.Class is null ? "在 StuDev 里选好班级，这里就会显示课表。" : "正在读取课表…"); return; }
+        if (campus.Line is not { } line) { Empty(campus.Preferences.Class is null ? "请在 StuDev 中选择班级，课表会显示在这里。" : "正在加载课表…"); return; }
         Draw(campus, line, now);
     }
 

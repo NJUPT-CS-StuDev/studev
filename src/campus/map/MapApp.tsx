@@ -351,7 +351,7 @@ export default function MapApp() {
         body = <>
             <div className="card-h top"><h2>{roomName}</h2></div>
             <div className="meta">{openBuilding?.names[0]} {floor} 层{room?.seats ? ` · ${room.seats} 座` : ''}{room?.kinds[0] ? ` · ${room.kinds[0].replace(/^(仙林|三牌楼|锁金)/, '')}` : ''}</div>
-            {state && (!day ? <div className="msum">暂无这一天的排课数据</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>{state.minutes ? `，到 ${hm(state.until)}，还能待 ${durationText(state.minutes)}` : '，今天没课了'}</div>)}
+            {state && (!day ? <div className="msum">查不到这一天的排课</div> : state.busy ? <div className="state busy"><b>{state.current ? '上课中' : '有人用'}</b>，到 {hm(state.until)}</div> : <div className="state"><b>空闲</b>{state.minutes ? `到 ${hm(state.until)}，还有 ${durationText(state.minutes)}` : '，今天没课了'}</div>)}
             {state && day && <PeriodStrip periods={world.periods} state={state} min={moment.min} />}
             <div className="btns">
                 {state && <a className="btn" href={`/?who=room:${encodeURI(pickedRoom.id)}&scale=week&t=${moment.date}`}>这间的课表</a>}
@@ -368,7 +368,7 @@ export default function MapApp() {
         body = <>
             <div className="card-h top"><h2>{openBuilding.names[0]}{floor !== null ? ` ${floor} 层` : ''}</h2></div>
             <a className="kv" href={`/search/?within=${encodeURIComponent(openBuilding.id)}`}><span className="v">整栋楼的安排</span><Chevron /></a>
-            <div className="msum">{inFloor.length ? day ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '暂无这一天的排课数据' : '楼层布局'}</div>
+            <div className="msum">{inFloor.length ? day ? <><b>{free.length}</b> / {inFloor.length} 间空闲{floor !== null ? ` · 全楼 ${freeBy.get(openBuilding.id)?.free ?? 0} 间` : ''}</> : '查不到这一天的排课' : '楼层布局'}</div>
             {inFloor.length > 0 ? roomRows(free) : named.map(place => <button key={place.id} className="rrow" onClick={() => handlers.current.onRoom(place.id)}><span className="m"><span className="a">{(place as Place & { title?: string }).title ?? place.names[0]}</span><span className="b">{place.names[0]}</span></span></button>)}
             {day && inFloor.length > 0 && !free.length && <div className="empty">这一层此刻没有空教室</div>}
         </>;
@@ -395,7 +395,7 @@ export default function MapApp() {
                     <Chevron />
                 </button>
             ))}
-            {day ? <a className="kv" href={`/search/?scope=room${isNow ? '' : `&t=${momentText(moment)}`}`}><span className="v">{freeRooms.length} 间空教室</span><Chevron /></a> : <div className="msum">暂无这一天的排课数据</div>}
+            {day ? <a className="kv" href={`/search/?scope=room${isNow ? '' : `&t=${momentText(moment)}`}`}><span className="v">{freeRooms.length} 间空教室</span><Chevron /></a> : <div className="msum">查不到这一天的排课</div>}
         </>;
     }
     const holiday = world?.holidays.get(moment.date);

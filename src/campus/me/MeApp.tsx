@@ -36,7 +36,7 @@ export default function MeApp({ placement = 'site', campus = false }: { placemen
     const ready = useSyncExternalStore(noSubscription, clientReady, serverReady);
     const name = account ? account.nickname || '我' : '未登录';
     if (placement === 'page' ? wide : campus && !wide) return null;
-    if (!ready) return <span className="avatar avatar-loading" role="status" aria-label="正在加载个人菜单" aria-busy="true"><AccountFace account={null} /><span className="avatar-name">加载中</span></span>;
+    if (!ready) return <span className="avatar avatar-loading" role="status" aria-label="正在确认登录状态" aria-busy="true"><AccountFace account={null} /><span className="avatar-name">正在确认登录…</span></span>;
     return <>
         <button className="avatar" type="button" data-me aria-label={`${name}，打开我`} onClick={() => setOpen(true)}>
             <AccountFace account={account} /><span className="avatar-name" data-me-name>{name}</span>

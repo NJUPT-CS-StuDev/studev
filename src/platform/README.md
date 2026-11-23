@@ -145,8 +145,9 @@ usable across search index updates.
   `closed` to stop it manually. Rounds without a deadline remain open until
   stopped. Catalog and detail responses include the server time used for
   their round statuses. Replacement rounds keep a single submission per
-  student. Multiple-submission rounds reserve a slot against both the person
-  and round limits. Issued authorizations count toward those limits.
+  student. Each successful submission counts toward the round limit and, in
+  multiple-submission rounds, toward the student limit. Pending uploads hold
+  their place temporarily. Cancellation or expiry releases the reservation.
 
 All API paths below are relative to `/api/platform/collections`.
 
@@ -165,10 +166,12 @@ All API paths below are relative to `/api/platform/collections`.
 | `GET /items/<id>/rounds/<round>/submissions` | Staff report with records, progress board, statistics and quota usage |
 | `GET /items/<id>/rounds/<round>/csv`, `GET /items/<id>/rounds/<round>/files` | Staff CSV or signed attachment manifest |
 | `GET /mine`, `GET /submissions/<id>` | Own history or one authorized record |
+| `POST /submissions/<receiptId>/complete`, `POST /submissions/<receiptId>/cancel` | Confirm an upload or return its unused place |
 | `POST /submissions/<id>/edit`, `POST /submissions/<id>/review` | Edit answers or record a staff review at the current submission revision |
 | `POST /submissions/<id>/files/<file>/download` | Authorize one private immutable attachment download |
 
-Submit with `{ answers, files, keepFiles? }`. Each new file supplies
+Submit with `{ answers, files, keepFiles?, attemptId? }`. Reuse the same UUID
+for the same attempt if the connection drops. Each new file supplies
 `{ fieldId, name, size, type }`. A submission with no new files commits within
 that request. When new files are present, PUT them to the returned signed URLs
 in order, then send `{ receiptToken }` to `POST /submissions/<receiptId>/complete`.
@@ -180,7 +183,9 @@ stable through review and later changes to round settings. The receipt response
 contains the submission ID, status, late flag and timestamps. Answers,
 identity and attachment names require account authorization. File uploads and
 downloads go directly to OSCA. The backend verifies and freezes uploaded
-content and binds signed downloads to the saved ETag.
+content and binds signed downloads to the saved ETag. A replacement commits
+its latest files before the superseded objects are cleaned up. Files that the
+participant kept and imported objects with unproven ownership stay available.
 
 Metadata uses one canonical EdgeOne Blob collection model. Immutable definition
 and submission revisions support concurrent editors, review, and retained

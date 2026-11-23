@@ -129,18 +129,18 @@ public sealed class Campus
             // The release kept on disk was retired from the site before its files were all fetched: start from the latest.
             rediscovered = true;
             try { loading = Fetch(await Data.Repository.Discover()); await loading; return; }
-            catch (Exception again) when (again is HttpRequestException or IOException or TaskCanceledException) { Error = "连不上 StuDev，检查一下网络。"; loading = null; }
+            catch (Exception again) when (again is HttpRequestException or IOException or TaskCanceledException) { Error = "暂时连不上 StuDev，请检查网络后重试。"; loading = null; }
         }
         catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException)
         {
             if (source is not null && Repository is not null) UpdateError = "更新未完成，继续使用已保存的校园数据。";
-            else Error = "连不上 StuDev，检查一下网络。";
+            else Error = "暂时连不上 StuDev，请检查网络后重试。";
             loading = null;
         }
         catch (Exception error) when (error is System.Text.Json.JsonException or InvalidDataException)
         {
             if (source is not null && Repository is not null) UpdateError = "新版校园数据无法读取，已保留当前版本。";
-            else Error = "这份校园数据无法读取，请检查应用更新。";
+            else Error = "校园数据暂时无法加载，请检查应用是否有新版本。";
             loading = null;
         }
         Changed?.Invoke();

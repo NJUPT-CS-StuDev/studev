@@ -21,10 +21,10 @@ internal static class ToolSettings
         }
 
         Heading(page, "Local Runtime MCP");
-        page.Children.Add(Kit.Text("没有授权给 StuDev 的本机工具", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("StuDev 暂未获得本机工具的使用权限", Role.Label, "muted", wrap: true));
 
         Heading(page, "Web MCP");
-        page.Children.Add(Kit.Text("使用这台电脑上已授权的网页工具。请输入 Local Runtime MCP 的浏览器工具专用密钥。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("输入 Local Runtime MCP 的浏览器工具专用密钥后，即可使用这台电脑上已授权的网页工具。", Role.Label, "muted", wrap: true));
         var key = new PasswordBox { Password = access.BrowserKey, PlaceholderText = "浏览器工具专用密钥", Margin = new Thickness(0, 10, 0, 4) };
         AutomationProperties.SetName(key, "浏览器工具专用密钥");
         page.Children.Add(key);
@@ -42,13 +42,13 @@ internal static class ToolSettings
         async Task Read()
         {
             load!.IsEnabled = disconnect!.IsEnabled = false;
-            status.Text = "正在读取已授权工具…"; status.Foreground = Paint.Brush("muted");
+            status.Text = "正在加载已授权的工具…"; status.Foreground = Paint.Brush("muted");
             try { await access.Connect(key.Password); Catalogue(); status.Text = ""; }
             catch (Exception failure) when (failure is InvalidOperationException or JsonException or IOException)
             { status.Text = failure is InvalidOperationException ? failure.Message : "未能保存或读取浏览器工具。"; status.Foreground = Paint.Brush("danger"); }
             finally { load.IsEnabled = disconnect.IsEnabled = true; }
         }
-        load = Kit.TextAction("读取已授权工具", () => App.Watch(Read()));
+        load = Kit.TextAction("获取已授权的工具", () => App.Watch(Read()));
         disconnect = Kit.TextAction("断开连接", () => { access.Disconnect(); key.Password = ""; status.Text = ""; Catalogue(); }, colour: "muted");
         page.Children.Add(Kit.Line(16, load, disconnect));
         page.Children.Add(status);
@@ -80,9 +80,9 @@ internal static class ToolSettings
         var title = server is null ? "添加外部 MCP" : "编辑外部 MCP";
         var name = Kit.Field(server?.Name ?? "", "例如 Context7", "服务器名称");
         var address = Kit.Field(server?.Endpoint.AbsoluteUri ?? "", "https://mcp.context7.com/mcp", "MCP 地址");
-        var token = new PasswordBox { Password = server?.Token ?? "", PlaceholderText = "访问令牌（可选）", MinHeight = Paint.Number("size", "control") };
-        AutomationProperties.SetName(token, "访问令牌（可选）");
-        var enabled = new CheckBox { Content = "启用这个服务器", IsChecked = server?.Enabled ?? true };
+        var token = new PasswordBox { Password = server?.Token ?? "", PlaceholderText = "访问令牌（选填）", MinHeight = Paint.Number("size", "control") };
+        AutomationProperties.SetName(token, "访问令牌（选填）");
+        var enabled = new CheckBox { Content = "启用此服务器", IsChecked = server?.Enabled ?? true };
         var status = Kit.Text("", Role.Caption, "muted", wrap: true);
         var cancel = new CancellationTokenSource();
         var actions = Kit.Line(8, Kit.Action("取消", () => App.Window?.Close()));
@@ -99,7 +99,7 @@ internal static class ToolSettings
             {
                 var next = ExternalMcpServer.Parse(server?.Id ?? Guid.NewGuid().ToString("N"), name.Text, address.Text, token.Password, enabled.IsChecked == true);
                 status.Foreground = Paint.Brush("muted");
-                status.Text = next.Enabled ? "正在读取可用工具…" : "";
+                status.Text = next.Enabled ? "正在加载可用工具…" : "";
                 var found = next.Enabled ? await ExternalMcpConnection.Discover(next, cancelToken) : [];
                 cancelToken.ThrowIfCancellationRequested();
                 ExternalMcp.Shared.Save(next, found);

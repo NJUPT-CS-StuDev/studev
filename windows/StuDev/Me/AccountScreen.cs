@@ -103,7 +103,7 @@ public sealed partial class AccountScreen : Screen
         }
     }
 
-    private static string Message(Exception failure) => failure is PlatformFailure platform ? platform.Message : "连接未完成，请检查网络后重试。";
+    private static string Message(Exception failure) => failure is PlatformFailure platform ? platform.Message : "暂时连不上 StuDev，请检查网络后重试。";
     private void UpdateStatus()
     {
         if (status is null) return;
@@ -178,7 +178,7 @@ public sealed partial class AccountScreen : Screen
         AutomationProperties.SetAutomationId(page, "account-page");
         if (user is null)
         {
-            page.Children.Add(Pages.Empty("登录后查看账号、管理安全与登录设备。", Kit.Action("登录 StuDev", () => SignIn.Show(() => Shown(null)), true)));
+            page.Children.Add(Pages.Empty("登录后可编辑个人资料、管理账号安全和查看已登录的设备。", Kit.Action("登录 StuDev", () => SignIn.Show(() => Shown(null)), true)));
             if (notice is not null) page.Children.Add(Kit.Text(notice, Role.Label, "muted", wrap: true));
             Children.Add(Pages.Frame(page, 680)); return;
         }
@@ -214,30 +214,30 @@ public sealed partial class AccountScreen : Screen
         Row("学号", me.StudentId); Row("姓名", me.RealName); Row("昵称", me.Nickname);
         Row("QQ 号", me.Qq); Row("联系邮箱", me.Email.Length > 0 ? me.Email : $"{me.Qq}@qq.com");
         foreach (var membership in me.Memberships ?? [])
-            Row("组织归属", string.Join(" · ", new[] { membership.OrganizationName, membership.Position }.Where(value => value.Length > 0)));
+            Row("所在组织", string.Join(" · ", new[] { membership.OrganizationName, membership.Position }.Where(value => value.Length > 0)));
         page.Children.Add(rows);
         var incomplete = state?.ProfileRequired == true || !me.ProfileComplete;
         if (incomplete)
         {
-            page.Children.Add(Kit.Text("请完善学号与姓名，确认后将与账号绑定。", Role.Label, "brand", wrap: true));
+            page.Children.Add(Kit.Text("请填写学号和姓名，核对后与账号绑定。", Role.Label, "brand", wrap: true));
             Field(page, "学号", student, text => student = text, "account-student", 20, me.StudentId.Length > 0);
             Field(page, "真实姓名", realName, text => realName = text, "account-real-name", 40, me.RealName.Length > 0);
         }
         Field(page, "昵称（选填）", nickname, text => nickname = text, "account-nickname");
         Field(page, "个人签名（选填）", signature, text => signature = text, "account-signature", 120);
-        page.Children.Add(Kit.Text("留空使用默认昵称。成员可看到你的头像、昵称和签名。身份与联系方式仅本人和授权管理员可见。", Role.Caption, "muted", wrap: true));
+        page.Children.Add(Kit.Text("不填昵称则使用默认昵称。其他成员可以看到你的头像、昵称和签名。姓名、学号和联系方式仅本人和有权限的管理员可见。", Role.Caption, "muted", wrap: true));
         Action(page, incomplete ? "确认并绑定身份" : "保存个人资料", "account-save-profile", () => Run("正在保存…", async () =>
         {
             await Account.Shared.SaveProfile(me.Revision, student, realName, nickname, signature);
             Accept(Account.Shared.CachedState, true); notice = "资料已保存。";
         }), () => !verifying && state is not null && !state.PasswordChangeRequired && !state.EnrollmentRequired && !state.MfaRequired, true);
         if (error is not null) page.Children.Add(Kit.TextAction("刷新账号信息", () => _ = Verify(), Icons.Again));
-        page.Children.Add(Kit.Row("同步", Words("任务和课表设置在已登录的设备间同步", "桌面小组件位置、提醒和后台运行设置保留在这台电脑")));
+        page.Children.Add(Kit.Row("同步", Words("任务和课表设置会同步到已登录的设备", "桌面小组件位置、提醒和后台运行设置保留在这台电脑")));
     }
 
     private void Devices(StackPanel page)
     {
-        page.Children.Add(Kit.Text("查看已登录的浏览器和应用，退出后需要重新登录。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("在这里查看哪些浏览器和应用登录了你的账号，也可以让它们退出登录。", Role.Label, "muted", wrap: true));
         var refresh = Kit.TextAction("刷新", () => _ = LoadDevices(), Icons.Again);
         refresh.HorizontalAlignment = HorizontalAlignment.Right;
         AutomationProperties.SetAutomationId(refresh, "account-refresh-devices"); Watch(refresh, () => !devicesLoading); page.Children.Add(refresh);
@@ -252,7 +252,7 @@ public sealed partial class AccountScreen : Screen
         deviceControls.Clear();
         devicesRows.Children.Clear();
         if (devicesError is not null) devicesRows.Children.Add(Kit.Text(devicesError, Role.Label, "danger", wrap: true));
-        if (devicesStatus is not null) { devicesStatus.Text = devicesLoading ? "正在读取设备…" : ""; devicesStatus.Visibility = devicesLoading ? Visibility.Visible : Visibility.Collapsed; }
+        if (devicesStatus is not null) { devicesStatus.Text = devicesLoading ? "正在加载登录设备…" : ""; devicesStatus.Visibility = devicesLoading ? Visibility.Visible : Visibility.Collapsed; }
         foreach (var device in devices)
         {
             var created = DateTimeOffset.TryParse(device.CreatedAt, out var at) ? at.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy年M月d日 HH:mm") : device.CreatedAt;
@@ -263,7 +263,7 @@ public sealed partial class AccountScreen : Screen
             AutomationProperties.SetAutomationId(revoke, device.Current ? "account-revoke-current" : "account-revoke-device");
             revoke.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(revoke, 1); Watch(revoke); deviceControls.Add(revoke); row.Children.Add(revoke); devicesRows.Children.Add(row);
         }
-        if (!devicesLoading && devicesError is null && devicesFor is not null && devices.Count == 0) devicesRows.Children.Add(Pages.Empty("没有登录设备。"));
+        if (!devicesLoading && devicesError is null && devicesFor is not null && devices.Count == 0) devicesRows.Children.Add(Pages.Empty("暂无登录设备。"));
     }
 
     private async Task LoadDevices()
@@ -273,7 +273,7 @@ public sealed partial class AccountScreen : Screen
         devicesVisit = currentVisit;
         devicesLoading = true; devicesError = null;
         // Retain the current rows and focused action during refresh.
-        if (devicesStatus is not null) { devicesStatus.Text = "正在读取设备…"; devicesStatus.Visibility = Visibility.Visible; }
+        if (devicesStatus is not null) { devicesStatus.Text = "正在加载登录设备…"; devicesStatus.Visibility = Visibility.Visible; }
         EnableControls();
         try
         {
@@ -291,7 +291,7 @@ public sealed partial class AccountScreen : Screen
 
     private void ConfirmExit(AccountDevice? device)
     {
-        Confirm(device is null ? "退出此账号？" : $"退出{device.DeviceName}？", "此设备需要重新登录才能使用账号服务。", "确认退出", () => Run("正在退出…", async () =>
+        Confirm(device is null ? "退出此账号？" : $"退出{device.DeviceName}？", "退出后，这台设备需要重新登录才能继续使用账号。", "确认退出", () => Run("正在退出…", async () =>
         {
             if (device is null) await Account.Shared.SignOut(); else await Account.Shared.RevokeDevice(device.Id);
             if (device is null || device.Current) { Accept(null, true); notice = "已退出登录。"; }

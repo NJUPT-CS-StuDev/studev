@@ -77,7 +77,7 @@ public sealed partial class AccountAvatar : Grid
         else if (visit == load)
         {
             retryAt = DateTime.UtcNow.AddMinutes(1);
-            if (picture.Opacity == 0) State("头像暂未加载");
+            if (picture.Opacity == 0) State("头像暂时无法显示");
         }
     }
 

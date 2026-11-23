@@ -45,7 +45,7 @@ function renderIdCard(user: User) {
   const head = el('div', undefined, 'p-id-head');
   head.append(nameNode('h2', user), pill(user.role));
   if (user.identityVerified) {
-    const verified = el('span', '已实名入档', 'p-pill');
+    const verified = el('span', '已核验身份', 'p-pill');
     verified.dataset.state = 'active';
     head.append(verified);
   }
@@ -85,7 +85,7 @@ function renderIdCard(user: User) {
     refreshAvatarBtn.style.padding = '0';
     refreshAvatarBtn.style.cursor = 'pointer';
     refreshAvatarBtn.style.fontFamily = 'inherit';
-    refreshAvatarBtn.title = '刚在手机 QQ 换过头像？点击穿透缓存立即同步最新高清原图';
+    refreshAvatarBtn.title = '换过 QQ 头像？点这里更新。';
     refreshAvatarBtn.addEventListener('click', () => {
       avatarCacheBust = String(Date.now());
       renderIdCard(user);

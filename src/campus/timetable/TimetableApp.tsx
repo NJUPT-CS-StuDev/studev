@@ -125,7 +125,7 @@ export default function TimetableApp() {
     const examsAhead = line.exams.filter(exam => exam.date >= now.date).length;
     // The list's subtitle counts what is on it: things to do, and exams still ahead.
     const subtitle = scale === 'list' ? [pending ? `${pending} 件要做` : '没有待办', examsAhead ? `${examsAhead} 场考试待考` : ''].filter(Boolean).join(' · ')
-        : scale === 'exam' ? (examsAhead ? `${examsAhead} 场待考` : '暂无待考') : scale === 'term'
+        : scale === 'exam' ? (examsAhead ? `${examsAhead} 场待考` : '没有待考科目') : scale === 'term'
         ? `本学期 · ${nowWeek ? `第 ${nowWeek} / ${term.weeks.length} 周` : `${term.weeks.length} 周`}${last ? ` · 课上到 ${dateLabel(last)}` : ''}`
         : scale === 'week' ? `${ahead === 1 ? '下周 · ' : ahead > 1 ? `${ahead} 周后 · ` : ''}${dateLabel(monday)} – ${dateLabel(addDays(monday, 6))}` : week ? `第 ${week} 周` : '假期';
     const showShift = (scale === 'day' || scale === 'week') && !(scale === 'day' && !wide);

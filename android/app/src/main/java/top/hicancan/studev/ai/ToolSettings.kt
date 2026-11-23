@@ -113,7 +113,7 @@ internal object CampusToolPreferences {
             OutlinedTextField(source.key, { changed(source.copy(key = it.take(2_048))) }, Modifier.fillMaxWidth(),
                 label = { Text("访问密钥（可选）") }, singleLine = true, enabled = !connecting, shape = shape,
                 visualTransformation = PasswordVisualTransformation())
-            Plain("启用后，工具参数会发送给服务，读取结果会交给当前模型。", 12.sp, Ink.muted, lineHeight = 18.sp)
+            Plain("开启后，工具会收到请求里的内容，当前模型会看到工具返回的结果。", 12.sp, Ink.muted, lineHeight = 18.sp)
             if (notice.isNotEmpty()) Plain(notice, 12.sp, marks().danger)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextAction(if (connecting) "正在连接…" else "连接并启用", {

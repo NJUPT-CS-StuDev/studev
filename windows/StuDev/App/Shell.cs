@@ -192,7 +192,7 @@ public sealed partial class Shell : Window
     {
         var current = Me.Appearance.Current;
         var names = new[] { "跟随系统", "浅色", "深色" };
-        var label = $"外观：{names[current]}（点按切换到{names[(current + 1) % 3]}）";
+        var label = $"外观：{names[current]}（点击切换为{names[(current + 1) % 3]}）";
         AutomationProperties.SetName(themeToggle, label);
         ToolTipService.SetToolTip(themeToggle, label);
         var brush = Paint.Brush("muted");

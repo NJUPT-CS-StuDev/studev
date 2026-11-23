@@ -91,7 +91,7 @@ public static class Events
             if (!Names.Placed(e.Room)) { body.Children.Add(new Border { Height = 10 }); return; }
             var buttons = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 12, 0, 14) };
             buttons.ColumnDefinitions.Add(new ColumnDefinition()); buttons.ColumnDefinitions.Add(new ColumnDefinition());
-            var look = Kit.Action("在地图上看", () => { Close(); App.Open("map", ("place", e.Room!)); }); look.HorizontalAlignment = HorizontalAlignment.Stretch;
+            var look = Kit.Action("在地图上查看", () => { Close(); App.Open("map", ("place", e.Room!)); }); look.HorizontalAlignment = HorizontalAlignment.Stretch;
             var go = Kit.Action("去这里", () => { Close(); App.Open("map", ("nav", e.Room!)); }, go: true); go.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetColumn(go, 1);
             buttons.Children.Add(look); buttons.Children.Add(go);
             body.Children.Add(buttons);
@@ -102,7 +102,7 @@ public static class Events
         void Place(string key) { if (Names.IsRoom(e.Room)) Row(key, Value($"{Names.Room(e.Room!)} 的课表"), () => See("room", e.Room!)); }
         void Course(string course, string? code = null)
         {
-            Row("课程", Value("这门课的全部时段"), () => See("course", course));
+            Row("课程", Value("查看该课程的所有上课时间"), () => See("course", course));
             AddKnowledge(body, campus.Repository, course, code);
         }
         void Together(string key, List<string> classes, int? people)
@@ -118,8 +118,8 @@ public static class Events
         {
             Meta(when);
             var tally = line.RunTally(now);
-            Row("次数", Value($"{tally.Count} / {run.Required}", tally.Need > 0 ? $"还需安排 {tally.Need} 次" : "已经够了"));
-            Danger("这天没跑", () =>
+            Row("次数", Value($"{tally.Count} / {run.Required}", tally.Need > 0 ? $"还需安排 {tally.Need} 次" : "已排够本学期所需次数"));
+            Danger("标记为当天未跑", () =>
             {
                 var settings = campus.Preferences.Get("run", Data.StorageJson.Default.RunSettings) ?? new([]);
                 campus.Preferences.Set("run", settings with { Days = settings.Days.Where(d => d != Clock.Text(e.Date)).ToList() }, Data.StorageJson.Default.RunSettings);
@@ -134,7 +134,7 @@ public static class Events
         {
             if (Lessons.CourseOf(line.CourseMeetings, lab.Course) is { } facts) Meta(Lessons.CourseLine(facts.Credits, facts.Nature));
             Meta($"{when} · {place ?? lab.Place}", true);
-            if (line.Holidays.GetValueOrDefault(e.Date) is { } off) Meta($"这天是{off}，实验表照常排了这一次，以老师通知为准");
+            if (line.Holidays.GetValueOrDefault(e.Date) is { } off) Meta($"实验表显示{off}当天有实验，请以老师通知为准。");
             Go();
             Row("项目", Value(lab.Project, lab.Group is { } g ? $"第 {g} 组" : null));
             if (System.Text.RegularExpressions.Regex.IsMatch(lab.Location, "排|[（(]")) Row("座位", Value(lab.Location.Replace(",", "、")));
@@ -144,9 +144,9 @@ public static class Events
             Course(courseName, courseCode);
             Materials(courseName);
             if (!mine) return root;
-            Danger("不上这次实验", () => { Choices.LeaveLab(campus.Preferences, "skip", lab.Id); Close(); });
+            Danger("从课表隐藏本次实验", () => { Choices.LeaveLab(campus.Preferences, "skip", lab.Id); Close(); });
             var count = line.Labs.Count(o => Choices.LabCourse(o) == Choices.LabCourse(lab));
-            Danger("不上这门实验", () => { Choices.LeaveLab(campus.Preferences, "drop", Choices.LabCourse(lab)); Close(); }, $"共 {count} 次，可在“我 · 实验安排”里恢复");
+            Danger("从课表隐藏这门实验", () => { Choices.LeaveLab(campus.Preferences, "drop", Choices.LabCourse(lab)); Close(); }, $"共 {count} 次，可在“我 · 实验安排”里恢复");
             return root;
         }
         if (e.Exam is { } x)
@@ -166,18 +166,18 @@ public static class Events
             Course(courseName, courseCode);
             Materials(courseName);
             Row("考试", Value($"全部考试 · {line.Exams.Select(o => o.Course.Code ?? o.Course.Name).Distinct().Count()} 门"), mine ? () => { Close(); App.Open("timetable", "exams"); } : null);
-            if (mine && campus.Preferences.Class is { } klass) Danger("不参加这场考试", () => { Choices.SkipExam(campus.Preferences, term, klass, x.Id); Close(); });
+            if (mine && campus.Preferences.Class is { } klass) Danger("从课表隐藏这场考试", () => { Choices.SkipExam(campus.Preferences, term, klass, x.Id); Close(); });
             return root;
         }
 
         var meeting = e.Meeting;
         if (meeting is not null) Meta(Lessons.CourseLine(meeting.Course.Credits, meeting.Course.Nature, meeting.Course.Assessment));
-        Meta($"{when}{(place is not null ? $" · {place}" : " · 课表没写地点")}", true);
+        Meta($"{when}{(place is not null ? $" · {place}" : " · 课表未注明地点")}", true);
         Go();
         if (meeting is not null)
         {
             var left = Lessons.Left(line, meeting, now, e.End);
-            Row("周次", Value(Lessons.WeeksText(meeting.Weeks), left > 0 ? $"还剩 {left} 次" : "已经上完"));
+            Row("周次", Value(Lessons.WeeksText(meeting.Weeks), left > 0 ? $"还剩 {left} 次" : "本学期已结束"));
             Together("合班", meeting.Classes, meeting.TeachingClass.Size);
         }
         Teachers();
@@ -229,7 +229,7 @@ public static class Events
         body.Children.Add(Kit.Row("进度", Value(Practices.Progress(practice.Weeks, week))));
         if (TeacherRow(Practices.Teachers(practice), name => { App.Window?.Close(); App.Open("timetable", new Who("teacher", name)); }) is { } teachers)
             body.Children.Add(Kit.Row("老师", teachers));
-        body.Children.Add(Kit.Row("安排", Value("不占课表格子", "具体时间、地点和要求以指导老师的安排为准。")));
+        body.Children.Add(Kit.Row("安排", Value("不占固定课时", "时间、地点和要求以指导老师的安排为准。")));
         var name = Practices.ResourceName(practice);
         AddKnowledge(body, campus.Repository, name);
         AddMaterials(body, campus.Repository, name);
@@ -320,7 +320,7 @@ public static class Events
             AddRows(0, visible);
             if (items.Count > visible)
             {
-                var more = Kit.TextAction($"还有 {items.Count - visible} 份", () =>
+                var more = Kit.TextAction($"查看其余 {items.Count - visible} 份", () =>
                 {
                     section.Children.RemoveAt(section.Children.Count - 1);
                     AddRows(visible, items.Count - visible);
@@ -350,7 +350,7 @@ public static class Events
             target.Children.Clear();
             foreach (var change in Exams.ChangesOf(record, exam))
             {
-                var title = $"{(change.Change == "added" ? "新发布" : "改过")} · {Exams.VersionTime(record.History.First(version => version.Id == change.Version))}";
+                var title = $"{(change.Change == "added" ? "新发布" : "已调整")} · {Exams.VersionTime(record.History.First(version => version.Id == change.Version))}";
                 var words = Kit.Column(2, Kit.Text(title, Role.Label));
                 if (change.Change == "changed") foreach (var line in Exams.ChangeLines(change)) words.Children.Add(Kit.Text(line, Role.Caption, "muted", wrap: true));
                 words.Margin = new Thickness(0, 0, 0, 12); target.Children.Add(words);

@@ -25,7 +25,7 @@ public sealed partial class SearchScreen : Screen
     private static readonly HashSet<string> FillerSections = ["Direct detail links", "显示更多", "更多", "查看更多", "More"];
     private static readonly Regex FileSuffix = new(@"\.[a-z0-9]{1,5}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex FileTypePattern = new(@"\.([a-z0-9]{2,5})(?:$|[?#])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-    private static readonly (string Value, string Label)[] Since = [("", "全部时间"), ("3", "近三天"), ("7", "近一周"), ("30", "近一月"), ("365", "近一年")];
+    private static readonly (string Value, string Label)[] Since = [("", "全部时间"), ("3", "近三天"), ("7", "近一周"), ("30", "近一个月"), ("365", "近一年")];
     private static readonly string[] Campuses = ["仙林", "三牌楼", "锁金"];
     private readonly Campus campus = Campus.Shared;
     private readonly TextBox box;
@@ -135,7 +135,7 @@ public sealed partial class SearchScreen : Screen
         {
             if (cancel.IsCancellationRequested) return;
             answer = null;
-            failure = "搜索数据有误，暂时无法显示结果";
+            failure = "暂时无法加载搜索结果，请重试";
         }
         catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
         {
@@ -164,17 +164,17 @@ public sealed partial class SearchScreen : Screen
         }
         var query = box.Text.Trim();
         DrawFilters(query.Length > 1);
-        if (query.Length == 1) { body.Children.Add(Pages.Empty("再多输入一个字")); return; }
+        if (query.Length == 1) { body.Children.Add(Pages.Empty("请至少输入两个字")); return; }
         if (answer is { Total: > 0 } a)
         {
             var tally = Kit.Text($"{(query.Length == 0 ? $"{a.Total:N0} 条" : a.Total >= 1000 ? "超过 1000 条结果" : $"约 {a.Total:N0} 条结果")}（{a.Seconds:0.00} 秒）{(page > 1 ? $" · 第 {page} 页" : "")}", Role.Caption, "faint");
             tally.FontSize = 12.5; tally.Margin = new Thickness(0, 12, 0, 2); body.Children.Add(tally);
         }
         if (page == 1 && System.Text.RegularExpressions.Regex.IsMatch(query, "空教室|自习"))
-            body.Children.Add(Kit.Row("", Kit.Column(1, Kit.Text("看此刻的空教室", Role.Body, bold: true), Kit.Text("按楼和楼层，还能待多久", Role.Caption, "muted")), () => { channel = Channels.First(c => c.Id == "room"); box.Text = ""; }));
+            body.Children.Add(Kit.Row("", Kit.Column(1, Kit.Text("查看当前空教室", Role.Body, bold: true), Kit.Text("按楼栋和楼层查看空闲时段", Role.Caption, "muted")), () => { channel = Channels.First(c => c.Id == "room"); box.Text = ""; }));
         if (failure is not null) body.Children.Add(Pages.Empty(failure));
         foreach (var result in answer?.Results ?? []) body.Children.Add(Result(result));
-        if (answer is { Total: 0 } && failure is null) body.Children.Add(Pages.Empty(query.Length == 0 ? "这段时间没有内容" : $"没有找到“{query}”{(channel.Id != "all" ? "，换到“全部”试试" : "")}"));
+        if (answer is { Total: 0 } && failure is null) body.Children.Add(Pages.Empty(query.Length == 0 ? "这段时间没有内容" : $"没有找到“{query}”{(channel.Id != "all" ? "，可切换到“全部”再搜一次" : "")}"));
         if (answer is { Total: > PageSize } paged)
         {
             var last = (paged.Total + PageSize - 1) / PageSize;
@@ -329,7 +329,7 @@ public sealed partial class SearchScreen : Screen
                 file.Ground(Paint.Clear, Paint.Brush("surface"));
                 files.Children.Add(file);
             }
-            if (attachments.Count > 4) files.Children.Add(Kit.Text($"等 {attachments.Count} 个附件", Role.Caption, "muted"));
+            if (attachments.Count > 4) files.Children.Add(Kit.Text($"共 {attachments.Count} 个附件", Role.Caption, "muted"));
             doc.Children.Add(files);
         }
         return doc;
@@ -411,7 +411,7 @@ public sealed partial class SearchScreen : Screen
         if (reader is null || !roomDays.TryGetValue(Clock.Text(now.Date), out var day)) { LoadRooms(now.Date); return null; }
         if (day is null) return null;
         var state = reader.At(day, id, now.Min);
-        return (state.Busy, state.Busy ? $"上课中，到 {Clock.Hm(state.Until)}" : $"现在空闲，到 {Clock.Hm(state.Until)}");
+        return (state.Busy, state.Busy ? $"上课至 {Clock.Hm(state.Until)}" : $"空闲至 {Clock.Hm(state.Until)}");
     }
 
     private bool loadingRooms;
@@ -478,11 +478,11 @@ public sealed partial class SearchScreen : Screen
         var collator = StringComparer.Create(new System.Globalization.CultureInfo("zh-CN"), System.Globalization.CompareOptions.NumericOrdering);
         var groups = roomIndex.Rooms.Where(r => World.Rooms.Classroom(r) && r.Campus == roomsCampus).GroupBy(r => r.Building).OrderBy(g => g.Key, collator).ToList();
         var buildings = new WrapRow { Gap = 14, Margin = new Thickness(0, 10, 0, 0) };
-        buildings.Children.Add(Plain("全部的楼", roomsBuilding is null, () => { roomsBuilding = null; Draw(); }));
+        buildings.Children.Add(Plain("全部楼栋", roomsBuilding is null, () => { roomsBuilding = null; Draw(); }));
         foreach (var g in groups) { var name = g.Key; buildings.Children.Add(Plain(name, roomsBuilding == name, () => { roomsBuilding = name; Draw(); })); }
-        buildings.Children.Add(Plain(roomsAll ? "显示全部" : "只看空的", roomsAll, () => { roomsAll = !roomsAll; Draw(); }));
+        buildings.Children.Add(Plain(roomsAll ? "显示全部" : "只看空教室", roomsAll, () => { roomsAll = !roomsAll; Draw(); }));
         body.Children.Add(buildings);
-        if (day is null) { body.Children.Add(Pages.Empty("这一天没有排课数据")); return; }
+        if (day is null) { body.Children.Add(Pages.Empty("暂无这一天的排课数据")); return; }
         foreach (var group in groups.Where(g => roomsBuilding is null || g.Key == roomsBuilding))
         {
             var states = group.Select(r => (Room: r, State: reader.At(day, r.Id, at.Min))).ToList();

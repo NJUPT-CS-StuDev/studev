@@ -161,12 +161,12 @@ public sealed partial class KnowledgeScreen : Screen
         host.Children.Clear();
         if (failed)
         {
-            host.Children.Add(Pages.Frame(Pages.Empty("知识暂时无法加载", Kit.TextAction("重试", () => _ = Load(), Icons.Again))));
+            host.Children.Add(Pages.Frame(Pages.Empty("课程资料暂时无法加载", Kit.TextAction("重试", () => _ = Load(), Icons.Again))));
             return;
         }
         if (knowledge is null)
         {
-            host.Children.Add(Pages.Frame(Pages.Empty("正在打开知识…")));
+            host.Children.Add(Pages.Frame(Pages.Empty("正在加载课程目录…")));
             return;
         }
 
@@ -334,9 +334,9 @@ public sealed partial class KnowledgeScreen : Screen
 
                 var card = new Border { Background = Paint.Brush("paper"), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Paint.Number("radius", "card")), Padding = new Thickness(18) };
                 var graphStack = new StackPanel { Spacing = 14 };
-                graphStack.Children.Add(Kit.Text("箭头表示作者整理的建议先修顺序，学期安排以培养方案为准。", Role.Caption, "muted", wrap: true));
-                graphStack.Children.Add(Doc.Make(Doc.Read(shown.Count > 0 ? md.ToString() : "当前筛选暂无已收录的先修关系。课程仍可在课程目录查看。")));
-                if (selected.Any(course => !connected.Contains(course.Code)) && shown.Count > 0) graphStack.Children.Add(Kit.Text("仅显示已收录的关系，未连线课程仍可在课程目录查看。", Role.Caption, "muted", wrap: true));
+                graphStack.Children.Add(Kit.Text("箭头表示建议先修顺序，学期安排以培养方案为准。", Role.Caption, "muted", wrap: true));
+                graphStack.Children.Add(Doc.Make(Doc.Read(shown.Count > 0 ? md.ToString() : "符合筛选条件的课程暂无先修关系。可在课程目录中查看这些课程。")));
+                if (selected.Any(course => !connected.Contains(course.Code)) && shown.Count > 0) graphStack.Children.Add(Kit.Text("没有连线的课程可在课程目录中查看。", Role.Caption, "muted", wrap: true));
                 if (linkedCourses.Count > 0)
                 {
                     graphStack.Children.Add(Kit.Hairline());
@@ -377,7 +377,7 @@ public sealed partial class KnowledgeScreen : Screen
                 if (grouped.Count == 0) results.Children.Add(Pages.Empty("没有符合当前筛选条件的课程"));
                 foreach (var group in grouped)
                 {
-                    var termTitle = group.Key is >= 1 and <= 8 ? termTitles[group.Key] : "其他与通识课程";
+                    var termTitle = group.Key is >= 1 and <= 8 ? termTitles[group.Key] : "通识及其他课程";
                     var termSub = group.Key is >= 1 and <= 8 ? $"第 {group.Key} 学期 · {group.Count()} 门" : $"{group.Count()} 门";
                     var head = new Grid { Padding = new Thickness(0, 8, 0, 4), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 0, 0, 1) };
                     head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -564,8 +564,8 @@ public sealed partial class KnowledgeScreen : Screen
                 if (ids.Count > 5) { toggle = Kit.Button($"展开全部 {ids.Count} 个", () => { expanded = !expanded; DrawLinks(); }); toggle.HorizontalAlignment = HorizontalAlignment.Left; section.Children.Add(toggle); }
                 DrawLinks(); rightStack.Children.Add(section);
             }
-            Related("先要懂", topic.Requires);
-            Related("用到它的", topic.LeadsTo);
+            Related("先修知识点", topic.Requires);
+            Related("后续知识点", topic.LeadsTo);
             if (topic.Requires.Count == 0 && topic.LeadsTo.Count == 0)
             {
                 var rHead = Kit.Text("相关知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
@@ -575,7 +575,7 @@ public sealed partial class KnowledgeScreen : Screen
         }
         else if (material is not null)
         {
-            var rHead = Kit.Text("这份资料关联的知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
+            var rHead = Kit.Text("资料中的知识点", Role.Caption); rHead.Foreground = Paint.Tone(t, "fg");
             rightStack.Children.Add(rHead);
             var counts = idx.Topics.Select(tp => (Topic: tp, N: tp.References.Count(r => r.Material == material.Path))).Where(x => x.N > 0).OrderByDescending(x => x.N).ToList();
             foreach (var (tp, n) in counts) rightStack.Children.Add(RelLink($"{tp.Title} · {n} 处", () => Open(course: course.Id, topic: tp.Id)));
@@ -728,7 +728,7 @@ public sealed partial class KnowledgeScreen : Screen
             catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException) {
                 if (!current()) return;
                 System.Diagnostics.Trace.TraceError("Knowledge preview {0}: {1}", path, error);
-                previewStatus.Children.Add(Kit.Text("题干预览暂时无法加载", Role.Caption, "muted"));
+                previewStatus.Children.Add(Kit.Text("题目预览暂时无法加载", Role.Caption, "muted"));
                 previewStatus.Children.Add(Kit.TextAction("重试", () => _ = LoadPreviews(), Icons.Again));
             }
         }
@@ -771,7 +771,7 @@ public sealed partial class KnowledgeScreen : Screen
         if (topic is not null)
         {
             var matCount = topic.References.Select(r => r.Material).Distinct().Count();
-            var info = Kit.Text(topic.References.Count > 0 ? $"关联 {topic.References.Count} 处 · 出现在 {matCount} 份资料里" : "收录的资料里还没有与它关联的片段", Role.Label);
+            var info = Kit.Text(topic.References.Count > 0 ? $"{matCount} 份资料 · {topic.References.Count} 处引用" : "暂无相关资料", Role.Label);
             info.Foreground = Paint.Tone(toneIdx, "fg");
             container.Children.Add(info);
             container.Children.Add(Doc.Make(blocks, link: onLink, image: imgLoader));
@@ -783,7 +783,7 @@ public sealed partial class KnowledgeScreen : Screen
             var byMat = topic.References.GroupBy(r => r.Material).ToList();
             if (byMat.Count == 0)
             {
-                container.Children.Add(Kit.Text("收录的资料里还没有与它关联的片段。", Role.Label, "muted"));
+                container.Children.Add(Kit.Text("暂无相关资料。", Role.Label, "muted"));
             }
             else
             {

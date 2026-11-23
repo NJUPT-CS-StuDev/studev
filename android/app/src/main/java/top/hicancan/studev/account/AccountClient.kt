@@ -104,7 +104,7 @@ class HttpsPlatformTransport : PlatformTransport {
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val bytes = stream?.use { it.accountBytes(1_048_576) } ?: byteArrayOf()
             val value = runCatching { accountJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject }.getOrElse {
-                throw PlatformFailure(status, "INVALID_RESPONSE", "服务暂时无法响应，请稍后重试。")
+                throw PlatformFailure(status, "INVALID_RESPONSE", "暂时连不上，请稍后再试。")
             }
             PlatformReply(status, value)
         } finally { connection.disconnect() }

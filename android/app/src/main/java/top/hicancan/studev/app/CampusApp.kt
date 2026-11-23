@@ -152,7 +152,7 @@ import top.hicancan.studev.world.Moment
         text = {
             if (found == null) Row(verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Ink.brand)
-                Plain("查找新版本和新的校园数据……", 14.sp, Ink.muted, modifier = Modifier.padding(start = 12.dp))
+                Plain("正在检查更新…", 14.sp, Ink.muted, modifier = Modifier.padding(start = 12.dp))
             } else Plain(found.detail, 14.sp, Ink.muted, lineHeight = 21.sp)
         },
         confirmButton = {

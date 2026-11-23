@@ -353,7 +353,7 @@ export function renderManagedMembers() {
             user.status === 'active' ? '停用' : '启用',
             () =>
               guard(async () => {
-                if ((await confirmAction(user.status === 'active' ? '停用账号' : '启用账号', `${display}（${ref}）${user.status === 'active' ? '将无法登录，旧会话立即失效。' : '将恢复登录权限。'}`)) === null) return;
+                if ((await confirmAction(user.status === 'active' ? '停用账号' : '启用账号', `${display}（${ref}）${user.status === 'active' ? '将无法登录，已登录的设备也会退出。' : '可以重新登录。'}`)) === null) return;
                 await api(`/admin/users/${encodeURIComponent(user.id)}`, { revision: user.revision, status: user.status === 'active' ? 'disabled' : 'active' });
                 await refreshMembers();
                 message(status, '账号状态已更新。', 'success');

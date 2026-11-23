@@ -79,9 +79,9 @@ public sealed partial class MapScreen : Screen
         var controlsScroll = new ScrollViewer { Content = controls, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         stage.SizeChanged += (_, e) => controlsScroll.MaxHeight = Math.Max(0, e.NewSize.Height);
         stage.Children.Add(controlsScroll);
-        var search = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = Kit.Line(8, Kit.Icon(Icons.Magnifier, 16, "muted", 20), Kit.Text("搜地点或教室", Role.Label, "muted")), Padding = new Thickness(14, 9, 18, 9), CornerRadius = new CornerRadius(20),
+        var search = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = Kit.Line(8, Kit.Icon(Icons.Magnifier, 16, "muted", 20), Kit.Text("搜索地点或教室", Role.Label, "muted")), Padding = new Thickness(14, 9, 18, 9), CornerRadius = new CornerRadius(20),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(16), Translation = new System.Numerics.Vector3(0, 0, 8), Shadow = new ThemeShadow() };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "搜地点或教室");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(search, "搜索地点或教室");
         search.Click += (_, _) => App.OpenLink("/search/?scope=place");
         stage.Children.Add(search);
         var credit = Kit.Text("© OpenStreetMap 贡献者 · njupt-map", Role.Caption, "faint"); credit.FontSize = 10.5; credit.HorizontalAlignment = HorizontalAlignment.Right; credit.VerticalAlignment = VerticalAlignment.Bottom; credit.Margin = new Thickness(0, 0, 10, 6);
@@ -629,7 +629,7 @@ public sealed partial class MapScreen : Screen
             JsonNode? from = origin is not null ? JsonNode.Parse(space.ById[origin].Routing.GetRawText()) : me is not null ? new JsonObject { ["type"] = "position", ["position"] = new JsonArray(me[0], me[1]) } : null;
             if (from is null)
             {
-                notice = "输入出发地，或点右边的定位。";
+                notice = "请输入出发地，或点击定位按钮使用当前位置。";
                 var at = destination.Centre ?? (BuildingOf(destination) is { } b && model!.Buildings.FirstOrDefault(x => x.Id == b.Id) is { } shape ? Centre(shape.Geometry) : null);
                 if (at is not null)
                     surface.Move(new CameraOptions { Center = new LatLng(at[1], at[0]), Zoom = 16.6, Pitch = 45 }, CameraUpdateMode.Fly, 900);
@@ -639,7 +639,7 @@ public sealed partial class MapScreen : Screen
                 if (origin is not null && space.ById.GetValueOrDefault(origin) is { } source && Routing.SameAccess(source, destination)) { notice = null; await surface.Map.SetGeoJsonSourceDataAsync("route", Collection([])); surface.Redraw(); Draw(); return; }
                 var request = new JsonObject { ["origin"] = from, ["destination"] = JsonNode.Parse(destination.Routing.GetRawText()), ["mode"] = mode, ["avoid_steps"] = false, ["max_snap_distance_m"] = 100, ["alternatives"] = 3 };
                 try { routes = JsonNode.Parse(router.Route(request.ToJsonString()))!["routes"]!.AsArray().Select(r => r!).ToList(); notice = routes.Count > 0 ? null : "没有找到路线。"; }
-                catch (Exception error) when (error is not OutOfMemoryException) { notice = origin is not null ? "没有找到路线。" : "你现在不在校园路网附近，请选一个出发地。"; }
+                catch (Exception error) when (error is not OutOfMemoryException) { notice = origin is not null ? "没有找到路线。" : "当前位置离校园道路较远，请选择出发地。"; }
                 chosen = Math.Min(chosen, Math.Max(0, routes.Count - 1));
             }
         }
@@ -673,7 +673,7 @@ public sealed partial class MapScreen : Screen
             if (navId is not null) await Routes();
         }
         catch (Exception error) when (error is UnauthorizedAccessException or System.Runtime.InteropServices.COMException or TaskCanceledException)
-        { notice = "没有拿到你的位置：在 Windows 设置里允许定位，或选一个出发地。"; Draw(); }
+        { notice = "无法获取当前位置。请在 Windows 设置中允许定位，或手动选择出发地。"; Draw(); }
     }
 
     /** Where a drag on the ball has turned the camera so far: taken from the camera when it starts, as the web's jumpTo. */
@@ -746,7 +746,7 @@ public sealed partial class MapScreen : Screen
             body.Children.Add(Kit.TextAction("重试", () => _ = Load(), Icons.Again));
             if (!styled) return;
         }
-        if (!styled || space is null || model is null) { body.Children.Add(Kit.Text("正在打开校园…", Role.Label, "muted")); return; }
+        if (!styled || space is null || model is null) { body.Children.Add(Kit.Text("正在加载地图…", Role.Label, "muted")); return; }
         void Row(string key, UIElement value, Action? open = null) => body.Children.Add(Kit.Row(key, value, open));
         UIElement Value(string text, string? small = null) { var v = Kit.Column(2, Kit.Text(text, Role.Label, wrap: true)); ((TextBlock)v.Children[0]).FontSize = 14; if (small is not null) v.Children.Add(Kit.Text(small, Role.Caption, "muted", wrap: true)); return v; }
         void Title(string text) { var t = Pages.SheetTitle(text); t.Margin = new Thickness(0, 10, 0, 4); body.Children.Add(t); }
@@ -776,7 +776,7 @@ public sealed partial class MapScreen : Screen
             else
             {
                 Title(route is not null ? $"{(mode == "walk" ? "步行" : "骑行")} {Routing.Duration((double)route["duration_s"]!)} · {Metres((double)route["distance_m"]!)}" : name);
-                Meta(Routing.Access(destination, space.ById).Kind == "building" ? $"道路路线到{Routing.Name(Routing.Access(destination, space.ById), space.ById)}入口" : $"到 {name}");
+                Meta(Routing.Access(destination, space.ById).Kind == "building" ? $"路线终点为{Routing.Name(Routing.Access(destination, space.ById), space.ById)}入口" : $"到 {name}");
                 if (Routing.Indoor(destination)) Meta(Routing.Inside(destination, space.ById));
             }
             // Where from: one's position, or a place typed and picked, found as every place is found (Find.Places).
@@ -796,7 +796,7 @@ public sealed partial class MapScreen : Screen
             };
             body.Children.Add(fromBox);
             body.Children.Add(found);
-            if (origin is not null) { var mine = new Tap { Content = Kit.Text("改从我的位置出发", Role.Label, "brand"), Margin = new Thickness(0, 0, 0, 10) }; mine.Click += (_, _) => { origin = null; _ = Routes(); }; body.Children.Add(mine); }
+            if (origin is not null) { var mine = new Tap { Content = Kit.Text("从当前位置出发", Role.Label, "brand"), Margin = new Thickness(0, 0, 0, 10) }; mine.Click += (_, _) => { origin = null; _ = Routes(); }; body.Children.Add(mine); }
             var modes = Kit.Choice([("walk", "步行"), ("bike", "骑行")], mode, m => { mode = m; _ = Routes(); }); modes.Margin = new Thickness(0, 0, 0, 10);
             body.Children.Add(modes);
             if (routes.Count > 1)
@@ -829,7 +829,7 @@ public sealed partial class MapScreen : Screen
             Meta($"{building.Names.FirstOrDefault()} {floor} 层{(room?.Seats is { } seats ? $" · {seats} 座" : "")}{(room?.Kinds.FirstOrDefault() is { } kind ? $" · {System.Text.RegularExpressions.Regex.Replace(kind, "^(仙林|三牌楼|锁金)", "")}" : "")}");
             if (state is not null)
             {
-                var said = day is null ? "暂无这一天的排课数据" : state.Busy ? $"{(state.Current is not null ? "上课中" : "有人用")}，到 {Clock.Hm(state.Until)}" : state.Minutes > 0 ? $"空闲，到 {Clock.Hm(state.Until)}，还能待 {Clock.Duration(state.Minutes)}" : "空闲，今天没课了";
+                var said = day is null ? "暂无这一天的排课数据" : state.Busy ? $"{(state.Current is not null ? "上课中" : "使用中")}，到 {Clock.Hm(state.Until)}" : state.Minutes > 0 ? $"空闲至 {Clock.Hm(state.Until)}，剩余 {Clock.Duration(state.Minutes)}" : "空闲，今天没有其他课";
                 var t = Kit.Text(said, Role.Body, state.Busy || day is null ? "muted" : "free", bold: true); t.Margin = new Thickness(0, 0, 0, 6); body.Children.Add(t);
             }
             Buttons(("去这里", () => { navId = picked.Id; placeId = null; _ = Scene(); Draw(); }, true));
@@ -852,8 +852,8 @@ public sealed partial class MapScreen : Screen
                 sum.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = $" / {rooms.Count} 间空闲 · 全楼 {all} 间" });
                 body.Children.Add(sum);
                 foreach (var (room, state) in free)
-                    Row(Names.RoomShort(room.Id), Value(state.Minutes > 0 ? $"空到 {Clock.Hm(state.Until)}" : "今天没课了", room.Seats is { } s ? $"{s} 座" : "座位未知"), () => Select(room.Id));
-                if (free.Count == 0) Meta("这一层此刻没有空教室");
+                    Row(Names.RoomShort(room.Id), Value(state.Minutes > 0 ? $"空闲至 {Clock.Hm(state.Until)}" : "今天没课了", room.Seats is { } s ? $"{s} 座" : "座位数未知"), () => Select(room.Id));
+                if (free.Count == 0) Meta("这一层目前没有空教室");
             }
             else
                 foreach (var part in model.Floors.GetValueOrDefault($"{building.Id}/{floor}")?.Rooms ?? [])
@@ -873,7 +873,7 @@ public sealed partial class MapScreen : Screen
         }
         else
         {
-            var head = Kit.Text("此刻可以去", Role.Label, "muted", bold: true); head.Margin = new Thickness(0, 10, 0, 4); body.Children.Add(head);
+            var head = Kit.Text("附近可去的地方", Role.Label, "muted", bold: true); head.Margin = new Thickness(0, 10, 0, 4); body.Children.Add(head);
             foreach (var item in Places.Recommendations(space.Places, Clock.Weekday(moment.Date), moment.Min, me ?? space.ById[Product.Campus].Centre!))
             {
                 var name = Places.DisplayName(item.Place, space.ById);
@@ -927,7 +927,7 @@ public sealed partial class MapScreen : Screen
     private FrameworkElement Ruler()
     {
         var ruler = new Grid { Height = 40, Margin = new Thickness(0, 8, 0, 4), Background = Paint.Clear };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ruler, "查看的时刻");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ruler, "查看时间");
         double Share(int minutes) => (Math.Clamp(minutes, RulerStart, RulerEnd) - RulerStart) / (double)(RulerEnd - RulerStart);
         var lane = new Canvas { Height = 40 };
         ruler.Children.Add(lane);

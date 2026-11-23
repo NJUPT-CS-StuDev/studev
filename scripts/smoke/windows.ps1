@@ -332,7 +332,7 @@ function ManagedCourses() {
     if ($null -ne $removed) { throw 'the removed course remains stored' }
     Press $window '返回' 'back to timetable settings'
     Press $window '实验安排' 'experiments belong to timetable settings'
-    Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '实验与理论课分别选择' } 'independent experiment choices' | Out-Null
+    Find $window (Is $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text)) { param($e) $e.Current.Name -match '可以单独选择要显示的实验' } 'independent experiment choices' | Out-Null
     Alive 'public course rename/hide/restore, independent labs and personal course create/edit/delete'
 }
 
@@ -359,7 +359,7 @@ function ExamHistory {
     Press $window { param($e) $e.Current.Name.StartsWith('第一学期') } 'open the published first term'
     Capture 'timetable-first-term'
     Press $window '算法与数据结构设计' 'open the real practice course details'
-    Find $window (Is $A::NameProperty '不占课表格子') $null 'practice notes match the term' | Out-Null
+    Find $window (Is $A::NameProperty '不占固定课时') $null 'practice notes match the term' | Out-Null
     Find $window (Is $A::NameProperty '陈兴国 的课表') $null 'the practice teacher links to a timetable' | Out-Null
     Capture 'practice-detail'
     Press $window '关闭' 'return from practice details'

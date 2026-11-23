@@ -17,9 +17,14 @@ export const collectionKeys = {
   history: (userId, itemId, roundId, id) => `collection/users/${userId}/${itemId}/${roundId}/${id}.json`,
   replacement: (itemId, roundId, sid) => `collection/replacements/${itemId}/${roundId}/${sid}.json`,
   request: (id) => `collection/requests/${id}.json`,
-  itemQuota: (itemId) => `collection/quota/${itemId}/`,
-  quota: (itemId, roundId, scope) => `collection/quota/${itemId}/${roundId}/${scope}/`,
+  quota: (itemId, roundId) => `collection/quotas/${itemId}/${roundId}`,
+  itemQuotas: (itemId) => `collection/quotas/${itemId}`,
+  cleanup: (itemId, roundId, id = '') => `collection/cleanup/${itemId}/${roundId}/${id && id + '.json'}`,
 };
+
+export function revisionKey(prefix, revision) {
+  return `${prefix}/${String(revision).padStart(8, '0')}.json`;
+}
 
 /** Locator and history entries precede the authoritative record, so a failed
  * publish cannot leave a committed submission unreachable. */

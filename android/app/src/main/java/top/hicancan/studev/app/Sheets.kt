@@ -121,7 +121,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             KeyRow("周次", Exams.weeksText(practice.weeks), dates)
             KeyRow("进度", Practices.progress(practice.weeks, week))
             TeacherRow(Practices.teachers(practice)) { onClose(); route.timetable("teacher", it) }
-            KeyRow("安排", "不占课表格子", "具体时间、地点和要求以指导老师的安排为准。")
+            KeyRow("安排", "课表没有固定时段", "具体时间、地点和要求以指导老师的安排为准。")
             KnowledgeRow(null, course, state.repository) { onClose(); route.knowledge(course = it) }
             MaterialsRow(course, state.repository) { url ->
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -203,7 +203,7 @@ private fun courseLine(course: top.hicancan.studev.data.Course?, assessment: Boo
             ActionButton("在地图上看", modifier = Modifier.weight(1f)) { onClose(); route.map(place = event.room, at = date to event.start) }
             ActionButton("去这里", go = true, modifier = Modifier.weight(1f)) { onClose(); route.map(nav = event.room) }
         } else Spacer(Modifier.height(12.dp))
-        if (lab != null) line.holidays[date]?.let { Plain("这天是$it，实验表照常排了这一次，以老师通知为准", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp)) }
+        if (lab != null) line.holidays[date]?.let { Plain("这天是$it，实验表上仍有安排，请以老师通知为准", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp)) }
         if (exam != null) {
             Exams.changesOf(record, exam).forEach { change ->
                 KeyRow(if (change.change == "added") "新发布" else "改过", Exams.versionTime(record!!.history.first { it.id == change.version }), if (change.change == "changed") Exams.changeLines(change).joinToString("\n") else null)
@@ -306,7 +306,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     val sheets = state.labs.distinctBy(catalog::labSheet)
     fun update(change: (top.hicancan.studev.me.LabChoices) -> top.hicancan.studev.me.LabChoices) = model.setLabs(change)
     PlainSheet("实验安排", onClose) {
-        Plain("实验与理论课各自选择；增删理论课不会改变这里的选择。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
+        Plain("实验单独选。增删理论课，这里的实验安排照旧。", 13.sp, Ink.muted, modifier = Modifier.padding(bottom = 8.dp))
         settings.labs.classes.forEach { name -> KeyRow("其他班", name, trailing = { Chip("移除", { update { it.copy(classes = it.classes - name) } }) }) }
         Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             top.hicancan.studev.timetable.Field(extraClass, "添加其他班实验，如 B240402", Modifier.weight(1f)) { extraClass = it.uppercase() }
@@ -318,7 +318,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             KeyRow(null, name, "${dateLabel(java.time.LocalDate.parse(Exams.publishedOn(lab.source)))} 的版本 · 你的班有 ${state.labs.count { catalog.labSheet(it) == name }} 次",
                 trailing = { Toggle(on) { next -> update { if (next) it.copy(off = it.off - name) else it.copy(off = (it.off + name).distinct()) } } })
         }
-        if (sheets.isEmpty()) Plain("你的班级不在已收到的实验表里。", 13.sp, Ink.faint)
+        if (sheets.isEmpty()) Plain("暂时没在实验表里找到你的班级。", 13.sp, Ink.faint)
         KeyRow(null, "有新版实验表，或你的班不在里面", "在浏览器提交，审核后更新课表", chevron = true, onClick = { browser.openUri(collectionLink(BuildConfig.FORM_DATA)) })
         val dropped = state.labs.filter { catalog.labCourseKey(it) in choices.drop }.distinctBy(catalog::labCourseKey)
         if (dropped.isNotEmpty()) Plain("去掉的实验", 13.sp, Ink.muted, FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
@@ -360,13 +360,13 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
             if (section == "home") {
                 val (name, note) = when (val shown = presence) {
                     AccountPresence.Loading -> "正在读取账号…" to null
-                    AccountPresence.Unavailable -> "账号暂不可用" to "打开账号页重试"
+                    AccountPresence.Unavailable -> "账号暂不可用" to "打开账号页，再试一次"
                     AccountPresence.SignedOut -> "未登录" to "登录后同步任务和课表设置"
                     is AccountPresence.SignedIn -> shown.user.nickname to "管理账号 · 任务和课表设置自动同步"
                 }
                 KeyRow(null, name, note, chevron = true, onClick = { onClose(); onAccount() })
                 Spacer(Modifier.height(12.dp))
-                KeyRow(null, "收集", "在浏览器查看和填写收集", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/forms/") })
+                KeyRow(null, "收集", "在浏览器打开收集页面", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/forms/") })
                 KeyRow(null, "成员", "在浏览器查看成员", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/members/") })
                 KeyRow(null, "课表设置", listOfNotNull(settings.klass, info?.major).joinToString(" · ").ifEmpty { "选择班级、调整课程与实验" }, chevron = true, onClick = { section = "timetable" })
                 KeyRow(null, "外观", "跟随系统、浅色或深色", chevron = true, onClick = { section = "appearance" })

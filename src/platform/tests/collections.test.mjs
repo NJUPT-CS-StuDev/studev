@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createCollectionsService } from '../server/collections/index.mjs';
-import { collectionKeys, locateSubmission } from '../server/collections/records.mjs';
+import { collectionKeys, locateSubmission, revisionKey } from '../server/collections/records.mjs';
+import { seedRoundQuota } from '../server/collections/quota.mjs';
 import { submissionWasLate } from '../server/collections/submissions.mjs';
 import { createIdentity } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
@@ -71,7 +72,8 @@ async function collectionsFixture() {
   const roundPath = (item) => itemPath(item) + '/rounds/' + item.rounds[0].id;
   const submit = (item, user, body = { answers: { note: '完成' }, files: [] }) => call(roundPath(item) + '/submissions', { user, body });
   const complete = ({ receiptId, receiptToken }) => call('/submissions/' + receiptId + '/complete', { body: { receiptToken } });
-  return { users, repo, store, gateway, call, create, itemPath, roundPath, submit, complete, advance: (ms) => { clock += ms; } };
+  const cancel = ({ receiptId, receiptToken }) => call('/submissions/' + receiptId + '/cancel', { body: { receiptToken } });
+  return { users, repo, store, gateway, call, create, itemPath, roundPath, submit, complete, cancel, advance: (ms) => { clock += ms; } };
 }
 
 test('the collection catalog and direct reads project only the effective view and organization scope', async () => {
@@ -337,6 +339,119 @@ test('multiple quotas reserve from one bounded set under concurrency and replace
   assert.equal(after.data.submission.id, before.data.submission.id);
   assert.equal(after.data.submission.revision, 2);
   assert.equal((await f.submit(replacement, 'bob')).data.error, 'COLLECTION_FULL');
+});
+
+test('a stable attempt resends the same reservation while cancelled or expired uploads return both slots', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment], submissionMode: 'multiple', maxPerUser: 1, maxSubmissions: 1 } });
+  const body = { attemptId: randomUUID(), answers: { note: '内容' }, files: [{ fieldId: 'upload', name: '资料.txt', type: 'text/plain', size: 3 }] };
+  const first = await f.submit(item, 'alice', body);
+  const firstObject = f.gateway.uploads.at(-1);
+  f.gateway.upload(firstObject, 'one');
+  const again = await f.submit(item, 'alice', body);
+  assert.equal(first.data.receiptId, again.data.receiptId);
+  assert.equal(firstObject.objectKey, f.gateway.uploads.at(-1).objectKey);
+  assert.equal((await f.submit(item, 'alice', { ...body, answers: { note: '新内容' } })).data.error, 'ATTEMPT_CHANGED');
+  assert.equal((await f.submit(item, 'bob', body)).data.error, 'COLLECTION_FULL');
+  assert.deepEqual((await f.cancel(first.data)).data, { cancelled: true });
+  assert.deepEqual((await f.cancel(first.data)).data, { cancelled: true });
+  assert.equal((await f.complete(first.data)).data.error, 'SUBMISSION_EXPIRED');
+  assert.equal((await f.submit(item, 'alice', body)).status, 410);
+  assert.equal(f.gateway.objects.has(firstObject.objectKey), false);
+  const second = await f.submit(item, 'bob', body);
+  assert.equal(second.status, 201);
+  const secondObject = f.gateway.uploads.at(-1);
+  f.gateway.upload(secondObject, 'two');
+  f.advance(65 * 60_000 + 2_000);
+  assert.equal((await f.complete(second.data)).status, 410);
+  const third = await f.submit(item, 'bob', { ...body, attemptId: randomUUID() });
+  assert.equal(third.status, 201);
+  assert.equal(f.gateway.objects.has(secondObject.objectKey), false);
+  f.gateway.upload(f.gateway.uploads.at(-1), 'new');
+  assert.equal((await f.complete(third.data)).status, 200);
+  assert.equal((await f.cancel(third.data)).data.error, 'SUBMISSION_COMMITTED');
+  assert.equal((await f.complete(third.data)).status, 200);
+  const usage = (await f.call(f.roundPath(item) + '/submissions', { user: 'owner' })).data.usage;
+  assert.deepEqual(usage, { authorizations: 1, pending: 0, completed: 1, fileBytes: 3 });
+});
+
+test('a cancelled confirmation cannot settle after its files have been copied', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment] } });
+  const body = { answers: { note: '内容' }, files: [{ fieldId: 'upload', name: '资料.txt', type: 'text/plain', size: 3 }] };
+  const first = await f.submit(item, 'alice', body);
+  f.gateway.upload(f.gateway.uploads.at(-1), 'old');
+  const copy = f.gateway.copy;
+  let copied, resume;
+  const started = new Promise((resolve) => { copied = resolve; });
+  const released = new Promise((resolve) => { resume = resolve; });
+  f.gateway.copy = async (...args) => { await copy(...args); copied(); await released; };
+  const confirming = f.complete(first.data);
+  await started;
+  assert.deepEqual((await f.cancel(first.data)).data, { cancelled: true });
+  resume();
+  assert.equal((await confirming).data.error, 'SUBMISSION_EXPIRED');
+  assert.equal(f.gateway.objects.size, 0);
+  assert.equal((await f.submit(item, 'alice', body)).status, 201);
+});
+
+test('replacement preserves retained files, retries cleanup and leaves imported paths intact', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment,
+    { ...attachment, id: 'keep', label: '保留', required: false }, { ...attachment, id: 'legacy', label: '历史', required: false }] } });
+  const file = (fieldId, name) => ({ fieldId, name, type: 'text/plain', size: 3 });
+  const first = await f.submit(item, 'alice', { answers: { note: '旧答卷' }, files: [file('upload', '旧.txt'), file('keep', '保留.txt')] });
+  for (const upload of f.gateway.uploads) f.gateway.upload(upload, 'old');
+  assert.equal((await f.complete(first.data)).status, 200);
+  const roundId = item.rounds[0].id;
+  const prefix = collectionKeys.submission(item.id, roundId, first.data.submission.id);
+  const current = await f.repo.latest(prefix);
+  const replaced = current.files.find((row) => row.fieldId === 'upload');
+  const kept = current.files.find((row) => row.fieldId === 'keep');
+  const legacyPath = 'studev-submissions/legacy/historical-shared-file';
+  f.gateway.objects.set(legacyPath, { size: 3 });
+  const legacy = { ...replaced, id: randomUUID(), fieldId: 'legacy', objectKey: legacyPath };
+  await f.repo.append(prefix, { ...current, files: [...current.files, legacy] }, current.revision);
+  const second = await f.submit(item, 'alice', { answers: { note: '新答卷' }, keepFiles: [kept.id], files: [file('upload', '新.txt')] });
+  f.gateway.upload(f.gateway.uploads.at(-1), 'new');
+  const remove = f.gateway.delete;
+  f.gateway.delete = (key) => key === replaced.objectKey ? Promise.reject(new Error('busy')) : remove(key);
+  assert.equal((await f.complete(second.data)).status, 200);
+  assert.equal(f.gateway.objects.has(replaced.objectKey), true);
+  assert.equal(f.gateway.objects.has(kept.objectKey), true);
+  f.gateway.delete = remove;
+  await f.call(f.roundPath(item) + '/submissions', { user: 'owner' });
+  assert.equal(f.gateway.objects.has(replaced.objectKey), false);
+  assert.equal(f.gateway.objects.has(kept.objectKey), true);
+  assert.equal(f.gateway.objects.has(legacyPath), true);
+  assert.equal((await f.repo.latest(prefix)).files.filter((row) => row.fieldId === 'upload')[0].name, '新.txt');
+});
+
+test('cutover seeds a live legacy upload and current submissions without counting a completed receipt twice', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment], submissionMode: 'multiple', maxPerUser: 1, maxSubmissions: 2 } });
+  const body = { answers: { note: '资料' }, files: [{ fieldId: 'upload', name: '资料.txt', type: 'text/plain', size: 3 }] };
+  const current = await f.submit(item, 'alice', body);
+  f.gateway.upload(f.gateway.uploads.at(-1), 'one');
+  assert.equal((await f.complete(current.data)).status, 200);
+  const pending = await f.submit(item, 'bob', body);
+  f.gateway.upload(f.gateway.uploads.at(-1), 'two');
+  const roundId = item.rounds[0].id;
+  const prefix = collectionKeys.quota(item.id, roundId);
+  for (const key of await f.repo.list(prefix + '/')) await f.repo.remove(key);
+  const receipts = [];
+  for (const { data: { receiptId } } of [current, pending]) {
+    const { payloadDigest, discarded, ...legacy } = await f.repo.get(collectionKeys.request(receiptId));
+    await f.repo.put(collectionKeys.request(receiptId), legacy);
+    receipts.push([receiptId, legacy]);
+  }
+  const seeded = await seedRoundQuota(f.repo, item.id, roundId, receipts);
+  assert.equal(Object.keys(seeded.completed).length, 1);
+  assert.deepEqual(Object.keys(seeded.active), [pending.data.receiptId]);
+  await f.repo.putNew(revisionKey(prefix, 1), { ...seeded, revision: 1 });
+  assert.equal((await f.submit(item, 'admin', body)).data.error, 'COLLECTION_FULL');
+  assert.equal((await f.complete(pending.data)).status, 200);
+  assert.equal((await f.complete(current.data)).status, 200);
 });
 
 test('only verified identities inherit unclaimed historical submissions, while anonymous history stays staff-only', async () => {

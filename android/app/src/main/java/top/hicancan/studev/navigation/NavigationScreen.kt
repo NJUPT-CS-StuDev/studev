@@ -131,7 +131,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                         ManeuverIcon(banner?.maneuver?.type ?: "continue", banner?.maneuver?.modifier ?: "ahead", 56)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(banner?.let { metres(it.distance_m) } ?: "正在定位", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                            Text(banner?.maneuver?.instruction?.let(::visibleRouteText) ?: "沿规划路线前行", style = MaterialTheme.typography.titleMedium)
+                            Text(banner?.maneuver?.instruction?.let(::visibleRouteText) ?: "沿路线继续走", style = MaterialTheme.typography.titleMedium)
                         }
                     }
                     val route = state.route
@@ -254,7 +254,7 @@ internal fun NavigationScreen(state: PlannerState, runtime: NavigationRuntime, c
                             }
                         }
                         state.route != null -> {
-                            if (indoor != null) { Text("道路路线到$entrance", style = MaterialTheme.typography.titleMedium); Text(Routing.inside(indoor, places)); TextButton(onClick = { viewFloor(indoor) }) { Text("查看楼层") } }
+                            if (indoor != null) { Text("先到$entrance", style = MaterialTheme.typography.titleMedium); Text(Routing.inside(indoor, places)); TextButton(onClick = { viewFloor(indoor) }) { Text("查看楼层") } }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(if (state.routes.size > 1) "${state.routes.size} 条可选路线" else "推荐路线", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                                 TextButton(onClick = { steps = true }) { Text("路线详情"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp)) }

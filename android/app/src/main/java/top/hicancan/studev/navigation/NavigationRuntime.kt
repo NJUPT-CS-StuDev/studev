@@ -219,7 +219,7 @@ class NavigationRuntime private constructor(private val context: Context) {
                 if (version == generation) {
                     goal = if (current.destinationIsMyPosition) endpoint else Endpoint.Target(destination!!.id)
                     _state.update { it.copy(routes = result.orEmpty(), busy = false,
-                        error = if (result?.isEmpty() == true) "暂无可通行路线，请更换起终点或出行方式。" else null) }
+                        error = if (result?.isEmpty() == true) "没找到能走的路线，试试换个起点、终点或出行方式。" else null) }
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (version == generation) _state.update { it.copy(busy = false,
@@ -244,7 +244,7 @@ class NavigationRuntime private constructor(private val context: Context) {
                 .putExtra("simulate", simulated).putExtra("speed", speed))
         } catch (_: RuntimeException) {
             persisted.clear()
-            notice("无法开始导航，请确认已允许定位且系统定位已开启。")
+            notice("现在还不能导航。请打开系统定位，并允许 StuDev 获取位置。")
         }
     }
     suspend fun begin(simulated: Boolean) {
@@ -283,7 +283,7 @@ class NavigationRuntime private constructor(private val context: Context) {
                     trip = TripState(TripPhase.Navigating, reroutes = it.trip.reroutes + 1)) }
                 android.util.Log.i("StudevNav", "reroute complete")
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { notice("暂时无法重新规划，请返回校园道路；稍后会自动重试。") }
+            catch (_: Exception) { notice("暂时找不到新路线。请回到校园道路，导航会再试一次。") }
             return emptyList()
         }
         return value.voice_prompts
@@ -319,7 +319,7 @@ class NavigationRuntime private constructor(private val context: Context) {
             e.message.orEmpty().contains("snap", true) && myPosition -> "您目前不在校园道路附近（超出 100 米吸附范围）。请选择校园内的起点。"
             e.message.orEmpty().contains("snap", true) -> "起终点附近没有可通行道路，请更换地点。"
             e.message.orEmpty().contains("unknown target", true) -> "校园数据缺少该地点的导航目标，请更新数据后重试。"
-            else -> "无法找到可通行路线，请更换起终点或出行方式。"
+            else -> "没找到能走的路线，试试换个起点、终点或出行方式。"
         }
     }
 }

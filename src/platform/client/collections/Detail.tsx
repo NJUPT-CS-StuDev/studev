@@ -108,9 +108,9 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
 }) {
     const { item, view } = detail;
     const [panel, setPanel] = useState<'board' | 'fill'>(receiptId ? 'fill' : 'board');
-    const [latest, setLatest] = useState<Submission>();
-    const [replaceRound, setReplace] = useState('');
-    const replace = replaceRound === round?.id;
+    const [saved, setSaved] = useState<Record<string, Submission>>({});
+    const [editingRound, setEditingRound] = useState('');
+    const [savedNotice, setSavedNotice] = useState<{ roundId: string; message: string }>();
     const [failure, setFailure] = useState('');
     const [duplicating, setDuplicating] = useState(false);
     const [confirm, setConfirm] = useState(false);
@@ -130,19 +130,23 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
         : state === 'collecting' ? { label: '停止收集', policy: 'closed' }
         : { label: '恢复收集', policy: 'strict' };
     const canSubmit = !!detail.viewer && !preview && view !== 'guest' && accepts && (item.targetMode === 'open' || item.inRecipients);
-    const mostRecent = (latest?.roundId === round?.id ? latest : undefined);
-    const self = detail.mySubmissions.filter(submission => submission.roundId === round?.id);
-    const own = mostRecent ? [mostRecent, ...self.filter(record => record.id !== mostRecent.id)] : self;
+    const byId = new Map(detail.mySubmissions.filter(submission => submission.roundId === round?.id).map(submission => [submission.id, submission]));
+    for (const submission of Object.values(saved)) {
+        if (submission.roundId === round?.id && (byId.get(submission.id)?.revision ?? -1) < submission.revision) byId.set(submission.id, submission);
+    }
+    const own = [...byId.values()].sort((left, right) => right.submittedAt.localeCompare(left.submittedAt));
     const prior = round?.submissionMode === 'replace' ? own[0] : undefined;
     const displayedOwn = [...own].sort((left, right) => Number(right.id === receiptId) - Number(left.id === receiptId));
     const showFill = !manage || panel === 'fill';
-    const limitReached = !!round && round.submissionMode === 'multiple' && round.maxPerUser > 0 && own.length >= round.maxPerUser;
+    const limitReached = !!round && round.submissionMode === 'multiple' && own.length >= round.maxPerUser;
+    const writing = editingRound === round?.id;
+    const showComposer = !own.length || writing;
     const loginUrl = !detail.viewer && accepts ? collectionLoginUrl() : undefined;
     let submitNote = '';
-    if (!accepts) submitNote = state === 'expired' ? '本批次已截止。' : '本批次当前不收集提交。';
-    else if (preview) submitNote = '预览视角下可以查看填写内容。';
-    else if (detail.viewer && !canSubmit) submitNote = '本批次面向指定填写对象。';
-    else if (limitReached) submitNote = '已达到本批次的个人提交次数上限。';
+    if (!accepts) submitNote = state === 'expired' ? '这个批次已截止。' : '这个批次暂时不能提交。';
+    else if (preview) submitNote = '预览时可以查看表单。';
+    else if (detail.viewer && !canSubmit) submitNote = '只有指定成员可以填写。';
+    else if (limitReached) submitNote = `你已交满 ${round?.maxPerUser} 份。`;
     else if (state === 'makeup') submitNote = canSubmit ? '本次提交将记为补交。' : '补交已开放，登录后可填写。';
     async function changeTiming() {
         if (!round || timingUpdate?.busy) return;
@@ -215,8 +219,8 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
                             ? <button type="button" className="cw-fact-action" aria-label={`修改截止时间，当前 ${deadlineLabel}`} onClick={() => edit('deadline')}>{deadlineLabel}<Pencil size={15} /></button>
                             : <strong>{deadlineLabel}</strong>}</div>
                         <div><span><UsersRound size={16} />填写对象</span>{manage && !pinned
-                            ? <button type="button" className="cw-fact-action" onClick={() => edit('recipients')}>{item.targetMode === 'selected' ? `${item.recipientCount} 人` : '所有可访问用户'}<Pencil size={15} /></button>
-                            : <strong>{item.targetMode === 'selected' ? '指定成员' : '所有可访问用户'}</strong>}</div>
+                            ? <button type="button" className="cw-fact-action" onClick={() => edit('recipients')}>{item.targetMode === 'selected' ? `${item.recipientCount} 人` : '登录后可填写'}<Pencil size={15} /></button>
+                            : <strong>{item.targetMode === 'selected' ? '指定成员' : '登录后可填写'}</strong>}</div>
                     </div>
                     {manage && <div className="cw-inline">
                         {item.status === 'published' && <button type="button" className="cw-button" disabled={timingUpdate?.busy} onClick={changeTiming}>{timingUpdate?.busy && timingUpdate.roundId === round.id ? '正在处理…' : timingAction.label}</button>}
@@ -226,14 +230,26 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
                 </section>
                 {manage && <div className="cw-segment" role="group" aria-label="批次内容">
                     <button type="button" aria-pressed={panel === 'board'} onClick={() => setPanel('board')}>提交记录</button>
-                    <button type="button" aria-pressed={panel === 'fill'} onClick={() => setPanel('fill')}>{canSubmit ? '填写与我的提交' : '查看填写内容'}</button>
+                    <button type="button" aria-pressed={panel === 'fill'} onClick={() => setPanel('fill')}>{canSubmit ? '填写表单' : '查看表单'}</button>
                 </div>}
                 {showFill ? <div className="cw-panel cw-fill-panel">
-                    <h2>{prior ? '我的提交' : '填写内容'}</h2>
-                    {displayedOwn.map(record => <ReceiptSummary key={record.id} submission={record} manage={false} editable={canSubmit && round.allowEdit} authorize={authorize} onChanged={() => { setLatest(undefined); onChanged(); }} />)}
-                    {prior && canSubmit && !replace && <button type="button" className="cw-button" onClick={() => setReplace(round.id)}>重新填写</button>}
-                    {(!prior || replace) && <AnswerForm key={`${round.id}/${prior?.id || ''}`} round={round} path={roundRoute(item.id, round.id)} replacing={prior} canSubmit={canSubmit && !limitReached} makeup={state === 'makeup'}
-                        loginUrl={loginUrl} authorize={authorize} onSaved={submission => { setLatest(submission); setReplace(''); onChanged(); }} />}
+                    {displayedOwn.length > 0 && <>
+                        <h2>我的提交</h2>
+                        {savedNotice?.roundId === round.id && <p role="status">{savedNotice.message}</p>}
+                        {displayedOwn.map(record => <ReceiptSummary key={record.id} submission={record} manage={false}
+                            editable={round.submissionMode === 'multiple' && canSubmit && round.allowEdit} authorize={authorize} onChanged={onChanged} />)}
+                    </>}
+                    {!showComposer && canSubmit && !limitReached && <button type="button" className="cw-button" onClick={() => setEditingRound(round.id)}>{prior ? '更新提交' : '再交一份'}</button>}
+                    {showComposer && <>
+                        <h2>{prior ? '更新提交' : '填写内容'}</h2>
+                        <AnswerForm key={`${round.id}/${prior?.id || ''}`} round={round} path={roundRoute(item.id, round.id)} replacing={prior} canSubmit={canSubmit && !limitReached}
+                            focus={writing} makeup={state === 'makeup'} loginUrl={loginUrl} authorize={authorize} onDismiss={writing ? () => setEditingRound('') : undefined} onSaved={submission => {
+                                setSaved(previous => ({ ...previous, [submission.id]: submission }));
+                                setSavedNotice({ roundId: round.id, message: prior ? '已更新提交。' : submission.late ? '补交成功。' : '提交成功。' });
+                                setEditingRound('');
+                                onChanged();
+                            }} />
+                    </>}
                     {submitNote && <p className="cw-muted">{submitNote}</p>}
                 </div> : <RoundBoard key={round.id} detail={detail} round={round} version={version} authorize={authorize} refresh={() => onChanged()} />}
             </div>}

@@ -17,10 +17,10 @@ public static class ClassPicker
         if (heading)
         {
             column.Children.Add(Kit.Text("你在哪个班？", Role.Title));
-            var lead = Kit.Text("输入班号或专业，课表、考试和校历就都有了。", Role.Body, "muted", wrap: true); lead.Margin = new Thickness(0, 6, 0, 18);
+            var lead = Kit.Text("按班号或专业搜索，选择后即可查看本班课表、考试和校历。", Role.Body, "muted", wrap: true); lead.Margin = new Thickness(0, 6, 0, 18);
             column.Children.Add(lead);
         }
-        var box = Kit.Field(query, "比如 B240402", "班号或专业");
+        var box = Kit.Field(query, "例如 B240402", "班号或专业");
         column.Children.Add(Kit.SearchField(box));
         var results = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         column.Children.Add(results);
@@ -30,7 +30,7 @@ public static class ClassPicker
             var needle = Fold(box.Text);
             if (needle.Length == 0) return;
             var matches = classes.Where(c => Fold($"{c.Name} {c.Major ?? ""}").Contains(needle)).Take(30).ToList();
-            if (matches.Count == 0) { var none = Kit.Text("没有找到这个班", Role.Body, "muted"); none.Margin = new Thickness(0, 16, 0, 0); results.Children.Add(none); return; }
+            if (matches.Count == 0) { var none = Kit.Text("没有找到匹配的班级", Role.Body, "muted"); none.Margin = new Thickness(0, 16, 0, 0); results.Children.Add(none); return; }
             foreach (var item in matches)
             {
                 var said = string.Join(" · ", new[] { item.Major, item.Campus, item.Students is { } n ? $"{n} 人" : null }.Where(s => !string.IsNullOrEmpty(s)));

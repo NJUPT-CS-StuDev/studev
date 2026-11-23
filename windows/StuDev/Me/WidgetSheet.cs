@@ -35,14 +35,14 @@ public static class WidgetSheet
         var placed = Device.Widgets;
         if (placed.Count > 0)
         {
-            column.Children.Add(Pages.Section("已放在桌面"));
+            column.Children.Add(Pages.Section("桌面上的小组件"));
             var list = new StackPanel();
             foreach (var widget in placed)
             {
                 var row = new Grid { Padding = new Thickness(0, 8, 0, 8) };
                 row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var kindName = Kinds.FirstOrDefault(k => k.Kind == widget.Kind).Name ?? widget.Kind;
-                var state = string.Join(" · ", new[] { ViewNames.GetValueOrDefault(widget.View, widget.View), widget.OnTop ? "在最上层" : "贴在桌面", widget.Locked ? "已锁定" : null }.Where(s => s is not null));
+                var state = string.Join(" · ", new[] { ViewNames.GetValueOrDefault(widget.View, widget.View), widget.OnTop ? "窗口置顶" : "固定在桌面", widget.Locked ? "已锁定" : null }.Where(s => s is not null));
                 row.Children.Add(Kit.Column(2, Kit.Text(kindName, Role.Label), Kit.Text(state, Role.Caption, "muted")));
                 var id = widget.Id;
                 var remove = Kit.Action("移除", () => { Device.RemoveWidget(id); Open(); });
@@ -53,7 +53,7 @@ public static class WidgetSheet
             var hidden = Device.Settings.WidgetsHidden;
             column.Children.Add(Kit.Action(hidden ? "显示桌面小组件" : "暂时隐藏桌面小组件", () => { Device.Set(Device.Settings with { WidgetsHidden = !hidden }); Open(); }));
         }
-        var hint = Kit.Text("拖动小组件的标题移动，拖边缘调大小，靠近屏幕边缘或其他小组件会自动对齐。右上角“…”里可以调不透明度、锁定位置或放在最上层。", Role.Caption, "faint", wrap: true);
+        var hint = Kit.Text("拖动标题栏可移动小组件，拖动边缘可调整大小。靠近屏幕边缘或其他小组件时会自动对齐。可在右上角菜单中调整不透明度、锁定位置或置顶。", Role.Caption, "faint", wrap: true);
         column.Children.Add(hint);
         return column;
     }

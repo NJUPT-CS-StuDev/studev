@@ -101,6 +101,12 @@ async function collectionFixture() {
     course: { id: 'information/course-plan/CSX10001', code: 'CSX10001', name: '课程标签示例' },
     rounds: [round, { ...round, id: 'round-two', label: '第二批' }],
   }, 201);
+  const { item: journal } = await post(owner, '/collections/items', { ...common, name: '可交多份的记录', visibility: 'members',
+    rounds: [{ ...round, submissionMode: 'multiple', maxPerUser: 2, allowEdit: true }],
+  }, 201);
+  const { item: report } = await post(owner, '/collections/items', { ...common, name: '可以更新附件的作业', visibility: 'members',
+    rounds: [{ ...round, fields: [...round.fields, { id: 'report', type: 'file', label: '报告附件', required: true, maxFiles: 2, maxFileBytes: 1024, extensions: ['txt'] }] }],
+  }, 201);
   const { item: privateItem } = await post(owner, '/collections/items', {
     ...common, name: privateTitle, visibility: 'members', targetMode: 'selected', recipients: [{ studentId: member.sid, name: memberName }],
   }, 201);
@@ -114,10 +120,12 @@ async function collectionFixture() {
     await repo.append(collectionKeys.definition(id), { ...definition, id, name: pinnedTitles[index], tags: [] });
   }
   const prior = await post(peer.actor, roundPath(item) + '/submissions', { answers: { answer: peerSecret }, files: [] }, 201);
-  return { handle, env, owner, guest, member: member.actor, item, privateItem, expired, stopped, deadline, peerSubmission: prior.submission.id };
+  const sign = gateway.presignUpload.bind(gateway);
+  gateway.presignUpload = async (file, ...args) => ({ ...await sign(file, ...args), url: `https://fgws3-ocloud.ihep.ac.cn/test-upload/${file.id}` });
+  return { handle, env, owner, guest, member: member.actor, gateway, item, privateItem, report, journal, expired, stopped, deadline, peerSubmission: prior.submission.id };
 }
 
-async function collections(page, fixture, actor, { identity, reads = [] } = {}) {
+async function collections(page, fixture, actor, { identity, reads = [], alterResponse } = {}) {
   await page.route('**/api/platform/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -133,8 +141,106 @@ async function collections(page, fixture, actor, { identity, reads = [] } = {}) 
       }),
       env: fixture.env, clientIp: 'isolated-browser',
     });
-    await route.fulfill({ status: result.status, headers: Object.fromEntries(result.headers), body: Buffer.from(await result.arrayBuffer()) });
+    const response = alterResponse?.(path, request, result) || result;
+    await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
   });
+}
+
+async function checkSubmissionUpdates(fixture, viewport) {
+  const { page, context, errors } = await newPage(viewport);
+  const parts = page.locator('.cw-workspace');
+  const answer = parts.getByRole('textbox', { name: /^填写内容/ });
+  const submit = name => parts.getByRole('button', { name, exact: true });
+  const receipts = parts.locator('.cw-receipt');
+  const attempts = [];
+  await collections(page, fixture, fixture.member, { alterResponse(path, request, result) {
+    if (path === roundPath(fixture.journal) + '/submissions' && request.method() === 'POST') {
+      attempts.push(request.postDataJSON().attemptId);
+      if (attempts.length === 1) {
+        assert.equal(result.status, 201, 'the first write committed before the response was lost');
+        return new Response(JSON.stringify({ error: { message: '网络中断，请重试。' } }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+  } });
+  try {
+    await page.goto(origin + '/forms/?id=' + fixture.journal.id);
+    await answer.fill('第一份记录');
+    await submit('提交').click();
+    await parts.getByRole('alert').filter({ hasText: '网络中断，请重试。' }).waitFor();
+    await submit('重试提交').click();
+    await receipts.getByText('第一份记录', { exact: true }).waitFor();
+    assert.equal(attempts[0], attempts[1]);
+    assert.match(attempts[0], /^[0-9a-f-]{36}$/);
+    await submit('再交一份').click();
+    assert.equal(await answer.inputValue(), '');
+    await answer.fill('第二份记录');
+    await submit('提交').click();
+    await receipts.getByText('第二份记录', { exact: true }).waitFor();
+    assert.notEqual(attempts[1], attempts[2]);
+    assert.equal(await receipts.count(), 2);
+    await parts.getByText('你已交满 2 份。', { exact: true }).waitFor();
+    assert.equal(await submit('再交一份').count(), 0);
+    const saved = await fixture.member.call('/collections/items/' + fixture.journal.id);
+    assert.deepEqual(saved.body.mySubmissions.map(value => value.answers.answer).sort(), ['第一份记录', '第二份记录']);
+    await receipts.filter({ hasText: '第一份记录' }).getByRole('button', { name: '修改已填内容' }).click();
+    const revision = page.getByRole('dialog', { name: '修改已填内容' });
+    await revision.getByRole('textbox', { name: /^填写内容/ }).fill('更新第一份记录');
+    await revision.getByRole('button', { name: '保存修改' }).click();
+    await receipts.getByText('更新第一份记录', { exact: true }).waitFor();
+    assert.equal(await receipts.count(), 2);
+
+    const puts = new Map();
+    await page.route('https://fgws3-ocloud.ihep.ac.cn/test-upload/**', async route => {
+      const request = route.request();
+      const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'PUT', 'Access-Control-Allow-Headers': 'content-type' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      const id = new URL(request.url()).pathname.split('/').at(-1);
+      const file = fixture.gateway.uploads.find(value => value.id === id);
+      assert(file, 'upload received a scoped file URL');
+      const count = (puts.get(file.fileName) || 0) + 1;
+      puts.set(file.fileName, count);
+      if (file.fileName === '网络失败一次.txt' && count === 1 || file.fileName === '取消提交.txt') return route.fulfill({ status: 502, headers, body: '' });
+      fixture.gateway.upload({ objectKey: file.objectKey, contentType: file.contentType }, request.postDataBuffer());
+      return route.fulfill({ status: 200, headers, body: '' });
+    });
+    await page.goto(origin + '/forms/?id=' + fixture.report.id);
+    await answer.fill('原报告');
+    const upload = parts.getByLabel(/^报告附件/);
+    await upload.setInputFiles([
+      { name: '保留.txt', mimeType: 'text/plain', buffer: Buffer.from('original') },
+      { name: '网络失败一次.txt', mimeType: 'text/plain', buffer: Buffer.from('retry') },
+    ]);
+    await submit('提交').click();
+    await parts.getByRole('alert').filter({ hasText: '附件上传失败，请重试。' }).waitFor();
+    await submit('重试提交').click();
+    await receipts.getByText('保留.txt', { exact: true }).waitFor();
+    await receipts.getByText('网络失败一次.txt', { exact: true }).waitFor();
+    assert.equal(puts.get('保留.txt'), 1, 'retry keeps the completed attachment');
+    assert.equal(puts.get('网络失败一次.txt'), 2);
+    const original = (await fixture.member.call('/collections/items/' + fixture.report.id)).body.mySubmissions[0];
+    await submit('更新提交').click();
+    assert.equal(await answer.inputValue(), '原报告');
+    await parts.locator('.cw-answer li').filter({ hasText: '网络失败一次.txt' }).getByRole('button', { name: '移除' }).click();
+    await upload.setInputFiles({ name: '取消提交.txt', mimeType: 'text/plain', buffer: Buffer.from('abort') });
+    await answer.fill('附件失败后保留答案');
+    await submit('更新提交').click();
+    await parts.getByRole('alert').filter({ hasText: '附件上传失败，请重试。' }).waitFor();
+    await submit('取消这次提交').click();
+    await parts.getByText('已取消这次提交，你填的内容还在。', { exact: true }).waitFor();
+    assert.equal(await answer.inputValue(), '附件失败后保留答案');
+    assert.equal((await fixture.member.call('/collections/items/' + fixture.report.id)).body.mySubmissions[0].revision, original.revision);
+    await upload.setInputFiles({ name: '更新.txt', mimeType: 'text/plain', buffer: Buffer.from('replacement') });
+    await submit('更新提交').click();
+    await receipts.getByText('更新.txt', { exact: true }).waitFor();
+    const updated = (await fixture.member.call('/collections/items/' + fixture.report.id)).body.mySubmissions;
+    assert.equal(updated.length, 1);
+    assert.equal(updated[0].id, original.id);
+    assert.deepEqual(updated[0].files.map(value => value.name).sort(), ['保留.txt', '更新.txt'].sort());
+    assert.deepEqual(errors, []);
+    record('desktop: one effective report, retained files, real cancel, safe network retry and successful-only multiple count');
+  } finally {
+    await context.close();
+  }
 }
 
 async function checkCollection(viewport, name) {
@@ -260,6 +366,7 @@ async function checkCollection(viewport, name) {
   record(name + ': pinned card order, responsive card grid, semester chronology, one write and participant privacy');
 
   if (name === 'desktop') {
+    await checkSubmissionUpdates(fixture, viewport);
     const staff = await newPage(viewport), staffReads = [];
     await collections(staff.page, fixture, fixture.owner, { reads: staffReads });
     await staff.page.goto(origin + '/forms/');
@@ -339,7 +446,7 @@ async function checkCollection(viewport, name) {
     const lateParts = lateMember.page.locator('.cw-workspace');
     await lateParts.getByText('本次提交将记为补交。', { exact: true }).waitFor();
     await lateParts.getByRole('textbox', { name: /^填写内容/ }).fill('补交验收答案');
-    await lateParts.getByRole('button', { name: '提交补交', exact: true }).click();
+    await lateParts.getByRole('button', { name: '补交', exact: true }).click();
     const lateReceipt = lateParts.locator('.cw-receipt');
     await lateReceipt.getByText('补交', { exact: true }).waitFor();
     await lateReceipt.getByText('待审核', { exact: true }).waitFor();

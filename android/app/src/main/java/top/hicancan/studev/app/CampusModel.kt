@@ -103,7 +103,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                 // The packaged release stays immediately usable while the website is checked.
                 AcademicRepository.discover(getApplication(), settings.state.value.klass)?.let { found -> take(found) }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.update { it.copy(busy = false, error = "校园数据暂时无法打开，请重试") } }
+            catch (_: Exception) { _state.update { it.copy(busy = false, error = "暂时打不开校园数据，请再试一次") } }
         }
     }
     private suspend fun loadRepository(repo: AcademicRepository) = coroutineScope {
@@ -152,7 +152,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             loadLabs(repo, id)
             syncPhone()
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { _state.update { if (settings.state.value.klass == id && it.repository === repo) it.copy(classBusy = false, error = if (e is DataUnavailableException) e.message else "班级数据暂时无法打开，请重试") else it } }
+        catch (e: Exception) { _state.update { if (settings.state.value.klass == id && it.repository === repo) it.copy(classBusy = false, error = if (e is DataUnavailableException) e.message else "暂时打不开这个班的课表，请再试一次") else it } }
     }
     fun openCourseManager() {
         val current = state.value
@@ -175,7 +175,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.update { if (it.repository === repo) it.copy(catalogBusy = false, catalogError = "全校课程目录暂时无法加载，请重试") else it } }
+            catch (_: Exception) { _state.update { if (it.repository === repo) it.copy(catalogBusy = false, catalogError = "暂时打不开全校课程目录，请再试一次") else it } }
         }
     }
     private fun applyTimetableChange(change: (TimetableEdits) -> TimetableEdits) {

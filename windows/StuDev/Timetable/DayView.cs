@@ -59,7 +59,7 @@ public static class DayView
             var g = Kit.Text($"已结束 {gone.Count} 项 · {summary}", Role.Label, "faint");
             g.Margin = new Thickness(0, 0, 0, 12); page.Children.Add(g);
         }
-        if (live.Count == 0) { page.Children.Add(Pages.Empty("今天的课都上完了")); return page; }
+        if (live.Count == 0) { page.Children.Add(Pages.Empty("今天的课已结束")); return page; }
 
         // The campus day opens with the first period; "now" joins the hours only within the hour before the first thing.
         var opens = Clock.Minutes(line.Periods[0].Start);
@@ -81,7 +81,7 @@ public static class DayView
         }
         void Gap(int start, int end, bool leadNow = false)
         {
-            var words = Kit.Line(4, Kit.Text($"{(leadNow ? "现在有空" : $"空 {Clock.Duration(end - start)}")} · 看这时的空教室", Role.Label, "muted"), Kit.Icon(Icons.Chevron, 13, "muted"));
+            var words = Kit.Line(4, Kit.Text($"{(leadNow ? "现在空闲" : $"空 {Clock.Duration(end - start)}")} · 查看这段时间的空教室", Role.Label, "muted"), Kit.Icon(Icons.Chevron, 13, "muted"));
             var tap = new Tap(Paint.Brush("paper"), Paint.Brush("surfaceSunken")) { Content = words, Padding = new Thickness(8, 3, 8, 3), CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left };
             tap.Click += (_, _) => App.Open("search", ("rooms", new Moment(day, start)));
             lane.Put(tap, Y((start + end) / 2.0) - 13, 26, 10, 0);
@@ -117,7 +117,7 @@ public static class DayView
         var today = e.Date == now.Date;
         var during = today && e.Start <= now.Min;
         var caption = during ? $"进行中，至 {Clock.Hm(e.End)}" : today ? $"下一项 · 还有 {Clock.Duration(e.Start - now.Min)}" : $"下一项 · {(e.Date.DayNumber - now.Date.DayNumber == 1 ? "明天" : Clock.DateLabel(e.Date))}";
-        var words = Kit.Column(2, Kit.Text(caption, Role.Caption, "muted"), Kit.Text($"{Clock.Hm(e.Start)} {e.Name}", Role.Heading), Kit.Text(e.Room is not null ? Names.Room(e.Room) : "课表没写地点", Role.Label, "muted"));
+        var words = Kit.Column(2, Kit.Text(caption, Role.Caption, "muted"), Kit.Text($"{Clock.Hm(e.Start)} {e.Name}", Role.Heading), Kit.Text(e.Room is not null ? Names.Room(e.Room) : "课表未注明地点", Role.Label, "muted"));
         ((TextBlock)words.Children[0]).FontSize = 12.5;
         var upcoming = line.Exams.Where(x => string.CompareOrdinal(x.Date, Clock.Text(now.Date)) >= 0).OrderBy(x => x.Date, StringComparer.Ordinal).ThenBy(x => x.Start, StringComparer.Ordinal).ToList();
         if (upcoming.Count > 0)

@@ -289,7 +289,7 @@ export function TermView({ line, now, isMe, record, recordFailed, onRecordRetry,
                             {ahead[0] ? <>
                                 <span className="tcard-lead"><b>{dayHead(ahead[0].date)}</b><span className="tcard-pill">{lead(ahead[0].days)}</span></span>
                                 {ahead[0].exams.map(exam => <span key={exam.id} className="tcard-row"><span>{courseName(exam.course.name)}</span><small>{exam.start} · {placeOf(exam)}</small></span>)}
-                            </> : <span className="tcard-row"><span className="faint">{courses ? '都考完了' : '暂无待考安排'}</span></span>}
+                            </> : <span className="tcard-row"><span className="faint">{courses ? '都考完了' : '没有待考科目'}</span></span>}
                         </button>}
                         {offGrid.length > 0 && <section className="tcard practice">
                             <span className="tcard-head"><i className="tcard-icon" aria-hidden="true">{ICONS.practice}</i><b>实践课程</b><span className="tcard-meta">不占课表格子</span></span>

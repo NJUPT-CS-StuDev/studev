@@ -189,17 +189,17 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
                 {!creating && <label>发布状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">已发布</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}
             </>}
             {targetFields && <>
-                <label>填写对象<select value={targetMode} onChange={event => setTarget(event.target.value as TargetMode)}><option value="open">所有具有访问权限的人</option><option value="selected">指定成员</option></select></label>
+                <label>填写对象<select value={targetMode} onChange={event => setTarget(event.target.value as TargetMode)}><option value="open">登录后可填写</option><option value="selected">指定成员</option></select></label>
                 {targetMode === 'selected' && <RecipientPicker selected={recipients} onChange={setRecipients} />}
             </>}
             {(roundFields || mode === 'deadline') && <>
                 {roundFields && <><h3>批次设置</h3><label>批次名称<input required maxLength={80} value={round.label} onChange={event => changeRound({ label: event.target.value })} /></label></>}
                 <Timing value={round} patch={changeRound} reopened={currentRound?.policy === 'allow-late' && mode !== 'new-round'} />
-                {roundFields && <><div className="cw-form-grid"><label>每人提交方式<select value={round.submissionMode} onChange={event => changeRound({ submissionMode: event.target.value as Round['submissionMode'] })}><option value="replace">保留一份</option><option value="multiple">可提交多份</option></select></label>
+                {roundFields && <><div className="cw-form-grid"><label>每人可交几份<select value={round.submissionMode} onChange={event => changeRound({ submissionMode: event.target.value as Round['submissionMode'] })}><option value="replace">交一份，可更新</option><option value="multiple">可交多份</option></select></label>
                     {round.submissionMode === 'multiple' && <label>每人最多提交<input type="number" min="1" max="20" required value={round.maxPerUser} onChange={event => changeRound({ maxPerUser: +event.target.value })} /></label>}
                     <label>本批次最多提交<input type="number" min="1" max="1000" required value={round.maxSubmissions} onChange={event => changeRound({ maxSubmissions: +event.target.value })} /></label></div>
                     <div className="cw-inline"><label className="cw-check"><input type="checkbox" checked={round.requireReview} onChange={event => changeRound({ requireReview: event.target.checked })} />提交后需要审核</label>
-                    <label className="cw-check"><input type="checkbox" checked={round.allowEdit} onChange={event => changeRound({ allowEdit: event.target.checked })} />允许修改已答内容</label></div>
+                    <label className="cw-check"><input type="checkbox" checked={round.allowEdit} onChange={event => changeRound({ allowEdit: event.target.checked })} />允许修改已填内容</label></div>
                     <FieldsEditor fields={round.fields} onChange={fields => changeRound({ fields })} /></>}
             </>}
             {error && <p className="cw-failure" role="alert">{error}</p>}

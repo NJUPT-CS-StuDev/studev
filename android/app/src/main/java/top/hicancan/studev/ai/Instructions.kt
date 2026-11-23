@@ -87,7 +87,7 @@ internal object Instructions {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                notice = (failure as? IllegalArgumentException)?.message ?: "无法读取文件，请选择 UTF-8 Markdown 文本。"
+                notice = (failure as? IllegalArgumentException)?.message ?: "这个文件打不开，请选一个 UTF-8 编码的 Markdown 文件。"
             }
         }
     }
@@ -103,7 +103,7 @@ internal object Instructions {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                notice = "无法导出 Markdown。"
+                notice = "导出 Markdown 失败，请再试一次。"
             }
         }
     }

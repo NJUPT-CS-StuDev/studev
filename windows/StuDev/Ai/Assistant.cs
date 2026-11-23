@@ -83,7 +83,7 @@ public sealed class Assistant(JsonObject contract, List<JsonObject> tools)
     {
         var request = new JsonObject { ["model"] = model, ["stream"] = true };
         if (!runtime) { request["max_tokens"] = 4096; request["temperature"] = 0.2; }
-        else { if (string.IsNullOrWhiteSpace(conversationId)) throw new InvalidOperationException("对话尚未初始化，请重新打开对话。"); request["conversation_id"] = conversationId; if (retry) request["retry"] = true; }
+        else { if (string.IsNullOrWhiteSpace(conversationId)) throw new InvalidOperationException("对话还未就绪，请重新打开。"); request["conversation_id"] = conversationId; if (retry) request["retry"] = true; }
         var available = offered ?? ToolsFor(s);
         if (!last) request["tools"] = new JsonArray([.. available.Select(t => t.DeepClone())]);
         var finish = last ? "\n" + (string)contract["finish"]! : "";
@@ -214,25 +214,25 @@ public static class Models
     }
     public static async Task<List<string>> FetchModelsAsync(HttpClient http, string @base, string key, bool runtime = false, CancellationToken cancel = default)
     {
-        if (AddressError(@base, runtime) is not null) throw new InvalidOperationException("接口地址格式不对");
+        if (AddressError(@base, runtime) is not null) throw new InvalidOperationException("请输入有效的接口地址");
         var trimmed = key.Trim();
-        if (trimmed.Length == 0) throw new InvalidOperationException("请先填写 API Key");
+        if (trimmed.Length == 0) throw new InvalidOperationException("请先填写 API 密钥");
         foreach (var url in ModelsEndpoints(@base))
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", trimmed);
             using var res = await http.SendAsync(req, cancel);
             if ((int)res.StatusCode == 404) continue;
-            if (!res.IsSuccessStatusCode) throw new InvalidOperationException((int)res.StatusCode == 401 ? "API Key 无效或无权限" : $"请求失败（{(int)res.StatusCode}）");
+            if (!res.IsSuccessStatusCode) throw new InvalidOperationException((int)res.StatusCode == 401 ? "API 密钥无效或没有访问权限" : $"请求失败（{(int)res.StatusCode}）");
             var root = JsonNode.Parse(await res.Content.ReadAsStringAsync(cancel))?.AsObject();
             var ids = root?["data"]?.AsArray().Select(item => (string?)item?["id"]).Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id!.Trim()).Distinct().ToList() ?? [];
             if (ids.Count > 0) return ids;
         }
-        throw new InvalidOperationException("接口没有返回模型列表，可直接手动填写模型名");
+        throw new InvalidOperationException("服务未提供模型列表，可手动填写模型 ID");
     }
     public static string? AddressError(string @base, bool runtime = false)
     {
-        var said = runtime ? "Local Runtime MCP 地址须指向这台电脑，例如 http://127.0.0.1:9316/v1。" : "接口地址以 https:// 开头，只写地址本身。";
+        var said = runtime ? "Local Runtime MCP 地址须指向这台电脑，例如 http://127.0.0.1:9316/v1。" : "接口地址应以 https:// 开头，请只填写地址。";
         if (!Uri.TryCreate(@base.Trim(), UriKind.Absolute, out var uri)) return said;
         var transport = runtime ? (uri.Host is "localhost" or "127.0.0.1" or "[::1]") && (uri.Scheme is "https" or "http") : uri.Scheme == "https";
         return transport && uri.Host.Length > 0 && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? null : said;

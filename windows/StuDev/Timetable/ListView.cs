@@ -128,7 +128,7 @@ public static class ListView
         var suggested = shown is null ? Suggestions.Suggest(line, now, SetAside) : [];
         if (suggested.Count > 0)
         {
-            var head = Kit.Text("从你的安排里", Role.Label, "brand", bold: true); head.FontSize = 13; head.Margin = new Thickness(0, 18, 0, 6);
+            var head = Kit.Text("根据课表推荐", Role.Label, "brand", bold: true); head.FontSize = 13; head.Margin = new Thickness(0, 18, 0, 6);
             page.Children.Add(head);
             foreach (var (key, task) in suggested)
             {
@@ -136,7 +136,7 @@ public static class ListView
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var plus = new Tap(Paint.Clear, Paint.Faded("brand", .12)) { Content = new TextBlock { Text = "+", FontSize = 15, Foreground = Paint.Brush("brand"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, -3, 0, 0) },
                     Width = 20, Height = 20, CornerRadius = new CornerRadius(5), BorderBrush = Paint.Brush("brand"), BorderThickness = new Thickness(1.5), VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(plus, $"加上 {task.Title}");
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(plus, $"添加任务：{task.Title}");
                 var adding = task; plus.Click += (_, _) => campus.Tasks.Put(adding with { Id = TaskRules.NewId(), Order = -DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
                 row.Children.Add(plus);
                 var title = Kit.Text(task.Title, Role.Body); title.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(title, 1); row.Children.Add(title);
@@ -191,7 +191,7 @@ public static class ListView
             }
             foreach (var task in tasks) page.Children.Add(TaskRow(task, now, courses, tones, openTask, wide && task.Id == beside));
         }
-        if (open_.Count == 0 && exams.Count == 0) page.Children.Add(Pages.Empty("没有要做的事。在上面输入一件，回车就加上了。"));
+        if (open_.Count == 0 && exams.Count == 0) page.Children.Add(Pages.Empty("暂无待办任务。在上方输入任务后按 Enter 即可添加。"));
         if (done.Count > 0)
         {
             var head = new Tap { Content = Kit.Line(6, Kit.Text($"已完成 {done.Count} 项", Role.Label, "muted", bold: true), Kit.Icon(Icons.Chevron, 12, "muted")), Padding = new Thickness(0, 20, 0, 6) };

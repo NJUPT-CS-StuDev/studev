@@ -6,11 +6,12 @@ import { boardFor, definitions, directoryPeople, itemView, myRecords, ownHistory
 import { canManage, canSee, collectionViewer, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
 import { collectionCsv, fileManifest } from './exports.mjs';
 import { collectionKeys as keys, mapConcurrent, readSubmission } from './records.mjs';
-import { authorizationGrace, canEditSubmission, collectionSubmissions, ownsSubmission, submissionView } from './submissions.mjs';
+import { roundQuota } from './quota.mjs';
+import { canEditSubmission, collectionSubmissions, ownsSubmission, submissionView } from './submissions.mjs';
 
 const API = '/api/platform/collections';
 const itemPath = /^\/api\/platform\/collections\/items\/([a-zA-Z0-9_-]+)(?:\/(duplicate|unpublish|rounds)(?:\/([a-zA-Z0-9_-]+)(?:\/(submissions|csv|files))?)?)?$/;
-const submissionPath = /^\/api\/platform\/collections\/submissions\/([a-z0-9-]+)(?:\/(complete|edit|review)|\/files\/([^/]+)\/(download))?$/;
+const submissionPath = /^\/api\/platform\/collections\/submissions\/([a-z0-9-]+)(?:\/(complete|cancel|edit|review)|\/files\/([^/]+)\/(download))?$/;
 
 export function createCollectionsService({ repo, identity, env, now = Date.now, getGateway }) {
   const timestamp = () => new Date(now()).toISOString();
@@ -56,13 +57,15 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
 
   async function deleteDraft(item, revision, actor) {
     if (item.status !== 'draft') fail(409, 'DRAFT_REQUIRED', '请先取消发布，再删除草稿。');
-    const [records, tickets] = await Promise.all([
+    const [records, quotas] = await Promise.all([
       repo.heads(`${keys.submissions}/${item.id}`),
-      item.publishedAt && now() <= Date.parse(item.updatedAt) + authorizationGrace
-        ? repo.list(keys.itemQuota(item.id)) : [],
+      repo.heads(keys.itemQuotas(item.id)),
     ]);
     if (records.size) fail(409, 'DRAFT_HAS_SUBMISSIONS', '已有提交的草稿不能删除。');
-    if (tickets.length) fail(409, 'DRAFT_HAS_AUTHORIZATIONS', '先前授权的上传可能仍在确认，请稍后重试。');
+    const counts = await mapConcurrent([...quotas.keys()], 16, (roundId) => roundQuota(repo, item.id, roundId, now).status());
+    if (counts.some((count) => count.active || count.completed)) {
+      fail(409, 'DRAFT_HAS_AUTHORIZATIONS', '先前授权的上传可能仍在确认，请稍后重试。');
+    }
     const prefix = keys.definition(item.id);
     const revisions = (await repo.list(prefix + '/')).filter((key) => /\/\d{8}\.json$/.test(key));
     const result = await repo.append(prefix, { deleted: true }, revision);
@@ -77,7 +80,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ deleted: true });
   }
 
-  async function routeItem(request, viewer, orgs, route, receivedAt) {
+  async function routeItem(context, viewer, orgs, route, receivedAt) {
+    const { request } = context;
     const [ , id, operation, roundId, action ] = route;
     if (roundId && operation !== 'rounds') fail(404, 'NOT_FOUND', '接口不存在。');
     const item = await readItem(repo, id);
@@ -93,7 +97,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (directDetail) return detail(item, viewer, orgs);
     const round = roundId ? readRound(item, roundId) : null;
     if (action === 'submissions' && request.method === 'POST') {
-      return response(await submissions.begin(request, item, round, viewer.user, receivedAt), 201);
+      return response(await submissions.begin(context, item, round, viewer.user, receivedAt), 201);
     }
     if (!manage) fail(403, 'STAFF_REQUIRED', '此账号无权管理这项收集。');
     if (!operation && request.method === 'DELETE') {
@@ -101,14 +105,16 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return deleteDraft(item, body.revision, viewer.user);
     }
     if (action && request.method === 'GET') {
-      const [records, authorizations] = await Promise.all([
+      const [records, quota] = await Promise.all([
         roundRecords(repo, id, roundId),
-        action === 'submissions' ? repo.list(keys.quota(id, roundId, 'all')).then((list) => list.length) : null,
+        action === 'submissions' ? roundQuota(repo, id, roundId, now).status() : null,
       ]);
       if (action === 'submissions') {
+        await submissions.cleanup(context, id, roundId);
         return response({ items: records.map((record) => submissionView(record, item, round)),
           ...boardFor(item, records, [round]),
-          usage: { authorizations, completed: records.length, fileBytes: records.reduce((total, record) =>
+          usage: { authorizations: quota.active + records.length, pending: quota.active,
+            completed: records.length, fileBytes: records.reduce((total, record) =>
             total + record.files.reduce((bytes, file) => bytes + file.size, 0), 0) },
         });
       }
@@ -140,9 +146,9 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (operation === 'rounds') {
       const next = roundInput({ ...round, ...body }, { now: Date.parse(time), existing: round });
       if (!round && item.rounds.length >= 100) fail(409, 'ROUND_LIMIT_REACHED', '每项收集最多设置 100 轮。');
-      if (round && next.submissionMode !== round.submissionMode &&
-        (await repo.list(keys.quota(id, roundId, 'all'))).length) {
-        fail(409, 'SUBMISSION_MODE_IN_USE', '已有提交授权，无法切换提交方式。');
+      if (round && next.submissionMode !== round.submissionMode) {
+        const { active, completed } = await roundQuota(repo, id, roundId, now).status();
+        if (active || completed) fail(409, 'SUBMISSION_MODE_IN_USE', '已存在提交或暂存内容，无法切换提交方式。');
       }
       update.rounds = round ? item.rounds.map((row) => row.id === round.id ? next : row) : [...item.rounds, next];
     } else {
@@ -192,6 +198,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       const onPeople = path === API + '/people' && request.method === 'GET';
       const onMine = path === API + '/mine' && request.method === 'GET';
       if (submissionMatch?.[2] === 'complete' && post) return response({ submission: await submissions.complete(context, submissionMatch[1]) });
+      if (submissionMatch?.[2] === 'cancel' && post) return response(await submissions.cancel(context, submissionMatch[1]));
       if (!onCatalog && !onCreate && !onPeople && !onMine && !itemMatch && !submissionMatch) return null;
       const [viewer, orgs, available] = await Promise.all([
         collectionViewer(identity, request, url, { required: write || onPeople || onMine || Boolean(submissionMatch), mutation: write, today: chinaDay(receivedAt) }),
@@ -217,7 +224,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const body = await readJson(request, 256 * 1024);
         return createItem({ ...itemInput(body, timestamp()), issuer: publishedIssuer(body, viewer, orgs) }, viewer, orgs);
       }
-      if (itemMatch) return routeItem(request, viewer, orgs, itemMatch, receivedAt);
+      if (itemMatch) return routeItem(context, viewer, orgs, itemMatch, receivedAt);
       return routeSubmission(request, viewer, orgs, submissionMatch, receivedAt);
     },
   };

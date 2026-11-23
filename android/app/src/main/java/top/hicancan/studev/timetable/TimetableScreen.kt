@@ -646,7 +646,7 @@ private fun goneSummary(events: List<LineEvent>): String {
                 }
             }
             if (record != null) item { ExamRecordView(record) }
-            if (recordState.failed) item { Column(Modifier.padding(vertical = 24.dp)) { Plain("更新记录暂时无法加载", 13.sp, Ink.muted); TextAction("重试", onClick = recordState.retry) } }
+            if (recordState.failed) item { Column(Modifier.padding(vertical = 24.dp)) { Plain("暂时看不了更新记录", 13.sp, Ink.muted); TextAction("重试", onClick = recordState.retry) } }
             return@LazyColumn
         }
         item {

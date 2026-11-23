@@ -64,7 +64,7 @@ public sealed partial class ListWidget(string id) : DeskWidget(id)
             foreach (var task in group) TaskRow(campus, task, now);
             shown = true;
         }
-        if (!shown) Empty(all ? "没有待办，在上面写下一件吧" : "这一周没有要做的事");
+        if (!shown) Empty(all ? "暂无待办任务。可在上方添加任务。" : "本周暂无待办任务");
     }
 
     private void TaskRow(Campus campus, PersonalTask task, Moment now)

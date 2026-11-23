@@ -14,7 +14,7 @@ public static class SignIn
         var student = Kit.Field("", "学号", "学号");
         var password = new PasswordBox { PlaceholderText = "密码", MinHeight = 40, FontSize = 14.5 };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(password, "密码");
-        var totp = Kit.Field("", "开了两步验证时填 6 位验证码", "验证码");
+        var totp = Kit.Field("", "已开启两步验证时填写验证码或恢复码", "动态验证码或恢复码");
         var said = Kit.Text("", Role.Label, "danger", wrap: true);
         Tap? go = null;
         var signingIn = false;
@@ -37,7 +37,7 @@ public static class SignIn
                 }
             }
             catch (PlatformFailure failure) { said.Text = failure.Message; }
-            catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "连不上 StuDev，检查一下网络。"; }
+            catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "暂时连不上 StuDev，请检查网络后重试。"; }
             finally {
                 signingIn = false; go.IsEnabled = true;
                 student.IsEnabled = password.IsEnabled = totp.IsEnabled = true;
@@ -51,20 +51,20 @@ public static class SignIn
         var register = Kit.TextAction("还没有账号？注册 StuDev", () => { if (!signingIn) Register(signedIn); });
         register.HorizontalAlignment = HorizontalAlignment.Center;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(register, "account-register");
-        var forgot = new Tap { Content = Kit.Text("忘记密码？发送重设链接到 QQ 邮箱", Role.Label, "brand"), HorizontalAlignment = HorizontalAlignment.Center };
+        var forgot = new Tap { Content = Kit.Text("忘记密码？发送重置链接", Role.Label, "brand"), HorizontalAlignment = HorizontalAlignment.Center };
         forgot.Click += async (_, _) =>
         {
             if (signingIn) return;
-            if (!System.Text.RegularExpressions.Regex.IsMatch(student.Text.Trim(), "^[A-Za-z0-9]{6,20}$")) { said.Text = "请先在上面填写学号。"; return; }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(student.Text.Trim(), "^[A-Za-z0-9]{6,20}$")) { said.Text = "请先填写学号。"; return; }
             forgot.IsEnabled = false;
-            try { await Account.Forgot(student.Text); said.Text = "如果这个学号有账号，重设链接已经发到它绑定的 QQ 邮箱，30 分钟内有效。"; }
+            try { await Account.Forgot(student.Text); said.Text = "如果这个学号已注册，重置链接会发到绑定的 QQ 邮箱，30 分钟内有效。"; }
             catch (PlatformFailure failure) { said.Text = failure.Message; }
-            catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "连不上 StuDev，检查一下网络。"; }
+            catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "暂时连不上 StuDev，请检查网络后重试。"; }
             finally { forgot.IsEnabled = true; }
         };
         var column = new StackPanel { Spacing = 12, Padding = new Thickness(22, 20, 22, 20) };
         column.Children.Add(Pages.SheetHead(Pages.SheetTitle("登录 StuDev"), () => App.Window?.Close()));
-        column.Children.Add(Kit.Text("登录后可以用免费额度问 AI，任务在手机和电脑间同步。", Role.Label, "muted", wrap: true));
+        column.Children.Add(Kit.Text("登录后可使用 AI 免费额度，并在手机和电脑间同步任务。", Role.Label, "muted", wrap: true));
         column.Children.Add(student); column.Children.Add(password); column.Children.Add(totp);
         column.Children.Add(said); column.Children.Add(go); column.Children.Add(forgot); column.Children.Add(register);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(student, "account-login-student");
@@ -78,7 +78,7 @@ public static class SignIn
     {
         var column = new StackPanel { Spacing = 14, Padding = new Thickness(22, 20, 22, 22) };
         column.Children.Add(Pages.SheetHead(Pages.SheetTitle("注册 StuDev"), () => App.Window?.Close()));
-        column.Children.Add(Kit.Text("每位同学都可以注册，网页与 App 共用一个账号。", Role.Label, "muted", wrap: true));
+        column.Children.Add(Kit.Text("注册后可用同一账号登录网页、手机和电脑。", Role.Label, "muted", wrap: true));
         TextBox Field(string label, string id, int max)
         {
             var field = Kit.Field("", "", label); field.MaxLength = max;
@@ -95,9 +95,9 @@ public static class SignIn
         var student = Field("学号", "account-register-student", 20);
         var realName = Field("真实姓名", "account-register-name", 40);
         var nickname = Field("昵称（选填）", "account-register-nickname", 40);
-        column.Children.Add(Kit.Text("留空使用默认昵称。其他同学可看到昵称、头像和签名。", Role.Caption, "muted", wrap: true));
-        var qq = Field("联系 QQ", "account-register-qq", 12);
-        column.Children.Add(Kit.Text("用于通知、找回密码和注销验证，也可匹配 QQ 头像。身份与联系方式仅本人和管理员可见。", Role.Caption, "muted", wrap: true));
+        column.Children.Add(Kit.Text("不填则使用默认昵称。其他成员可以看到你的头像、昵称和签名。", Role.Caption, "muted", wrap: true));
+        var qq = Field("QQ 号", "account-register-qq", 12);
+        column.Children.Add(Kit.Text("QQ 邮箱用于接收通知、重置密码和确认注销，QQ 头像可用作 StuDev 头像。姓名、学号和联系方式仅本人和有权限的管理员可见。", Role.Caption, "muted", wrap: true));
         var password = Password("密码", "account-register-password");
         var confirm = Password("确认密码", "account-register-confirm");
         column.Children.Add(Kit.Text("密码需要 12–256 个字符，请勿使用学校统一身份认证密码。", Role.Caption, "muted", wrap: true));
@@ -130,7 +130,7 @@ public static class SignIn
                 if (active) Show(signedIn);
             }
             catch (Exception failure) when (failure is PlatformFailure or HttpRequestException or TaskCanceledException)
-            { status.Text = failure is PlatformFailure platform ? platform.Message : "连接未完成，请检查网络后重试。"; status.Foreground = Paint.Brush("danger"); }
+            { status.Text = failure is PlatformFailure platform ? platform.Message : "暂时连不上 StuDev，请检查网络后重试。"; status.Foreground = Paint.Brush("danger"); }
             finally
             {
                 busy = false; submit.IsEnabled = true;
