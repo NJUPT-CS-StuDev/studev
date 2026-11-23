@@ -102,7 +102,7 @@ async function collectionFixture() {
   const deadline = new Date(clock - 60_000).toISOString();
   const { item: expired } = await post(owner, '/collections/items', { ...common, name: expiredTitle, visibility: 'public', rounds: [{ ...round, deadline, requireReview: true }] }, 201);
   const { item: stopped } = await post(owner, '/collections/items', { ...common, name: stoppedTitle, visibility: 'public', rounds: [{ ...round, policy: 'closed' }] }, 201);
-  await post(owner, '/collections/items', { ...common, name: timedTitle, visibility: 'public', rounds: [{ ...round, deadline: new Date(clock + 30_000).toISOString() }] }, 201);
+  await post(owner, '/collections/items', { ...common, name: timedTitle, visibility: 'public', rounds: [{ ...round, deadline: new Date(clock + 4_000).toISOString() }] }, 201);
   const repo = createRepository(store, { secret: env.PLATFORM_SESSION_SECRET });
   const definition = await repo.latest(collectionKeys.definition(item.id));
   for (const [index, id] of pinnedCollections.entries()) {
@@ -137,7 +137,7 @@ async function checkCollection(viewport, name) {
   const { item, privateItem } = fixture;
   const guest = await newPage(viewport);
   const guestReads = [];
-  await guest.page.clock.install({ time: new Date('2040-01-01T00:00:00Z') });
+  await guest.page.addInitScript(() => { Date.now = () => Date.UTC(2040, 0, 1); });
   await collections(guest.page, fixture, fixture.guest, { reads: guestReads });
   await guest.page.goto(origin+'/search/');
   const nav = name === 'phone' ? guest.page.locator('.phone-tabs') : guest.page.locator('.site-nav');
@@ -145,6 +145,15 @@ async function checkCollection(viewport, name) {
   await guest.page.waitForURL(url => url.pathname === '/forms/');
   const parts = guest.page.locator('.cw-workspace');
   await parts.getByRole('heading', { name: '2026–2027 学年第一学期', exact: true }).waitFor();
+  const elapsedRow = parts.getByRole('link', { name: new RegExp(expiredTitle) });
+  const stoppedRow = parts.getByRole('link', { name: new RegExp(stoppedTitle) });
+  const timedRow = parts.getByRole('link', { name: new RegExp(timedTitle) });
+  await elapsedRow.getByText('已截止', { exact: true }).waitFor();
+  await stoppedRow.getByText('已停止', { exact: true }).waitFor();
+  await timedRow.getByText('收集中', { exact: true }).waitFor();
+  const catalogReads = guestReads.filter(read => read.path === '/api/platform/collections').length;
+  await timedRow.getByText('已截止', { exact: true }).waitFor();
+  assert.equal(guestReads.filter(read => read.path === '/api/platform/collections').length, catalogReads, 'cutoff updates locally without polling or trusting the client wall clock');
   const pinned = parts.getByRole('region', { name: '常用收集' });
   await pinned.getByText('公开 · 登录后填写', { exact: true }).waitFor();
   for (const title of pinnedTitles) {
@@ -160,16 +169,6 @@ async function checkCollection(viewport, name) {
   await parts.getByRole('link', { name: new RegExp(title) }).waitFor();
   assert.equal(await pinned.count(), 0);
   await search.clear();
-  const elapsedRow = parts.getByRole('link', { name: new RegExp(expiredTitle) });
-  const stoppedRow = parts.getByRole('link', { name: new RegExp(stoppedTitle) });
-  const timedRow = parts.getByRole('link', { name: new RegExp(timedTitle) });
-  await elapsedRow.getByText('已截止', { exact: true }).waitFor();
-  await stoppedRow.getByText('已停止', { exact: true }).waitFor();
-  await timedRow.getByText('收集中', { exact: true }).waitFor();
-  const catalogReads = guestReads.filter(read => read.path === '/api/platform/collections').length;
-  await guest.page.clock.fastForward(31_000);
-  await timedRow.getByText('已截止', { exact: true }).waitFor();
-  assert.equal(guestReads.filter(read => read.path === '/api/platform/collections').length, catalogReads, 'cutoff updates locally without polling or trusting the client wall clock');
   const width = await parts.boundingBox();
   assert(width && width.width >= (name === 'phone' ? viewport.width - 48 : 1100), 'collection list uses the available screen');
   assert(await guest.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'collection list has no horizontal page overflow');
