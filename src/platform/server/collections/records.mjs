@@ -7,6 +7,8 @@ export const studentId = (value) => String(value || '').normalize('NFKC').trim()
 
 export const collectionKeys = {
   definitions: 'collection/definitions',
+  catalog: 'collection/catalog.json',
+  board: (itemId, roundId) => `collection/boards/${itemId}/${roundId}.json`,
   definition: (itemId) => `collection/definitions/${itemId}`,
   submissions: 'collection/submissions',
   round: (itemId, roundId) => `collection/submissions/${itemId}/${roundId}`,

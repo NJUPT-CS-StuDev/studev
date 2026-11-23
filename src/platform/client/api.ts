@@ -178,6 +178,26 @@ function browserDevice() {
     const system = agent.includes('Android') ? 'Android' : /iPhone|iPad/.test(agent) ? 'iOS' : agent.includes('Windows') ? 'Windows' : agent.includes('Mac') ? 'macOS' : 'Linux';
     return { deviceId, deviceName: `${system} · ${browser}` };
 }
+type CollectionEntry = { path: string; request: Promise<{ generation: string | null; response: Promise<Response | null> } | null> };
+declare global { interface Window { studevCollectionEntry?: CollectionEntry } }
+
+let collectionProof: { generation: string | null; csrfToken: string } | undefined;
+export function collectionAuthorized() {
+    return collectionProof && !localStorage.getItem('studev_session_refresh_pending') &&
+        localStorage.getItem('studev_session_generation') === collectionProof.generation;
+}
+
+async function collectionEntry(path: string, generation: string | null, credentials: RequestCredentials) {
+    if (typeof window === 'undefined') return null;
+    const entry = window.studevCollectionEntry;
+    if (credentials !== 'same-origin' || entry?.path !== path) return null;
+    delete window.studevCollectionEntry;
+    const initial = await entry.request;
+    const response = initial?.generation === generation ? await initial.response : null;
+    return localStorage.getItem('studev_session_generation') === generation &&
+        !localStorage.getItem('studev_session_refresh_pending') ? response : null;
+}
+
 let refreshRequest: Promise<void> | null = null;
 const foregroundRenewal = 'studev_session_foreground_renewal';
 const pageInUse = () => typeof document === 'undefined' || (document.visibilityState === 'visible' && document.hasFocus());
@@ -190,10 +210,13 @@ async function refreshCookieSession(generation: string | null, foreground: boole
         // result must require sign-in, rather than replaying an old credential.
         localStorage.setItem('studev_session_refresh_pending', '1');
         const extend = foreground && pageInUse();
-        try { await api('/auth/refresh', { ...browserDevice(), foreground: extend }); }
+        let renewed: { csrfToken: string };
+        try { renewed = await api('/auth/refresh', { ...browserDevice(), foreground: extend }); }
         catch (error) { localStorage.removeItem('studev_session_generation'); throw error; }
         localStorage.removeItem('studev_session_refresh_pending');
-        localStorage.setItem('studev_session_generation', crypto.randomUUID());
+        const nextGeneration = crypto.randomUUID();
+        localStorage.setItem('studev_session_generation', nextGeneration);
+        if (collectionProof?.generation === generation) collectionProof = { generation: nextGeneration, csrfToken: renewed.csrfToken };
         if (extend) localStorage.removeItem(foregroundRenewal);
         else localStorage.setItem(foregroundRenewal, '1');
     }).finally(() => { refreshRequest = null; });
@@ -224,7 +247,9 @@ export async function api<T>(path: string, body?: unknown, options: RequestInit 
         }
         return api<T>(path, body, options, false);
     }
-    response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials, cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const collectionRead = publicCollectionRead || (path === '/collections/mine' && body === undefined && !options.method);
+    const csrfToken = path.startsWith('/collections') && collectionAuthorized() ? collectionProof?.csrfToken : currentSession?.csrfToken;
+    response = (collectionRead && retry ? await collectionEntry(path, generation, credentials) : null) ?? await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials, cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 catch (error) {
     if (error instanceof PlatformError) throw error;
@@ -256,7 +281,11 @@ catch {
     }
     if (expiredSession && publicCollectionRead && credentials !== 'omit') return api<T>(path, body, { ...options, credentials: 'omit' }, false);
     throw new PlatformError(e.error?.message || '操作未完成，请稍后重试。', response.status, e.error?.code);
+} if (publicCollectionRead && credentials !== 'omit' && generation === localStorage.getItem('studev_session_generation')) {
+    const csrfToken = response.headers.get('x-csrf-token');
+    collectionProof = csrfToken ? { generation, csrfToken } : undefined;
 } if (path === '/auth/login' || path === '/auth/logout') {
+    collectionProof = undefined;
     localStorage.removeItem('studev_session_refresh_pending');
     localStorage.removeItem(foregroundRenewal);
     if (path === '/auth/login') localStorage.setItem('studev_session_generation', crypto.randomUUID());

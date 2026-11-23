@@ -1,3 +1,5 @@
+[data-collection-detail] .cw-entry-title { display: none; }
+
 .cw-workspace {
     width: min(1480px, calc(100% - clamp(36px, 7vw, 112px)));
     min-height: 60vh;

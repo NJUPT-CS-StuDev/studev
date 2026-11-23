@@ -31,9 +31,18 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (aiResponse) return aiResponse;
       const syncResponse = await createSyncService({ identity, repo })(context, path);
       if (syncResponse) return syncResponse;
-      const collections = createCollectionsService({ repo, identity, env, now, getGateway });
-      const collectionsResponse = await collections.handle(context, path);
-      if (collectionsResponse) return collectionsResponse;
+      const timings = new Map();
+      const measure = async (name, run) => {
+        const started = performance.now();
+        try { return await run(); }
+        finally { timings.set(name, Math.max(timings.get(name) || 0, performance.now() - started)); }
+      };
+      const collections = createCollectionsService({ repo, identity, env, now, getGateway, measure });
+      const collectionsResponse = await measure('collection', () => collections.handle(context, path));
+      if (collectionsResponse) {
+        collectionsResponse.headers.set('Server-Timing', [...timings].map(([name, ms]) => name + ';dur=' + ms.toFixed(1)).join(', '));
+        return collectionsResponse;
+      }
       fail(404, 'NOT_FOUND', '接口不存在。');
     } catch (error) {
       if (error instanceof AppError) return response({ error: { code: error.code, message: error.message } }, error.status);

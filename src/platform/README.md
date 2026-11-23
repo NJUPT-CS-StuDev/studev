@@ -173,7 +173,7 @@ All API paths below are relative to `/api/platform/collections`.
 | `POST /items/<id>/duplicate` | New draft with copied collection fields and cleared deadlines |
 | `POST /items/<id>/rounds`, `POST /items/<id>/rounds/<round>` | Add or revise a round using the collection revision |
 | `POST /items/<id>/rounds/<round>/submissions` | Validate answers and attachment descriptors, then either finalize or issue the upload receipt |
-| `GET /items/<id>/rounds/<round>/submissions` | Staff report with records, progress board, statistics and quota usage |
+| `GET /items/<id>/rounds/<round>/submissions` | Staff report with compact record summaries, progress board, statistics and quota usage |
 | `GET /items/<id>/rounds/<round>/csv`, `GET /items/<id>/rounds/<round>/files` | Staff CSV or signed attachment manifest |
 | `GET /mine`, `GET /submissions/<id>` | Own history or one authorized record |
 | `POST /submissions/<receiptId>/complete`, `POST /submissions/<receiptId>/cancel` | Confirm an upload or return its unused place |

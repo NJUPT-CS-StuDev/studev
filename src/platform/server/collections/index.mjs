@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { fail, readJson, response } from '../common.mjs';
 import { chinaDay, flattenOrganizationTree, isWithin } from '../../organizations.mjs';
 import { pinnedCollections } from '../../collections.mjs';
-import { boardFor, definitions, directoryPeople, itemView, myRecords, ownHistory, readItem, readRound, roundRecords } from './catalog.mjs';
+import { boardFor, boardRecords, catalogItems, definitions, directoryPeople, historyItems, itemView, myRecords, ownHistory, readItem, readRound, roundRecords } from './catalog.mjs';
 import { canManage, canSee, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
 import { collectionCsv, fileManifest } from './exports.mjs';
 import { collectionKeys as keys, mapConcurrent, readSubmission } from './records.mjs';
@@ -13,24 +13,18 @@ const API = '/api/platform/collections';
 const itemPath = /^\/api\/platform\/collections\/items\/([a-zA-Z0-9_-]+)(?:\/(duplicate|unpublish|rounds)(?:\/([a-zA-Z0-9_-]+)(?:\/(submissions|csv|files))?)?)?$/;
 const submissionPath = /^\/api\/platform\/collections\/submissions\/([a-z0-9-]+)(?:\/(complete|cancel|edit|review)|\/files\/([^/]+)\/(download))?$/;
 
-export function createCollectionsService({ repo, identity, env, now = Date.now, getGateway }) {
+export function createCollectionsService({ repo, identity, env, now = Date.now, getGateway, measure = (_name, run) => run() }) {
   const timestamp = () => new Date(now()).toISOString();
-  const submissions = collectionSubmissions({ repo, env, now, getGateway });
+  const submissions = collectionSubmissions({ repo, env, now, getGateway, measure });
 
-  async function catalog(viewer, orgs, url, available) {
+  function catalog(viewer, orgs, url, available) {
     const orgFilter = url.searchParams.get('orgId');
     const items = available.filter((item) => canSee(item, viewer, orgs) &&
       (!orgFilter || isWithin(item.issuer.organizationId, orgFilter, orgs)));
-    const ids = new Set(items.map((item) => item.id));
-    const records = new Map();
-    for (const record of await myRecords(repo, viewer.user, ids)) {
-      if (!records.has(record.itemId)) records.set(record.itemId, []);
-      records.get(record.itemId).push(record);
-    }
     const serverTime = now();
     return response({ ...viewerInfo(viewer, orgs), serverTime, organizations: flattenOrganizationTree(orgs),
-      items: items.map((item) => itemView(item, viewer, orgs, records.get(item.id) || [], serverTime)),
-    });
+      items: items.map((item) => itemView(item, viewer, orgs, [], serverTime)),
+    }, 200, viewer.headers);
   }
 
   async function detail(item, viewer, orgs, knownRecords) {
@@ -41,7 +35,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       serverTime,
       item: itemView(item, viewer, orgs, mine, serverTime, true),
       mySubmissions: ownHistory(new Map([[item.id, item]]), mine),
-    });
+    }, 200, viewer.headers);
   }
 
   async function createItem(input, viewer, orgs) {
@@ -80,21 +74,20 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ deleted: true });
   }
 
-  async function routeItem(context, viewer, orgs, route, receivedAt) {
+  async function routeItem(context, viewer, orgs, route, receivedAt, item, own) {
     const { request } = context;
     const [ , id, operation, roundId, action ] = route;
     if (roundId && operation !== 'rounds') fail(404, 'NOT_FOUND', '接口不存在。');
-    const item = await readItem(repo, id);
     const directDetail = !operation && request.method === 'GET';
     if (!canSee(item, viewer, orgs)) {
       if (directDetail && (item.status === 'draft' || item.status === 'closed') && viewer.user) {
-        const mine = await myRecords(repo, viewer.user, new Set([item.id]));
+        const mine = await own;
         if (mine.length) return detail(item, viewer, orgs, mine);
       }
       fail(404, 'NOT_FOUND', '收集不存在或无权查看。');
     }
     const manage = canManage(item, viewer, orgs);
-    if (directDetail) return detail(item, viewer, orgs);
+    if (directDetail) return detail(item, viewer, orgs, await own);
     const round = roundId ? readRound(item, roundId) : null;
     if (action === 'submissions' && request.method === 'POST') {
       return response(await submissions.begin(context, item, round, viewer.user, receivedAt), 201);
@@ -105,19 +98,21 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       return deleteDraft(item, body.revision, viewer.user);
     }
     if (action && request.method === 'GET') {
-      const [records, quota] = await Promise.all([
-        roundRecords(repo, id, roundId),
-        action === 'submissions' ? roundQuota(repo, id, roundId, now).status() : null,
-      ]);
       if (action === 'submissions') {
-        await submissions.cleanup(context, id, roundId);
-        return response({ items: records.map((record) => submissionView(record, item, round)),
+        const [records, quota] = await Promise.all([
+          measure('board', () => boardRecords(repo, id, roundId)),
+          roundQuota(repo, id, roundId, now).status(),
+          submissions.cleanup(context, id, roundId),
+        ]);
+        return response({ items: records.map(({ id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles }) => ({
+          id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles,
+        })),
           ...boardFor(item, records, [round]),
           usage: { authorizations: quota.active + records.length, pending: quota.active,
-            completed: records.length, fileBytes: records.reduce((total, record) =>
-            total + record.files.reduce((bytes, file) => bytes + file.size, 0), 0) },
+            completed: records.length, fileBytes: records.reduce((total, record) => total + record.fileBytes, 0) },
         });
       }
+      const records = await roundRecords(repo, id, roundId);
       await repo.audit(viewer.user, 'collection.export', id, { roundId, kind: action, count: records.length });
       if (action === 'csv') return collectionCsv(item, round, records);
       return response({ files: await fileManifest(records, submissions.download) });
@@ -200,12 +195,23 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (submissionMatch?.[2] === 'complete' && post) return response({ submission: await submissions.complete(context, submissionMatch[1]) });
       if (submissionMatch?.[2] === 'cancel' && post) return response(await submissions.cancel(context, submissionMatch[1]));
       if (!onCatalog && !onCreate && !onPeople && !onMine && !itemMatch && !submissionMatch) return null;
-      const [auth, orgs, available] = await Promise.all([
-        identity.authenticate(request, { required: write || onPeople || onMine || Boolean(submissionMatch), csrf: write }),
+      const authentication = measure('auth', () => identity.authenticate(request, { required: write || onPeople || onMine || Boolean(submissionMatch), csrf: write }));
+      if (onMine) {
+        const { user } = await authentication;
+        const records = await myRecords(repo, user);
+        return response({ items: ownHistory(await historyItems(repo, records), records) });
+      }
+      const directDetail = itemMatch && !itemMatch[2] && request.method === 'GET';
+      const itemId = itemMatch?.[1];
+      const [auth, orgs, available, item, own] = await Promise.all([
+        authentication,
         identity.loadOrganizations(),
-        onCatalog || onMine ? definitions(repo) : null,
+        onCatalog ? measure('catalog', () => catalogItems(repo)) : null,
+        itemId ? readItem(repo, itemId) : null,
+        directDetail ? authentication.then(auth => myRecords(repo, auth?.user, new Set([itemId]))) : null,
       ]);
-      const viewer = { user: auth?.user ?? null, today: chinaDay(receivedAt) };
+      const headers = auth?.kind === 'cookie' ? { 'X-CSRF-Token': auth.csrfToken } : {};
+      const viewer = { user: auth?.user ?? null, today: chinaDay(receivedAt), headers };
       if (onCatalog) return catalog(viewer, orgs, url, available);
       if (onPeople) {
         if (!isManagement(viewer.user.role)) fail(403, 'STAFF_REQUIRED', '此账号无权查看应交名单。');
@@ -216,16 +222,12 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
           people: directoryPeople(await identity.loadAllUsers(), allowed, viewer.today),
         });
       }
-      if (onMine) {
-        const records = await myRecords(repo, viewer.user);
-        return response({ items: ownHistory(new Map(available.map((item) => [item.id, item])), records) });
-      }
       if (onCreate) {
         if (!isManagement(viewer.user.role)) fail(403, 'STAFF_REQUIRED', '此账号无权发布收集。');
         const body = await readJson(request, 256 * 1024);
         return createItem({ ...itemInput(body, timestamp()), issuer: publishedIssuer(body, viewer, orgs) }, viewer, orgs);
       }
-      if (itemMatch) return routeItem(context, viewer, orgs, itemMatch, receivedAt);
+      if (itemMatch) return routeItem(context, viewer, orgs, itemMatch, receivedAt, item, own);
       return routeSubmission(request, viewer, orgs, submissionMatch, receivedAt);
     },
   };

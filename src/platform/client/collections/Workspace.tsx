@@ -1,13 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ClipboardList, Plus, Search, UsersRound } from 'lucide-react';
-import { api, errorText, PlatformError, session } from '../api';
+import { api, collectionAuthorized, errorText, PlatformError, session } from '../api';
 import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
 import { CollectionBadge, Details, WorkspaceLink, type Navigate } from './Detail';
 import { badge } from './Submission';
-import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, roundState, toCollectionUrl, type Catalog, type Detail, type Item, type Round, type Submission, type Viewer } from './model';
+import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, roundState, toCollectionUrl, type Catalog, type Detail, type Item, type Round, type Submission } from './model';
 
-const CollectionEditor = lazy(() => import('./Editor').then(module => ({ default: module.CollectionEditor })));
+const loadEditor = () => import('./Editor');
+const preloadEditor = () => { void loadEditor().catch(() => {}); };
+const CollectionEditor = lazy(() => loadEditor().then(module => ({ default: module.CollectionEditor })));
 
 const searchText = (value: string) => value.normalize('NFKC').toLowerCase().trim();
 
@@ -70,23 +72,26 @@ function List({ catalog, now, navigate }: { catalog: Catalog; now: number; navig
     </div>;
 }
 
-function Mine({ viewer, navigate }: { viewer: Viewer | null; navigate: Navigate }) {
+function Mine({ navigate }: { navigate: Navigate }) {
     const [items, setItems] = useState<Submission[]>();
     const [error, setError] = useState('');
     const [attempt, retry] = useState(0);
-    const viewerId = viewer?.id;
+    const [signedOut, setSignedOut] = useState(false);
     useEffect(() => {
-        if (!viewerId) return;
         const controller = new AbortController();
         api<{ items: Submission[] }>('/collections/mine', undefined, { signal: controller.signal }).then(result => {
             if (!controller.signal.aborted) { setItems(result.items); setError(''); }
-        }).catch(failure => { if (!controller.signal.aborted) setError(errorText(failure)); });
+        }).catch(failure => {
+            if (controller.signal.aborted) return;
+            if (failure instanceof PlatformError && failure.status === 401) setSignedOut(true);
+            else setError(errorText(failure));
+        });
         return () => controller.abort();
-    }, [viewerId, attempt]);
+    }, [attempt]);
     return <section className="cw-mine">
         <WorkspaceLink className="cw-back" href={toCollectionUrl()} navigate={navigate}><ArrowLeft size={17} />全部收集</WorkspaceLink>
         <h1 tabIndex={-1}>我的提交</h1>
-        {!viewer ? <a className="cw-button cw-primary" href={collectionLoginUrl()}>登录后查看</a> : error ? <div className="cw-inline"><p className="cw-failure" role="alert">{error}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>
+        {signedOut ? <a className="cw-button cw-primary" href={collectionLoginUrl()}>登录后查看</a> : error ? <div className="cw-inline"><p className="cw-failure" role="alert">{error}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>
             : !items ? <p className="cw-muted" role="status">正在加载提交记录…</p> : !items.length ? <p className="cw-empty">暂无提交记录。</p> : <div className="cw-card-grid cw-receipt-grid">
                 {items.map(item => {
                     const titleId = `receipt-title-${item.id}`;
@@ -134,7 +139,7 @@ export default function Workspace() {
         const timeout = setTimeout(() => tick(value => value + 1), Math.min(2_147_483_647, Math.ceil(remaining)));
         return () => clearTimeout(timeout);
     }, [clock, nextDeadline, clockTick]);
-    const needsCatalog = !id && catalog?.version !== version;
+    const needsCatalog = !id && !mine && catalog?.version !== version;
     const currentError = failure?.id === id ? failure : undefined;
     useEffect(() => {
         const onPop = () => { setQuery(new URLSearchParams(location.search)); setEditor(undefined); setNotice(''); };
@@ -159,7 +164,7 @@ export default function Workspace() {
     }, [id, version]);
     useEffect(() => {
         const page = id ? `/items/${id}` : mine ? 'mine' : 'list';
-        if ((!activeDetail && id) || !info || page === focusedPage.current) return;
+        if ((!activeDetail && id) || (!mine && !info) || page === focusedPage.current) return;
         if (focusedPage.current) root.current?.querySelector('h1')?.focus({ preventScroll: true });
         focusedPage.current = page;
     }, [activeDetail, id, info, mine]);
@@ -176,6 +181,7 @@ export default function Workspace() {
         if (prior.get('id') !== params.get('id') || prior.has('mine') !== params.has('mine')) window.scrollTo({ top: 0, behavior: 'instant' });
     }
     async function authorize() {
+        if (collectionAuthorized()) return;
         authorization.current ||= session(true);
         try {
             if (!await authorization.current) throw new Error('请先登录 StuDev。');
@@ -187,7 +193,7 @@ export default function Workspace() {
     return <div className="cw-workspace" ref={root}>
         {!id && !mine && <div className="cw-workspace-toolbar">
             <h1 tabIndex={-1}>收集</h1>
-            {activeCatalog?.viewer?.canPublish && <button type="button" className="cw-button cw-primary" onClick={() => setEditor('create')}><Plus size={18} />新建收集</button>}
+            {activeCatalog?.viewer?.canPublish && <button type="button" className="cw-button cw-primary" onFocus={preloadEditor} onPointerEnter={preloadEditor} onClick={() => setEditor('create')}><Plus size={18} />新建收集</button>}
         </div>}
         {notice && <p role="status" className="cw-notice">{notice}</p>}
         {id && activeDetail ? <Details key={id} detail={activeDetail} round={round} now={now} receiptId={query.get('receipt') || ''} navigate={navigate} version={version} edit={setEditor} authorize={authorize} onChanged={created => {
@@ -207,7 +213,7 @@ export default function Workspace() {
             navigate(toCollectionUrl(), true);
             setNotice('草稿已删除');
             refresh(value => value + 1);
-        }} /> : !id && mine && activeCatalog ? <Mine key={activeCatalog.viewer?.id} viewer={activeCatalog.viewer} navigate={navigate} /> : !id && activeCatalog ? <List catalog={activeCatalog} now={now} navigate={navigate} />
+        }} /> : mine ? <Mine navigate={navigate} /> : !id && activeCatalog ? <List catalog={activeCatalog} now={now} navigate={navigate} />
             : currentError ? <div className="cw-empty"><p className="cw-failure" role="alert">{currentError.message}</p><div className="cw-inline"><button type="button" className="cw-button" onClick={() => refresh(version + 1)}>重试</button>
                 {id && <WorkspaceLink className="cw-button" href={toCollectionUrl()} navigate={navigate}>返回收集</WorkspaceLink>}
                 {(currentError.status === 401 || (id && !activeCatalog?.viewer && currentError.status === 404)) && <a className="cw-button cw-primary" href={collectionLoginUrl(query)}>登录后查看</a>}</div></div>

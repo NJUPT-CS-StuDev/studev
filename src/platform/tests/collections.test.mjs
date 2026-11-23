@@ -114,6 +114,36 @@ test('collection reads and writes use the signed-in role and organization scope'
   } })).status, 403);
 });
 
+test('compact reads reuse current revisions without exposing withdrawn items or full submission content', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ visibility: 'public', targetMode: 'selected', recipients: [{ studentId: 'TEST1001', name: '甲学生' }] });
+  await f.create({ status: 'draft' });
+  assert.equal((await f.call()).data.items.length, 1);
+  const submitted = await f.submit(item, 'alice');
+  assert.equal(submitted.status, 201);
+  const path = f.roundPath(item) + '/submissions';
+  assert.equal((await f.call(path, { user: 'owner' })).data.items.length, 1);
+
+  const reads = [];
+  const get = f.store.get;
+  f.store.get = (key, options) => { reads.push(key); return get(key, options); };
+  assert.equal((await f.call()).data.items.length, 1);
+  const compact = (await f.call(path, { user: 'owner' })).data.items[0];
+  assert.equal(compact.id, submitted.data.submission.id);
+  for (const key of ['answers', 'files', 'fields', 'userId']) assert.ok(!Object.hasOwn(compact, key));
+  assert.ok(!reads.some(key => key.includes('/collection/submissions/')));
+  assert.equal(reads.filter(key => key.includes('/collection/definitions/')).length, 1);
+  reads.length = 0;
+  assert.equal((await f.call('/mine', { user: 'alice' })).data.items[0].answers.note, '完成');
+  assert.equal(reads.filter(key => key.includes('/collection/definitions/')).length, 1);
+  assert.ok(!reads.some(key => key.endsWith('/collection/catalog.json')));
+  assert.equal((await f.call(path, { user: 'bob' })).status, 403);
+
+  assert.equal((await f.call(f.itemPath(item) + '/unpublish', { user: 'owner', body: { revision: item.revision } })).status, 200);
+  assert.equal((await f.call()).data.items.length, 0);
+  assert.equal((await f.call(f.itemPath(item), { user: 'alice' })).data.mySubmissions.length, 1);
+});
+
 test('stopping keeps access and withdrawal preserves private receipts, review and historical answers', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ user: 'admin', round: { requireReview: true, allowEdit: true } });

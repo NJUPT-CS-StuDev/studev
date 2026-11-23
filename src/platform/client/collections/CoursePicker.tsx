@@ -58,6 +58,10 @@ export default function CollectionCoursePicker({ value, onChange }: {
         };
     }, [attempt, query, value]);
 
+    useEffect(() => {
+        if (!value) void courseSearch().then(client => client.initialize()).catch(() => undefined);
+    }, [value]);
+
     const result = state?.query === query ? state : undefined;
     return <div className="collection-course-picker">
         {value ? <>

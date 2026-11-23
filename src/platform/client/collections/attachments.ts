@@ -97,16 +97,20 @@ export async function downloadZip(path: string, name: string, progress: (message
       try {
         signal.throwIfAborted();
         const response = await fetchStorageDownload(file.download, signal);
-        const data = await response.blob();
-        if (data.size !== file.size) throw new Error('附件内容大小发生变化，请重新下载。');
-        const reader = data.stream().getReader();
+        if (!response.body) throw new Error('未收到附件内容，请重新下载。');
         let crc = 0xffffffff;
-        try {
-          for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+        let bytes = 0;
+        const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, out) {
             signal.throwIfAborted();
-            for (const byte of chunk.value) crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
-          }
-        } finally { reader.releaseLock(); }
+            bytes += chunk.byteLength;
+            if (bytes > file.size) throw new Error('附件内容大小发生变化，请重新下载。');
+            for (const byte of chunk) crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+            out.enqueue(chunk);
+          },
+        }), { signal });
+        const data = await new Response(body).blob();
+        if (bytes !== file.size) throw new Error('附件内容大小发生变化，请重新下载。');
         archive[index] = { name: path, data, crc: (crc ^ 0xffffffff) >>> 0 };
         progress(`正在下载附件 ${++done}/${files.length}`);
       } catch (error) { failure ||= error; }

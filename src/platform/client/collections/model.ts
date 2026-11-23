@@ -100,7 +100,8 @@ export interface Detail extends WorkspaceData {
     mySubmissions: Submission[];
 }
 
-export interface RoundBoardData { items: Submission[]; board: BoardRow[]; roundStats: RoundStats[] }
+export type BoardSubmission = Pick<Submission, 'id' | 'studentId' | 'studentName' | 'status' | 'submittedAt' | 'late'> & { hasFiles: boolean };
+export interface RoundBoardData { items: BoardSubmission[]; board: BoardRow[]; roundStats: RoundStats[] }
 
 export interface SubmissionFile { id: string; fieldId: string; name: string; size: number; type: string }
 export interface Submission {

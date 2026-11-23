@@ -101,7 +101,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       <div class="header-inner">
         <a class="wordmark" href="/" aria-label={`${PRODUCT_CONFIG.APP_NAME} 首页`}>{PRODUCT_CONFIG.APP_NAME}</a>
         <nav class="site-nav" aria-label="主导航">
-          {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
+          {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} data-astro-reload={item.key === "forms" ? true : undefined} data-astro-prefetch={item.key === "forms" ? "false" : undefined} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
           <a class:list={[{ active: clubKeys.includes(active) }]} href="/club/">学生发展中心</a>
         </nav>
         <div class:list={['header-actions', { 'campus-site-actions': campusHeader }]}>
@@ -133,7 +133,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       <button type="button" aria-label="不再显示" data-app-offer-close>×</button>
     </aside>}
     <nav class="phone-tabs" aria-label="主导航">
-      {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
+      {tabs.map((item) => <a class:list={['campus-tab', { active: active === item.key }]} href={item.href} data-astro-reload={item.key === "forms" ? true : undefined} data-astro-prefetch={item.key === "forms" ? "false" : undefined} aria-current={active === item.key ? 'page' : undefined}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={item.glyph} /></svg><span>{item.label}</span></a>)}
     </nav>
     <dialog class="site-share" id="share-studev" aria-labelledby="share-studev-title">
       <form method="dialog">

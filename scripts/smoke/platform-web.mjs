@@ -128,13 +128,13 @@ async function collectionFixture() {
     ownerCode: () => totpCode(setup.secret, Math.floor((clock += 30_000) / 30_000)) };
 }
 
-async function collections(page, fixture, actor, { identity, reads = [], alterResponse } = {}) {
+async function collections(page, fixture, actor, { write, reads = [], alterResponse } = {}) {
   await page.route('**/api/platform/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
     reads.push({ path: url.pathname, method: request.method(), query: url.search });
     const path = url.pathname.slice('/api/platform'.length);
-    if (path === '/auth/session' && identity) await identity.ready;
+    if (write && request.method() === 'POST' && path.endsWith('/submissions')) await write.ready;
     const headers = new Headers(await request.allHeaders());
     headers.set('Origin', fixture.env.PLATFORM_ORIGIN);
     if (actor.cookie) headers.set('Cookie', actor.cookie);
@@ -324,8 +324,8 @@ async function checkCollection(viewport, name) {
   assert.deepEqual(guest.errors, []);
   await guest.context.close();
 
-  const member = await newPage(viewport), identity = gate(), memberReads = [];
-  await collections(member.page, fixture, fixture.member, { identity, reads: memberReads });
+  const member = await newPage(viewport), write = gate(), memberReads = [];
+  await collections(member.page, fixture, fixture.member, { write, reads: memberReads });
   await member.page.goto(origin + '/forms/?id=' + item.id + '&a.answer=' + encodeURIComponent('地图预填内容'));
   const memberParts = member.page.locator('.cw-workspace');
   const answer = memberParts.getByRole('textbox', { name: /^填写内容/ });
@@ -335,23 +335,23 @@ async function checkCollection(viewport, name) {
   assert.equal(await memberParts.getByRole('button', { name: '收集设置' }).count(), 0);
   assert.equal(await memberParts.getByText(peerSecret).count(), 0);
   assert.equal(memberReads.filter(read => read.path === '/api/platform/auth/session').length, 0);
-  await answer.fill('登录验证期间保留这段内容');
+  await answer.fill('提交期间保留这段内容');
   await memberParts.getByRole('button', { name: '提交', exact: true }).click();
   await memberParts.getByRole('button', { name: /正在提交/ }).waitFor();
-  assert.equal(await answer.inputValue(), '登录验证期间保留这段内容');
-  assert.equal(memberReads.filter(read => read.method === 'POST').length, 0);
+  assert.equal(await answer.inputValue(), '提交期间保留这段内容');
   try {
     assert(await memberParts.getByRole('button', { name: /正在提交/ }).isDisabled());
   } finally {
-    identity.release();
+    write.release();
   }
-  await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).waitFor();
-  assert.equal(memberReads.filter(read => read.path === '/api/platform/auth/session').length, 1);
+  await memberParts.getByText('提交期间保留这段内容', { exact: true }).waitFor();
+  assert.equal(memberReads.filter(read => read.path === '/api/platform/auth/session').length, 0, 'the authorized read supplies the CSRF token');
+  assert.equal(memberReads.filter(read => read.path === '/api/platform/collections/items/' + item.id).length, 1, 'the initial read and local save need no duplicate detail fetch');
   assert.equal(memberReads.filter(read => read.method === 'POST').length, 1, 'plain answers save with one write');
   assert.equal(memberReads.filter(read => read.path === '/api/platform/sync').length, 0);
   assert.equal((await fixture.member.call('/collections/submissions/' + fixture.peerSubmission)).status, 404);
   await member.page.reload();
-  await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).waitFor();
+  await memberParts.getByText('提交期间保留这段内容', { exact: true }).waitFor();
   await shot(member.page, name + '-collection-own-submission');
   assert.equal(await memberParts.getByRole('combobox', { name: '视角' }).count(), 0);
   await memberParts.getByRole('link', { name: '全部收集' }).click();
@@ -469,7 +469,7 @@ async function checkCollection(viewport, name) {
     assert.equal((await fixture.guest.call('/collections/items/' + item.id)).status, 404);
     const previous = await fixture.member.call('/collections/items/' + item.id);
     assert.equal(previous.status, 200);
-    assert.equal(previous.body.mySubmissions[0].answers.answer, '登录验证期间保留这段内容');
+    assert.equal(previous.body.mySubmissions[0].answers.answer, '提交期间保留这段内容');
     assert.deepEqual(staff.errors, []);
     await staff.context.close();
     record('desktop: owner creates and deletes a draft, reads participant submissions and withdraws a published collection');
