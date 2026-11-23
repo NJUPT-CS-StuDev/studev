@@ -128,12 +128,13 @@ async function collectionFixture() {
     ownerCode: () => totpCode(setup.secret, Math.floor((clock += 30_000) / 30_000)) };
 }
 
-async function collections(page, fixture, actor, { write, reads = [], alterResponse } = {}) {
+async function collections(page, fixture, actor, { write, catalog, reads = [], alterResponse } = {}) {
   await page.route('**/api/platform/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
     reads.push({ path: url.pathname, method: request.method(), query: url.search });
     const path = url.pathname.slice('/api/platform'.length);
+    if (catalog && path === '/collections' && request.method() === 'GET') await catalog.ready;
     if (write && request.method() === 'POST' && path.endsWith('/submissions')) await write.ready;
     const headers = new Headers(await request.allHeaders());
     headers.set('Origin', fixture.env.PLATFORM_ORIGIN);
@@ -250,14 +251,19 @@ async function checkCollection(viewport, name) {
   const fixture = await collectionFixture();
   const { item, privateItem } = fixture;
   const guest = await newPage(viewport);
-  const guestReads = [];
+  const guestReads = [], catalog = gate();
   await guest.page.addInitScript(() => { Date.now = () => Date.UTC(2040, 0, 1); });
-  await collections(guest.page, fixture, fixture.guest, { reads: guestReads });
+  await collections(guest.page, fixture, fixture.guest, { reads: guestReads, catalog });
   await guest.page.goto(origin+'/search/');
   const nav = name === 'phone' ? guest.page.locator('.phone-tabs') : guest.page.locator('.site-nav');
   await nav.getByRole('link', { name: '收集', exact: true }).click();
   await guest.page.waitForURL(url => url.pathname === '/forms/');
   const parts = guest.page.locator('.cw-workspace');
+  try {
+    const entry = parts.locator('.cw-entry-card').filter({ hasText: '意见反馈' });
+    await entry.waitFor();
+    assert.equal(new URL(await entry.getAttribute('href'), origin).searchParams.get('id'), pinnedCollections[1]);
+  } finally { catalog.release(); }
   await parts.getByRole('heading', { name: '2026–2027 学年第一学期', exact: true }).waitFor();
   const elapsedRow = parts.getByRole('link', { name: new RegExp(expiredTitle) });
   const stoppedRow = parts.getByRole('link', { name: new RegExp(stoppedTitle) });

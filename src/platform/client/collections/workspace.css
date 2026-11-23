@@ -1,4 +1,4 @@
-[data-collection-detail] .cw-entry-title { display: none; }
+[data-collection-detail] :is(.cw-entry-title, astro-island[ssr] .cw-entry) { display: none; }
 
 .cw-workspace {
     width: min(1480px, calc(100% - clamp(36px, 7vw, 112px)));
@@ -84,6 +84,7 @@
     display: grid; align-content: start; grid-template-rows: auto 1fr auto; gap: 7px; min-height: 132px; padding: 17px 18px;
     border: 1px solid var(--line); border-radius: var(--cw-radius); background: var(--surface); color: var(--ink);
 }
+.cw-entry-card { align-content: center; }
 .cw-card:hover, .cw-card:focus-visible { border-color: var(--brand); color: var(--ink); background: var(--cw-accent); }
 .cw-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 12px; }
 .cw-card-head > :is(.cw-status, .cw-submission-status) { flex: none; }

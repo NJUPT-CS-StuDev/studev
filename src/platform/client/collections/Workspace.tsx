@@ -5,6 +5,7 @@ import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
 import { CollectionBadge, Details, WorkspaceLink, type Navigate } from './Detail';
 import { badge } from './Submission';
+import CollectionEntry from './Entry';
 import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, roundState, toCollectionUrl, type Catalog, type Detail, type Item, type Round, type Submission } from './model';
 
 const loadEditor = () => import('./Editor');
@@ -217,7 +218,7 @@ export default function Workspace() {
             : currentError ? <div className="cw-empty"><p className="cw-failure" role="alert">{currentError.message}</p><div className="cw-inline"><button type="button" className="cw-button" onClick={() => refresh(version + 1)}>重试</button>
                 {id && <WorkspaceLink className="cw-button" href={toCollectionUrl()} navigate={navigate}>返回收集</WorkspaceLink>}
                 {(currentError.status === 401 || (id && !activeCatalog?.viewer && currentError.status === 404)) && <a className="cw-button cw-primary" href={collectionLoginUrl(query)}>登录后查看</a>}</div></div>
-                : <div className="cw-loading" role="status"><span className="cw-spinner" />{id ? '正在加载收集…' : '正在加载收集列表…'}</div>}
+                : <>{!id && <CollectionEntry />}<div className="cw-loading" role="status"><span className="cw-spinner" />{id ? '正在加载收集…' : '正在加载收集列表…'}</div></>}
         {editor && <Suspense fallback={<p className="cw-sr-only" role="status">正在加载编辑器…</p>}><CollectionEditor key={editor} mode={editor} catalog={activeCatalog} item={item} currentRound={round} authorize={authorize} onClose={() => setEditor(undefined)} onSaved={(savedId, savedRound) => {
             navigate(toCollectionUrl(savedId, savedRound));
             setEditor(undefined);

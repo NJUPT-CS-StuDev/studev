@@ -230,12 +230,15 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
   }
 
   async function cleanupLater(context, itemId, roundId, settled, exclude) {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function run() {
       const prefix = keys.cleanup(itemId, roundId);
       const paths = settled ? [keys.cleanup(itemId, roundId, settled.id)] : (await repo.list(prefix))
         .filter(key => !exclude || key !== keys.cleanup(itemId, roundId, exclude)).slice(0, 8);
       if (!paths.length) return;
       const { active } = settled ? { active: {} } : await roundQuota(repo, itemId, roundId, now).read();
+      signal.throwIfAborted();
       const configuration = oscaConfig(env);
       const storage = getGateway(configuration);
       const objectPrefix = configuration.prefix + 'collection/' + itemId + '/' + roundId + '/';
@@ -247,24 +250,34 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       };
       await mapConcurrent(paths, 8, async (key) => {
         const task = await repo.get(key);
-        if (!task) return;
+        if (!task || (task.cleaned && now() < task.expiresAt + 1000)) return;
+        signal.throwIfAborted();
         const winner = settled ? settled.winner : await repo.get(task.target);
         if (!winner && active[task.id]) return;
-        const discarded = winner?.receiptId === task.id
+        const discarded = !task.cleaned && winner?.receiptId === task.id
           ? task.discarded.filter(ownedFinal).map((file) => file.objectKey) : [];
         const stagePrefix = objectPrefix + 'staging/' + task.id + '/';
         const staging = task.staging.filter((objectKey) => objectKey.startsWith(stagePrefix));
         const candidates = (task.candidates || []).filter((objectKey) =>
           objectKey.startsWith(finalPrefix + task.id + '/') && !winner?.files.some((file) => file.objectKey === objectKey));
         const remove = [...discarded, ...staging, ...candidates];
-        const result = await Promise.allSettled(remove.map((objectKey) => storage.delete(objectKey)));
-        if (result.every((entry) => entry.status === 'fulfilled') && (!task.staging.length || now() >= task.expiresAt + 1000)) {
-          await repo.remove(key);
-        }
+        signal.throwIfAborted();
+        const result = await Promise.allSettled(remove.map((objectKey) => storage.delete(objectKey, signal)));
+        if (result.some((entry) => entry.status === 'rejected')) return;
+        signal.throwIfAborted();
+        if (!task.staging.length || now() >= task.expiresAt + 1000) await repo.remove(key);
+        else await repo.put(key, { ...task, cleaned: true });
       });
     }
-    const job = measure('cleanup', run).catch(() => {});
-    if (typeof context.waitUntil === 'function') context.waitUntil(job);
+    // The durable task stays available for the next sweep if storage is slow.
+    // Cleanup must not hold an authorization, a committed receipt or a board open.
+    const background = typeof context.waitUntil === 'function';
+    let timer;
+    const budget = new Promise((resolve) => {
+      timer = setTimeout(() => { controller.abort(); resolve(); }, background ? 8000 : 1200);
+    });
+    const job = measure('cleanup', () => Promise.race([run(), budget])).catch(() => {}).finally(() => clearTimeout(timer));
+    if (background) context.waitUntil(job);
     else await job;
   }
 
@@ -332,7 +345,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       return await finish(winner);
     } finally {
       if (disposable && candidates.length) {
-        const attempts = await Promise.allSettled(candidates.map((path) => storage.delete(path)));
+        const attempts = await Promise.allSettled(candidates.map((path) => storage.delete(path, AbortSignal.timeout(1200))));
         const failed = candidates.filter((_, index) => attempts[index].status === 'rejected');
         if (failed.length) await queueCandidates(id, receipt, failed).catch(() => {});
       }

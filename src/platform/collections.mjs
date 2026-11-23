@@ -1,6 +1,12 @@
 import product from '../../product.json' with { type: 'json' };
 
-export const pinnedCollections = [product.forms.place, product.forms.feedback, product.forms.data];
+export const pinnedCollectionLinks = [
+  { id: product.forms.place, title: '地点拍照' },
+  { id: product.forms.feedback, title: '意见反馈' },
+  { id: product.forms.data, title: '补充校园数据' },
+];
+
+export const pinnedCollections = pinnedCollectionLinks.map(({ id }) => id);
 
 export function isSemester(value) {
   const parts = typeof value === 'string' && /^(\d{4})-(\d{4})-([12])$/.exec(value);

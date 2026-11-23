@@ -429,6 +429,21 @@ test('a cancelled confirmation cannot settle after its files have been copied', 
   assert.equal((await f.submit(item, 'alice', body)).status, 201);
 });
 
+test('slow storage cleanup cannot fail an already confirmed upload', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment] } });
+  const staged = await f.submit(item, 'alice', { answers: { note: '内容' }, files: [{ fieldId: 'upload', name: '资料.txt', size: 3, type: 'text/plain' }] });
+  const upload = f.gateway.uploads.at(-1);
+  f.gateway.upload(upload, 'one');
+  const remove = f.gateway.delete;
+  f.gateway.delete = (_key, signal) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+  assert.equal((await f.complete(staged.data)).status, 200);
+  assert.equal(f.gateway.objects.has(upload.objectKey), true);
+  f.gateway.delete = remove;
+  assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'owner' })).status, 200);
+  assert.equal(f.gateway.objects.has(upload.objectKey), false);
+});
+
 test('replacement preserves retained files, retries cleanup and leaves imported paths intact', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ round: { fields: [note, attachment,

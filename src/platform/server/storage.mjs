@@ -51,8 +51,8 @@ export function oscaGateway(config) {
         CopySourceIfMatch: etag, MetadataDirective: 'COPY',
       }));
     },
-    async delete(objectKey) {
-      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: objectKey }));
+    async delete(objectKey, abortSignal) {
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: objectKey }), { abortSignal });
     },
     async presignDownload(record, etag, expiresIn) {
       const fallbackName = record.fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\;]/g, '_');
