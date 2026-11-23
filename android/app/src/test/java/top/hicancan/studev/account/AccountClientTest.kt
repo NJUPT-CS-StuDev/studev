@@ -63,6 +63,46 @@ class AccountClientTest {
         coroutineScope { (1..8).map { async { client.request("/auth/devices", authenticated = true) } }.awaitAll() }
         assertEquals(1, refreshCount); assertEquals("refresh-two", storage.value.session!!.refreshToken)
     }
+    @Test fun coldStartupKeepsUnknownSeparateAndRestoresSignedInUserWithoutNetwork() = runBlocking {
+        val savedUser = AccountUser("signed-in-user", "测试成员", qq = "123456789")
+        val local = StoredAccount(session = AccountSession("access", "refresh", 0, "family", savedUser))
+        val readable = CompletableDeferred<Unit>()
+        val storage = object : AccountStorage {
+            override suspend fun read(): StoredAccount { readable.await(); return local }
+            override suspend fun write(value: StoredAccount) = error("Restore should not write to storage")
+        }
+        val client = AccountClient(storage, PlatformTransport { _, _, _ -> error("Restore should not use the network") })
+        val loading = async { client.current() }
+        assertEquals(AccountPresence.Loading, client.presence.value)
+        readable.complete(Unit)
+        assertEquals(savedUser, loading.await())
+        assertEquals(AccountPresence.SignedIn(savedUser), client.presence.value)
+    }
+    @Test fun refreshSpendsStoredTokenWithoutShowingSignedOutWhileWaiting() = runBlocking {
+        val storage = Storage()
+        val refreshing = CompletableDeferred<Unit>()
+        val replyReady = CompletableDeferred<Unit>()
+        val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
+            "/auth/login" -> reply()
+            "/auth/refresh" -> {
+                refreshing.complete(Unit)
+                replyReady.await()
+                reply("access-two", "refresh-two")
+            }
+            else -> { assertEquals("access-two", bearer); PlatformReply(200, buildJsonObject {}) }
+        } })
+        val user = client.signIn("TEST123456", "password", "", "device").user
+        storage.value = storage.value.copy(session = storage.value.session!!.copy(expiresAt = 0))
+        val request = async { client.request("/auth/devices", authenticated = true) }
+        refreshing.await()
+        assertNull(storage.value.session)
+        assertEquals(AccountPresence.SignedIn(user), client.presence.value)
+        assertEquals(user, client.current())
+        replyReady.complete(Unit)
+        request.await()
+        assertEquals(AccountPresence.SignedIn(user), client.presence.value)
+        assertEquals("refresh-two", storage.value.session?.refreshToken)
+    }
     @Test fun unauthorizedAccessRetriesOnceWithRotatedToken() = runBlocking {
         val storage = Storage(); var calls = 0
         val client = AccountClient(storage, PlatformTransport { path, _, bearer -> when (path) {
@@ -81,6 +121,7 @@ class AccountClientTest {
         storage.value = storage.value.copy(session = storage.value.session!!.copy(expiresAt = 0))
         try { client.request("/auth/devices", authenticated = true); fail() } catch (_: java.io.IOException) { }
         assertNull(storage.value.session); assertEquals(1, refreshes)
+        assertEquals(AccountPresence.SignedOut, client.presence.value)
         try { client.request("/auth/devices", authenticated = true); fail() } catch (e: PlatformFailure) { assertEquals("AUTH_REQUIRED", e.code) }
         assertEquals(1, refreshes)
     }

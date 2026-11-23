@@ -66,7 +66,7 @@ class ConversationTest {
                 }
             }
             compose.waitUntil(15_000) { compose.onAllNodesWithText("有什么可以帮你？").fetchSemanticsNodes().isNotEmpty() }
-            compose.waitUntil(10_000) { client.user.value != null }
+            compose.waitUntil(10_000) { client.presence.value.user != null }
             val input = compose.onNode(hasSetTextAction() and hasContentDescription("问点什么"))
             input.performTextInput(a)
             compose.onNodeWithContentDescription("发送").performClick()

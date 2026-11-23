@@ -43,6 +43,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
+import top.hicancan.studev.account.AccountPresence
 import top.hicancan.studev.app.CampusModel
 import top.hicancan.studev.app.CampusHeader
 import top.hicancan.studev.app.CampusGlyph
@@ -93,7 +94,8 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
 @Composable internal fun AiScreen(model: CampusModel, route: Route, conversations: Conversations = model.conversations) {
     val context = LocalContext.current
     val client = conversations.client
-    val account by client.user.collectAsState()
+    val presence by client.presence.collectAsState()
+    val account = presence.user
     LaunchedEffect(client) { client.current() }
     val scope = rememberCoroutineScope()
     val modelPrefs = conversations.modelPrefs
@@ -161,7 +163,10 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
     fun ask(question: String, parent: String = thread.tip(), signedIn: Boolean = false) {
         if (question.isBlank() || busy) return
         val selected = view.selection
-        if (!signedIn && selected.provider == null && account == null) { waiting = question; return }
+        if (!signedIn && selected.provider == null && account == null) {
+            if (presence != AccountPresence.Loading) waiting = question
+            return
+        }
         val id = java.util.UUID.randomUUID().toString()
         val fromTip = parent == thread.tip()
         if (conversations.start(current, activeProject, thread.append(parent, id, buildJsonObject {
@@ -207,7 +212,7 @@ private data class CallInspection(val step: Steps.Step, val arguments: String, v
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (unavailable) Plain("当前模型已停用或移除，请重新选择。", 12.sp, marks().danger, modifier = Modifier.padding(horizontal = 8.dp))
             Composer(view.draft, { view.draft = it.take(4000) }, onSend = { ask(view.draft) }, onStop = { view.job?.cancel() },
-                onTools = { keyboard?.hide(); configuringTools = true }, busy = busy, canSend = !unavailable, focus = composeFocus) {
+                onTools = { keyboard?.hide(); configuringTools = true }, busy = busy, canSend = !unavailable && (view.selection.provider != null || presence != AccountPresence.Loading), focus = composeFocus) {
                 ChatModelPicker(catalog, view.selection, freeService, enabled = true,
                     manage = { keyboard?.hide(); configuringModels = true }) { next ->
                     view.selection = next

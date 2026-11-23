@@ -42,11 +42,12 @@ public sealed class Account
     private readonly Func<string, JsonObject?, string?, Task<(int Status, JsonObject Body)>> send;
     private readonly Func<long> now;
     private StoredAccount stored;
+    private AccountState? renewing;
     private int generation;
     private sealed record Pass(AccountSession Session, int Generation);
     public event Action? Changed;
-    public AccountUser? User => Stored().Session?.User;
-    public AccountState? CachedState => Stored().Session?.State;
+    public AccountUser? User => CachedState?.User;
+    public AccountState? CachedState { get { lock (storageGate) return stored.Session?.State ?? renewing; } }
 
     private Account() : this(
         Secure.Read(File) is { } text ? JsonSerializer.Deserialize(text, StorageJson.Default.StoredAccount)! : new(Guid.NewGuid().ToString(), null),
@@ -64,8 +65,9 @@ public sealed class Account
         lock (storageGate)
         {
             if (generation != expectedGeneration) throw AccountChanged();
-            if (stored == value) return;
-            write(value); stored = value;
+            if (stored == value && renewing is null) return;
+            if (stored != value) write(value);
+            stored = value; renewing = null;
         }
         Changed?.Invoke();
     }
@@ -133,11 +135,38 @@ public sealed class Account
             var session = stored.Session ?? throw new PlatformFailure(401, "AUTH_REQUIRED", "请先登录。");
             if (forceFor is not null && (expectedGeneration != forceFor.Generation || session.DeviceSessionId != forceFor.Session.DeviceSessionId)) throw AccountChanged();
             if (session.ExpiresAt > now() + 30_000 && (forceFor is null || session.AccessToken != forceFor.Session.AccessToken)) return new(session, expectedGeneration);
-            // A refresh is never retried after an uncertain result: the spent ticket is forgotten before it is sent.
-            Keep(stored with { Session = null }, expectedGeneration);
-            var value = Checked(await send("/auth/refresh", new JsonObject { ["refreshToken"] = session.RefreshToken, ["deviceId"] = stored.DeviceId }, null));
-            var fresh = Tokens(value, session.State);
-            Keep(stored with { Session = fresh }, expectedGeneration);
+            // Persist the spent intent before sending this one-use ticket. Keep
+            // only the profile visible while waiting for the replacement.
+            var profile = session.State;
+            lock (storageGate)
+            {
+                if (generation != expectedGeneration) throw AccountChanged();
+                var cleared = stored with { Session = null };
+                write(cleared);
+                this.stored = cleared;
+                renewing = profile;
+            }
+            AccountSession fresh;
+            try
+            {
+                var value = Checked(await send("/auth/refresh", new JsonObject { ["refreshToken"] = session.RefreshToken, ["deviceId"] = stored.DeviceId }, null));
+                fresh = Tokens(value, profile);
+                Keep(stored with { Session = fresh }, expectedGeneration);
+            }
+            catch
+            {
+                var changed = false;
+                lock (storageGate)
+                {
+                    if (ReferenceEquals(renewing, profile))
+                    {
+                        renewing = null;
+                        changed = true;
+                    }
+                }
+                if (changed) Changed?.Invoke();
+                throw;
+            }
             return new(fresh, expectedGeneration);
         }
         finally { gate.Release(); }
@@ -286,8 +315,9 @@ public sealed class Account
         {
             generation++;
             var next = stored with { Session = null };
-            if (stored == next) return;
-            write(next); stored = next;
+            if (stored == next && renewing is null) return;
+            if (stored != next) write(next);
+            stored = next; renewing = null;
         }
         Changed?.Invoke();
     }

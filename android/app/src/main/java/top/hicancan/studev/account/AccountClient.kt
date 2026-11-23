@@ -28,6 +28,15 @@ internal val accountJson = Json { ignoreUnknownKeys = true; encodeDefaults = tru
 fun avatarLetter(nickname: String): String = if (nickname.isEmpty()) "我" else java.text.BreakIterator.getCharacterInstance(java.util.Locale.ROOT).run {
     setText(nickname); first(); nickname.substring(0, next())
 }
+sealed interface AccountPresence {
+    val user: AccountUser? get() = null
+
+    data object Loading : AccountPresence
+    data object Unavailable : AccountPresence
+    data object SignedOut : AccountPresence
+    data class SignedIn(override val user: AccountUser) : AccountPresence
+}
+
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
 @Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
@@ -104,12 +113,35 @@ class HttpsPlatformTransport : PlatformTransport {
 
 class AccountClient(private val storage: AccountStorage, private val transport: PlatformTransport, private val now: () -> Long = System::currentTimeMillis, private val streamer: PlatformStreamer = HttpsPlatformStreamer()) {
     private val lock = Mutex()
-    private val signedIn = kotlinx.coroutines.flow.MutableStateFlow<AccountUser?>(null)
-    /** Who is signed in, updated the moment that changes: signing in or out, a refreshed session, a saved profile. */
-    val user: kotlinx.coroutines.flow.StateFlow<AccountUser?> = signedIn
-    /** Every change to the stored account goes through here, so [user] always says what is stored. */
-    private suspend fun keep(stored: StoredAccount) { storage.write(stored); signedIn.value = stored.session?.user }
-    suspend fun current(): AccountUser? = lock.withLock { storage.read().session?.user.also { signedIn.value = it } }
+    private val accountPresence = kotlinx.coroutines.flow.MutableStateFlow<AccountPresence>(AccountPresence.Loading)
+    val presence: kotlinx.coroutines.flow.StateFlow<AccountPresence> = accountPresence
+
+    private fun publish(user: AccountUser?) {
+        accountPresence.value = user?.let { AccountPresence.SignedIn(it) } ?: AccountPresence.SignedOut
+    }
+    private suspend fun keep(stored: StoredAccount) {
+        storage.write(stored)
+        publish(stored.session?.user)
+    }
+    private suspend fun restore(): StoredAccount = try {
+        storage.read().also { saved ->
+            if (accountPresence.value == AccountPresence.Loading || accountPresence.value == AccountPresence.Unavailable) {
+                publish(saved.session?.user)
+            }
+        }
+    } catch (failure: java.io.IOException) {
+        if (accountPresence.value == AccountPresence.Loading) accountPresence.value = AccountPresence.Unavailable
+        throw failure
+    }
+    suspend fun current(): AccountUser? = when (val shown = accountPresence.value) {
+        AccountPresence.Loading, AccountPresence.Unavailable -> lock.withLock {
+            when (val restored = accountPresence.value) {
+                AccountPresence.Loading, AccountPresence.Unavailable -> restore().session?.user
+                else -> restored.user
+            }
+        }
+        else -> shown.user
+    }
     private fun checked(reply: PlatformReply): JsonObject {
         if (reply.status !in 200..299) {
             val error = reply.body["error"]?.jsonObject
@@ -123,7 +155,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         value.getValue("deviceSessionId").jsonPrimitive.content, user,
     )
     suspend fun signIn(studentId: String, password: String, totp: String, deviceName: String): AccountState = lock.withLock {
-        val stored = storage.read()
+        val stored = restore()
         val value = checked(transport.send("/auth/login", buildJsonObject {
             put("studentId", studentId.trim()); put("password", password); put("deviceId", stored.deviceId); put("deviceName", deviceName.take(80))
             if (totp.isNotBlank()) put("totp", totp.trim())
@@ -142,16 +174,16 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         val value = request("/auth/session", authenticated = true)
         val state = accountJson.decodeFromJsonElement<AccountState>(value)
         lock.withLock {
-            val stored = storage.read()
+            val stored = restore()
             if (stored.session?.user?.id == state.user.id) keep(stored.copy(session = stored.session.copy(user = state.user)))
         }
         return state
     }
     suspend fun devices(): List<AccountDevice> = accountJson.decodeFromJsonElement(request("/auth/devices", authenticated = true).getValue("items"))
     suspend fun revokeDevice(id: String) { request("/auth/devices/$id/revoke", buildJsonObject {}, authenticated = true) }
-    suspend fun forget() = lock.withLock { val stored = storage.read(); keep(stored.copy(session = null)) }
+    suspend fun forget() = lock.withLock { val stored = restore(); keep(stored.copy(session = null)) }
     private suspend fun access(forceFor: AccountSession? = null): AccountSession = lock.withLock {
-        val stored = storage.read()
+        val stored = restore()
         val session = stored.session ?: throw PlatformFailure(401, "AUTH_REQUIRED", "请先登录。")
         if (forceFor != null && session.deviceSessionId != forceFor.deviceSessionId) throw PlatformFailure(401, "ACCOUNT_CHANGED", "登录账号已更改，请重新操作。")
         if (session.expiresAt > now() + 30_000 && (forceFor == null || session.accessToken != forceFor.accessToken)) return@withLock session
@@ -159,7 +191,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
             // Never retry a refresh after an ambiguous network result: rotation
             // might have committed. Persist the spent intent BEFORE sending,
             // so even process death requires sign-in rather than token replay.
-            keep(stored.copy(session = null))
+            storage.write(stored.copy(session = null))
             val value = checked(transport.send("/auth/refresh", buildJsonObject { put("refreshToken", session.refreshToken); put("deviceId", stored.deviceId) }, null))
             val fresh = tokens(value, session.user)
             keep(stored.copy(session = fresh)); fresh
@@ -192,7 +224,7 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         val credential = access()
         authenticatedRequest("/auth/logout", buildJsonObject {}, credential)
         lock.withLock {
-            val stored = storage.read()
+            val stored = restore()
             if (stored.session?.deviceSessionId == credential.deviceSessionId) keep(stored.copy(session = null))
         }
     }

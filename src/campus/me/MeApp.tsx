@@ -34,7 +34,7 @@ export default function MeApp({ placement = 'site', campus = false }: { placemen
     const [open, setOpen] = useState(false);
     const account = useSyncExternalStore(subscribeCachedAccount, readCachedAccount, serverAccount);
     const ready = useSyncExternalStore(noSubscription, clientReady, serverReady);
-    const name = account?.nickname || '未登录';
+    const name = account ? account.nickname || '我' : '未登录';
     if (placement === 'page' ? wide : campus && !wide) return null;
     if (!ready) return <span className="avatar avatar-loading" role="status" aria-label="正在加载个人菜单" aria-busy="true"><AccountFace account={null} /><span className="avatar-name">加载中</span></span>;
     return <>
@@ -47,19 +47,20 @@ export default function MeApp({ placement = 'site', campus = false }: { placemen
 
 function AccountFace({ account }: { account: CachedAccount | null }) {
     const picture = account ? avatarUrl(account, 100) : '';
+    const [loaded, setLoaded] = useState('');
     const [failed, setFailed] = useState('');
-    useEffect(() => setFailed(''), [picture]);
     useEffect(() => {
-        if (!failed) return;
+        if (!picture || failed !== picture) return;
         const retry = () => { if (document.visibilityState === 'visible') setFailed(''); };
         window.addEventListener('online', retry);
         document.addEventListener('visibilitychange', retry);
         return () => { window.removeEventListener('online', retry); document.removeEventListener('visibilitychange', retry); };
-    }, [failed]);
+    }, [failed, picture]);
     return <span className="avatar-face" data-me-face>
-        {picture && failed !== picture ? <img src={picture} alt="" referrerPolicy="no-referrer" onError={() => setFailed(picture)} />
-            : account ? account.nickname?.slice(0, 1) || '我'
+        {account ? <span aria-hidden="true">{[...(account.nickname?.trim() || '我')][0]}</span>
             : <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.8-3.8 3.6-5.8 7-5.8s6.2 2 7 5.8" /></svg>}
+        {picture && failed !== picture && <img key={picture} src={picture} alt="" referrerPolicy="no-referrer" decoding="async"
+            data-loaded={loaded === picture ? '' : undefined} onLoad={() => setLoaded(picture)} onError={() => setFailed(picture)} />}
     </span>;
 }
 

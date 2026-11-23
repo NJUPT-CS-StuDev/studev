@@ -29,6 +29,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import top.hicancan.studev.BuildConfig
+import top.hicancan.studev.account.Accounts
+import top.hicancan.studev.account.AccountPresence
 import top.hicancan.studev.account.PLATFORM_ORIGIN
 import top.hicancan.studev.app.AcademicState
 import top.hicancan.studev.app.CampusModel
@@ -348,7 +350,7 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     val edits = term?.let { settings.timetableEdits(it.term) }
     val grade = if (term != null) CampusLine.grade(info?.grade, term) else null
     val runOn = settings.runShown ?: (grade != null && grade <= 2)
-    val account by top.hicancan.studev.account.Accounts.get(context).user.collectAsStateWithLifecycle()
+    val presence by Accounts.get(context).presence.collectAsStateWithLifecycle()
     var background by remember { mutableStateOf(top.hicancan.studev.device.BackgroundSettings.status(context)) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { background = top.hicancan.studev.device.BackgroundSettings.status(context) }
     val title = when (section) { "timetable" -> "课表设置"; "widgets" -> "桌面小组件"; "appearance" -> "外观"; "permissions" -> "提醒与权限"; "about" -> "帮助与关于"; else -> "我" }
@@ -356,7 +358,13 @@ private val KIND_NAMES = mapOf("exam" to "考试", "task" to "任务", "lab" to 
     PlainSheet(title, { if (section == "home") onClose() else section = "home" }, back = if (section == "home") null else ({ section = "home" })) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             if (section == "home") {
-                KeyRow(null, account?.nickname ?: "未登录", if (account == null) "登录后同步任务和课表设置" else "管理账号 · 任务和课表设置自动同步", chevron = true, onClick = { onClose(); onAccount() })
+                val (name, note) = when (val shown = presence) {
+                    AccountPresence.Loading -> "正在读取账号…" to null
+                    AccountPresence.Unavailable -> "账号暂不可用" to "打开账号页重试"
+                    AccountPresence.SignedOut -> "未登录" to "登录后同步任务和课表设置"
+                    is AccountPresence.SignedIn -> shown.user.nickname to "管理账号 · 任务和课表设置自动同步"
+                }
+                KeyRow(null, name, note, chevron = true, onClick = { onClose(); onAccount() })
                 Spacer(Modifier.height(12.dp))
                 KeyRow(null, "收集", "在浏览器查看和填写收集", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/forms/") })
                 KeyRow(null, "成员", "在浏览器查看成员", chevron = true, onClick = { browser.openUri("$PLATFORM_ORIGIN/members/") })

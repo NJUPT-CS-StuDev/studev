@@ -313,17 +313,27 @@ try {
       assert.equal(search.height,36);assert(search.x+search.width<=avatar.x);
     }
     await shot(visual.page,`${name}-search-shared-components`);
+    const picture = gate();
+    await visual.page.route('https://q1.qlogo.cn/**', async route => {
+      await picture.ready;
+      await route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="blue"/></svg>'});
+    });
     await visual.page.evaluate(()=>{
-      localStorage.setItem('studev_auth_user',JSON.stringify({nickname:'测试最长显示昵称',role:'user',qq:'',verifiedAt:Date.now()}));
+      localStorage.setItem('studev_auth_user',JSON.stringify({nickname:'测试最长显示昵称',role:'user',qq:'123456789',verifiedAt:Date.now()}));
       window.dispatchEvent(new Event('studev:account'));
     });
+    await visual.page.reload({waitUntil:'domcontentloaded'});
     await visual.page.getByRole('button',{name:'测试最长显示昵称，打开我',exact:true}).waitFor();
-    assert.equal(await visual.page.locator('[data-me-face]').innerText(),'测','the account cache drives the avatar fallback');
+    assert.equal(await visual.page.locator('[data-me-face]').innerText(),'测','the cached nickname and initial stay visible while the avatar downloads');
     if(name==='phone') {
       const search=await visual.page.locator('.sfield').boundingBox(), avatar=await visual.page.locator('[data-me]').boundingBox();
       assert(search.x+search.width<=avatar.x,'the longest displayed nickname still has its own header space');
       await shot(visual.page,`${name}-search-long-name`);
     }
+    const visiblePhoto = visual.page.locator('[data-me-face] img');
+    assert(await visiblePhoto.isHidden(),'waiting for the photo does not leave an empty avatar');
+    picture.release();
+    await visiblePhoto.waitFor();
     await visual.page.evaluate(()=>{
       localStorage.removeItem('studev_auth_user');
       window.dispatchEvent(new Event('studev:account'));

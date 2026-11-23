@@ -76,6 +76,47 @@ internal static class AccountTest
             Same("concurrent expired reads share one refresh", refreshing, 1);
         }
         {
+            var writes = new List<StoredAccount>();
+            var visible = new List<string?>();
+            var requested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var reply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var account = new Account(Stored(expiresAt: Now), writes.Add, async (path, body, bearer) =>
+            {
+                if (path == "/auth/refresh") { requested.SetResult(); await reply.Task; return (200, Credentials()); }
+                return (200, UserBody(User));
+            }, () => Now);
+            account.Changed += () => visible.Add(account.User?.Id);
+            var verification = account.State();
+            await requested.Task;
+            Same("cold expired session keeps account visible while renewing", account.User?.Id, User.Id);
+            Same("cold expired session keeps its avatar identity", account.CachedState?.User.Qq, User.Qq);
+            Same("refresh ticket erased from disk before sending", writes.Count == 1 && writes[0].Session is null, true);
+            Same("no sign-out event while refreshing", visible.Count, 0);
+            reply.SetResult();
+            await verification;
+            Same("successful refresh never shows an anonymous frame", visible.All(id => id == User.Id), true);
+            Same("successful refresh persists the rotated credentials", writes.Last().Session?.AccessToken, "access-b");
+        }
+        {
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var calls = new List<string>();
+            var account = new Account(Stored(expiresAt: Now), _ => { }, async (path, body, bearer) =>
+            {
+                calls.Add(path);
+                if (path == "/auth/refresh") { started.SetResult(); await resume.Task; return (200, Credentials()); }
+                return (401, Failure("PASSWORD_INVALID"));
+            }, () => Now);
+            var refresh = account.State();
+            await started.Task;
+            var signIn = account.SignIn(User.StudentId, "wrong-password", "");
+            resume.SetResult();
+            Same("late renewal cannot replace a sign-in attempt", await Code(() => refresh), "ACCOUNT_CHANGED");
+            Same("later failed login keeps its own failure", await Code(() => signIn), "PASSWORD_INVALID");
+            Same("a superseded refresh token is never sent twice", await Code(() => account.State()), "AUTH_REQUIRED");
+            Same("refresh and superseding sign-in paths", calls, new[] { "/auth/refresh", "/auth/login" });
+        }
+        {
             StoredAccount? saved = null; var refreshes = 0;
             var account = new Account(Stored(expiresAt: Now), value => saved = value, (path, body, bearer) =>
             {
@@ -166,5 +207,10 @@ internal static class AccountTest
             Same("TOTP codes need no second network response", calls, 1);
         }
         Same("avatar fallback preserves complete emoji", (User with { Nickname = "😀同学" }).Letter, "😀");
+        var avatar = AvatarCache.Address(User)!;
+        Same("avatar source validates QQ digits", AvatarCache.Address(User with { Qq = "12345&x=9" }), null);
+        Same("avatar cache is stable across profile changes", AvatarCache.FileFor(User.Id, avatar), AvatarCache.FileFor(User.Id, AvatarCache.Address(User with { Nickname = "new" })!));
+        Same("avatar cache separates different accounts even with the same source", AvatarCache.FileFor(User.Id, avatar) != AvatarCache.FileFor("user-b", avatar), true);
+
     }
 }

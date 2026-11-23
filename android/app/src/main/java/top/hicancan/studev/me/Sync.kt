@@ -30,7 +30,7 @@ class Sync(private val store: TaskStore, private val settings: CampusSettings, p
     init {
         scope.launch {
             runCatching { client.current() }.onFailure { if (it is CancellationException) throw it }
-            combine(store.all, settings.state, client.user, resumed) { tasks, mine, user, resume -> Triple(tasks, mine, user) to resume }.debounce(1500).collect { (state, resume) ->
+            combine(store.all, settings.state, client.presence, resumed) { tasks, mine, presence, resume -> Triple(tasks, mine, presence.user) to resume }.debounce(1500).collect { (state, resume) ->
                 val (tasks, mine, user) = state
                 if (user != null && (resume != syncedResume || user.id != syncedUser || tasks !== adopted || mine !== adoptedSettings)) run(user.id, resume)
             }
@@ -41,7 +41,7 @@ class Sync(private val store: TaskStore, private val settings: CampusSettings, p
             val sent = store.all.value
             val mine = settings.state.value
             val result = client.request("/sync", buildJsonObject { put("tasks", json.encodeToJsonElement(sent)); put("settings", partsOf(mine)) }, authenticated = true)
-            if (client.user.value?.id != user) return
+            if (client.presence.value.user?.id != user) return
             val theirs = json.decodeFromJsonElement<List<Task>>(result.getValue("tasks")).map(Tasks::sanitize)
             val now = store.all.value
             val merged = Tasks.merge(now, theirs)

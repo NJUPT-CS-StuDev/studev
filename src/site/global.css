@@ -43,9 +43,10 @@ body { padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
 .club-nav a.active { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
 .avatar, .sd .avatar { padding: 4px 12px 4px 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .avatar-loading { cursor: default; }
-.avatar-face { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: none; }
+.avatar-face { position: relative; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: none; }
 .avatar-name { max-width: var(--size-account-name-max); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; visibility: hidden; }
+.avatar img[data-loaded] { visibility: visible; }
 .avatar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .app-entry, .site-share-entry { font-size: 14px; font-weight: 500; color: var(--muted); flex: none; line-height: 1; }
 .site-share-entry { display: inline-flex; min-height: 32px; gap: 6px; align-items: center; justify-content: center; padding: 4px 7px; border: 0; border-radius: 8px; background: none; cursor: pointer; }

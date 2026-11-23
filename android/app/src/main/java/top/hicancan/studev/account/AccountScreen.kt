@@ -19,8 +19,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -35,27 +33,22 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 import top.hicancan.studev.app.Tokens
 import top.hicancan.studev.app.KeyRow
+import top.hicancan.studev.app.QqAvatarImage
 import top.hicancan.studev.app.TextAction
 import top.hicancan.studev.app.Choice
 import top.hicancan.studev.world.CampusDay
 
 /** The avatar Tencent shows for this QQ number, for checking it really is yours before registering. */
 @Composable private fun QqPreview(qq: String) {
-    val valid = Regex("[1-9]\\d{4,11}").matches(qq)
-    val avatar by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, qq) {
-        value = null
-        if (!valid) return@produceState
+    if (!qqNumber.matches(qq)) return
+    var requested by remember(qq) { mutableStateOf("") }
+    LaunchedEffect(qq) {
         kotlinx.coroutines.delay(400)
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching {
-                java.net.URL("https://q1.qlogo.cn/g?b=qq&nk=$qq&s=140").openStream().use { android.graphics.BitmapFactory.decodeStream(it) }?.asImageBitmap()
-            }.getOrNull()
-        }
+        requested = qq
     }
-    if (!valid) return
     Row(Modifier.fillMaxWidth().testTag("qq-preview"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
-            avatar?.let { androidx.compose.foundation.Image(it, "QQ 头像", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+        QqAvatarImage(requested, Modifier.size(36.dp), description = "QQ 头像") {
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh))
         }
         Column {
             Text("联系邮箱：$qq@qq.com", style = MaterialTheme.typography.bodyMedium)
