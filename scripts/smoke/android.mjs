@@ -434,7 +434,7 @@ async function routeDetails() {
     await link(path('仙林/不存在的起点', '仙林/教1-101'), 'open an invalid explicit origin');
     await find('没有找到出发地。', 'an invalid explicit origin does not silently become GPS');
     await link(path('仙林/教1-101', '仙林/教2-101', 'bike'), 'open a cross-building cycling route');
-    await find('道路路线到教2入口', 'the measured road leg ends at the building entrance', 30);
+    await find('先到教2入口', 'the measured road leg ends at the building entrance', 30);
     if (screen().some(node => node.text === '避开楼梯')) throw new Error('a cycling link was changed back to walking');
     await find(node => node.text.includes('进入教2后') && node.text.includes('教2-101'), 'the room position follows the entrance');
     await find(node => /^(?:不到 1|\d+(?:\.\d+)?) 分钟$/.test(node.text), 'a computed road travel time', 30);
