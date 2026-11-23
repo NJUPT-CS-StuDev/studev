@@ -57,7 +57,7 @@ try {
 const actualResponse = await fetch(entry, { cache: 'no-cache', signal: AbortSignal.timeout(30_000) });
 const actual = actualResponse.ok ? await actualResponse.json() : null;
 if (!actual || ['version', 'map_base', 'knowledge_base', 'search_base', 'search_stable_base', 'texts_base'].some(key => actual[key] !== snapshot[key as keyof CampusRelease])) throw new Error('the public pointer does not name the published component set');
-for (const path of [`${snapshot.map_base}/仙林/entities.json`, `${snapshot.knowledge_base}/knowledge.json`, `${snapshot.search_base}/manifest.json`, `${snapshot.base}/rooms/index.json`]) {
+for (const path of [`${snapshot.map_base}/仙林/entities.json`, `${snapshot.knowledge_base}/knowledge.json`, `${snapshot.search_base}/manifest.json`, `${snapshot.base}/rooms/index.json`, `${snapshot.base}/entities/course-search/manifest.json`]) {
     const response = await fetch(new URL(path, entry), { signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`published resource not readable (${response.status}): ${path}`);
     await response.body?.cancel();

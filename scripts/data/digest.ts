@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { packageSearch } from './search.ts';
 import { initialize as initializeDocuments, read as readDocument, type Block, type Inline } from 'docstream';
 import type { SearchDocument } from 'wasm-search';
+import { compileBundle } from 'wasm-search/compile';
 import { campusConfig } from '../../campus.config.ts';
 import { packageFacts } from './package-facts.ts';
 import { SPACE_FILES } from './space-contract.ts';
@@ -592,15 +593,6 @@ function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], 
     /** What students call a course (the course plans' aliases in the data release), so 计网 finds 计算机网络. */
     const nicknames = group(coursePlans, plan => plan.names.slice(0, 1));
     const called = (name: string) => (nicknames.get(name) ?? []).flatMap(plan => plan.aliases);
-    for (const plan of coursePlans) {
-        const code = plan.id.split('/').at(-1)!;
-        const name = plan.names[0]!;
-        docs.push({
-            ...entity('course-plans', code, `/?who=course:${encodeURIComponent(plainCourse(name))}&scale=week`, name, code, [...plan.names, ...plan.aliases, code]),
-            id: plan.id,
-            source_name: '课程',
-        });
-    }
     const byId = new Map(places.map(place => [place.id, place]));
     /** An entity and everything that contains it. */
     const chain = (id: string | null | undefined): string[] => {
@@ -718,6 +710,15 @@ async function main() {
     });
     const information = await read<{ items: (CoursePlan & { subtype: string })[] }>(join(data.dir, 'entities', 'information.json'));
     const coursePlans = information.items.filter(item => item.subtype === 'information:course-plan');
+    const courseSearch = coursePlans.map(plan => {
+        const code = plan.id.split('/').at(-1)!;
+        const name = plan.names[0]!;
+        return {
+            ...entity('course-plans', code, `/?who=course:${encodeURIComponent(plainCourse(name))}&scale=week`, name, code, [...plan.names, ...plan.aliases, code]),
+            id: plan.id, source_name: '课程',
+        };
+    });
+    await compileBundle(courseSearch, { aliases: [] }, join(out, 'entities', 'course-search'));
     const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, searchablePlaces, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms, coursePlans);
     for await (const doc of searchDocuments(data.dir)) {
         docs.push(doc);
