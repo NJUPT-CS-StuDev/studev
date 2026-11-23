@@ -6,6 +6,7 @@ const archiveSignature = [0x50, 0x4b, 3, 4];
 
 /** Check the actual public object, with an ordinary URL and a small byte range. */
 export async function verifyArchive(url, size, fetchArchive = fetch) {
+    const signature = new URL(url).pathname.endsWith('.exe') ? [0x4d, 0x5a] : archiveSignature;
     const response = await fetchArchive(url, { headers: { Range: 'bytes=0-3' }, signal: AbortSignal.timeout(15_000) });
     const reader = response.body?.getReader();
     try {
@@ -14,12 +15,12 @@ export async function verifyArchive(url, size, fetchArchive = fetch) {
             : response.status === 200 ? response.headers.get('content-length') : undefined;
         if (Number(length) !== size || !reader) throw new Error(`${url}: expected ${size} public bytes, got HTTP ${response.status}`);
         const prefix = [];
-        while (prefix.length < archiveSignature.length) {
+        while (prefix.length < signature.length) {
             const { value, done } = await reader.read();
             if (done) break;
-            prefix.push(...value.subarray(0, archiveSignature.length - prefix.length));
+            prefix.push(...value.subarray(0, signature.length - prefix.length));
         }
-        if (!archiveSignature.every((byte, index) => byte === prefix[index])) {
+        if (!signature.every((byte, index) => byte === prefix[index])) {
             throw new Error(`${url}: the download is not an archive`);
         }
     } finally { await reader?.cancel().catch(() => {}); }

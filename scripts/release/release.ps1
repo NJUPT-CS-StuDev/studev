@@ -135,10 +135,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows smoke test failed' }
 $velopack = Join-Path $tempRoot 'windows-releases'
 New-Item -ItemType Directory -Path $velopack -Force | Out-Null
 $feed = "$($product.downloadOrigin)/windows"
-# The releases already out, so the new one carries a delta from the last; none yet before the first.
-$known = try { Invoke-WebRequest "$feed/releases.win.json" -MaximumRedirection 0 -ErrorAction Stop | Out-Null; $true } catch { if ($_.Exception.Response.StatusCode.value__ -eq 404) { $false } else { throw } }
-if ($known) { & vpk download http --url $feed --outputDir $velopack; if ($LASTEXITCODE -ne 0) { throw 'Earlier Windows releases could not be read' } }
-& vpk pack --runtime win-x64 --packId top.hicancan.studev --packVersion $versionName --packDir $publish --mainExe StuDev.exe --packTitle StuDev --packAuthors 'NJUPT StuDev' `
+# Each Windows release provides one full package, usable directly by every installed version.
+& vpk pack --runtime win-x64 --packId top.hicancan.studev --packVersion $versionName --packDir $publish --mainExe StuDev.exe --packTitle StuDev --packAuthors 'NJUPT StuDev' --delta None `
     --icon (Join-Path $windows 'StuDev\Assets\StuDev.ico') --shortcuts 'Desktop,StartMenuRoot' --outputDir $velopack
 if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
 $portable = Join-Path $velopack 'top.hicancan.studev-win-Portable.zip'
@@ -147,14 +145,14 @@ if (-not (Test-Path -LiteralPath $portable)) { throw "Windows portable zip is mi
 # lets the site advertise the release. The updater feed still waits for the site.
 $fullPortable = Join-Path $tempRoot "studev-$versionName-windows.zip"
 Copy-Item $portable $fullPortable
-$made = Get-ChildItem $velopack -File -Filter "*-$versionName-*.nupkg"
-if (!($made | Where-Object Name -Like "*-$versionName-full.nupkg")) { throw 'Windows full update package is missing' }
+$fullUpdate = Join-Path $velopack "top.hicancan.studev-$versionName-full.nupkg"
+if (-not (Test-Path -LiteralPath $fullUpdate)) { throw 'Windows full update package is missing' }
 $env:OSCA_DOWNLOAD_ENDPOINT = "https://$(Get-Secret local.cloudflare.account_id).r2.cloudflarestorage.com"
 $env:OSCA_DOWNLOAD_BUCKET = 'studev-download'
 $env:OSCA_DOWNLOAD_ACCESS_KEY = Get-Secret local.cloudflare.r2_access_key
 $env:OSCA_DOWNLOAD_SECRET_KEY = Get-Secret local.cloudflare.r2_secret_key
-$uploads = @($fullApk, "studev-$versionName.apk", $fullPortable, "windows/studev-$versionName-windows.zip")
-foreach ($file in $made) { $uploads += @($file.FullName, "windows/$($file.Name)") }
+$uploads = @($fullApk, "studev-$versionName.apk", $fullPortable, "windows/studev-$versionName-windows.zip",
+    $fullUpdate, "windows/$([IO.Path]::GetFileName($fullUpdate))")
 & node (Join-Path $repo 'scripts/release/put.mjs') @uploads
 if ($LASTEXITCODE -ne 0) { throw 'Release upload or public download verification failed' }
 $releaseNotes = if ($Notes) { $Notes } else { "studev $versionName" }
@@ -176,8 +174,10 @@ try {
     Wait-PublishedApp $product.origin $versionName $versionCode
     & node (Join-Path $repo 'scripts/release/put.mjs') (Join-Path $velopack 'releases.win.json') 'windows/releases.win.json'
     if ($LASTEXITCODE -ne 0) { throw 'Windows feed upload failed' }
+    & node (Join-Path $PSScriptRoot 'prune.mjs') --apply
+    if ($LASTEXITCODE -ne 0) { throw 'Historical download cleanup needs review' }
 } catch {
-    Write-Warning "$tag is already published. Keep the release and resume only the site check and Windows feed upload; do not publish the tag again. Artifacts retained at $tempRoot"
+    Write-Warning "$tag is already published. Keep the release and resume only the site check, Windows feed upload or history cleanup; do not publish the tag again. Artifacts retained at $tempRoot"
     throw
 }
 $releaseUrl = (& gh release view $tag --repo $repoName --json url --jq .url).Trim()

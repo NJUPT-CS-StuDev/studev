@@ -2,6 +2,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { downloadStore, signedFetch } from '../../src/download/object-store.mjs';
 import { waitForArchive } from './check-public.mjs';
+import { listDownloadObjects } from './objects.mjs';
 
 const args = process.argv.slice(2);
 if (!args.length || args.length % 2 !== 0) throw new Error('Provide file and object name pairs.');
@@ -14,27 +15,12 @@ for (let i = 0; i < args.length; i += 2) {
     files.set(name, { file, bytes: (await stat(file)).size });
 }
 
-// Leave headroom under the account-wide 10 GB-month free Standard allowance.
-// Versioned downloads stay available, so reaching this limit stops publication.
+// Leave headroom below the account-wide 10 GB-month free Standard allowance.
+// The incoming and installed releases coexist until the new updater feed is live.
 const limit = 8_000_000_000;
-let projected = [...files.values()].reduce((sum, file) => sum + file.bytes, 0);
-let cursor;
-do {
-    const query = new URLSearchParams({ 'list-type': '2', 'encoding-type': 'url' });
-    if (cursor) query.set('continuation-token', cursor);
-    const answer = await signedFetch(store, 'GET', '', { query, signal: AbortSignal.timeout(20_000) });
-    if (!answer.ok) throw new Error(`could not check download storage budget (${answer.status})`);
-    const xml = await answer.text();
-    if (!xml.includes('ListBucketResult')) throw new Error('unexpected download storage inventory');
-    for (const [object] of xml.matchAll(/<Contents>[\s\S]*?<\/Contents>/g)) {
-        const key = object.match(/<Key>([^<]+)<\/Key>/)?.[1];
-        const size = object.match(/<Size>(\d+)<\/Size>/)?.[1];
-        if (!key || size === undefined) throw new Error('incomplete download storage inventory');
-        if (!files.has(decodeURIComponent(key))) projected += Number(size);
-    }
-    cursor = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)?.[1]?.replace(/&amp;/g, '&');
-    if (xml.includes('<IsTruncated>true</IsTruncated>') && !cursor) throw new Error('download storage inventory has no continuation token');
-} while (cursor);
+const inventory = await listDownloadObjects(store);
+const projected = [...files.values()].reduce((sum, file) => sum + file.bytes, 0)
+    + inventory.filter(({ key }) => !files.has(key)).reduce((sum, { size }) => sum + size, 0);
 if (projected > limit) throw new Error(`download storage would reach ${projected} bytes (release budget ${limit})`);
 console.log(`download storage after upload: ${projected} bytes / ${limit}`);
 
