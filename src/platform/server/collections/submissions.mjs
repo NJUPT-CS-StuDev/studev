@@ -51,7 +51,12 @@ function receiptView(record) {
 }
 
 export function submissionWasLate(record) {
-  return record.status === 'late' || deadlineReached(record.deadline, Date.parse(record.submittedAt));
+  if (typeof record.late === 'boolean') return record.late;
+  if (record.status === 'late') return true;
+  if (record.status === 'submitted') return false;
+  // Earlier reviewed records retained the deadline but included equality in
+  // the on-time window. New authorizations record the result on arrival.
+  return Date.parse(record.submittedAt) > Date.parse(record.deadline);
 }
 
 function submissionStatus(record) {
@@ -145,6 +150,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
       studentName: actor.realName || actor.nickname || sid, answers, fields: round.fields,
       status: 'uploading', createdAt: existing?.createdAt || submittedAt, submittedAt, updatedAt: issuedAt, files: kept,
       allowEdit: round.allowEdit, requireReview: round.requireReview, deadline: round.deadline,
+      late: deadlineReached(round.deadline, receivedAt),
     };
     const expectedRevision = existing?.revision || 0;
     if (!inputs.length) {
@@ -222,7 +228,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
         return { ...file, objectKey: final, etag: head.etag };
       });
       await locateSubmission(repo, record);
-      const value = { ...record, receiptId: id, files: [...record.files, ...copies],
+      const value = { ...record, receiptId: id, files: [...record.files, ...copies], late: submissionWasLate(record),
         status: submissionStatus(record), updatedAt: iso(),
       };
       // A transport error can conceal a successful commit. Retain the candidate
@@ -247,7 +253,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
   async function change(request, record, item, round, actor, action, receivedAt) {
     const body = await readJson(request);
     const updatedAt = iso();
-    const next = { ...record, updatedAt };
+    const next = { ...record, updatedAt, late: submissionWasLate(record) };
     if (action === 'edit') {
       if (!canEditSubmission(record, item, round, actor, receivedAt)) fail(409, 'EDIT_CLOSED', '本轮当前不允许修改。');
       if (body.files !== undefined) fail(400, 'FILES_IMMUTABLE', '请在本轮重新提交附件。');
@@ -255,6 +261,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
       if (deadlineReached(round.deadline, receivedAt)) {
         next.deadline = round.deadline;
         next.submittedAt = new Date(receivedAt).toISOString();
+        next.late = true;
       }
       next.status = submissionStatus(next);
       delete next.review;

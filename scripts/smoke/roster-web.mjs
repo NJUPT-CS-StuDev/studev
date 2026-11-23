@@ -64,7 +64,7 @@ try {
       assert.equal(calls.length, 0, 'reading the timeline does not request platform data');
       await page.getByRole('tab', { name: /成员名册/ }).click();
     }
-    const cards = page.locator('[data-roster-container] article.member');
+    const cards = page.locator('[data-roster-container] article.member:not(.member-skeleton)');
     const selector = page.getByRole('combobox', { name: '查看任职' });
     await cards.nth(1).waitFor();
     assert.equal(await cards.count(), 2);

@@ -14,8 +14,8 @@ export function CollectionBadge({ state }: { state: keyof typeof collectionStatu
     return <span className={`cw-status cw-status-${state}`}>{collectionStatus[state]}</span>;
 }
 
-export function WorkspaceLink({ href, navigate, children, className, current }: { href: string; navigate: Navigate; children: React.ReactNode; className?: string; current?: boolean }) {
-    return <a href={href} className={className} aria-current={current ? 'page' : undefined} onClick={event => {
+export function WorkspaceLink({ href, navigate, children, className, current, labelledBy }: { href: string; navigate: Navigate; children: React.ReactNode; className?: string; current?: boolean; labelledBy?: string }) {
+    return <a href={href} className={className} aria-labelledby={labelledBy} aria-current={current ? 'page' : undefined} onClick={event => {
         if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         navigate(href);

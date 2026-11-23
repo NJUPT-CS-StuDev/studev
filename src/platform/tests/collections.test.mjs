@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createCollectionsService } from '../server/collections/index.mjs';
 import { collectionKeys, locateSubmission } from '../server/collections/records.mjs';
+import { submissionWasLate } from '../server/collections/submissions.mjs';
 import { createIdentity } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
 import { hashPassword } from '../server/crypto.mjs';
@@ -225,6 +226,7 @@ test('deadline closes at the cutoff and late reopening keeps submissions indepen
   assert.equal(uploaded.submittedAt, deadline);
   assert.equal(uploaded.status, 'pending_review');
   assert.equal(uploaded.late, true);
+  assert.equal((await f.repo.latest(collectionKeys.submission(item.id, item.rounds[0].id, uploaded.id))).late, true);
   const { data: { submission: approved } } = await f.call('/submissions/' + uploaded.id + '/review', {
     user: 'admin', body: { revision: uploaded.revision, status: 'accepted' },
   });
@@ -239,6 +241,16 @@ test('deadline closes at the cutoff and late reopening keeps submissions indepen
   const board = (await f.call(roundPath + '/submissions', { user: 'admin' })).data;
   assert.equal(board.roundStats[0].late, 2);
   assert.equal(board.items.find((row) => row.id === uploaded.id).late, true);
+});
+
+test('historical receipts retain their recorded late decisions at a restored cutoff', () => {
+  const deadline = '2026-06-15T15:00:00.000Z';
+  const base = { deadline, submittedAt: deadline };
+  assert.equal(submissionWasLate({ ...base, status: 'submitted' }), false);
+  assert.equal(submissionWasLate({ ...base, status: 'accepted' }), false);
+  assert.equal(submissionWasLate({ ...base, status: 'accepted', late: true }), true);
+  assert.equal(submissionWasLate({ ...base, status: 'late' }), true);
+  assert.equal(submissionWasLate({ ...base, status: 'accepted', submittedAt: '2026-06-15T15:00:00.001Z' }), true);
 });
 
 test('signed uploads survive a deadline, finalize concurrently and leave only their immutable final attachment', async () => {

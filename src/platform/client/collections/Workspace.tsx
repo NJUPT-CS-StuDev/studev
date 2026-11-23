@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ClipboardList, Eye, MapPin, MessageSquare, Plus, Search, Upload, UsersRound } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Eye, Plus, Search, UsersRound } from 'lucide-react';
 import { api, errorText, PlatformError, session } from '../api';
 import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
@@ -10,7 +10,6 @@ import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, rou
 const CollectionEditor = lazy(() => import('./Editor').then(module => ({ default: module.CollectionEditor })));
 
 const searchText = (value: string) => value.normalize('NFKC').toLowerCase().trim();
-const pinnedIcons = [MapPin, MessageSquare, Upload];
 
 function groupItems(items: Item[]) {
     const groups = new Map<string, Item[]>();
@@ -30,38 +29,34 @@ function mineHref(query: URLSearchParams) {
     return `/forms/?${params}`;
 }
 
-function ItemRow({ item, now, navigate }: { item: Item; now: number; navigate: Navigate }) {
+function CollectionCard({ item, now, navigate }: { item: Item; now: number; navigate: Navigate }) {
     const state = itemState(item, now);
-    const accepting = item.rounds.filter(round => roundState(item, round, now) === state);
-    const deadlines = accepting.map(round => round.deadline).filter(Boolean).sort();
-    const date = state === 'collecting' ? deadlines[0] : deadlines.at(-1);
-    const time = state === 'collecting' ? date ? `截止 ${displayTime(date)}` : '不限时'
-        : date && (state === 'makeup' || state === 'expired') ? `${state === 'makeup' ? '原截止' : '截止'} ${displayTime(date)}`
-        : item.publishedAt ? displayTime(item.publishedAt).split(' ')[0] : '—';
-    return <WorkspaceLink href={toCollectionUrl(item.id)} navigate={navigate} className="cw-item">
-        <span className="cw-item-icon"><ClipboardList size={21} /></span>
-        <span className="cw-item-body">
-            <span className="cw-item-title">{item.name}</span>
-            <span className="cw-item-info">
-                {(item.course || item.tags.length > 0) && <span className="cw-inline cw-item-tags">{item.course && <span className="cw-tag"><span className="cw-mono">{item.course.code}</span> {item.course.name}</span>}
-                    {item.tags.map(tag => <span key={tag} className="cw-tag">{tag}</span>)}</span>}
-                <span>{[item.issuer.orgShortName || item.issuer.organizationName, item.issuer.title].filter(Boolean).join(' · ')}</span>
-            </span>
+    const deadlines = item.rounds.filter(round => roundState(item, round, now) === state && round.deadline)
+        .map(round => round.deadline).sort();
+    const deadline = state === 'collecting' ? deadlines[0] : deadlines.at(-1);
+    const showDeadline = Boolean(deadline && (state === 'collecting' || state === 'makeup' || state === 'expired'));
+    const date = showDeadline ? deadline : state === 'collecting' ? '' : item.publishedAt || item.updatedAt;
+    const dateLabel = showDeadline ? state === 'makeup' ? '原截止' : '截止' : item.publishedAt ? '发布于' : '更新于';
+    const dateText = date ? showDeadline ? displayTime(date) : displayTime(date).split(' ')[0] : '不限时';
+    const issuer = [item.issuer.orgShortName || item.issuer.organizationName, item.issuer.title].filter(Boolean).join(' · ');
+    const titleId = `collection-title-${item.id}`;
+    return <WorkspaceLink href={toCollectionUrl(item.id)} navigate={navigate} className="cw-card" labelledBy={titleId}>
+        <span className="cw-card-head">
+            <span className="cw-card-title" id={titleId}>{item.name}</span>
+            <CollectionBadge state={state} />
         </span>
-        <span className="cw-item-time">{time}</span>
-        <CollectionBadge state={state} />
-        <ArrowRight className="cw-item-arrow" size={17} />
+        <span className="cw-card-time">{date ? <><span>{dateLabel}</span> <time dateTime={date}>{dateText}</time></> : dateText}</span>
+        <span className="cw-card-meta">
+            {item.course && <span className="cw-card-course"><span className="cw-mono">{item.course.code}</span>{item.course.name !== item.name && ` ${item.course.name}`}</span>}
+            <span className="cw-card-foot"><span>{issuer}</span><span>{item.rounds.length} 个批次</span></span>
+        </span>
     </WorkspaceLink>;
 }
-
 function List({ catalog, now, query, navigate }: { catalog: Catalog; now: number; query: URLSearchParams; navigate: Navigate }) {
     const [text, setText] = useState('');
     const search = searchText(text);
     const matches = useMemo(() => catalog.items.filter(item => !search || searchText([item.name, item.description, item.course?.code, item.course?.name, ...item.tags, item.issuer.organizationName].join(' ')).includes(search)), [catalog.items, search]);
-    const pinned = pinnedCollections.flatMap((id, index) => {
-        const item = matches.find(value => value.id === id);
-        return item ? [{ item, Icon: pinnedIcons[index]! }] : [];
-    });
+    const pinned = pinnedCollections.map(id => matches.find(item => item.id === id)).filter(item => item !== undefined);
     const groups = useMemo(() => groupItems(matches.filter(item => !pinnedCollections.includes(item.id))), [matches]);
     const canReadMine = catalog.viewer && catalog.view !== 'guest' && catalog.view === catalog.viewer.role;
     return <div className="cw-list">
@@ -72,13 +67,11 @@ function List({ catalog, now, query, navigate }: { catalog: Catalog; now: number
             </div>
             {pinned.length > 0 && <section className="cw-group" aria-labelledby="cw-pinned-title">
                 <div className="cw-group-head"><h2 id="cw-pinned-title">常用收集</h2>{catalog.view === 'guest' && <span>公开 · 登录后填写</span>}</div>
-                <div className="cw-pinned">{pinned.map(({ item, Icon }) => <WorkspaceLink key={item.id} href={toCollectionUrl(item.id)} navigate={navigate} className="cw-pinned-link">
-                    <span className="cw-item-icon"><Icon size={21} /></span><span className="cw-item-title">{item.name}</span><ArrowRight className="cw-item-arrow" size={17} />
-                </WorkspaceLink>)}</div>
+                <div className="cw-card-grid">{pinned.map(item => <CollectionCard key={item.id} item={item} now={now} navigate={navigate} />)}</div>
             </section>}
             {groups.map(([term, items]) => <section className="cw-group" key={term}>
                 <div className="cw-group-head"><h2>{semesterLabel(term)}</h2><span>{items.length} 项</span></div>
-                <div className="cw-items">{items.map(item => <ItemRow key={item.id} item={item} now={now} navigate={navigate} />)}</div>
+                <div className="cw-card-grid">{items.map(item => <CollectionCard key={item.id} item={item} now={now} navigate={navigate} />)}</div>
             </section>)}
             {!matches.length && <div className="cw-empty"><ClipboardList size={30} /><h2>{search ? '找不到匹配的收集' : '暂无可查看的收集'}</h2>
                 {search ? <button type="button" className="cw-button" onClick={() => setText('')}>清除搜索</button> : catalog.view === 'guest' && !catalog.viewer && <a className="cw-button" href="/login/?next=%2Fforms%2F">登录查看开放给你的收集</a>}</div>}
@@ -102,11 +95,15 @@ function Mine({ info, navigate }: { info: WorkspaceView; navigate: Navigate }) {
         <WorkspaceLink className="cw-back" href={toCollectionUrl()} navigate={navigate}><ArrowLeft size={17} />全部收集</WorkspaceLink>
         <h1 tabIndex={-1}>我的提交</h1>
         {!allowed ? <p className="cw-muted">在自己的登录视角查看提交记录。</p> : error ? <div className="cw-inline"><p className="cw-failure" role="alert">{error}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>
-            : !items ? <p className="cw-muted" role="status">正在加载提交记录…</p> : !items.length ? <p className="cw-empty">暂无提交记录。</p> : <div className="cw-items">
-                {items.map(item => <WorkspaceLink key={item.id} href={`${toCollectionUrl(item.itemId, item.roundId)}&receipt=${encodeURIComponent(item.id)}`} navigate={navigate} className="cw-item">
-                    <span className="cw-item-icon"><ClipboardList size={21} /></span><span className="cw-item-body"><span className="cw-item-title">{item.itemName || '查看收集'}</span><span className="cw-item-info">{item.roundLabel}</span></span>
-                    <span className="cw-item-time">{displayTime(item.submittedAt)}</span>{badge(item.status, item.late)}<ArrowRight className="cw-item-arrow" size={17} />
-                </WorkspaceLink>)}</div>}
+            : !items ? <p className="cw-muted" role="status">正在加载提交记录…</p> : !items.length ? <p className="cw-empty">暂无提交记录。</p> : <div className="cw-card-grid cw-receipt-grid">
+                {items.map(item => {
+                    const titleId = `receipt-title-${item.id}`;
+                    return <WorkspaceLink key={item.id} href={`${toCollectionUrl(item.itemId, item.roundId)}&receipt=${encodeURIComponent(item.id)}`} navigate={navigate} className="cw-card" labelledBy={titleId}>
+                        <span className="cw-card-head"><span className="cw-card-title" id={titleId}>{item.itemName || '查看收集'}</span>{badge(item.status, item.late)}</span>
+                        <time className="cw-card-time" dateTime={item.submittedAt}>{displayTime(item.submittedAt)}</time>
+                        <span className="cw-card-meta">{item.roundLabel}</span>
+                    </WorkspaceLink>;
+                })}</div>}
     </section>;
 }
 

@@ -96,6 +96,11 @@ async function collectionFixture() {
   const { organizationId, title: issuerTitle } = catalog.body.issuerOptions[0];
   const common = { status: 'published', issuerOrganizationId: organizationId, issuerTitle, rounds: [round], tags: ['问卷验收'], term: '2026-2027-1' };
   const { item } = await post(owner, '/collections/items', { ...common, name: title, visibility: 'public' }, 201);
+  await post(owner, '/collections/items', {
+    ...common, name: '上学期课程收集', term: '2025-2026-2', visibility: 'public',
+    course: { id: 'information/course-plan/CSX10001', code: 'CSX10001', name: '课程标签示例' },
+    rounds: [round, { ...round, id: 'round-two', label: '第二批' }],
+  }, 201);
   const { item: privateItem } = await post(owner, '/collections/items', {
     ...common, name: privateTitle, visibility: 'members', targetMode: 'selected', recipients: [{ studentId: member.sid, name: memberName }],
   }, 201);
@@ -172,8 +177,30 @@ async function checkCollection(viewport, name) {
   const width = await parts.boundingBox();
   assert(width && width.width >= (name === 'phone' ? viewport.width - 48 : 1100), 'collection list uses the available screen');
   assert(await guest.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'collection list has no horizontal page overflow');
+  assert.deepEqual(await parts.locator('.cw-group h2').allTextContents(), ['常用收集', '2026–2027 学年第一学期', '2025–2026 学年第二学期']);
+  assert.deepEqual(await pinned.locator('.cw-card-title').allTextContents(), pinnedTitles, 'fixed shortcuts keep stable order');
+  const earlierCard = parts.getByRole('link', { name: '上学期课程收集', exact: true });
+  await earlierCard.getByText('CSX10001', { exact: true }).waitFor();
+  await earlierCard.getByText('2 个批次', { exact: true }).waitFor();
+  const cards = parts.locator('.cw-group').nth(1).locator('.cw-card');
+  const columns = () => cards.first().locator('..').evaluate(grid => getComputedStyle(grid).gridTemplateColumns.split(' ').length);
+  assert.equal(await columns(), name === 'phone' ? 1 : 3);
+  const [first, second, third] = await Promise.all([0, 1, 2].map(index => cards.nth(index).boundingBox()));
+  assert(first && second && third);
+  if (name === 'phone') {
+    assert(first.x === second.x && second.x === third.x && first.y < second.y && second.y < third.y);
+  } else {
+    assert(first.y === second.y && second.y === third.y && first.x < second.x && second.x < third.x);
+    assert(first.width + second.width + third.width >= width.width - 32);
+    await guest.page.setViewportSize({ width: 900, height: 900 });
+    assert.equal(await columns(), 2);
+    const [left, right, next] = await Promise.all([0, 1, 2].map(index => cards.nth(index).boundingBox()));
+    assert(left && right && next && left.y === right.y && left.x < right.x && left.x === next.x && next.y > left.y);
+    assert(await guest.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await guest.page.setViewportSize(viewport);
+  }
   await shot(guest.page, name + '-collection-catalog');
-  await parts.getByRole('link', { name: new RegExp(title) }).click();
+  await parts.getByRole('link', { name: title, exact: true }).press('Enter');
   await parts.getByRole('heading', { name: title, exact: true }).waitFor();
   const login = parts.getByRole('link', { name: '登录后填写' });
   assert.equal(new URL(await login.getAttribute('href'), origin).searchParams.get('next'), '/forms/?id=' + item.id);
@@ -230,7 +257,7 @@ async function checkCollection(viewport, name) {
   await memberParts.getByRole('link', { name: new RegExp(title) }).waitFor();
   assert.deepEqual(member.errors, []);
   await member.context.close();
-  record(name + ': pinned public forms, semester chronology, searchable tags, one write and participant privacy');
+  record(name + ': pinned card order, responsive card grid, semester chronology, one write and participant privacy');
 
   if (name === 'desktop') {
     const staff = await newPage(viewport), staffReads = [];
