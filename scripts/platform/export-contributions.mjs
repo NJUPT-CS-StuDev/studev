@@ -8,8 +8,11 @@ import { loginOwner } from './bootstrap-owner.mjs';
 import { privateFile } from '../private/files.mjs';
 
 export async function exportContributions(client, output) {
-  const result = await client.call(`/collections/items/${product.forms.data}/rounds/main/submissions`, { expected: 200 });
-  const accepted = result.body.items.filter(record => record.status === 'accepted');
+  const path = `/collections/items/${product.forms.data}`;
+  const { body: { item } } = await client.call(path, { expected: 200 });
+  const rounds = await Promise.all(item.rounds.map(round =>
+    client.call(`${path}/rounds/${encodeURIComponent(round.id)}/submissions`, { expected: 200 })));
+  const accepted = rounds.flatMap(result => result.body.items.filter(record => record.status === 'accepted'));
   let count = 0;
   for (const record of accepted) {
     if (!/^[a-f0-9-]{36}$/.test(record.id)) throw new Error('Invalid submission ID');
