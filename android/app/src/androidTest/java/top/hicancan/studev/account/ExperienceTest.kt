@@ -16,6 +16,49 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ExperienceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Test fun loginShowsTheFactorOnlyWhenTheServerAsksForIt() {
+        val account = AccountUser(id = "synthetic-user", nickname = "测试成员", studentId = "TEST123456", totpEnabled = true)
+        var stored = StoredAccount(deviceId = "synthetic-account-installation")
+        val storage = object : AccountStorage {
+            override suspend fun read() = stored
+            override suspend fun write(value: StoredAccount) { stored = value }
+        }
+        val client = AccountClient(storage, PlatformTransport { path, body, _ ->
+            when (path) {
+                "/auth/login" -> {
+                    assertFalse(body!!.containsKey("trustedDeviceToken"))
+                    assertFalse(body.containsKey("trustDevice"))
+                    if (body["totp"] == null) PlatformReply(401, buildJsonObject { put("error", buildJsonObject { put("code", "MFA_REQUIRED") }) })
+                    else {
+                        assertEquals("123456", body.getValue("totp").jsonPrimitive.content)
+                        PlatformReply(200, buildJsonObject {
+                            put("accessToken", "synthetic-access"); put("refreshToken", "synthetic-refresh"); put("expiresIn", 600)
+                            put("deviceSessionId", "synthetic-family"); put("user", Json.encodeToJsonElement(account))
+                        })
+                    }
+                }
+                "/auth/logout" -> PlatformReply(200, buildJsonObject {})
+                else -> error("Unexpected request: $path")
+            }
+        })
+        compose.runOnUiThread { compose.activity.setContent { StuDevTheme { AccountScreen(client, onBack = {}) } } }
+        fun field(label: String) = compose.onNode(hasText(label) and hasSetTextAction())
+        fun submit() = compose.onNodeWithTag("account-submit").performScrollTo().performClick()
+        field("学号").performTextInput("TEST123456")
+        field("密码").performTextInput("test-password")
+        field("动态验证码或恢复码").assertDoesNotExist()
+        submit()
+        field("动态验证码或恢复码").performScrollTo().performTextInput("123456")
+        submit()
+        compose.onNodeWithText("我的账号", substring = false).assertExists()
+        compose.onNodeWithText("退出登录", substring = false).performScrollTo().performClick()
+        compose.onNodeWithText("确认退出", substring = false).performClick()
+        field("密码").performScrollTo().performTextInput("test-password")
+        field("动态验证码或恢复码").assertDoesNotExist()
+        submit()
+        field("动态验证码或恢复码").assertExists()
+    }
+
     @Test fun cachedAccountAndNavigationRemainUsableWhileVerificationAndDevicesWait() {
         val account = AccountUser(id = "synthetic-user", nickname = "缓存同学", studentId = "TEST123456", realName = "合成测试成员", qq = "100002")
         var stored = StoredAccount(deviceId = "synthetic-account-installation", session = AccountSession(

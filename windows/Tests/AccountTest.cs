@@ -40,7 +40,32 @@ internal static class AccountTest
             var roundtrip = JsonSerializer.Deserialize(JsonSerializer.Serialize(saved, StorageJson.Default.StoredAccount), StorageJson.Default.StoredAccount)!;
             Same("encrypted shape keeps setup state", roundtrip.Session?.State, account.CachedState);
         }
-        foreach (var code in new[] { "PASSWORD_INVALID", "MFA_INVALID", "MFA_REPLAYED" })
+        {
+            var previous = JsonSerializer.SerializeToNode(Stored(), StorageJson.Default.StoredAccount)!.AsObject();
+            previous["trustedDevices"] = new JsonObject { [User.StudentId] = "removed-placeholder" };
+            var migrated = previous.Deserialize(StorageJson.Default.StoredAccount)!;
+            Same("previous installation retains its existing session", migrated, Stored());
+            Same("obsolete trust field is not written back", JsonSerializer.SerializeToNode(migrated, StorageJson.Default.StoredAccount)!.AsObject().ContainsKey("trustedDevices"), false);
+        }
+        {
+            var renewals = new List<bool>();
+            var saved = Stored(expiresAt: Now);
+            var account = new Account(saved, value => saved = value, (path, body, _) =>
+            {
+                if (path != "/auth/refresh") return Ok(UserBody(User));
+                renewals.Add(body!["foreground"]!.GetValue<bool>());
+                return Ok(Credentials());
+            }, () => Now);
+            await account.State(foreground: false);
+            Same("background refresh preserves sign-in", account.User?.Id, User.Id);
+            Same("background refresh records foreground renewal still due", saved.Session?.RenewalDeferred, true);
+            await account.Request("/sync", new(), foreground: false);
+            Same("background request reuses fresh access", renewals, new[] { false });
+            await account.State();
+            Same("opening the window renews an idle deadline after background sync", renewals, new[] { false, true });
+            Same("foreground renewal clears pending state", account.NeedsRenewal, false);
+        }
+        foreach (var code in new[] { "PASSWORD_INVALID", "MFA_REQUIRED", "MFA_INVALID", "MFA_REPLAYED" })
         {
             var calls = new List<string>();
             var account = new Account(Stored(), _ => { }, (path, body, bearer) => { calls.Add(path); return Task.FromResult((401, Failure(code))); }, () => Now);

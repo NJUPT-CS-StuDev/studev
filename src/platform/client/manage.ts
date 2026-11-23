@@ -186,22 +186,30 @@ async function guard(fn: () => Promise<void>) {
   }
 }
 
-async function confirmAction(title: string, description: string, password = false): Promise<string | null> {
+async function confirmAction(title: string, description: string, { password = false, factor = false } = {}) {
+  if (factor && !current?.user.totpEnabled) {
+    throw new Error('请先在「账号安全」中绑定验证器，再进行此操作。');
+  }
   const dialog = q<HTMLDialogElement>('[data-platform-confirm]');
   q('[data-confirm-title]').textContent = title;
   q('[data-confirm-description]').textContent = description;
   q('[data-confirm-password-field]').hidden = !password;
   const input = q<HTMLInputElement>('#confirm-user-password');
+  const code = q<HTMLInputElement>('#confirm-operator-factor');
+  q('[data-confirm-factor-field]').hidden = !factor;
   input.value = '';
   input.required = password;
+  code.value = '';
+  code.required = factor;
   dialog.returnValue = '';
   dialog.showModal();
-  return new Promise((resolve) =>
+  return new Promise<{ password: string; totp: string } | null>((resolve) =>
     dialog.addEventListener(
       'close',
       () => {
-        const result = password ? input.value : 'ok';
+        const result = { password: input.value, totp: code.value.trim() };
         input.value = '';
+        code.value = '';
         resolve(dialog.returnValue === 'confirm' ? result : null);
       },
       { once: true }
@@ -311,11 +319,9 @@ export function renderManagedMembers() {
         const next = select.value as 'user' | 'admin';
         // The owner sets and lifts admins directly, as a group owner does; admin and position are independent.
         void guard(async () => {
-          if ((await confirmAction('调整成员角色', `将 ${display}（${ref}）设为${labels[next]}？`)) === null) {
-            select.value = user.role;
-            return;
-          }
-          await api(`/admin/users/${encodeURIComponent(user.id)}`, { revision: user.revision, role: next });
+          const verification = await confirmAction('调整成员角色', `将 ${display}（${ref}）设为${labels[next]}？`, { factor: true });
+          if (!verification) return;
+          await api(`/admin/users/${encodeURIComponent(user.id)}`, { revision: user.revision, role: next, totp: verification.totp });
           await refreshMembers();
           message(status, '成员角色已更新。', 'success');
         }).finally(() => (select.value = user.role));
@@ -338,9 +344,9 @@ export function renderManagedMembers() {
     if (mayManage && !isSelf) {
       const isPending = user.status === 'pending';
       if (isPending) controls.append(button('设置密码并激活', () => guard(async () => {
-        const password = await confirmAction('激活账号', `核实 ${display}（${ref}）的身份后设置临时密码。对方首次登录必须修改密码。`, true);
-        if (password === null) return;
-        await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, { password });
+        const verification = await confirmAction('激活账号', `核实 ${display}（${ref}）的身份后设置临时密码。对方首次登录必须修改密码。`, { password: true, factor: true });
+        if (!verification) return;
+        await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, verification);
         const latest = await api<{ user: User }>(`/admin/users/${encodeURIComponent(user.id)}`);
         await api(`/admin/users/${encodeURIComponent(user.id)}`, { revision: latest.user.revision, status: 'active' });
         await refreshMembers();
@@ -361,9 +367,9 @@ export function renderManagedMembers() {
           ),
           button('重置密码', () =>
             guard(async () => {
-              const password = await confirmAction('重置成员密码', `为 ${display}（${ref}）设置临时密码。对方下次登录须修改密码。`, true);
-              if (password === null) return;
-              await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, { password });
+              const verification = await confirmAction('重置成员密码', `为 ${display}（${ref}）设置临时密码。对方下次登录须修改密码。`, { password: true, factor: true });
+              if (!verification) return;
+              await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, verification);
               message(status, '密码已重置。', 'success');
             })
           )
@@ -375,8 +381,9 @@ export function renderManagedMembers() {
             '重置验证器',
             () =>
               guard(async () => {
-                if ((await confirmAction('重置验证器', `确认重置 ${display} 的两步验证器？`)) === null) return;
-                await api(`/admin/users/${encodeURIComponent(user.id)}/reset-totp`, {});
+                const verification = await confirmAction('重置验证器', `确认重置 ${display} 的验证器？`, { factor: true });
+                if (!verification) return;
+                await api(`/admin/users/${encodeURIComponent(user.id)}/reset-totp`, { totp: verification.totp });
                 await refreshMembers();
                 message(status, '验证器已重置。', 'success');
               }),

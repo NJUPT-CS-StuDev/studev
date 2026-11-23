@@ -57,6 +57,10 @@ import '../platform/members.css';
         <input id="confirm-user-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" />
         <p class="p-help">至少 12 位。请通过安全渠道告知本人，首次登录须修改密码。</p>
       </div>
+      <div class="p-field" data-confirm-factor-field hidden>
+        <label for="confirm-operator-factor">你的动态验证码或恢复码</label>
+        <input id="confirm-operator-factor" maxlength="64" autocomplete="one-time-code" />
+      </div>
       <div class="p-actions">
         <button class="p-button secondary" value="cancel" formnovalidate>取消</button>
         <button class="p-button" value="confirm" data-confirm-submit>确认</button>

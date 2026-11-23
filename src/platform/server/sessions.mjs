@@ -4,7 +4,9 @@ import { fail, text } from './common.mjs';
 import { isConflict } from './store.mjs';
 
 const ACCESS_SECONDS = 600;
-const REFRESH_SECONDS = 30 * 86400;
+const DAY_MS = 86400000;
+const IDLE_MS = 30 * DAY_MS;
+const maxExpiry = (session, role) => Date.parse(session.createdAt) + (role === 'user' ? 180 : 90) * DAY_MS;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const ID = /^[a-f0-9-]{36}$/;
 const bootstrapRoute = (path) => ['/api/platform/auth/register', '/api/platform/auth/login', '/api/platform/auth/refresh'].includes(path);
@@ -15,6 +17,7 @@ export const hasAuthorization = (request) => request.headers.has('authorization'
 // materialized revision can never undo a revocation or spend a refresh twice.
 export function createSessions({ repo, now, loadUser }) {
   const sessionKey = (id) => `identity/devices/sessions/${id}.json`;
+  const expiryKey = (id) => `identity/devices/expiry/${id}.json`;
   const revokedKey = (id) => `identity/devices/revoked/${id}.json`;
   const tokenKey = (kind, token) => `identity/devices/${kind}/${digest(token)}.json`;
   const loginPrefix = (userId) => `identity/devices/logins/${userId}`;
@@ -24,11 +27,11 @@ export function createSessions({ repo, now, loadUser }) {
     return digest(value);
   }
   async function revoke(id, expiresAt) {
-    try { await repo.putNew(revokedKey(id), { revokedAt: new Date(now()).toISOString(), expiresAt: expiresAt ?? now() + REFRESH_SECONDS * 1000 }); }
+    try { await repo.putNew(revokedKey(id), { revokedAt: new Date(now()).toISOString(), expiresAt }); }
     catch (error) { if (!isConflict(error)) throw error; }
   }
   async function validSession(id, known = {}) {
-    const [original, revoked, state, ticketIdentity] = await Promise.all([
+    const [original, revoked, state, ticketIdentity, renewal] = await Promise.all([
       repo.get(sessionKey(id)), repo.get(revokedKey(id)), repo.latest(`identity/devices/state/${id}`),
       // A ticket names the immutable session's owner, so these authoritative
       // reads can run alongside the session reads.
@@ -36,28 +39,35 @@ export function createSessions({ repo, now, loadUser }) {
         loginTip(known.userId),
         loadUser(known.userId),
       ]) : null,
+      // Access and refresh already carry a deadline. Only inventory needs to
+      // read the newest deadline rather than the caller's own ticket.
+      known.userId ? null : repo.get(expiryKey(id)),
     ]);
     const ownerId = known.userId ?? known.user?.id;
-    if (!original || original.expiresAt <= now() || revoked || (ownerId && original.userId !== ownerId)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    if (!original || revoked || (ownerId && original.userId !== ownerId)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const [tip, user] = ticketIdentity ?? await Promise.all([
       known.tip ?? loginTip(original.userId), known.user ?? loadUser(original.userId),
     ]);
     if (!tip || tip.devices[original.deviceHash] !== id) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     // TOTP confirmation elevates this session's security version, just as it
     // does for web sessions. Revocation and absolute expiry remain immutable.
-    const session = { ...original, ...state };
+    const expiresAt = Math.min(known.expiresAt ?? renewal?.expiresAt ?? original.expiresAt, maxExpiry(original, user?.role));
+    if (!(expiresAt > now())) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const session = { ...original, ...state, expiresAt };
     if (!user || user.status !== 'active' || user.securityVersion !== session.securityVersion) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     return { user, session, loginHead: tip };
   }
 
   async function issue(session) {
     const accessToken = randomBytes(32).toString('base64url'), refreshToken = randomBytes(32).toString('base64url');
-    const expiresAt = Math.min(now() + ACCESS_SECONDS * 1000, session.expiresAt);
+    const started = now();
+    if (!(session.expiresAt > started)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const expiresAt = Math.min(started + ACCESS_SECONDS * 1000, session.expiresAt);
     await Promise.all([
-      repo.putNew(tokenKey('access', accessToken), { sessionId: session.id, userId: session.userId, expiresAt }),
+      repo.putNew(tokenKey('access', accessToken), { sessionId: session.id, userId: session.userId, expiresAt, sessionExpiresAt: session.expiresAt }),
       repo.putNew(tokenKey('refresh', refreshToken), { sessionId: session.id, userId: session.userId, expiresAt: session.expiresAt }),
     ]);
-    return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.floor((expiresAt - now()) / 1000), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };
+    return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.max(0, Math.floor((expiresAt - now()) / 1000)), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };
   }
   async function start(user, body, { kind, mfaVerified, verified }) {
     const deviceHash = device(body.deviceId);
@@ -74,13 +84,14 @@ export function createSessions({ repo, now, loadUser }) {
     // reserved. The factor must succeed before any session state is changed.
     await verified;
     for (const record of existing.filter(Boolean)) {
-      if (record.deviceHash === deviceHash) await revoke(record.id, record.expiresAt);
+      if (record.deviceHash === deviceHash) await revoke(record.id, maxExpiry(record, user.role));
       else devices[record.deviceHash] = record.id;
     }
     if (Object.keys(devices).length >= 20) fail(429, 'DEVICE_LIMIT', '已登录设备过多，请先在网页账号中心退出不再使用的设备。');
     const generation = (tip?.generation ?? 0) + 1;
+    const started = now();
     const session = { id: randomUUID(), loginGeneration: generation, userId: user.id, securityVersion: user.securityVersion, deviceHash, deviceName,
-      kind, csrfToken: randomBytes(32).toString('base64url'), mfaVerified, createdAt: new Date(now()).toISOString(), expiresAt: now() + REFRESH_SECONDS * 1000 };
+      kind, csrfToken: randomBytes(32).toString('base64url'), mfaVerified, createdAt: new Date(started).toISOString(), expiresAt: started + IDLE_MS };
     // Publish metadata before the head so a following login on another device
     // can retain this family even while its credentials are still being issued.
     await repo.putNew(sessionKey(session.id), session);
@@ -89,31 +100,42 @@ export function createSessions({ repo, now, loadUser }) {
     // late write cannot restore an old head. Never use a mutable snapshot here.
     devices[deviceHash] = session.id;
     await repo.putNew(`${loginPrefix(user.id)}/${String(generation).padStart(12, '0')}.json`, {
-      devices, generation, expiresAt: session.expiresAt,
+      devices, generation, expiresAt: maxExpiry(session, user.role),
     });
     return { credentials: await issue(session), session };
   }
   async function refresh(body, kind) {
     const hash = device(body.deviceId);
+    if (body.foreground !== undefined && typeof body.foreground !== 'boolean') fail(400, 'INVALID_FIELD', '使用状态无效。');
     if (typeof body.refreshToken !== 'string' || !TOKEN.test(body.refreshToken)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const ticket = await repo.get(tokenKey('refresh', body.refreshToken));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const { session } = await validSession(ticket.sessionId, { userId: ticket.userId });
+    const { user, session } = await validSession(ticket.sessionId, { userId: ticket.userId, expiresAt: ticket.expiresAt });
     if (session.kind !== kind) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     if (hash !== session.deviceHash) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    try { await repo.putNew(tokenKey('spent', body.refreshToken), { spentAt: now(), expiresAt: session.expiresAt }); }
+    const started = now();
+    if (session.expiresAt <= started) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
+    const limit = maxExpiry(session, user.role);
+    try { await repo.putNew(tokenKey('spent', body.refreshToken), { spentAt: started, expiresAt: ticket.expiresAt }); }
     catch (error) {
       if (!isConflict(error)) throw error;
-      await revoke(session.id, session.expiresAt);
+      await revoke(session.id, limit);
       fail(401, 'REFRESH_REPLAYED', '检测到重复刷新，请重新登录此设备。');
     }
-    return { credentials: await issue(session), session };
+    const expiresAt = body.foreground === true ? Math.min(Math.max(session.expiresAt, started + IDLE_MS), limit) : session.expiresAt;
+    const renewed = { ...session, expiresAt };
+    const credentials = await issue(renewed);
+    // A refresh ticket has only one successor, so this inventory snapshot
+    // advances along a single chain. Authorization always uses the ticket
+    // deadline and the immutable family/revocation records, never this view.
+    if (expiresAt > session.expiresAt) await repo.put(expiryKey(session.id), { expiresAt });
+    return { credentials, session: renewed };
   }
   async function authenticate(token, kind) {
     if (typeof token !== 'string' || !TOKEN.test(token)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const ticket = await repo.get(tokenKey('access', token));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
-    const { user, session, loginHead } = await validSession(ticket.sessionId, { userId: ticket.userId });
+    const { user, session, loginHead } = await validSession(ticket.sessionId, { userId: ticket.userId, expiresAt: ticket.sessionExpiresAt });
     if (session.kind !== kind) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     return { user, session, sessionId: session.id, kind, mfaVerified: session.mfaVerified, loginHead };
   }
@@ -130,7 +152,7 @@ export function createSessions({ repo, now, loadUser }) {
     if (!ID.test(id)) fail(404, 'DEVICE_NOT_FOUND', '设备不存在。');
     const session = await repo.get(sessionKey(id));
     if (session?.userId !== userId) fail(404, 'DEVICE_NOT_FOUND', '设备不存在。');
-    await revoke(id, session.expiresAt);
+    await revoke(id, maxExpiry(session, 'user'));
   }
   return { start, refresh, authenticate, list, revokeOwned };
 }

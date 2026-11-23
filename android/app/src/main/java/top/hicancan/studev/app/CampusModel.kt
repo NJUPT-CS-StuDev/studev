@@ -62,6 +62,7 @@ class CampusModel(application: Application) : AndroidViewModel(application) {
             catch (_: Exception) { /* Offline or unreadable: the data at hand stays in use. */ }
         }
     }
+    fun pause() = sync.pause()
     private var checked = System.currentTimeMillis()
     private val _state = MutableStateFlow(AcademicState())
     val state = _state.asStateFlow()

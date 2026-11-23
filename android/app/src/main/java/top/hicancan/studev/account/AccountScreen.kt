@@ -84,6 +84,7 @@ import top.hicancan.studev.world.CampusDay
     var confirm by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var totp by remember { mutableStateOf("") }
+    var loginFactorRequired by remember { mutableStateOf(false) }
     var secret by remember { mutableStateOf("") }
     var recovery by remember { mutableStateOf<List<String>>(emptyList()) }
     var devices by remember { mutableStateOf<List<AccountDevice>>(emptyList()) }
@@ -96,6 +97,11 @@ import top.hicancan.studev.world.CampusDay
     var error by remember { mutableStateOf<String?>(null) }
     var confirmOut by remember { mutableStateOf(false) }
     var revoke by remember { mutableStateOf<AccountDevice?>(null) }
+    fun resetLoginFactor() {
+        if (loginFactorRequired) notice = null
+        loginFactorRequired = false
+        totp = ""
+    }
     fun showUser(fresh: AccountUser) {
         user = fresh
         student = fresh.studentId; realName = fresh.realName; nickname = fresh.nickname; signature = fresh.signature
@@ -155,15 +161,15 @@ import top.hicancan.studev.world.CampusDay
             if (verifying) Text("正在验证登录状态…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (user != null && state == null && !verifying) TextAction("重试", { run { reload() } }, refresh = true)
             if (user == null) {
-                Choice(listOf("login" to "登录", "register" to "注册"), if (register) "register" else "login") { value -> if (!busy) { register = value == "register"; password = ""; confirm = ""; totp = ""; error = null; notice = null } }
-                OutlinedTextField(student, { student = it.take(20); totp = "" }, Modifier.fillMaxWidth(), label = { Text("学号") }, singleLine = true, enabled = !busy)
+                Choice(listOf("login" to "登录", "register" to "注册"), if (register) "register" else "login") { value -> if (!busy) { register = value == "register"; password = ""; confirm = ""; resetLoginFactor(); error = null; notice = null } }
+                OutlinedTextField(student, { student = it.take(20); resetLoginFactor() }, Modifier.fillMaxWidth(), label = { Text("学号") }, singleLine = true, enabled = !busy)
                 if (register) {
                     OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称（选填）") }, supportingText = { Text("留空就用默认昵称。其他同学可以看到你的昵称、头像和签名。") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(qq, { qq = it.take(12) }, Modifier.fillMaxWidth(), label = { Text("联系 QQ") }, supportingText = { Text("用这个 QQ 邮箱收通知、找回密码或确认注销。也可以用它的 QQ 头像。") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy)
                     QqPreview(qq)
                 }
-                SecretField("密码", password, !busy) { password = it }
+                SecretField("密码", password, !busy) { password = it; resetLoginFactor() }
                 if (register) {
                     SecretField("确认密码", confirm, !busy) { confirm = it }
                     Text("密码需要 12–256 个字符。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -178,18 +184,26 @@ import top.hicancan.studev.world.CampusDay
                         }
                     }
                 }
-                else OutlinedTextField(totp, { totp = it.take(64) }, Modifier.fillMaxWidth(), label = { Text("动态验证码或恢复码") }, supportingText = { Text("请打开认证器查看验证码，也可以用恢复码。") }, singleLine = true, enabled = !busy)
+                else if (loginFactorRequired) OutlinedTextField(totp, { totp = it.take(64) }, Modifier.fillMaxWidth(), label = { Text("动态验证码或恢复码") }, singleLine = true, enabled = !busy)
                 Button(onClick = { run {
                     if (register) {
                         if (password != confirm) { error = "两次输入的密码不一致。"; return@run }
                         client.register(student, realName, nickname, qq, password)
-                        register = false; password = ""; confirm = ""; totp = ""; notice = "注册成功，请使用学号和密码登录。"
+                        register = false; password = ""; confirm = ""; resetLoginFactor(); notice = "注册成功，请使用学号和密码登录。"
                     } else {
-                        showState(client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}"))
+                        try {
+                            showState(client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}"))
+                        } catch (failure: PlatformFailure) {
+                            if (failure.code != "MFA_REQUIRED") throw failure
+                            loginFactorRequired = true
+                            notice = "请输入认证器里的动态验证码，也可用一次性恢复码。"
+                            return@run
+                        }
                         section = "profile"; devices = emptyList(); devicesFor = null
-                        password = ""; totp = ""; onSignedIn()
+                        password = ""; resetLoginFactor(); onSignedIn()
                     }
-                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
+                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() &&
+                    (if (register) realName.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed else !loginFactorRequired || totp.isNotBlank())) {
                     if (busy) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
                     Text(if (busy) if (register) "正在注册…" else "正在登录…" else if (register) "创建账号" else "登录")
                 }
@@ -231,7 +245,7 @@ import top.hicancan.studev.world.CampusDay
                         } }, modifier = Modifier.align(Alignment.End), enabled = !busy && !blocked) { Text(if (incomplete) "确认并绑定身份" else "保存个人资料") }
                     }
                     "devices" -> {
-                        Text("查看已登录的浏览器和应用，退出后需要重新登录。", style = MaterialTheme.typography.bodySmall)
+                        Text("查看已登录的浏览器和应用，可让不再使用的设备退出。", style = MaterialTheme.typography.bodySmall)
                         TextAction(if (devicesLoading) "正在读取设备…" else "刷新", { scope.launch { loadDevices() } }, enabled = !devicesLoading, refresh = !devicesLoading)
                         devicesError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (!devicesLoading && devicesError == null && devicesFor != null && devices.isEmpty()) Text("没有其他登录设备。", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -252,10 +266,10 @@ import top.hicancan.studev.world.CampusDay
                             if (newPassword != confirm) { error = "两次输入的新密码不一致。"; return@run }
                             client.request("/auth/password", buildJsonObject { put("currentPassword", password); put("newPassword", newPassword); put("totp", totp) }, authenticated = true)
                             client.forget(); user = null; state = null; password = ""; newPassword = ""; confirm = ""; totp = ""; notice = "密码已修改，请重新登录。"
-                        } }, enabled = !busy && password.isNotBlank() && newPassword.length >= 12 && confirm.isNotBlank()) { Text("修改密码并重新登录") }
+                        } }, enabled = !busy && password.isNotBlank() && newPassword.length >= 12 && confirm.isNotBlank() && (!user!!.totpEnabled || totp.isNotBlank())) { Text("修改密码并重新登录") }
                         HorizontalDivider()
                         Text("认证器验证", style = MaterialTheme.typography.titleLarge)
-                        Text(if (user!!.totpEnabled) "已开启。登录时填写动态验证码或一次性恢复码。" else "可使用任意支持 TOTP 的认证器，无需 Google 服务。", style = MaterialTheme.typography.bodyMedium)
+                        Text(if (user!!.totpEnabled) "重新登录或修改密码时，请输入动态验证码或一次性恢复码。" else "可用支持动态验证码的认证器。", style = MaterialTheme.typography.bodyMedium)
                         if (recovery.isNotEmpty()) {
                             Text("恢复码只显示这一次，请抄下来或存到安全的地方。每个恢复码只能用一次。", color = MaterialTheme.colorScheme.primary)
                             SelectionContainer { Text(recovery.joinToString("\n")) }

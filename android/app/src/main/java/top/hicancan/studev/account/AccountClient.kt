@@ -39,7 +39,8 @@ sealed interface AccountPresence {
 
 @Serializable data class AccountState(val user: AccountUser, val enrollmentRequired: Boolean = false, val passwordChangeRequired: Boolean = false, val profileRequired: Boolean = false, val mfaRequired: Boolean = false)
 @Serializable data class AccountDevice(val id: String, val deviceName: String, val kind: String, val current: Boolean, val createdAt: String, val expiresAt: Long)
-@Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser)
+@Serializable data class AccountSession(val accessToken: String, val refreshToken: String, val expiresAt: Long, val deviceSessionId: String, val user: AccountUser,
+    val renewalDeferred: Boolean = false)
 @Serializable data class StoredAccount(val deviceId: String = UUID.randomUUID().toString(), val session: AccountSession? = null)
 interface AccountStorage { suspend fun read(): StoredAccount; suspend fun write(value: StoredAccount) }
 data class PlatformReply(val status: Int, val body: JsonObject)
@@ -182,18 +183,23 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     suspend fun devices(): List<AccountDevice> = accountJson.decodeFromJsonElement(request("/auth/devices", authenticated = true).getValue("items"))
     suspend fun revokeDevice(id: String) { request("/auth/devices/$id/revoke", buildJsonObject {}, authenticated = true) }
     suspend fun forget() = lock.withLock { val stored = restore(); keep(stored.copy(session = null)) }
-    private suspend fun access(forceFor: AccountSession? = null): AccountSession = lock.withLock {
+    private suspend fun access(forceFor: AccountSession? = null, foreground: Boolean = true): AccountSession = lock.withLock {
         val stored = restore()
         val session = stored.session ?: throw PlatformFailure(401, "AUTH_REQUIRED", "请先登录。")
         if (forceFor != null && session.deviceSessionId != forceFor.deviceSessionId) throw PlatformFailure(401, "ACCOUNT_CHANGED", "登录账号已更改，请重新操作。")
-        if (session.expiresAt > now() + 30_000 && (forceFor == null || session.accessToken != forceFor.accessToken)) return@withLock session
+        if (session.expiresAt > now() + 30_000 && (!foreground || !session.renewalDeferred) &&
+            (forceFor == null || session.accessToken != forceFor.accessToken)) return@withLock session
         try {
             // Never retry a refresh after an ambiguous network result: rotation
             // might have committed. Persist the spent intent BEFORE sending,
             // so even process death requires sign-in rather than token replay.
             storage.write(stored.copy(session = null))
-            val value = checked(transport.send("/auth/refresh", buildJsonObject { put("refreshToken", session.refreshToken); put("deviceId", stored.deviceId) }, null))
-            val fresh = tokens(value, session.user)
+            val value = checked(transport.send("/auth/refresh", buildJsonObject {
+                put("refreshToken", session.refreshToken)
+                put("deviceId", stored.deviceId)
+                put("foreground", foreground)
+            }, null))
+            val fresh = tokens(value, session.user).copy(renewalDeferred = !foreground)
             keep(stored.copy(session = fresh)); fresh
         } catch (failure: Exception) {
             // UI/navigation cancellation may arrive after the server spent the
@@ -204,14 +210,14 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
     }
     private fun expired(reply: PlatformReply): Boolean = reply.status == 401 &&
         reply.body["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content in setOf("TOKEN_INVALID", "AUTH_REQUIRED")
-    private suspend fun authenticatedRequest(path: String, body: JsonObject?, credential: AccountSession): JsonObject {
+    private suspend fun authenticatedRequest(path: String, body: JsonObject?, credential: AccountSession, foreground: Boolean): JsonObject {
         var reply = transport.send(path, body, credential.accessToken)
-        if (expired(reply)) reply = transport.send(path, body, access(forceFor = credential).accessToken)
+        if (expired(reply)) reply = transport.send(path, body, access(forceFor = credential, foreground = foreground).accessToken)
         return checked(reply)
     }
-    suspend fun request(path: String, body: JsonObject? = null, authenticated: Boolean = false): JsonObject {
+    suspend fun request(path: String, body: JsonObject? = null, authenticated: Boolean = false, foreground: Boolean = true): JsonObject {
         if (!authenticated) return checked(transport.send(path, body, null))
-        return authenticatedRequest(path, body, access())
+        return authenticatedRequest(path, body, access(foreground = foreground), foreground)
     }
     /** An event stream for someone signed in, renewing the pass once if it ran out before the stream began. */
     suspend fun stream(path: String, body: JsonObject, onEvent: (String, JsonObject) -> Unit) {
@@ -221,8 +227,8 @@ class AccountClient(private val storage: AccountStorage, private val transport: 
         refused?.let(::checked)
     }
     suspend fun signOut() {
-        val credential = access()
-        authenticatedRequest("/auth/logout", buildJsonObject {}, credential)
+        val credential = access(foreground = false)
+        authenticatedRequest("/auth/logout", buildJsonObject {}, credential, foreground = false)
         lock.withLock {
             val stored = restore()
             if (stored.session?.deviceSessionId == credential.deviceSessionId) keep(stored.copy(session = null))

@@ -24,7 +24,8 @@ public sealed record AccountMembership(string OrganizationName, string Position 
 public sealed record AccountState(AccountUser User, bool EnrollmentRequired = false, bool PasswordChangeRequired = false, bool ProfileRequired = false, bool MfaRequired = false);
 public sealed record AccountDevice(string Id, string DeviceName, string Kind, bool Current, string CreatedAt, long ExpiresAt);
 public sealed record AccountSession(string AccessToken, string RefreshToken, long ExpiresAt, string DeviceSessionId, AccountUser User,
-    bool EnrollmentRequired = false, bool PasswordChangeRequired = false, bool ProfileRequired = false, bool MfaRequired = false)
+    bool EnrollmentRequired = false, bool PasswordChangeRequired = false, bool ProfileRequired = false, bool MfaRequired = false,
+    bool RenewalDeferred = false)
 {
     [JsonIgnore] public AccountState State => new(User, EnrollmentRequired, PasswordChangeRequired, ProfileRequired, MfaRequired);
 }
@@ -48,6 +49,7 @@ public sealed class Account
     public event Action? Changed;
     public AccountUser? User => CachedState?.User;
     public AccountState? CachedState { get { lock (storageGate) return stored.Session?.State ?? renewing; } }
+    public bool NeedsRenewal { get { lock (storageGate) return stored.Session is { } session && (session.RenewalDeferred || session.ExpiresAt <= now() + 30_000); } }
 
     private Account() : this(
         Secure.Read(File) is { } text ? JsonSerializer.Deserialize(text, StorageJson.Default.StoredAccount)! : new(Guid.NewGuid().ToString(), null),
@@ -99,8 +101,8 @@ public sealed class Account
         throw new PlatformFailure(reply.Status, (string?)error?["code"] ?? "REQUEST_FAILED", (string?)error?["message"] ?? "操作未完成，请稍后重试。");
     }
 
-    private AccountSession Tokens(JsonObject value, AccountState state) => new((string)value["accessToken"]!, (string)value["refreshToken"]!,
-        now() + (long)value["expiresIn"]! * 1000, (string)value["deviceSessionId"]!, state.User, state.EnrollmentRequired, state.PasswordChangeRequired, state.ProfileRequired, state.MfaRequired);
+    private AccountSession Tokens(JsonObject value, AccountState state, bool renewalDeferred = false) => new((string)value["accessToken"]!, (string)value["refreshToken"]!,
+        now() + (long)value["expiresIn"]! * 1000, (string)value["deviceSessionId"]!, state.User, state.EnrollmentRequired, state.PasswordChangeRequired, state.ProfileRequired, state.MfaRequired, renewalDeferred);
 
     /// <summary>Asks for a password-reset link, mailed to the account's QQ mailbox; the reset itself happens on the website.</summary>
     public static async Task Forgot(string studentId) => Checked(await Shared.send("/auth/password/forgot", new JsonObject { ["studentId"] = studentId.Trim().ToUpperInvariant() }, null));
@@ -126,7 +128,7 @@ public sealed class Account
         finally { gate.Release(); }
     }
 
-    private async Task<Pass> Access(Pass? forceFor = null)
+    private async Task<Pass> Access(Pass? forceFor = null, bool foreground = true)
     {
         await gate.WaitAsync();
         try
@@ -134,7 +136,8 @@ public sealed class Account
             var (stored, expectedGeneration) = Snapshot();
             var session = stored.Session ?? throw new PlatformFailure(401, "AUTH_REQUIRED", "请先登录。");
             if (forceFor is not null && (expectedGeneration != forceFor.Generation || session.DeviceSessionId != forceFor.Session.DeviceSessionId)) throw AccountChanged();
-            if (session.ExpiresAt > now() + 30_000 && (forceFor is null || session.AccessToken != forceFor.Session.AccessToken)) return new(session, expectedGeneration);
+            if (session.ExpiresAt > now() + 30_000 && !(foreground && session.RenewalDeferred) &&
+                (forceFor is null || session.AccessToken != forceFor.Session.AccessToken)) return new(session, expectedGeneration);
             // Persist the spent intent before sending this one-use ticket. Keep
             // only the profile visible while waiting for the replacement.
             var profile = session.State;
@@ -149,8 +152,8 @@ public sealed class Account
             AccountSession fresh;
             try
             {
-                var value = Checked(await send("/auth/refresh", new JsonObject { ["refreshToken"] = session.RefreshToken, ["deviceId"] = stored.DeviceId }, null));
-                fresh = Tokens(value, profile);
+                var value = Checked(await send("/auth/refresh", new JsonObject { ["refreshToken"] = session.RefreshToken, ["deviceId"] = stored.DeviceId, ["foreground"] = foreground }, null));
+                fresh = Tokens(value, profile, renewalDeferred: !foreground);
                 Keep(stored with { Session = fresh }, expectedGeneration);
             }
             catch
@@ -174,21 +177,21 @@ public sealed class Account
 
     private static bool Expired((int Status, JsonObject Body) reply) => reply.Status == 401 && (string?)reply.Body["error"]?["code"] is "TOKEN_INVALID" or "AUTH_REQUIRED";
 
-    private async Task<(JsonObject Body, Pass Pass)> Authenticated(string path, JsonObject? body)
+    private async Task<(JsonObject Body, Pass Pass)> Authenticated(string path, JsonObject? body, bool foreground = true)
     {
-        var credential = await Access();
+        var credential = await Access(foreground: foreground);
         var reply = await send(path, body, credential.Session.AccessToken);
-        if (Expired(reply)) { credential = await Access(credential); reply = await send(path, body, credential.Session.AccessToken); }
+        if (Expired(reply)) { credential = await Access(credential, foreground); reply = await send(path, body, credential.Session.AccessToken); }
         await EnsureCurrent(credential);
         return (Checked(reply), credential);
     }
 
-    public async Task<JsonObject> Request(string path, JsonObject? body = null) => (await Authenticated(path, body)).Body;
+    public async Task<JsonObject> Request(string path, JsonObject? body = null, bool foreground = true) => (await Authenticated(path, body, foreground)).Body;
 
     /** The account as the platform now has it, kept. */
-    public async Task<AccountState> State()
+    public async Task<AccountState> State(bool foreground = true)
     {
-        var (value, pass) = await Authenticated("/auth/session", null);
+        var (value, pass) = await Authenticated("/auth/session", null, foreground);
         var state = value.Deserialize(StorageJson.Default.AccountState)!;
         await gate.WaitAsync();
         try

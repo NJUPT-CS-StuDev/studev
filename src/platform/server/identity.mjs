@@ -259,8 +259,12 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     }
     await claimStudent(studentId, current.id);
   }
+  function requireFactorCode(code) {
+    if (code === undefined || code === null || (typeof code === 'string' && !code.trim())) fail(401, 'MFA_REQUIRED', '请输入你的动态验证码或恢复码。');
+  }
   async function consumeFactor(user, code) {
     if (!user.totp) fail(400, 'TOTP_NOT_ENABLED', '尚未绑定认证器。');
+    requireFactorCode(code);
     if (typeof code !== 'string' || code.length > 64) fail(401, 'MFA_INVALID', '动态验证码或恢复码无效。');
     const normalized = code.trim().toUpperCase();
     const recoveryHash = digest(`${user.id}:${normalized}`);
@@ -275,6 +279,11 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     }
     try { await repo.putNew(key, { usedAt: iso(now) }); }
     catch (error) { if (isConflict(error)) fail(401, 'MFA_REPLAYED', '此验证码已使用，请使用下一个验证码或未使用的恢复码。'); throw error; }
+  }
+  async function authorizeCredentialChange(user, code) {
+    if (!user.totp) fail(403, 'TOTP_NOT_ENABLED', '请先在账号安全中绑定验证器，再办理此操作。');
+    await repo.throttle('management-factor', user.id, 8, 60);
+    await consumeFactor(user, code);
   }
   async function loadUser(id) {
     if (!ID.test(id)) fail(404, 'USER_NOT_FOUND', '账号不存在。');
@@ -609,9 +618,11 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const body = await readJson(request, 8192);
       await repo.throttle('password-change', auth.user.id, 5, 60);
       if (!await verifyPassword(body.currentPassword, auth.user.passwordHash)) fail(401, 'PASSWORD_INVALID', '当前密码不正确。');
-      if (auth.user.totp && !auth.mfaVerified) await consumeFactor(auth.user, body.totp);
-      const passwordHash = await hashPassword(validatePassword(body.newPassword));
-      if (await verifyPassword(body.newPassword, auth.user.passwordHash)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
+      const newPassword = validatePassword(body.newPassword);
+      if (auth.user.totp) requireFactorCode(body.totp);
+      if (safeEqual(body.currentPassword, newPassword)) fail(400, 'PASSWORD_UNCHANGED', '新密码应与当前密码不同。');
+      if (auth.user.totp) await consumeFactor(auth.user, body.totp);
+      const passwordHash = await hashPassword(newPassword);
       await saveUser(auth.user, { passwordHash, mustChangePassword: false, securityVersion: secretToken() });
       await repo.audit(auth.user.id, 'identity.password.changed', auth.user.id);
       await tellPasswordChanged(auth.user);
@@ -751,6 +762,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const signature = body.signature === undefined ? '' : text(body.signature, '个性签名', 120, false);
       if (await repo.get(studentKey(studentId))) fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '该学号已存在记录。');
       if (qq && await repo.get(`identity/qq/${qq}.json`)) fail(409, 'QQ_ALREADY_REGISTERED', '该 QQ 号已存在记录。');
+      if (role === 'admin') await authorizeCredentialChange(auth.user, body.totp);
       const id = randomUUID();
       if (qq) await repo.putNew(`identity/qq/${qq}.json`, { id });
       await claimStudent(studentId, id);
@@ -781,12 +793,15 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       }
       const body = await readJson(request, 8192);
       if (management[2] === '/reset-password') {
-        const passwordHash = await hashPassword(validatePassword(body.password));
+        const password = validatePassword(body.password);
+        await authorizeCredentialChange(auth.user, body.totp);
+        const passwordHash = await hashPassword(password);
         await saveUser(user, { passwordHash, mustChangePassword: true, securityVersion: secretToken() });
         await repo.audit(auth.user.id, 'identity.password.reset', user.id);
         return response({ ok: true });
       }
       if (management[2] === '/reset-totp') {
+        await authorizeCredentialChange(auth.user, body.totp);
         await saveUser(user, { totp: null, securityVersion: secretToken() });
         await repo.audit(auth.user.id, 'identity.totp.reset', user.id);
         return response({ ok: true });
@@ -813,6 +828,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships, orgs, appointmentYear());
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
+      if (role !== user.role) await authorizeCredentialChange(auth.user, body.totp);
       if (studentId && studentId !== user.studentId) {
         await bindStudent(user, studentId, realName);
       }

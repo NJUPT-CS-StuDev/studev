@@ -8,7 +8,7 @@ function render(items: Device[]) {
   if (!items.length) rows.append(el('p', '目前没有已登录的设备。', 'p-muted'));
   for (const device of items) {
     const row = el('div', undefined, 'p-card');
-    row.append(el('h3', device.deviceName + (device.current ? ' · 当前设备' : '') + (device.kind === 'cookie' ? ' · 网页' : ' · App')), el('p', `登录于 ${formatTime(device.createdAt)} · 最晚 ${formatTime(new Date(device.expiresAt).toISOString())} 重新登录`, 'p-help'));
+    row.append(el('h3', device.deviceName + (device.current ? ' · 当前设备' : '') + (device.kind === 'cookie' ? ' · 网页' : ' · App')), el('p', `登录于 ${formatTime(device.createdAt)} · 当前有效至 ${formatTime(new Date(device.expiresAt).toISOString())}`, 'p-help'));
     const actions = el('div', undefined, 'p-actions');
     actions.style.marginTop = '12px';
     const offerExit = () => actions.replaceChildren(button('退出此设备', () => {

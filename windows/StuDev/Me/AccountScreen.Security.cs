@@ -10,7 +10,7 @@ public sealed partial class AccountScreen
     private void Security(StackPanel page)
     {
         var me = user!;
-        page.Children.Add(Kit.Text("修改密码或认证器设置后，其他设备可能需要重新登录。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("修改密码或认证器设置后，其他设备需要重新登录。", Role.Label, "muted", wrap: true));
         SecretField(page, "当前密码", password, text => password = text, "account-current-password");
         if (me.TotpEnabled)
         {
@@ -32,11 +32,11 @@ public sealed partial class AccountScreen
                 await Account.Shared.ChangePassword(password, newPassword, code);
                 ClearSecrets(); notice = "密码已修改，请重新登录。";
             });
-        }, () => state is not null && password.Length > 0 && newPassword.Length >= 12 && confirmPassword.Length > 0);
+        }, () => state is not null && password.Length > 0 && newPassword.Length >= 12 && confirmPassword.Length > 0 && (!me.TotpEnabled || code.Trim().Length > 0));
 
         page.Children.Add(Kit.Hairline());
         page.Children.Add(Pages.Section("认证器验证"));
-        page.Children.Add(Kit.Text(me.TotpEnabled ? "已开启。登录时填写动态验证码或一次性恢复码。" : "可使用任意支持 TOTP 的认证器，无需 Google 服务。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text(me.TotpEnabled ? "已开启。重新登录、修改密码和解绑认证器时，请输入动态验证码或恢复码。" : "可使用任意支持 TOTP 的认证器，无需 Google 服务。", Role.Label, "muted", wrap: true));
         if (recovery.Count > 0)
         {
             page.Children.Add(Kit.Text("恢复码只显示一次，请妥善离线保存。每个恢复码仅可使用一次。", Role.Label, "brand", wrap: true));

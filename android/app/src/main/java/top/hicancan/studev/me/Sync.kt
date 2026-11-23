@@ -24,9 +24,11 @@ class Sync(private val store: TaskStore, private val settings: CampusSettings, p
     private var adopted: List<Task>? = null
     private var adoptedSettings: PersonalSettings? = null
     private val resumed = MutableStateFlow(0L)
+    private var foreground = false
     private var syncedResume = -1L
     private var syncedUser: String? = null
-    fun resume() { resumed.value++ }
+    fun resume() { foreground = true; resumed.value++ }
+    fun pause() { foreground = false }
     init {
         scope.launch {
             runCatching { client.current() }.onFailure { if (it is CancellationException) throw it }
@@ -40,7 +42,7 @@ class Sync(private val store: TaskStore, private val settings: CampusSettings, p
         try {
             val sent = store.all.value
             val mine = settings.state.value
-            val result = client.request("/sync", buildJsonObject { put("tasks", json.encodeToJsonElement(sent)); put("settings", partsOf(mine)) }, authenticated = true)
+            val result = client.request("/sync", buildJsonObject { put("tasks", json.encodeToJsonElement(sent)); put("settings", partsOf(mine)) }, authenticated = true, foreground = foreground)
             if (client.presence.value.user?.id != user) return
             val theirs = json.decodeFromJsonElement<List<Task>>(result.getValue("tasks")).map(Tasks::sanitize)
             val now = store.all.value

@@ -14,7 +14,9 @@ public static class SignIn
         var student = Kit.Field("", "学号", "学号");
         var password = new PasswordBox { PlaceholderText = "密码", MinHeight = 40, FontSize = 14.5 };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(password, "密码");
-        var totp = Kit.Field("", "已开启两步验证时填写验证码或恢复码", "动态验证码或恢复码");
+        var totp = Kit.Field("", "动态验证码或恢复码", "动态验证码或恢复码");
+        totp.MaxLength = 64;
+        totp.Visibility = Visibility.Collapsed;
         var said = Kit.Text("", Role.Label, "danger", wrap: true);
         Tap? go = null;
         var signingIn = false;
@@ -22,13 +24,16 @@ public static class SignIn
         async void Go()
         {
             if (signingIn || student.Text.Trim().Length == 0 || password.Password.Length == 0) return;
+            var challenged = totp.Visibility == Visibility.Visible;
+            if (challenged && totp.Text.Trim().Length == 0) { totp.Focus(FocusState.Programmatic); return; }
             signingIn = true; go!.IsEnabled = false; said.Text = "";
             student.IsEnabled = password.IsEnabled = totp.IsEnabled = false;
             ((TextBlock)go.Content).Text = "正在登录…";
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(go, "正在登录…");
+            var focusFactor = false;
             try
             {
-                await Account.Shared.SignIn(student.Text, password.Password, totp.Text);
+                await Account.Shared.SignIn(student.Text, password.Password, challenged ? totp.Text : "");
                 if (active)
                 {
                     App.Window?.Close();
@@ -36,15 +41,33 @@ public static class SignIn
                     else if (Account.Shared.CachedState is { } state && (state.EnrollmentRequired || state.PasswordChangeRequired || state.ProfileRequired || state.MfaRequired)) App.Open("me", "account");
                 }
             }
-            catch (PlatformFailure failure) { said.Text = failure.Message; }
+            catch (PlatformFailure failure)
+            {
+                if (failure.Code == "MFA_REQUIRED")
+                {
+                    totp.Visibility = Visibility.Visible;
+                    focusFactor = true;
+                }
+                said.Text = failure.Message;
+            }
             catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "暂时连不上 StuDev，请检查网络后重试。"; }
             finally {
                 signingIn = false; go.IsEnabled = true;
                 student.IsEnabled = password.IsEnabled = totp.IsEnabled = true;
                 ((TextBlock)go.Content).Text = "登录";
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(go, "登录");
+                if (focusFactor && active) totp.Focus(FocusState.Programmatic);
             }
         }
+        void ResetFactor()
+        {
+            if (signingIn) return;
+            totp.Visibility = Visibility.Collapsed;
+            totp.Text = "";
+            said.Text = "";
+        }
+        student.TextChanged += (_, _) => ResetFactor();
+        password.PasswordChanged += (_, _) => ResetFactor();
         password.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Go(); };
         totp.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Go(); };
         go = Kit.Action("登录", Go, go: true); go.HorizontalAlignment = HorizontalAlignment.Stretch;

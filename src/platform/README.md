@@ -29,10 +29,15 @@ Web, Android and Windows use the same `/api/platform` identity endpoints and err
   in their own interface. Password-reset and account-deletion links confirm
   mailbox access on the website; native clients request these mails in the app.
 - `POST /auth/refresh`: `deviceId`, plus a bearer client's `refreshToken`.
+  Send `foreground: true` during active use to renew the idle deadline.
+  Background refreshes rotate credentials without extending it.
 - `GET /auth/session`, `POST /auth/logout`, `/auth/profile`, `/auth/password`,
   `/auth/totp/setup`, `/auth/totp/confirm`, `/auth/totp/disable` are shared.
   Clients renew credentials only for `TOKEN_INVALID` or `AUTH_REQUIRED`, never
   for a rejected password, verification code or recovery code.
+- Changing a password after enabling an authenticator requires a fresh factor.
+  Owners and administrators must use their own fresh factor for administrator
+  provisioning, role changes and resets of member passwords or authenticators.
 - `GET /auth/devices` lists both carriers with `kind`, `current`, `id`,
   `deviceName`, `createdAt`, `expiresAt`. `POST /auth/devices/<id>/revoke` revokes
   either kind, including the current session, from either client.
@@ -42,17 +47,20 @@ credentials. Browser requests require exact same Origin; credential-bearing
 browser mutations also require the session CSRF token. Any Authorization header
 is validated and never falls back to cookies. Browser responses deliver access
 and refresh credentials only as HttpOnly, SameSite=Strict, Secure host cookies
-(Secure is omitted for loopback HTTP development). Native clients store tokens
-in Android Keystore-encrypted storage. Refresh cookies never appear in JSON.
+(Secure is omitted for loopback HTTP development). Native clients protect tokens
+using Android Keystore or Windows DPAPI. Refresh cookies never appear in JSON.
 
 All devices share `platform-v1/identity/devices/`: immutable sessions, per-user
 indices, hashed access/refresh tickets, spent/revoked markers, login generations,
-and versioned security state. Access expires in 600 seconds; the session expires
-absolutely after 30 days. Rotation spends one atomic ticket; replay revokes the
-family. A device re-login replaces its old session; at most 20 active devices
-exist across both carriers. Logout, role/status changes, password changes and
-account deletion invalidate both carriers. TOTP enrollment elevates only its own
-session. Never retry an ambiguous refresh; sign in again. Browser tabs serialize
+versioned security state and the current deadline used by device inventory.
+Access expires in at most 600 seconds. Foreground use renews the 30-day idle
+window on credential rotation, up to 180 days from the sign-in for ordinary
+accounts and 90 days for administrators and owners. Existing valid sessions
+adopt this policy on their next foreground refresh. Rotation spends one atomic
+ticket; replay revokes the family. A device re-login replaces its old session;
+at most 20 active devices exist across both carriers. Logout, role/status
+changes, password changes and account deletion invalidate both carriers. TOTP
+enrollment elevates only its own session. Never retry an ambiguous refresh; sign in again. Browser tabs serialize
 refreshes with Web Locks and persists a non-secret pending marker before spending
 the refresh ticket, requiring sign-in after an interrupted rotation. No credentials
 enter browser localStorage. All navigation/session checks use that same client.

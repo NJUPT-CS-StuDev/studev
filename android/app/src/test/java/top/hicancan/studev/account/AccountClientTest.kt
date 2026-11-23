@@ -63,6 +63,45 @@ class AccountClientTest {
         coroutineScope { (1..8).map { async { client.request("/auth/devices", authenticated = true) } }.awaitAll() }
         assertEquals(1, refreshCount); assertEquals("refresh-two", storage.value.session!!.refreshToken)
     }
+    @Test fun backgroundRefreshDoesNotCountAsUseAndForegroundSurvivesProcessRestart() = runBlocking {
+        val storage = Storage(); var now = 1_000L
+        val renewals = mutableListOf<Boolean>()
+        val transport = PlatformTransport { path, body, bearer -> when (path) {
+            "/auth/login" -> reply()
+            "/auth/refresh" -> {
+                renewals += body!!.getValue("foreground").jsonPrimitive.boolean
+                assertEquals("refresh-${if (renewals.size == 1) "one" else "2"}", body.getValue("refreshToken").jsonPrimitive.content)
+                reply("access-${renewals.size + 1}", "refresh-${renewals.size + 1}")
+            }
+            "/sync", "/auth/devices" -> {
+                assertEquals("access-${renewals.size + 1}", bearer)
+                PlatformReply(200, buildJsonObject {})
+            }
+            else -> error("Unexpected request: $path")
+        } }
+        val first = AccountClient(storage, transport, now = { now })
+        first.signIn("TEST123456", "password", "", "device")
+        now += 600_000
+        first.request("/sync", buildJsonObject {}, authenticated = true, foreground = false)
+        assertTrue(storage.value.session!!.renewalDeferred)
+        now += 10_000
+        val reopened = AccountClient(storage, transport, now = { now })
+        assertEquals("user-id", reopened.current()?.id)
+        reopened.request("/auth/devices", authenticated = true)
+        assertEquals(listOf(false, true), renewals)
+        assertEquals("session-id", storage.value.session?.deviceSessionId)
+        assertFalse(storage.value.session!!.renewalDeferred)
+    }
+    @Test fun previousEncryptedAccountIgnoresRemovedTrustFieldWithoutLosingTheSession() {
+        val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val cipher = AccountCipher { key }
+        val existing = StoredAccount("legacy-device-id", AccountSession("access", "refresh", 1_000L, "family", AccountUser("id", "账号")))
+        val encoded = accountJson.encodeToJsonElement(existing).jsonObject
+        val old = JsonObject(encoded + ("trustedDevices" to buildJsonObject { put("TEST123456", "fixture-only") }))
+        val restored = accountJson.decodeFromString<StoredAccount>(cipher.decrypt(cipher.encrypt(old.toString().toByteArray())).decodeToString())
+        assertEquals(existing, restored)
+        assertFalse(accountJson.encodeToString(restored).contains("trustedDevices"))
+    }
     @Test fun coldStartupKeepsUnknownSeparateAndRestoresSignedInUserWithoutNetwork() = runBlocking {
         val savedUser = AccountUser("signed-in-user", "测试成员", qq = "123456789")
         val local = StoredAccount(session = AccountSession("access", "refresh", 0, "family", savedUser))

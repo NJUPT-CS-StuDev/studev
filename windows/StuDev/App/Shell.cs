@@ -37,6 +37,7 @@ public sealed partial class Shell : Window
     private FrameworkElement? wordmark;
     private string shown = "";
     private Action? closing;
+    private bool seenForeground;
 
     public Shell()
     {
@@ -88,6 +89,8 @@ public sealed partial class Shell : Window
         Grid.SetRowSpan(layer, 2); root.Children.Add(layer);
         Content = root;
         root.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Escape && layer.Visibility == Visibility.Visible) { Close(); e.Handled = true; } };
+        root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => RenewOnInput()), true);
+        root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, _) => RenewOnInput()), true);
         root.ActualThemeChanged += (_, _) => Turned();
         bar.SizeChanged += (_, _) => AccountWidth();
         nav.SizeChanged += (_, _) => AccountWidth();
@@ -97,10 +100,17 @@ public sealed partial class Shell : Window
         Activated += (_, state) => {
             Inset();
             if (state.WindowActivationState == WindowActivationState.Deactivated) return;
+            if (!seenForeground || Me.Account.Shared.NeedsRenewal) _ = App.RefreshAccount();
+            seenForeground = true;
             World.Campus.Shared.Resume();
             App.Syncing?.Soon();
         };
         Place();
+    }
+
+    private static void RenewOnInput()
+    {
+        if (Me.Account.Shared.NeedsRenewal) _ = App.RefreshAccount();
     }
 
     /** Opens an entry, or 我; its page is made the first time and kept. */

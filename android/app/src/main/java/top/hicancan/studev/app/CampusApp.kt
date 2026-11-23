@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
@@ -64,7 +65,10 @@ import top.hicancan.studev.world.Moment
 /** The five campus entries share one shell. */
 @Composable fun CampusApp(deepLink: String?, onDeepLinkHandled: () -> Unit, onAccount: () -> Unit, model: CampusModel = viewModel()) {
     val context = LocalContext.current
-    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { model.resume() }
+    LifecycleResumeEffect(model) {
+        model.resume()
+        onPauseOrDispose { model.pause() }
+    }
     val state by model.state.collectAsStateWithLifecycle()
     val settings by model.settings.state.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()

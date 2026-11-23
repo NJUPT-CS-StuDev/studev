@@ -179,7 +179,9 @@ function browserDevice() {
     return { deviceId, deviceName: `${system} · ${browser}` };
 }
 let refreshRequest: Promise<void> | null = null;
-async function refreshCookieSession(generation: string | null) {
+const foregroundRenewal = 'studev_session_foreground_renewal';
+const pageInUse = () => typeof document === 'undefined' || (document.visibilityState === 'visible' && document.hasFocus());
+async function refreshCookieSession(generation: string | null, foreground: boolean) {
     refreshRequest ||= navigator.locks.request('studev-session-refresh', async () => {
         // Other tabs may have rotated the HttpOnly ticket while we waited.
         if (localStorage.getItem('studev_session_generation') !== generation) return;
@@ -187,10 +189,13 @@ async function refreshCookieSession(generation: string | null) {
         // Persist before spending the ticket: a killed tab or ambiguous network
         // result must require sign-in, rather than replaying an old credential.
         localStorage.setItem('studev_session_refresh_pending', '1');
-        try { await api('/auth/refresh', browserDevice()); }
+        const extend = foreground && pageInUse();
+        try { await api('/auth/refresh', { ...browserDevice(), foreground: extend }); }
         catch (error) { localStorage.removeItem('studev_session_generation'); throw error; }
         localStorage.removeItem('studev_session_refresh_pending');
         localStorage.setItem('studev_session_generation', crypto.randomUUID());
+        if (extend) localStorage.removeItem(foregroundRenewal);
+        else localStorage.setItem(foregroundRenewal, '1');
     }).finally(() => { refreshRequest = null; });
     return refreshRequest;
 }
@@ -198,10 +203,12 @@ export async function api<T>(path: string, body?: unknown, options: RequestInit 
     throw new PlatformError('请求路径无效。'); let response: Response; let generation: string | null;
     const publicCollectionRead = body === undefined && (!options.method || options.method === 'GET') &&
         /^\/collections(?:\/items\/[A-Za-z0-9_-]+)?$/.test(path);
+    const foreground = path !== '/auth/logout' && pageInUse();
+    const sessionRequest = !['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path);
     let credentials = options.credentials ?? 'same-origin';
     try {
     if (path === '/auth/login') body = { ...(body as object), ...browserDevice() };
-    if (credentials !== 'omit' && !['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path)) {
+    if (credentials !== 'omit' && sessionRequest) {
         await navigator.locks.request('studev-session-refresh', () => {
             if (!localStorage.getItem('studev_session_refresh_pending')) return;
             if (publicCollectionRead) credentials = 'omit';
@@ -209,6 +216,14 @@ export async function api<T>(path: string, body?: unknown, options: RequestInit 
         });
     }
     generation = credentials === 'omit' ? null : localStorage.getItem('studev_session_generation');
+    if (retry && sessionRequest && generation && foreground && localStorage.getItem(foregroundRenewal)) {
+        try { await refreshCookieSession(generation, true); }
+        catch (error) {
+            if (publicCollectionRead && error instanceof PlatformError && error.status === 401) return api<T>(path, body, { ...options, credentials: 'omit' }, false);
+            throw error;
+        }
+        return api<T>(path, body, options, false);
+    }
     response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials, cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 catch (error) {
@@ -230,7 +245,7 @@ catch {
     // session. Rotating and repeating it adds a round trip and can spend a code.
     const expiredSession = response.status === 401 && ['TOKEN_INVALID', 'AUTH_REQUIRED'].includes(e.error?.code || '');
     if (expiredSession && retry && generation && !['/auth/login', '/auth/register', '/auth/refresh'].includes(path)) {
-        try { await refreshCookieSession(generation); }
+        try { await refreshCookieSession(generation, foreground); }
         catch (error) {
             if (publicCollectionRead && error instanceof PlatformError && error.status === 401) {
                 return api<T>(path, body, { ...options, credentials: 'omit' }, false);
@@ -241,9 +256,11 @@ catch {
     }
     if (expiredSession && publicCollectionRead && credentials !== 'omit') return api<T>(path, body, { ...options, credentials: 'omit' }, false);
     throw new PlatformError(e.error?.message || '操作未完成，请稍后重试。', response.status, e.error?.code);
-} if (path === '/auth/login') {
+} if (path === '/auth/login' || path === '/auth/logout') {
     localStorage.removeItem('studev_session_refresh_pending');
-    localStorage.setItem('studev_session_generation', crypto.randomUUID());
+    localStorage.removeItem(foregroundRenewal);
+    if (path === '/auth/login') localStorage.setItem('studev_session_generation', crypto.randomUUID());
+    else localStorage.removeItem('studev_session_generation');
 }
 return data as T; }
 async function loadSession(): Promise<Session | null> {

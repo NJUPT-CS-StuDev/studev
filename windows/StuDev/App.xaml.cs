@@ -80,7 +80,7 @@ public partial class App : Application
         Me.Appearance.Follow();
         Window.Open("timetable");
         Syncing = new Me.Sync(World.Campus.Shared, Window.DispatcherQueue);
-        _ = RefreshAccount();
+        if (Me.Device.Background) _ = RefreshAccount(foreground: false);
         // A newer StuDev fetched in the background is said once, in a notification that can restart into it.
         Me.Updates.Changed += () => Window.DispatcherQueue.TryEnqueue(() => { if (Me.Updates.Ready is { } ready) Reminders.Announce($"StuDev {ready} 已准备好", "重启即可更新，班级和设置都会保留。", "重启更新", "update"); });
         // Data only a newer StuDev reads is said over whatever is open, once.
@@ -101,12 +101,12 @@ public partial class App : Application
         Reminders.Start(Window.DispatcherQueue);
     }
 
-    // Verify a restored account once without delaying the initial campus page.
-    // Public nickname changes then reach the same account cache and header.
-    private static async Task RefreshAccount()
+    // Reconcile the cached profile without holding up the campus page. Only a
+    // foreground use extends the inactivity deadline.
+    internal static async Task RefreshAccount(bool foreground = true)
     {
         if (Me.Account.Shared.User is null) return;
-        try { await Me.Account.Shared.State(); }
+        try { await Me.Account.Shared.State(foreground); }
         catch (Exception failure) when (failure is Me.PlatformFailure or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
     }
 }

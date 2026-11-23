@@ -65,7 +65,8 @@ const roundPath = item => '/collections/items/' + item.id + '/rounds/' + round.i
 
 async function collectionFixture() {
   const { env, password } = await testEnvironment();
-  const store = memoryBlob(), gateway = memoryGateway(), clock = Date.UTC(2026, 10, 22, 12);
+  const store = memoryBlob(), gateway = memoryGateway();
+  let clock = Date.UTC(2026, 10, 22, 12);
   const handle = createPlatformHandler({ getStore: () => store, getGateway: () => gateway, now: () => clock });
   const client = () => requestClient(handle, env);
   const owner = client(), guest = client();
@@ -122,7 +123,9 @@ async function collectionFixture() {
   const prior = await post(peer.actor, roundPath(item) + '/submissions', { answers: { answer: peerSecret }, files: [] }, 201);
   const sign = gateway.presignUpload.bind(gateway);
   gateway.presignUpload = async (file, ...args) => ({ ...await sign(file, ...args), url: `https://fgws3-ocloud.ihep.ac.cn/test-upload/${file.id}` });
-  return { handle, env, owner, guest, member: member.actor, gateway, item, privateItem, report, journal, expired, stopped, deadline, peerSubmission: prior.submission.id };
+  return { handle, env, owner, guest, member: member.actor, gateway, item, privateItem, report, journal, expired, stopped, deadline, peerSubmission: prior.submission.id,
+    ownerLogin: { studentId, password: ownerPassword }, now: () => clock, advance: elapsed => { clock += elapsed; },
+    ownerCode: () => totpCode(setup.secret, Math.floor((clock += 30_000) / 30_000)) };
 }
 
 async function collections(page, fixture, actor, { identity, reads = [], alterResponse } = {}) {
@@ -132,7 +135,7 @@ async function collections(page, fixture, actor, { identity, reads = [], alterRe
     reads.push({ path: url.pathname, method: request.method(), query: url.search });
     const path = url.pathname.slice('/api/platform'.length);
     if (path === '/auth/session' && identity) await identity.ready;
-    const headers = new Headers(request.headers());
+    const headers = new Headers(await request.allHeaders());
     headers.set('Origin', fixture.env.PLATFORM_ORIGIN);
     if (actor.cookie) headers.set('Cookie', actor.cookie);
     const result = await fixture.handle({
@@ -472,8 +475,68 @@ async function checkCollection(viewport, name) {
     record('desktop: owner creates and deletes a draft, reads participant submissions and withdraws a published collection');
   }
 }
+async function checkSessionRenewal() {
+  const seeded = await collectionFixture();
+  const fixture = { ...seeded, env: { ...seeded.env, PLATFORM_ORIGIN: origin } };
+  const { context, page, errors } = await newPage({ width: 1440, height: 900 });
+  const waitsFor = path => page.waitForResponse(response => new URL(response.url()).pathname === '/api/platform' + path);
+  const submit = () => page.locator('[data-login-form] button[type=submit]').click();
+  const factor = page.locator('#login-totp');
+  const day = 86_400_000;
+  await collections(page, fixture, {});
+  try {
+    await page.goto(origin + '/login/?next=%2Faccount%2F');
+    await page.locator('#login-student-id').fill(fixture.ownerLogin.studentId);
+    await page.locator('#login-password').fill(fixture.ownerLogin.password);
+    assert(await factor.isHidden());
+    await submit();
+    await factor.waitFor();
+    assert.equal(await page.getByRole('checkbox', { name: /信任/ }).count(), 0);
+    await factor.fill(fixture.ownerCode());
+    const loginAt = fixture.now();
+    await submit();
+    await page.waitForURL(url => url.pathname === '/account/');
+    const accountHeading = page.getByRole('heading', { name: '我的账号', exact: true });
+    await accountHeading.waitFor();
+    const currentDevice = async () => {
+      const response = waitsFor('/auth/devices');
+      await page.getByRole('tab', { name: '登录设备', exact: true }).click();
+      return (await (await response).json()).items.find(item => item.current);
+    };
+    const initial = await currentDevice();
+    assert.equal(initial.expiresAt, loginAt + 30 * day);
+    fixture.advance(29 * day);
+    const refreshing = waitsFor('/auth/refresh');
+    await page.goto(origin + '/account/');
+    const refreshed = await refreshing;
+    assert.equal(refreshed.status(), 200);
+    assert.equal(refreshed.request().postDataJSON().foreground, true);
+    await accountHeading.waitFor();
+    const extended = await currentDevice();
+    assert.equal(extended.id, initial.id);
+    assert.equal(extended.expiresAt, loginAt + 59 * day);
+    const rejected = await page.evaluate(async password => {
+      const session = await fetch('/api/platform/auth/session').then(response => response.json());
+      const response = await fetch('/api/platform/auth/password', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
+        body: JSON.stringify({ currentPassword: password, newPassword: password }),
+      });
+      return { status: response.status, code: (await response.json()).error?.code };
+    }, fixture.ownerLogin.password);
+    assert.deepEqual(rejected, { status: 401, code: 'MFA_REQUIRED' });
+    fixture.advance(30 * day);
+    const idleRefresh = waitsFor('/auth/refresh');
+    await page.goto(origin + '/account/');
+    assert.equal((await idleRefresh).status(), 401);
+    await page.waitForURL(url => url.pathname === '/login/');
+    assert.deepEqual(errors, []);
+    record('Edge: MFA on new login, same session renews on day 29, idle expiry on day 30, and fresh MFA for password change');
+  } finally { await context.close(); }
+}
+
 const layouts = [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]];
 try {
+  await checkSessionRenewal();
   for (const [name, viewport] of layouts) await checkCollection(viewport, name);
   for (const [name, viewport] of layouts) {
     const account=await newPage(viewport), counts={session:0,devices:0,members:0},unexpected=[];

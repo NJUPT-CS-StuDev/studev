@@ -75,7 +75,7 @@ import '../platform/platform.css';
                 </div>
               </div>
               <div class="p-field" data-password-totp hidden>
-                <label for="password-totp">双重验证码</label>
+                <label for="password-totp">动态验证码或恢复码</label>
                 <input id="password-totp" name="totp" maxlength="64" autocomplete="one-time-code" placeholder="6 位动态码或恢复码" />
               </div>
               <button class="p-button" type="submit">修改密码</button>
@@ -136,7 +136,7 @@ import '../platform/platform.css';
       </div>
 
       <section data-account-panel="devices" hidden>
-        <header class="p-heading"><div><h1>登录设备</h1><p>查看使用此账号的网页与 App，退出设备后需要重新登录。</p></div></header>
+        <header class="p-heading"><div><h1>登录设备</h1><p>日常使用会自动续期，连续 30 天未使用则退出登录。你也可以随时退出任一设备。</p></div></header>
         <div class="p-actions"><button class="p-button secondary small" type="button" data-devices-refresh>刷新设备</button></div>
         <p class="p-message" data-devices-status role="status"></p>
         <div data-account-devices></div>

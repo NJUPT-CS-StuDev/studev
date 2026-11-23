@@ -8,6 +8,7 @@ import { memoryBlob, memoryGateway, requestClient, testEnvironment } from './fix
 
 const config = await testEnvironment();
 const deviceId = 'synthetic-device-000001';
+const day = 86_400_000;
 async function fixture() {
   let clock = Date.UTC(2026, 9, 30);
   const store = memoryBlob(), gateway = memoryGateway(), env = config.env;
@@ -53,6 +54,87 @@ test('racing refresh claims one immutable ticket and replay revokes the whole de
   const results = await Promise.all([1, 2].map(() => f.call('/auth/refresh', { refreshToken: body.refreshToken, deviceId })));
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 401]);
   assert.equal((await f.call('/auth/session', undefined, results.find((r) => r.status === 200).body.accessToken)).status, 401);
+});
+
+test('foreground traffic renews the 30-day device deadline; background traffic only rotates credentials', async () => {
+  const f = await fixture();
+  const started = f.now();
+  const foreground = await f.login();
+  const backgroundDevice = 'synthetic-background-0001';
+  const background = await f.login({ deviceId: backgroundDevice });
+  assert.equal(foreground.body.refreshExpiresAt, started + 30 * day);
+  f.advance(29 * day);
+  const quiet = await f.call('/auth/refresh', { refreshToken: background.body.refreshToken, deviceId: backgroundDevice, foreground: false });
+  assert.equal(quiet.status, 200);
+  assert.equal(quiet.body.refreshExpiresAt, started + 30 * day);
+  const active = await f.call('/auth/refresh', { refreshToken: foreground.body.refreshToken, deviceId, foreground: true });
+  assert.equal(active.status, 200);
+  assert.equal(active.body.refreshExpiresAt, started + 59 * day);
+  assert.equal(active.body.deviceSessionId, foreground.body.deviceSessionId);
+  const inventory = await f.call('/auth/devices', undefined, active.body.accessToken);
+  assert.equal(inventory.body.items.find(item => item.id === active.body.deviceSessionId).expiresAt, active.body.refreshExpiresAt);
+
+  f.advance(day);
+  assert.equal((await f.call('/auth/refresh', { refreshToken: quiet.body.refreshToken, deviceId: backgroundDevice })).status, 401);
+  const quietAgain = await f.call('/auth/refresh', { refreshToken: active.body.refreshToken, deviceId });
+  assert.equal(quietAgain.status, 200);
+  assert.equal(quietAgain.body.refreshExpiresAt, active.body.refreshExpiresAt);
+  const continued = await f.call('/auth/refresh', { refreshToken: quietAgain.body.refreshToken, deviceId, foreground: true });
+  assert.equal(continued.status, 200);
+  assert.equal(continued.body.refreshExpiresAt, started + 60 * day);
+  const current = await f.call('/auth/devices', undefined, continued.body.accessToken);
+  assert.deepEqual(current.body.items.map(device => device.id), [continued.body.deviceSessionId]);
+});
+
+for (const [role, maximumDays] of [['user', 180], ['admin', 90], ['owner', 90]]) {
+  test(`a continuously used ${role} session stops at its ${maximumDays}-day limit`, async () => {
+    const f = await fixture();
+    if (role !== 'user') {
+      const key = `identity/users/${f.user.id}`;
+      const account = await f.repo.latest(key);
+      await f.repo.append(key, { ...account, role, securityVersion: `${role}-renewal-test` }, account.revision);
+    }
+    const started = f.now();
+    let auth = (await f.login()).body;
+    const absoluteExpiry = started + maximumDays * day;
+    for (let elapsed = 28; elapsed < maximumDays; elapsed += 28) {
+      f.advance(28 * day);
+      const refreshed = await f.call('/auth/refresh', { refreshToken: auth.refreshToken, deviceId, foreground: true });
+      assert.equal(refreshed.status, 200);
+      auth = refreshed.body;
+      assert.equal(auth.refreshExpiresAt, Math.min(f.now() + 30 * day, absoluteExpiry));
+    }
+    f.advance(absoluteExpiry - 60_000 - f.now());
+    const lastRefresh = await f.call('/auth/refresh', { refreshToken: auth.refreshToken, deviceId, foreground: true });
+    assert.equal(lastRefresh.status, 200);
+    assert.equal(lastRefresh.body.expiresIn, 60);
+    assert.equal(lastRefresh.body.refreshExpiresAt, absoluteExpiry);
+    f.advance(60_000);
+    assert.equal((await f.call('/auth/session', undefined, lastRefresh.body.accessToken)).status, 401);
+    assert.equal((await f.call('/auth/refresh', { refreshToken: lastRefresh.body.refreshToken, deviceId })).status, 401);
+  });
+}
+
+test('an existing fixed-expiry browser session rolls only after foreground renewal without a new login', async () => {
+  const f = await fixture();
+  const cookieValue = f.browser.cookie.split('=')[1];
+  const [access] = cookieValue.split('.');
+  const key = `platform-v1/identity/devices/access/${digest(access)}.json`;
+  const legacy = f.store.values.get(key);
+  delete legacy.sessionExpiresAt;
+  f.store.values.set(key, legacy);
+  const started = f.now();
+  const original = (await f.browser.call('/auth/devices')).body.items[0];
+
+  f.advance(29 * day);
+  assert.equal((await f.browser.call('/auth/refresh', { method: 'POST', body: { foreground: false } })).status, 200);
+  assert.equal((await f.browser.call('/auth/devices')).body.items[0].expiresAt, started + 30 * day);
+  assert.equal((await f.browser.call('/auth/refresh', { method: 'POST', body: { foreground: true } })).status, 200);
+  const devices = (await f.browser.call('/auth/devices')).body.items;
+  assert.equal(devices[0].id, original.id);
+  assert.equal(devices[0].expiresAt, started + 59 * day);
+  assert.equal((await f.browser.call('/auth/logout', { method: 'POST', body: {} })).status, 200);
+  assert.equal((await f.browser.call('/auth/refresh', { method: 'POST', body: { foreground: true } })).status, 401);
 });
 
 test('web device list exposes only safe metadata and revocation is owner-only and CSRF protected', async () => {

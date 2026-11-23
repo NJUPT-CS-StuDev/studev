@@ -17,6 +17,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-auth-tab]').forEach(b => b.a
 if (new URLSearchParams(location.search).get('tab') === 'register') showTab('register');
 q<HTMLInputElement>('#login-student-id').addEventListener('input', resetLoginFactor);
 q<HTMLInputElement>('#login-student-id').addEventListener('change', resetLoginFactor);
+q<HTMLInputElement>('#login-password').addEventListener('input', resetLoginFactor);
 let qqPreviewTimer = 0;
 q<HTMLInputElement>('#register-qq').addEventListener('input', () => {
   const qq = q<HTMLInputElement>('#register-qq').value.trim();

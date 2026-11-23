@@ -30,7 +30,26 @@ describe('account request renewal', () => {
         vi.stubGlobal('fetch', fetch);
         await expect(api('/auth/devices')).resolves.toEqual({ items: [] });
         expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/platform/auth/devices', '/api/platform/auth/refresh', '/api/platform/auth/devices']);
+        expect(JSON.parse(fetch.mock.calls[1]?.[1]?.body ?? '{}')).toMatchObject({ foreground: true });
         expect(localStorage.getItem('studev_session_refresh_pending')).toBeNull();
+    });
+
+    it('rotates an access credential in a hidden page without extending its idle deadline', async () => {
+        const page = { visibilityState: 'hidden', hasFocus: () => true };
+        vi.stubGlobal('document', page);
+        const fetch = vi.fn()
+            .mockResolvedValueOnce(Response.json({ error: { code: 'TOKEN_INVALID' } }, { status: 401 }))
+            .mockResolvedValueOnce(Response.json({ ok: true }))
+            .mockResolvedValueOnce(Response.json({ items: [] }))
+            .mockResolvedValueOnce(Response.json({ ok: true }))
+            .mockResolvedValueOnce(Response.json({ items: [] }));
+        vi.stubGlobal('fetch', fetch);
+        await expect(api('/auth/devices')).resolves.toEqual({ items: [] });
+        expect(JSON.parse(fetch.mock.calls[1]?.[1]?.body ?? '{}')).toMatchObject({ foreground: false });
+        page.visibilityState = 'visible';
+        await expect(api('/auth/devices')).resolves.toEqual({ items: [] });
+        expect(fetch.mock.calls[3]?.[0]).toBe('/api/platform/auth/refresh');
+        expect(JSON.parse(fetch.mock.calls[3]?.[1]?.body ?? '{}')).toMatchObject({ foreground: true });
     });
 
     it('loads only public collection pages without credentials while renewal is incomplete', async () => {
