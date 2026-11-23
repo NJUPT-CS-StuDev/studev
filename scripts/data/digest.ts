@@ -568,6 +568,7 @@ async function buildCampus(
 }
 
 type Normalized = ReturnType<typeof normalizePlace>;
+type CoursePlan = { id: string; names: string[]; aliases: string[] };
 const labels: Record<string, string> = campusConfig.search.entities;
 const entity = (source: string, id: string, url: string, title: string, section: string | null, text: string[], within: string[] = []): SearchDocument & { within: string[] } => ({
     id: `${source}/${id}`, source, source_name: labels[source] ?? source, url, title, text: [...new Set(text.filter(Boolean))].join(' '),
@@ -586,10 +587,20 @@ const group = <T>(rows: T[], key: (row: T) => string[]) => {
 };
 
 /** Courses, people, classes, exams and places as documents, so one index answers everything. */
-function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[], rooms: Room[], nicknames: Map<string, string[]>): SearchDocument[] {
+function entityDocuments(meetings: TeachingMeeting[], classes: TeachingClass[], exams: Exam[], places: Normalized[], rooms: Room[], coursePlans: CoursePlan[]): SearchDocument[] {
     const docs: SearchDocument[] = [];
     /** What students call a course (the course plans' aliases in the data release), so 计网 finds 计算机网络. */
-    const called = (name: string) => nicknames.get(name) ?? [];
+    const nicknames = group(coursePlans, plan => plan.names.slice(0, 1));
+    const called = (name: string) => (nicknames.get(name) ?? []).flatMap(plan => plan.aliases);
+    for (const plan of coursePlans) {
+        const code = plan.id.split('/').at(-1)!;
+        const name = plan.names[0]!;
+        docs.push({
+            ...entity('course-plans', code, `/?who=course:${encodeURIComponent(plainCourse(name))}&scale=week`, name, code, [...plan.names, ...plan.aliases, code]),
+            id: plan.id,
+            source_name: '课程',
+        });
+    }
     const byId = new Map(places.map(place => [place.id, place]));
     /** An entity and everything that contains it. */
     const chain = (id: string | null | undefined): string[] => {
@@ -705,14 +716,14 @@ async function main() {
         const fact = roomFacts.get(place.id);
         return { ...place, ...(fact ? { names: [...new Set([...place.names, ...fact.names])], seats: fact.seats, room_kinds: fact.kinds } : {}) };
     });
-    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, searchablePlaces, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms,
-        new Map((await read<{ items: { subtype: string; names: string[]; aliases: string[] }[] }>(join(data.dir, 'entities', 'information.json'))).items
-            .filter(item => item.subtype === 'information:course-plan' && item.aliases.length).map(item => [item.names[0]!, item.aliases])));
+    const information = await read<{ items: (CoursePlan & { subtype: string })[] }>(join(data.dir, 'entities', 'information.json'));
+    const coursePlans = information.items.filter(item => item.subtype === 'information:course-plan');
+    const docs: SearchDocument[] = entityDocuments(await read<TeachingMeeting[]>(join(teachingDir, 'meetings.json')), await read<TeachingClass[]>(join(teachingDir, 'classes.json')), examRows, searchablePlaces, (await read<{ rooms: Room[] }>(join(out, 'rooms', 'index.json'))).rooms, coursePlans);
     for await (const doc of searchDocuments(data.dir)) {
         docs.push(doc);
     }
     // The knowledge names its courses by the codes taught now; one that is not stops the build.
-    const taught = new Set((await read<{ items: { id: string }[] }>(join(data.dir, 'entities', 'information.json'))).items.map(item => item.id));
+    const taught = new Set(coursePlans.map(item => item.id));
     for (const course of knowledgeIndex.courses) {
         const gone = course.codes.filter(code => !taught.has(`information/course-plan/${code}`));
         if (gone.length) throw new Error(`knowledge course ${course.name} names codes not taught this term: ${gone.join(', ')}`);
