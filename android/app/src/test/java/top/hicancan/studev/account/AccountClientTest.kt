@@ -48,6 +48,77 @@ class AccountClientTest {
         assertTrue(signedIn.passwordChangeRequired); assertTrue(signedIn.enrollmentRequired)
         assertEquals(1, calls)
     }
+    @Test fun deviceTrustSurvivesSignOutAndRestartWithoutCrossingAccounts() = runBlocking {
+        val storage = Storage()
+        val token = "signed-device-credential"
+        val trusted = AccountDevice("trust-id", "常用手机", "bearer", true, "2026-11-20T01:23:45Z", 601_000)
+        var revoked = false
+        val transport = PlatformTransport { path, payload, bearer ->
+            when (path) {
+                "/auth/login" -> {
+                    val body = requireNotNull(payload)
+                    when {
+                        body.getValue("studentId").jsonPrimitive.content == "OTHER123" -> {
+                            assertNull(body["trustedDeviceToken"])
+                            assertNull(body["trustDevice"])
+                            reply()
+                        }
+                        body.containsKey("totp") -> {
+                            assertTrue(body.getValue("trustDevice").jsonPrimitive.boolean)
+                            assertNull(body["trustedDeviceToken"])
+                            PlatformReply(200, JsonObject(reply().body + ("trustedDeviceToken" to JsonPrimitive(token))))
+                        }
+                        body["trustedDeviceToken"]?.jsonPrimitive?.content == token && !revoked -> reply()
+                        else -> {
+                            assertNull(body["trustDevice"])
+                            PlatformReply(401, buildJsonObject { putJsonObject("error") { put("code", "MFA_REQUIRED") } })
+                        }
+                    }
+                }
+                "/auth/trusted-devices" -> {
+                    assertEquals("access-one", bearer)
+                    PlatformReply(200, buildJsonObject { put("items", accountJson.encodeToJsonElement(listOf(trusted))) })
+                }
+                "/auth/trusted-devices/trust-id/revoke" -> {
+                    assertEquals("access-one", bearer)
+                    revoked = true
+                    PlatformReply(200, buildJsonObject {})
+                }
+                "/auth/logout" -> PlatformReply(200, buildJsonObject {})
+                else -> error("Unexpected $path")
+            }
+        }
+        val login = AccountClient(storage, transport)
+        try { login.signIn("TEST123456", "password", "", "phone", trustDevice = true); fail() }
+        catch (failure: PlatformFailure) { assertEquals("MFA_REQUIRED", failure.code) }
+        login.signIn("TEST123456", "password", "123456", "phone", trustDevice = true)
+        login.signOut()
+        assertNull(storage.value.session)
+        assertEquals(mapOf("TEST123456" to token), storage.value.trustedDevices)
+
+        val restarted = AccountClient(storage, transport)
+        restarted.signIn("OTHER123", "password", "", "phone")
+        restarted.signOut()
+        restarted.signIn("test123456", "password", "", "phone")
+        restarted.revokeTrustedDevice(restarted.trustedDevices().single())
+        assertTrue(revoked)
+        assertTrue(storage.value.trustedDevices.isEmpty())
+        restarted.signOut()
+        try { restarted.signIn("TEST123456", "password", "", "phone"); fail() }
+        catch (failure: PlatformFailure) { assertEquals("MFA_REQUIRED", failure.code) }
+    }
+
+    @Test fun expiredDeviceTrustIsRemovedForOnlyTheChallengedAccount() = runBlocking {
+        val storage = Storage().also { it.value = it.value.copy(trustedDevices = mapOf("TEST123456" to "expired", "OTHER123" to "other")) }
+        val client = AccountClient(storage, PlatformTransport { path, body, _ ->
+            assertEquals("/auth/login", path)
+            assertEquals("expired", body!!.getValue("trustedDeviceToken").jsonPrimitive.content)
+            PlatformReply(401, buildJsonObject { putJsonObject("error") { put("code", "MFA_REQUIRED") } })
+        })
+        try { client.signIn("TEST123456", "password", "", "phone"); fail() }
+        catch (failure: PlatformFailure) { assertEquals("MFA_REQUIRED", failure.code) }
+        assertEquals(mapOf("OTHER123" to "other"), storage.value.trustedDevices)
+    }
     @Test fun concurrentExpiredRequestsRotateOnlyOnceAndUseNewAccess() = runBlocking {
         val storage = Storage()
         var refreshCount = 0

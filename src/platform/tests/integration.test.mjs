@@ -41,7 +41,10 @@ async function fixture() {
     assert.equal((await user.call('/auth/login', { method: 'POST', body: { studentId: `TEST${qq}`, password: data.password } })).status, 200);
     return { client: user, user: registered.body.user };
   }
-  return { ...data, store, gateway, owner, client, member, advance: (ms) => { clock += ms; } };
+  return { ...data, store, gateway, owner, client, member, advance: (ms) => { clock += ms; }, ownerFactor: () => {
+    clock += 30000;
+    return totpCode(setup.body.secret, Math.floor(clock / 30000));
+  } };
 }
 
 test('an existing account can sign in without the owner bootstrap student ID', async () => {
@@ -135,7 +138,7 @@ test('public reads accept anonymous requests and reject stale credentials while 
 test('role promotion and suspension revoke existing sessions; admin can manage assigned collections and look up users', async () => {
   const f = await fixture(); const member = await f.member('100002', '待提升成员');
   const promoted = await f.owner.call(`/admin/users/${member.user.id}`, { method: 'POST', body: { revision: member.user.revision, role: 'admin',
-    memberships: [{ organizationId: 'student-development/operations', title: '部长' }] } });
+    totp: f.ownerFactor(), memberships: [{ organizationId: 'student-development/operations', title: '部长' }] } });
   assert.equal(promoted.status, 200);
   assert.equal((await member.client.call('/auth/session')).status, 401);
   const login = await member.client.call('/auth/login', { method: 'POST', body: { studentId: member.user.studentId, password: f.password } });

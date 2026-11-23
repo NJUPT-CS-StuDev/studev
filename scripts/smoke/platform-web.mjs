@@ -65,7 +65,8 @@ const roundPath = item => '/collections/items/' + item.id + '/rounds/' + round.i
 
 async function collectionFixture() {
   const { env, password } = await testEnvironment();
-  const store = memoryBlob(), gateway = memoryGateway(), clock = Date.UTC(2026, 10, 22, 12);
+  const store = memoryBlob(), gateway = memoryGateway();
+  let clock = Date.UTC(2026, 10, 22, 12);
   const handle = createPlatformHandler({ getStore: () => store, getGateway: () => gateway, now: () => clock });
   const client = () => requestClient(handle, env);
   const owner = client(), guest = client();
@@ -122,7 +123,8 @@ async function collectionFixture() {
   const prior = await post(peer.actor, roundPath(item) + '/submissions', { answers: { answer: peerSecret }, files: [] }, 201);
   const sign = gateway.presignUpload.bind(gateway);
   gateway.presignUpload = async (file, ...args) => ({ ...await sign(file, ...args), url: `https://fgws3-ocloud.ihep.ac.cn/test-upload/${file.id}` });
-  return { handle, env, owner, guest, member: member.actor, gateway, item, privateItem, report, journal, expired, stopped, deadline, peerSubmission: prior.submission.id };
+  return { handle, env, owner, guest, member: member.actor, gateway, item, privateItem, report, journal, expired, stopped, deadline, peerSubmission: prior.submission.id,
+    ownerLogin: { studentId, password: ownerPassword }, ownerCode: () => totpCode(setup.secret, Math.floor((clock += 30_000) / 30_000)) };
 }
 
 async function collections(page, fixture, actor, { identity, reads = [], alterResponse } = {}) {
@@ -132,7 +134,7 @@ async function collections(page, fixture, actor, { identity, reads = [], alterRe
     reads.push({ path: url.pathname, method: request.method(), query: url.search });
     const path = url.pathname.slice('/api/platform'.length);
     if (path === '/auth/session' && identity) await identity.ready;
-    const headers = new Headers(request.headers());
+    const headers = new Headers(await request.allHeaders());
     headers.set('Origin', fixture.env.PLATFORM_ORIGIN);
     if (actor.cookie) headers.set('Cookie', actor.cookie);
     const result = await fixture.handle({
@@ -142,7 +144,9 @@ async function collections(page, fixture, actor, { identity, reads = [], alterRe
       env: fixture.env, clientIp: 'isolated-browser',
     });
     const response = alterResponse?.(path, request, result) || result;
-    await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
+    const responseHeaders = Object.fromEntries(response.headers);
+    if (response.headers.has('Set-Cookie')) responseHeaders['set-cookie'] = response.headers.getSetCookie().join('\n');
+    await route.fulfill({ status: response.status, headers: responseHeaders, body: Buffer.from(await response.arrayBuffer()) });
   });
 }
 
@@ -472,8 +476,75 @@ async function checkCollection(viewport, name) {
     record('desktop: owner creates and deletes a draft, reads participant submissions and withdraws a published collection');
   }
 }
+async function checkTrustedDevices() {
+  const seeded = await collectionFixture();
+  const fixture = { ...seeded, env: { ...seeded.env, PLATFORM_ORIGIN: origin } };
+  const [trusted, unfamiliar] = await Promise.all([newPage({ width: 1440, height: 900 }), newPage({ width: 390, height: 844 })]);
+  for (const { page } of [trusted, unfamiliar]) await collections(page, fixture, {});
+  const submit = page => page.locator('[data-login-form] button[type=submit]').click();
+  const factor = page => page.locator('#login-totp');
+  async function enterPassword(page) {
+    await page.goto(origin + '/login/?next=%2Faccount%2F');
+    await page.locator('#login-student-id').fill(fixture.ownerLogin.studentId);
+    await page.locator('#login-password').fill(fixture.ownerLogin.password);
+    assert(await factor(page).isHidden());
+    await submit(page);
+  }
+  async function signOut(page) {
+    await page.getByRole('tab', { name: '我的账号', exact: true }).click();
+    await page.getByRole('button', { name: '退出登录', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/login/');
+  }
+  try {
+    const { page } = trusted;
+    await enterPassword(page);
+    await factor(page).waitFor();
+    const remember = page.getByRole('checkbox', { name: '信任此设备 30 天' });
+    assert.equal(await remember.isChecked(), false);
+    await remember.check();
+    await factor(page).fill(fixture.ownerCode());
+    await submit(page);
+    await page.waitForURL(url => url.pathname === '/account/');
+    assert((await trusted.context.cookies()).some(cookie => cookie.httpOnly && cookie.name.includes('studev_trusted')));
+    await signOut(page);
+    await enterPassword(page);
+    await page.waitForURL(url => url.pathname === '/account/');
+    await enterPassword(unfamiliar.page);
+    await factor(unfamiliar.page).waitFor();
+
+    await page.getByRole('tab', { name: '账号安全' }).click();
+    await page.locator('#current-password').fill(fixture.ownerLogin.password);
+    await page.locator('#new-password').fill(fixture.ownerLogin.password + '-rotated');
+    const newPassword = page.locator('[data-password-form] button[type=submit]');
+    await newPassword.click();
+    assert.equal(await page.locator('#password-totp').evaluate(input => input.validity.valueMissing), true);
+    await page.getByRole('tab', { name: '登录设备' }).click();
+    await page.getByRole('button', { name: '取消信任', exact: true }).click();
+    await page.getByRole('button', { name: '确认取消信任', exact: true }).click();
+    await page.getByText('目前没有受信任的设备。', { exact: true }).waitFor();
+    await signOut(page);
+    await enterPassword(page);
+    await factor(page).waitFor();
+    await factor(page).fill(fixture.ownerCode());
+    await submit(page);
+    await page.waitForURL(url => url.pathname === '/account/');
+    await page.getByRole('tab', { name: '账号安全' }).click();
+    await page.locator('#current-password').fill(fixture.ownerLogin.password);
+    await page.locator('#new-password').fill(fixture.ownerLogin.password + '-rotated');
+    await page.locator('#password-totp').fill(fixture.ownerCode());
+    await newPassword.click();
+    await page.waitForURL(url => url.pathname === '/login/');
+    assert.deepEqual(trusted.errors, []);
+    assert.deepEqual(unfamiliar.errors, []);
+    record('Edge: trusted re-login, new browser challenge, trust removal and fresh verification for password change');
+  } finally {
+    await Promise.all([trusted.context.close(), unfamiliar.context.close()]);
+  }
+}
+
 const layouts = [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]];
 try {
+  await checkTrustedDevices();
   for (const [name, viewport] of layouts) await checkCollection(viewport, name);
   for (const [name, viewport] of layouts) {
     const account=await newPage(viewport), counts={session:0,devices:0,members:0},unexpected=[];
@@ -482,6 +553,7 @@ try {
       const path=new URL(route.request().url()).pathname;
       if(path.endsWith('/auth/session')){counts.session++;await route.fulfill(failAccount?{status:503,json:{error:{message:'账号读取暂时中断。'}}}:{json:current});}
       else if(path.endsWith('/auth/devices')){counts.devices++;if(deviceGate)await deviceGate.ready;await route.fulfill({json:{items:[device]}});}
+      else if(path.endsWith('/auth/trusted-devices')){await route.fulfill({json:{items:[]}});}
       else if(path.endsWith('/admin/users')){counts.members++;await route.fulfill({json:{items:[]}});}
       else {unexpected.push(path);await route.fulfill({status:404,json:{error:{message:'Unexpected platform read'}}});}
     });

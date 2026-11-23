@@ -17,6 +17,7 @@ public sealed partial class AccountScreen : Screen
     private string password = "", newPassword = "", confirmPassword = "", code = "", secret = "";
     private List<string> recovery = [];
     private List<AccountDevice> devices = [];
+    private List<AccountDevice> trustedDevices = [];
     private string? devicesFor;
     private bool active, busy, verifying, devicesLoading;
     private int visit, verificationVisit, devicesVisit;
@@ -64,7 +65,7 @@ public sealed partial class AccountScreen : Screen
             nickname = next?.Nickname ?? ""; signature = next?.Signature ?? "";
             profileDirty = false;
         }
-        if (next?.Id != user?.Id) { ClearSecrets(); devices.Clear(); devicesFor = null; }
+        if (next?.Id != user?.Id) { ClearSecrets(); devices.Clear(); trustedDevices.Clear(); devicesFor = null; }
         state = value; user = next;
     }
 
@@ -237,7 +238,7 @@ public sealed partial class AccountScreen : Screen
 
     private void Devices(StackPanel page)
     {
-        page.Children.Add(Kit.Text("在这里查看哪些浏览器和应用登录了你的账号，也可以让它们退出登录。", Role.Label, "muted", wrap: true));
+        page.Children.Add(Kit.Text("查看登录的浏览器和应用，也可以让它们退出或取消对设备的信任。", Role.Label, "muted", wrap: true));
         var refresh = Kit.TextAction("刷新", () => _ = LoadDevices(), Icons.Again);
         refresh.HorizontalAlignment = HorizontalAlignment.Right;
         AutomationProperties.SetAutomationId(refresh, "account-refresh-devices"); Watch(refresh, () => !devicesLoading); page.Children.Add(refresh);
@@ -253,17 +254,33 @@ public sealed partial class AccountScreen : Screen
         devicesRows.Children.Clear();
         if (devicesError is not null) devicesRows.Children.Add(Kit.Text(devicesError, Role.Label, "danger", wrap: true));
         if (devicesStatus is not null) { devicesStatus.Text = devicesLoading ? "正在加载登录设备…" : ""; devicesStatus.Visibility = devicesLoading ? Visibility.Visible : Visibility.Collapsed; }
+        devicesRows.Children.Add(Pages.Section("已登录的设备"));
         foreach (var device in devices)
         {
-            var created = DateTimeOffset.TryParse(device.CreatedAt, out var at) ? at.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy年M月d日 HH:mm") : device.CreatedAt;
-            var row = new Grid { ColumnSpacing = 16, Padding = new Thickness(0, 12, 0, 12), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(Words(device.DeviceName + (device.Current ? " · 当前设备" : ""), $"{(device.Kind == "cookie" ? "浏览器" : "应用")} · 登录于 {created}"));
-            var revoke = Kit.TextAction("退出", () => ConfirmExit(device), colour: "muted");
-            AutomationProperties.SetAutomationId(revoke, device.Current ? "account-revoke-current" : "account-revoke-device");
-            revoke.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(revoke, 1); Watch(revoke); deviceControls.Add(revoke); row.Children.Add(revoke); devicesRows.Children.Add(row);
+            var created = DateTimeOffset.TryParse(device.CreatedAt, out var at) ? DeviceDate(at) : device.CreatedAt;
+            DeviceRow(device, $"登录于 {created}", "退出", device.Current ? "account-revoke-current" : "account-revoke-device", () => ConfirmExit(device));
         }
-        if (!devicesLoading && devicesError is null && devicesFor is not null && devices.Count == 0) devicesRows.Children.Add(Pages.Empty("暂无登录设备。"));
+        if (devicesFor is not null && devices.Count == 0) devicesRows.Children.Add(Pages.Empty("暂无登录设备。"));
+        if (user?.TotpEnabled != true) return;
+        devicesRows.Children.Add(Pages.Section("受信任的设备"));
+        foreach (var device in trustedDevices)
+        {
+            var expires = DeviceDate(DateTimeOffset.FromUnixTimeMilliseconds(device.ExpiresAt));
+            DeviceRow(device, $"信任至 {expires}", "取消信任", device.Current ? "account-untrust-current" : "account-untrust-device", () => ConfirmUntrust(device));
+        }
+        if (devicesFor is not null && trustedDevices.Count == 0) devicesRows.Children.Add(Pages.Empty("暂无受信任的设备。"));
+    }
+
+    private static string DeviceDate(DateTimeOffset at) => at.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy年M月d日 HH:mm");
+
+    private void DeviceRow(AccountDevice device, string detail, string label, string id, Action action)
+    {
+        var row = new Grid { ColumnSpacing = 16, Padding = new Thickness(0, 12, 0, 12), BorderBrush = Paint.Brush("line"), BorderThickness = new Thickness(0, 1, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(Words(device.DeviceName + (device.Current ? " · 当前设备" : ""), $"{(device.Kind == "cookie" ? "浏览器" : "应用")} · {detail}"));
+        var control = Kit.TextAction(label, action, colour: "muted");
+        AutomationProperties.SetAutomationId(control, id);
+        control.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(control, 1); Watch(control); deviceControls.Add(control); row.Children.Add(control); devicesRows!.Children.Add(row);
     }
 
     private async Task LoadDevices()
@@ -277,8 +294,13 @@ public sealed partial class AccountScreen : Screen
         EnableControls();
         try
         {
-            var found = await Account.Shared.Devices();
-            if (active && visit == currentVisit && Account.Shared.User?.Id == owner) { devices = found; devicesFor = owner; }
+            var sessions = Account.Shared.Devices();
+            var trusted = user.TotpEnabled ? Account.Shared.TrustedDevices() : Task.FromResult<List<AccountDevice>>([]);
+            await Task.WhenAll(sessions, trusted);
+            if (active && visit == currentVisit && Account.Shared.User?.Id == owner)
+            {
+                devices = await sessions; trustedDevices = await trusted; devicesFor = owner;
+            }
         }
         catch (Exception failure) when (failure is PlatformFailure or HttpRequestException or TaskCanceledException)
         { if (active && visit == currentVisit) devicesError = Message(failure); }
@@ -296,6 +318,15 @@ public sealed partial class AccountScreen : Screen
             if (device is null) await Account.Shared.SignOut(); else await Account.Shared.RevokeDevice(device.Id);
             if (device is null || device.Current) { Accept(null, true); notice = "已退出登录。"; }
             else { devices.RemoveAll(value => value.Id == device.Id); notice = "设备已退出登录。"; }
+        }));
+    }
+
+    private void ConfirmUntrust(AccountDevice device)
+    {
+        Confirm($"取消信任{device.DeviceName}？", "此设备下次登录时需要重新验证，当前登录会保留。", "取消信任", () => Run("正在取消信任…", async () =>
+        {
+            await Account.Shared.RevokeTrust(device);
+            trustedDevices.RemoveAll(value => value.Id == device.Id); notice = "已取消信任。";
         }));
     }
 

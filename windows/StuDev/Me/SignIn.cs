@@ -14,7 +14,10 @@ public static class SignIn
         var student = Kit.Field("", "学号", "学号");
         var password = new PasswordBox { PlaceholderText = "密码", MinHeight = 40, FontSize = 14.5 };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(password, "密码");
-        var totp = Kit.Field("", "已开启两步验证时填写验证码或恢复码", "动态验证码或恢复码");
+        var totp = Kit.Field("", "动态验证码或恢复码", "动态验证码或恢复码"); totp.MaxLength = 64;
+        var trust = new CheckBox { Content = "信任此设备 30 天", IsChecked = false };
+        var factor = Kit.Column(4, totp, trust, Kit.Text("仅在自己的电脑上勾选。", Role.Caption, "muted"));
+        factor.Visibility = Visibility.Collapsed;
         var said = Kit.Text("", Role.Label, "danger", wrap: true);
         Tap? go = null;
         var signingIn = false;
@@ -22,13 +25,16 @@ public static class SignIn
         async void Go()
         {
             if (signingIn || student.Text.Trim().Length == 0 || password.Password.Length == 0) return;
+            var challenged = factor.Visibility == Visibility.Visible;
+            if (challenged && totp.Text.Trim().Length == 0) { totp.Focus(FocusState.Programmatic); return; }
             signingIn = true; go!.IsEnabled = false; said.Text = "";
-            student.IsEnabled = password.IsEnabled = totp.IsEnabled = false;
+            student.IsEnabled = password.IsEnabled = totp.IsEnabled = trust.IsEnabled = false;
             ((TextBlock)go.Content).Text = "正在登录…";
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(go, "正在登录…");
+            var focusFactor = false;
             try
             {
-                await Account.Shared.SignIn(student.Text, password.Password, totp.Text);
+                await Account.Shared.SignIn(student.Text, password.Password, challenged ? totp.Text : "", challenged && trust.IsChecked == true);
                 if (active)
                 {
                     App.Window?.Close();
@@ -36,15 +42,25 @@ public static class SignIn
                     else if (Account.Shared.CachedState is { } state && (state.EnrollmentRequired || state.PasswordChangeRequired || state.ProfileRequired || state.MfaRequired)) App.Open("me", "account");
                 }
             }
-            catch (PlatformFailure failure) { said.Text = failure.Message; }
+            catch (PlatformFailure failure)
+            {
+                if (failure.Code == "MFA_REQUIRED")
+                {
+                    factor.Visibility = Visibility.Visible;
+                    focusFactor = true;
+                }
+                said.Text = failure.Message;
+            }
             catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException) { said.Text = "暂时连不上 StuDev，请检查网络后重试。"; }
             finally {
                 signingIn = false; go.IsEnabled = true;
-                student.IsEnabled = password.IsEnabled = totp.IsEnabled = true;
+                student.IsEnabled = password.IsEnabled = totp.IsEnabled = trust.IsEnabled = true;
                 ((TextBlock)go.Content).Text = "登录";
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(go, "登录");
+                if (focusFactor && active) totp.Focus(FocusState.Programmatic);
             }
         }
+        student.TextChanged += (_, _) => { factor.Visibility = Visibility.Collapsed; totp.Text = ""; trust.IsChecked = false; said.Text = ""; };
         password.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Go(); };
         totp.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) Go(); };
         go = Kit.Action("登录", Go, go: true); go.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -65,11 +81,12 @@ public static class SignIn
         var column = new StackPanel { Spacing = 12, Padding = new Thickness(22, 20, 22, 20) };
         column.Children.Add(Pages.SheetHead(Pages.SheetTitle("登录 StuDev"), () => App.Window?.Close()));
         column.Children.Add(Kit.Text("登录后可使用 AI 免费额度，并在手机和电脑间同步任务。", Role.Label, "muted", wrap: true));
-        column.Children.Add(student); column.Children.Add(password); column.Children.Add(totp);
+        column.Children.Add(student); column.Children.Add(password); column.Children.Add(factor);
         column.Children.Add(said); column.Children.Add(go); column.Children.Add(forgot); column.Children.Add(register);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(student, "account-login-student");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(password, "account-login-password");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(totp, "account-login-factor");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(trust, "account-login-trust-device");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(go, "account-submit");
         App.Window?.Sheet(column, 420, () => { active = false; password.Password = ""; totp.Text = ""; });
     }

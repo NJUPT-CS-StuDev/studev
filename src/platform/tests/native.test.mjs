@@ -88,6 +88,38 @@ test('TOTP and recovery verification, setup restrictions and account security in
   assert.equal((await f.call('/auth/refresh', { deviceId, refreshToken: login.body.refreshToken })).status, 401);
 });
 
+test('a native trust token has a fixed lifetime and never replaces the password or the action factor', async () => {
+  const f = await fixture(), userKey = `identity/users/${f.user.id}`;
+  const user = await f.repo.latest(userKey), secret = 'JBSWY3DPEHPK3PXP';
+  await f.repo.append(userKey, { ...user, totp: { encrypted: encryptTotp(secret, f.env.PLATFORM_ENCRYPTION_KEY, user.id), epoch: 'native-trust', recoveryHashes: [] } }, user.revision);
+  const { body } = await f.login({ totp: totpCode(secret, Math.floor(f.now() / 30000)), trustDevice: true });
+  const { trustedDeviceToken } = body;
+  assert.match(trustedDeviceToken, /^[a-f0-9-]{36}\.[A-Za-z0-9_-]{43}$/);
+  assert.ok(!JSON.stringify([...f.store.values]).includes(trustedDeviceToken.split('.')[1]));
+  assert.equal((await f.call('/auth/logout', {}, body.accessToken)).status, 200);
+  assert.equal((await f.login({ password: 'not-the-password', trustedDeviceToken })).body.error.code, 'LOGIN_FAILED');
+  assert.equal((await f.login({ deviceId: 'other-synthetic-device', trustedDeviceToken })).body.error.code, 'MFA_REQUIRED');
+  assert.equal((await f.browser.call('/auth/login', { method: 'POST', body: { studentId: user.studentId, password: config.password, deviceId }, headers: { Cookie: `__Host-studev_trusted=${trustedDeviceToken}` } })).body.error.code, 'MFA_REQUIRED');
+  const other = await f.browser.call('/auth/register', { method: 'POST', body: { qq: '100003', studentId: 'TEST100003', realName: '合成成员', nickname: '合成测试', password: config.password } });
+  const otherKey = `identity/users/${other.body.user.id}`;
+  const otherUser = await f.repo.latest(otherKey);
+  await f.repo.append(otherKey, { ...otherUser, totp: { encrypted: encryptTotp(secret, f.env.PLATFORM_ENCRYPTION_KEY, otherUser.id), epoch: 'other-native-trust', recoveryHashes: [] } }, otherUser.revision);
+  assert.equal((await f.login({ studentId: otherUser.studentId, trustedDeviceToken })).body.error.code, 'MFA_REQUIRED');
+  const remembered = await f.login({ trustedDeviceToken, trustDevice: true });
+  assert.equal(remembered.status, 200);
+  assert.equal(remembered.body.mfaVerified, true);
+  assert.equal(remembered.body.trustedDeviceToken, undefined);
+  const list = (await f.call('/auth/trusted-devices', undefined, remembered.body.accessToken)).body.items;
+  assert.equal(list.length, 1);
+  assert.equal(list[0].current, true);
+  assert.equal(list[0].kind, 'bearer');
+  assert.equal(list[0].expiresAt, f.now() + 30 * 86400000);
+  const refused = await f.call('/auth/password', { currentPassword: config.password, newPassword: 'new-synthetic-native-password' }, remembered.body.accessToken);
+  assert.equal(refused.body.error.code, 'MFA_REQUIRED');
+  f.advance(30 * 86400000);
+  assert.equal((await f.login({ trustedDeviceToken })).body.error.code, 'MFA_REQUIRED');
+});
+
 test('browser and native password attempts share account rate limits', async () => {
   const f = await fixture();
   for (let i = 0; i < 9; i++) assert.equal((await f.login({ password: 'wrong' })).status, 401);
@@ -96,7 +128,7 @@ test('browser and native password attempts share account rate limits', async () 
 
 test('every existing mutating endpoint still rejects cross-origin cookies, including spoofed bearer and native bootstrap', async () => {
   const f = await fixture(), id = '00000000-0000-0000-0000-000000000001';
-  const paths = ['/auth/register', '/auth/login', '/auth/logout', '/auth/profile', '/auth/password', '/auth/totp/setup', '/auth/totp/confirm', '/auth/totp/disable', '/admin/users', `/admin/users/${id}`, `/admin/users/${id}/reset-password`, `/admin/users/${id}/reset-totp`, `/admin/users/${id}/delete`, '/collections/items', `/collections/items/${id}`, `/collections/items/${id}/duplicate`, `/collections/items/${id}/rounds`, `/collections/items/${id}/rounds/main`, `/collections/items/${id}/rounds/main/submissions`, `/collections/submissions/${id}/complete`, `/collections/submissions/${id}/edit`, `/collections/submissions/${id}/review`, `/collections/submissions/${id}/files/${id}/download`, '/auth/login', '/auth/refresh', `/auth/devices/${id}/revoke`];
+  const paths = ['/auth/register', '/auth/login', '/auth/logout', '/auth/profile', '/auth/password', '/auth/totp/setup', '/auth/totp/confirm', '/auth/totp/disable', '/admin/users', `/admin/users/${id}`, `/admin/users/${id}/reset-password`, `/admin/users/${id}/reset-totp`, `/admin/users/${id}/delete`, '/collections/items', `/collections/items/${id}`, `/collections/items/${id}/duplicate`, `/collections/items/${id}/rounds`, `/collections/items/${id}/rounds/main`, `/collections/items/${id}/rounds/main/submissions`, `/collections/submissions/${id}/complete`, `/collections/submissions/${id}/edit`, `/collections/submissions/${id}/review`, `/collections/submissions/${id}/files/${id}/download`, '/auth/login', '/auth/refresh', `/auth/devices/${id}/revoke`, `/auth/trusted-devices/${id}/revoke`];
   for (const path of paths) {
     for (const headers of [{ Origin: 'https://evil.invalid' }, { Origin: '' }, { Origin: 'https://studev.test', 'Sec-Fetch-Site': 'cross-site' }]) {
       const result = await f.browser.call(path, { method: 'POST', body: {}, headers });

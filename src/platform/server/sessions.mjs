@@ -10,6 +10,10 @@ const ID = /^[a-f0-9-]{36}$/;
 const bootstrapRoute = (path) => ['/api/platform/auth/register', '/api/platform/auth/login', '/api/platform/auth/refresh'].includes(path);
 export const bearerBootstrap = (request, path) => bootstrapRoute(path) && !request.headers.has('origin') && !request.headers.has('cookie') && !request.headers.has('sec-fetch-site');
 export const hasAuthorization = (request) => request.headers.has('authorization');
+export function deviceHash(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) fail(400, 'INVALID_DEVICE', '设备标识无效，请重新安装后重试。');
+  return digest(value);
+}
 
 // All security decisions use immutable records/conditional creation. A stale
 // materialized revision can never undo a revocation or spend a refresh twice.
@@ -19,10 +23,6 @@ export function createSessions({ repo, now, loadUser }) {
   const tokenKey = (kind, token) => `identity/devices/${kind}/${digest(token)}.json`;
   const loginPrefix = (userId) => `identity/devices/logins/${userId}`;
   const loginTip = (userId) => repo.latest(loginPrefix(userId), 12);
-  function device(value) {
-    if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value)) fail(400, 'INVALID_DEVICE', '设备标识无效，请重新安装后重试。');
-    return digest(value);
-  }
   async function revoke(id, expiresAt) {
     try { await repo.putNew(revokedKey(id), { revokedAt: new Date(now()).toISOString(), expiresAt: expiresAt ?? now() + REFRESH_SECONDS * 1000 }); }
     catch (error) { if (!isConflict(error)) throw error; }
@@ -60,7 +60,7 @@ export function createSessions({ repo, now, loadUser }) {
     return { tokenType: 'Bearer', accessToken, refreshToken, expiresIn: Math.floor((expiresAt - now()) / 1000), refreshExpiresAt: session.expiresAt, deviceSessionId: session.id };
   }
   async function start(user, body, { kind, mfaVerified, verified }) {
-    const deviceHash = device(body.deviceId);
+    const hash = deviceHash(body.deviceId);
     const deviceName = text(body.deviceName, '设备名称', 80, true);
     const tip = await loginTip(user.id), devices = {};
     // The immutable login head already names the current families (at most 20).
@@ -74,12 +74,12 @@ export function createSessions({ repo, now, loadUser }) {
     // reserved. The factor must succeed before any session state is changed.
     await verified;
     for (const record of existing.filter(Boolean)) {
-      if (record.deviceHash === deviceHash) await revoke(record.id, record.expiresAt);
+      if (record.deviceHash === hash) await revoke(record.id, record.expiresAt);
       else devices[record.deviceHash] = record.id;
     }
     if (Object.keys(devices).length >= 20) fail(429, 'DEVICE_LIMIT', '已登录设备过多，请先在网页账号中心退出不再使用的设备。');
     const generation = (tip?.generation ?? 0) + 1;
-    const session = { id: randomUUID(), loginGeneration: generation, userId: user.id, securityVersion: user.securityVersion, deviceHash, deviceName,
+    const session = { id: randomUUID(), loginGeneration: generation, userId: user.id, securityVersion: user.securityVersion, deviceHash: hash, deviceName,
       kind, csrfToken: randomBytes(32).toString('base64url'), mfaVerified, createdAt: new Date(now()).toISOString(), expiresAt: now() + REFRESH_SECONDS * 1000 };
     // Publish metadata before the head so a following login on another device
     // can retain this family even while its credentials are still being issued.
@@ -87,14 +87,14 @@ export function createSessions({ repo, now, loadUser }) {
     // Reserve an immutable generation before publishing credentials. Concurrent
     // logins conflict rather than bypass replacement or the device ceiling; a
     // late write cannot restore an old head. Never use a mutable snapshot here.
-    devices[deviceHash] = session.id;
+    devices[hash] = session.id;
     await repo.putNew(`${loginPrefix(user.id)}/${String(generation).padStart(12, '0')}.json`, {
       devices, generation, expiresAt: session.expiresAt,
     });
     return { credentials: await issue(session), session };
   }
   async function refresh(body, kind) {
-    const hash = device(body.deviceId);
+    const hash = deviceHash(body.deviceId);
     if (typeof body.refreshToken !== 'string' || !TOKEN.test(body.refreshToken)) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
     const ticket = await repo.get(tokenKey('refresh', body.refreshToken));
     if (!ticket || ticket.expiresAt <= now()) fail(401, 'TOKEN_INVALID', '登录已失效，请重新登录。');
@@ -132,5 +132,9 @@ export function createSessions({ repo, now, loadUser }) {
     if (session?.userId !== userId) fail(404, 'DEVICE_NOT_FOUND', '设备不存在。');
     await revoke(id, session.expiresAt);
   }
-  return { start, refresh, authenticate, list, revokeOwned };
+  async function isCurrent(session) {
+    try { await validSession(session.id, { userId: session.userId }); return true; }
+    catch (error) { if (error.status === 401) return false; throw error; }
+  }
+  return { start, refresh, authenticate, list, revokeOwned, isCurrent };
 }

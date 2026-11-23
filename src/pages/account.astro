@@ -75,7 +75,7 @@ import '../platform/platform.css';
                 </div>
               </div>
               <div class="p-field" data-password-totp hidden>
-                <label for="password-totp">双重验证码</label>
+                <label for="password-totp">动态验证码或恢复码</label>
                 <input id="password-totp" name="totp" maxlength="64" autocomplete="one-time-code" placeholder="6 位动态码或恢复码" />
               </div>
               <button class="p-button" type="submit">修改密码</button>
@@ -136,10 +136,15 @@ import '../platform/platform.css';
       </div>
 
       <section data-account-panel="devices" hidden>
-        <header class="p-heading"><div><h1>登录设备</h1><p>查看使用此账号的网页与 App，退出设备后需要重新登录。</p></div></header>
+        <header class="p-heading"><div><h1>登录设备</h1><p>查看已登录和受信任的浏览器与 App。</p></div></header>
         <div class="p-actions"><button class="p-button secondary small" type="button" data-devices-refresh>刷新设备</button></div>
         <p class="p-message" data-devices-status role="status"></p>
         <div data-account-devices></div>
+        <section aria-labelledby="trusted-devices-heading" style="margin-top:20px">
+          <h2 id="trusted-devices-heading">受信任的设备</h2>
+          <p class="p-help">在信任有效期内，这些设备重新登录时只需输入密码。取消信任后，下次登录需要动态验证码。</p>
+          <div data-account-trusted-devices></div>
+        </section>
       </section>
     </div>
   </div>

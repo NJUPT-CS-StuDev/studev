@@ -9,6 +9,11 @@ Web, Android and Windows use the same `/api/platform` identity endpoints and err
   registration cannot claim administrator privileges by knowing a student ID.
 - `POST /auth/login`: `studentId`, `password`, optional `totp` (TOTP or recovery
   code), `deviceId` (16–128 URL-safe characters), `deviceName` (1–80 characters).
+  `trustDevice: true` after verifying a factor remembers this installation for
+  30 days. Password-only login on a trusted installation still validates the
+  password. Web uses a separate HttpOnly cookie; native clients store and send the
+  opaque `trustedDeviceToken` from the opt-in response. A remembered login never
+  extends the trust expiry.
   Missing/invalid factors return `MFA_REQUIRED`/`MFA_INVALID`; used factors return
   `MFA_REPLAYED`, identically for all clients. Temporary-password and owner TOTP
   setup use the same restricted session and endpoints on every client.
@@ -36,6 +41,17 @@ Web, Android and Windows use the same `/api/platform` identity endpoints and err
 - `GET /auth/devices` lists both carriers with `kind`, `current`, `id`,
   `deviceName`, `createdAt`, `expiresAt`. `POST /auth/devices/<id>/revoke` revokes
   either kind, including the current session, from either client.
+- `GET /auth/trusted-devices` lists remembered installations using the same
+  display fields, with an independent ID. `POST /auth/trusted-devices/<id>/revoke`
+  removes trust without ending the active login. Logging out preserves trust.
+  Trust is scoped to one account, carrier and installation; the server stores
+  only a digest of the secret. Password, factor and role/security changes also
+  retire old trust. Trusting a device keeps the most recent 20 grants.
+- Password changes on accounts with a verifier, staff password or verifier resets,
+  role changes, and pre-seeding an administrator through `POST /admin/users`
+  require a fresh `totp` for that action. Staff acting without
+  a verifier must enroll first. Disabling a verifier requires the existing
+  password and a fresh `code`.
 
 A request without Origin, cookies or browser fetch metadata bootstraps bearer
 credentials. Browser requests require exact same Origin; credential-bearing
@@ -50,8 +66,8 @@ indices, hashed access/refresh tickets, spent/revoked markers, login generations
 and versioned security state. Access expires in 600 seconds; the session expires
 absolutely after 30 days. Rotation spends one atomic ticket; replay revokes the
 family. A device re-login replaces its old session; at most 20 active devices
-exist across both carriers. Logout, role/status changes, password changes and
-account deletion invalidate both carriers. TOTP enrollment elevates only its own
+exist across both carriers. Logout ends its session; role/status changes, password
+changes and account deletion invalidate all sessions. TOTP enrollment elevates only its own
 session. Never retry an ambiguous refresh; sign in again. Browser tabs serialize
 refreshes with Web Locks and persists a non-secret pending marker before spending
 the refresh ticket, requiring sign-in after an interrupted rotation. No credentials

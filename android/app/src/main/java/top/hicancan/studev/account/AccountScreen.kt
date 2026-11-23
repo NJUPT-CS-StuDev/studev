@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,6 +31,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 import top.hicancan.studev.app.Tokens
@@ -84,9 +88,12 @@ import top.hicancan.studev.world.CampusDay
     var confirm by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var totp by remember { mutableStateOf("") }
+    var loginFactorRequired by remember { mutableStateOf(false) }
+    var trustDevice by remember { mutableStateOf(false) }
     var secret by remember { mutableStateOf("") }
     var recovery by remember { mutableStateOf<List<String>>(emptyList()) }
     var devices by remember { mutableStateOf<List<AccountDevice>>(emptyList()) }
+    var trustedDevices by remember { mutableStateOf<List<AccountDevice>>(emptyList()) }
     var devicesFor by remember { mutableStateOf<String?>(null) }
     var devicesLoading by remember { mutableStateOf(false) }
     var devicesError by remember { mutableStateOf<String?>(null) }
@@ -96,6 +103,11 @@ import top.hicancan.studev.world.CampusDay
     var error by remember { mutableStateOf<String?>(null) }
     var confirmOut by remember { mutableStateOf(false) }
     var revoke by remember { mutableStateOf<AccountDevice?>(null) }
+    var revokeTrust by remember { mutableStateOf<AccountDevice?>(null) }
+    fun resetLoginFactor() {
+        if (loginFactorRequired) notice = null
+        totp = ""; loginFactorRequired = false; trustDevice = false
+    }
     fun showUser(fresh: AccountUser) {
         user = fresh
         student = fresh.studentId; realName = fresh.realName; nickname = fresh.nickname; signature = fresh.signature
@@ -115,18 +127,22 @@ import top.hicancan.studev.world.CampusDay
             catch (failure: Exception) {
                 error = if (failure is PlatformFailure) failure.message else "连接未完成，请检查网络后重试。"
                 if (failure is PlatformFailure && failure.status == 401 && failure.code in listOf("TOKEN_INVALID", "AUTH_REQUIRED", "REFRESH_REPLAYED")) {
-                    client.forget(); user = null; state = null; devices = emptyList(); devicesFor = null
+                    client.forget(); user = null; state = null; devices = emptyList(); trustedDevices = emptyList(); devicesFor = null
                 }
             } finally { busy = false }
         }
     }
     suspend fun loadDevices() {
         if (devicesLoading) return
-        val owner = user?.id ?: return
+        val owner = user ?: return
         devicesLoading = true; devicesError = null
         try {
-            val found = client.devices()
-            if (user?.id == owner) { devices = found; devicesFor = owner }
+            val (signedIn, trusted) = coroutineScope {
+                val sessions = async { client.devices() }
+                val remembered = if (owner.totpEnabled) async { client.trustedDevices() } else null
+                sessions.await() to remembered?.await().orEmpty()
+            }
+            if (user?.id == owner.id) { devices = signedIn; trustedDevices = trusted; devicesFor = owner.id }
         } catch (failure: CancellationException) { throw failure }
         catch (failure: Exception) {
             devicesError = if (failure is PlatformFailure) failure.message else "暂时看不了登录设备，请再试一次。"
@@ -155,15 +171,15 @@ import top.hicancan.studev.world.CampusDay
             if (verifying) Text("正在验证登录状态…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (user != null && state == null && !verifying) TextAction("重试", { run { reload() } }, refresh = true)
             if (user == null) {
-                Choice(listOf("login" to "登录", "register" to "注册"), if (register) "register" else "login") { value -> if (!busy) { register = value == "register"; password = ""; confirm = ""; totp = ""; error = null; notice = null } }
-                OutlinedTextField(student, { student = it.take(20); totp = "" }, Modifier.fillMaxWidth(), label = { Text("学号") }, singleLine = true, enabled = !busy)
+                Choice(listOf("login" to "登录", "register" to "注册"), if (register) "register" else "login") { value -> if (!busy) { register = value == "register"; password = ""; confirm = ""; resetLoginFactor(); error = null; notice = null } }
+                OutlinedTextField(student, { student = it.take(20); resetLoginFactor() }, Modifier.fillMaxWidth(), label = { Text("学号") }, singleLine = true, enabled = !busy)
                 if (register) {
                     OutlinedTextField(realName, { realName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("真实姓名") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(nickname, { nickname = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("昵称（选填）") }, supportingText = { Text("留空就用默认昵称。其他同学可以看到你的昵称、头像和签名。") }, singleLine = true, enabled = !busy)
                     OutlinedTextField(qq, { qq = it.take(12) }, Modifier.fillMaxWidth(), label = { Text("联系 QQ") }, supportingText = { Text("用这个 QQ 邮箱收通知、找回密码或确认注销。也可以用它的 QQ 头像。") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, enabled = !busy)
                     QqPreview(qq)
                 }
-                SecretField("密码", password, !busy) { password = it }
+                SecretField("密码", password, !busy) { password = it; resetLoginFactor() }
                 if (register) {
                     SecretField("确认密码", confirm, !busy) { confirm = it }
                     Text("密码需要 12–256 个字符。学号被占用时，请联系管理员核实。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -178,18 +194,35 @@ import top.hicancan.studev.world.CampusDay
                         }
                     }
                 }
-                else OutlinedTextField(totp, { totp = it.take(64) }, Modifier.fillMaxWidth(), label = { Text("动态验证码或恢复码") }, supportingText = { Text("请打开认证器查看验证码，也可以用恢复码。") }, singleLine = true, enabled = !busy)
+                else if (loginFactorRequired) {
+                    OutlinedTextField(totp, { totp = it.take(64) }, Modifier.fillMaxWidth(), label = { Text("动态验证码或恢复码") }, singleLine = true, enabled = !busy)
+                    Row(Modifier.fillMaxWidth().toggleable(value = trustDevice, enabled = !busy, role = Role.Checkbox, onValueChange = { trustDevice = it }),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Checkbox(checked = trustDevice, onCheckedChange = null, enabled = !busy)
+                        Column(Modifier.weight(1f)) {
+                            Text("信任此设备 30 天")
+                            Text("仅在自己的设备上勾选。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
                 Button(onClick = { run {
                     if (register) {
                         if (password != confirm) { error = "两次输入的密码不一致。"; return@run }
                         client.register(student, realName, nickname, qq, password)
-                        register = false; password = ""; confirm = ""; totp = ""; notice = "注册成功，请使用学号和密码登录。"
+                        register = false; password = ""; confirm = ""; resetLoginFactor(); notice = "注册成功，请使用学号和密码登录。"
                     } else {
-                        showState(client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}"))
-                        section = "profile"; devices = emptyList(); devicesFor = null
-                        password = ""; totp = ""; onSignedIn()
+                        try {
+                            showState(client.signIn(student, password, totp, "${Build.MANUFACTURER} ${Build.MODEL}", trustDevice))
+                        } catch (failure: PlatformFailure) {
+                            if (failure.code != "MFA_REQUIRED") throw failure
+                            loginFactorRequired = true; notice = "请输入认证器里的动态验证码，也可用一次性恢复码。"
+                            return@run
+                        }
+                        section = "profile"; devices = emptyList(); trustedDevices = emptyList(); devicesFor = null
+                        password = ""; resetLoginFactor(); onSignedIn()
                     }
-                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() && (!register || realName.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed)) {
+                } }, Modifier.fillMaxWidth().testTag("account-submit"), enabled = !busy && student.isNotBlank() && password.isNotBlank() &&
+                    (if (register) realName.isNotBlank() && qq.isNotBlank() && confirm.isNotBlank() && agreed else !loginFactorRequired || totp.isNotBlank())) {
                     if (busy) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
                     Text(if (busy) if (register) "正在注册…" else "正在登录…" else if (register) "创建账号" else "登录")
                 }
@@ -241,6 +274,18 @@ import top.hicancan.studev.world.CampusDay
                                 TextAction("退出", { revoke = device }, enabled = !busy, muted = true)
                             })
                         }
+                        if (user!!.totpEnabled) {
+                            HorizontalDivider()
+                            Text("受信任的设备", style = MaterialTheme.typography.titleSmall)
+                            Text("这些设备再次登录时可以少输一次验证码。", style = MaterialTheme.typography.bodySmall)
+                            if (!devicesLoading && devicesError == null && devicesFor != null && trustedDevices.isEmpty()) Text("暂无受信任的设备。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            for (device in trustedDevices) {
+                                val expires = java.time.Instant.ofEpochMilli(device.expiresAt).atZone(CampusDay.zone).format(java.time.format.DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"))
+                                KeyRow(null, device.deviceName + if (device.current) " · 当前设备" else "", "${if (device.kind == "cookie") "浏览器" else "应用"} · $expires 到期", trailing = {
+                                    TextAction("取消信任", { revokeTrust = device }, enabled = !busy, muted = true)
+                                })
+                            }
+                        }
                     }
                     else -> {
                         Text("修改密码", style = MaterialTheme.typography.titleLarge)
@@ -252,10 +297,10 @@ import top.hicancan.studev.world.CampusDay
                             if (newPassword != confirm) { error = "两次输入的新密码不一致。"; return@run }
                             client.request("/auth/password", buildJsonObject { put("currentPassword", password); put("newPassword", newPassword); put("totp", totp) }, authenticated = true)
                             client.forget(); user = null; state = null; password = ""; newPassword = ""; confirm = ""; totp = ""; notice = "密码已修改，请重新登录。"
-                        } }, enabled = !busy && password.isNotBlank() && newPassword.length >= 12 && confirm.isNotBlank()) { Text("修改密码并重新登录") }
+                        } }, enabled = !busy && password.isNotBlank() && newPassword.length >= 12 && confirm.isNotBlank() && (!user!!.totpEnabled || totp.isNotBlank())) { Text("修改密码并重新登录") }
                         HorizontalDivider()
                         Text("认证器验证", style = MaterialTheme.typography.titleLarge)
-                        Text(if (user!!.totpEnabled) "已开启。登录时填写动态验证码或一次性恢复码。" else "可使用任意支持 TOTP 的认证器，无需 Google 服务。", style = MaterialTheme.typography.bodyMedium)
+                        Text(if (user!!.totpEnabled) "已开启。新设备登录时，请输入动态验证码或恢复码。" else "可使用任意支持 TOTP 的认证器，无需 Google 服务。", style = MaterialTheme.typography.bodyMedium)
                         if (recovery.isNotEmpty()) {
                             Text("恢复码只显示这一次，请抄下来或存到安全的地方。每个恢复码只能用一次。", color = MaterialTheme.colorScheme.primary)
                             SelectionContainer { Text(recovery.joinToString("\n")) }
@@ -298,7 +343,15 @@ import top.hicancan.studev.world.CampusDay
         confirmButton = { TextButton(enabled = !busy, onClick = { run {
             val target = revoke
             if (target == null) client.signOut() else client.revokeDevice(target.id)
-            if (target == null || target.current) { client.forget(); user = null; state = null; devices = emptyList(); devicesFor = null } else devices = devices.filter { it.id != target.id }
+            if (target == null || target.current) { client.forget(); user = null; state = null; devices = emptyList(); trustedDevices = emptyList(); devicesFor = null } else devices = devices.filter { it.id != target.id }
             confirmOut = false; revoke = null
         } }) { Text(if (busy) "正在退出…" else "确认退出") } }, dismissButton = { TextButton(enabled = !busy, onClick = { confirmOut = false; revoke = null }) { Text("取消") } })
+    revokeTrust?.let { device -> AlertDialog(onDismissRequest = { if (!busy) revokeTrust = null }, title = { Text("取消信任此设备？") },
+        text = { Text("${device.deviceName} 下次登录时需要输入动态验证码或恢复码。") },
+        confirmButton = { TextButton(enabled = !busy, onClick = { run {
+            client.revokeTrustedDevice(device)
+            trustedDevices = trustedDevices.filter { it.id != device.id }
+            revokeTrust = null; notice = "已取消信任。"
+        } }) { Text(if (busy) "正在取消…" else "确认取消信任") } },
+        dismissButton = { TextButton(enabled = !busy, onClick = { revokeTrust = null }) { Text("返回") } }) }
 }

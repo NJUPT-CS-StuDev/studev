@@ -16,6 +16,94 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ExperienceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Test fun trustRemembersThisInstallationAndSensitiveActionsStillAskForCode() {
+        val account = AccountUser("test-account", "验证测试", "TEST123456", true)
+        val installedTrust = AccountDevice("test-trust", "验收手机", "bearer", true, "2026-11-20T01:23:45Z", 1_800_000_000_000)
+        var stored = StoredAccount(deviceId = "synthetic-account-installation")
+        val storage = object : AccountStorage {
+            override suspend fun read() = stored
+            override suspend fun write(value: StoredAccount) { stored = value }
+        }
+        val changedPassword = AtomicBoolean(false)
+        var trusted = false
+        fun reply(vararg fields: Pair<String, JsonElement>) = PlatformReply(200, JsonObject(mapOf(*fields)))
+        fun refused(code: String, message: String) = PlatformReply(401, buildJsonObject {
+            putJsonObject("error") { put("code", code); put("message", message) }
+        })
+        val client = AccountClient(storage, PlatformTransport { path, payload, _ ->
+            when (path) {
+                "/auth/login" -> {
+                    val body = requireNotNull(payload)
+                    assertEquals("example-password", body.getValue("password").jsonPrimitive.content)
+                    val enteredCode = body["totp"]?.jsonPrimitive?.content
+                    if (enteredCode == null && (!trusted || body["trustedDeviceToken"]?.jsonPrimitive?.content != "fixture-trust-token")) {
+                        refused("MFA_REQUIRED", "请填写动态验证码。")
+                    } else {
+                        if (enteredCode != null) {
+                            assertEquals("123456", enteredCode)
+                            assertTrue(body.getValue("trustDevice").jsonPrimitive.boolean)
+                            trusted = true
+                        }
+                        PlatformReply(200, buildJsonObject {
+                            put("user", accountJson.encodeToJsonElement(account))
+                            put("accessToken", "test-access"); put("refreshToken", "test-refresh"); put("expiresIn", 600); put("deviceSessionId", "test-session")
+                            if (enteredCode != null) put("trustedDeviceToken", "fixture-trust-token")
+                        })
+                    }
+                }
+                "/auth/logout" -> reply()
+                "/auth/password" -> {
+                    assertEquals("654321", payload?.get("totp")?.jsonPrimitive?.content)
+                    changedPassword.set(true)
+                    refused("MFA_INVALID", "测试拦截了密码修改。")
+                }
+                "/auth/devices" -> reply("items" to JsonArray(emptyList()))
+                "/auth/trusted-devices" -> reply("items" to accountJson.encodeToJsonElement(if (trusted) listOf(installedTrust) else emptyList()))
+                "/auth/trusted-devices/test-trust/revoke" -> { trusted = false; reply() }
+                else -> error("Unexpected request: $path")
+            }
+        }, now = { 1000 })
+        compose.runOnUiThread { compose.activity.setContent { StuDevTheme { AccountScreen(client, onBack = {}) } } }
+        fun field(label: String) = compose.onNode(hasSetTextAction() and hasText(label))
+        fun submit() = compose.onNodeWithTag("account-submit").performScrollTo().performClick()
+        fun exit() {
+            compose.onNodeWithText("退出登录").performScrollTo().performClick()
+            compose.onNodeWithText("确认退出").performClick()
+            compose.onNodeWithText("登录 StuDev").assertExists()
+        }
+        field("学号").performTextInput(account.studentId)
+        field("密码").performTextInput("example-password")
+        field("动态验证码或恢复码").assertDoesNotExist()
+        submit()
+        field("动态验证码或恢复码").performScrollTo().performTextInput("123456")
+        compose.onNodeWithText("信任此设备 30 天").performScrollTo().performClick()
+        submit()
+        compose.onNodeWithText("我的账号").assertExists()
+
+        exit()
+        field("密码").performTextInput("example-password")
+        submit()
+        compose.onNodeWithText("我的账号").assertExists()
+        compose.onNodeWithText("账号安全").performClick()
+        field("当前密码").performScrollTo().performTextInput("example-password")
+        field("新密码").performScrollTo().performTextInput("example-next-password")
+        field("确认新密码").performScrollTo().performTextInput("example-next-password")
+        val change = compose.onNodeWithText("修改密码并重新登录")
+        change.performScrollTo().assertIsNotEnabled()
+        field("动态验证码或恢复码").performScrollTo().performTextInput("654321")
+        change.performScrollTo().performClick()
+        compose.waitUntil(10_000) { changedPassword.get() }
+
+        compose.onNodeWithText("登录设备").performScrollTo().performClick()
+        compose.onNodeWithText("取消信任").performScrollTo().performClick()
+        compose.onNodeWithText("确认取消信任").performClick()
+        compose.onNodeWithText("暂无受信任的设备。").assertExists()
+        exit()
+        field("密码").performTextInput("example-password")
+        submit()
+        field("动态验证码或恢复码").assertExists()
+    }
+
     @Test fun cachedAccountAndNavigationRemainUsableWhileVerificationAndDevicesWait() {
         val account = AccountUser(id = "synthetic-user", nickname = "缓存同学", studentId = "TEST123456", realName = "合成测试成员", qq = "100002")
         var stored = StoredAccount(deviceId = "synthetic-account-installation", session = AccountSession(

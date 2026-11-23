@@ -1,6 +1,7 @@
 import { api, button, el, errorText, formatTime, message, q } from './api';
 interface Device { id: string; deviceName: string; createdAt: string; expiresAt: number; kind: 'cookie' | 'bearer'; current: boolean }
 const root = q('[data-account-devices]'), status = q('[data-devices-status]');
+const trustedRoot = q('[data-account-trusted-devices]');
 let request: Promise<void> | null = null;
 let loaded = false;
 function render(items: Device[]) {
@@ -22,14 +23,39 @@ function render(items: Device[]) {
   }
   root.replaceChildren(rows);
 }
+function renderTrusted(items: Device[]) {
+  const rows = document.createDocumentFragment();
+  if (!items.length) rows.append(el('p', '目前没有受信任的设备。', 'p-muted'));
+  for (const device of items) {
+    const row = el('div', undefined, 'p-card');
+    row.append(el('h3', device.deviceName + (device.current ? ' · 当前设备' : '') + (device.kind === 'cookie' ? ' · 网页' : ' · App')),
+      el('p', `信任至 ${formatTime(new Date(device.expiresAt).toISOString())}`, 'p-help'));
+    const actions = el('div', undefined, 'p-actions');
+    const offerRevoke = () => actions.replaceChildren(button('取消信任', () => {
+      actions.replaceChildren(el('span', '下次登录时需要动态验证码。', 'p-help'), button('确认取消信任', async () => {
+        try {
+          await api(`/auth/trusted-devices/${device.id}/revoke`, {});
+          await refresh(true);
+          message(status, '已取消信任。', 'success');
+        } catch (error) { message(status, errorText(error), 'error'); }
+      }), button('返回', offerRevoke));
+    }));
+    offerRevoke();
+    row.append(actions);
+    rows.append(row);
+  }
+  trustedRoot.replaceChildren(rows);
+}
 function refresh(force = false): Promise<void> {
   if (request) return request;
   if (loaded && !force) return Promise.resolve();
   const control = q<HTMLButtonElement>('[data-devices-refresh]');
   control.disabled = true;
   message(status, loaded ? '正在刷新设备…' : '正在读取登录设备…');
-  request = api<{ items: Device[] }>('/auth/devices').then(result => {
-    render(result.items); loaded = true; message(status);
+  request = Promise.all([
+    api<{ items: Device[] }>('/auth/devices'), api<{ items: Device[] }>('/auth/trusted-devices'),
+  ]).then(([active, trusted]) => {
+    render(active.items); renderTrusted(trusted.items); loaded = true; message(status);
   }).catch(error => { message(status, errorText(error), 'error'); }).finally(() => {
     request = null; control.disabled = false;
   });

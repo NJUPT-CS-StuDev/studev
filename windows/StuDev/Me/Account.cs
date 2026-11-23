@@ -28,7 +28,7 @@ public sealed record AccountSession(string AccessToken, string RefreshToken, lon
 {
     [JsonIgnore] public AccountState State => new(User, EnrollmentRequired, PasswordChangeRequired, ProfileRequired, MfaRequired);
 }
-public sealed record StoredAccount(string DeviceId, AccountSession? Session);
+public sealed record StoredAccount(string DeviceId, AccountSession? Session, Dictionary<string, string>? TrustedDevices = null);
 
 public sealed class Account
 {
@@ -108,7 +108,16 @@ public sealed class Account
     public static async Task Register(string studentId, string realName, string nickname, string qq, string password) => Checked(await Shared.send("/auth/register",
         new JsonObject { ["studentId"] = studentId.Trim(), ["realName"] = realName.Trim(), ["nickname"] = nickname.Trim(), ["qq"] = qq.Trim(), ["password"] = password }, null));
 
-    public async Task<AccountUser> SignIn(string studentId, string password, string totp)
+    private static StoredAccount WithTrust(StoredAccount value, string studentId, string? token)
+    {
+        if (value.TrustedDevices?.GetValueOrDefault(studentId) == token) return value;
+        var devices = value.TrustedDevices is { } existing ? new Dictionary<string, string>(existing) : [];
+        if (token is null) devices.Remove(studentId);
+        else devices[studentId] = token;
+        return value with { TrustedDevices = devices.Count == 0 ? null : devices };
+    }
+
+    public async Task<AccountUser> SignIn(string studentId, string password, string totp, bool trustDevice = false)
     {
         int expectedGeneration;
         lock (storageGate) expectedGeneration = ++generation;
@@ -116,10 +125,23 @@ public sealed class Account
         try
         {
             var stored = Stored();
-            var body = new JsonObject { ["studentId"] = studentId.Trim(), ["password"] = password, ["deviceId"] = stored.DeviceId, ["deviceName"] = $"Windows · {Environment.MachineName}"[..Math.Min(80, $"Windows · {Environment.MachineName}".Length)] };
-            if (totp.Trim().Length > 0) body["totp"] = totp.Trim();
-            var value = Checked(await send("/auth/login", body, null));
+            studentId = studentId.Normalize(NormalizationForm.FormKC).Trim().ToUpperInvariant();
+            var deviceName = $"Windows · {Environment.MachineName}";
+            var body = new JsonObject { ["studentId"] = studentId, ["password"] = password, ["deviceId"] = stored.DeviceId, ["deviceName"] = deviceName[..Math.Min(80, deviceName.Length)] };
+            var prior = stored.TrustedDevices?.GetValueOrDefault(studentId);
+            if (prior is not null) body["trustedDeviceToken"] = prior;
+            if (totp.Trim() is { Length: > 0 } code)
+            {
+                body["totp"] = code;
+                if (trustDevice) body["trustDevice"] = true;
+            }
+            var reply = await send("/auth/login", body, null);
+            if (reply.Status == 401 && (string?)reply.Body["error"]?["code"] == "MFA_REQUIRED" && prior is not null)
+                Keep(WithTrust(stored, studentId, null), expectedGeneration);
+            var value = Checked(reply);
             var state = value.Deserialize(StorageJson.Default.AccountState)!;
+            if ((string?)value["trustedDeviceToken"] is { Length: > 0 } trusted)
+                stored = WithTrust(stored, studentId, trusted);
             Keep(stored with { Session = Tokens(value, state) }, expectedGeneration);
             return state.User;
         }
@@ -223,6 +245,8 @@ public sealed class Account
 
     public async Task<List<AccountDevice>> Devices() => (await Request("/auth/devices"))["items"].Deserialize(StorageJson.Default.ListAccountDevice)!;
 
+    public async Task<List<AccountDevice>> TrustedDevices() => (await Request("/auth/trusted-devices"))["items"].Deserialize(StorageJson.Default.ListAccountDevice)!;
+
     public async Task RevokeDevice(string id)
     {
         if (!Guid.TryParseExact(id, "D", out _)) throw new ArgumentException("登录设备无效。", nameof(id));
@@ -230,10 +254,25 @@ public sealed class Account
         if (id == pass.Session.DeviceSessionId) await Forget(pass);
     }
 
+    public async Task RevokeTrust(AccountDevice device)
+    {
+        if (!Guid.TryParseExact(device.Id, "D", out _)) throw new ArgumentException("受信任的设备无效。", nameof(device));
+        var (_, pass) = await Authenticated($"/auth/trusted-devices/{device.Id}/revoke", new JsonObject());
+        if (!device.Current) return;
+        await gate.WaitAsync();
+        try
+        {
+            var stored = Stored();
+            if (stored.Session?.DeviceSessionId != pass.Session.DeviceSessionId) throw AccountChanged();
+            Keep(WithTrust(stored, pass.Session.User.StudentId, null), pass.Generation);
+        }
+        finally { gate.Release(); }
+    }
+
     public async Task ChangePassword(string currentPassword, string newPassword, string totp)
     {
         var (_, pass) = await Authenticated("/auth/password", new JsonObject { ["currentPassword"] = currentPassword, ["newPassword"] = newPassword, ["totp"] = totp });
-        await Forget(pass);
+        await Forget(pass, forgetTrust: true);
     }
 
     public async Task<string> SetupTotp(string password) => (string)(await Request("/auth/totp/setup", new JsonObject { ["password"] = password }))["secret"]!;
@@ -247,7 +286,7 @@ public sealed class Account
         {
             var stored = Stored();
             if (stored.Session?.DeviceSessionId != pass.Session.DeviceSessionId) throw AccountChanged();
-            Keep(stored with { Session = stored.Session with { User = stored.Session.User with { TotpEnabled = true }, EnrollmentRequired = false, MfaRequired = false } }, pass.Generation);
+            Keep(WithTrust(stored, pass.Session.User.StudentId, null) with { Session = stored.Session with { User = stored.Session.User with { TotpEnabled = true }, EnrollmentRequired = false, MfaRequired = false } }, pass.Generation);
         }
         finally { gate.Release(); }
         return recovery;
@@ -256,7 +295,7 @@ public sealed class Account
     public async Task DisableTotp(string password, string code)
     {
         var (_, pass) = await Authenticated("/auth/totp/disable", new JsonObject { ["password"] = password, ["code"] = code });
-        await Forget(pass);
+        await Forget(pass, forgetTrust: true);
     }
 
     public async Task RequestDeletion(string password) => await Request("/auth/account/delete", new JsonObject { ["password"] = password });
@@ -298,13 +337,17 @@ public sealed class Account
         await Forget(credential);
     }
 
-    private async Task Forget(Pass pass)
+    private async Task Forget(Pass pass, bool forgetTrust = false)
     {
         await gate.WaitAsync();
         try
         {
             var stored = Stored();
-            if (stored.Session?.DeviceSessionId == pass.Session.DeviceSessionId) Keep(stored with { Session = null }, pass.Generation);
+            if (stored.Session?.DeviceSessionId == pass.Session.DeviceSessionId)
+            {
+                if (forgetTrust) stored = WithTrust(stored, pass.Session.User.StudentId, null);
+                Keep(stored with { Session = null }, pass.Generation);
+            }
         }
         finally { gate.Release(); }
     }
