@@ -32,6 +32,7 @@ test('ordinary signed-in members browse only public fields while full account lo
   const f = await fixture();
   assert.equal(f.first.nickname, '学');
   assert.equal((await f.visitor.call('/members')).status, 401);
+  assert.equal((await f.visitor.call('/members?entry=1')).status, 401);
   assert.equal((await f.visitor.call(`/members/${f.first.id}`)).status, 401);
   const listed = await f.one.call('/members');
   assert.equal(listed.status, 200);
@@ -39,14 +40,42 @@ test('ordinary signed-in members browse only public fields while full account lo
   for (const member of listed.body.items) assert.deepEqual(Object.keys(member).sort(), ['avatarUrl', 'id', 'nickname', 'signature']);
   const payload = JSON.stringify(listed.body);
   for (const privateValue of ['MEMBER001', 'MEMBER002', '保密姓名', '10000801', '10000802', '@qq.com', 'passwordHash', 'totp', 'securityVersion']) assert.equal(payload.includes(privateValue), false, privateValue);
+  const firstPage = await f.one.call('/members?entry=1&limit=1&offset=1');
+  assert.equal(firstPage.status, 200);
+  assert.equal(firstPage.body.session.user.id, f.first.id);
+  assert.ok(firstPage.body.session.csrfToken);
+  assert.deepEqual(firstPage.body.items, listed.body.items.slice(1, 2));
+  for (const privateValue of ['MEMBER002', '保密姓名', '10000802', 'passwordHash', 'securityVersion']) {
+    assert.equal(JSON.stringify(firstPage.body).includes(privateValue), false, privateValue);
+  }
   assert.equal((await f.one.call('/admin/users')).status, 403);
   assert.equal((await f.one.call(`/admin/users/${f.second.id}`)).status, 403);
   const detail = await f.one.call(`/members/${f.second.id}`);
   assert.deepEqual(detail.body.member, listed.body.items.find(member => member.id === f.second.id));
+  assert.deepEqual((await f.one.call(`/members/${f.second.id}?entry=1`)).body.member, detail.body.member);
+  assert.equal((await f.visitor.call('/members/not-an-id?entry=1')).status, 401);
+  assert.equal((await f.one.call('/members/not-an-id?entry=1')).status, 404);
   assert.equal((await f.one.call('/members?query=MEMBER002')).body.total, 0);
   assert.equal((await f.one.call('/members?query=风中的树')).body.total, 1);
   assert.equal((await f.one.call('/members?limit=1&offset=1')).body.items.length, 1);
   assert.equal((await f.one.call('/members?limit=0')).status, 400);
+});
+
+test('member entry leaves the full directory behind management and account setup checks', async () => {
+  const f = await fixture();
+  const prefix = 'identity/users/' + f.first.id;
+  const old = await f.repo.latest(prefix);
+  const admin = await f.repo.append(prefix, { ...old, role: 'admin' }, old.revision);
+  const staffEntry = await f.one.call('/members?entry=1');
+  assert.equal(staffEntry.status, 200);
+  assert.deepEqual(Object.keys(staffEntry.body), ['session']);
+  assert.equal(staffEntry.body.session.user.role, 'admin');
+  await f.repo.append(prefix, { ...admin, mustChangePassword: true }, admin.revision);
+  assert.equal((await f.one.call('/members')).status, 403);
+  const setupEntry = await f.one.call(`/members/${f.second.id}?entry=1`);
+  assert.equal(setupEntry.status, 200);
+  assert.deepEqual(Object.keys(setupEntry.body), ['session']);
+  assert.equal(setupEntry.body.session.passwordChangeRequired, true);
 });
 
 test('profile changes update the public projection and blank nicknames restore the default', async () => {
@@ -103,20 +132,29 @@ test('appointed pending staff use the same opaque avatar without publishing pend
 test('member listing reads only the public directory after authentication, and ignores delayed obsolete profiles', async () => {
   const f = await fixture();
   const readKeys = [], listKeys = [];
-  const publicRepo = { ...f.repo, get: async key => { readKeys.push(key); return f.repo.get(key); }, list: async prefix => { listKeys.push(prefix); return f.repo.list(prefix); } };
-  const members = createMembers(publicRepo, f.env.PLATFORM_ORIGIN);
+  const { get, list } = f.store;
+  f.store.get = (key, options) => { readKeys.push(key); return get(key, options); };
+  f.store.list = options => { listKeys.push(options.prefix); return list(options); };
+  const members = createMembers(f.repo, f.env.PLATFORM_ORIGIN);
   const current = await f.repo.latest(`identity/users/${f.first.id}`);
   assert.equal(current.nickname, '', 'an unset nickname remains unset in the account');
   const disabled = { ...current, revision: current.revision + 1, status: 'disabled' };
   await members.publish(disabled, current);
   // A slower earlier publisher cannot resurrect the person in the directory.
   await members.publish(current);
+  readKeys.length = listKeys.length = 0;
   const page = await members.list('', 0, 50);
   assert.equal(page.items.some(member => member.id === current.id), false);
-  assert.deepEqual(listKeys, ['members/']);
-  assert.ok(readKeys.every(key => key.startsWith('members/')));
+  assert.deepEqual(listKeys, ['platform-v1/members/']);
+  assert.ok(readKeys.every(key => key.startsWith('platform-v1/members/')));
+  assert.ok(readKeys.length > 1, 'cold projection reads the published profiles');
+  readKeys.length = listKeys.length = 0;
+  assert.deepEqual(await members.list('', 0, 50), page);
+  assert.deepEqual(listKeys, ['platform-v1/members/']);
+  assert.deepEqual(readKeys, ['platform-v1/members/directory.json']);
   const changedName = { ...current, realName: '改名字', revision: disabled.revision + 1 };
   await members.publish(changedName, disabled);
+  assert.equal((await members.list('字', 0, 50)).items[0].id, current.id, 'the changed head invalidates the old snapshot');
   assert.equal((await members.get(current.id)).nickname, '字', 'defaults are recomputed from the corrected name');
   await assert.rejects(members.publish({ ...changedName, nickname: 'a different write at the same revision' }), error => error.status === 409);
 });

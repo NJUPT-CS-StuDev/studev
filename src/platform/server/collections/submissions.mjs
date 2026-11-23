@@ -66,17 +66,19 @@ export function canEditSubmission(record, item, round, actor, now) {
     record.allowEdit !== false && roundAcceptsSubmissions(item, round, now);
 }
 
-async function reserveReplacement(repo, item, round, sid) {
+async function replacement(repo, item, round, sid, permitted) {
   const key = keys.replacement(item.id, round.id, sid);
+  const read = async ({ id }) => ({ id, previous: await repo.latest(keys.submission(item.id, round.id, id)) });
   const existing = await repo.get(key);
-  if (existing) return existing.id;
+  if (existing) return read(existing);
+  await permitted;
   const id = randomUUID();
-  try { await repo.putNew(key, { id }); return id; }
+  try { await repo.putNew(key, { id }); return { id, previous: null }; }
   catch (error) {
     if (!isConflict(error)) throw error;
     const reserved = await repo.get(key);
     if (!reserved) throw error;
-    return reserved.id;
+    return read(reserved);
   }
 }
 
@@ -111,17 +113,20 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     return revisionKey(keys.submission(record.itemId, record.roundId, record.id), expectedRevision + 1);
   }
 
-  async function offer(context, receiptId, receipt, item, round) {
+  async function offer(context, receiptId, receipt, item, round, reservation) {
     const { record, pending, expiresAt, expectedRevision } = receipt;
     if (!pending.length) return {
-      submission: submissionView(await commit(context, receiptId, receipt), item, round), uploads: [],
+      submission: submissionView(await commit(context, receiptId, receipt, { reservation }), item, round), uploads: [],
     };
-    const quota = roundQuota(repo, item.id, round.id, now);
-    const [committed, { active }] = await Promise.all([repo.get(submissionKey(receipt)), quota.read()]);
-    if (committed?.receiptId === receiptId) return { submission: submissionView(committed, item, round), uploads: [] };
-    if (committed) fail(409, 'REVISION_CONFLICT', '提交已发生变化，请刷新后重试。');
+    if (!reservation) {
+      const quota = roundQuota(repo, item.id, round.id, now);
+      const [committed, { active }] = await Promise.all([repo.get(submissionKey(receipt)), quota.read()]);
+      if (committed?.receiptId === receiptId) return { submission: submissionView(committed, item, round), uploads: [] };
+      if (committed) fail(409, 'REVISION_CONFLICT', '提交已发生变化，请刷新后重试。');
+      if (!active[receiptId]) fail(410, 'SUBMISSION_EXPIRED', '这次上传超时了，请重新提交。');
+    }
     const seconds = Math.ceil((expiresAt - now()) / 1000);
-    if (!active[receiptId] || seconds <= 0) fail(410, 'SUBMISSION_EXPIRED', '这次上传超时了，请重新提交。');
+    if (seconds <= 0) fail(410, 'SUBMISSION_EXPIRED', '这次上传超时了，请重新提交。');
     const storage = gateway();
     const [uploads] = await Promise.all([mapConcurrent(pending, 6, async (file) => ({
       fileId: file.id,
@@ -150,22 +155,24 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     if (!roundAcceptsSubmissions(item, round, receivedAt)) fail(409, 'COLLECTION_CLOSED', '本轮当前不接受提交。');
     const submittedAt = new Date(receivedAt).toISOString();
     const answers = answersInput(body.answers, round.fields);
-    await repo.throttle('collection-submit', actor.id, 15);
     const stable = round.submissionMode === 'replace';
-    const id = stable ? await reserveReplacement(repo, item, round, sid) : receiptId;
-    const existing = stable ? await repo.latest(keys.submission(item.id, round.id, id)) : null;
+    const permitted = measure('rate', () => repo.throttle('collection-submit', actor.id, 15));
+    const [{ id, previous: existing }] = await Promise.all([
+      stable ? replacement(repo, item, round, sid, permitted) : { id: receiptId, previous: null },
+      permitted,
+    ]);
     if (existing && !ownsSubmission(existing, actor)) fail(409, 'IDENTITY_CHANGED', '此学号的既有提交需要管理员核对。');
     const kept = attachmentSelection(body, existing);
     const inputs = fileInput(body.files || [], round.fields, kept, round.maxTotalFileBytes);
     const configuration = inputs.length ? oscaConfig(env) : null;
     const issuedAt = iso();
     const quota = roundQuota(repo, item.id, round.id, now);
-    const entry = await quota.reserve({
+    const { entry, state: reservation } = await measure('upload-reserve', () => quota.reserve({
       id: receiptId, submissionId: id, studentId: sid, expectedRevision: existing?.revision ?? 0,
       expiresAt: now() + (inputs.length ? uploadSeconds * 1000 + confirmationMillis : 60_000), phase: 'pending',
-    }, round);
+    }, round));
     // Any request allowed past this point has a reservation visible to draft deletion.
-    const current = await repo.latest(keys.definition(item.id));
+    const current = await measure('definition-check', () => repo.latest(keys.definition(item.id)));
     if (current?.revision !== item.revision) await quota.cancel(receiptId);
     if (current?.status !== 'published') fail(409, 'COLLECTION_CLOSED', '本轮当前不接受提交。');
     if (current.revision !== item.revision) fail(409, 'REVISION_CONFLICT', '收集已更新，请刷新后重试。');
@@ -184,14 +191,14 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       discarded: existing?.files.filter((file) => !kept.some((saved) => saved.id === file.id))
         .map(({ id, objectKey }) => ({ id, objectKey })) || [],
     };
-    try { await repo.putNew(requestKey, receipt); }
+    try { await measure('receipt-write', () => repo.putNew(requestKey, receipt)); }
     catch (error) {
       if (!isConflict(error)) throw error;
       const winner = await repo.get(requestKey);
       if (!winner) throw error;
       return resume(winner);
     }
-    return offer(context, receiptId, receipt, item, round);
+    return offer(context, receiptId, receipt, item, round, reservation);
   }
 
   async function ticket(context, id) {
@@ -281,48 +288,59 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
     else await job;
   }
 
-  async function commit(context, id, receipt, enforceRate = false) {
+  async function commit(context, id, receipt, { enforceRate = false, reservation } = {}) {
     const { record, pending, objectPrefix, expectedRevision } = receipt;
     const target = submissionKey(receipt);
     const quota = roundQuota(repo, record.itemId, record.roundId, now);
-    async function finish(value) {
+    async function finish(value, snapshot) {
       await Promise.all([
-        measure('quota', () => quota.saved(id)).catch(() => {}),
+        measure('quota', () => quota.saved(id, snapshot)).catch(() => {}),
         pending.length || receipt.discarded?.length
           ? cleanupLater(context, record.itemId, record.roundId, { id, winner: value }) : null,
       ]);
       return value;
     }
-    const [current, { active }] = await measure('prepare', () => Promise.all([repo.get(target), quota.read()]));
-    if (current?.receiptId === id) return finish(current);
+    const [current, quotaState] = reservation ? [null, reservation] :
+      await measure('prepare', () => Promise.all([repo.get(target), quota.read()]));
+    if (current?.receiptId === id) return finish(current, quotaState);
     if (current) {
-      await quota.discard(id);
+      await quota.discard(id, quotaState);
       fail(409, 'REVISION_CONFLICT', '提交已发生变化，请刷新后重试。');
     }
-    if (!active[id] || now() >= active[id].expiresAt) {
+    const active = quotaState.active[id];
+    if (!active || now() >= active.expiresAt) {
       const winner = await repo.get(target);
-      if (winner?.receiptId === id) return finish(winner);
+      if (winner?.receiptId === id) return finish(winner, quotaState);
       fail(410, 'SUBMISSION_EXPIRED', '本次提交已取消或过期。');
     }
     if (enforceRate) await measure('rate', () => repo.throttle('collection-complete', record.userId, 60));
-    await queueCleanup(id, receipt);
+    // An upload token was issued only after its durable cleanup task existed.
+    // A direct text save can still be replacing files from an earlier receipt.
+    if (!pending.length) await queueCleanup(id, receipt);
     const storage = pending.length ? gateway() : null;
     const candidates = [];
     let disposable = true;
     try {
-      const copies = await mapConcurrent(pending, 5, async ({ extension, ...file }) => {
+      const staged = await mapConcurrent(pending, 5, async ({ extension, ...file }) => {
         const head = await measure('staging-head', () => storage.head(file.objectKey));
         if (!matchingObject(head, file)) fail(409, 'UPLOAD_MISMATCH', '附件尚未就绪，或内容与声明不一致。');
-        const final = objectPrefix + 'final/' + id + '/' + file.id + '/' + randomUUID();
-        candidates.push(final);
-        await measure('copy', () => storage.copy(file.objectKey, final, head.etag));
-        const archived = await measure('final-head', () => storage.head(final));
-        if (!matchingObject(archived, file) || archived.etag !== head.etag) fail(409, 'UPLOAD_CHANGED', '附件在确认期间发生变化。');
-        return { ...file, objectKey: final, etag: head.etag };
+        return { file, etag: head.etag };
       });
-      await measure('publish-index', () => locateSubmission(repo, record));
-      await measure('reserve', () => quota.authoriseSave(id));
-      const value = { ...record, receiptId: id, files: [...record.files, ...copies], late: submissionWasLate(record),
+      const [archivedFiles, index] = await Promise.allSettled([
+        mapConcurrent(staged, 5, async ({ file, etag }) => {
+          const final = objectPrefix + 'final/' + id + '/' + file.id + '/' + randomUUID();
+          candidates.push(final);
+          await measure('copy', () => storage.copy(file.objectKey, final, etag));
+          const archived = await measure('final-head', () => storage.head(final));
+          if (!matchingObject(archived, file) || archived.etag !== etag) fail(409, 'UPLOAD_CHANGED', '附件在确认期间发生变化。');
+          return { ...file, objectKey: final, etag };
+        }),
+        measure('publish-index', () => locateSubmission(repo, record)),
+      ]);
+      if (archivedFiles.status === 'rejected') throw archivedFiles.reason;
+      if (index.status === 'rejected') throw index.reason;
+      const saving = await measure('reserve', () => quota.authoriseSave(id, quotaState));
+      const value = { ...record, receiptId: id, files: [...record.files, ...archivedFiles.value], late: submissionWasLate(record),
         status: submissionStatus(record), updatedAt: iso(),
       };
       // A transport error can conceal a successful commit. Retain the candidate
@@ -331,7 +349,7 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
       // The receipt captures the verified predecessor and quota admits one
       // potential writer. The conditional next revision also settles retries.
       const committed = await measure('write', () => repo.putNew(target, { ...value, revision: expectedRevision + 1 }));
-      return await finish(committed);
+      return await finish(committed, saving);
     } catch (error) {
       // Another confirmation can finish and remove staging while this one is
       // still reading it. A matching committed receipt settles both requests.
@@ -354,18 +372,23 @@ export function collectionSubmissions({ repo, env, now, getGateway, measure = (_
 
   async function complete(context, id) {
     const receipt = await ticket(context, id);
-    return receiptView(await commit(context, id, receipt, true));
+    return receiptView(await commit(context, id, receipt, { enforceRate: true }));
   }
 
   async function cancel(context, id) {
     const receipt = await ticket(context, id);
     const { itemId, roundId } = receipt.record;
-    const current = await repo.get(submissionKey(receipt));
-    if (current?.receiptId === id) fail(409, 'SUBMISSION_COMMITTED', '这次提交已经保存。');
-    await queueCleanup(id, receipt);
     const quota = roundQuota(repo, itemId, roundId, now);
-    if (current) await quota.discard(id);
-    else await quota.cancel(id);
+    const target = submissionKey(receipt);
+    let [current, snapshot] = await Promise.all([repo.get(target), quota.read()]);
+    if (current?.receiptId === id) fail(409, 'SUBMISSION_COMMITTED', '这次提交已经保存。');
+    if (!receipt.pending.length) await queueCleanup(id, receipt);
+    if (current) await quota.discard(id, snapshot);
+    else if (!await quota.cancel(id, snapshot)) {
+      // The committed revision can appear between the target and quota reads.
+      current = await repo.get(target);
+      if (current?.receiptId === id) fail(409, 'SUBMISSION_COMMITTED', '这次提交已经保存。');
+    }
     await cleanupLater(context, itemId, roundId, { id, winner: current });
     return { cancelled: true };
   }

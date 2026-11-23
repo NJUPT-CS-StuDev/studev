@@ -2,28 +2,13 @@
 import SiteLayout from '../site/SiteLayout.astro';
 import Workspace from '../platform/client/collections/Workspace';
 import CollectionEntry from '../platform/client/collections/Entry';
+import PlatformStartup from '../platform/client/PlatformStartup.astro';
 import styles from '../platform/client/collections/workspace.css?inline';
 ---
 <SiteLayout title="收集 — StuDev" description="StuDev 的课程作业、活动报名和资料收集" active="forms" noindex={true}>
   <Fragment slot="head">
     <style is:inline set:html={styles}></style>
-    <script is:inline>
-      const query = new URLSearchParams(location.search);
-      const id = query.get('id');
-      const mine = !id && query.has('mine');
-      if (id || mine) document.documentElement.dataset.collectionDetail = '';
-      if (navigator.locks && (!id || /^[a-zA-Z0-9_-]+$/.test(id))) {
-        const path = id ? '/collections/items/' + id : mine ? '/collections/mine' : '/collections';
-        const request = navigator.locks.request('studev-session-refresh', () => {
-          if (localStorage.getItem('studev_session_refresh_pending') || localStorage.getItem('studev_session_foreground_renewal')) return null;
-          const generation = localStorage.getItem('studev_session_generation');
-          return { generation, response: fetch('/api/platform' + path, {
-            credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
-          }).catch(() => null) };
-        }).catch(() => null);
-        window.studevCollectionEntry = { path, request };
-      }
-    </script>
+    <PlatformStartup surface="collections" />
   </Fragment>
   <Workspace client:only="react">
     <div slot="fallback" class="cw-workspace">

@@ -5,33 +5,33 @@ import {
 import product from '../../../product.json';
 import { PRODUCT_CONFIG } from './product';
 import { SEARCH_BUNDLE_FORMAT } from 'wasm-search';
-import { releaseAt, validRelease, type CampusRelease } from './release';
+import { CAMPUS_POINTER_PATH, releaseAt, validRelease, type CampusPointer } from './release';
 
 /** A release this build can read: valid, and in the search format its engine reads. */
-const readable = (value: unknown): value is CampusRelease => validRelease(value) && value.search_format === SEARCH_BUNDLE_FORMAT;
+const readable = (value: unknown): value is CampusPointer => validRelease(value) && value.search_format === SEARCH_BUNDLE_FORMAT;
 
 export const CAMPUS_RELEASE_CACHE = 'studev-campus-release';
 // The offline resource inventories belong to the service worker. Keeping them
 // out of this module removes hundreds of kilobytes from each campus entry.
-const local: CampusRelease = {
+const local: CampusPointer = {
     version, base, built_at, teaching, exams, labs, rooms, map_version, data_version, knowledge_version,
     map_base, knowledge_base, search_base, texts_base, search_format,
 };
 const browser = typeof window !== 'undefined';
-const entry = `${product.campusOrigin}/campus-release.json`;
+const entry = new URL(CAMPUS_POINTER_PATH, product.campusOrigin).href;
 const dataOrigin = import.meta.env.DEV ? (browser ? location.origin : product.origin) : product.campusOrigin;
 let available: string | undefined;
-function kept(): CampusRelease | undefined {
+function kept(): CampusPointer | undefined {
     try {
         const value = JSON.parse(localStorage.getItem(CAMPUS_RELEASE_CACHE) ?? 'null');
         return value?.entry === entry && readable(value.release) ? value.release : undefined;
     } catch { return undefined; }
 }
-let discovering: Promise<CampusRelease | undefined> | undefined;
-export function latestCampusRelease(): Promise<CampusRelease | undefined> {
+let discovering: Promise<CampusPointer | undefined> | undefined;
+export function latestCampusRelease(): Promise<CampusPointer | undefined> {
     return discovering ??= discoverCampus().finally(() => { discovering = undefined; });
 }
-async function discoverCampus(): Promise<CampusRelease | undefined> {
+async function discoverCampus(): Promise<CampusPointer | undefined> {
     try {
         // The pointer requires HTTP revalidation. The default cache mode also reuses its document preload.
         const response = await fetch(entry, { signal: AbortSignal.timeout(4000) });
@@ -47,7 +47,7 @@ const initial = browser ? releaseAt(cached ?? local, dataOrigin, import.meta.env
 const opensSearch = browser && !import.meta.env.DEV && location.pathname === '/search/' && navigator.onLine;
 /** The visit reads one snapshot. On a direct cold search, resolve the live pointer before opening its index:
  * the deployment's bundled snapshot may have been retired by a separate data release. */
-export const DATA_RELEASE: CampusRelease = (opensSearch ? await latestCampusRelease() : undefined) ?? initial;
+export const DATA_RELEASE: CampusPointer = (opensSearch ? await latestCampusRelease() : undefined) ?? initial;
 if (browser && !import.meta.env.DEV) {
     const check = async () => {
         if (!navigator.onLine) return;

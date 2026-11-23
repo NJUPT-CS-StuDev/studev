@@ -26,11 +26,12 @@ try {
                 if(failNext){failNext=false;return json({error:{message:'成员暂时无法读取'}},503);}
                 const query=url.searchParams.get('query')||'',offset=Number(url.searchParams.get('offset')||0),limit=50;
                 const filtered=members.filter(item=>item.nickname.includes(query));
-                return json({items:filtered.slice(offset,offset+limit),total:filtered.length,offset,limit});
+                return json({items:filtered.slice(offset,offset+limit),total:filtered.length,offset,limit,
+                    ...(url.searchParams.get('entry')==='1' ? {session} : {})});
             }
             if(url.pathname.startsWith('/api/platform/members/')) {
                 const found=members.find(item=>url.pathname.endsWith('/'+item.id));
-                return found?json({member:found}):json({error:{message:'找不到这位成员'}},404);
+                return found?json({member:found,...(url.searchParams.get('entry')==='1' ? {session} : {})}):json({error:{message:'找不到这位成员'}},404);
             }
             return json({error:{message:'fixture endpoint unavailable'}},403);
         });
@@ -38,6 +39,8 @@ try {
         await page.goto(new URL('/members/',origin).href);
         await page.waitForFunction(()=>document.querySelectorAll('.p-member-row').length===50);
         assert.equal(await page.locator('[data-members-count]').textContent(),'51 位成员');
+        assert.equal(calls.filter(call=>call.path==='/api/platform/members').length,1);
+        assert(!calls.some(call=>call.path==='/api/platform/auth/session'));
         await page.locator('[data-me]').click();
         await page.getByRole('link', { name: /^成员\s/ }).filter({ hasText: '昵称与签名' }).waitFor();
         await page.keyboard.press('Escape');
@@ -66,7 +69,7 @@ try {
         assert(calls.filter(call=>call.path.startsWith('/api/platform/members')).every(call=>call.method==='GET'));
         assert(calls.filter(call=>call.method!=='GET').every(call=>call.path==='/api/platform/sync'));
         assert(!calls.some(call=>call.path.includes('/admin/')||call.path.includes('/users')));
-        results.push({width,passed:true,checks:['ordinary role','Me entry','search nickname','pagination','profile and Back','literal user text','private fields absent','no horizontal overflow','503 retry','404','public member GET only; existing sync mocked']});
+        results.push({width,passed:true,checks:['ordinary role','one authenticated request for the first page','Me entry','search nickname','pagination','profile and Back','literal user text','private fields absent','no horizontal overflow','503 retry','404','public member GET only; existing sync mocked']});
         await context.close();
     }
     for (const role of ['admin', 'owner']) {
@@ -75,12 +78,15 @@ try {
         const managedUser = { ...session.user, id: members[0].id, memberships: [] };
         const calls = [];
         await context.route('**/api/platform/**', async route => {
-            const { pathname } = new URL(route.request().url());
+            const { pathname, searchParams } = new URL(route.request().url());
             calls.push(pathname);
             if (pathname === '/api/platform/auth/session') return route.fulfill({ json: staff });
+            if (pathname === '/api/platform/members') return route.fulfill({ json: { session: staff } });
             if (pathname === '/api/platform/admin/users') return route.fulfill({ json: { items: [managedUser] } });
             if (pathname === '/api/platform/organizations') return route.fulfill({ json: { items: [] } });
-            if (pathname === '/api/platform/members/' + managedUser.id) return route.fulfill({ json: { member: members[0] } });
+            if (pathname === '/api/platform/members/' + managedUser.id) return route.fulfill({ json: {
+                member: members[0], ...(searchParams.get('entry') === '1' ? { session: staff } : {}),
+            } });
             return route.fulfill({ status: 404, json: { error: { message: 'fixture endpoint unavailable' } } });
         });
         const page = await context.newPage();
@@ -99,6 +105,7 @@ try {
         assert.equal(calls.filter(path => path === '/api/platform/admin/users').length, managementReads);
         await page.locator('[data-members-back]').click();
         await checkManagement();
+        assert(!calls.includes('/api/platform/auth/session'));
         results.push({ role, passed: true, checks: ['session-based management', 'shared member profile', 'return to management'] });
         await context.close();
     }
@@ -108,6 +115,13 @@ try {
     await page.waitForURL(url=>url.pathname==='/login/'&&url.searchParams.get('next')==='/members/?id=member');
     results.push({guest:'redirects to login preserving selected profile',passed:true});
     await context.close();
+    const setupContext=await browser.newContext();
+    await setupContext.route('**/api/platform/members?**',route=>route.fulfill({json:{session:{...session,passwordChangeRequired:true}}}));
+    const setup=await setupContext.newPage();
+    await setup.goto(new URL('/members/',origin).href);
+    await setup.waitForURL(url=>url.pathname==='/account/'&&url.searchParams.get('setup')==='1');
+    results.push({setup:'directs accounts with outstanding setup to account settings',passed:true});
+    await setupContext.close();
     await writeFile(`${output}/result.json`,JSON.stringify({passed:true,results},null,2));
     console.log(JSON.stringify({passed:true,contexts:results.length,output}));
 } finally { await browser.close(); }

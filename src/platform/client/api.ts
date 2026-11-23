@@ -178,8 +178,8 @@ function browserDevice() {
     const system = agent.includes('Android') ? 'Android' : /iPhone|iPad/.test(agent) ? 'iOS' : agent.includes('Windows') ? 'Windows' : agent.includes('Mac') ? 'macOS' : 'Linux';
     return { deviceId, deviceName: `${system} · ${browser}` };
 }
-type CollectionEntry = { path: string; request: Promise<{ generation: string | null; response: Promise<Response | null> } | null> };
-declare global { interface Window { studevCollectionEntry?: CollectionEntry } }
+type PlatformStartup = { path: string; request: Promise<{ generation: string | null; response: Promise<Response | null> } | null> };
+declare global { interface Window { studevPlatformStartup?: PlatformStartup } }
 
 let collectionProof: { generation: string | null; csrfToken: string } | undefined;
 export function collectionAuthorized() {
@@ -187,11 +187,11 @@ export function collectionAuthorized() {
         localStorage.getItem('studev_session_generation') === collectionProof.generation;
 }
 
-async function collectionEntry(path: string, generation: string | null, credentials: RequestCredentials) {
+async function platformStartup(path: string, generation: string | null, credentials: RequestCredentials) {
     if (typeof window === 'undefined') return null;
-    const entry = window.studevCollectionEntry;
+    const entry = window.studevPlatformStartup;
     if (credentials !== 'same-origin' || entry?.path !== path) return null;
-    delete window.studevCollectionEntry;
+    delete window.studevPlatformStartup;
     const initial = await entry.request;
     const response = initial?.generation === generation ? await initial.response : null;
     return localStorage.getItem('studev_session_generation') === generation &&
@@ -225,7 +225,7 @@ async function refreshCookieSession(generation: string | null, foreground: boole
 export async function api<T>(path: string, body?: unknown, options: RequestInit = {}, retry = true): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
     throw new PlatformError('请求路径无效。'); let response: Response; let generation: string | null;
     const publicCollectionRead = body === undefined && (!options.method || options.method === 'GET') &&
-        /^\/collections(?:\/items\/[A-Za-z0-9_-]+)?$/.test(path);
+        /^\/collections(?:\/items\/[A-Za-z0-9_-]+)?$/.test(path.split('?', 1)[0]!);
     const foreground = path !== '/auth/logout' && pageInUse();
     const sessionRequest = !['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path);
     let credentials = options.credentials ?? 'same-origin';
@@ -247,9 +247,9 @@ export async function api<T>(path: string, body?: unknown, options: RequestInit 
         }
         return api<T>(path, body, options, false);
     }
-    const collectionRead = publicCollectionRead || (path === '/collections/mine' && body === undefined && !options.method);
+    const startupRead = body === undefined && (!options.method || options.method === 'GET');
     const csrfToken = path.startsWith('/collections') && collectionAuthorized() ? collectionProof?.csrfToken : currentSession?.csrfToken;
-    response = (collectionRead && retry ? await collectionEntry(path, generation, credentials) : null) ?? await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials, cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    response = (startupRead && retry ? await platformStartup(path, generation, credentials) : null) ?? await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials, cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 catch (error) {
     if (error instanceof PlatformError) throw error;
@@ -292,29 +292,27 @@ catch {
     else localStorage.removeItem('studev_session_generation');
 }
 return data as T; }
+function rememberSession(value: Session | null) {
+    currentSession = value;
+    try {
+        if (value?.user) localStorage.setItem('studev_auth_user', JSON.stringify({
+            id: value.user.id, nickname: value.user.nickname, role: value.user.role || 'user',
+            qq: value.user.qq, verifiedAt: Date.now(),
+        }));
+        else localStorage.removeItem('studev_auth_user');
+        window.dispatchEvent(new Event('studev:account'));
+    } catch {}
+}
+
 async function loadSession(): Promise<Session | null> {
     // Share the in-flight session lookup across components on the same page.
     sessionRequest ||= (async () => {
         try {
-            currentSession = await api<Session>('/auth/session');
-            if (currentSession?.user) {
-                try {
-                    localStorage.setItem('studev_auth_user', JSON.stringify({
-                        id: currentSession.user.id,
-                        nickname: currentSession.user.nickname,
-                        role: currentSession.user.role || 'user',
-                        qq: currentSession.user.qq,
-                        verifiedAt: Date.now()
-                    }));
-                    window.dispatchEvent(new Event('studev:account'));
-                } catch {}
-            }
+            rememberSession(await api<Session>('/auth/session'));
         }
         catch (e) {
             if (e instanceof PlatformError && e.status === 401) {
-                currentSession = null;
-                try { localStorage.removeItem('studev_auth_user'); } catch {}
-                window.dispatchEvent(new Event('studev:account'));
+                rememberSession(null);
             }
             else
                 throw e;
@@ -323,8 +321,7 @@ async function loadSession(): Promise<Session | null> {
     })().finally(() => { sessionRequest = null; });
     return sessionRequest;
 }
-export async function session(required = false, staff = false): Promise<Session | null> {
-    await loadSession();
+function sessionForPage(required: boolean, staff: boolean): Session | null {
     if (required && !currentSession) {
     location.replace(`/login/?next=${encodeURIComponent(location.pathname + location.search)}`);
     return null;
@@ -339,6 +336,14 @@ export async function session(required = false, staff = false): Promise<Session 
         return null;
     }
 } return currentSession; }
+export function acceptSession(value: Session | null, required = false): Session | null {
+    rememberSession(value);
+    return sessionForPage(required, false);
+}
+export async function session(required = false, staff = false): Promise<Session | null> {
+    await loadSession();
+    return sessionForPage(required, staff);
+}
 export function safeNext(raw: string | null): string { if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\x00-\x20]/.test(raw))
     return '/forms/'; try {
     const u = new URL(raw, location.origin);

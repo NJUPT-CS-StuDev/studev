@@ -49,12 +49,13 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
         fetchJson<Record<string, OpeningRecord>>(`${DATA_RELEASE.base}/hours.json`),
         loadRoomIndex(),
     ]);
+    const roomById = new Map(rooms.rooms.map(room => [room.id, room]));
     const joined = places.map(place => {
         if (!place.routing || place.routing.type !== 'target' || !network.targets[place.routing.id]?.length) {
             throw new Error(`地图实体缺少规范导航目标：${place.id}`);
         }
         const record = opening[place.id];
-        const room = rooms.rooms.find(room => room.id === place.id);
+        const room = roomById.get(place.id);
         return { ...place,
             ...(room ? { names: [...new Set([...place.names, ...room.names])], seats: room.seats ?? undefined, room_kinds: room.kinds } : {}),
             ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };

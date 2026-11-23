@@ -1,7 +1,21 @@
-import { createHmac, randomInt, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomUUID } from 'node:crypto';
 import { fail } from './common.mjs';
 
 const ROOT = 'platform-v1/';
+
+// A delayed rebuild may publish an old projection. A strong head listing
+// validates every read before the derived rows can be used.
+export async function revisionProjection(repo, key, prefix, build) {
+  const [heads, snapshot] = await Promise.all([repo.heads(prefix), repo.get(key).catch(() => null)]);
+  const ordered = [...heads.values()].sort((a, b) => a.key.localeCompare(b.key));
+  const version = createHash('sha256').update(JSON.stringify(ordered.map(({ key, etag }) => [key, etag]))).digest('hex');
+  if (snapshot?.version === version) return snapshot.rows;
+  const rows = await build(heads);
+  const value = { version, rows };
+  if (Buffer.byteLength(JSON.stringify(value)) <= 2 * 1024 * 1024) await repo.put(key, value).catch(() => {});
+  return rows;
+}
+
 export function isConflict(error) {
   return error?.status === 409 || error?.statusCode === 409 || error?.code === 'PRECONDITION_FAILED' || [409, 412].includes(error?.$metadata?.httpStatusCode) || /already exists|precondition|conflict|onlyifnew/i.test(String(error?.message || ''));
 }

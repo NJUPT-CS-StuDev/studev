@@ -1,5 +1,5 @@
 import { academicYearId, academicYearWindow, isWithin, namedOrganizations, positionLabel, studentCenter } from '../organizations.mjs';
-import { isConflict } from './store.mjs';
+import { isConflict, revisionProjection } from './store.mjs';
 
 const rosterPeople = 'roster/people';
 const publicOrganizations = orgs => new Set(orgs.filter(org => org.publicRoster && isWithin(org.id, studentCenter.id, orgs)).map(org => org.id));
@@ -103,12 +103,14 @@ export async function hasPublishedRosterAppointment(repo, id, orgs, today) {
 }
 
 export async function readRosterPeople(repo) {
-  const heads = [...(await repo.heads(rosterPeople)).values()];
-  const people = [];
-  for (let start = 0; start < heads.length; start += 32) {
-    for (const record of await Promise.all(heads.slice(start, start + 32).map(repo.readRevision))) {
-      if (record?.person) people.push(record.person);
+  return revisionProjection(repo, 'roster/people-summary.json', rosterPeople, async tips => {
+    const heads = [...tips.values()];
+    const people = [];
+    for (let start = 0; start < heads.length; start += 32) {
+      for (const record of await Promise.all(heads.slice(start, start + 32).map(repo.readRevision))) {
+        if (record?.person) people.push(record.person);
+      }
     }
-  }
-  return people;
+    return people;
+  });
 }

@@ -1,0 +1,31 @@
+---
+interface Props { surface: 'account' | 'collections' | 'members' }
+const { surface } = Astro.props;
+---
+<script is:inline define:vars={{ surface }}>
+  const account = surface === 'account';
+  const members = surface === 'members';
+  const query = new URLSearchParams(location.search);
+  const id = account ? null : query.get('id');
+  const mine = !account && !id && query.has('mine');
+  if (surface === 'collections' && (id || mine)) document.documentElement.dataset.collectionDetail = '';
+  if (navigator.locks && (!id || /^[a-zA-Z0-9_-]+$/.test(id))) {
+    const board = new URLSearchParams();
+    if (id && !query.get('receipt')) {
+      board.set('board', '1');
+      if (query.get('round')) board.set('round', query.get('round'));
+    }
+    const memberParams = new URLSearchParams({ entry: '1', query: (query.get('query') || '').trim(), offset: '0', limit: '50' });
+    const path = account ? '/auth/session'
+      : members ? id ? '/members/' + encodeURIComponent(id) + '?entry=1' : '/members?' + memberParams
+      : id ? '/collections/items/' + id + (board.size ? '?' + board : '') : mine ? '/collections/mine' : '/collections';
+    const request = navigator.locks.request('studev-session-refresh', () => {
+      if (localStorage.getItem('studev_session_refresh_pending') || localStorage.getItem('studev_session_foreground_renewal')) return null;
+      const generation = localStorage.getItem('studev_session_generation');
+      return { generation, response: fetch('/api/platform' + path, {
+        credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
+      }).catch(() => null) };
+    }).catch(() => null);
+    window.studevPlatformStartup = { path, request };
+  }
+</script>

@@ -10,6 +10,18 @@ import { createSyncService } from './sync.mjs';
 export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now, academicYear } = {}) {
   const revisions = new Map();
   return async function handle(context) {
+    const started = performance.now();
+    const timings = new Map();
+    const measure = async (name, run) => {
+      const start = performance.now();
+      try { return await run(); }
+      finally { timings.set(name, Math.max(timings.get(name) || 0, performance.now() - start)); }
+    };
+    function timed(result) {
+      timings.set('platform', performance.now() - started);
+      result.headers.set('Server-Timing', [...timings].map(([name, ms]) => `${name};dur=${ms.toFixed(1)}`).join(', '));
+      return result;
+    }
     try {
       const env = context.env || {};
       if (String(env.PLATFORM_ENABLED) !== 'true') fail(503, 'NOT_OPEN', '平台尚未开放，请稍后再试。');
@@ -24,30 +36,22 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       const identity = createIdentity({ repo, env, now, academicYear });
       // Never fall back to cookies when an Authorization header is present.
       // Validate it before exempting any endpoint from the browser boundary.
-      if (hasAuthorization(request)) await identity.authenticate(request, { required: true, allowEnrollment: true });
-      const identityResponse = await identity.handle(context, path);
-      if (identityResponse) return identityResponse;
+      if (hasAuthorization(request)) await measure('auth', () => identity.authenticate(request, { required: true, allowEnrollment: true }));
+      const identityResponse = await measure('identity', () => identity.handle(context, path));
+      if (identityResponse) return timed(identityResponse);
       const aiResponse = await createAiService({ identity, repo, env, now })(context, path);
-      if (aiResponse) return aiResponse;
+      if (aiResponse) return timed(aiResponse);
       const syncResponse = await createSyncService({ identity, repo })(context, path);
-      if (syncResponse) return syncResponse;
-      const timings = new Map();
-      const measure = async (name, run) => {
-        const started = performance.now();
-        try { return await run(); }
-        finally { timings.set(name, Math.max(timings.get(name) || 0, performance.now() - started)); }
-      };
+      if (syncResponse) return timed(syncResponse);
+      timings.delete('identity');
       const collections = createCollectionsService({ repo, identity, env, now, getGateway, measure });
       const collectionsResponse = await measure('collection', () => collections.handle(context, path));
-      if (collectionsResponse) {
-        collectionsResponse.headers.set('Server-Timing', [...timings].map(([name, ms]) => name + ';dur=' + ms.toFixed(1)).join(', '));
-        return collectionsResponse;
-      }
+      if (collectionsResponse) return timed(collectionsResponse);
       fail(404, 'NOT_FOUND', '接口不存在。');
     } catch (error) {
-      if (error instanceof AppError) return response({ error: { code: error.code, message: error.message } }, error.status);
+      if (error instanceof AppError) return timed(response({ error: { code: error.code, message: error.message } }, error.status));
       safeLog(error);
-      return response({ error: { code: 'SERVICE_UNAVAILABLE', message: '服务暂时不可用，请稍后重试。' } }, 503);
+      return timed(response({ error: { code: 'SERVICE_UNAVAILABLE', message: '服务暂时不可用，请稍后重试。' } }, 503));
     }
   };
 }

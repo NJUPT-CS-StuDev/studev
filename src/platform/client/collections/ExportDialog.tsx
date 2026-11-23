@@ -24,6 +24,8 @@ const builtinTokens = ['学号', '姓名', '班级', '批次', '收集名称', '
 const schemeKey = 'studev_collection_export_scheme';
 const tokens = /\{([^{}]+)\}/g;
 const fieldPrefix = '字段:';
+const nameOrder = new Intl.Collator('zh-CN', { numeric: true });
+const previewPageSize = 80;
 interface Scheme { folders: FolderLayer[]; pattern: string; statistics: boolean; missing: boolean }
 
 function readScheme(): Scheme | undefined {
@@ -99,8 +101,9 @@ function makePlan({ files, attachmentRows, reportRows, scheme, title, round, rep
     const placement = new Map(attachmentRows.flatMap((row, index) => row.submissionId ? [[row.submissionId, index] as const] : []));
     const rootFolders = new Map<string, string>();
     const takenRootNames = new Set(occupied);
+    const nextSuffix = new Map<string, number>();
     const ordered = [...files].sort((a, b) => (placement.get(a.submissionId) ?? Infinity) - (placement.get(b.submissionId) ?? Infinity) ||
-        a.fieldId.localeCompare(b.fieldId) || a.name.localeCompare(b.name, 'zh-CN', { numeric: true }) || a.id.localeCompare(b.id));
+        a.fieldId.localeCompare(b.fieldId) || nameOrder.compare(a.name, b.name) || a.id.localeCompare(b.id));
     for (const file of ordered) {
         const row = bySubmission.get(file.submissionId);
         if (!row) continue;
@@ -137,8 +140,17 @@ function makePlan({ files, attachmentRows, reportRows, scheme, title, round, rep
         const ending = extension ? zipSegment('file.' + extension).slice(4) : '';
         const full = (suffix = '') => (directory ? directory + '/' : '') + cleanStem + suffix + ending;
         let path = full();
-        for (let count = 2; occupied.has(path.toLowerCase()); count++) path = full('-' + count);
-        occupied.add(path.toLowerCase());
+        const base = path.toLowerCase();
+        let key = base;
+        if (occupied.has(base)) {
+            let suffix = nextSuffix.get(base) ?? 2;
+            do {
+                path = full('-' + suffix++);
+                key = path.toLowerCase();
+            } while (occupied.has(key));
+            nextSuffix.set(base, suffix);
+        }
+        occupied.add(key);
         entries.push({ path, file });
     }
     return entries;
@@ -176,7 +188,7 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
     }));
     const [manifest, setManifest] = useState<{ key: string; files: ExportAttachment[]; time: string; error?: string }>();
     const [attempt, retry] = useState(0);
-    const [expanded, setExpanded] = useState(false);
+    const [previewPage, setPreviewPage] = useState(0);
     const [working, setWorking] = useState(false);
     const [attachmentError, setAttachmentError] = useState('');
     const [message, setMessage] = useState('');
@@ -304,14 +316,16 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
         }
     }
 
-    const shown = expanded ? entries : entries.slice(0, 16);
+    const pageCount = Math.ceil(entries.length / previewPageSize);
+    const page = Math.max(0, Math.min(previewPage, pageCount - 1));
+    const shown = entries.slice(page * previewPageSize, (page + 1) * previewPageSize);
     return <Dialog title="打包附件" onClose={onClose} wide busy={working}>
         <div className="cw-export">
             <div className="cw-export-body">
                 <fieldset className="cw-export-settings" disabled={working} aria-label="导出设置">
                     <div className="cw-export-field">
                         <label htmlFor="cw-export-scope">附件范围</label>
-                        <select id="cw-export-scope" value={scope} onChange={event => { setScope(event.target.value === 'all' ? 'all' : 'current'); setAttachmentError(''); }}>
+                        <select id="cw-export-scope" value={scope} onChange={event => { setScope(event.target.value === 'all' ? 'all' : 'current'); setPreviewPage(0); setAttachmentError(''); }}>
                             <option value="current">当前筛选 · {activeGroup} · {activeStatus}</option>
                             <option value="all">整个批次</option>
                         </select>
@@ -382,9 +396,11 @@ export default function ExportDialog({ path, title, round, rows, activeGroupId, 
                         : entries.length ? <>
                             <p className="cw-muted">{fileCount} 个附件{fileCount ? ' · ' + bytes(fileBytes) : ''} · {entries.length - fileCount} 份清单</p>
                             <ZipTree entries={shown} name={zipName} />
-                            {entries.length > 16 && <button type="button" className="cw-button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
-                                {expanded ? '收起' : '查看全部 ' + entries.length + ' 项'}
-                            </button>}
+                            {pageCount > 1 && <div className="cw-inline">
+                                <button type="button" className="cw-button" disabled={page === 0} onClick={() => setPreviewPage(page - 1)}>上一页</button>
+                                <span className="cw-muted" role="status">第 {page + 1} / {pageCount} 页</span>
+                                <button type="button" className="cw-button" disabled={page + 1 === pageCount} onClick={() => setPreviewPage(page + 1)}>下一页</button>
+                            </div>}
                         </> : <p className="cw-muted">{invalidPattern ? '命名规则有效后显示预览。' : '当前范围没有可打包的内容。'}</p>}
                 </section>
             </div>

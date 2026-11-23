@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { fail, readJson, response } from '../common.mjs';
 import { chinaDay, flattenOrganizationTree, isWithin } from '../../organizations.mjs';
-import { pinnedCollections } from '../../collections.mjs';
+import { pinnedCollections, roundAcceptsSubmissions, selectCollectionRound } from '../../collections.mjs';
 import { boardFor, boardRecords, catalogItems, definitions, directoryPeople, historyItems, itemView, myRecords, ownHistory, readItem, readRound, roundRecords } from './catalog.mjs';
 import { canManage, canSee, canSeeProgress, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
 import { collectionCsv, fileManifest, signAttachments } from './exports.mjs';
@@ -27,15 +27,33 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     }, 200, viewer.headers);
   }
 
-  async function detail(item, viewer, orgs, knownRecords) {
-    const mine = knownRecords ?? await myRecords(repo, viewer.user, new Set([item.id]));
+  async function detail(item, viewer, orgs, own, query) {
     const serverTime = now();
+    const round = query?.has('board') && canManage(item, viewer, orgs) && selectCollectionRound(item.rounds,
+      query.get('round') || '', value => roundAcceptsSubmissions(item, value, serverTime));
+    const [mine, initialBoard] = await Promise.all([
+      own ?? measure('mine', () => myRecords(repo, viewer.user, new Set([item.id]))),
+      round ? measure('board', () => boardRecords(repo, item.id, round.id)).then(records => ({
+        roundId: round.id, data: staffReport(item, round, records, viewer),
+      })) : null,
+    ]);
     return response({
       ...viewerInfo(viewer, orgs),
       serverTime,
       item: itemView(item, viewer, orgs, mine, serverTime, true),
       mySubmissions: ownHistory(new Map([[item.id, item]]), mine),
+      ...(initialBoard ? { initialBoard } : {}),
     }, 200, viewer.headers);
+  }
+
+  function staffReport(item, round, records, viewer) {
+    return {
+      items: records.map(({ id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles, complete, userId }) => ({
+        id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles, complete,
+        ...(studentId ? {} : { personId: userId }),
+      })),
+      ...boardFor(item, round, records, viewer, true),
+    };
   }
 
   async function createItem(input, viewer, orgs) {
@@ -106,42 +124,28 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     return response({ files });
   }
 
-  async function routeItem(context, viewer, orgs, route, receivedAt, item, own) {
+  async function routeItem(context, viewer, orgs, route, receivedAt, item, query) {
     const { request } = context;
     const [ , id, operation, roundId, action ] = route;
     if (roundId && operation !== 'rounds') fail(404, 'NOT_FOUND', '接口不存在。');
     const directDetail = !operation && request.method === 'GET';
     if (!canSee(item, viewer, orgs)) {
       if (directDetail && (item.status === 'draft' || item.status === 'closed') && viewer.user) {
-        const mine = await own;
+        const mine = await myRecords(repo, viewer.user, new Set([item.id]));
         if (mine.length) return detail(item, viewer, orgs, mine);
       }
       fail(404, 'NOT_FOUND', '收集不存在或无权查看。');
     }
     const manage = canManage(item, viewer, orgs);
-    if (directDetail) return detail(item, viewer, orgs, await own);
+    if (directDetail) return detail(item, viewer, orgs, null, query);
     const round = roundId ? readRound(item, roundId) : null;
     if (action === 'submissions' && request.method === 'POST') {
       return response(await submissions.begin(context, item, round, viewer.user, receivedAt), 201);
     }
     if (action === 'submissions' && request.method === 'GET') {
       if (!manage && !canSeeProgress(item, viewer)) fail(403, 'STAFF_REQUIRED', '此账号无权查看本次收集的提交进度。');
-      const board = measure('board', () => boardRecords(repo, id, roundId));
-      if (!manage) return response(boardFor(item, round, await board, viewer, false));
-      const [records, quota] = await Promise.all([
-        board,
-        roundQuota(repo, id, roundId, now).status(),
-        submissions.cleanup(context, id, roundId),
-      ]);
-      return response({
-        items: records.map(({ id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles, complete, userId }) => ({
-          id, studentId, studentName, status, submittedAt, createdAt, late, hasFiles, complete,
-          ...(studentId ? {} : { personId: userId }),
-        })),
-        ...boardFor(item, round, records, viewer, true),
-        usage: { authorizations: quota.active + records.length, pending: quota.active,
-          completed: records.length, fileBytes: records.reduce((total, record) => total + record.fileBytes, 0) },
-      });
+      const records = await measure('board', () => boardRecords(repo, id, roundId));
+      return response(manage ? staffReport(item, round, records, viewer) : boardFor(item, round, records, viewer, false));
     }
     if (!manage) fail(403, 'STAFF_REQUIRED', '此账号无权管理这项收集。');
     if (!operation && request.method === 'DELETE') {
@@ -238,14 +242,12 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const records = await myRecords(repo, user);
         return response({ items: ownHistory(await historyItems(repo, records), records) });
       }
-      const directDetail = itemMatch && !itemMatch[2] && request.method === 'GET';
       const itemId = itemMatch?.[1];
-      const [auth, orgs, available, item, own] = await Promise.all([
+      const [auth, orgs, available, item] = await Promise.all([
         authentication,
         identity.loadOrganizations(),
         onCatalog ? measure('catalog', () => catalogItems(repo)) : null,
         itemId ? readItem(repo, itemId) : null,
-        directDetail ? authentication.then(auth => myRecords(repo, auth?.user, new Set([itemId]))) : null,
       ]);
       const headers = auth?.kind === 'cookie' ? { 'X-CSRF-Token': auth.csrfToken } : {};
       const viewer = { user: auth?.user ?? null, today: chinaDay(receivedAt), headers };
@@ -266,7 +268,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const issuer = publishedIssuer(body, viewer, orgs);
         return createItem({ ...await itemInput(body, timestamp(), null, viewer, orgs, issuer, identity.loadAllUsers), issuer }, viewer, orgs);
       }
-      if (itemMatch) return routeItem(context, viewer, orgs, itemMatch, receivedAt, item, own);
+      if (itemMatch) return routeItem(context, viewer, orgs, itemMatch, receivedAt, item, url.searchParams);
       return routeSubmission(request, viewer, orgs, submissionMatch, receivedAt);
     },
   };

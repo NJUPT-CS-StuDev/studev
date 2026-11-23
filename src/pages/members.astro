@@ -1,9 +1,11 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
+import PlatformStartup from '../platform/client/PlatformStartup.astro';
 import '../platform/platform.css';
 import '../platform/members.css';
 ---
 <SiteLayout title="成员 — StuDev" active="members" noindex={true}>
+  <PlatformStartup slot="head" surface="members" />
   <div class="platform p-members" data-members-shell>
     <header class="p-heading p-members-heading">
       <h1 data-members-title>成员</h1>

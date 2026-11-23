@@ -4,11 +4,12 @@ import SearchApp from '../../campus/search/SearchApp';
 import product from '../../../product.json';
 import release from '../../data/campus-release.json';
 import { searchBootstrap } from '../../site/build/search-preload.mjs';
+import { CAMPUS_POINTER_PATH } from '../../campus/world/release';
 
 const { base: searchBase, manifest } = searchBootstrap(release, import.meta.env.DEV ? Astro.url.origin : product.campusOrigin, !import.meta.env.DEV);
 ---
 <SiteLayout title="搜索 — StuDev" description="搜南京邮电大学的课程、老师、班级、教室、地点、通知和学习资料。" active="search">
-  {!import.meta.env.DEV && <link slot="head" rel="preload" as="fetch" crossorigin="anonymous" href={`${product.campusOrigin}/campus-release.json`} data-campus-entry />}
+  {!import.meta.env.DEV && <link slot="head" rel="preload" as="fetch" crossorigin="anonymous" href={new URL(CAMPUS_POINTER_PATH, product.campusOrigin).href} data-campus-entry />}
   <script slot="head" is:inline type="application/json" data-search-base={searchBase} set:html={JSON.stringify(manifest).replaceAll('<', '\\u003c')} />
   <Fragment slot="head">
     <script>

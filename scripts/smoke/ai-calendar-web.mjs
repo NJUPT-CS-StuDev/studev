@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
+import { CAMPUS_POINTER_PATH, campusPointer } from '../../src/campus/world/release.ts';
 
 const root = resolve(import.meta.dirname, '../..');
 const origin = process.env.STUDEV_WEB_URL || 'http://127.0.0.1:4324';
 const output = process.env.STUDEV_AI_CALENDAR_SMOKE_DIR || 'D:/Temp/codex/studev-design-lrmcp/ai-calendar';
 const release = JSON.parse(await readFile(join(root, 'src/data/campus-release.json'), 'utf8'));
+const pointer = campusPointer(release);
 const product = JSON.parse(await readFile(join(root, 'product.json'), 'utf8'));
 const dataOrigin = new URL(product.campusOrigin).origin;
 const termPath = `${release.base}/teaching/${release.teaching}/term.json`;
@@ -25,7 +27,7 @@ try {
             localStorage.setItem('studev-campus-release', JSON.stringify({ release, entry }));
             localStorage.setItem('studev_prefs', JSON.stringify({ campus: '仙林' }));
             localStorage.setItem('studev_ai_model', JSON.stringify({ use: 'own', own: { base: 'https://calendar-inference.test', model: 'test', key: 'test-only' }, runtime: { model: '' } }));
-        }, { release, entry: `${dataOrigin}/campus-release.json` });
+        }, { release: pointer, entry: new URL(CAMPUS_POINTER_PATH, dataOrigin).href });
         const page = await context.newPage(), requests = [], privateReads = [];
         let termReads = 0;
         await context.route(`${dataOrigin}/**`, async route => {
@@ -33,7 +35,7 @@ try {
             if (path === termPath) {
                 termReads++;
                 await route.fulfill(state === 'unknown' ? { status: 503, body: 'Calendar temporarily unavailable' } : { json: state === 'out' ? { ...term, weeks: [] } : term });
-            } else if (path === '/campus-release.json') await route.fulfill({ json: release });
+            } else if (path === CAMPUS_POINTER_PATH) await route.fulfill({ json: pointer });
             else {
                 if (/\/classes\/[^/]+\.json$/.test(path)) privateReads.push(path);
                 try { await route.fulfill({ body: await readFile(join(root, 'public', decodeURIComponent(path))), contentType: 'application/json' }); }

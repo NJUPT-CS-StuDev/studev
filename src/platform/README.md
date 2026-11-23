@@ -173,7 +173,7 @@ All API paths below are relative to `/api/platform/collections`.
 | Request | Result |
 | --- | --- |
 | `GET /` | Scoped catalog with account role, organization list, summary rounds and the person's own statuses |
-| `GET /items/<id>` | Collection definition and own submissions. Authorized managers can also see recipient names and IDs |
+| `GET /items/<id>` | Collection definition and own submissions. Authorized managers can also see recipient names and IDs, and include one round's report with `?board=1&round=<round>` |
 | `GET /people` | Scoped staff directory for recipient selection |
 | `POST /items` | New draft or published collection with issuing identity, rounds and audience |
 | `POST /items/<id>` | Collection metadata, audience or lifecycle update using the current revision |
@@ -182,7 +182,7 @@ All API paths below are relative to `/api/platform/collections`.
 | `POST /items/<id>/duplicate` | New draft with copied collection fields and cleared deadlines |
 | `POST /items/<id>/rounds`, `POST /items/<id>/rounds/<round>` | Add or revise a round using the collection revision |
 | `POST /items/<id>/rounds/<round>/submissions` | Validate answers and attachment descriptors, then either finalize or issue the upload receipt |
-| `GET /items/<id>/rounds/<round>/submissions` | Staff report with compact records and quota usage, or the aggregate progress allowed for the participant |
+| `GET /items/<id>/rounds/<round>/submissions` | Staff report with compact records, or the aggregate progress allowed for the participant |
 | `GET /items/<id>/rounds/<round>/csv` | Staff CSV |
 | `POST /items/<id>/rounds/<round>/files` | Staff attachment manifest for selected submissions and naming fields, or download authorization for exactly the requested file revisions |
 | `GET /mine`, `GET /submissions/<id>` | Own history or one authorized record |

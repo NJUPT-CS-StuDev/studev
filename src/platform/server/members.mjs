@@ -1,8 +1,9 @@
 import { fail } from './common.mjs';
-import { isConflict } from './store.mjs';
+import { isConflict, revisionProjection } from './store.mjs';
 import { profileNickname } from './roster.mjs';
 
-const memberPath = /^members\/([a-f0-9-]{36})\/(\d{8})\.json$/;
+export const memberId = /^[a-f0-9-]{36}$/;
+const directory = 'members';
 const published = user => ({ id: user.id, nickname: profileNickname(user), signature: user.signature || '', active: user.status === 'active' });
 
 /** Public profiles have their own directory; account revisions never enter a member read. */
@@ -24,17 +25,18 @@ export function createMembers(repo, origin) {
     return projection(value);
   }
   async function list(query, offset, limit) {
-    const latest = new Map();
-    for (const key of await repo.list('members/')) {
-      const match = memberPath.exec(key);
-      if (match && (!latest.has(match[1]) || latest.get(match[1]) < key)) latest.set(match[1], key);
-    }
-    const keys = [...latest.values()], profiles = [];
-    for (let start = 0; start < keys.length; start += 32) profiles.push(...await Promise.all(keys.slice(start, start + 32).map(key => repo.get(key))));
-    const items = profiles.filter(value => value?.active).map(projection)
-      .filter(value => !query || value.nickname.normalize('NFKC').toLocaleLowerCase('zh-CN').includes(query))
-      .sort((a, b) => a.nickname.localeCompare(b.nickname, 'zh-CN') || a.id.localeCompare(b.id));
-    return { items: items.slice(offset, offset + limit), total: items.length, offset, limit };
+    const profiles = await revisionProjection(repo, directory + '/directory.json', directory, async (heads) => {
+      const tips = [...heads].filter(([id]) => memberId.test(id)).map(([, tip]) => tip);
+      const values = [];
+      for (let start = 0; start < tips.length; start += 32) {
+        values.push(...await Promise.all(tips.slice(start, start + 32).map(repo.readRevision)));
+      }
+      return values.filter(value => value?.active)
+        .map(({ id, nickname, signature }) => ({ id, nickname, signature }))
+        .sort((a, b) => a.nickname.localeCompare(b.nickname, 'zh-CN') || a.id.localeCompare(b.id));
+    });
+    const visible = query ? profiles.filter(value => value.nickname.normalize('NFKC').toLocaleLowerCase('zh-CN').includes(query)) : profiles;
+    return { items: visible.slice(offset, offset + limit).map(projection), total: visible.length, offset, limit };
   }
   return { publish, get, list };
 }

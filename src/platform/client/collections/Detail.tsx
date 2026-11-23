@@ -28,7 +28,8 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     detail: CollectionDetail; round: Round; version: number; authorize: () => Promise<void>; refresh: () => void;
 }) {
     const path = roundRoute(detail.item.id, round.id);
-    const [results, setResults] = useState<RoundBoardData>();
+    const initial = detail.initialBoard?.roundId === round.id ? detail.initialBoard.data : undefined;
+    const [results, setResults] = useState<RoundBoardData | undefined>(initial);
     const [loadError, setLoadError] = useState('');
     const [actionError, setActionError] = useState('');
     const [filter, setFilter] = useState('all');
@@ -43,6 +44,11 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     const [message, setMessage] = useState('');
     const [attempt, retry] = useState(0);
     useEffect(() => {
+        if (initial && !attempt) {
+            setResults(initial);
+            setLoadError('');
+            return;
+        }
         const controller = new AbortController();
         api<RoundBoardData>(`${path}/submissions`, undefined, { signal: controller.signal }).then(result => {
             if (!controller.signal.aborted) { setResults(result); setLoadError(''); }
@@ -50,7 +56,7 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
             if (!controller.signal.aborted) setLoadError(errorText(error));
         });
         return () => controller.abort();
-    }, [path, version, attempt]);
+    }, [initial, path, version, attempt]);
 
     const selected = detail.item.targetMode === 'selected';
     const rows = useMemo(() => {

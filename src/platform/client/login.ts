@@ -93,12 +93,8 @@ register.addEventListener('submit', async (e) => { e.preventDefault(); const b =
 catch (e) {
     message(status, errorText(e), 'error');
 } });
-void api<{
-    registrationEnabled: boolean;
-}>('/auth/config').then(c => { if (!c.registrationEnabled) {
-    q<HTMLButtonElement>('[data-auth-tab=register]').hidden = true;
-    register.hidden = true;
-} }).catch(e => message(status, errorText(e), 'error'));
+q<HTMLButtonElement>('button[type=submit]', login).disabled = false;
+q<HTMLButtonElement>('button[type=submit]', register).disabled = false;
 
 q<HTMLInputElement>('#register-student-id').addEventListener('blur',event=>{const input=event.currentTarget as HTMLInputElement;input.value=input.value.trim().toUpperCase();});
 

@@ -7,6 +7,7 @@ import policeEmblem from '../assets/police-emblem.png';
 import tokens from '../../design/tokens.json';
 import PwaPanel from '../pwa/PwaPanel.astro';
 import { PRODUCT_CONFIG } from '../campus/world/product';
+import product from '../../product.json';
 import { ClientRouter } from 'astro:transitions';
 // fill: the page is one full-height application (the map) with no footer.
 interface Props { title?: string; description?: string; active?: string; noindex?: boolean; fill?: boolean; noPwa?: boolean; }
@@ -71,6 +72,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     {Astro.url.pathname === '/' && <meta name="msvalidate.01" content="E44C2F6A09F0A678DED98C8374E549A1" />}
     {noindex && <meta name="robots" content="noindex" />}
     <link rel="icon" type="image/png" href={favicon.src} />
+    {appPage && !import.meta.env.DEV && <link rel="preconnect" href={product.campusOrigin} crossorigin="anonymous" />}
     {(active === 'history' || active === 'account' || active === 'forms') && <link rel="preconnect" href="https://q1.qlogo.cn" crossorigin />}
     <link rel="canonical" href={canonical} />
     <link rel="sitemap" type="application/xml" href={new URL('/sitemap-index.xml', Astro.site)} />

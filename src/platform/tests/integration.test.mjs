@@ -89,7 +89,12 @@ test('real identity and collection services compose: private mixed submissions, 
   assert.equal(reviewed.status, 200);
   assert.equal((await a.client.call(recordPath(id))).body.submission.status, 'accepted');
   const listed = await f.owner.call(`${roundPath(item)}/submissions`);
-  assert.equal(listed.body.usage.authorizations, 1); assert.equal(listed.body.usage.completed, 1); assert.equal(listed.body.usage.fileBytes, 7);
+  assert.equal(listed.body.progress.records, 1);
+  const query = '?board=1&round=' + item.rounds[0].id;
+  const combined = await f.owner.call(itemPath(item.id) + query);
+  assert.equal(combined.body.initialBoard.roundId, item.rounds[0].id);
+  assert.deepEqual(combined.body.initialBoard.data, listed.body);
+  assert.equal((await a.client.call(itemPath(item.id) + query)).body.initialBoard, undefined);
   assert.ok(!JSON.stringify(listed.body).includes('finalObjectKey')); assert.ok(!JSON.stringify(listed.body).includes('receiptHash'));
 });
 

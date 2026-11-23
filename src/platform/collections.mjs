@@ -28,6 +28,16 @@ export function roundAcceptsSubmissions(item, round, now) {
 }
 
 /**
+ * @template {{id: string}} Round
+ * @param {ReadonlyArray<Round>} rounds
+ * @param {string} id
+ * @param {(round: Round) => boolean} isOpen
+ */
+export function selectCollectionRound(rounds, id, isOpen) {
+  return rounds.find(round => round.id === id) || rounds.find(isOpen) || rounds[0];
+}
+
+/**
  * A participant can have several effective submissions, but counts once in
  * progress. Their latest effective submission determines timeliness.
  * @template {{id: string, studentId?: string, personId?: string, expected: boolean, submissionId?: string, submittedAt?: string, complete?: boolean, status: string, late: boolean}} Row

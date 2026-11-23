@@ -158,7 +158,15 @@ export default function Workspace() {
     useEffect(() => {
         if (!id) return;
         const controller = new AbortController();
-        api<Detail>(itemRoute(id), undefined, { signal: controller.signal }).then(data => {
+        const requestOptions = new URLSearchParams();
+        const selection = new URLSearchParams(location.search);
+        if (!selection.get('receipt')) {
+            requestOptions.set('board', '1');
+            const requestedRound = selection.get('round');
+            if (requestedRound) requestOptions.set('round', requestedRound);
+        }
+        const path = itemRoute(id) + (requestOptions.size ? `?${requestOptions}` : '');
+        api<Detail>(path, undefined, { signal: controller.signal }).then(data => {
             if (!controller.signal.aborted) { setDetail({ id, data, receivedAt: performance.now() }); setFailure(previous => previous?.id === id ? undefined : previous); }
         }).catch(error => { if (!controller.signal.aborted) setFailure({ id, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();

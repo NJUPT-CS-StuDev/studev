@@ -34,14 +34,16 @@ export function roundQuota(repo, itemId, roundId, now) {
   const prefix = keys.quota(itemId, roundId);
   const read = async () => (await repo.latest(prefix)) ?? seedRoundQuota(repo, itemId, roundId);
 
-  async function update(change) {
+  async function update(change, firstSnapshot) {
     for (let attempt = 0; attempt < 18; attempt++) {
-      const state = await read();
+      // A snapshot just read or written by this request can attempt the next
+      // revision directly. A competing writer takes that key and forces a reread.
+      const state = attempt === 0 && firstSnapshot ? structuredClone(firstSnapshot) : await read();
       const result = await change(state);
       if (!result.write) return result.value;
-      const revision = (state.revision ?? 0) + 1;
+      state.revision = (state.revision ?? 0) + 1;
       try {
-        await repo.putNew(revisionKey(prefix, revision), { ...state, revision });
+        await repo.putNew(revisionKey(prefix, state.revision), state);
         return result.value;
       } catch (error) {
         if (!isConflict(error)) throw error;
@@ -72,7 +74,7 @@ export function roundQuota(repo, itemId, roundId, now) {
     return update(async (state) => {
       const changed = await prune(state);
       const current = state.active[entry.id];
-      if (current) return { write: changed, value: current };
+      if (current) return { write: changed, value: { entry: current, state } };
       const committed = state.completed;
       const active = Object.values(state.active);
       const perStudent = Object.values(committed).filter((sid) => sid === entry.studentId).length
@@ -88,46 +90,46 @@ export function roundQuota(repo, itemId, roundId, now) {
         fail(409, 'SUBMISSION_PENDING', '上一份提交仍在处理，请继续上传或取消后重试。');
       }
       state.active[entry.id] = entry;
-      return { write: true, value: entry };
+      return { write: true, value: { entry, state } };
     });
   }
 
-  async function authoriseSave(id) {
+  async function authoriseSave(id, snapshot) {
     return update(async (state) => {
       const entry = state.active[id];
       if (!entry || now() >= entry.expiresAt) fail(410, 'SUBMISSION_EXPIRED', '本次提交已取消或过期。');
-      if (entry.phase === 'saving') return { value: entry };
+      if (entry.phase === 'saving') return { value: state };
       entry.phase = 'saving';
-      return { write: true, value: entry };
-    });
+      return { write: true, value: state };
+    }, snapshot);
   }
 
-  async function saved(id) {
+  async function saved(id, snapshot) {
     return update(async (state) => {
       const entry = state.active[id];
       if (!entry) return {};
       state.completed[entry.submissionId] = entry.studentId;
       delete state.active[id];
       return { write: true };
-    });
+    }, snapshot);
   }
 
-  async function cancel(id) {
+  async function cancel(id, snapshot) {
     return update(async (state) => {
       const entry = state.active[id];
-      if (!entry) return {};
+      if (!entry) return { value: false };
       if (entry.phase === 'saving') fail(409, 'SUBMISSION_PENDING', '提交正在确认，请稍后重试。');
       delete state.active[id];
-      return { write: true };
-    });
+      return { write: true, value: true };
+    }, snapshot);
   }
 
-  async function discard(id) {
+  async function discard(id, snapshot) {
     return update(async (state) => {
       if (!state.active[id]) return {};
       delete state.active[id];
       return { write: true };
-    });
+    }, snapshot);
   }
 
   async function status() {

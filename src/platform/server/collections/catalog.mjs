@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import { fail } from '../common.mjs';
+import { revisionProjection } from '../store.mjs';
 import { collectionProgress, roundAcceptsSubmissions } from '../../collections.mjs';
 import { activeMemberships } from '../../organizations.mjs';
 import { canManage, canSeeProgress, isRecipient, issuerView } from './definition.mjs';
@@ -27,23 +27,8 @@ export async function definitions(repo, tips) {
     String(b.publishedAt || b.createdAt).localeCompare(String(a.publishedAt || a.createdAt)) || b.id.localeCompare(a.id));
 }
 
-// Both the public catalog and staff boards derive from immutable revisions.
-// Validate every snapshot against the strongly consistent listing before use.
-async function projection(repo, key, prefix, build) {
-  const [heads, snapshot] = await Promise.all([repo.heads(prefix), repo.get(key).catch(() => null)]);
-  const ordered = [...heads.values()].sort((a, b) => a.key.localeCompare(b.key));
-  const version = createHash('sha256').update(JSON.stringify(ordered.map(({ key, etag }) => [key, etag]))).digest('hex');
-  if (snapshot?.version === version) return snapshot.rows;
-  const rows = await build(heads);
-  const value = { version, rows };
-  if (Buffer.byteLength(JSON.stringify(value)) <= 2 * 1024 * 1024) {
-    await repo.put(key, value).catch(() => {});
-  }
-  return rows;
-}
-
 export function catalogItems(repo) {
-  return projection(repo, keys.catalog, keys.definitions, async (heads) => (await definitions(repo, heads)).map(item => ({
+  return revisionProjection(repo, keys.catalog, keys.definitions, async (heads) => (await definitions(repo, heads)).map(item => ({
     ...item,
     recipients: item.recipients.map(({ studentId }) => ({ studentId })),
     rounds: item.rounds.map(({ id, label, deadline, policy, fields }) => ({
@@ -79,11 +64,11 @@ function complete(record) {
 }
 
 export function boardRecords(repo, itemId, roundId) {
-  return projection(repo, keys.board(itemId, roundId), keys.round(itemId, roundId), async heads =>
+  return revisionProjection(repo, keys.board(itemId, roundId), keys.round(itemId, roundId), async heads =>
     (await roundRecords(repo, itemId, roundId, heads)).map(record => {
       const { id, studentId, studentName, userId, roundId, status, submittedAt, createdAt } = record;
       return { id, studentId, studentName, userId, roundId, status, submittedAt, createdAt,
-        complete: complete(record), late: submissionWasLate(record), fileBytes: record.files.reduce((bytes, file) => bytes + file.size, 0),
+        complete: complete(record), late: submissionWasLate(record),
         hasFiles: record.files.length > 0 };
     }));
 }

@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
+import { CAMPUS_POINTER_PATH, campusPointer } from '../../src/campus/world/release.ts';
 
 const root = resolve(import.meta.dirname, '../..');
 const origin = process.env.STUDEV_WEB_URL || 'http://127.0.0.1:4324';
 const output = process.env.STUDEV_ROUTES_SMOKE_DIR || 'D:/Temp/codex/studev-design-lrmcp/routes-web';
 const release = JSON.parse(await readFile(join(root, 'src/data/campus-release.json'), 'utf8'));
+const pointer = campusPointer(release);
 const product = JSON.parse(await readFile(join(root, 'product.json'), 'utf8'));
 const dataOrigin = new URL(product.campusOrigin).origin;
 const mapUrl = (from, to, mode) => new URL('/map/?'+new URLSearchParams({from,nav:to,...(mode==='bike'?{mode}: {})}),origin).href;
@@ -32,10 +34,10 @@ try {
     await context.addInitScript(({release,entry})=>{
       localStorage.setItem('studev-campus-release',JSON.stringify({release,entry}));
       localStorage.setItem('studev_ball_hinted','1');
-    },{release,entry:`${dataOrigin}/campus-release.json`});
+    },{release:pointer,entry:new URL(CAMPUS_POINTER_PATH, dataOrigin).href});
     await context.route(`${dataOrigin}/**`,async route=>{
       const url=new URL(route.request().url()), path=join(root,'public',decodeURIComponent(url.pathname));
-      if(url.pathname==='/campus-release.json') return route.fulfill({json:release});
+      if(url.pathname===CAMPUS_POINTER_PATH) return route.fulfill({json:pointer});
       try {
         const range=route.request().headers().range?.match(/^bytes=(\d+)-(\d+)$/);
         const contentType=url.pathname.endsWith('.json')?'application/json':url.pathname.endsWith('.png')?'image/png':'application/octet-stream';

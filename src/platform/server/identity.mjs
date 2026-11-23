@@ -8,7 +8,7 @@ import { createMailer, letter } from './mail.mjs';
 import { hasPublishedRosterAppointment, publishRosterPerson, readRosterPeople, rosterView, qqAvatarUrl, profileNickname } from './roster.mjs';
 import { deleteOrganization, loadOrganizations, membershipView, overlapsMembership, saveOrganization, validateMemberships } from './organizations.mjs';
 import { academicYearId, academicYearWindow, activeMemberships, chinaDay, flattenOrganizationTree, namedOrganizations, organization, validAcademicYear } from '../organizations.mjs';
-import { avatarBody, createMembers } from './members.mjs';
+import { avatarBody, createMembers, memberId } from './members.mjs';
 
 const API = '/api/platform';
 const ID = /^[a-f0-9-]{36}$/;
@@ -148,6 +148,7 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       mfaVerified: Boolean(session.mfaVerified),
     };
   }
+  const needsSetup = state => state.passwordChangeRequired || state.enrollmentRequired || state.mfaRequired || state.profileRequired;
   async function authenticate(request, { required = false, staff = false, owner = false, csrf = false, allowEnrollment = false } = {}) {
     const kind = hasAuthorization(request) ? 'bearer' : 'cookie';
     const header = request.headers.get('authorization') || '';
@@ -163,13 +164,32 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
     if (owner && user.role !== 'owner') fail(403, 'OWNER_REQUIRED', '此操作仅限所有者。');
     if (staff && !staffRole(user.role)) fail(403, 'STAFF_REQUIRED', '此操作仅限管理员。');
     const state = setupStatus(user, session);
-    if (!allowEnrollment && (state.passwordChangeRequired || state.enrollmentRequired || state.mfaRequired || state.profileRequired)) fail(403, 'AUTH_SETUP_REQUIRED', '请先完成身份资料、密码修改与安全验证。');
+    if (!allowEnrollment && needsSetup(state)) fail(403, 'AUTH_SETUP_REQUIRED', '请先完成身份资料、密码修改与安全验证。');
     if ((owner || user.role === 'owner' || user.totp) && !allowEnrollment && !session.mfaVerified) fail(403, 'MFA_REQUIRED', '请完成动态验证码验证。');
     if (csrf && kind === 'cookie') {
       requireOrigin(request, env);
       if (!safeEqual(request.headers.get('x-csrf-token') || '', session.csrfToken)) fail(403, 'CSRF_REJECTED', '页面已失效，请刷新后重试。');
     }
     return { user, csrfToken: session.csrfToken, sessionId: session.id, mfaVerified: Boolean(session.mfaVerified), session, kind, loginHead: auth.loginHead };
+  }
+  async function readMembers(request, id) {
+    const url = new URL(request.url);
+    const entry = url.searchParams.get('entry') === '1';
+    const auth = await authenticate(request, { required: true, allowEnrollment: entry });
+    const setup = setupStatus(auth.user, auth.session);
+    async function read() {
+      if (entry && (needsSetup(setup) || (!id && staffRole(auth.user.role)))) return {};
+      if (id) {
+        if (!memberId.test(id)) fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
+        return { member: await members.get(id) };
+      }
+      const query = text(url.searchParams.get('query') || '', '昵称', 40).normalize('NFKC').toLocaleLowerCase('zh-CN');
+      const offset = Number(url.searchParams.get('offset') || '0'), limit = Number(url.searchParams.get('limit') || '50');
+      if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) fail(400, 'INVALID_PAGE', '成员列表页码无效。');
+      return members.list(query, offset, limit);
+    }
+    const [data, organizations] = await Promise.all([read(), entry ? loadOrganizations(repo) : null]);
+    return response(entry ? { ...data, session: { user: publicUser(auth.user, organizations), csrfToken: auth.csrfToken, ...setup } } : data);
   }
   async function sessionResponse(user, body, kind, verified) {
     const [started, orgs] = await Promise.all([
@@ -394,17 +414,8 @@ export function createIdentity({ repo, env, now = Date.now, academicYear, mailer
       const bytes = await avatarBody(picture);
       return new Response(bytes, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=900', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' } });
     }
-    if (method === 'GET' && (route === '/members' || /^\/members\/[a-f0-9-]{36}$/.test(route))) {
-      await authenticate(request, { required: true });
-      if (route !== '/members') {
-        return response({ member: await members.get(route.slice('/members/'.length)) });
-      }
-      const url = new URL(request.url);
-      const query = text(url.searchParams.get('query') || '', '昵称', 40).normalize('NFKC').toLocaleLowerCase('zh-CN');
-      const offset = Number(url.searchParams.get('offset') || '0'), limit = Number(url.searchParams.get('limit') || '50');
-      if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) fail(400, 'INVALID_PAGE', '成员列表页码无效。');
-      return response(await members.list(query, offset, limit));
-    }
+    const memberDetail = route.match(/^\/members\/([^/]+)$/);
+    if (method === 'GET' && (route === '/members' || memberDetail)) return readMembers(request, memberDetail?.[1]);
     // Existing credentials and public reads do not need to initialize the owner
     // again. Registration/login/reset-mail remain the account bootstrap paths.
     if (method === 'POST' && ['/auth/register', '/auth/password/forgot'].includes(route)) await bootstrap();

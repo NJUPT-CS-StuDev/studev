@@ -1,5 +1,5 @@
 import type { OrganizationNode, Role } from '../api';
-import { deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
+import { deadlineReached, roundAcceptsSubmissions, selectCollectionRound } from '../../collections.mjs';
 import type { CollectionCourse } from './CoursePicker';
 
 export type TargetMode = 'open' | 'selected';
@@ -113,6 +113,7 @@ export interface BoardRow { studentId: string; name: string; orgId?: string; org
 export interface Detail extends WorkspaceData {
     item: Item<Round>;
     mySubmissions: Submission[];
+    initialBoard?: { roundId: string; data: RoundBoardData };
 }
 
 export type BoardSubmission = Pick<Submission, 'id' | 'studentId' | 'studentName' | 'status' | 'submittedAt' | 'late'> &
@@ -217,7 +218,7 @@ export function itemState(item: Item, now: number): keyof typeof collectionStatu
 }
 
 export function chooseRound(item: Item<Round>, id: string) {
-    return item.rounds.find(round => round.id === id) || item.rounds.find(round => round.open) || item.rounds[0];
+    return selectCollectionRound(item.rounds, id, round => round.open === true);
 }
 
 export function collectionLoginUrl(query = new URLSearchParams(location.search)) {

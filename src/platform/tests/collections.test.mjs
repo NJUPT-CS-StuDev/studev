@@ -512,6 +512,37 @@ test('an attachment copy with changed bytes and an ambiguous commit retain disti
   assert.equal((await f.complete(result.data)).status, 200);
 });
 
+test('a first upload and its completion reuse quota revisions and preserve one durable cleanup task', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment] } });
+  const roundId = item.rounds[0].id;
+  const quota = 'platform-v1/' + collectionKeys.quota(item.id, roundId) + '/';
+  const cleanup = 'platform-v1/' + collectionKeys.cleanup(item.id, roundId);
+  const calls = { quota: 0, cleanup: 0 };
+  const { list, setJSON } = f.store;
+  f.store.list = (options) => {
+    if (options.prefix === quota) calls.quota++;
+    return list(options);
+  };
+  f.store.setJSON = (key, value, options) => {
+    if (key.startsWith(cleanup) && options?.onlyIfNew) calls.cleanup++;
+    return setJSON(key, value, options);
+  };
+  const result = await f.submit(item, 'alice', {
+    answers: { note: '资料' }, files: [{ fieldId: 'upload', name: '资料.txt', type: 'text/plain', size: 3 }],
+  });
+  assert.equal(result.status, 201);
+  assert.deepEqual(calls, { quota: 1, cleanup: 1 });
+  const task = await f.repo.get(collectionKeys.cleanup(item.id, roundId, result.data.receiptId));
+  assert.equal(task.staging.length, 1);
+  f.gateway.upload(f.gateway.uploads.at(-1), 'one');
+  assert.equal((await f.complete(result.data)).status, 200);
+  assert.deepEqual(calls, { quota: 2, cleanup: 1 });
+  const saved = await f.repo.latest(collectionKeys.quota(item.id, roundId));
+  assert.deepEqual(saved.active, {});
+  assert.equal(saved.completed[result.data.submission.id], 'TEST1001');
+});
+
 test('multiple quotas reserve from one bounded set under concurrency and replacement holds one place', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ round: { submissionMode: 'multiple', maxPerUser: 2, maxSubmissions: 3 } });
@@ -522,7 +553,7 @@ test('multiple quotas reserve from one bounded set under concurrency and replace
   assert.equal(concurrent.filter((response) => response.status === 201).length, 1);
   assert.equal(concurrent.filter((response) => response.data.error === 'COLLECTION_FULL').length, 1);
   const count = await f.call(f.roundPath(item) + '/submissions', { user: 'owner' });
-  assert.equal(count.data.usage.authorizations, 3);
+  assert.equal(count.data.progress.records, 3);
   const lower = await f.call(f.roundPath(item), { user: 'owner', body: { revision: item.revision, maxSubmissions: 1 } });
   assert.equal(lower.status, 200);
   assert.equal((await f.submit(item, 'admin')).data.error, 'COLLECTION_FULL');
@@ -566,8 +597,8 @@ test('a stable attempt resends the same reservation while cancelled or expired u
   assert.equal((await f.complete(third.data)).status, 200);
   assert.equal((await f.cancel(third.data)).data.error, 'SUBMISSION_COMMITTED');
   assert.equal((await f.complete(third.data)).status, 200);
-  const usage = (await f.call(f.roundPath(item) + '/submissions', { user: 'owner' })).data.usage;
-  assert.deepEqual(usage, { authorizations: 1, pending: 0, completed: 1, fileBytes: 3 });
+  const count = (await f.call(f.roundPath(item) + '/submissions', { user: 'owner' })).data.progress;
+  assert.equal(count.records, 1);
 });
 
 test('a cancelled confirmation cannot settle after its files have been copied', async () => {
@@ -590,6 +621,37 @@ test('a cancelled confirmation cannot settle after its files have been copied', 
   assert.equal((await f.submit(item, 'alice', body)).status, 201);
 });
 
+test('a cancellation cannot report success after a concurrent confirmation used its slot', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ round: { fields: [note, attachment] } });
+  const staged = await f.submit(item, 'alice', {
+    answers: { note: '内容' }, files: [{ fieldId: 'upload', name: '资料.txt', type: 'text/plain', size: 3 }],
+  });
+  f.gateway.upload(f.gateway.uploads.at(-1), 'one');
+  const quota = 'platform-v1/' + collectionKeys.quota(item.id, item.rounds[0].id) + '/';
+  let readStarted, resume;
+  const waiting = new Promise(resolve => { readStarted = resolve; });
+  const released = new Promise(resolve => { resume = resolve; });
+  const list = f.store.list;
+  let delayed = false;
+  f.store.list = async options => {
+    if (options.prefix === quota && !delayed) {
+      delayed = true;
+      readStarted();
+      await released;
+    }
+    return list(options);
+  };
+  const cancelling = f.cancel(staged.data);
+  await waiting;
+  try {
+    assert.equal((await f.complete(staged.data)).status, 200);
+  } finally {
+    resume();
+  }
+  assert.equal((await cancelling).data.error, 'SUBMISSION_COMMITTED');
+});
+
 test('slow storage cleanup cannot fail an already confirmed upload', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ round: { fields: [note, attachment] } });
@@ -601,7 +663,7 @@ test('slow storage cleanup cannot fail an already confirmed upload', async () =>
   assert.equal((await f.complete(staged.data)).status, 200);
   assert.equal(f.gateway.objects.has(upload.objectKey), true);
   f.gateway.delete = remove;
-  assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'owner' })).status, 200);
+  assert.equal((await f.complete(staged.data)).status, 200);
   assert.equal(f.gateway.objects.has(upload.objectKey), false);
 });
 
@@ -630,7 +692,7 @@ test('replacement preserves retained files, retries cleanup and leaves imported 
   assert.equal(f.gateway.objects.has(replaced.objectKey), true);
   assert.equal(f.gateway.objects.has(kept.objectKey), true);
   f.gateway.delete = remove;
-  await f.call(f.roundPath(item) + '/submissions', { user: 'owner' });
+  assert.equal((await f.submit(item, 'bob', { answers: { note: '另一份答卷' }, files: [file('upload', '另交.txt')] })).status, 201);
   assert.equal(f.gateway.objects.has(replaced.objectKey), false);
   assert.equal(f.gateway.objects.has(kept.objectKey), true);
   assert.equal(f.gateway.objects.has(legacyPath), true);

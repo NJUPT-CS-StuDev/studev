@@ -41,15 +41,15 @@ const distance = (a: Position, b: Position) => {
     return Math.hypot((b[0]! - a[0]!) * t * Math.cos(a[1]! * t), (b[1]! - a[1]!) * t) * 6371000;
 };
 
-interface World { space: Space; model: CampusModel; router: Router; rooms: Room[]; roomById: Map<string, Room>; periods: TeachingPeriod[]; term: TeachingTerm; holidays: Map<string, string>; read: ReturnType<typeof makeRoomReader> }
+interface World { space: Space; model: CampusModel; style: Awaited<ReturnType<typeof loadStyle>>; rooms: Room[]; roomById: Map<string, Room>; periods: TeachingPeriod[]; term: TeachingTerm; holidays: Map<string, string>; read: ReturnType<typeof makeRoomReader> }
 
 function useWorld() {
     const [world, setWorld] = useState<World | null>(null);
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
-        Promise.all([loadSpace(), fetchJson<CampusModel>(`${spaceBase()}/model.json`), loadRoomIndex(), loadPeriods(), loadTerm(), loadCalendar(), initializeRouting()]).then(([space, model, index, periods, term, calendar]) => {
+        Promise.all([loadStyle(), loadSpace(), fetchJson<CampusModel>(`${spaceBase()}/model.json`), loadRoomIndex(), loadPeriods(), loadTerm(), loadCalendar()]).then(([style, space, model, index, periods, term, calendar]) => {
             const placedRooms = index.rooms.filter(room => !unplaced(room.id));
-            setWorld({ space, model, router: new Router(space.network), rooms: placedRooms, roomById: new Map(placedRooms.map(room => [room.id, room])), periods, term, holidays: holidayMap(calendar), read: makeRoomReader(periods) });
+            setWorld({ space, model, style, rooms: placedRooms, roomById: new Map(placedRooms.map(room => [room.id, room])), periods, term, holidays: holidayMap(calendar), read: makeRoomReader(periods) });
         }).catch(reason => setError(reason instanceof Error ? reason.message : String(reason)));
     }, []);
     return { world, error };
@@ -132,23 +132,19 @@ export default function MapApp() {
     const handlers = useRef({ onBuilding: (_: string) => {}, onRoom: (_: string) => {}, onPlace: (_: string) => {}, onEmpty: () => {}, onView: () => {} });
     useEffect(() => {
         if (!world || !canvas.current || !labels.current) return;
-        let instance: CampusScene | null = null;
         let cancelled = false;
-        void loadStyle().then(style => {
-            if (cancelled || !canvas.current || !labels.current) return;
-            // The campus opens over the place product.json names; a map without it is a broken release, not a place to guess.
-            const teach = world.space.byId.get(PRODUCT_CONFIG.CAMPUS.opens)?.centre;
-            if (!teach) throw new Error(`the map data has no ${PRODUCT_CONFIG.CAMPUS.opens}`);
-            instance = new CampusScene(canvas.current, labels.current, style, world.model, [teach[0]! + .0006, teach[1]! - .0002], pitch, {
-                onBuilding: id => handlers.current.onBuilding(id), onRoom: id => handlers.current.onRoom(id),
-                onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
-            });
-            instance.whenReady(() => { if (!cancelled) setScene(instance); });
-            void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin.gzip`).then(response => { if (!response.ok || !response.body) throw new Error(String(response.status)); return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })])
-                .then(([index, bytes]) => { if (!cancelled) instance?.showModels(index, bytes); })
-                .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
+        // The campus opens over the place product.json names; a map without it is a broken release, not a place to guess.
+        const teach = world.space.byId.get(PRODUCT_CONFIG.CAMPUS.opens)?.centre;
+        if (!teach) throw new Error(`the map data has no ${PRODUCT_CONFIG.CAMPUS.opens}`);
+        const instance = new CampusScene(canvas.current, labels.current, world.style, world.model, [teach[0]! + .0006, teach[1]! - .0002], pitch, {
+            onBuilding: id => handlers.current.onBuilding(id), onRoom: id => handlers.current.onRoom(id),
+            onPlace: id => handlers.current.onPlace(id), onEmpty: () => handlers.current.onEmpty(), onView: () => handlers.current.onView(),
         });
-        return () => { cancelled = true; instance?.destroy(); setScene(null); };
+        instance.whenReady(() => { if (!cancelled) setScene(instance); });
+        void Promise.all([fetchJson<ModelIndex>(`${spaceBase()}/models.json`), fetch(`${spaceBase()}/models.bin.gzip`).then(response => { if (!response.ok || !response.body) throw new Error(String(response.status)); return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })])
+            .then(([index, bytes]) => { if (!cancelled) instance.showModels(index, bytes); })
+            .catch(() => undefined); // The plain forms keep standing where the models did not arrive.
+        return () => { cancelled = true; instance.destroy(); setScene(null); };
     }, [world]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* What is selected. */
@@ -246,17 +242,31 @@ export default function MapApp() {
     /* Routes. */
     const destination = navId ? world?.space.byId.get(navId) : undefined;
     const routeInfo = useMemo(() => world && destination ? routeContext(origin ? world.space.byId.get(origin) : undefined, destination, world.space.byId) : null, [destination, origin, world]);
+    const network = destination && routeInfo && !routeInfo.withinBuilding ? world?.space.network : undefined;
+    const [routing, setRouting] = useState<Router | 'unavailable' | null>(null);
+    useEffect(() => {
+        if (!network) return;
+        let active = true;
+        let router: Router | undefined;
+        void initializeRouting().then(() => {
+            if (!active) return;
+            router = new Router(network);
+            setRouting(router);
+        }).catch(() => { if (active) setRouting('unavailable'); });
+        return () => { active = false; router?.free(); setRouting(null); };
+    }, [network]);
     const planned = useMemo<{ routes: Route[]; notice: string | null }>(() => {
         if (!destination || !world || routeInfo?.withinBuilding) return { routes: [], notice: null };
         const from = origin ? world.space.byId.get(origin)?.routing : me ? { type: 'position' as const, position: me as [number, number] } : null;
         if (!from) return { routes: [], notice: origin ? '没有找到出发地。' : null };
+        if (!routing || routing === 'unavailable') return { routes: [], notice: routing ? '暂时无法规划路线。' : null };
         try {
-            const answer = world.router.route({ origin: from, destination: destination.routing, mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 3 });
+            const answer = routing.route({ origin: from, destination: destination.routing, mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 3 });
             return { routes: answer.routes, notice: answer.routes.length ? null : '没有找到路线。' };
         } catch {
             return { routes: [], notice: origin ? '没有找到路线。' : '你现在不在校园路网附近，请选一个出发地。' };
         }
-    }, [destination, me, mode, origin, routeInfo, world]);
+    }, [destination, me, mode, origin, routeInfo, routing, world]);
     const routes = planned.routes;
     useEffect(() => { setChosen(0); setNotice(planned.notice); }, [planned]);
     useEffect(() => {
@@ -341,7 +351,7 @@ export default function MapApp() {
             {!routeInfo.withinBuilding && routes.length > 1 && routes.map((item, index) => <button key={index} className={`occ ${index === chosen ? 'cur' : ''}`} onClick={() => setChosen(index)}><span className="tm">{routeDuration(item.duration_s)}</span><span className="nm">{metres(item.distance_m)}<small>经 {visibleRouteText(item.via)}</small></span></button>)}
             {!routeInfo.withinBuilding && route && <ol className="steps">{route.maneuvers.map((step, index) => <li key={index}>{step.type === 'arrive' && routeInfo.access.kind === 'building' ? `到达${routeInfo.arrival}` : visibleRouteText(step.instruction)}</li>)}{routeInfo.continuation && <li>{routeInfo.continuation}</li>}</ol>}
             {(routeInfo.withinBuilding || routeInfo.indoorDestination) && <div className="btns"><button className="btn go" onClick={() => set({ nav: null, from: null, place: destination.id, f: routeInfo.floor ?? null }, { push: true })}>查看楼层</button></div>}
-            {!routeInfo.withinBuilding && !route && !notice && <p className="msum">正在找你的位置…</p>}
+            {!routeInfo.withinBuilding && !route && !notice && <p className="msum">{origin || me ? '正在规划路线…' : '正在找你的位置…'}</p>}
         </>;
     } else if (world && pickedRoom && bId) {
         const room = world.roomById.get(pickedRoom.id);

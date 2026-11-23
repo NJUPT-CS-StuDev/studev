@@ -1,8 +1,10 @@
 ---
 import SiteLayout from '../site/SiteLayout.astro';
+import PlatformStartup from '../platform/client/PlatformStartup.astro';
 import '../platform/platform.css';
 ---
 <SiteLayout title="账号 — StuDev" active="account" noindex={true}>
+  <PlatformStartup slot="head" surface="account" />
   <div class="platform" data-account-shell>
     <nav class="p-nav" aria-label="账号与组织导航">
       <div class="p-nav-group" role="tablist">

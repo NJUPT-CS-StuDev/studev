@@ -11,7 +11,7 @@ import '../platform/platform.css';
         <button class="p-tab" id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="register-panel" data-auth-tab="register">注册账号</button>
       </div>
       <div class="p-message" role="status" aria-live="polite" data-auth-status></div>
-      <form id="login-panel" role="tabpanel" aria-labelledby="login-tab" data-login-form>
+      <form id="login-panel" method="post" role="tabpanel" aria-labelledby="login-tab" data-login-form>
         <div class="p-field">
           <label for="login-student-id">学号</label>
           <input id="login-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="你的学号" required />
@@ -27,9 +27,9 @@ import '../platform/platform.css';
           <label for="login-totp">动态验证码或恢复码</label>
           <input id="login-totp" name="totp" autocomplete="one-time-code" maxlength="64" placeholder="6 位动态码或恢复码" />
         </div>
-        <button class="p-button wide" type="submit">立即登录</button>
+        <button class="p-button wide" type="submit" disabled>立即登录</button>
       </form>
-      <form data-forgot-form hidden>
+      <form method="post" data-forgot-form hidden>
         <div data-forgot-ask>
           <p class="p-help p-auth-lead">输入学号，我们会把重设密码的链接发到这个账号绑定的 QQ 邮箱，30 分钟内有效。</p>
           <div class="p-field">
@@ -45,7 +45,7 @@ import '../platform/platform.css';
         </div>
         <button class="p-link-button p-auth-back" type="button" data-forgot-back>‹ 返回登录</button>
       </form>
-      <form data-reset-form hidden>
+      <form method="post" data-reset-form hidden>
         <p class="p-help">为你的账号设置新密码。设置后，所有设备都会退出登录。</p>
         <div class="p-field">
           <label for="reset-password">新密码</label>
@@ -63,11 +63,11 @@ import '../platform/platform.css';
         </div>
         <button class="p-button wide" type="submit">设置新密码</button>
       </form>
-      <form data-delete-form hidden>
+      <form method="post" data-delete-form hidden>
         <p class="p-help">确认后，你的账号、学号绑定和所有登录设备会立即删除，无法恢复。</p>
         <button class="p-button wide danger" type="submit">确认注销账号</button>
       </form>
-      <form id="register-panel" role="tabpanel" aria-labelledby="register-tab" data-register-form hidden>
+      <form id="register-panel" method="post" role="tabpanel" aria-labelledby="register-tab" data-register-form hidden>
         <div class="p-field">
           <label for="register-student-id">学号</label>
           <input id="register-student-id" name="studentId" pattern="[A-Za-z0-9]{6,20}" minlength="6" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="你的学号" required />
@@ -108,7 +108,7 @@ import '../platform/platform.css';
           <input id="register-agreements" name="agreements" type="checkbox" style="margin-top:4px" required />
           <span>我已阅读并同意 <a class="p-link" href="/terms/" target="_blank" rel="noopener">《用户协议》</a> 与 <a class="p-link" href="/privacy/" target="_blank" rel="noopener">《隐私政策》</a>，承诺不使用学校统一身份认证密码。</span>
         </label>
-        <button class="p-button wide" type="submit">立即注册</button>
+        <button class="p-button wide" type="submit" disabled>立即注册</button>
       </form>
     </section>
   </div>

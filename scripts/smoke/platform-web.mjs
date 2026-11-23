@@ -421,8 +421,8 @@ async function checkCollection(viewport, name) {
     await receipt.getByText(peerSecret, { exact: true }).waitFor();
     await receipt.getByRole('button', { name: '关闭', exact: true }).click();
     assert.equal(await staffParts.getByRole('combobox', { name: '视角' }).count(), 0);
-    assert.equal(staffReads.filter(read => read.method === 'GET' && read.path === '/api/platform' + roundPath(item) + '/submissions').length, 1);
-    assert(!staffReads.some(read => read.query.includes('board=1')));
+    assert.equal(staffReads.filter(read => read.method === 'GET' && read.path === '/api/platform' + roundPath(item) + '/submissions').length, 0);
+    assert.equal(staffReads.filter(read => read.method === 'GET' && read.path === '/api/platform/collections/items/' + item.id && read.query.includes('board=1')).length, 1);
     await shot(staff.page, name + '-collection-board');
     await staffParts.getByRole('button', { name: /修改截止时间/ }).click();
     const deadline = staff.page.getByRole('dialog', { name: '截止时间' });
