@@ -7,16 +7,36 @@
  * @property {boolean} [publicRoster]
  * @property {number} [order]
  * @property {string[]} titles
- * @property {string} [term]
  */
+
+const chinaCalendar = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/** The same calendar day governs public appointments and organization grants. */
+export const chinaDay = (instant = Date.now()) => chinaCalendar.format(instant);
+
+export function activeMemberships(memberships = [], day = chinaDay()) {
+  return memberships.filter(row => row.startsOn ? row.startsOn <= day && day < row.endsBefore : !row.endsBefore);
+}
+
+export function academicYearId(day) {
+  const year = Number(day.slice(0, 4)) - (day.slice(5) < '08-01' ? 1 : 0);
+  return `${year}-${year + 1}`;
+}
+
+export const validAcademicYear = year => /^\d{4}-\d{4}$/.test(year) && Number(year.slice(0, 4)) + 1 === Number(year.slice(-4));
+
+/** August is the administrative boundary for browsing academic years. The published
+ * academic calendar supplies the exact teaching dates offered for new appointments. */
+export function academicYearWindow(year) {
+  return { id: year, startsOn: `${year.slice(0, 4)}-08-01`, endsBefore: `${year.slice(-4)}-08-01` };
+}
 
 export const defaultClassTitles = ['班长', '副班长', '团支书', '学习委员', '生活委员', '文体委员'];
 
-/** @type {OrgRecord & { term: string }} */
+/** @type {OrgRecord} */
 export const studentCenter = {
   id: 'student-development',
   name: '学生发展中心',
-  term: '2026-2027',
   parentId: null,
   kind: 'club',
   publicRoster: true,
@@ -60,7 +80,6 @@ export function mergeOrganizations(custom = []) {
       publicRoster: Boolean(item.publicRoster),
       order: Number.isSafeInteger(item.order) ? item.order : (prev?.order ?? 500),
       titles: Array.isArray(item.titles) ? item.titles : (prev?.titles ?? []),
-      ...(prev?.term || item.term ? { term: item.term || prev?.term } : {}),
     });
   }
   return [...byId.values()];

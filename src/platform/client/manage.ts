@@ -1,6 +1,7 @@
-import { api, avatarImg, button, el, empty, errorText, formatTime, labels, message, pill, q, type OrganizationNode, type Session, type User } from './api';
+import { api, avatarImg, button, el, empty, errorText, formatTime, labels, message, pill, q, type AcademicYear, type OrganizationNode, type Session, type User } from './api';
+import { addDays } from '../../campus/world/time';
 import { isWithin, namedOrganizations, organizationName, studentCenter } from '../organizations.mjs';
-import { openMemberRecord, valueButton } from './member-record';
+import { openMemberRecord, periodFields, valueButton } from './member-record';
 
 // Staff columns and actions for the shared member directory.
 const status = q<HTMLElement>('[data-members-status]');
@@ -8,6 +9,7 @@ let preview = false;
 let current: Session | null = null;
 let members: User[] = [];
 let organizations: OrganizationNode[] = [];
+let academicYear: AcademicYear | undefined;
 const unassigned = '暂未分配';
 const orgFilter = q<HTMLSelectElement>('[data-manage-org-filter]');
 
@@ -34,14 +36,6 @@ function refreshFilters() {
   orgFilter.replaceChildren(...options);
   orgFilter.value = seen.has(then) ? then : '';
 }
-
-const archive = q<HTMLButtonElement>('[data-members-archive]');
-archive.addEventListener('click', () => void guard(async () => {
-  const term = studentCenter.term;
-  if (await confirmAction('归档本届名册', `封存 ${term} 届当前公开名册。归档后这份名单固定保存。`) === null) return;
-  const { snapshot } = await api<{ snapshot: { term: string; totalCount: number } }>('/admin/roster/archive', {});
-  message(status, `已归档 ${snapshot.term} 届名册 · ${snapshot.totalCount} 人。`, 'success');
-}));
 
 // Organization Tree Manager modal (owner only)
 const orgModal = q<HTMLDialogElement>('[data-org-manager-modal]');
@@ -122,10 +116,35 @@ orgCreateForm.addEventListener('submit', event => {
 // Batch Import Members modal (owner only)
 const importModal = q<HTMLDialogElement>('[data-batch-import-modal]');
 const batchOrgSelect = q<HTMLSelectElement>('[data-batch-org]');
+const batchTitle = q<HTMLSelectElement>('[data-batch-title]');
+const batchTitleField = q('[data-batch-title-field]');
+const batchPeriod = q('[data-batch-period]');
 const batchLinesInput = q<HTMLTextAreaElement>('[data-batch-lines]');
 const batchStatus = q<HTMLElement>('[data-batch-import-status]');
 const batchForm = q<HTMLFormElement>('[data-batch-import-form]');
 q('[data-batch-import-close]').addEventListener('click', () => importModal.close());
+const dates = periodFields();
+batchPeriod.append(dates.start.wrapper, dates.end.wrapper);
+
+function updateBatchPeriod() {
+  const hasTitle = Boolean(batchTitle.value);
+  batchPeriod.hidden = !hasTitle;
+  const dated = hasTitle && isWithin(batchOrgSelect.value, studentCenter.id, organizations);
+  dates.start.input.required = dates.end.input.required = dated;
+  dates.start.input.value = dated && academicYear ? academicYear.startsOn : '';
+  dates.end.input.value = dated && academicYear ? addDays(academicYear.endsBefore, -1) : '';
+  dates.clearValidation();
+}
+
+function updateBatchTitles() {
+  const titles = organizations.find(org => org.id === batchOrgSelect.value)?.titles ?? [];
+  batchTitle.replaceChildren(new Option('仅添加组织归属', ''), ...titles.map(title => new Option(title, title)));
+  batchTitleField.hidden = !titles.length;
+  updateBatchPeriod();
+}
+
+batchOrgSelect.addEventListener('change', updateBatchTitles);
+batchTitle.addEventListener('change', updateBatchPeriod);
 
 q('[data-members-import]').addEventListener('click', () => {
   message(batchStatus);
@@ -133,17 +152,22 @@ q('[data-members-import]').addEventListener('click', () => {
     new Option('请选择归属组织', ''),
     ...organizations.map(org => new Option(orgSelectLabel(org), org.id))
   );
+  updateBatchTitles();
   batchLinesInput.value = '';
   importModal.showModal();
 });
 
 batchForm.addEventListener('submit', event => {
   event.preventDefault();
+  const interval = dates.interval();
+  if (!interval) return;
   void (async () => {
     try {
       const res = await api<{ created: number; updated: number; skipped: number; total: number }>('/admin/users/batch', {
         organizationId: batchOrgSelect.value,
+        title: batchTitle.value,
         lines: batchLinesInput.value,
+        ...interval,
       });
       batchLinesInput.value = '';
       await refreshMembers();
@@ -192,10 +216,11 @@ async function refreshMembers(signal = directorySignal) {
   const visit = directorySignal;
   const [res, orgRes] = await Promise.all([
     api<{ items: User[] }>('/admin/users', undefined, { signal }),
-    api<{ items: OrganizationNode[] }>('/organizations', undefined, { signal }),
+    api<{ items: OrganizationNode[]; academicYear: AcademicYear }>('/organizations', undefined, { signal }),
   ]);
   if (visit?.aborted) return;
   organizations = orgRes.items;
+  academicYear = orgRes.academicYear;
   members = res.items.sort((a, b) => (a.realName || a.nickname).localeCompare(b.realName || b.nickname, 'zh-CN') || a.id.localeCompare(b.id));
   refreshFilters();
   renderManagedMembers();
@@ -237,7 +262,7 @@ export function renderManagedMembers() {
       members = members.map(member => member.id === updated.id ? updated : member);
       refreshFilters();
       renderManagedMembers();
-    }, focusEdit, organizations, isOwner);
+    }, focusEdit, organizations, isOwner, academicYear);
 
     const nameCell = el('td');
     const userBox = el('div', undefined, 'p-user-cell');
@@ -264,6 +289,9 @@ export function renderManagedMembers() {
     for (const group of affiliations(user).sort((a, b) => a.organizationName.localeCompare(b.organizationName, 'zh-CN'))) {
       const item = el('li');
       item.append(el('span', group.organizationName, 'p-muted'), el('span', group.position || unassigned, group.position ? undefined : 'p-muted'));
+      if (group.startsOn && group.endsBefore) {
+        item.append(el('span', `${group.startsOn} 至 ${addDays(group.endsBefore, -1)}`, 'p-muted p-appointment-dates'));
+      }
       assignments.append(item);
     }
     titleCell.append(assignments.childElementCount ? assignments : el('span', unassigned, 'p-muted'));
@@ -403,8 +431,6 @@ const auditLabels: Record<string, string> = {
   'collection.created': '发布收集',
   'collection.recipients.updated': '调整收集名单',
   'collection.deleted': '删除收集',
-  'identity.roster.synced': '更新本届名册',
-  'identity.roster.archived': '归档本届名册',
   'form.create': '新建表单',
   'form.update': '修改表单',
   'form.duplicate': '复制表单',

@@ -5,11 +5,11 @@ import EventTimeline from './EventTimeline.astro';
 interface Props {
   entry: CollectionEntry<'history'>;
   allEntries?: CollectionEntry<'history'>[];
+  rosterYear?: string;
 }
 
-const { entry, allEntries = [] } = Astro.props;
+const { entry, allEntries = [], rosterYear } = Astro.props;
 const { Content } = await render(entry);
-const term = entry.data.term || entry.id;
 const skeletonGroups = [
   { name: '主席团', count: 4, featured: true },
   { name: '运营支持部', count: 3, featured: false },
@@ -30,7 +30,7 @@ const skeletonGroups = [
       <nav class="term-switcher" aria-label="切换历届学年">
         {allEntries.map((item) => (
           <a
-            href={item.id === '2026-2027' ? '/history/' : `/history/${item.id}/`}
+            href={item.id === allEntries[0]?.id ? '/history/' : `/history/${item.id}/`}
             class:list={['term-switch-link', { active: item.id === entry.id }]}
           >
             {item.data.period}
@@ -95,18 +95,25 @@ const skeletonGroups = [
       </aside>
     </section>
 
-    <!-- 右栏：当届公开成员名册 -->
+    <!-- 右栏：公开成员名册 -->
     <section
       class="term-col term-col-people"
       id="people"
       aria-labelledby="people-title"
-      data-roster-term={term}
+      data-roster-year={rosterYear ?? ''}
       data-tab-panel="people"
     >
       <div class="term-section-heading">
         <span class="section-number">02</span>
-        <h2 id="people-title">历届成员</h2>
-        <span class="section-aside" data-roster-count>正在读取名册</span>
+        <h2 id="people-title">成员名册</h2>
+      </div>
+      <div class="roster-controls">
+        <label class="roster-year-label">
+          <span>查看任职</span>
+          <select aria-label="查看任职" data-roster-selector disabled><option value="today">当前在任</option></select>
+        </label>
+        <span class="roster-count" role="status" data-roster-count>正在读取名册</span>
+        <button class="roster-retry" type="button" data-roster-retry hidden>重试</button>
       </div>
 
       <div data-roster-container class="roster-container">

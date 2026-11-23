@@ -17,7 +17,6 @@ const back = q<HTMLAnchorElement>('[data-members-back]');
 const view = q<HTMLSelectElement>('#members-view');
 const note = q('[data-members-preview]');
 const audit = q<HTMLButtonElement>('[data-members-audit]');
-const archive = q<HTMLButtonElement>('[data-members-archive]');
 const orgsBtn = q<HTMLButtonElement>('[data-members-orgs]');
 const importBtn = q<HTMLButtonElement>('[data-members-import]');
 const auditPanel = q('[data-members-audit-panel]');
@@ -74,7 +73,6 @@ async function load(append = false) {
     note.textContent = preview ? '预览' + (view.value === 'user' ? '普通用户' : labels[view.value]) + '视图 · 可浏览资料' : '';
     filters.hidden = publicView;
     audit.hidden = preview || who.user.role !== 'owner';
-    archive.hidden = audit.hidden;
     orgsBtn.hidden = audit.hidden;
     importBtn.hidden = audit.hidden;
     form.hidden = !!id;
@@ -151,7 +149,6 @@ audit.addEventListener('click', () => {
     auditOpen = !auditOpen;
     auditPanel.hidden = !auditOpen;
     directory.hidden = auditOpen;
-    archive.hidden = auditOpen;
     orgsBtn.hidden = auditOpen;
     importBtn.hidden = auditOpen;
     view.disabled = auditOpen;

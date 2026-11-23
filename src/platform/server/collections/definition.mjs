@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { fail, text } from '../common.mjs';
-import { flattenOrganizationTree, isWithin, organization, organizationName, positionLabel } from '../../organizations.mjs';
+import { activeMemberships, chinaDay, flattenOrganizationTree, isWithin, organization, organizationName, positionLabel } from '../../organizations.mjs';
+import { isSemester, pinnedCollections } from '../../collections.mjs';
 import { boolean, fields, integer, validObject } from './fields.mjs';
 import { collectionId, studentId } from './records.mjs';
 
 export const roles = ['guest', 'user', 'admin', 'owner'];
 export const isManagement = (view) => view === 'admin' || view === 'owner';
 
-export async function collectionViewer(identity, request, url, { required = false, mutation = false } = {}) {
+export async function collectionViewer(identity, request, url, { required = false, mutation = false, today = chinaDay() } = {}) {
   const requested = url.searchParams.get('view');
   if (requested && !roles.includes(requested)) fail(400, 'INVALID_VIEW', '该视角不存在。');
   const auth = await identity.authenticate(request, { required, csrf: mutation }).catch((error) => {
@@ -20,28 +21,28 @@ export async function collectionViewer(identity, request, url, { required = fals
   const views = roles.slice(0, roles.indexOf(role) + 1).reverse();
   if (!views.includes(view)) fail(403, 'VIEW_FORBIDDEN', '此账号无法使用该视角。');
   if (mutation && view !== role) fail(403, 'VIEW_READ_ONLY', '预览视角只能浏览。');
-  return { user, view, views, preview: view !== role };
+  return { user, view, views, preview: view !== role, today };
 }
 
 export function viewerInfo(viewer, organizations) {
-  const { user, view, views, preview } = viewer;
-  const issuerOptions = isManagement(view) && !preview ? publishChoices(user, view, organizations) : [];
+  const { user, view, views, preview, today } = viewer;
+  const issuerOptions = isManagement(view) && !preview ? publishChoices(user, view, organizations, today) : [];
   return {
     view, views, issuerOptions,
     viewer: user ? { id: user.id, role: user.role, view, isStaff: isManagement(view), canPublish: issuerOptions.length > 0 } : null,
   };
 }
 
-function scopes(user) {
-  return (user?.memberships || []).flatMap((claim) =>
+function scopes(memberships) {
+  return memberships.flatMap((claim) =>
     [claim.organizationId, claim.overseesOrganizationId].filter(Boolean));
 }
 
 export function canManage(item, viewer, orgs) {
   if (viewer.view === 'owner') return true;
   if (viewer.view !== 'admin') return false;
-  return item.issuer.userId === viewer.user.id ||
-    scopes(viewer.user).some((scope) => isWithin(item.issuer.organizationId, scope, orgs));
+  return scopes(activeMemberships(viewer.user.memberships, viewer.today))
+    .some((scope) => isWithin(item.issuer.organizationId, scope, orgs));
 }
 
 export function isRecipient(item, user) {
@@ -51,7 +52,7 @@ export function isRecipient(item, user) {
 
 export function canSee(item, viewer, orgs) {
   if (canManage(item, viewer, orgs)) return true;
-  if (item.status === 'draft' || item.status === 'archived' || !item.publishedAt) return false;
+  if (item.status === 'draft' || !item.publishedAt) return false;
   if (item.visibility === 'public') return true;
   return viewer.view !== 'guest' && isRecipient(item, viewer.user);
 }
@@ -61,10 +62,12 @@ export function openRound(item, round, now) {
     (round.policy === 'allow-late' || !round.deadline || Date.parse(round.deadline) > now);
 }
 
-export function publishChoices(user, view, orgs) {
-  const visible = view === 'owner' ? () => true : (node) => scopes(user).some((scope) => isWithin(node.id, scope, orgs));
+export function publishChoices(user, view, orgs, today) {
+  const memberships = activeMemberships(user.memberships, today);
+  const allowed = scopes(memberships);
+  const visible = view === 'owner' ? () => true : (node) => allowed.some((scope) => isWithin(node.id, scope, orgs));
   return flattenOrganizationTree(orgs).filter(visible).map((node) => {
-    const membership = user.memberships?.find((claim) => claim.organizationId === node.id);
+    const membership = memberships.find((claim) => claim.organizationId === node.id);
     const title = membership ? positionLabel(membership, orgs) : '';
     return {
       organizationId: node.id, organizationName: node.fullName, orgShortName: node.name, title,
@@ -82,7 +85,7 @@ export function issuerView(issuer, orgs) {
 }
 
 export function publishedIssuer(body, viewer, orgs) {
-  const choice = publishChoices(viewer.user, viewer.view, orgs).find(({ organizationId, title }) =>
+  const choice = publishChoices(viewer.user, viewer.view, orgs, viewer.today).find(({ organizationId, title }) =>
     organizationId === body.issuerOrganizationId && title === (body.issuerTitle || ''));
   if (!choice) fail(403, 'ISSUER_FORBIDDEN', '此账号无法以该组织的身份发布。');
   return {
@@ -144,8 +147,19 @@ export function roundInput(body, id = randomUUID()) {
 
 export function itemInput(body, now, existing = null) {
   const targetMode = choice(body.targetMode ?? existing?.targetMode ?? 'open', ['open', 'selected'], '受众');
-  const status = choice(body.status ?? existing?.status ?? 'draft', ['draft', 'published', 'closed', 'archived'], '收集状态');
+  const status = choice(body.status ?? existing?.status ?? 'draft', ['draft', 'published', 'closed'], '收集状态');
   const visibility = choice(body.visibility ?? existing?.visibility ?? 'members', ['public', 'members'], '可见范围');
+  const term = body.term ?? existing?.term;
+  if (!isSemester(term)) fail(400, 'INVALID_SEMESTER', '请选择收集所属的学期。');
+  if (existing && existing.status !== 'draft' && status === 'draft') {
+    fail(400, 'UNPUBLISH_REQUIRED', '请使用取消发布操作将收集撤回为草稿。');
+  }
+  if ((!existing || existing.status === 'draft') && status === 'closed') {
+    fail(400, 'PUBLISH_REQUIRED', '收集发布后才能停止收集。');
+  }
+  if (pinnedCollections.includes(existing?.id) && (visibility !== 'public' || targetMode !== 'open' || status === 'draft')) {
+    fail(400, 'PINNED_COLLECTION_PUBLIC', '常用收集入口应保持公开，且面向所有登录用户。');
+  }
   let rounds = existing?.rounds;
   if (body.rounds !== undefined) {
     if (!Array.isArray(body.rounds) || !body.rounds.length || body.rounds.length > 100) fail(400, 'INVALID_ROUNDS', '请设置 1–100 轮。');
@@ -169,8 +183,7 @@ export function itemInput(body, now, existing = null) {
     name: text(body.name ?? existing?.name, '收集名称', 120, true),
     description: text(body.description ?? existing?.description, '收集说明', 5000),
     tags: [...new Set(tags.map((tag) => text(tag, '标签', 40, true)))],
-    term: text(body.term ?? existing?.term, '学期', 40),
-    termLabel: text(body.termLabel ?? existing?.termLabel, '学期名称', 60),
+    term,
     course: Object.hasOwn(body, 'course') && (body.course?.id !== null || body.course?.code !== existing?.course?.code || body.course?.name !== existing?.course?.name)
       ? courseReference(body.course) : existing?.course ?? null,
     targetMode, status, visibility, rounds,

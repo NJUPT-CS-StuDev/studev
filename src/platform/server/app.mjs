@@ -7,7 +7,7 @@ import { hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { createAiService } from './ai.mjs';
 import { createSyncService } from './sync.mjs';
 
-export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now } = {}) {
+export function createPlatformHandler({ getStore = metadataStore, getGateway = oscaGateway, now = Date.now, academicYear } = {}) {
   const revisions = new Map();
   return async function handle(context) {
     try {
@@ -21,13 +21,7 @@ export function createPlatformHandler({ getStore = metadataStore, getGateway = o
       if (['POST', 'DELETE'].includes(request.method) && !hasAuthorization(request) && !bearerBootstrap(request, path)) requireOrigin(request, env);
       const store = getStore(env);
       const repo = createRepository(store, { now, secret: env.PLATFORM_SESSION_SECRET, revisions });
-
-      const isDefinitionChange = request.method !== 'GET' && /^\/api\/platform\/collections\/items(?:\/[^/]+(?:\/duplicate|\/rounds(?:\/[^/]+)?)?)?$/.test(path);
-      const isAppointmentChange = request.method !== 'GET' && /^\/api\/platform\/(?:admin\/(?:users|organizations|roster)|auth\/(?:register|account\/delete\/confirm))(?:\/|$)/.test(path);
-      if ((isDefinitionChange || isAppointmentChange) && (await repo.get('cutover/academic-time.json'))?.paused === true) {
-        fail(503, 'ACADEMIC_TIME_MIGRATING', '收集设置与任职资料正在更新，请稍后再保存。');
-      }
-      const identity = createIdentity({ repo, env, now });
+      const identity = createIdentity({ repo, env, now, academicYear });
       // Never fall back to cookies when an Authorization header is present.
       // Validate it before exempting any endpoint from the browser boundary.
       if (hasAuthorization(request)) await identity.authenticate(request, { required: true, allowEnrollment: true });

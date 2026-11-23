@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createPlatformHandler } from '../server/app.mjs';
 import { createIdentity } from '../server/identity.mjs';
 import { createRepository } from '../server/store.mjs';
-import { profileNickname } from '../server/roster.mjs';
+import { profileNickname, publishRosterPerson } from '../server/roster.mjs';
 import { avatarBody, createMembers } from '../server/members.mjs';
 import { memoryBlob, requestClient, testEnvironment } from './fixtures.mjs';
 
@@ -84,10 +84,17 @@ test('appointed pending staff use the same opaque avatar without publishing pend
   const image = () => identity.handle({request:new Request(f.env.PLATFORM_ORIGIN+path)}, path);
   let current = await f.repo.append(`identity/users/${source.id}`, {...source, status:'pending', memberships:[], role:'user'}, source.revision);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
-  const memberships = [{ organizationId: 'student-development/operations', title: '部长' }];
+  const scheduled = [{ organizationId: 'student-development/operations', title: '部长', startsOn: '2190-09-01', endsBefore: '2191-08-01' }];
+  current = await f.repo.append(`identity/users/${source.id}`, {...current, role:'admin', memberships:scheduled}, current.revision);
+  await publishRosterPerson(f.repo, current);
+  await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
+  const memberships = [{ organizationId: 'student-development/operations', title: '部长', startsOn: '2025-09-01', endsBefore: '2027-08-01' }];
   current = await f.repo.append(`identity/users/${source.id}`, {...current, role:'admin', memberships}, current.revision);
+  await publishRosterPerson(f.repo, current);
   assert.equal((await image()).status, 200);
+  const appointed = current;
   current = await f.repo.append(`identity/users/${source.id}`, {...current, memberships:[]}, current.revision);
+  await publishRosterPerson(f.repo, current, appointed);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');
   current = await f.repo.append(`identity/users/${source.id}`, {...current, memberships, status:'disabled'}, current.revision);
   await assert.rejects(image(), error => error.code === 'MEMBER_NOT_FOUND');

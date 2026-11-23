@@ -12,7 +12,7 @@ const complete = (client, begun) => client.call(`${recordPath(begun.body.receipt
 });
 const create = (client, { fields, allowEdit, requireReview, maxPerUser, ...metadata }) => client.call('/collections/items', {
   method: 'POST', body: { issuerOrganizationId: 'student-development', issuerTitle: '', targetMode: 'open',
-    status: 'published', visibility: 'members', ...metadata, rounds: [{ id: 'main', label: '填写', fields, allowEdit, requireReview, maxPerUser }],
+    status: 'published', visibility: 'members', term: '2026-2027-1', ...metadata, rounds: [{ id: 'main', label: '填写', fields, allowEdit, requireReview, maxPerUser }],
   },
 });
 

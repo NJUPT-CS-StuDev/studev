@@ -5,9 +5,9 @@ import { isConflict } from './store.mjs';
 import { createSessions, hasAuthorization, bearerBootstrap } from './sessions.mjs';
 import { decryptTotp, encryptTotp, matchedTotpCounter, newTotpSecret } from './totp.mjs';
 import { createMailer, letter } from './mail.mjs';
-import { ROSTER_SCHEMA, archiveKey, buildRosterSnapshot, isRosterMember, publicRoster, qqAvatarUrl, profileNickname, rosterTerm } from './roster.mjs';
-import { deleteOrganization, loadOrganizations, membershipView, saveOrganization, validateMemberships } from './organizations.mjs';
-import { flattenOrganizationTree, isWithin, namedOrganizations, organization, studentCenter } from '../organizations.mjs';
+import { hasPublishedRosterAppointment, publishRosterPerson, readRosterPeople, rosterView, qqAvatarUrl, profileNickname } from './roster.mjs';
+import { deleteOrganization, loadOrganizations, membershipView, overlapsMembership, saveOrganization, validateMemberships } from './organizations.mjs';
+import { academicYearId, academicYearWindow, activeMemberships, chinaDay, flattenOrganizationTree, namedOrganizations, organization, validAcademicYear } from '../organizations.mjs';
 import { avatarBody, createMembers } from './members.mjs';
 
 const API = '/api/platform';
@@ -55,7 +55,7 @@ function cookieValue(request, name) {
   return matches.length === 1 ? matches[0].slice(name.length + 1) : null;
 }
 
-export function createIdentity({ repo, env, now = Date.now, mailer = createMailer({ env, repo }), fetcher = globalThis.fetch }) {
+export function createIdentity({ repo, env, now = Date.now, academicYear, mailer = createMailer({ env, repo }), fetcher = globalThis.fetch }) {
   const origin = platformOrigin(env);
   const members = createMembers(repo, origin);
   const local = origin.startsWith('http://');
@@ -68,7 +68,11 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   const sessions = createSessions({ repo, now, loadUser: (id) => repo.latest(userKey(id)) });
   const authRequests = new WeakMap();
   const authSessionKey = (auth) => `identity/devices/state/${auth.sessionId}`;
-  function publicUser(user, orgs = namedOrganizations) {
+  function appointmentYear() {
+    const id = academicYearId(chinaDay(now()));
+    return academicYear?.id === id ? academicYear : academicYearWindow(id);
+  }
+  function publicUser(user, orgs = namedOrganizations, history = false) {
     return {
       id: user.id,
       qq: user.qq || '',
@@ -80,7 +84,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       realName: user.realName || '',
       identityVerified: user.identityVerified === true,
       profileComplete: profileComplete(user),
-      memberships: membershipView(user.memberships, orgs),
+      memberships: membershipView(history ? user.memberships : activeMemberships(user.memberships, chinaDay(now())), orgs),
       signature: user.signature || '',
       role: user.role,
       status: user.status,
@@ -202,15 +206,19 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     for (const id of idsToDelete) delete existing.byId[id];
     await repo.put(DIRECTORY_INDEX_KEY, existing);
   }
-  async function saveUser(current, changes, { syncIndex = true } = {}) {
+  async function publishAppointmentChanges(next, previous, orgs) {
+    if (!next.memberships?.some(row => row.title && row.startsOn) && !previous?.memberships?.some(row => row.title && row.startsOn)) return;
+    await publishRosterPerson(repo, next, previous, orgs ?? await loadOrganizations(repo));
+  }
+  async function saveUser(current, changes, { syncIndex = true, orgs } = {}) {
     const next = await repo.append(userKey(current.id), { ...current, ...changes, updatedAt: iso(now) }, current.revision);
-    await members.publish(next, current);
+    await Promise.all([members.publish(next, current), publishAppointmentChanges(next, current, orgs)]);
     if (syncIndex) await syncDirectoryIndex([next]);
     return next;
   }
-  async function createUser(user, { syncIndex = true } = {}) {
+  async function createUser(user, { syncIndex = true, orgs } = {}) {
     const next = await repo.append(userKey(user.id), user, 0);
-    await members.publish(next);
+    await Promise.all([members.publish(next), publishAppointmentChanges(next, undefined, orgs)]);
     if (syncIndex) await syncDirectoryIndex([next]);
     return next;
   }
@@ -292,13 +300,11 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
   }
   async function deleteUser(user) {
     if (user.role === 'owner') fail(403, 'CANNOT_DELETE_OWNER', '不能删除所有者账号。');
-    const orgs = await loadOrganizations(repo);
     await saveUser(user, { status: 'disabled', securityVersion: secretToken() }, { syncIndex: false });
     if (user.qq) await repo.remove(`identity/qq/${user.qq}.json`);
     if (user.studentId) await repo.remove(studentKey(user.studentId));
     for (const key of await repo.list(`identity/users/${user.id}`)) await repo.remove(key);
     await syncDirectoryIndex([], [user.id]);
-    if (isRosterMember(user, orgs)) await rebuildRoster();
   }
   // After a password changes, the account's mailbox hears of it, so a change nobody asked for is noticed at once.
   async function tellPasswordChanged(user) {
@@ -336,35 +342,30 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     await repo.put(DIRECTORY_INDEX_KEY, { version: 1, byId });
     return Object.values(byId);
   }
-  async function rebuildRoster() {
-    const term = studentCenter.term;
-    const [users, orgs] = await Promise.all([loadAllUsersCanonical(), loadOrganizations(repo)]);
-    const snapshot = buildRosterSnapshot(users, term, iso(now), origin, orgs);
-    await repo.put(`roster/${term}.json`, snapshot);
-    return snapshot;
-  }
   async function handle(context, rawPath) {
     const path = rawPath.split('?')[0].replace(/\/+$/, '');
-    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/members`) && !path.startsWith(`${API}/organizations`) && !path.startsWith(`${API}/admin/organizations`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/admin/roster`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
+    if (!path.startsWith(`${API}/auth/`) && !path.startsWith(`${API}/members`) && !path.startsWith(`${API}/organizations`) && !path.startsWith(`${API}/admin/organizations`) && !path.startsWith(`${API}/admin/users`) && !path.startsWith(`${API}/public/roster`) && path !== `${API}/admin/audit`) return null;
     const request = context.request;
     const route = path.slice(API.length);
     const method = request.method;
     if (method === 'GET' && route === '/organizations') {
       const orgs = await loadOrganizations(repo);
-      return response({ items: flattenOrganizationTree(orgs) });
+      return response({ items: flattenOrganizationTree(orgs), academicYear: appointmentYear() });
     }
     if (method === 'POST' && route === '/admin/organizations') {
       const auth = await authenticate(request, { owner: true, csrf: true });
       const body = await readJson(request, 16384);
       const saved = await saveOrganization(repo, body);
       await repo.audit(auth.user.id, 'organization.saved', saved.organization.id, { name: saved.organization.name, parentId: saved.organization.parentId });
-      if (saved.organization.publicRoster) await rebuildRoster();
       return response(saved, 201);
     }
     const orgDelete = route.match(/^\/admin\/organizations\/(.+?)(?:\/delete)?$/);
     if ((method === 'DELETE' || (method === 'POST' && route.endsWith('/delete'))) && orgDelete) {
       const auth = await authenticate(request, { owner: true, csrf: true });
       const targetId = decodeURIComponent(orgDelete[1]);
+      if ((await loadAllUsersCanonical()).some(user => user.memberships?.some(row => row.organizationId === targetId || row.overseesOrganizationId === targetId))) {
+        fail(409, 'ORGANIZATION_IN_USE', '此组织还有任职或归属记录。');
+      }
       const result = await deleteOrganization(repo, targetId);
       await repo.audit(auth.user.id, 'organization.deleted', targetId);
       return response(result);
@@ -372,7 +373,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     const memberAvatar = route.match(/^\/members\/([a-f0-9-]{36})\/avatar$/);
     if (method === 'GET' && memberAvatar) {
       const user = await repo.latest(userKey(memberAvatar[1]));
-      if (!user || (user.status !== 'active' && !isRosterMember(user))) fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
+      const visible = user?.status === 'active' || (user?.status === 'pending'
+        && await hasPublishedRosterAppointment(repo, user.id, await loadOrganizations(repo), chinaDay(now())));
+      if (!visible) fail(404, 'MEMBER_NOT_FOUND', '找不到这位成员。');
       // The image is public; its address must not disclose the private QQ number.
       let picture;
       try { picture = await fetcher(qqAvatarUrl(user.qq), { signal: AbortSignal.timeout(8000), redirect: 'error' }); }
@@ -417,47 +420,16 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
     }
     if (method === 'GET' && route === '/auth/config') return response({ registrationEnabled: true, emailDeliveryEnabled: mailer.enabled });
     if (method === 'GET' && route === '/public/roster') {
-      const url = new URL(request.url);
-      const term = (url.searchParams.get('term') || studentCenter.term).trim();
-      if (!rosterTerm.test(term)) fail(400, 'INVALID_TERM', '届别格式无效。');
-      const archive = await repo.get(archiveKey(term));
-      if (archive) return response(publicRoster(archive, origin));
-      if (term !== studentCenter.term) fail(404, 'ROSTER_NOT_FOUND', '该届别档案名册不存在。');
-      let snapshot = await repo.get(`roster/${term}.json`);
-      if (!snapshot || snapshot.schema !== ROSTER_SCHEMA) {
-        snapshot = await rebuildRoster();
-      }
-      return response(publicRoster(snapshot, origin));
+      const year = new URL(request.url).searchParams.get('year');
+      if (year !== null && !validAcademicYear(year)) fail(400, 'INVALID_ACADEMIC_YEAR', '请选择有效的学年。');
+      const [people, orgs] = await Promise.all([readRosterPeople(repo), loadOrganizations(repo)]);
+      return response(rosterView(people, orgs, origin, chinaDay(now()), year));
     }
     const userLookup = route.match(/^\/admin\/users\/([a-f0-9-]{36})$/);
     if (method === 'GET' && userLookup) {
       await authenticate(request, { staff: true });
       const [user, orgs] = await Promise.all([loadUser(userLookup[1]), loadOrganizations(repo)]);
-      return response({ user: publicUser(user, orgs) });
-    }
-    if (method === 'POST' && route === '/admin/roster/sync') {
-      const auth = await authenticate(request, { owner: true, csrf: true });
-      const body = await readJson(request, 8192);
-      if (body.term !== undefined && body.term !== studentCenter.term) fail(400, 'INVALID_TERM', '请选择本届名册。');
-      const snapshot = await rebuildRoster();
-      await repo.audit(auth.user.id, 'identity.roster.synced', studentCenter.term, { count: snapshot.totalCount });
-      return response({ snapshot });
-    }
-    if (method === 'POST' && route === '/admin/roster/archive') {
-      const auth = await authenticate(request, { owner: true, csrf: true });
-      const key = archiveKey(studentCenter.term);
-      let snapshot = await repo.get(key);
-      if (!snapshot) {
-        const live = await rebuildRoster();
-        snapshot = { ...live, archivedAt: iso(now) };
-        try { await repo.putNew(key, snapshot); }
-        catch (error) {
-          if (!isConflict(error)) throw error;
-          snapshot = await repo.get(key);
-        }
-        await repo.audit(auth.user.id, 'identity.roster.archived', studentCenter.term, { count: snapshot.totalCount });
-      }
-      return response({ snapshot: publicRoster(snapshot, origin) });
+      return response({ user: publicUser(user, orgs, true) });
     }
     if (method === 'POST' && route === '/auth/register') {
       if (!bearerBootstrap(request, path)) requireOrigin(request, env);
@@ -503,7 +475,6 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
           identityVerified: true,
           securityVersion: secretToken(),
         });
-        if (isRosterMember(activated, orgs)) await rebuildRoster();
         await repo.audit(activated.id, 'identity.registered', activated.id, { claimedPending: true });
         return response({ user: publicUser(activated, orgs) }, 201);
       }
@@ -581,7 +552,6 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       await bindStudent(current, studentId, realName);
       const orgs = await loadOrganizations(repo);
       const user = await saveUser(current, { studentId, realName, nickname, signature, ...(changedIdentity ? { identityVerified: false } : {}) });
-      if (isRosterMember(user, orgs)) await rebuildRoster();
       await repo.audit(user.id, changedIdentity ? 'identity.profile.bound' : 'identity.profile.updated', user.id, { profileComplete: profileComplete(user), identityVerified: user.identityVerified === true });
       return response({ user: publicUser(user, orgs) });
     }
@@ -693,7 +663,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       const url = new URL(request.url);
       const refresh = url.searchParams.get('refresh') === '1';
       const [users, orgs] = await Promise.all([loadAllUsers({ refresh }), loadOrganizations(repo)]);
-      return response({ items: users.map(user => publicUser(user, orgs)) });
+      return response({ items: users.map(user => publicUser(user, orgs, true)) });
     }
     if (method === 'POST' && route === '/admin/users/batch') {
       const auth = await authenticate(request, { owner: true, csrf: true });
@@ -706,6 +676,9 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (title !== '' && targetOrg.titles.length > 0 && !targetOrg.titles.includes(title)) {
         fail(400, 'INVALID_POSITION', '请选择该组织的职务。');
       }
+      const [appointment] = validateMemberships([{
+        organizationId: targetOrg.id, title, startsOn: body.startsOn, endsBefore: body.endsBefore,
+      }], orgs, appointmentYear());
       const parsed = [];
       if (Array.isArray(body.members)) {
         for (const row of body.members) {
@@ -737,12 +710,12 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         const existingUser = existingClaim?.id && ID.test(existingClaim.id) ? await repo.latest(userKey(existingClaim.id)) : null;
         if (existingUser) {
           const currentMemberships = Array.isArray(existingUser.memberships) ? existingUser.memberships : [];
-          if (currentMemberships.some(m => m.organizationId === targetOrg.id)) {
+          if (currentMemberships.some(m => overlapsMembership(m, appointment))) {
             skipped++;
             continue;
           }
-          const nextMemberships = [...currentMemberships, { organizationId: targetOrg.id, title, overseesOrganizationId: '', order: 999 }];
-          touched.push(await saveUser(existingUser, { memberships: nextMemberships }, { syncIndex: false }));
+          const nextMemberships = validateMemberships([...currentMemberships, appointment], orgs, appointmentYear());
+          touched.push(await saveUser(existingUser, { memberships: nextMemberships }, { syncIndex: false, orgs }));
           updated++;
           continue;
         }
@@ -755,14 +728,13 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         touched.push(await createUser({
           id, qq: row.qq, nickname: '', email: row.qq ? `${row.qq}@qq.com` : '', emailVerified: false,
           studentId: row.studentId, realName: row.realName, identityVerified: true,
-          memberships: [{ organizationId: targetOrg.id, title, overseesOrganizationId: '', order: 999 }],
+          memberships: [appointment],
           signature: '', role: 'user', status: 'pending', passwordHash: '', mustChangePassword: false,
           securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
-        }, { syncIndex: false }));
+        }, { syncIndex: false, orgs }));
         created++;
       }
       if (touched.length) await syncDirectoryIndex(touched);
-      if (isWithin(targetOrg.id, studentCenter.id, orgs)) await rebuildRoster();
       await repo.audit(auth.user.id, 'identity.users.batch_imported', targetOrg.id, { created, updated, skipped, total: dedup.size });
       return response({ created, updated, skipped, total: dedup.size }, 201);
     }
@@ -775,7 +747,7 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (!['admin', 'user'].includes(role)) fail(400, 'INVALID_ROLE', '预录成员角色须为成员或管理员。');
       const qq = role === 'user' && (body.qq === undefined || body.qq === '') ? '' : qqValue(body.qq);
       const orgs = await loadOrganizations(repo);
-      const memberships = validateMemberships(body.memberships ?? [], orgs);
+      const memberships = validateMemberships(body.memberships ?? [], orgs, appointmentYear());
       const signature = body.signature === undefined ? '' : text(body.signature, '个性签名', 120, false);
       if (await repo.get(studentKey(studentId))) fail(409, 'STUDENT_ID_ALREADY_REGISTERED', '该学号已存在记录。');
       if (qq && await repo.get(`identity/qq/${qq}.json`)) fail(409, 'QQ_ALREADY_REGISTERED', '该 QQ 号已存在记录。');
@@ -789,9 +761,8 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
         role, status: 'pending', passwordHash: '', mustChangePassword: false,
         securityVersion: secretToken(), totp: null, createdAt: iso(now), updatedAt: iso(now),
       });
-      if (isRosterMember(user, orgs)) await rebuildRoster();
       await repo.audit(auth.user.id, 'identity.user.seeded', id);
-      return response({ user: publicUser(user, orgs) }, 201);
+      return response({ user: publicUser(user, orgs, true) }, 201);
     }
     if (method === 'GET' && route === '/admin/audit') {
       await authenticate(request, { owner: true });
@@ -839,21 +810,20 @@ export function createIdentity({ repo, env, now = Date.now, mailer = createMaile
       if (identityVerified && !profileComplete({ ...user, studentId, realName })) fail(409, 'PROFILE_REQUIRED', '账号需先补齐学号与真实姓名，再核验身份。');
       if (body.memberships !== undefined && auth.user.role !== 'owner') fail(403, 'OWNER_REQUIRED', '组织归属由所有者统一维护。');
       const orgs = await loadOrganizations(repo);
-      const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships, orgs);
+      const memberships = body.memberships === undefined ? user.memberships : validateMemberships(body.memberships, orgs, appointmentYear());
       const signature = body.signature === undefined ? (user.signature || '') : text(body.signature, '个性签名', 120, false);
       const changedSecurity = role !== user.role || status !== user.status || studentId !== user.studentId;
       if (studentId && studentId !== user.studentId) {
         await bindStudent(user, studentId, realName);
       }
-      const updated = await saveUser(user, { role, status, nickname, studentId, realName, identityVerified, memberships, signature, ...(changedSecurity ? { securityVersion: secretToken() } : {}) });
+      const updated = await saveUser(user, { role, status, nickname, studentId, realName, identityVerified, memberships, signature, ...(changedSecurity ? { securityVersion: secretToken() } : {}) }, { orgs });
       if (user.studentId && studentId !== user.studentId) {
         const previous = await repo.get(studentKey(user.studentId));
         if (previous?.id === user.id) await repo.remove(studentKey(user.studentId));
       }
-      if (isRosterMember(user, orgs) || isRosterMember(updated, orgs)) await rebuildRoster();
       await repo.audit(auth.user.id, 'identity.user.updated', user.id, { role, status, previousRole: user.role, previousStatus: user.status });
       if (identityChanged || identityVerified !== (user.identityVerified === true)) await repo.audit(auth.user.id, identityChanged ? 'identity.profile.corrected' : 'identity.verification.updated', user.id, { identityVerified, profileComplete: profileComplete(updated) });
-      return response({ user: publicUser(updated, orgs) });
+      return response({ user: publicUser(updated, orgs, true) });
     }
     fail(404, 'NOT_FOUND', '接口不存在。');
   }

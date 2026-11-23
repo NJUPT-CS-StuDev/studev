@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CalendarClock, ClipboardList, Copy, Download, FileArchive, Pencil, Plus, Settings2, UsersRound } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ClipboardList, Copy, Download, FileArchive, Pencil, Plus, Settings2, Trash2, Undo2, UsersRound } from 'lucide-react';
 import { api, errorText } from '../api';
+import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import { downloadZip } from './attachments';
 import { AnswerForm, ReceiptSummary, badge } from './Submission';
 import { Dialog } from './Dialog';
@@ -97,9 +98,9 @@ function RoundBoard({ detail, round, version, authorize, refresh }: {
     </section>;
 }
 
-export function Details({ detail, chosenRound, receiptId, version, navigate, edit, authorize, onChanged }: {
+export function Details({ detail, chosenRound, receiptId, version, navigate, edit, authorize, onChanged, onDeleted }: {
     detail: CollectionDetail; chosenRound: string; receiptId: string; version: number; navigate: Navigate; edit: (mode: EditorMode) => void;
-    authorize: () => Promise<void>; onChanged: (id?: string) => void;
+    authorize: () => Promise<void>; onChanged: (id?: string) => void; onDeleted: () => void;
 }) {
     const { item, view } = detail;
     const round = item.rounds.find(value => value.id === chosenRound) || item.rounds.find(value => value.open) || item.rounds[0];
@@ -109,7 +110,13 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
     const replace = replaceRound === round?.id;
     const [failure, setFailure] = useState('');
     const [duplicating, setDuplicating] = useState(false);
+    const [confirm, setConfirm] = useState(false);
+    const [changing, setChanging] = useState(false);
+    const [changeError, setChangeError] = useState('');
     const manage = item.canManage;
+    const draft = item.status === 'draft';
+    const pinned = pinnedCollections.includes(item.id);
+    const actionLabel = draft ? '删除草稿' : '取消发布';
     const preview = detail.viewer && view !== detail.viewer.role;
     const accepts = !!round && (round.open ?? roundIsOpen(item, round));
     const canSubmit = !!detail.viewer && !preview && view !== 'guest' && accepts && (item.targetMode === 'open' || item.inRecipients);
@@ -136,17 +143,38 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
         } catch (error) { setFailure(errorText(error)); }
         finally { setDuplicating(false); }
     }
+    async function changePublication() {
+        setChangeError('');
+        setChanging(true);
+        try {
+            await authorize();
+            const path = itemRoute(item.id);
+            const body = { revision: item.revision };
+            if (draft) {
+                await api(path, body, { method: 'DELETE' });
+                onDeleted();
+            } else {
+                await api(`${path}/unpublish`, body);
+                setConfirm(false);
+                onChanged();
+            }
+        } catch (error) { setChangeError(errorText(error)); }
+        finally { setChanging(false); }
+    }
     return <>
         <WorkspaceLink className="cw-back" href={toCollectionUrl()} navigate={navigate}><ArrowLeft size={17} />全部收集</WorkspaceLink>
         <div className="cw-detail-head">
             <div className="cw-detail-title"><div className="cw-inline cw-meta-line">
                 <span className={`cw-status cw-status-${item.status}`}>{collectionStatus[item.status]}</span>
-                {item.termLabel && <span>{item.termLabel}</span>}
+                <span>{semesterLabel(item.term)}</span>
                 {item.course && <span className="cw-tag"><span className="cw-mono">{item.course.code}</span> {item.course.name}</span>}
                 {item.tags.map(tag => <span className="cw-tag" key={tag}>{tag}</span>)}
             </div><h1 tabIndex={-1}>{item.name}</h1><p className="cw-muted">{[item.issuer.organizationName, item.issuer.title, item.issuer.name].filter(Boolean).join(' · ')}</p></div>
             {manage && <div className="cw-inline cw-detail-actions"><button type="button" className="cw-button" onClick={() => edit('item')}><Settings2 size={17} />收集设置</button>
-                <button type="button" className="cw-button" disabled={duplicating} onClick={duplicate}><Copy size={16} />{duplicating ? '复制中…' : '复制为草稿'}</button></div>}
+                <button type="button" className="cw-button" disabled={duplicating} onClick={duplicate}><Copy size={16} />{duplicating ? '复制中…' : '复制为草稿'}</button>
+                {!pinned && <button type="button" className={draft ? 'cw-button cw-danger' : 'cw-button'} onClick={() => { setChangeError(''); setConfirm(true); }}>
+                    {draft ? <Trash2 size={16} /> : <Undo2 size={16} />}{actionLabel}
+                </button>}</div>}
         </div>
         {failure && <p className="cw-failure" role="alert">{failure}</p>}
         {item.description && <p className="cw-description">{item.description}</p>}
@@ -164,7 +192,7 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
                         <div><span><CalendarClock size={16} />截止时间</span>{manage
                             ? <button type="button" className="cw-fact-action" aria-label={`修改截止时间，当前 ${displayTime(round.deadline)}`} onClick={() => edit('deadline')}>{displayTime(round.deadline)}<Pencil size={15} /></button>
                             : <strong>{displayTime(round.deadline)}</strong>}</div>
-                        <div><span><UsersRound size={16} />填写对象</span>{manage
+                        <div><span><UsersRound size={16} />填写对象</span>{manage && !pinned
                             ? <button type="button" className="cw-fact-action" onClick={() => edit('recipients')}>{item.targetMode === 'selected' ? `${item.recipientCount} 人` : '所有可访问用户'}<Pencil size={15} /></button>
                             : <strong>{item.targetMode === 'selected' ? '指定成员' : '所有可访问用户'}</strong>}</div>
                     </div>
@@ -184,5 +212,15 @@ export function Details({ detail, chosenRound, receiptId, version, navigate, edi
                 </div> : <RoundBoard key={round.id} detail={detail} round={round} version={version} authorize={authorize} refresh={() => onChanged()} />}
             </div>}
         </div>
+        {confirm && <Dialog title={actionLabel} busy={changing} onClose={() => setConfirm(false)}>
+            <div className="cw-dialog-form">
+                <p>{draft ? '删除后无法恢复。有提交记录的草稿会保留。' : '收集将撤回为草稿并停止接收新提交。已提交的人仍可在「我的提交」中查看自己的记录。'}</p>
+                {changeError && <p className="cw-failure" role="alert">{changeError}</p>}
+                <div className="cw-dialog-actions">
+                    <button type="button" className="cw-button" disabled={changing} onClick={() => setConfirm(false)}>返回</button>
+                    <button type="button" className="cw-button cw-danger" disabled={changing} onClick={changePublication}>{changing ? '正在处理…' : actionLabel}</button>
+                </div>
+            </div>
+        </Dialog>}
     </>;
 }

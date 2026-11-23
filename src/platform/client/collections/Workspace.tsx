@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, ClipboardList, Eye, ListFilter, Plus, Search, Tags, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardList, Eye, MapPin, MessageSquare, Plus, Search, Upload, UsersRound } from 'lucide-react';
 import { api, errorText, PlatformError, session } from '../api';
+import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
 import { Details, WorkspaceLink, type Navigate } from './Detail';
 import { badge } from './Submission';
@@ -8,34 +9,18 @@ import { collectionLoginUrl, collectionStatus, displayTime, itemRoute, roundIsOp
 
 const CollectionEditor = lazy(() => import('./Editor').then(module => ({ default: module.CollectionEditor })));
 
-type Display = 'time' | 'tags';
-type CollectionGroup = { id: string; label: string; items: Item[] };
-const month = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', timeZone: 'Asia/Shanghai' });
 const searchText = (value: string) => value.normalize('NFKC').toLowerCase().trim();
+const pinnedIcons = [MapPin, MessageSquare, Upload];
 
-function tagsFor(item: Item) {
-    return [
-        ...(item.course ? [{ id: `course:${item.course.id || item.course.code}`, label: `${item.course.name} · ${item.course.code}` }] : []),
-        ...item.tags.map(tag => ({ id: `tag:${tag}`, label: tag })),
-    ];
-}
-
-function groupItems(items: Item[], display: Display) {
-    const groups = new Map<string, CollectionGroup>();
+function groupItems(items: Item[]) {
+    const groups = new Map<string, Item[]>();
     const sorted = [...items].sort((left, right) => (right.publishedAt || right.updatedAt).localeCompare(left.publishedAt || left.updatedAt) || right.id.localeCompare(left.id));
     for (const item of sorted) {
-        const date = item.publishedAt || item.updatedAt;
-        const dateGroup = Number.isFinite(Date.parse(date)) ? month.format(new Date(date)) : '时间未设置';
-        const tags = tagsFor(item);
-        const buckets = display === 'time' ? [{ id: item.term || dateGroup, label: item.termLabel || dateGroup }]
-            : tags.length ? tags : [{ id: 'untagged', label: '未加标签' }];
-        for (const bucket of buckets) {
-            const group = groups.get(bucket.id) || { ...bucket, items: [] };
-            group.items.push(item);
-            groups.set(bucket.id, group);
-        }
+        const group = groups.get(item.term) || [];
+        group.push(item);
+        groups.set(item.term, group);
     }
-    return [...groups.values()];
+    return [...groups].sort(([left], [right]) => right.localeCompare(left));
 }
 
 function mineHref(query: URLSearchParams) {
@@ -65,43 +50,34 @@ function ItemRow({ item, navigate }: { item: Item; navigate: Navigate }) {
     </WorkspaceLink>;
 }
 
-function List({ catalog, query, navigate, display, setDisplay }: { catalog: Catalog; query: URLSearchParams; navigate: Navigate; display: Display; setDisplay: (value: Display) => void }) {
+function List({ catalog, query, navigate }: { catalog: Catalog; query: URLSearchParams; navigate: Navigate }) {
     const [text, setText] = useState('');
-    const [showArchived, setShowArchived] = useState(false);
-    const [term, setTerm] = useState('');
-    const [tag, setTag] = useState('');
     const search = searchText(text);
-    const manageable = catalog.items.some(item => item.canManage);
-    const groups = useMemo(() => groupItems(catalog.items.filter(item => (item.status === 'archived') === showArchived
-        && (!search || searchText([item.name, item.description, item.course?.code, item.course?.name, ...item.tags, item.issuer.organizationName].join(' ')).includes(search))), display), [catalog.items, display, showArchived, search]);
-    const groupFilter = display === 'time' ? term : tag;
-    const currentGroup = groups.some(group => group.id === groupFilter) ? groupFilter : '';
+    const matches = useMemo(() => catalog.items.filter(item => !search || searchText([item.name, item.description, item.course?.code, item.course?.name, ...item.tags, item.issuer.organizationName].join(' ')).includes(search)), [catalog.items, search]);
+    const pinned = pinnedCollections.flatMap((id, index) => {
+        const item = matches.find(value => value.id === id);
+        return item ? [{ item, Icon: pinnedIcons[index]! }] : [];
+    });
+    const groups = useMemo(() => groupItems(matches.filter(item => !pinnedCollections.includes(item.id))), [matches]);
     const canReadMine = catalog.viewer && catalog.view !== 'guest' && catalog.view === catalog.viewer.role;
-    return <div className="cw-catalog">
-        <aside className="cw-sidebar">
-            <section><div className="cw-side-label">分类</div><div className="cw-side-select" role="group" aria-label="收集分类">
-                <button type="button" className="cw-side-link" aria-pressed={display === 'time'} onClick={() => setDisplay('time')}><CalendarDays size={18} />按时间</button>
-                <button type="button" className="cw-side-link" aria-pressed={display === 'tags'} onClick={() => setDisplay('tags')}><Tags size={18} />按标签</button>
-            </div></section>
-            {canReadMine && <section><WorkspaceLink className="cw-side-link" navigate={navigate} href={mineHref(query)}><ClipboardList size={18} />我的提交</WorkspaceLink></section>}
-            {catalog.viewer?.isStaff && catalog.view === catalog.viewer.role && <section><a className="cw-side-link" href="/members/"><UsersRound size={18} />组织与成员</a></section>}
-        </aside>
-        <div className="cw-list">
+    return <div className="cw-list">
             <div className="cw-list-controls">
                 <label className="cw-search"><Search size={19} /><span className="cw-sr-only">搜索收集</span><input type="search" value={text} onChange={event => setText(event.target.value)} placeholder="搜索收集、课程编号或标签" /></label>
-                <label className="cw-list-select"><ListFilter size={17} /><span className="cw-sr-only">{display === 'time' ? '按学期或月份筛选' : '按标签筛选'}</span>
-                    <select value={currentGroup} onChange={event => (display === 'time' ? setTerm : setTag)(event.target.value)}>
-                        <option value="">{display === 'time' ? '所有时间' : '所有标签'}</option>
-                        {groups.map(group => <option key={group.id} value={group.id}>{group.label}</option>)}
-                    </select></label>
-                {manageable && catalog.items.some(item => item.status === 'archived') && <button type="button" className="cw-button" aria-pressed={showArchived} onClick={() => setShowArchived(!showArchived)}>{showArchived ? '返回收集列表' : '查看归档'}</button>}
+                {canReadMine && <WorkspaceLink className="cw-button" navigate={navigate} href={mineHref(query)}><ClipboardList size={17} />我的提交</WorkspaceLink>}
+                {catalog.viewer?.isStaff && catalog.view === catalog.viewer.role && <a className="cw-button" href="/members/"><UsersRound size={17} />组织与成员</a>}
             </div>
-            {groups.length ? groups.filter(group => !currentGroup || currentGroup === group.id).map(group => <section className="cw-group" key={group.id}>
-                <div className="cw-group-head"><h2>{group.label}</h2><span>{group.items.length} 项</span></div>
-                <div className="cw-items">{group.items.map(item => <ItemRow key={item.id} item={item} navigate={navigate} />)}</div>
-            </section>) : <div className="cw-empty"><ClipboardList size={30} /><h2>{search ? '找不到匹配的收集' : showArchived ? '暂无归档收集' : '暂无可查看的收集'}</h2>
+            {pinned.length > 0 && <section className="cw-group" aria-labelledby="cw-pinned-title">
+                <div className="cw-group-head"><h2 id="cw-pinned-title">常用收集</h2>{catalog.view === 'guest' && <span>公开 · 登录后填写</span>}</div>
+                <div className="cw-pinned">{pinned.map(({ item, Icon }) => <WorkspaceLink key={item.id} href={toCollectionUrl(item.id)} navigate={navigate} className="cw-pinned-link">
+                    <span className="cw-item-icon"><Icon size={21} /></span><span className="cw-item-title">{item.name}</span><ArrowRight className="cw-item-arrow" size={17} />
+                </WorkspaceLink>)}</div>
+            </section>}
+            {groups.map(([term, items]) => <section className="cw-group" key={term}>
+                <div className="cw-group-head"><h2>{semesterLabel(term)}</h2><span>{items.length} 项</span></div>
+                <div className="cw-items">{items.map(item => <ItemRow key={item.id} item={item} navigate={navigate} />)}</div>
+            </section>)}
+            {!matches.length && <div className="cw-empty"><ClipboardList size={30} /><h2>{search ? '找不到匹配的收集' : '暂无可查看的收集'}</h2>
                 {search ? <button type="button" className="cw-button" onClick={() => setText('')}>清除搜索</button> : catalog.view === 'guest' && !catalog.viewer && <a className="cw-button" href="/login/?next=%2Fforms%2F">登录查看开放给你的收集</a>}</div>}
-        </div>
     </div>;
 }
 
@@ -138,7 +114,6 @@ export default function Workspace() {
     const [failure, setFailure] = useState<{ key: string; message: string; status?: number }>();
     const [editor, setEditor] = useState<EditorMode>();
     const [version, refresh] = useState(0);
-    const [display, setDisplay] = useState<Display>('time');
     const [notice, setNotice] = useState('');
     const root = useRef<HTMLDivElement>(null);
     const focusedPage = useRef('');
@@ -233,8 +208,14 @@ export default function Workspace() {
         {notice && <p role="status" className="cw-notice">{notice}</p>}
         {id && activeDetail ? <Details key={detailKey} detail={activeDetail} chosenRound={roundId} receiptId={query.get('receipt') || ''} navigate={navigate} version={version} edit={setEditor} authorize={authorize} onChanged={created => {
             if (created) navigate(toCollectionUrl(created));
-            refresh(version + 1);
-        }} /> : !id && mine && info ? <Mine key={requestedView} info={info} navigate={navigate} /> : !id && activeCatalog ? <List key={requestedView} catalog={activeCatalog} query={query} navigate={navigate} display={display} setDisplay={setDisplay} />
+            refresh(value => value + 1);
+        }} onDeleted={() => {
+            setDetail(undefined);
+            setCatalog(undefined);
+            navigate(toCollectionUrl(), true);
+            setNotice('草稿已删除');
+            refresh(value => value + 1);
+        }} /> : !id && mine && info ? <Mine key={requestedView} info={info} navigate={navigate} /> : !id && activeCatalog ? <List key={requestedView} catalog={activeCatalog} query={query} navigate={navigate} />
             : currentError ? <div className="cw-empty"><p className="cw-failure" role="alert">{currentError.message}</p><div className="cw-inline"><button type="button" className="cw-button" onClick={() => refresh(version + 1)}>重试</button>
                 {id && <WorkspaceLink className="cw-button" href={toCollectionUrl()} navigate={navigate}>返回收集</WorkspaceLink>}
                 {(currentError.status === 401 || (id && !viewChoice?.viewer && (!requestedView || requestedView === 'guest') && currentError.status === 404)) && <a className="cw-button cw-primary" href={collectionLoginUrl(query)}>登录后查看</a>}

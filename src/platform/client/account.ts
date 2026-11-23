@@ -72,10 +72,10 @@ function renderIdCard(user: User) {
   linksRow.style.gap = '14px';
   linksRow.style.marginTop = '8px';
   if (user.memberships?.some(row => row.title && isWithin(row.organizationId, studentCenter.id))) {
-    const archiveLink = el('a', '查看本届名册 ↗', 'p-link');
+    const rosterLink = el('a', '查看在任名册 ↗', 'p-link');
     const anchor = `#member-${user.id}`;
-    archiveLink.href = `/history/${anchor}`;
-    linksRow.append(archiveLink);
+    rosterLink.href = `/history/${anchor}`;
+    linksRow.append(rosterLink);
   }
   if (user.qq) {
     const refreshAvatarBtn = el('button', '刷新 QQ 头像', 'p-link');
@@ -196,12 +196,9 @@ q<HTMLFormElement>('[data-profile-form]').addEventListener('submit', async (e) =
         revision: current!.user.revision,
       });
       current!.user = result.user;
-      try {
-        localStorage.removeItem(`studev_roster_${studentCenter.term}`);
-      } catch {}
       current = await session(true);
       render();
-      message(status, '个人资料与签名已保存，并已同步至历届档案与成员名录。', 'success');
+      message(status, '个人资料与签名已保存。', 'success');
     });
   } catch (e) {
     message(status, errorText(e), 'error');

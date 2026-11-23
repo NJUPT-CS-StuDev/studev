@@ -59,7 +59,7 @@ async function collectionsFixture() {
   }
   async function create({ user = 'owner', round = {}, ...input } = {}) {
     const result = await call('/items', { user, body: {
-      name: '采集', status: 'published', visibility: 'members', targetMode: 'open',
+      name: '采集', status: 'published', visibility: 'members', targetMode: 'open', term: '2026-2027-1',
       issuerOrganizationId: orgA, issuerTitle: user === 'admin' ? '部长' : '',
       rounds: [{ label: '首轮', fields: [note], ...round }], ...input,
     } });
@@ -81,7 +81,6 @@ test('the collection catalog and direct reads project only the effective view an
     tags: ['课程实验'], course: { id: 'information/course-plan/JS160201S', code: 'JS160201S', name: '计算机网络' },
   });
   const draft = await f.create({ status: 'draft' });
-  const archived = await f.create({ status: 'archived' });
   assert.deepEqual((await f.call()).data.items.map(({ id }) => id), [publicItem.id]);
   assert.deepEqual((await f.call('', { user: 'bob' })).data.items.map(({ id }) => id), [publicItem.id]);
   const mine = (await f.call(f.itemPath(privateItem), { user: 'alice' })).data.item;
@@ -90,7 +89,7 @@ test('the collection catalog and direct reads project only the effective view an
   assert.equal(mine.course.code, 'JS160201S');
   assert.deepEqual(mine.tags, ['课程实验']);
   assert.equal((await f.call(f.itemPath(privateItem), { user: 'outsider' })).status, 404);
-  for (const item of [draft, archived]) assert.equal((await f.call(f.itemPath(item), { user: 'alice' })).status, 404);
+  assert.equal((await f.call(f.itemPath(draft), { user: 'alice' })).status, 404);
   const staff = (await f.call(f.itemPath(privateItem), { user: 'admin' })).data.item;
   assert.deepEqual(staff.recipients, [{ studentId: 'TEST1001', name: '甲学生' }]);
   const preview = await f.call('?view=guest', { user: 'owner' });
@@ -104,11 +103,11 @@ test('the collection catalog and direct reads project only the effective view an
   const directory = (await f.call('/people', { user: 'admin' })).data.people;
   assert.deepEqual(directory.map(({ studentId }) => studentId).sort(), ['ADMIN01', 'TEST1001']);
   assert.equal((await f.call('/items', { user: 'admin', body: {
-    name: '越权', issuerOrganizationId: orgB, rounds: [{ label: '填表', fields: [note] }],
+    name: '越权', term: '2026-2027-1', issuerOrganizationId: orgB, rounds: [{ label: '填表', fields: [note] }],
   } })).status, 403);
 });
 
-test('one text commit supplies immutable historical answers, scoped review, archival and safe CSV', async () => {
+test('stopping keeps access and withdrawal preserves private receipts, review and historical answers', async () => {
   const f = await collectionsFixture();
   const item = await f.create({ user: 'admin', round: { requireReview: true, allowEdit: true } });
   const inserted = await f.submit(item, 'alice', { answers: { note: '  =FORMULA(1) ' }, files: [],
@@ -143,21 +142,50 @@ test('one text commit supplies immutable historical answers, scoped review, arch
   assert.equal(report.data.roundStats[0].submitted, 1);
   assert.equal(report.data.items[0].createdAt, inserted.data.submission.createdAt);
   assert.equal((await f.call(f.roundPath(item) + '/submissions?view=user', { user: 'admin' })).status, 403);
-  const archived = await f.call(f.itemPath(item), { user: 'admin', body: { revision: changed.data.item.revision, status: 'archived' } });
-  assert.equal(archived.status, 200);
+  const path = f.itemPath(item);
+  const stopped = await f.call(path, { user: 'admin', body: { revision: changed.data.item.revision, status: 'closed' } });
+  assert.equal(stopped.status, 200);
+  assert.equal((await f.call(path, { user: 'bob' })).status, 200);
+  assert.equal((await f.submit(item, 'bob')).data.error, 'COLLECTION_CLOSED');
+  const withdrawn = await f.call(path + '/unpublish', { user: 'admin', body: { revision: stopped.data.item.revision } });
+  assert.equal(withdrawn.status, 200);
   assert.equal((await f.call(f.itemPath(item), { user: 'bob' })).status, 404);
   assert.equal((await f.call(f.itemPath(item) + '?view=guest', { user: 'alice' })).status, 404);
-  assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'alice' })).status, 404);
+  assert.equal((await f.submit(item, 'alice')).status, 404);
   assert.equal((await f.call('', { user: 'alice' })).data.items.some(({ id }) => id === item.id), false);
   const historical = (await f.call(f.itemPath(item), { user: 'alice' })).data;
-  assert.equal(historical.item.status, 'archived');
+  assert.equal(historical.item.status, 'draft');
   assert.equal(historical.item.canManage, false);
   assert.deepEqual(historical.mySubmissions.map((row) => row.id), [id]);
   assert.equal((await f.call('/mine', { user: 'alice' })).data.items[0].status, 'accepted');
   assert.equal((await f.call(recordPath, { user: 'alice' })).data.canEdit, false);
+  assert.equal((await f.call(path, { user: 'admin', method: 'DELETE', body: { revision: withdrawn.data.item.revision } })).data.error, 'DRAFT_HAS_SUBMISSIONS');
   const duplicate = await f.call(f.itemPath(item) + '/duplicate', { user: 'admin', body: {} });
   assert.equal(duplicate.status, 201);
   assert.equal(duplicate.data.item.status, 'draft');
+});
+
+test('draft deletion removes definition content and protects outstanding upload confirmations', async () => {
+  const f = await collectionsFixture();
+  const item = await f.create({ visibility: 'public', round: { fields: [note, attachment] } });
+  const path = f.itemPath(item);
+  const submission = await f.submit(item, 'alice', { answers: { note: '上传' }, files: [{ fieldId: 'upload', name: '材料.txt', size: 7, type: 'text/plain' }] });
+  assert.equal(submission.status, 201);
+  const deletion = (revision, options = {}) => f.call(path, { user: 'owner', method: 'DELETE', body: { revision }, ...options });
+  assert.equal((await deletion(item.revision)).data.error, 'DRAFT_REQUIRED');
+  const { data: { item: draft } } = await f.call(path + '/unpublish', { user: 'owner', body: { revision: item.revision } });
+  assert.equal((await deletion(draft.revision, { csrf: false })).data.error, 'CSRF_REJECTED');
+  assert.equal((await deletion(draft.revision)).data.error, 'DRAFT_HAS_AUTHORIZATIONS');
+  f.advance(71 * 60_000);
+  assert.equal((await f.complete(submission.data)).data.error, 'SUBMISSION_EXPIRED');
+  assert.equal((await deletion(item.revision)).data.error, 'REVISION_CONFLICT');
+  assert.deepEqual((await deletion(draft.revision)).data, { deleted: true });
+  assert.equal((await f.call(path, { user: 'owner' })).status, 404);
+  assert.equal((await f.call('', { user: 'owner' })).data.items.length, 0);
+  const prefix = collectionKeys.definition(item.id);
+  const keys = await f.repo.list(prefix + '/');
+  assert.equal(keys.length, draft.revision + 1);
+  for (const [index, key] of keys.entries()) assert.deepEqual(await f.repo.get(key), { deleted: true, revision: index + 1 });
 });
 
 test('signed uploads survive a deadline, finalize concurrently and leave only their immutable final attachment', async () => {
@@ -273,7 +301,8 @@ test('only verified identities inherit unclaimed historical submissions, while a
 
 test('field and answer primitives reject malformed schemas and inconsistent payloads', async () => {
   const f = await collectionsFixture();
-  const schema = { name: '校验', issuerOrganizationId: orgA, rounds: [{ label: '一轮', fields: [note, note] }] };
+  const schema = { name: '校验', term: '2026-2027-1', issuerOrganizationId: orgA, rounds: [{ label: '一轮', fields: [note, note] }] };
+  assert.equal((await f.call('/items', { user: 'owner', body: { ...schema, term: '2026-2028-1' } })).data.error, 'INVALID_SEMESTER');
   assert.equal((await f.call('/items', { user: 'owner', body: schema })).status, 400);
   assert.equal((await f.call('/items', { user: 'owner', body: { ...schema, rounds: [{ label: '一轮', fields: [{ ...note, id: undefined }] }] } })).status, 400);
   const item = await f.create({ round: { fields: [

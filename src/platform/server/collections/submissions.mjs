@@ -6,6 +6,10 @@ import { answersInput, fileInput } from './fields.mjs';
 import { collectionKeys as keys, locateSubmission, mapConcurrent, studentId, submissionId } from './records.mjs';
 
 const strongETag = (value) => typeof value === 'string' && /^"[^"\r\n]+"$/.test(value);
+const uploadSeconds = 300;
+const confirmationMillis = 60 * 60 * 1000;
+// Let confirmations already processing finish before deleting withdrawn drafts.
+export const authorizationGrace = uploadSeconds * 1000 + confirmationMillis + 5 * 60 * 1000;
 
 function oscaConfig(env) {
   let endpoint;
@@ -124,6 +128,11 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
     const ticket = { id: stable ? id : receiptId, issuedAt, stable };
     if (!stable) await claim(repo, keys.quota(item.id, round.id, 'user/' + actor.id), round.maxPerUser, ticket, 'USER_LIMIT_REACHED');
     if (!existing) await claim(repo, keys.quota(item.id, round.id, 'all'), round.maxSubmissions, ticket, 'COLLECTION_FULL', previouslyReserved);
+    // Any request allowed past this point is discoverable when a withdrawn
+    // draft checks for earlier authorizations, even before its receipt exists.
+    const current = await repo.latest(keys.definition(item.id));
+    if (current?.status !== 'published') fail(409, 'COLLECTION_CLOSED', '本轮当前不接受提交。');
+    if (current.revision !== item.revision) fail(409, 'REVISION_CONFLICT', '收集已更新，请刷新后重试。');
     const record = {
       id, itemId: item.id, roundId: round.id, userId: actor.id, studentId: sid,
       studentName: actor.realName || actor.nickname || sid, answers, fields: round.fields,
@@ -140,7 +149,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
     const objectPrefix = configuration ? configuration.prefix + 'collection/' + item.id + '/' + round.id + '/' : '';
     const pending = inputs.map((file) => ({ ...file, objectKey: objectPrefix + 'staging/' + receiptId + '/' + file.id + '.' + file.extension }));
     const receipt = {
-      expiresAt: now() + 300000, record,
+      expiresAt: now() + uploadSeconds * 1000, record,
       pending, objectPrefix, expectedRevision,
     };
     const storage = configuration ? getGateway(configuration) : null;
@@ -148,7 +157,7 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
       fileId: file.id,
       ...await storage.presignUpload({
         id: file.id, objectKey: file.objectKey, contentType: file.type, fileSize: file.size, fileName: file.name,
-      }, 300),
+      }, uploadSeconds),
     }));
     const submission = { ...record, revision: expectedRevision, files: [...kept, ...pending] };
     await repo.putNew(keys.request(receiptId), receipt);
@@ -185,13 +194,13 @@ export function collectionSubmissions({ repo, env, now, getGateway }) {
     const current = await repo.get(target);
     if (current?.receiptId === id) {
       // A retry can be the first response after an ambiguous metadata write.
-      if (now() <= receipt.expiresAt + 3600000) {
+      if (now() <= receipt.expiresAt + confirmationMillis) {
         try { await removeStaging(); } catch { /* The committed receipt still applies. */ }
       }
       return receiptView(current);
     }
     if (current) fail(409, 'REVISION_CONFLICT', '提交已发生变化，请刷新后重试。');
-    if (now() > receipt.expiresAt + 3600000) fail(410, 'SUBMISSION_EXPIRED', '本次上传确认已过期。');
+    if (now() > receipt.expiresAt + confirmationMillis) fail(410, 'SUBMISSION_EXPIRED', '本次上传确认已过期。');
     await repo.throttle('collection-complete', record.userId, 60);
     storage = gateway();
     try {

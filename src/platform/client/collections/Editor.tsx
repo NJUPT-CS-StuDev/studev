@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, errorText } from '../api';
-import { loadTerm } from '@/world/data';
+import { pinnedCollections, semesterLabel } from '../../collections.mjs';
+import { DATA_RELEASE } from '@/world/config';
+import { loadCalendar, type CalendarTerm } from '@/world/data';
+import { momentNow } from '@/world/time';
 import CoursePicker, { type CollectionCourse } from './CoursePicker';
 import { Dialog } from './Dialog';
 import { deadlineInput, deadlineValue, itemRoute, roundRoute, type Catalog, type Directory, type Field, type FieldType, type Item, type Round, type TargetMode } from './model';
@@ -13,6 +16,10 @@ const defaultField = (): Field => ({ id: `f-${crypto.randomUUID().slice(0, 12)}`
 const draftRound = (label: string): Round => ({ id: '', label, deadline: '', policy: 'strict', fields: [defaultField()], requireReview: false, allowEdit: false, maxPerUser: 1, maxSubmissions: 500, submissionMode: 'replace' });
 const lines = (raw: string) => raw.split(/[,，\n]/).map(value => value.trim()).filter(Boolean);
 const MB = 1024 * 1024;
+const semesterId = ({ number, start }: CalendarTerm) => {
+    const year = Number(start.slice(0, 4)) - (number === 2 ? 1 : 0);
+    return `${year}-${year + 1}-${number}`;
+};
 
 function RecipientPicker({ selected, onChange }: { selected: Map<string, string>; onChange: (value: Map<string, string>) => void }) {
     const [directory, setDirectory] = useState<Directory>();
@@ -116,18 +123,19 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
     const [description, setDescription] = useState(item?.description || '');
     const [tags, setTags] = useState(item?.tags.join('，') || '');
     const [course, setCourse] = useState<CollectionCourse | null>(item?.course || null);
-    const semesters = new Map((catalog?.items || []).filter(value => value.term && value.termLabel).map(value => [value.term, value.termLabel]));
-    const [term, setTerm] = useState(item?.term || '');
-    const [publishedTerm, setPublishedTerm] = useState<{ id: string; label: string }>();
+    const [term, setTerm] = useState(item?.term);
+    const [calendar, setCalendar] = useState<CalendarTerm[]>([]);
     useEffect(() => {
         if (!itemFields) return;
         let current = true;
-        loadTerm().then(data => {
-            if (current) setPublishedTerm({ id: data.term, label: `${data.year}–${data.year + 1} 学年第${data.number === 1 ? '一' : '二'}学期` });
-        }).catch(() => {});
+        loadCalendar().then(terms => { if (current) setCalendar(terms); }).catch(() => {});
         return () => { current = false; };
     }, [itemFields]);
-    if (publishedTerm && !semesters.has(publishedTerm.id)) semesters.set(publishedTerm.id, publishedTerm.label);
+    const today = momentNow().date;
+    const active = calendar.find(value => value.start <= today && today <= (value.break?.end || value.end));
+    const selectedTerm = term ?? (active ? semesterId(active) : DATA_RELEASE.teaching);
+    const semesters = [...new Set([selectedTerm, DATA_RELEASE.teaching, ...calendar.map(semesterId), ...catalog?.items.map(value => value.term) || []])].sort().reverse();
+    const pinned = !!item && pinnedCollections.includes(item.id);
     const [visibility, setVisibility] = useState<Item['visibility']>(item?.visibility || 'members');
     const [status, setStatus] = useState<Item['status']>(item?.status || 'draft');
     const [targetMode, setTarget] = useState<TargetMode>(item?.targetMode || 'open');
@@ -141,7 +149,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
         if (busy) return;
         const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value');
         const targets = { targetMode, recipients: targetMode === 'selected' ? [...recipients].map(([studentId, name]) => ({ studentId, name })) : [] };
-        const details = { name, description, tags: lines(tags), course, term, termLabel: semesters.get(term) || '', visibility };
+        const details = { name, description, tags: lines(tags), course, term: selectedTerm, visibility };
         const roundBody = { label: round.label, deadline: round.deadline, policy: round.policy, fields: round.fields, requireReview: round.requireReview, allowEdit: round.allowEdit, maxPerUser: round.maxPerUser, maxSubmissions: round.maxSubmissions, submissionMode: round.submissionMode };
         setError('');
         setBusy(true);
@@ -174,10 +182,10 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
                 <label>名称<input autoFocus required maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label>
                 <label>填写说明<textarea rows={3} maxLength={5000} value={description} onChange={event => setDescription(event.target.value)} /></label>
                 <label>标签<input placeholder="例如 实验报告、活动报名" value={tags} onChange={event => setTags(event.target.value)} /></label>
-                <div className="cw-form-grid"><label>学期<select value={term} onChange={event => setTerm(event.target.value)}><option value="">按日期分组</option>{[...semesters].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-                    <label>可见范围<select value={visibility} onChange={event => setVisibility(event.target.value as Item['visibility'])}><option value="members">登录用户</option><option value="public">公开</option></select></label></div>
+                <div className="cw-form-grid"><label>学期<select required value={selectedTerm} onChange={event => setTerm(event.target.value)}>{semesters.map(id => <option key={id} value={id}>{semesterLabel(id)}</option>)}</select></label>
+                    <label>可见范围<select value={visibility} disabled={pinned} onChange={event => setVisibility(event.target.value as Item['visibility'])}><option value="members">登录用户</option><option value="public">公开</option></select></label></div>
                 <CoursePicker value={course} onChange={setCourse} />
-                {!creating && <label>收集状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}><option value="draft">草稿</option><option value="published">收集中</option><option value="closed">停止收集</option><option value="archived">归档</option></select></label>}
+                {!creating && <label>收集状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">收集中</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}
             </>}
             {targetFields && <>
                 <label>填写对象<select value={targetMode} onChange={event => setTarget(event.target.value as TargetMode)}><option value="open">所有具有访问权限的人</option><option value="selected">指定成员</option></select></label>

@@ -17,7 +17,6 @@ import '../platform/members.css';
         </select>
         <button class="p-button secondary small" type="button" data-members-orgs hidden>组织管理</button>
         <button class="p-button secondary small" type="button" data-members-import hidden>批量导入</button>
-        <button class="p-button secondary small" type="button" data-members-archive hidden>归档本届名册</button>
         <button class="p-button secondary small" type="button" data-members-audit hidden>操作记录</button>
       </div>
     </header>
@@ -115,6 +114,11 @@ import '../platform/members.css';
         <label for="batch-org">归属组织</label>
         <select id="batch-org" class="p-input" required data-batch-org></select>
       </div>
+      <div class="p-field" data-batch-title-field hidden>
+        <label for="batch-title">职务</label>
+        <select id="batch-title" class="p-input" data-batch-title></select>
+      </div>
+      <div class="p-batch-period" data-batch-period hidden></div>
       <div class="p-field">
         <label for="batch-lines">成员名单（每行：学号 姓名）</label>
         <textarea id="batch-lines" class="p-input" rows="8" required placeholder="B24040201 张三&#10;B24040202 李四" data-batch-lines></textarea>

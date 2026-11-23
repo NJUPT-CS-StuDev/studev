@@ -60,22 +60,22 @@ enter browser localStorage. All navigation/session checks use that same client.
 Platform roles descend from `owner` through `admin` to `user`. The owner manages
 roles and other administrators. Owners and admins may list or look up users
 through `/admin/users` and `/admin/users/<id>`. Admins may edit ordinary users.
-Account responses carry `memberships` for the subject of that account
-response. Organizations can contain other organizations. Each membership has one
-organization ID, a title in that organization, an optional `overseesOrganizationId`
-for a direct child, and a roster order. A member can hold appointments in both a
-parent and a child. Account roles grant permissions independently of them.
-A staff edit sends `revision` and only the
-fields being edited. Membership changes submit the account's current array
-under the same revision. Class preferences are synchronized separately.
+Account responses carry currently effective `memberships`. Authorized account
+management additionally reads the subject's appointment history. A membership
+records an organization, title, roster order and optional direct-child assignment.
+A student development center appointment has a China civil `startsOn` date and
+exclusive `endsBefore` date. The normal dates cover both terms of one academic
+year. Separate periods in the same organization may follow each other. Class
+affiliations can be undated. Each admin update applies to the current account
+revision. Class preferences are synchronized separately.
 
-`GET /public/roster?term=YYYY-YYYY` reads the student center's current roster or
-an archived roster. The current roster is derived from appointments independently
-of platform role. It includes eligible pending appointments and excludes disabled
-accounts. `POST /admin/roster/archive` freezes the current term for the owner.
-Repeating the action returns the same archive. Older terms are read from archives
-without rebuilding them. Both projections expose only published organizational
-details and opaque avatar addresses. Signed-in member browsing remains limited
+`GET /public/roster` shows appointments effective today in China.
+`GET /public/roster?year=YYYY-YYYY` shows appointments that intersect the selected
+academic year, retaining the date range of each appointment. Both queries read
+the same public per-person projection of the account's dated appointments. The
+projection includes eligible pending appointments, excludes disabled accounts
+and returns published organizational fields and opaque avatar addresses.
+Signed-in member browsing remains limited
 to active accounts. Ordinary students'
 identity and contact details, including staff identities, are available only to
 themselves and authorized staff. Other
@@ -93,12 +93,6 @@ projection.
 
 Build `.server-build/platform.mjs` with `npm run build` and deploy the static
 output and function together.
-
-Before the organization model is deployed, run
-`node scripts/server/migrate-organizations.mjs` with the scoped migration token
-in `STUDEV_MIGRATION_TOKEN` for a read-only report. Once the report has no
-unmatched rows, run with `--apply` to save the new account revisions and seal
-previous terms. Run the report again to confirm that no revisions remain.
 
 `POST /sync` takes `{ tasks, settings }` and returns both merged. Tasks are merged
 by id and modification time, including deletion markers. Settings contain only
@@ -122,26 +116,27 @@ The product configuration identifies the campus feedback, location photos and
 data contributions. Links use `/forms/?id=<collection>&round=<round>` and may
 prefill public answer fields with `a.<field>=<value>`.
 
-A collection has an issuing organization, audience, lifecycle, optional
-semester and tags, and one or more rounds. A course tag copies the stable
-campus course ID, code and display name selected from the local release search.
-Collections retain this saved reference across search index updates. Tags and
-time grouping affect display. Server permissions come from the collection
-audience and the effective account view.
+A collection has an issuing organization, audience, academic semester, status,
+tags and one or more rounds. The public campus entries stay at the top of the
+catalog. Other collections are grouped by semester and ordered by publication
+within each semester. Search matches tags and courses. The optional course
+reference copies the stable campus course ID, code and display name, and remains
+usable across search index updates.
 
-- Visitors browse published public collections. An authenticated recipient can
-  browse member collections and submit in an open round. Archived collections
-  remain visible to managing staff and prior participants retain access to their
-  own submission history. A student with a staff-verified identity can retrieve
-  historical submissions recorded against their student ID before they had an
-  account.
+- Visitors browse published public collections. Submission requires a logged-in
+  eligible account. Stopping a collection closes submissions and leaves its
+  published detail visible to the same audience. Unpublishing returns the
+  collection to draft. Prior participants retain their own receipts.
+- A draft may be permanently deleted if it has no submissions or outstanding
+  upload authorizations. A student with verified identity can retrieve earlier
+  submissions filed against their student ID before they had an account.
 - Owners can manage every collection. Admins manage collections they authored
   or whose issuing organizations fall within their assignments. Admins publish
   within those assignments. The people picker exposes only the authorized
   directory scope.
 - Reads accept `view=guest|user|admin|owner`. Signed-in users can preview views
   lower than their account role. Mutations require their actual view. The
-  role checks apply to every record, archive, progress report and download.
+  role checks apply to every record, progress report and download.
 - Round fields cover text, long text, single choice, multiple choice, number,
   date and attachments. Each round defines its deadline, late policy, edit and
   review rules, and quotas. Replacement rounds keep a single submission per
@@ -157,6 +152,8 @@ All API paths below are relative to `/api/platform/collections`.
 | `GET /people` | Scoped staff directory for recipient selection |
 | `POST /items` | New draft or published collection with issuing identity, rounds and audience |
 | `POST /items/<id>` | Collection metadata, audience or lifecycle update using the current revision |
+| `POST /items/<id>/unpublish` | Return a collection to draft at its current revision, retaining receipts |
+| `DELETE /items/<id>` | Permanently delete an eligible draft at its current revision |
 | `POST /items/<id>/duplicate` | New draft with copied collection fields and cleared deadlines |
 | `POST /items/<id>/rounds`, `POST /items/<id>/rounds/<round>` | Add or revise a round using the collection revision |
 | `POST /items/<id>/rounds/<round>/submissions` | Validate answers and attachment descriptors, then either finalize or issue the upload receipt |

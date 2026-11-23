@@ -95,24 +95,53 @@ export async function deleteOrganization(repo, id) {
   return { items: flattenOrganizationTree(mergeOrganizations(nextCustom)) };
 }
 
-export function validateMemberships(value, orgs = namedOrganizations) {
-  if (!Array.isArray(value) || value.length > 24) fail(400, 'INVALID_MEMBERSHIPS', '组织归属无效。');
-  const seen = new Set();
-  return value.map(row => {
+function civilDate(value) {
+  if (typeof value !== 'string' || !/^(20|21)\d\d-\d\d-\d\d$/.test(value)) return false;
+  const time = Date.parse(value + 'T00:00:00Z');
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
+export function overlapsMembership(left, right) {
+  return left.organizationId === right.organizationId && (
+    !left.startsOn || !right.startsOn || left.startsOn < right.endsBefore && right.startsOn < left.endsBefore
+  );
+}
+
+export function validateMemberships(value, orgs = namedOrganizations, academicYear) {
+  if (!Array.isArray(value) || value.length > 100) fail(400, 'INVALID_MEMBERSHIPS', '组织归属无效。');
+  const memberships = [];
+  for (const row of value) {
     const org = organization(row?.organizationId, orgs);
-    if (!org || seen.has(org.id)) fail(400, 'INVALID_ORGANIZATION', '请选择不同的组织。');
-    if ('department' in row || 'responsibleDepartment' in row) fail(400, 'INVALID_MEMBERSHIPS', '请按组织填写任职。');
-    seen.add(org.id);
+    if (!org) fail(400, 'INVALID_ORGANIZATION', '请选择有效的组织。');
     const title = row.title ?? '';
-    if (title !== '' && org.titles.length > 0 && !org.titles.includes(title)) fail(400, 'INVALID_POSITION', '请选择该组织的职务。');
+    if (typeof title !== 'string' || title.length > 60 || (title && org.titles.length && !org.titles.includes(title))) {
+      fail(400, 'INVALID_POSITION', '请选择该组织的职务。');
+    }
     const overseesOrganizationId = row.overseesOrganizationId ?? '';
     if (overseesOrganizationId !== '' && (!title || organization(overseesOrganizationId, orgs)?.parentId !== org.id)) {
       fail(400, 'INVALID_ORGANIZATION', '请选择该组织直属的分管组织。');
     }
     const order = row.order ?? 999;
     if (!Number.isSafeInteger(order) || order < 0 || order > 9999) fail(400, 'INVALID_FIELD', '排序序号须为 0–9999 的整数。');
-    return { organizationId: org.id, title, overseesOrganizationId, order };
-  });
+    let startsOn = row.startsOn || '';
+    let endsBefore = row.endsBefore || '';
+    if (!startsOn && !endsBefore && title && isWithin(org.id, studentCenter.id, orgs)) {
+      startsOn = academicYear?.startsOn;
+      endsBefore = academicYear?.endsBefore;
+      if (!startsOn || !endsBefore) fail(400, 'APPOINTMENT_DATES_REQUIRED', '学发任职需要生效日与结束日。');
+    }
+    if ((startsOn || endsBefore) && (!civilDate(startsOn) || !civilDate(endsBefore) || startsOn >= endsBefore)) {
+      fail(400, 'INVALID_APPOINTMENT_DATES', '任职的结束日应晚于生效日。');
+    }
+    const membership = { organizationId: org.id, title, overseesOrganizationId, order,
+      ...(startsOn ? { startsOn, endsBefore } : {}),
+    };
+    if (memberships.some(other => overlapsMembership(membership, other))) {
+      fail(400, 'OVERLAPPING_MEMBERSHIPS', '同一个组织的任期不能重叠。');
+    }
+    memberships.push(membership);
+  }
+  return memberships;
 }
 
 export function membershipView(memberships = [], orgs = namedOrganizations) {
@@ -123,5 +152,6 @@ export function membershipView(memberships = [], orgs = namedOrganizations) {
     overseesOrganizationId: row.overseesOrganizationId || '',
     position: positionLabel(row, orgs),
     order: row.order ?? 999,
+    ...(row.startsOn && row.endsBefore ? { startsOn: row.startsOn, endsBefore: row.endsBefore } : {}),
   }));
 }

@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlatformHandler } from '../server/app.mjs';
 import { createRepository } from '../server/store.mjs';
-import { buildRosterSnapshot, ROSTER_SCHEMA } from '../server/roster.mjs';
-import { migrateOrganizations } from '../../../scripts/server/migrate-organizations.mjs';
+import { publishRosterPerson } from '../server/roster.mjs';
 import { memoryBlob, memoryGateway, requestClient, testEnvironment } from './fixtures.mjs';
 
 const config = await testEnvironment();
@@ -108,107 +107,91 @@ test('admins may look up students and resolve identity disputes; roles and other
   assert.equal((await f.app(`/admin/users/${adminId}/reset-password`, { password: f.password }, native.body.accessToken)).status, 403);
 });
 
-test('public roster lists everyone holding a position, by real name, never with student ID or QQ; admin alone is not a position', async () => {
-  const f = await fixture(), source = await f.repo.latest(`identity/users/${f.user.id}`);
-  const ordinary = { ...source, memberships: [{ organizationId: 'student-development', title: '主席', order: 0 }], signature: '保密签名' };
-  await f.repo.append(`identity/users/${f.user.id}`, ordinary, source.revision);
-  const snapshot = buildRosterSnapshot([
-    ordinary,
-    { ...ordinary, id: '00000000-0000-0000-0000-000000000002', role: 'admin', realName: '公开管理员', nickname: '管理员', signature: '公开签名', qq: '10000903', studentId: 'ADMIN00002' },
-    { ...ordinary, id: '00000000-0000-0000-0000-000000000099', role: 'admin', memberships: [], realName: '未分配管理员', nickname: '未分配', qq: '10000909', studentId: 'ADMIN00009' },
-  ], '2026-2027', new Date().toISOString(), f.env.PLATFORM_ORIGIN);
-  assert.equal(snapshot.totalCount, 2);
-  assert.deepEqual(snapshot.groups[0].people.map(person => person.name).sort(), [ordinary.realName, '公开管理员'].sort());
-  assert.deepEqual(Object.keys(snapshot.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'name', 'nickname', 'role', 'signature']);
-  for (const value of ['未分配管理员', '10000903', 'ADMIN00002', '10000909', ordinary.studentId, ordinary.qq]) assert.equal(JSON.stringify(snapshot).includes(value), false);
-  await f.repo.put('roster/2026-2027.json', snapshot);
-  const result = await f.app('/public/roster');
-  assert.ok(JSON.stringify(result.body).includes(ordinary.realName));
-  for (const value of [ordinary.studentId, ordinary.qq]) assert.ok(!JSON.stringify(result.body).includes(value));
-  const selfEdit = await f.browser.call('/auth/profile', { method: 'POST', body: { revision: source.revision + 1, nickname: '', role: 'admin' } });
-  assert.equal(selfEdit.status, 200);
-  assert.equal(selfEdit.body.user.role, 'user');
-  assert.equal(selfEdit.body.user.nickname, '名');
-});
-
-test('old roster snapshots rebuild from existing private identities, never initialize or reseed accounts', async () => {
-  const f = await fixture(), source = await f.repo.latest('identity/users/' + f.user.id);
-  const id = '00000000-0000-0000-0000-000000000003';
-  const staff = { ...source, id, role: 'admin', status: 'pending', studentId: 'PRIVATESTAFF', realName: '内部真姓名', qq: '10000904', nickname: '',
-    memberships: [{ organizationId: 'student-development/media', title: '部长' }], signature: '一起成长' };
-  await f.repo.append('identity/users/' + id, staff);
-  await f.repo.putNew('identity/qq/' + staff.qq + '.json', { id });
-  await f.repo.put('roster/2026-2027.json', { schema: 5, groups: [{name:'媒体宣传部', people:[{name:staff.realName, studentId:staff.studentId, avatarUrl:'https://q1.qlogo.cn/g?nk=' + staff.qq}]}] });
-  const existingUsers = await f.repo.list('identity/users/');
-  const result = await f.app('/public/roster');
-  assert.equal(result.status, 200); assert.equal(result.body.schema, ROSTER_SCHEMA);
-  assert.equal(result.body.totalCount, 1); assert.equal(result.body.activeCount, 0);
-  const person = result.body.groups[0].people[0];
-  assert.equal(person.id, id); assert.equal(person.name, staff.realName); assert.equal(person.nickname, '名'); assert.equal(person.role, '部长'); assert.equal(person.signature, '一起成长');
-  assert.equal(person.avatarUrl, f.env.PLATFORM_ORIGIN + '/api/platform/members/' + id + '/avatar');
-  for (const value of [staff.studentId, staff.qq, 'passwordHash', 'securityVersion']) assert.equal(JSON.stringify(result.body).includes(value), false);
-  assert.deepEqual(await f.repo.list('identity/users/'), existingUsers, 'reading a roster never creates or changes accounts');
-  const read = f.store.get, keys = [];
-  f.store.get = async (key, ...args) => { keys.push(key); return read(key, ...args); };
-  const again = await f.app('/public/roster'); assert.deepEqual(again.body, result.body);
-  assert.deepEqual(keys, ['platform-v1/roster/archives/2026-2027.json', 'platform-v1/roster/2026-2027.json']);
-});
-
-test('organization migration seals old appointments and reruns without another account revision', async () => {
+test('current and historical rosters query the same dated appointments without revealing private account data', async () => {
   const f = await fixture();
-  const key = 'identity/users/' + f.user.id;
-  const source = await f.repo.latest(key);
-  const { memberships, ...previous } = source;
-  const legacy = await f.repo.append(key, { ...previous, term: '2025-2026', department: '易班建设部', title: '易班建设部部长', order: 3 }, source.revision);
-  const options = { origin: f.env.PLATFORM_ORIGIN, now: '2026-11-17T00:00:00.000Z' };
-  const report = await migrateOrganizations(f.repo, options);
-  assert.equal(report.historical, 1);
-  assert.equal((await f.repo.latest(key)).revision, legacy.revision);
-  const applied = await migrateOrganizations(f.repo, { ...options, apply: true });
-  assert.equal(applied.archives, 1);
-  const latest = await f.repo.latest(key);
-  assert.deepEqual(latest.memberships, []);
-  assert.equal(latest.term, undefined);
-  assert.equal(latest.department, undefined);
-  assert.equal(latest.role, legacy.role);
-  const older = await f.app('/public/roster?term=2025-2026');
-  assert.equal(older.status, 200);
-  assert.equal(older.body.archivedAt, options.now);
-  assert.equal(older.body.groups[0].people[0].role, '部长');
-  assert.equal((await f.app('/public/roster')).body.totalCount, 0);
-  assert.equal((await migrateOrganizations(f.repo, { ...options, apply: true })).revisions, 0);
-});
-
-test('even current roster snapshots expose only the public field projection and reconstruct opaque images', async () => {
-  const f = await fixture(); const id = '00000000-0000-0000-0000-000000000004';
-  const contaminated = { schema: ROSTER_SCHEMA, term: '2026-2027', updatedAt: '2026-11-17T00:00:00.000Z', totalCount: 1, activeCount: 1,
-    name: '内部真姓名', studentId: 'PRIVATESTAFF', qq: '10000905',
-    groups: [{ name: '媒体宣传部', realName: '内部真姓名', people: [{ id, nickname: '名', role: '部长', signature: '', featured: false,
-      name: '内部真姓名', realName: '内部真姓名', studentId: 'PRIVATESTAFF', qq: '10000905', avatarUrl: 'https://q1.qlogo.cn/g?nk=10000905' }] }] };
-  await f.repo.put('roster/2026-2027.json', contaminated);
-  const result = await f.app('/public/roster'); assert.equal(result.status, 200);
-  for (const value of ['PRIVATESTAFF', '10000905', 'qlogo']) assert.equal(JSON.stringify(result.body).includes(value), false);
-  assert.equal(result.body.name, undefined); assert.equal(result.body.groups[0].realName, undefined);
-  assert.deepEqual(Object.keys(result.body.groups[0].people[0]).sort(), ['avatarUrl', 'featured', 'id', 'name', 'nickname', 'role', 'signature']);
-});
-
-test('organization migration preserves oversight separately from a child appointment', async () => {
-  const f = await fixture();
-  const key = 'identity/users/' + f.user.id;
-  const source = await f.repo.latest(key);
-  await f.repo.append(key, { ...source, memberships: [
-    { organizationId: 'student-development', department: '', title: '执行主席', responsibleDepartment: '运营支持部', order: 1 },
-    { organizationId: 'class:B240402', department: '', title: '班长', responsibleDepartment: '', order: 2 },
-  ] }, source.revision);
-  const options = { origin: f.env.PLATFORM_ORIGIN, apply: true };
-  assert.equal((await migrateOrganizations(f.repo, options)).revisions, 1);
-  const latest = await f.repo.latest(key);
-  assert.equal(latest.role, source.role);
-  assert.deepEqual(latest.memberships, [
-    { organizationId: 'student-development', title: '执行主席', overseesOrganizationId: 'student-development/operations', order: 1 },
-    { organizationId: 'class:B240402', title: '班长', overseesOrganizationId: '', order: 2 },
+  const source = await f.repo.latest('identity/users/' + f.user.id);
+  const memberships = [
+    { organizationId: 'student-development/media', title: '副部长', order: 0, startsOn: '2025-09-01', endsBefore: '2026-07-01' },
+    { organizationId: 'student-development/media', title: '部员', order: 1, startsOn: '2026-08-31', endsBefore: '2026-10-31' },
+    { organizationId: 'student-development/media', title: '部长', order: 2, startsOn: '2026-10-31', endsBefore: '2027-07-05' },
+    { organizationId: 'student-development/operations', title: '部员', order: 3, startsOn: '2026-11-01', endsBefore: '2027-07-05' },
+    { organizationId: 'student-development/operations', title: '部长', order: 4, startsOn: '2027-08-30', endsBefore: '2028-07-03' },
+    { organizationId: 'class:B240402', title: '班长' },
+  ];
+  const current = await f.repo.append('identity/users/' + source.id, { ...source, memberships }, source.revision);
+  await publishRosterPerson(f.repo, current, source);
+  const reads = [];
+  const read = f.store.get;
+  f.store.get = (key, ...args) => { reads.push(key); return read(key, ...args); };
+  const today = (await f.app('/public/roster')).body;
+  assert.equal(today.view, 'today');
+  assert.equal(today.today, '2026-10-31');
+  assert.equal(today.year, '2026-2027');
+  assert.deepEqual(today.years, ['2026-2027', '2025-2026']);
+  assert.equal(today.totalCount, 1);
+  assert.deepEqual(today.groups.map(group => [group.name, group.people.map(person => person.role)]), [['媒体宣传部', ['部长']]]);
+  const person = today.groups[0].people[0];
+  assert.equal(person.name, source.realName);
+  assert.equal(person.avatarUrl, f.env.PLATFORM_ORIGIN + '/api/platform/members/' + source.id + '/avatar');
+  assert.deepEqual(Object.keys(person).sort(), ['avatarUrl', 'endsBefore', 'featured', 'id', 'name', 'nickname', 'role', 'signature', 'startsOn']);
+  const thisYear = (await f.app('/public/roster?year=2026-2027')).body;
+  assert.equal(thisYear.view, 'year');
+  assert.equal(thisYear.totalCount, 1, 'one person can hold several distinct appointments');
+  assert.deepEqual(thisYear.groups.map(group => [group.name, group.people.map(person => person.role)]), [
+    ['媒体宣传部', ['部员', '部长']],
   ]);
-  assert.equal((await migrateOrganizations(f.repo, options)).revisions, 0);
+  const future = (await f.app('/public/roster?year=2027-2028')).body;
+  assert.deepEqual(future.groups, []);
+  assert.deepEqual(future.years, ['2026-2027', '2025-2026']);
+  const past = (await f.app('/public/roster?year=2025-2026')).body;
+  assert.equal(past.groups[0].people[0].role, '副部长');
+  assert.deepEqual(past.groups[0].people[0].startsOn, '2025-09-01');
+  for (const value of [source.studentId, source.qq, 'passwordHash', 'securityVersion']) {
+    assert.ok(!JSON.stringify([today, thisYear, past]).includes(value));
+  }
+  assert.ok(reads.length > 0 && reads.every(key => /^platform-v1\/(roster\/people|organizations\/tree)/.test(key)), 'public roster only reads public projections and the organization tree');
+  assert.equal((await f.app('/public/roster?year=2026-2029')).status, 400);
+  assert.deepEqual((await f.browser.call('/auth/session')).body.user.memberships.map(row => row.title), ['部长', '班长']);
+  f.advance(24 * 3600000);
+  const tomorrow = (await f.app('/public/roster')).body;
+  assert.equal(tomorrow.today, '2026-11-01');
+  assert.equal(tomorrow.groups.length, 2, 'crossing midnight requires no write or snapshot regeneration');
+  const yearAfterStart = (await f.app('/public/roster?year=2026-2027')).body;
+  assert.deepEqual(yearAfterStart.groups[0].people.map(person => person.role), ['部员']);
+});
+
+test('the public projection includes pending appointments, removes disabled users and ignores delayed earlier writes', async () => {
+  const f = await fixture();
+  const source = await f.repo.latest('identity/users/' + f.user.id);
+  const former = { ...source, status: 'pending', memberships: [
+    { organizationId: 'student-development/yiban', title: '部长', startsOn: '2026-08-31', endsBefore: '2027-07-05' },
+  ] };
+  const staff = await f.repo.append('identity/users/' + source.id, former, source.revision);
+  await publishRosterPerson(f.repo, staff, source);
+  const before = (await f.app('/public/roster')).body;
+  assert.equal(before.totalCount, 1);
+  assert.equal(before.activeCount, 0);
+  const disabled = await f.repo.append('identity/users/' + source.id, { ...staff, status: 'disabled' }, staff.revision);
+  await publishRosterPerson(f.repo, disabled, staff);
+  await publishRosterPerson(f.repo, staff, source);
+  const after = (await f.app('/public/roster')).body;
+  assert.equal(after.totalCount, 0);
+  assert.deepEqual((await f.app('/public/roster?year=2026-2027')).body.groups, []);
+});
+
+test('published appointment correction can recover from an interrupted projection write without making duplicates', async () => {
+  const f = await fixture();
+  const source = await f.repo.latest('identity/users/' + f.user.id);
+  const revision = { ...source, revision: source.revision + 1, memberships: [
+    { organizationId: 'student-development/media', title: '部长', startsOn: '2026-08-31', endsBefore: '2027-07-05' },
+  ] };
+  await assert.rejects(publishRosterPerson({
+    ...f.repo, putNew: async () => { throw Error('Simulated interruption'); },
+  }, revision, source), /interruption/);
+  await publishRosterPerson(f.repo, { ...revision, revision: revision.revision + 1 }, revision);
+  assert.equal((await f.app('/public/roster')).body.totalCount, 1);
+  await publishRosterPerson(f.repo, { ...revision, revision: revision.revision + 2 }, revision);
+  assert.equal((await f.repo.list('roster/people/')).length, 1);
 });
 
 test('registration and login errors match for web/app; registering cannot claim a pre-recorded administrator', async () => {

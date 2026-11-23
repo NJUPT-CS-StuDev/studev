@@ -17,6 +17,7 @@ export const collectionKeys = {
   history: (userId, itemId, roundId, id) => `collection/users/${userId}/${itemId}/${roundId}/${id}.json`,
   replacement: (itemId, roundId, sid) => `collection/replacements/${itemId}/${roundId}/${sid}.json`,
   request: (id) => `collection/requests/${id}.json`,
+  itemQuota: (itemId) => `collection/quota/${itemId}/`,
   quota: (itemId, roundId, scope) => `collection/quota/${itemId}/${roundId}/${scope}/`,
 };
 

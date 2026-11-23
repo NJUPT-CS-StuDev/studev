@@ -19,7 +19,10 @@ export interface Membership {
     overseesOrganizationId: string;
     position: string;
     order: number;
+    startsOn?: string;
+    endsBefore?: string;
 }
+export interface AcademicYear { id: string; startsOn: string; endsBefore: string; }
 export interface User {
     id: string;
     qq: string;

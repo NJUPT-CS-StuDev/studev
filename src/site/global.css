@@ -265,6 +265,12 @@ html[data-theme='dark'] .prose .astro-code, html[data-theme='dark'] .prose .astr
 .member h4 { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.35; }
 .member h4 .member-nickname { margin-left: 4px; color: var(--faint); font-size: 12px; font-weight: 400; }
 .member-role, .member-signature { display: block; color: var(--muted); font-size: 12px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-period { color: var(--muted); font-size: 11.5px; line-height: 1.45; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.roster-controls { display: flex; align-items: center; flex-wrap: wrap; column-gap: 12px; row-gap: 8px; margin-top: 14px; color: var(--muted); font-size: 13px; }
+.roster-year-label { display: flex; align-items: center; gap: 8px; }
+.roster-year-label select, .roster-retry { font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); padding: 7px 9px; }
+.roster-retry, .roster-year-label select:not(:disabled) { cursor: pointer; }
+.roster-empty { margin: 18px 0; font-size: 14px; color: var(--muted); }
 .skeleton-circle, .skeleton-line { background: var(--surface-sunken); animation: skeleton-pulse 1.4s ease-in-out infinite; }
 .skeleton-line { border-radius: 3px; height: 10px; margin: 4px 0; }
 .skeleton-name { width: 72px; }

@@ -4,12 +4,12 @@ import type { CollectionCourse } from './CoursePicker';
 export const viewLabels = { guest: '访客', ...roleLabels };
 export type View = keyof typeof viewLabels;
 export type TargetMode = 'open' | 'selected';
-export type Status = 'draft' | 'published' | 'closed' | 'archived';
+export type Status = 'draft' | 'published' | 'closed';
 export type Policy = 'strict' | 'allow-late' | 'closed';
 export type SubmissionStatus = 'uploading' | 'submitted' | 'late' | 'pending_review' | 'accepted' | 'rejected';
 export type FieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'number' | 'date' | 'file';
 
-export const collectionStatus: Record<Status, string> = { draft: '草稿', published: '收集中', closed: '已停止', archived: '已归档' };
+export const collectionStatus: Record<Status, string> = { draft: '草稿', published: '收集中', closed: '已停止' };
 export const submissionStatus: Record<SubmissionStatus | 'missing', string> = { uploading: '待完成', submitted: '已提交', late: '迟交', pending_review: '待审核', accepted: '已通过', rejected: '已退回', missing: '未提交' };
 
 export interface Field {
@@ -68,7 +68,6 @@ export interface Item<CurrentRound extends RoundSummary = RoundSummary> {
     description: string;
     tags: string[];
     term: string;
-    termLabel: string;
     course: CollectionCourse | null;
     issuer: Issuer;
     visibility: 'public' | 'members';

@@ -1,4 +1,5 @@
 import { fail } from '../common.mjs';
+import { activeMemberships } from '../../organizations.mjs';
 import { canManage, isRecipient, issuerView, openRound } from './definition.mjs';
 import { collectionId, collectionKeys as keys, mapConcurrent, parseHistoryKey, studentId } from './records.mjs';
 import { ownsSubmission, submissionView } from './submissions.mjs';
@@ -7,7 +8,7 @@ const recency = (a, b) => String(b.submittedAt).localeCompare(String(a.submitted
 
 export async function readItem(repo, id) {
   const item = collectionId.test(id) && await repo.latest(keys.definition(id));
-  if (!item) fail(404, 'NOT_FOUND', '收集不存在。');
+  if (!item || item.deleted) fail(404, 'NOT_FOUND', '收集不存在。');
   return item;
 }
 
@@ -17,10 +18,10 @@ export function readRound(item, id) {
   return round;
 }
 
-export async function definitions(repo) {
-  const tips = await repo.heads(keys.definitions);
-  const items = await mapConcurrent([...tips.values()], 20, repo.readRevision);
-  return items.filter(Boolean).sort((a, b) =>
+export async function definitions(repo, tips) {
+  const heads = tips ?? await repo.heads(keys.definitions);
+  const items = await mapConcurrent([...heads.values()], 20, repo.readRevision);
+  return items.filter((item) => item && !item.deleted).sort((a, b) =>
     String(b.publishedAt || b.createdAt).localeCompare(String(a.publishedAt || a.createdAt)) || b.id.localeCompare(a.id));
 }
 
@@ -67,7 +68,7 @@ function roundSummary(item, round, actor, byRound, now) {
 }
 
 export function itemView(item, viewer, organizations, ownRecords, now, detail = false) {
-  const { id, name, description, tags, term, termLabel, course, issuer, visibility, status, targetMode,
+  const { id, name, description, tags, term, course, issuer, visibility, status, targetMode,
     publishedAt, updatedAt, revision, rounds, recipients } = item;
   const ownByRound = new Map();
   for (const record of ownRecords) {
@@ -78,7 +79,7 @@ export function itemView(item, viewer, organizations, ownRecords, now, detail = 
   const safeIssuer = issuerView(issuer, organizations);
   if (!manage && actor?.id !== issuer.userId) safeIssuer.name = '';
   return {
-    id, name, description, tags, term, termLabel, course, issuer: safeIssuer,
+    id, name, description, tags, term, course, issuer: safeIssuer,
     visibility, status, targetMode, publishedAt, updatedAt, revision, recipientCount: recipients.length,
     ...(manage && detail ? { recipients } : {}),
     canManage: manage && !viewer.preview, inRecipients: isRecipient(item, actor),
@@ -126,9 +127,9 @@ export function ownHistory(items, records) {
   });
 }
 
-export function directoryPeople(users, organizationIds) {
+export function directoryPeople(users, organizationIds, today) {
   return users.filter((user) => user.status !== 'disabled' && user.studentId).flatMap((user) => {
-    const ids = [...new Set((user.memberships || []).map((membership) => membership.organizationId))];
+    const ids = [...new Set(activeMemberships(user.memberships, today).map((membership) => membership.organizationId))];
     const visible = organizationIds ? ids.filter((id) => organizationIds.has(id)) : ids;
     return !organizationIds || visible.length
       ? [{ studentId: studentId(user.studentId), name: user.realName || user.nickname, organizationIds: visible }] : [];

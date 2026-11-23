@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pinnedCollections } from '../../src/platform/collections.mjs';
 import { createPlatformHandler } from '../../src/platform/server/app.mjs';
+import { collectionKeys } from '../../src/platform/server/collections/records.mjs';
+import { createRepository } from '../../src/platform/server/store.mjs';
 import { totpCode } from '../../src/platform/server/totp.mjs';
 import { memoryBlob, memoryGateway, requestClient, testEnvironment } from '../../src/platform/tests/fixtures.mjs';
 const origin = process.env.STUDEV_WEB_URL || 'http://127.0.0.1:4322';
@@ -48,6 +51,7 @@ async function pickReleasedCourse(dialog, course) {
 
 const title = '统一收集验收';
 const privateTitle = '仅指定成员的收集';
+const pinnedTitles = ['地点拍照', '意见反馈', '补充校园数据'];
 const memberName = '合成成员';
 const peerSecret = '另一账号的私有答案';
 const round = {
@@ -87,11 +91,16 @@ async function collectionFixture() {
   const catalog = await owner.call('/collections');
   assert.equal(catalog.status, 200);
   const { organizationId, title: issuerTitle } = catalog.body.issuerOptions[0];
-  const common = { status: 'published', issuerOrganizationId: organizationId, issuerTitle, rounds: [round], tags: ['问卷验收'], term: '2026-2027-1', termLabel: '验收学期' };
+  const common = { status: 'published', issuerOrganizationId: organizationId, issuerTitle, rounds: [round], tags: ['问卷验收'], term: '2026-2027-1' };
   const { item } = await post(owner, '/collections/items', { ...common, name: title, visibility: 'public' }, 201);
   const { item: privateItem } = await post(owner, '/collections/items', {
     ...common, name: privateTitle, visibility: 'members', targetMode: 'selected', recipients: [{ studentId: member.sid, name: memberName }],
   }, 201);
+  const repo = createRepository(store, { secret: env.PLATFORM_SESSION_SECRET });
+  const definition = await repo.latest(collectionKeys.definition(item.id));
+  for (const [index, id] of pinnedCollections.entries()) {
+    await repo.append(collectionKeys.definition(id), { ...definition, id, name: pinnedTitles[index], tags: [] });
+  }
   const prior = await post(peer.actor, roundPath(item) + '/submissions', { answers: { answer: peerSecret }, files: [] }, 201);
   return { handle, env, owner, guest, member: member.actor, item, privateItem, peerSubmission: prior.submission.id };
 }
@@ -127,11 +136,22 @@ async function checkCollection(viewport, name) {
   await nav.getByRole('link', { name: '收集', exact: true }).click();
   await guest.page.waitForURL(url => url.pathname === '/forms/');
   const parts = guest.page.locator('.cw-workspace');
-  await parts.getByRole('heading', { name: '验收学期', exact: true }).waitFor();
+  await parts.getByRole('heading', { name: '2026–2027 学年第一学期', exact: true }).waitFor();
+  const pinned = parts.getByRole('region', { name: '常用收集' });
+  await pinned.getByText('公开 · 登录后填写', { exact: true }).waitFor();
+  for (const title of pinnedTitles) {
+    await pinned.getByRole('link', { name: title, exact: true }).waitFor();
+    assert.equal(await parts.getByRole('link', { name: title, exact: true }).count(), 1);
+  }
+  assert.equal((await fixture.guest.call('/collections/items/' + pinnedCollections[0] + '/rounds/' + round.id + '/submissions', { method: 'POST', body: { answers: { answer: '未登录提交' } } })).status, 401);
   assert.equal(await parts.getByRole('link', { name: new RegExp(privateTitle) }).count(), 0);
   assert.equal(await nav.getByRole('link', { name:'收集', exact: true }).getAttribute('aria-current'), 'page');
-  await parts.getByRole('button', { name:'按标签', exact: true }).click();
-  await parts.getByRole('heading', { name: '问卷验收', exact: true }).waitFor();
+  assert.equal(await parts.getByRole('button', { name: '按标签', exact: true }).count(), 0);
+  const search = parts.getByRole('searchbox', { name: '搜索收集' });
+  await search.fill('问卷验收');
+  await parts.getByRole('link', { name: new RegExp(title) }).waitFor();
+  assert.equal(await pinned.count(), 0);
+  await search.clear();
   const width = await parts.boundingBox();
   assert(width && width.width >= (name === 'phone' ? viewport.width - 48 : 1100), 'collection list uses the available screen');
   assert(await guest.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'collection list has no horizontal page overflow');
@@ -193,7 +213,7 @@ async function checkCollection(viewport, name) {
   await memberParts.getByRole('link', { name: new RegExp(title) }).waitFor();
   assert.deepEqual(member.errors, []);
   await member.context.close();
-  record(name + ': collection navigation, grouping, prefill, one write, guest and member privacy');
+  record(name + ': pinned public forms, semester chronology, searchable tags, one write and participant privacy');
 
   if (name === 'desktop') {
     const staff = await newPage(viewport), staffReads = [];
@@ -232,6 +252,11 @@ async function checkCollection(viewport, name) {
     await addRound.getByRole('button', { name: '保存', exact: true }).click();
     await staffParts.getByRole('heading', { name: '草稿的第二轮', exact: true }).waitFor();
     assert(new URL(staff.page.url()).searchParams.has('round'));
+    await staffParts.getByRole('button', { name: '删除草稿', exact: true }).click();
+    const deleteDraft = staff.page.getByRole('dialog', { name: '删除草稿' });
+    await deleteDraft.getByRole('button', { name: '删除草稿', exact: true }).click();
+    await staffParts.getByText('草稿已删除', { exact: true }).waitFor();
+    assert.equal((await fixture.owner.call('/collections/items/' + draftId)).status, 404);
     await staff.page.goto(origin + '/forms/?id=' + item.id);
     const peerRow = staffParts.getByRole('row', { name: /合成同行成员/ });
     await peerRow.getByRole('button', { name: '查看', exact: true }).click();
@@ -248,9 +273,18 @@ async function checkCollection(viewport, name) {
     await staffParts.getByText(/正在预览用户视角/).waitFor();
     assert.equal(await staffParts.getByRole('button', { name: '收集设置' }).count(), 0);
     assert.equal(await staffParts.getByText(peerSecret).count(), 0);
+    await staffParts.getByRole('combobox', { name: '视角' }).selectOption('owner');
+    await staffParts.getByRole('button', { name: '取消发布', exact: true }).click();
+    const unpublish = staff.page.getByRole('dialog', { name: '取消发布' });
+    await unpublish.getByRole('button', { name: '取消发布', exact: true }).click();
+    await staffParts.getByRole('button', { name: '删除草稿', exact: true }).waitFor();
+    assert.equal((await fixture.guest.call('/collections/items/' + item.id)).status, 404);
+    const previous = await fixture.member.call('/collections/items/' + item.id);
+    assert.equal(previous.status, 200);
+    assert.equal(previous.body.mySubmissions[0].answers.answer, '登录验证期间保留这段内容');
     assert.deepEqual(staff.errors, []);
     await staff.context.close();
-    record('desktop: owner creates a private draft and second round, opens the deadline editor and previews user view');
+    record('desktop: owner creates and deletes a draft, edits deadlines, previews user view and withdraws a published collection');
   }
 }
 const layouts = [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]];

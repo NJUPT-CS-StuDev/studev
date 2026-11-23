@@ -449,18 +449,34 @@ test('admin role is independent of position, and owner can update full identity 
   const relogin = await f.call('/auth/login', 'POST', { studentId: 'NEWID0888', password: MEMBER_PASSWORD });
   assert.equal(relogin.status, 200);
   assert.equal(relogin.passwordChangeRequired, false);
-  const { snapshot } = await f.call('/admin/roster/archive', 'POST', {}, owner);
-  assert.ok(snapshot.archivedAt);
-  assert.equal(snapshot.totalCount, 1);
-  assert.deepEqual(snapshot.groups.map(group => [group.name, group.people.map(person => person.role)]), [
+  const currentRoster = await f.call('/public/roster');
+  assert.equal(currentRoster.totalCount, 1);
+  assert.deepEqual(currentRoster.groups.map(group => [group.name, group.people.map(person => person.role)]), [
     ['主席团', ['执行主席']], ['媒体宣传部', ['部员']],
   ]);
-  const unplaced = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, memberships: [] }, owner);
+  const ended = updated.user.memberships.filter(row => row.startsOn)
+    .map(row => ({ ...row, endsBefore: '2026-10-21' }));
+  const unplaced = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: updated.user.revision, memberships: ended }, owner);
   assert.equal(unplaced.user.role, 'admin');
-  assert.deepEqual(unplaced.user.memberships, []);
-  const { status, cookie, headers, ...archived } = await f.call('/public/roster');
-  assert.equal(status, 200);
-  assert.deepEqual(archived, snapshot);
+  assert.equal(unplaced.user.memberships.length, 2);
+  assert.equal((await f.call('/public/roster')).totalCount, 0);
+  assert.equal((await f.call('/public/roster?year=2026-2027')).totalCount, 1);
+  assert.deepEqual((await f.call('/auth/session', 'GET', undefined, relogin)).user.memberships, []);
   const demoted = await f.call(`/admin/users/${member.user.id}`, 'POST', { revision: unplaced.user.revision, role: 'user' }, owner);
   assert.equal(demoted.user.role, 'user');
+});
+
+test('each appointment has a valid half-open date range and time cannot overlap for a person and organization', async () => {
+  const f = fixture(), owner = await f.owner(), member = await f.member('10000889');
+  const path = '/admin/users/' + member.user.id;
+  const base = { organizationId: 'student-development/media', title: '部员', startsOn: '2026-08-31', endsBefore: '2026-10-21' };
+  const send = memberships => f.call(path, 'POST', { revision: member.user.revision, memberships }, owner);
+  await rejects(send([{ ...base, startsOn: '2026-02-30' }]), 'INVALID_APPOINTMENT_DATES', 400);
+  await rejects(send([{ ...base, endsBefore: '' }]), 'INVALID_APPOINTMENT_DATES', 400);
+  await rejects(send([{ ...base, endsBefore: base.startsOn }]), 'INVALID_APPOINTMENT_DATES', 400);
+  await rejects(send([base, { ...base, startsOn: '2026-10-20', endsBefore: '2027-07-05' }]), 'OVERLAPPING_MEMBERSHIPS', 400);
+  const joined = await send([base, { ...base, startsOn: base.endsBefore, endsBefore: '2027-07-05', title: '部长' }]);
+  assert.equal(joined.user.memberships.length, 2);
+  assert.equal((await f.call('/auth/session', 'GET', undefined, member)).user.memberships[0].title, '部长');
+  assert.equal((await f.call(path, 'GET', undefined, owner)).user.memberships.length, 2);
 });

@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { fail, readJson, response } from '../common.mjs';
-import { flattenOrganizationTree, isWithin } from '../../organizations.mjs';
+import { chinaDay, flattenOrganizationTree, isWithin } from '../../organizations.mjs';
+import { pinnedCollections } from '../../collections.mjs';
 import { boardFor, definitions, directoryPeople, itemView, myRecords, ownHistory, readItem, readRound, roundRecords } from './catalog.mjs';
 import { canManage, canSee, collectionViewer, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
 import { collectionCsv, fileManifest } from './exports.mjs';
-import { collectionKeys as keys, readSubmission } from './records.mjs';
-import { canEditSubmission, collectionSubmissions, ownsSubmission, submissionView } from './submissions.mjs';
+import { collectionKeys as keys, mapConcurrent, readSubmission } from './records.mjs';
+import { authorizationGrace, canEditSubmission, collectionSubmissions, ownsSubmission, submissionView } from './submissions.mjs';
 
 const API = '/api/platform/collections';
-const itemPath = /^\/api\/platform\/collections\/items\/([a-zA-Z0-9_-]+)(?:\/(duplicate|rounds)(?:\/([a-zA-Z0-9_-]+)(?:\/(submissions|csv|files))?)?)?$/;
+const itemPath = /^\/api\/platform\/collections\/items\/([a-zA-Z0-9_-]+)(?:\/(duplicate|unpublish|rounds)(?:\/([a-zA-Z0-9_-]+)(?:\/(submissions|csv|files))?)?)?$/;
 const submissionPath = /^\/api\/platform\/collections\/submissions\/([a-z0-9-]+)(?:\/(complete|edit|review)|\/files\/([^/]+)\/(download))?$/;
 
 export function createCollectionsService({ repo, identity, env, now = Date.now, getGateway }) {
@@ -40,19 +41,46 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
   }
 
   async function createItem(input, viewer, orgs) {
-    if ((await repo.heads(keys.definitions)).size >= 1000) fail(409, 'COLLECTION_LIMIT_REACHED', '收集数量已达平台上限。');
+    const heads = await repo.heads(keys.definitions);
+    if (heads.size >= 1000 && (await definitions(repo, heads)).length >= 1000) {
+      fail(409, 'COLLECTION_LIMIT_REACHED', '收集数量已达平台上限。');
+    }
     const id = randomUUID();
     const result = await repo.append(keys.definition(id), { ...input, id }, 0);
     await repo.audit(viewer.user, 'collection.create', id, { status: result.status });
     return response({ item: itemView(result, viewer, orgs, [], now(), true) }, 201);
   }
 
+  async function deleteDraft(item, revision, actor) {
+    if (item.status !== 'draft') fail(409, 'DRAFT_REQUIRED', '请先取消发布，再删除草稿。');
+    const [records, tickets] = await Promise.all([
+      repo.heads(`${keys.submissions}/${item.id}`),
+      item.publishedAt && now() <= Date.parse(item.updatedAt) + authorizationGrace
+        ? repo.list(keys.itemQuota(item.id)) : [],
+    ]);
+    if (records.size) fail(409, 'DRAFT_HAS_SUBMISSIONS', '已有提交的草稿不能删除。');
+    if (tickets.length) fail(409, 'DRAFT_HAS_AUTHORIZATIONS', '先前授权的上传可能仍在确认，请稍后重试。');
+    const prefix = keys.definition(item.id);
+    const revisions = (await repo.list(prefix + '/')).filter((key) => /\/\d{8}\.json$/.test(key));
+    const result = await repo.append(prefix, { deleted: true }, revision);
+    // Retain occupied revision keys so a delayed conditional write cannot
+    // restore discarded metadata at an older revision.
+    const scrubbed = await mapConcurrent(revisions, 16, async (key) => {
+      const marker = { deleted: true, revision: Number(key.slice(-13, -5)) };
+      return repo.put(key, marker).catch(() => repo.put(key, marker)).then(() => true, () => false);
+    });
+    if (scrubbed.includes(false)) console.error('Collection deletion could not scrub all previous revisions', item.id);
+    await repo.audit(actor, 'collection.delete', item.id, { revision: result.revision });
+    return response({ deleted: true });
+  }
+
   async function routeItem(request, viewer, orgs, route) {
     const [ , id, operation, roundId, action ] = route;
+    if (roundId && operation !== 'rounds') fail(404, 'NOT_FOUND', '接口不存在。');
     const item = await readItem(repo, id);
     const directDetail = !operation && request.method === 'GET';
     if (!canSee(item, viewer, orgs)) {
-      if (directDetail && item.status === 'archived' && viewer.user && viewer.view !== 'guest') {
+      if (directDetail && (item.status === 'draft' || item.status === 'closed') && viewer.user && viewer.view !== 'guest') {
         const mine = await myRecords(repo, viewer, new Set([item.id]));
         if (mine.length) return detail(item, viewer, orgs, mine);
       }
@@ -60,12 +88,15 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     }
     const manage = canManage(item, viewer, orgs);
     if (directDetail) return detail(item, viewer, orgs);
-    if (operation === 'duplicate' && roundId) fail(404, 'NOT_FOUND', '接口不存在。');
     const round = roundId ? readRound(item, roundId) : null;
     if (action === 'submissions' && request.method === 'POST') {
       return response(await submissions.begin(request, item, round, viewer.user), 201);
     }
     if (!manage) fail(403, 'STAFF_REQUIRED', '此账号无权管理这项收集。');
+    if (!operation && request.method === 'DELETE') {
+      const body = await readJson(request);
+      return deleteDraft(item, body.revision, viewer.user);
+    }
     if (action && request.method === 'GET') {
       const [records, authorizations] = await Promise.all([
         roundRecords(repo, id, roundId),
@@ -85,6 +116,13 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     if (request.method !== 'POST' || action) fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
     const body = await readJson(request, 256 * 1024);
     const time = timestamp();
+    if (operation === 'unpublish') {
+      if (pinnedCollections.includes(id)) fail(400, 'PINNED_COLLECTION_PUBLIC', '常用收集入口应保持公开。');
+      if (item.status === 'draft') fail(409, 'ALREADY_DRAFT', '此收集已是草稿。');
+      const result = await repo.append(keys.definition(id), { ...item, status: 'draft', updatedAt: time }, body.revision);
+      await repo.audit(viewer.user, 'collection.unpublish', id, { revision: result.revision, previousStatus: item.status });
+      return response({ item: itemView(result, viewer, orgs, [], now(), true) });
+    }
     if (operation === 'duplicate') {
       const issuer = publishedIssuer({
         issuerOrganizationId: body.issuerOrganizationId ?? item.issuer.organizationId,
@@ -141,17 +179,18 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (path !== API && !path.startsWith(API + '/')) return null;
       const request = context.request;
       const url = new URL(request.url);
-      const write = request.method === 'POST';
+      const post = request.method === 'POST';
+      const write = post || request.method === 'DELETE';
       const itemMatch = path.match(itemPath);
       const submissionMatch = path.match(submissionPath);
       const onCatalog = path === API && request.method === 'GET';
-      const onCreate = path === API + '/items' && write;
+      const onCreate = path === API + '/items' && post;
       const onPeople = path === API + '/people' && request.method === 'GET';
       const onMine = path === API + '/mine' && request.method === 'GET';
-      if (submissionMatch?.[2] === 'complete' && write) return response({ submission: await submissions.complete(context, submissionMatch[1]) });
+      if (submissionMatch?.[2] === 'complete' && post) return response({ submission: await submissions.complete(context, submissionMatch[1]) });
       if (!onCatalog && !onCreate && !onPeople && !onMine && !itemMatch && !submissionMatch) return null;
       const [viewer, orgs, available] = await Promise.all([
-        collectionViewer(identity, request, url, { required: write || onPeople || onMine || Boolean(submissionMatch), mutation: write }),
+        collectionViewer(identity, request, url, { required: write || onPeople || onMine || Boolean(submissionMatch), mutation: write, today: chinaDay(now()) }),
         identity.loadOrganizations(),
         onCatalog || onMine ? definitions(repo) : null,
       ]);
@@ -162,7 +201,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
         const allowed = viewer.view === 'owner' ? null : new Set(issuerOptions.map(({ organizationId }) => organizationId));
         return response({
           organizations: flattenOrganizationTree(orgs),
-          people: directoryPeople(await identity.loadAllUsers(), allowed),
+          people: directoryPeople(await identity.loadAllUsers(), allowed, viewer.today),
         });
       }
       if (onMine) {
