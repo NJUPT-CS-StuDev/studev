@@ -614,6 +614,14 @@ if (conversations) {
     await aiTrace();
     console.log(`Android conversation and sharing acceptance passed: ${evidence}`);
 } else if (entriesOnly) {
+    console.log(`installing ${apk} for shared-address acceptance on ${serial}`);
+    adb('install', '-r', apk);
+    adb('logcat', '-c');
+    adb('shell', 'am', 'force-stop', app);
+    await seedRelease();
+    adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1');
+    await chooseClass();
+    await find('周', 'the native timetable is ready before testing shared addresses', 45);
     await entryLinks();
     console.log(`Android native shared-address acceptance passed: ${evidence}`);
 } else if (routesOnly) {
