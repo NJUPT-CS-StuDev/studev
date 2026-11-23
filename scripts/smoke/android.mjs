@@ -142,7 +142,8 @@ function alive(step, quiet = false) {
 }
 async function find(match, step, seconds = 20) {
     for (let i = 0; i < seconds * 2; i++) {
-        const hit = screen().find(node => typeof match === 'string' ? node.text === match || node.words.split('|').includes(match) : match(node));
+        const nodes = screen();
+        const hit = nodes.find(node => typeof match === 'string' ? node.text === match || node.words.split('|').includes(match) : match(node, nodes));
         if (hit) return hit;
         alive(step, true);
         await sleep(500);
@@ -159,7 +160,7 @@ async function scrollFind(match, step, attempts = 12, direction = 1, distance = 
     for (let i = 0; i < attempts; i++) {
         const nodes = screen();
         if (!nodes.length) { await sleep(500); continue; }
-        const hit = nodes.find(node => typeof match === 'string' ? node.text === match || node.words.split('|').includes(match) : match(node));
+        const hit = nodes.find(node => typeof match === 'string' ? node.text === match || node.words.split('|').includes(match) : match(node, nodes));
         if (hit) return hit;
         healthy(step, nodes, true);
         const width = Math.max(...nodes.map(node => node.right));
@@ -172,8 +173,8 @@ async function scrollFind(match, step, attempts = 12, direction = 1, distance = 
     }
     throw new Error(`not found while scrolling: ${step}; on screen: ${screen().map(node => node.text).filter(Boolean).join(' | ')}`);
 }
-async function scrollTap(match, step, attempts, direction) {
-    const hit = await scrollFind(match, step, attempts, direction);
+async function scrollTap(match, step, attempts, direction, distance) {
+    const hit = await scrollFind(match, step, attempts, direction, distance);
     adb('shell', 'input', 'tap', String(Math.round(hit.x)), String(Math.round(hit.y)));
     await sleep(900);
     alive(step);
@@ -292,16 +293,23 @@ async function referenceGroups() {
     const grouped = Map.groupBy(military.references, reference => reference.material);
     const [material, refs] = [...grouped].sort((a, b) => b[1].length - a[1].length)[0];
     const identity = ref => `knowledge-reference:${material}#${ref.anchor}`;
+    const fourth = node => node['resource-id'] === identity(refs[3]);
+    const groupToggle = label => (node, nodes) => {
+        if (node.text !== label) return false;
+        const nextReference = nodes.slice(nodes.indexOf(node) + 1).find(row => row['resource-id']?.startsWith('knowledge-reference:'));
+        return nextReference?.['resource-id'] === identity(refs[0]);
+    };
+    const collapsed = groupToggle(`展开全部 ${refs.length} 处`);
+    const expanded = groupToggle('收起');
     await link(`/knowledge/?course=${encodeURIComponent('军事理论')}&topic=${encodeURIComponent(military.id)}`, 'a topic with many references');
-    await scrollFind(`展开全部 ${refs.length} 处`, 'the long reference group starts collapsed');
-    if (screen().some(node => node['resource-id'] === identity(refs[3]))) throw new Error('the collapsed reference group exposes more than three references');
-    await scrollTap(`展开全部 ${refs.length} 处`, 'expand the complete reference group');
-    // Preview excerpts can reflow above this group while scrolling. Re-anchor
-    // at its expanded heading before looking for the exact fourth reference.
-    await scrollFind('收起', 'the expanded reference group heading', 12, -1);
-    await scrollFind(node => node['resource-id'] === identity(refs[3]), 'the fourth exact reference appears after expansion');
-    await scrollTap('收起', 'collapse the complete reference group', 12, -1);
-    await find(`展开全部 ${refs.length} 处`, 'the reference group can be expanded again');
+    await scrollFind(collapsed, 'the long reference group starts collapsed', 24, 1, .24);
+    if (screen().some(fourth)) throw new Error('the collapsed reference group exposes more than three references');
+    await scrollTap(collapsed, 'expand the complete reference group', 24, 1, .24);
+    await find(expanded, 'the selected material’s reference group is expanded');
+    // Short drags keep the first newly revealed row between sampled viewports.
+    await scrollFind(fourth, 'the fourth exact reference appears after expansion', 18, 1, .12);
+    await scrollTap(expanded, 'collapse the complete reference group', 18, -1, .12);
+    await find(collapsed, 'the selected material’s reference group can be expanded again');
     capture('knowledge-reference-group');
     await link(`/knowledge/?course=${encodeURIComponent('体育理论')}`, 'a course homepage that is already an outline');
     await find('体育理论', 'the physical-education course homepage');

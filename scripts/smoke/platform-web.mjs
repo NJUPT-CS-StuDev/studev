@@ -317,7 +317,7 @@ try {
       localStorage.setItem('studev_auth_user',JSON.stringify({nickname:'测试最长显示昵称',role:'user',qq:'',verifiedAt:Date.now()}));
       window.dispatchEvent(new Event('studev:account'));
     });
-    await visual.page.getByText('测试最长显示昵称',{exact:true}).waitFor();
+    await visual.page.getByRole('button',{name:'测试最长显示昵称，打开我',exact:true}).waitFor();
     assert.equal(await visual.page.locator('[data-me-face]').innerText(),'测','the account cache drives the avatar fallback');
     if(name==='phone') {
       const search=await visual.page.locator('.sfield').boundingBox(), avatar=await visual.page.locator('[data-me]').boundingBox();
@@ -328,7 +328,7 @@ try {
       localStorage.removeItem('studev_auth_user');
       window.dispatchEvent(new Event('studev:account'));
     });
-    await visual.page.getByText('未登录',{exact:true}).waitFor();
+    await visual.page.getByRole('button',{name:'未登录，打开我',exact:true}).waitFor();
     assert.equal(await visual.page.locator('[data-me-face] svg').count(),1,'sign-out restores the anonymous face');
     assert.deepEqual(visual.errors,[]);await visual.context.close();
     record(`${name}: search geometry and shared component visual evidence`);
