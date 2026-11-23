@@ -642,6 +642,7 @@ if (resume) {
     const expected = /versionCode='(\d+)'/.exec(badging)?.[1];
     const installedVersion = /versionCode=(\d+)/.exec(adb('shell', 'dumpsys', 'package', app))?.[1];
     if (!expected || installedVersion !== expected) throw new Error('resume requires the same installed application version');
+    await seedRelease();
     adb('shell', 'am', 'force-stop', app);
     adb('shell', 'monkey', '-p', app, '-c', 'android.intent.category.LAUNCHER', '1');
     await sleep(3000);
