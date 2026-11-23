@@ -1,4 +1,4 @@
-import { api, avatarImg, el, errorText, labels, message, PlatformError, q, session, type MemberPage, type MemberProfile, type Session, type User } from './api';
+import { api, avatarImg, el, errorText, message, PlatformError, q, session, type MemberPage, type MemberProfile, type Session } from './api';
 import { renderManagedMembers, showAudit, showManagement } from './manage';
 
 const shell = q('[data-members-shell]');
@@ -14,8 +14,7 @@ const count = q<HTMLElement>('[data-members-count]');
 const more = q<HTMLButtonElement>('[data-members-more]');
 const retry = q<HTMLButtonElement>('[data-members-retry]');
 const back = q<HTMLAnchorElement>('[data-members-back]');
-const view = q<HTMLSelectElement>('#members-view');
-const note = q('[data-members-preview]');
+const tools = q('[data-members-tools]');
 const audit = q<HTMLButtonElement>('[data-members-audit]');
 const orgsBtn = q<HTMLButtonElement>('[data-members-orgs]');
 const importBtn = q<HTMLButtonElement>('[data-members-import]');
@@ -28,8 +27,6 @@ let loadMoreFailed = false;
 let who: Session | null = null;
 let auditOpen = false;
 
-const roleOrder: User['role'][] = ['owner', 'admin', 'user'];
-const isPublic = () => view.value === 'user';
 const listUrl = () => { const url = new URL(location.href); url.searchParams.delete('id'); return url; };
 const avatar = (member: MemberProfile) => avatarImg(member, { width: 44, className: 'p-member-avatar', lazy: true });
 const plainClick = (event: MouseEvent) => !event.button && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -63,16 +60,14 @@ async function load(append = false) {
     const request = new AbortController();
     pending = request;
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]);
-    const publicView = isPublic();
     const url = new URL(location.href);
-    const id = publicView ? url.searchParams.get('id') : null;
+    const id = url.searchParams.get('id');
+    const publicView = Boolean(id) || who.user.role === 'user';
     shell.dataset.wide = String(!publicView);
     shell.dataset.memberView = publicView ? 'public' : 'management';
-    const preview = view.value !== who.user.role;
-    note.hidden = !preview;
-    note.textContent = preview ? '预览' + (view.value === 'user' ? '普通用户' : labels[view.value]) + '视图 · 可浏览资料' : '';
     filters.hidden = publicView;
-    audit.hidden = preview || who.user.role !== 'owner';
+    tools.hidden = publicView || who.user.role !== 'owner';
+    audit.hidden = tools.hidden;
     orgsBtn.hidden = audit.hidden;
     importBtn.hidden = audit.hidden;
     form.hidden = !!id;
@@ -98,7 +93,7 @@ async function load(append = false) {
     message(status, append ? '正在读取更多成员…' : id ? '正在读取成员资料…' : '正在读取成员…');
     try {
         if (!publicView) {
-            await showManagement(who, preview, signal, request.signal);
+            await showManagement(who, signal, request.signal);
         } else if (id) {
             const { member } = await api<{ member: MemberProfile }>('/members/' + encodeURIComponent(id), undefined, { signal });
             if (request.signal.aborted) return;
@@ -125,7 +120,7 @@ async function load(append = false) {
 }
 
 function query() {
-    if (!isPublic()) { renderManagedMembers(); return; }
+    if (who?.user.role !== 'user') { renderManagedMembers(); return; }
     const url = listUrl();
     const value = search.value.trim();
     if (value) url.searchParams.set('query', value); else url.searchParams.delete('query');
@@ -135,23 +130,13 @@ function query() {
 search.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(query, 220); });
 form.addEventListener('submit', event => { event.preventDefault(); clearTimeout(debounce); query(); });
 filters.querySelectorAll('select').forEach(filter => filter.addEventListener('change', renderManagedMembers));
-view.addEventListener('change', () => {
-    if (!who || roleOrder.indexOf(view.value as User['role']) < roleOrder.indexOf(who.user.role)) return;
-    search.value = '';
-    filters.querySelectorAll('select').forEach(filter => { filter.value = ''; });
-    const url = listUrl();
-    url.searchParams.delete('query');
-    history.replaceState(null, '', url.pathname + url.search);
-    void load();
-});
 audit.addEventListener('click', () => {
-    if (who?.user.role !== 'owner' || view.value !== 'owner') return;
+    if (who?.user.role !== 'owner' || tools.hidden) return;
     auditOpen = !auditOpen;
     auditPanel.hidden = !auditOpen;
     directory.hidden = auditOpen;
     orgsBtn.hidden = auditOpen;
     importBtn.hidden = auditOpen;
-    view.disabled = auditOpen;
     audit.textContent = auditOpen ? '返回成员' : '操作记录';
     if (auditOpen) { pending?.abort(); void showAudit(who); } else void load();
 });
@@ -161,7 +146,6 @@ retry.addEventListener('click', () => void (who ? load(loadMoreFailed) : start()
 back.addEventListener('click', event => { if (plainClick(event)) { event.preventDefault(); navigate(listUrl()); } });
 window.addEventListener('popstate', () => {
     const params = new URL(location.href).searchParams;
-    if (params.has('id')) view.value = 'user';
     search.value = params.get('query') ?? '';
     void load();
 });
@@ -170,12 +154,8 @@ async function start() {
     try {
         who = await session(true);
         if (!who) return;
-        [...view.options].filter(option => roleOrder.indexOf(option.value as User['role']) < roleOrder.indexOf(who!.user.role)).forEach(option => option.remove());
         const params = new URL(location.href).searchParams;
-        // A shared member card opens in the same public view for all signed-in roles.
-        view.value = params.has('id') ? 'user' : who.user.role;
         search.value = params.get('query') ?? '';
-        q('[data-members-tools]').hidden = who.user.role === 'user';
         await load();
     } catch (error) { message(status, errorText(error), 'error'); retry.hidden = false; }
 }

@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ClipboardList, Eye, Plus, Search, UsersRound } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Plus, Search, UsersRound } from 'lucide-react';
 import { api, errorText, PlatformError, session } from '../api';
 import { pinnedCollections, semesterLabel } from '../../collections.mjs';
 import type { EditorMode } from './Editor';
 import { CollectionBadge, Details, WorkspaceLink, type Navigate } from './Detail';
 import { badge } from './Submission';
-import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, roundState, toCollectionUrl, viewLabels, type Catalog, type Detail, type Item, type Round, type Submission, type View, type WorkspaceView } from './model';
+import { chooseRound, collectionLoginUrl, displayTime, itemRoute, itemState, roundState, toCollectionUrl, type Catalog, type Detail, type Item, type Round, type Submission, type Viewer } from './model';
 
 const CollectionEditor = lazy(() => import('./Editor').then(module => ({ default: module.CollectionEditor })));
 
@@ -20,13 +20,6 @@ function groupItems(items: Item[]) {
         groups.set(item.term, group);
     }
     return [...groups].sort(([left], [right]) => right.localeCompare(left));
-}
-
-function mineHref(query: URLSearchParams) {
-    const params = new URLSearchParams({ mine: '1' });
-    const view = query.get('view');
-    if (view) params.set('view', view);
-    return `/forms/?${params}`;
 }
 
 function CollectionCard({ item, now, navigate }: { item: Item; now: number; navigate: Navigate }) {
@@ -52,21 +45,20 @@ function CollectionCard({ item, now, navigate }: { item: Item; now: number; navi
         </span>
     </WorkspaceLink>;
 }
-function List({ catalog, now, query, navigate }: { catalog: Catalog; now: number; query: URLSearchParams; navigate: Navigate }) {
+function List({ catalog, now, navigate }: { catalog: Catalog; now: number; navigate: Navigate }) {
     const [text, setText] = useState('');
     const search = searchText(text);
     const matches = useMemo(() => catalog.items.filter(item => !search || searchText([item.name, item.description, item.course?.code, item.course?.name, ...item.tags, item.issuer.organizationName].join(' ')).includes(search)), [catalog.items, search]);
     const pinned = pinnedCollections.map(id => matches.find(item => item.id === id)).filter(item => item !== undefined);
     const groups = useMemo(() => groupItems(matches.filter(item => !pinnedCollections.includes(item.id))), [matches]);
-    const canReadMine = catalog.viewer && catalog.view !== 'guest' && catalog.view === catalog.viewer.role;
     return <div className="cw-list">
             <div className="cw-list-controls">
                 <label className="cw-search"><Search size={19} /><span className="cw-sr-only">搜索收集</span><input type="search" value={text} onChange={event => setText(event.target.value)} placeholder="搜索收集、课程编号或标签" /></label>
-                {canReadMine && <WorkspaceLink className="cw-button" navigate={navigate} href={mineHref(query)}><ClipboardList size={17} />我的提交</WorkspaceLink>}
-                {catalog.viewer?.isStaff && catalog.view === catalog.viewer.role && <a className="cw-button" href="/members/"><UsersRound size={17} />组织与成员</a>}
+                {catalog.viewer && <WorkspaceLink className="cw-button" navigate={navigate} href="/forms/?mine=1"><ClipboardList size={17} />我的提交</WorkspaceLink>}
+                {catalog.viewer?.isStaff && <a className="cw-button" href="/members/"><UsersRound size={17} />组织与成员</a>}
             </div>
             {pinned.length > 0 && <section className="cw-group" aria-labelledby="cw-pinned-title">
-                <div className="cw-group-head"><h2 id="cw-pinned-title">常用收集</h2>{catalog.view === 'guest' && <span>公开 · 登录后填写</span>}</div>
+                <div className="cw-group-head"><h2 id="cw-pinned-title">常用收集</h2>{!catalog.viewer && <span>公开 · 登录后填写</span>}</div>
                 <div className="cw-card-grid">{pinned.map(item => <CollectionCard key={item.id} item={item} now={now} navigate={navigate} />)}</div>
             </section>}
             {groups.map(([term, items]) => <section className="cw-group" key={term}>
@@ -74,27 +66,27 @@ function List({ catalog, now, query, navigate }: { catalog: Catalog; now: number
                 <div className="cw-card-grid">{items.map(item => <CollectionCard key={item.id} item={item} now={now} navigate={navigate} />)}</div>
             </section>)}
             {!matches.length && <div className="cw-empty"><ClipboardList size={30} /><h2>{search ? '找不到匹配的收集' : '暂无可查看的收集'}</h2>
-                {search ? <button type="button" className="cw-button" onClick={() => setText('')}>清除搜索</button> : catalog.view === 'guest' && !catalog.viewer && <a className="cw-button" href="/login/?next=%2Fforms%2F">登录查看开放给你的收集</a>}</div>}
+                {search ? <button type="button" className="cw-button" onClick={() => setText('')}>清除搜索</button> : !catalog.viewer && <a className="cw-button" href="/login/?next=%2Fforms%2F">登录查看开放给你的收集</a>}</div>}
     </div>;
 }
 
-function Mine({ info, navigate }: { info: WorkspaceView; navigate: Navigate }) {
+function Mine({ viewer, navigate }: { viewer: Viewer | null; navigate: Navigate }) {
     const [items, setItems] = useState<Submission[]>();
     const [error, setError] = useState('');
     const [attempt, retry] = useState(0);
-    const allowed = info.viewer && info.view !== 'guest' && info.view === info.viewer.role;
+    const viewerId = viewer?.id;
     useEffect(() => {
-        if (!allowed) return;
+        if (!viewerId) return;
         const controller = new AbortController();
         api<{ items: Submission[] }>('/collections/mine', undefined, { signal: controller.signal }).then(result => {
             if (!controller.signal.aborted) { setItems(result.items); setError(''); }
         }).catch(failure => { if (!controller.signal.aborted) setError(errorText(failure)); });
         return () => controller.abort();
-    }, [allowed, attempt]);
+    }, [viewerId, attempt]);
     return <section className="cw-mine">
         <WorkspaceLink className="cw-back" href={toCollectionUrl()} navigate={navigate}><ArrowLeft size={17} />全部收集</WorkspaceLink>
         <h1 tabIndex={-1}>我的提交</h1>
-        {!allowed ? <p className="cw-muted">在自己的登录视角查看提交记录。</p> : error ? <div className="cw-inline"><p className="cw-failure" role="alert">{error}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>
+        {!viewer ? <a className="cw-button cw-primary" href={collectionLoginUrl()}>登录后查看</a> : error ? <div className="cw-inline"><p className="cw-failure" role="alert">{error}</p><button type="button" className="cw-button" onClick={() => retry(attempt + 1)}>重试</button></div>
             : !items ? <p className="cw-muted" role="status">正在加载提交记录…</p> : !items.length ? <p className="cw-empty">暂无提交记录。</p> : <div className="cw-card-grid cw-receipt-grid">
                 {items.map(item => {
                     const titleId = `receipt-title-${item.id}`;
@@ -109,10 +101,9 @@ function Mine({ info, navigate }: { info: WorkspaceView; navigate: Navigate }) {
 
 export default function Workspace() {
     const [query, setQuery] = useState(() => new URLSearchParams(location.search));
-    const [catalog, setCatalog] = useState<{ view: string; version: number; data: Catalog; receivedAt: number }>();
-    const [viewControls, setViewControls] = useState<Pick<WorkspaceView, 'viewer' | 'views'>>();
-    const [detail, setDetail] = useState<{ key: string; data: Detail; receivedAt: number }>();
-    const [failure, setFailure] = useState<{ key: string; message: string; status?: number }>();
+    const [catalog, setCatalog] = useState<{ version: number; data: Catalog; receivedAt: number }>();
+    const [detail, setDetail] = useState<{ id: string; data: Detail; receivedAt: number }>();
+    const [failure, setFailure] = useState<{ id: string; message: string; status?: number }>();
     const [editor, setEditor] = useState<EditorMode>();
     const [version, refresh] = useState(0);
     const [notice, setNotice] = useState('');
@@ -120,13 +111,11 @@ export default function Workspace() {
     const root = useRef<HTMLDivElement>(null);
     const focusedPage = useRef('');
     const authorization = useRef<ReturnType<typeof session> | null>(null);
-    const requestedView = query.get('view') || '';
     const id = query.get('id') || '';
     const mine = !id && query.has('mine');
     const roundId = query.get('round') || '';
-    const detailKey = `${requestedView}/${id}`;
-    const activeCatalog = catalog?.view === requestedView ? catalog.data : undefined;
-    const activeDetail = detail?.key === detailKey ? detail.data : undefined;
+    const activeCatalog = catalog?.data;
+    const activeDetail = detail?.id === id ? detail.data : undefined;
     const info = activeDetail || activeCatalog;
     const clock = id ? activeDetail && detail : activeCatalog && catalog;
     const now = clock ? clock.data.serverTime + performance.now() - clock.receivedAt : Date.now();
@@ -145,18 +134,8 @@ export default function Workspace() {
         const timeout = setTimeout(() => tick(value => value + 1), Math.min(2_147_483_647, Math.ceil(remaining)));
         return () => clearTimeout(timeout);
     }, [clock, nextDeadline, clockTick]);
-    const viewChoice = info || viewControls;
-    const viewValue = info?.view || requestedView || viewChoice?.viewer?.role || 'guest';
-    const catalogFresh = !!activeCatalog && catalog?.version === version;
-    const needsCatalog = !id && !catalogFresh;
-    const currentError = failure?.key === (id ? detailKey : requestedView) ? failure : undefined;
-    const viewQuery = requestedView ? `?view=${encodeURIComponent(requestedView)}` : '';
-    const browseGuest = () => {
-        const params = new URLSearchParams(query);
-        params.set('view', 'guest');
-        params.delete('mine');
-        updateQuery(`/forms/?${params}`);
-    };
+    const needsCatalog = !id && catalog?.version !== version;
+    const currentError = failure?.id === id ? failure : undefined;
     useEffect(() => {
         const onPop = () => { setQuery(new URLSearchParams(location.search)); setEditor(undefined); setNotice(''); };
         window.addEventListener('popstate', onPop);
@@ -165,31 +144,30 @@ export default function Workspace() {
     useEffect(() => {
         if (!needsCatalog) return;
         const controller = new AbortController();
-        api<Catalog>(`/collections${viewQuery}`, undefined, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) { setCatalog({ view: requestedView, version, data, receivedAt: performance.now() }); setViewControls({ viewer: data.viewer, views: data.views }); setFailure(previous => previous?.key === requestedView ? undefined : previous); }
-        }).catch(error => { if (!controller.signal.aborted) setFailure({ key: requestedView, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
+        api<Catalog>('/collections', undefined, { signal: controller.signal }).then(data => {
+            if (!controller.signal.aborted) { setCatalog({ version, data, receivedAt: performance.now() }); setFailure(previous => previous?.id === '' ? undefined : previous); }
+        }).catch(error => { if (!controller.signal.aborted) setFailure({ id: '', message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
-    }, [needsCatalog, requestedView, viewQuery, version]);
+    }, [needsCatalog, version]);
     useEffect(() => {
         if (!id) return;
         const controller = new AbortController();
-        api<Detail>(`${itemRoute(id)}${viewQuery}`, undefined, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) { setDetail({ key: detailKey, data, receivedAt: performance.now() }); setViewControls({ viewer: data.viewer, views: data.views }); setFailure(previous => previous?.key === detailKey ? undefined : previous); }
-        }).catch(error => { if (!controller.signal.aborted) setFailure({ key: detailKey, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
+        api<Detail>(itemRoute(id), undefined, { signal: controller.signal }).then(data => {
+            if (!controller.signal.aborted) { setDetail({ id, data, receivedAt: performance.now() }); setFailure(previous => previous?.id === id ? undefined : previous); }
+        }).catch(error => { if (!controller.signal.aborted) setFailure({ id, message: errorText(error), status: error instanceof PlatformError ? error.status : undefined }); });
         return () => controller.abort();
-    }, [id, requestedView, detailKey, viewQuery, version]);
+    }, [id, version]);
     useEffect(() => {
-        const page = id ? detailKey : mine ? 'mine' : 'list';
+        const page = id ? `/items/${id}` : mine ? 'mine' : 'list';
         if ((!activeDetail && id) || !info || page === focusedPage.current) return;
         if (focusedPage.current) root.current?.querySelector('h1')?.focus({ preventScroll: true });
         focusedPage.current = page;
-    }, [activeDetail, detailKey, id, info, mine]);
+    }, [activeDetail, id, info, mine]);
     function updateQuery(url: string, replace = false) {
         if (url === location.pathname + location.search) return;
         const next = new URL(url, location.origin);
         const prior = new URLSearchParams(location.search);
         const params = next.searchParams;
-        if ((prior.get('view') || '') !== (params.get('view') || '')) { setDetail(undefined); setCatalog(undefined); }
         if (replace) history.replaceState(null, '', url);
         else history.pushState(null, '', url);
         setEditor(undefined);
@@ -206,30 +184,17 @@ export default function Workspace() {
     const navigate: Navigate = updateQuery;
     const item = activeDetail?.item;
     const round = item && chooseRound(item, roundId);
-    const isPreview = info?.viewer && info.view !== info.viewer.role;
-    const showPublish = !id && !mine && info?.viewer?.canPublish && !isPreview;
     return <div className="cw-workspace" ref={root}>
-        <div className={`cw-workspace-toolbar${!id && !mine ? ' cw-top' : ''}`}>
-            {!id && !mine && <h1 tabIndex={-1}>收集</h1>}
-            <div className="cw-inline cw-toolbar-actions">
-                {viewChoice && viewChoice.views.length > 1 && <label className="cw-view"><Eye size={17} /><span>视角</span><select value={viewValue} onChange={event => {
-                    const next = new URLSearchParams(query);
-                    const selectedView = event.target.value as View;
-                    if (selectedView === viewChoice.viewer?.role) next.delete('view');
-                    else next.set('view', selectedView);
-                    if (selectedView === 'guest') next.delete('mine');
-                    navigate(`/forms/${next.size ? `?${next}` : ''}`);
-                }}>{viewChoice.views.map(view => <option key={view} value={view}>{viewLabels[view]}</option>)}</select></label>}
-                {showPublish && <button type="button" className="cw-button cw-primary" onClick={() => setEditor('create')}><Plus size={18} />新建收集</button>}
-            </div>
-        </div>
-        {isPreview && <p className="cw-preview" role="status"><Eye size={17} />正在预览{viewLabels[info.view]}视角</p>}
+        {!id && !mine && <div className="cw-workspace-toolbar">
+            <h1 tabIndex={-1}>收集</h1>
+            {activeCatalog?.viewer?.canPublish && <button type="button" className="cw-button cw-primary" onClick={() => setEditor('create')}><Plus size={18} />新建收集</button>}
+        </div>}
         {notice && <p role="status" className="cw-notice">{notice}</p>}
-        {id && activeDetail ? <Details key={detailKey} detail={activeDetail} round={round} now={now} receiptId={query.get('receipt') || ''} navigate={navigate} version={version} edit={setEditor} authorize={authorize} onChanged={created => {
+        {id && activeDetail ? <Details key={id} detail={activeDetail} round={round} now={now} receiptId={query.get('receipt') || ''} navigate={navigate} version={version} edit={setEditor} authorize={authorize} onChanged={created => {
             if (created) navigate(toCollectionUrl(created));
             refresh(value => value + 1);
         }} onRoundPolicyChanged={(updated: Item<Round>, roundId, policy) => {
-            setDetail(previous => previous?.key === detailKey && previous.data.item.revision < updated.revision ? {
+            setDetail(previous => previous?.id === id && previous.data.item.revision < updated.revision ? {
                 ...previous, data: { ...previous.data, item: {
                     ...previous.data.item, revision: updated.revision, updatedAt: updated.updatedAt,
                     rounds: previous.data.item.rounds.map(round => round.id === roundId ? { ...round, policy } : round),
@@ -242,11 +207,10 @@ export default function Workspace() {
             navigate(toCollectionUrl(), true);
             setNotice('草稿已删除');
             refresh(value => value + 1);
-        }} /> : !id && mine && info ? <Mine key={requestedView} info={info} navigate={navigate} /> : !id && activeCatalog ? <List key={requestedView} catalog={activeCatalog} now={now} query={query} navigate={navigate} />
+        }} /> : !id && mine && activeCatalog ? <Mine key={activeCatalog.viewer?.id} viewer={activeCatalog.viewer} navigate={navigate} /> : !id && activeCatalog ? <List catalog={activeCatalog} now={now} navigate={navigate} />
             : currentError ? <div className="cw-empty"><p className="cw-failure" role="alert">{currentError.message}</p><div className="cw-inline"><button type="button" className="cw-button" onClick={() => refresh(version + 1)}>重试</button>
                 {id && <WorkspaceLink className="cw-button" href={toCollectionUrl()} navigate={navigate}>返回收集</WorkspaceLink>}
-                {(currentError.status === 401 || (id && !viewChoice?.viewer && (!requestedView || requestedView === 'guest') && currentError.status === 404)) && <a className="cw-button cw-primary" href={collectionLoginUrl(query)}>登录后查看</a>}
-                {currentError.status === 401 && requestedView !== 'guest' && <button type="button" className="cw-button" onClick={browseGuest}>以访客身份浏览</button>}</div></div>
+                {(currentError.status === 401 || (id && !activeCatalog?.viewer && currentError.status === 404)) && <a className="cw-button cw-primary" href={collectionLoginUrl(query)}>登录后查看</a>}</div></div>
                 : <div className="cw-loading" role="status"><span className="cw-spinner" />{id ? '正在加载收集…' : '正在加载收集列表…'}</div>}
         {editor && <Suspense fallback={<p className="cw-sr-only" role="status">正在加载编辑器…</p>}><CollectionEditor key={editor} mode={editor} catalog={activeCatalog} item={item} currentRound={round} authorize={authorize} onClose={() => setEditor(undefined)} onSaved={(savedId, savedRound) => {
             navigate(toCollectionUrl(savedId, savedRound));

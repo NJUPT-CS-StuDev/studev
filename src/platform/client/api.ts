@@ -195,17 +195,21 @@ async function refreshCookieSession(generation: string | null) {
     return refreshRequest;
 }
 export async function api<T>(path: string, body?: unknown, options: RequestInit = {}, retry = true): Promise<T> { if (!path.startsWith('/') || path.startsWith('//'))
-    throw new PlatformError('请求路径无效。'); let response: Response; let generation: string | null; try {
+    throw new PlatformError('请求路径无效。'); let response: Response; let generation: string | null;
+    const publicCollectionRead = body === undefined && (!options.method || options.method === 'GET') &&
+        /^\/collections(?:\/items\/[A-Za-z0-9_-]+)?$/.test(path);
+    let credentials = options.credentials ?? 'same-origin';
+    try {
     if (path === '/auth/login') body = { ...(body as object), ...browserDevice() };
-    const explicitGuestRead = body === undefined && (!options.method || options.method === 'GET') &&
-        /^\/collections(?:\/items\/[A-Za-z0-9_-]+)?\?view=guest$/.test(path);
-    if (!explicitGuestRead && !['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path)) {
+    if (credentials !== 'omit' && !['/auth/login', '/auth/register', '/auth/config', '/auth/refresh'].includes(path)) {
         await navigator.locks.request('studev-session-refresh', () => {
-            if (localStorage.getItem('studev_session_refresh_pending')) throw new PlatformError('登录验证未完成，请重新登录。', 401, 'AUTH_REQUIRED');
+            if (!localStorage.getItem('studev_session_refresh_pending')) return;
+            if (publicCollectionRead) credentials = 'omit';
+            else throw new PlatformError('登录验证未完成，请重新登录。', 401, 'AUTH_REQUIRED');
         });
     }
-    generation = explicitGuestRead ? null : localStorage.getItem('studev_session_generation');
-    response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    generation = credentials === 'omit' ? null : localStorage.getItem('studev_session_generation');
+    response = await fetch(`/api/platform${path}`, { ...options, method: options.method || (body === undefined ? 'GET' : 'POST'), credentials, cache: 'no-store', headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(body !== undefined && currentSession ? { 'X-CSRF-Token': currentSession.csrfToken } : {}), ...options.headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 catch (error) {
     if (error instanceof PlatformError) throw error;
@@ -224,10 +228,18 @@ catch {
     };
     // A rejected password or verification code is an answer, not an expired
     // session. Rotating and repeating it adds a round trip and can spend a code.
-    if (response.status === 401 && retry && generation && ['TOKEN_INVALID', 'AUTH_REQUIRED'].includes(e.error?.code || '') && !['/auth/login', '/auth/register', '/auth/refresh'].includes(path)) {
-        await refreshCookieSession(generation);
+    const expiredSession = response.status === 401 && ['TOKEN_INVALID', 'AUTH_REQUIRED'].includes(e.error?.code || '');
+    if (expiredSession && retry && generation && !['/auth/login', '/auth/register', '/auth/refresh'].includes(path)) {
+        try { await refreshCookieSession(generation); }
+        catch (error) {
+            if (publicCollectionRead && error instanceof PlatformError && error.status === 401) {
+                return api<T>(path, body, { ...options, credentials: 'omit' }, false);
+            }
+            throw error;
+        }
         return api<T>(path, body, options, false);
     }
+    if (expiredSession && publicCollectionRead && credentials !== 'omit') return api<T>(path, body, { ...options, credentials: 'omit' }, false);
     throw new PlatformError(e.error?.message || '操作未完成，请稍后重试。', response.status, e.error?.code);
 } if (path === '/auth/login') {
     localStorage.removeItem('studev_session_refresh_pending');

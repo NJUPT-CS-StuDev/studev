@@ -1,10 +1,7 @@
 .p-members-heading { min-height:var(--size-search); align-items:center; flex-direction:row; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
 .p-members-heading h1 { margin:0; }
 .p-members-tools, .p-members-filters { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.p-members-tools label { font-size:.82rem; color:var(--muted); }
-.p-members-tools .p-input { width:auto; min-height:34px; padding:5px 9px; font-size:.85rem; }
 .p-members-filters .p-input { min-width:9rem; flex:1; }
-.p-members-preview { margin:-5px 0 14px; color:var(--brand); }
 .p-members-search > input { flex:1; }
 .p-members[data-member-view="public"] .p-directory { min-width:0; }
 .p-members[data-member-view="public"] .p-directory td { padding:0; border:0; max-width:none; }

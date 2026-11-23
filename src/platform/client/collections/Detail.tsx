@@ -106,7 +106,7 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
     detail: CollectionDetail; round?: Round; now: number; receiptId: string; version: number; navigate: Navigate; edit: (mode: EditorMode) => void;
     authorize: () => Promise<void>; onChanged: (id?: string) => void; onRoundPolicyChanged: (updated: Item<Round>, roundId: string, policy: Policy) => void; onDeleted: () => void;
 }) {
-    const { item, view } = detail;
+    const { item, viewer } = detail;
     const [panel, setPanel] = useState<'board' | 'fill'>(receiptId ? 'fill' : 'board');
     const [saved, setSaved] = useState<Record<string, Submission>>({});
     const [editingRound, setEditingRound] = useState('');
@@ -121,7 +121,6 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
     const draft = item.status === 'draft';
     const pinned = pinnedCollections.includes(item.id);
     const actionLabel = draft ? '删除草稿' : '取消发布';
-    const preview = detail.viewer && view !== detail.viewer.role;
     const state = round ? roundState(item, round, now) : 'closed';
     const deadlineLabel = round?.deadline ? displayTime(round.deadline) : '未设截止时间';
     const accepts = state === 'collecting' || state === 'makeup';
@@ -129,7 +128,7 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
         : state === 'expired' ? { label: '开放补交', policy: 'allow-late' }
         : state === 'collecting' ? { label: '停止收集', policy: 'closed' }
         : { label: '恢复收集', policy: 'strict' };
-    const canSubmit = !!detail.viewer && !preview && view !== 'guest' && accepts && (item.targetMode === 'open' || item.inRecipients);
+    const canSubmit = !!viewer && accepts && (item.targetMode === 'open' || item.inRecipients);
     const byId = new Map(detail.mySubmissions.filter(submission => submission.roundId === round?.id).map(submission => [submission.id, submission]));
     for (const submission of Object.values(saved)) {
         if (submission.roundId === round?.id && (byId.get(submission.id)?.revision ?? -1) < submission.revision) byId.set(submission.id, submission);
@@ -141,11 +140,10 @@ export function Details({ detail, round, now, receiptId, version, navigate, edit
     const limitReached = !!round && round.submissionMode === 'multiple' && own.length >= round.maxPerUser;
     const writing = editingRound === round?.id;
     const showComposer = !own.length || writing;
-    const loginUrl = !detail.viewer && accepts ? collectionLoginUrl() : undefined;
+    const loginUrl = !viewer && accepts ? collectionLoginUrl() : undefined;
     let submitNote = '';
     if (!accepts) submitNote = state === 'expired' ? '这个批次已截止。' : '这个批次暂时不能提交。';
-    else if (preview) submitNote = '预览时可以查看表单。';
-    else if (detail.viewer && !canSubmit) submitNote = '只有指定成员可以填写。';
+    else if (viewer && !canSubmit) submitNote = '只有指定成员可以填写。';
     else if (limitReached) submitNote = `你已交满 ${round?.maxPerUser} 份。`;
     else if (state === 'makeup') submitNote = canSubmit ? '本次提交将记为补交。' : '补交已开放，登录后可填写。';
     async function changeTiming() {

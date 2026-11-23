@@ -110,7 +110,7 @@ test('real identity shows a public collection to a visitor and asks them to sign
   assert.equal((await a.client.call(recordPath(id))).status, 200);
 });
 
-test('a public collection opens with a stale cookie while private items and submissions remain protected', async () => {
+test('public reads accept anonymous requests and reject stale credentials while private items stay protected', async () => {
   const f = await fixture(), guest = f.client();
   const make = async (extra) => {
     const result = await create(f.owner, { name: '访问规则测试', visibility: 'public', fields: [{ id: 'note', type: 'text', label: '说明' }], ...extra });
@@ -121,11 +121,13 @@ test('a public collection opens with a stale cookie while private items and subm
   const read = f.store.get; let identityReads = 0;
   f.store.get = async (key, ...args) => { if (key.startsWith('platform-v1/identity/users/')) identityReads++; return read(key, ...args); };
   assert.equal((await guest.call(itemPath(publicId), { headers: staleCookie })).body.error.code, 'TOKEN_INVALID');
-  const opened = await guest.call(itemPath(publicId) + '?view=guest', { headers: staleCookie });
+  const opened = await guest.call(itemPath(publicId));
   assert.equal(opened.status, 200);
+  assert.equal(opened.body.viewer, null);
   assert.equal(identityReads, 0, 'public content does not wait for owner/account/device storage');
-  assert.equal((await guest.call(itemPath(privateId) + '?view=guest', { headers: staleCookie })).status, 404);
-  assert.equal((await guest.call(itemPath(draftId) + '?view=guest', { headers: staleCookie })).status, 404);
+  assert.equal((await guest.call(itemPath(privateId))).status, 404);
+  assert.equal((await guest.call(itemPath(draftId))).status, 404);
+  assert.equal((await guest.call('/collections/mine', { headers: staleCookie })).status, 401);
   assert.equal((await guest.call(`${itemPath(publicId)}/rounds/main/submissions`, { method: 'POST', body: { answers: {}, files: [] } })).status, 401);
   assert.equal((await guest.call(itemPath(publicId), { headers: { Authorization: 'Bearer ' + 'A'.repeat(43) } })).status, 401, 'an explicit bearer credential is still validated at the API boundary');
 });

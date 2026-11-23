@@ -312,6 +312,7 @@ async function checkCollection(viewport, name) {
   assert.equal(new URL(await login.getAttribute('href'), origin).searchParams.get('next'), '/forms/?id=' + item.id);
   assert(await parts.getByRole('textbox', { name: /^填写内容/ }).isDisabled());
   assert.equal(await parts.getByText(peerSecret).count(), 0);
+  assert.equal(await parts.getByRole('link', { name: '我的提交' }).count(), 0);
   assert.equal(guestReads.filter(read => read.path === '/api/platform/auth/session').length, 0);
   const secret = await fixture.guest.call('/collections/submissions/' + fixture.peerSubmission);
   assert.equal(secret.status, 401);
@@ -349,15 +350,10 @@ async function checkCollection(viewport, name) {
   await member.page.reload();
   await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).waitFor();
   await shot(member.page, name + '-collection-own-submission');
-  await memberParts.getByRole('combobox', { name: '视角' }).selectOption('guest');
-  await memberParts.getByText(/正在预览访客视角/).waitFor();
-  assert.equal(await memberParts.getByText('登录验证期间保留这段内容', { exact: true }).count(), 0);
-  assert.equal(await memberParts.getByRole('button', { name: '提交', exact: true }).count(), 0);
+  assert.equal(await memberParts.getByRole('combobox', { name: '视角' }).count(), 0);
   await memberParts.getByRole('link', { name: '全部收集' }).click();
-  await memberParts.getByRole('link', { name: new RegExp(title) }).waitFor();
-  assert.equal(await memberParts.getByRole('link', { name: new RegExp(privateTitle) }).count(), 0);
-  await memberParts.getByRole('combobox', { name: '视角' }).selectOption('user');
   await memberParts.getByRole('link', { name: new RegExp(privateTitle) }).waitFor();
+  assert.equal(await memberParts.getByRole('combobox', { name: '视角' }).count(), 0);
   await memberParts.getByRole('link', { name: '我的提交' }).click();
   await memberParts.getByRole('heading', { name: '我的提交', exact: true }).waitFor();
   await memberParts.getByRole('link', { name: new RegExp(title) }).waitFor();
@@ -372,6 +368,7 @@ async function checkCollection(viewport, name) {
     await staff.page.goto(origin + '/forms/');
     const staffParts = staff.page.locator('.cw-workspace');
     await staffParts.getByRole('button', { name: '新建收集' }).click();
+    assert.equal(await staffParts.getByRole('combobox', { name: '视角' }).count(), 0);
     const dialog = staff.page.getByRole('dialog', { name: '新建收集' });
     await dialog.getByRole('textbox', { name: '名称', exact: true }).fill('统一入口的草稿');
     await dialog.getByRole('textbox', { name: /字段名称|字段标题/ }).fill('草稿字段');
@@ -414,6 +411,7 @@ async function checkCollection(viewport, name) {
     const receipt = staff.page.getByRole('dialog', { name: '提交详情' });
     await receipt.getByText(peerSecret, { exact: true }).waitFor();
     await receipt.getByRole('button', { name: '关闭', exact: true }).click();
+    assert.equal(await staffParts.getByRole('combobox', { name: '视角' }).count(), 0);
     assert.equal(staffReads.filter(read => read.method === 'GET' && read.path === '/api/platform' + roundPath(item) + '/submissions').length, 1);
     assert(!staffReads.some(read => read.query.includes('board=1')));
     await shot(staff.page, name + '-collection-board');
@@ -461,11 +459,6 @@ async function checkCollection(viewport, name) {
     assert.equal(restopped.body.item.rounds[0].open, false);
     record('desktop: automatic cutoff, manually stopped legacy rounds, reopen and stop makeup without moving the deadline');
     await staff.page.goto(origin + '/forms/?id=' + item.id);
-    await staffParts.getByRole('combobox', { name: '视角' }).selectOption('user');
-    await staffParts.getByText(/正在预览用户视角/).waitFor();
-    assert.equal(await staffParts.getByRole('button', { name: '收集设置' }).count(), 0);
-    assert.equal(await staffParts.getByText(peerSecret).count(), 0);
-    await staffParts.getByRole('combobox', { name: '视角' }).selectOption('owner');
     await staffParts.getByRole('button', { name: '取消发布', exact: true }).click();
     const unpublish = staff.page.getByRole('dialog', { name: '取消发布' });
     await unpublish.getByRole('button', { name: '取消发布', exact: true }).click();
@@ -476,7 +469,7 @@ async function checkCollection(viewport, name) {
     assert.equal(previous.body.mySubmissions[0].answers.answer, '登录验证期间保留这段内容');
     assert.deepEqual(staff.errors, []);
     await staff.context.close();
-    record('desktop: owner creates and deletes a draft, edits deadlines, previews user view and withdraws a published collection');
+    record('desktop: owner creates and deletes a draft, reads participant submissions and withdraws a published collection');
   }
 }
 const layouts = [['phone', { width: 390, height: 844 }], ['desktop', { width: 1440, height: 1000 }]];

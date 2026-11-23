@@ -76,7 +76,7 @@ async function collectionsFixture() {
   return { users, repo, store, gateway, call, create, itemPath, roundPath, submit, complete, cancel, advance: (ms) => { clock += ms; } };
 }
 
-test('the collection catalog and direct reads project only the effective view and organization scope', async () => {
+test('collection reads and writes use the signed-in role and organization scope', async () => {
   const f = await collectionsFixture();
   const publicItem = await f.create({ visibility: 'public' });
   const privateItem = await f.create({
@@ -84,7 +84,10 @@ test('the collection catalog and direct reads project only the effective view an
     tags: ['课程实验'], course: { id: 'information/course-plan/JS160201S', code: 'JS160201S', name: '计算机网络' },
   });
   const draft = await f.create({ status: 'draft' });
-  assert.deepEqual((await f.call()).data.items.map(({ id }) => id), [publicItem.id]);
+  const guest = (await f.call()).data;
+  assert.equal(guest.viewer, null);
+  assert.deepEqual(guest.items.map(({ id }) => id), [publicItem.id]);
+  assert.equal(guest.items[0].issuer.name, '');
   assert.deepEqual((await f.call('', { user: 'bob' })).data.items.map(({ id }) => id), [publicItem.id]);
   const mine = (await f.call(f.itemPath(privateItem), { user: 'alice' })).data.item;
   assert.equal(mine.inRecipients, true);
@@ -95,14 +98,15 @@ test('the collection catalog and direct reads project only the effective view an
   assert.equal((await f.call(f.itemPath(draft), { user: 'alice' })).status, 404);
   const staff = (await f.call(f.itemPath(privateItem), { user: 'admin' })).data.item;
   assert.deepEqual(staff.recipients, [{ studentId: 'TEST1001', name: '甲学生' }]);
-  const preview = await f.call('?view=guest', { user: 'owner' });
-  assert.equal(preview.data.viewer.canPublish, false);
-  assert.deepEqual(preview.data.views, ['owner', 'admin', 'user', 'guest']);
-  assert.deepEqual(preview.data.items.map(({ id }) => id), [publicItem.id]);
-  assert.ok(!JSON.stringify(preview.data.items).includes('所有者名称'));
-  assert.equal((await f.call('?view=admin', { user: 'alice' })).status, 403);
-  assert.equal((await f.call(f.itemPath(publicItem) + '?view=user', { user: 'owner', body: { revision: 1, status: 'closed' } })).status, 403);
-  assert.equal((await f.call('/people?view=user', { user: 'owner' })).status, 403);
+  const owner = (await f.call('?view=guest', { user: 'owner' })).data;
+  assert.deepEqual(owner.viewer, { id: f.users.owner.id, role: 'owner', isStaff: true, canPublish: true });
+  assert.equal(Object.hasOwn(owner, 'view'), false);
+  assert.equal(Object.hasOwn(owner, 'views'), false);
+  assert.deepEqual(new Set(owner.items.map(({ id }) => id)), new Set([publicItem.id, privateItem.id, draft.id]));
+  const member = (await f.call('?view=admin', { user: 'alice' })).data;
+  assert.deepEqual(member.viewer, { id: f.users.alice.id, role: 'user', isStaff: false, canPublish: false });
+  assert.equal((await f.call(f.itemPath(publicItem) + '?view=owner', { user: 'alice', body: { revision: 1, status: 'closed' } })).status, 403);
+  assert.equal((await f.call('/people?view=admin', { user: 'alice' })).status, 403);
   const directory = (await f.call('/people', { user: 'admin' })).data.people;
   assert.deepEqual(directory.map(({ studentId }) => studentId).sort(), ['ADMIN01', 'TEST1001']);
   assert.equal((await f.call('/items', { user: 'admin', body: {
@@ -144,7 +148,7 @@ test('stopping keeps access and withdrawal preserves private receipts, review an
   assert.equal(report.data.board[0].statuses[item.rounds[0].id], 'accepted');
   assert.equal(report.data.roundStats[0].submitted, 1);
   assert.equal(report.data.items[0].createdAt, inserted.data.submission.createdAt);
-  assert.equal((await f.call(f.roundPath(item) + '/submissions?view=user', { user: 'admin' })).status, 403);
+  assert.equal((await f.call(f.roundPath(item) + '/submissions', { user: 'alice' })).status, 403);
   const path = f.itemPath(item);
   const stopped = await f.call(path, { user: 'admin', body: { revision: changed.data.item.revision, status: 'closed' } });
   assert.equal(stopped.status, 200);
@@ -153,7 +157,7 @@ test('stopping keeps access and withdrawal preserves private receipts, review an
   const withdrawn = await f.call(path + '/unpublish', { user: 'admin', body: { revision: stopped.data.item.revision } });
   assert.equal(withdrawn.status, 200);
   assert.equal((await f.call(f.itemPath(item), { user: 'bob' })).status, 404);
-  assert.equal((await f.call(f.itemPath(item) + '?view=guest', { user: 'alice' })).status, 404);
+  assert.equal((await f.call(f.itemPath(item))).status, 404);
   assert.equal((await f.submit(item, 'alice')).status, 404);
   assert.equal((await f.call('', { user: 'alice' })).data.items.some(({ id }) => id === item.id), false);
   const historical = (await f.call(f.itemPath(item), { user: 'alice' })).data;

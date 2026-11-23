@@ -26,18 +26,18 @@ export async function definitions(repo, tips) {
     String(b.publishedAt || b.createdAt).localeCompare(String(a.publishedAt || a.createdAt)) || b.id.localeCompare(a.id));
 }
 
-export async function myRecords(repo, viewer, itemIds = null) {
-  if (!viewer.user || viewer.view === 'guest') return [];
-  const sid = studentId(viewer.user.studentId);
-  const prefixes = [keys.user(viewer.user.id)];
-  if (viewer.user.identityVerified && /^[A-Z0-9]{4,24}$/.test(sid)) prefixes.push(keys.student(sid));
+export async function myRecords(repo, user, itemIds = null) {
+  if (!user) return [];
+  const sid = studentId(user.studentId);
+  const prefixes = [keys.user(user.id)];
+  if (user.identityVerified && /^[A-Z0-9]{4,24}$/.test(sid)) prefixes.push(keys.student(sid));
   const itemPrefix = itemIds?.size === 1 ? [...itemIds][0] + '/' : '';
   const entries = await Promise.all(prefixes.map(async (prefix) =>
     (await repo.list(prefix + itemPrefix)).map((key) => parseHistoryKey(prefix, key))));
   const locations = [...new Map(entries.flat().filter((row) => row && (!itemIds || itemIds.has(row.itemId)))
     .map((row) => [row.id, row])).values()];
   const records = await mapConcurrent(locations, 16, ({ itemId, roundId, id }) => repo.latest(keys.submission(itemId, roundId, id)));
-  return records.filter((record) => record && ownsSubmission(record, viewer.user)).sort(recency);
+  return records.filter((record) => record && ownsSubmission(record, user)).sort(recency);
 }
 
 export async function roundRecords(repo, itemId, roundId = null) {
@@ -75,7 +75,7 @@ export function itemView(item, viewer, organizations, ownRecords, now, detail = 
   for (const record of ownRecords) {
     if (!ownByRound.has(record.roundId)) ownByRound.set(record.roundId, record);
   }
-  const actor = viewer.view === 'guest' ? null : viewer.user;
+  const actor = viewer.user;
   const manage = canManage(item, viewer, organizations);
   const safeIssuer = issuerView(issuer, organizations);
   if (!manage && actor?.id !== issuer.userId) safeIssuer.name = '';
@@ -83,7 +83,7 @@ export function itemView(item, viewer, organizations, ownRecords, now, detail = 
     id, name, description, tags, term, course, issuer: safeIssuer,
     visibility, status, targetMode, publishedAt, updatedAt, revision, recipientCount: recipients.length,
     ...(manage && detail ? { recipients } : {}),
-    canManage: manage && !viewer.preview, inRecipients: isRecipient(item, actor),
+    canManage: manage, inRecipients: isRecipient(item, actor),
     rounds: rounds.map((round) => ({
       ...(detail ? round : {}),
       ...roundSummary(item, round, actor, ownByRound, now),

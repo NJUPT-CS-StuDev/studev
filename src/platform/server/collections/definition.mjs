@@ -1,35 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { fail, text } from '../common.mjs';
-import { activeMemberships, chinaDay, flattenOrganizationTree, isWithin, organization, organizationName, positionLabel } from '../../organizations.mjs';
+import { activeMemberships, flattenOrganizationTree, isWithin, organization, organizationName, positionLabel } from '../../organizations.mjs';
 import { deadlineReached, isSemester, pinnedCollections } from '../../collections.mjs';
 import { boolean, fields, integer, validObject } from './fields.mjs';
 import { collectionId, studentId } from './records.mjs';
 
-export const roles = ['guest', 'user', 'admin', 'owner'];
-export const isManagement = (view) => view === 'admin' || view === 'owner';
-
-export async function collectionViewer(identity, request, url, { required = false, mutation = false, today = chinaDay() } = {}) {
-  const requested = url.searchParams.get('view');
-  if (requested && !roles.includes(requested)) fail(400, 'INVALID_VIEW', '该视角不存在。');
-  const auth = await identity.authenticate(request, { required, csrf: mutation }).catch((error) => {
-    if (!required && requested === 'guest' && !request.headers.has('authorization') && error.code === 'TOKEN_INVALID') return null;
-    throw error;
-  });
-  const user = auth?.user ?? null;
-  const role = user?.role ?? 'guest';
-  const view = requested || role;
-  const views = roles.slice(0, roles.indexOf(role) + 1).reverse();
-  if (!views.includes(view)) fail(403, 'VIEW_FORBIDDEN', '此账号无法使用该视角。');
-  if (mutation && view !== role) fail(403, 'VIEW_READ_ONLY', '预览视角只能浏览。');
-  return { user, view, views, preview: view !== role, today };
-}
+export const isManagement = (role) => role === 'admin' || role === 'owner';
 
 export function viewerInfo(viewer, organizations) {
-  const { user, view, views, preview, today } = viewer;
-  const issuerOptions = isManagement(view) && !preview ? publishChoices(user, view, organizations, today) : [];
+  const { user, today } = viewer;
+  const isStaff = isManagement(user?.role);
+  const issuerOptions = isStaff ? publishChoices(user, organizations, today) : [];
   return {
-    view, views, issuerOptions,
-    viewer: user ? { id: user.id, role: user.role, view, isStaff: isManagement(view), canPublish: issuerOptions.length > 0 } : null,
+    issuerOptions,
+    viewer: user ? { id: user.id, role: user.role, isStaff, canPublish: issuerOptions.length > 0 } : null,
   };
 }
 
@@ -39,8 +23,8 @@ function scopes(memberships) {
 }
 
 export function canManage(item, viewer, orgs) {
-  if (viewer.view === 'owner') return true;
-  if (viewer.view !== 'admin') return false;
+  if (viewer.user?.role === 'owner') return true;
+  if (viewer.user?.role !== 'admin') return false;
   return scopes(activeMemberships(viewer.user.memberships, viewer.today))
     .some((scope) => isWithin(item.issuer.organizationId, scope, orgs));
 }
@@ -54,13 +38,13 @@ export function canSee(item, viewer, orgs) {
   if (canManage(item, viewer, orgs)) return true;
   if (item.status === 'draft' || !item.publishedAt) return false;
   if (item.visibility === 'public') return true;
-  return viewer.view !== 'guest' && isRecipient(item, viewer.user);
+  return isRecipient(item, viewer.user);
 }
 
-export function publishChoices(user, view, orgs, today) {
+function publishChoices(user, orgs, today) {
   const memberships = activeMemberships(user.memberships, today);
   const allowed = scopes(memberships);
-  const visible = view === 'owner' ? () => true : (node) => allowed.some((scope) => isWithin(node.id, scope, orgs));
+  const visible = user.role === 'owner' ? () => true : (node) => allowed.some((scope) => isWithin(node.id, scope, orgs));
   return flattenOrganizationTree(orgs).filter(visible).map((node) => {
     const membership = memberships.find((claim) => claim.organizationId === node.id);
     const title = membership ? positionLabel(membership, orgs) : '';
@@ -80,7 +64,7 @@ export function issuerView(issuer, orgs) {
 }
 
 export function publishedIssuer(body, viewer, orgs) {
-  const choice = publishChoices(viewer.user, viewer.view, orgs, viewer.today).find(({ organizationId, title }) =>
+  const choice = publishChoices(viewer.user, orgs, viewer.today).find(({ organizationId, title }) =>
     organizationId === body.issuerOrganizationId && title === (body.issuerTitle || ''));
   if (!choice) fail(403, 'ISSUER_FORBIDDEN', '此账号无法以该组织的身份发布。');
   return {

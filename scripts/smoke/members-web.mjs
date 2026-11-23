@@ -1,4 +1,4 @@
-// Ordinary-member public views in an isolated browser; every account request is a fixture.
+// Member profiles and management in isolated browser sessions; every account request is a fixture.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
@@ -67,6 +67,39 @@ try {
         assert(calls.filter(call=>call.method!=='GET').every(call=>call.path==='/api/platform/sync'));
         assert(!calls.some(call=>call.path.includes('/admin/')||call.path.includes('/users')));
         results.push({width,passed:true,checks:['ordinary role','Me entry','search nickname','pagination','profile and Back','literal user text','private fields absent','no horizontal overflow','503 retry','404','public member GET only; existing sync mocked']});
+        await context.close();
+    }
+    for (const role of ['admin', 'owner']) {
+        const context = await browser.newContext();
+        const staff = { ...session, user: { ...session.user, id: 'fixture-' + role, role } };
+        const managedUser = { ...session.user, id: members[0].id, memberships: [] };
+        const calls = [];
+        await context.route('**/api/platform/**', async route => {
+            const { pathname } = new URL(route.request().url());
+            calls.push(pathname);
+            if (pathname === '/api/platform/auth/session') return route.fulfill({ json: staff });
+            if (pathname === '/api/platform/admin/users') return route.fulfill({ json: { items: [managedUser] } });
+            if (pathname === '/api/platform/organizations') return route.fulfill({ json: { items: [] } });
+            if (pathname === '/api/platform/members/' + managedUser.id) return route.fulfill({ json: { member: members[0] } });
+            return route.fulfill({ status: 404, json: { error: { message: 'fixture endpoint unavailable' } } });
+        });
+        const page = await context.newPage();
+        const checkManagement = async () => {
+            await page.getByRole('row').filter({ hasText: managedUser.realName }).waitFor();
+            assert.equal(await page.getByRole('combobox', { name: '查看身份' }).count(), 0);
+            assert.equal(await page.getByRole('button', { name: '组织管理', exact: true }).count(), Number(role === 'owner'));
+        };
+        await page.goto(new URL('/members/', origin).href);
+        await checkManagement();
+        const managementReads = calls.filter(path => path === '/api/platform/admin/users').length;
+        await page.goto(new URL('/members/?id=' + managedUser.id, origin).href);
+        await page.getByRole('heading', { name: members[0].nickname, exact: true }).waitFor();
+        assert.equal(await page.getByText(managedUser.realName, { exact: true }).count(), 0);
+        assert.equal(await page.getByRole('button', { name: '组织管理', exact: true }).count(), 0);
+        assert.equal(calls.filter(path => path === '/api/platform/admin/users').length, managementReads);
+        await page.locator('[data-members-back]').click();
+        await checkManagement();
+        results.push({ role, passed: true, checks: ['session-based management', 'shared member profile', 'return to management'] });
         await context.close();
     }
     const context=await browser.newContext();

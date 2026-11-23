@@ -84,6 +84,9 @@ final character of the real name; the raw empty nickname stays unset in storage.
 `GET /members?query=&offset=0&limit=50` and `GET /members/<id>` require sign-in
 and return only `id`, `nickname`, `signature`, and an opaque `avatarUrl` that
 does not disclose QQ. Search matches nicknames only; pages contain at most 100.
+On `/members/`, the signed-in role determines whether the list shows member
+profiles or administrative tools. A shared `/members/?id=<id>` link opens the
+same limited profile for any signed-in role.
 The public image proxy admits fixed image types and reads at most 2 MiB.
 Member reads use `members/<id>/<account-revision>.json`, never private account
 history; account changes publish the minimal public projection at that revision.
@@ -134,8 +137,7 @@ usable across search index updates.
   or whose issuing organizations fall within their assignments. Admins publish
   within those assignments. The people picker exposes only the authorized
   directory scope.
-- Reads accept `view=guest|user|admin|owner`. Signed-in users can preview views
-  lower than their account role. Mutations require their actual view. The
+- Collection reads and writes use the signed-in account's role. The same
   role checks apply to every record, progress report and download.
 - Round fields cover text, long text, single choice, multiple choice, number,
   date and attachments. Each round defines its deadline, late policy, edit and
@@ -153,8 +155,8 @@ All API paths below are relative to `/api/platform/collections`.
 
 | Request | Result |
 | --- | --- |
-| `GET /` | Scoped catalog with available views, organization list, summary rounds and the viewer's own statuses |
-| `GET /items/<id>` | Collection definition and own submissions. Recipient names and IDs are available in the authorized management view |
+| `GET /` | Scoped catalog with account role, organization list, summary rounds and the person's own statuses |
+| `GET /items/<id>` | Collection definition and own submissions. Authorized managers can also see recipient names and IDs |
 | `GET /people` | Scoped staff directory for recipient selection |
 | `POST /items` | New draft or published collection with issuing identity, rounds and audience |
 | `POST /items/<id>` | Collection metadata, audience or lifecycle update using the current revision |

@@ -3,7 +3,7 @@ import { fail, readJson, response } from '../common.mjs';
 import { chinaDay, flattenOrganizationTree, isWithin } from '../../organizations.mjs';
 import { pinnedCollections } from '../../collections.mjs';
 import { boardFor, definitions, directoryPeople, itemView, myRecords, ownHistory, readItem, readRound, roundRecords } from './catalog.mjs';
-import { canManage, canSee, collectionViewer, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
+import { canManage, canSee, isManagement, itemInput, publishedIssuer, roundInput, viewerInfo } from './definition.mjs';
 import { collectionCsv, fileManifest } from './exports.mjs';
 import { collectionKeys as keys, mapConcurrent, readSubmission } from './records.mjs';
 import { roundQuota } from './quota.mjs';
@@ -23,7 +23,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       (!orgFilter || isWithin(item.issuer.organizationId, orgFilter, orgs)));
     const ids = new Set(items.map((item) => item.id));
     const records = new Map();
-    for (const record of await myRecords(repo, viewer, ids)) {
+    for (const record of await myRecords(repo, viewer.user, ids)) {
       if (!records.has(record.itemId)) records.set(record.itemId, []);
       records.get(record.itemId).push(record);
     }
@@ -34,7 +34,7 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
   }
 
   async function detail(item, viewer, orgs, knownRecords) {
-    const mine = knownRecords ?? await myRecords(repo, viewer, new Set([item.id]));
+    const mine = knownRecords ?? await myRecords(repo, viewer.user, new Set([item.id]));
     const serverTime = now();
     return response({
       ...viewerInfo(viewer, orgs),
@@ -87,8 +87,8 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     const item = await readItem(repo, id);
     const directDetail = !operation && request.method === 'GET';
     if (!canSee(item, viewer, orgs)) {
-      if (directDetail && (item.status === 'draft' || item.status === 'closed') && viewer.user && viewer.view !== 'guest') {
-        const mine = await myRecords(repo, viewer, new Set([item.id]));
+      if (directDetail && (item.status === 'draft' || item.status === 'closed') && viewer.user) {
+        const mine = await myRecords(repo, viewer.user, new Set([item.id]));
         if (mine.length) return detail(item, viewer, orgs, mine);
       }
       fail(404, 'NOT_FOUND', '收集不存在或无权查看。');
@@ -169,11 +169,11 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
     const record = await readSubmission(repo, id);
     const item = await readItem(repo, record.itemId);
     const round = readRound(item, record.roundId);
-    const own = viewer.view !== 'guest' && ownsSubmission(record, viewer.user);
+    const own = ownsSubmission(record, viewer.user);
     const manage = canManage(item, viewer, orgs);
     if (!own && !manage) fail(404, 'NOT_FOUND', '提交记录不存在或无权访问。');
     if (!action && !download && request.method === 'GET') {
-      return response({ submission: submissionView(record, item, round), canEdit: !viewer.preview && canEditSubmission(record, item, round, viewer.user, now()) });
+      return response({ submission: submissionView(record, item, round), canEdit: canEditSubmission(record, item, round, viewer.user, now()) });
     }
     if (request.method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '不支持此操作。');
     if (download) return response({ download: await submissions.download(record.files.find((file) => file.id === fileId)) });
@@ -200,27 +200,28 @@ export function createCollectionsService({ repo, identity, env, now = Date.now, 
       if (submissionMatch?.[2] === 'complete' && post) return response({ submission: await submissions.complete(context, submissionMatch[1]) });
       if (submissionMatch?.[2] === 'cancel' && post) return response(await submissions.cancel(context, submissionMatch[1]));
       if (!onCatalog && !onCreate && !onPeople && !onMine && !itemMatch && !submissionMatch) return null;
-      const [viewer, orgs, available] = await Promise.all([
-        collectionViewer(identity, request, url, { required: write || onPeople || onMine || Boolean(submissionMatch), mutation: write, today: chinaDay(receivedAt) }),
+      const [auth, orgs, available] = await Promise.all([
+        identity.authenticate(request, { required: write || onPeople || onMine || Boolean(submissionMatch), csrf: write }),
         identity.loadOrganizations(),
         onCatalog || onMine ? definitions(repo) : null,
       ]);
+      const viewer = { user: auth?.user ?? null, today: chinaDay(receivedAt) };
       if (onCatalog) return catalog(viewer, orgs, url, available);
       if (onPeople) {
-        if (!isManagement(viewer.view) || viewer.preview) fail(403, 'STAFF_REQUIRED', '此视角无权查看应交名单目录。');
+        if (!isManagement(viewer.user.role)) fail(403, 'STAFF_REQUIRED', '此账号无权查看应交名单。');
         const { issuerOptions } = viewerInfo(viewer, orgs);
-        const allowed = viewer.view === 'owner' ? null : new Set(issuerOptions.map(({ organizationId }) => organizationId));
+        const allowed = viewer.user.role === 'owner' ? null : new Set(issuerOptions.map(({ organizationId }) => organizationId));
         return response({
           organizations: flattenOrganizationTree(orgs),
           people: directoryPeople(await identity.loadAllUsers(), allowed, viewer.today),
         });
       }
       if (onMine) {
-        const records = await myRecords(repo, viewer);
+        const records = await myRecords(repo, viewer.user);
         return response({ items: ownHistory(new Map(available.map((item) => [item.id, item])), records) });
       }
       if (onCreate) {
-        if (!isManagement(viewer.view)) fail(403, 'STAFF_REQUIRED', '此账号无权发布收集。');
+        if (!isManagement(viewer.user.role)) fail(403, 'STAFF_REQUIRED', '此账号无权发布收集。');
         const body = await readJson(request, 256 * 1024);
         return createItem({ ...itemInput(body, timestamp()), issuer: publishedIssuer(body, viewer, orgs) }, viewer, orgs);
       }

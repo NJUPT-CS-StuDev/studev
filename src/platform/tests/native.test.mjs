@@ -112,7 +112,7 @@ test('native accounts share identity with browser collections without elevating 
   const f = await fixture(), { body: auth } = await f.login();
   assert.equal((await f.call('/collections', undefined, auth.accessToken)).body.viewer.id, f.user.id);
   assert.equal((await f.call('/collections/mine', undefined, auth.accessToken)).status, 200);
-  assert.equal((await f.call('/collections?view=owner', undefined, auth.accessToken)).status, 403);
+  assert.equal((await f.call('/collections?view=owner', undefined, auth.accessToken)).body.viewer.role, 'user');
   assert.equal((await f.call('/collections/items', {}, auth.accessToken)).status, 403);
 });
 

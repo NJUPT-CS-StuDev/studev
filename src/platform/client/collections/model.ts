@@ -1,9 +1,7 @@
-import { roleLabels, type OrganizationNode } from '../api';
+import type { OrganizationNode, Role } from '../api';
 import { deadlineReached, roundAcceptsSubmissions } from '../../collections.mjs';
 import type { CollectionCourse } from './CoursePicker';
 
-export const viewLabels = { guest: '访客', ...roleLabels };
-export type View = keyof typeof viewLabels;
 export type TargetMode = 'open' | 'selected';
 export type Status = 'draft' | 'published' | 'closed';
 export type Policy = 'strict' | 'allow-late' | 'closed';
@@ -61,7 +59,7 @@ export interface IssuerOption { organizationId: string; title: string; label: st
 export interface Recipient { studentId: string; name: string }
 export interface DirectoryPerson extends Recipient { organizationIds: string[] }
 export interface Directory { organizations: OrganizationNode[]; people: DirectoryPerson[] }
-export interface Viewer { id: string; role: Exclude<View, 'guest'>; view: View; isStaff: boolean; canPublish: boolean }
+export interface Viewer { id: string; role: Role; isStaff: boolean; canPublish: boolean }
 
 export interface Item<CurrentRound extends RoundSummary = RoundSummary> {
     id: string;
@@ -84,14 +82,12 @@ export interface Item<CurrentRound extends RoundSummary = RoundSummary> {
     inRecipients: boolean;
 }
 
-export interface WorkspaceView {
+interface WorkspaceData {
     viewer: Viewer | null;
-    view: View;
-    views: View[];
+    serverTime: number;
 }
 
-export interface Catalog extends WorkspaceView {
-    serverTime: number;
+export interface Catalog extends WorkspaceData {
     items: Item[];
     organizations: OrganizationNode[];
     issuerOptions: IssuerOption[];
@@ -99,8 +95,7 @@ export interface Catalog extends WorkspaceView {
 
 export interface RoundStats { roundId: string; total: number; submitted: number; late: number; missing: number }
 export interface BoardRow { studentId: string; name: string; orgLabel: string; statuses: Record<string, SubmissionStatus | 'missing'> }
-export interface Detail extends WorkspaceView {
-    serverTime: number;
+export interface Detail extends WorkspaceData {
     item: Item<Round>;
     mySubmissions: Submission[];
 }
@@ -165,15 +160,12 @@ export function chooseRound(item: Item<Round>, id: string) {
 }
 
 export function collectionLoginUrl(query = new URLSearchParams(location.search)) {
-    const params = new URLSearchParams(query);
-    params.delete('view');
+    const params = new URLSearchParams([...query].filter(([key]) => ['id', 'round', 'receipt', 'mine'].includes(key) || key.startsWith('a.')));
     return `/login/?next=${encodeURIComponent(`/forms/${params.size ? `?${params}` : ''}`)}`;
 }
 
-export function toCollectionUrl(item?: string, round?: string, from = new URLSearchParams(location.search)) {
+export function toCollectionUrl(item?: string, round?: string) {
     const query = new URLSearchParams();
-    const view = from.get('view');
-    if (view) query.set('view', view);
     if (item) query.set('id', item);
     if (item && round) query.set('round', round);
     return `/forms/${query.size ? `?${query}` : ''}`;

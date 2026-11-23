@@ -33,17 +33,31 @@ describe('account request renewal', () => {
         expect(localStorage.getItem('studev_session_refresh_pending')).toBeNull();
     });
 
-    it('allows only explicit public collection reads while renewal is incomplete', async () => {
+    it('loads only public collection pages without credentials while renewal is incomplete', async () => {
         localStorage.setItem('studev_session_refresh_pending', '1');
-        const fetch = vi.fn(async () => Response.json({ view: 'guest' }));
+        const fetch = vi.fn(async (_url: string, _options: RequestInit) => Response.json({ viewer: null }));
         vi.stubGlobal('fetch', fetch);
-        for (const path of ['/collections?view=guest', '/collections/items/public-demo?view=guest']) {
-            await expect(api(path)).resolves.toEqual({ view: 'guest' });
+        for (const path of ['/collections', '/collections/items/public-demo']) {
+            await expect(api(path)).resolves.toEqual({ viewer: null });
         }
-        await expect(api('/collections')).rejects.toMatchObject({ status: 401 });
-        await expect(api('/collections/people?view=guest')).rejects.toMatchObject({ status: 401 });
-        await expect(api('/collections/items/public-demo?view=guest', {})).rejects.toMatchObject({ status: 401 });
-        expect(fetch).toHaveBeenCalledTimes(2);
+        await expect(api('/collections/people')).rejects.toMatchObject({ status: 401 });
+        await expect(api('/collections/mine')).rejects.toMatchObject({ status: 401 });
+        await expect(api('/collections/items/public-demo', {})).rejects.toMatchObject({ status: 401 });
+        expect(fetch.mock.calls.map(([, options]) => options.credentials)).toEqual(['omit', 'omit']);
+    });
+
+    it.each([true, false])('tries to renew first before reading public collections (renewable: %s)', async renewable => {
+        const viewer = renewable ? { role: 'user' } : null;
+        const fetch = vi.fn()
+            .mockResolvedValueOnce(Response.json({ error: { code: 'TOKEN_INVALID' } }, { status: 401 }))
+            .mockResolvedValueOnce(renewable ? Response.json({ ok: true }) : Response.json({ error: { code: 'TOKEN_INVALID' } }, { status: 401 }))
+            .mockResolvedValueOnce(Response.json({ viewer }));
+        vi.stubGlobal('fetch', fetch);
+        await expect(api('/collections')).resolves.toEqual({ viewer });
+        expect(fetch.mock.calls.map(([url, options]) => [url, options.credentials])).toEqual([
+            ['/api/platform/collections', 'same-origin'], ['/api/platform/auth/refresh', 'same-origin'],
+            ['/api/platform/collections', renewable ? 'same-origin' : 'omit'],
+        ]);
     });
 
     it('does not loop when the renewed session is refused', async () => {

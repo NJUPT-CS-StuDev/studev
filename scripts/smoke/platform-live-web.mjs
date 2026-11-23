@@ -60,7 +60,6 @@ async function guestCollections() {
   const response = await catalogResponse;
   assert.equal(response.status(), 200);
   const catalog = await response.json();
-  assert.equal(catalog.view, 'guest');
   assert.equal(catalog.viewer, null);
   assert(catalog.items.length > 0, 'published public collections are discoverable');
   assert(catalog.items.every(item => item.visibility === 'public' && !item.canManage && !Object.hasOwn(item, 'recipients')));
@@ -74,6 +73,7 @@ async function guestCollections() {
   const detailResponse = await detailsResponse;
   assert.equal(detailResponse.status(), 200);
   const detail = await detailResponse.json();
+  assert.equal(detail.viewer, null);
   await page.getByRole('heading', { name: item.name, exact: true }).waitFor();
   if (detail.item.rounds.some(round => round.open)) {
     await page.getByRole('link', { name: '登录后填写', exact: true }).waitFor();
@@ -101,15 +101,17 @@ async function signedInChecks() {
   await page.locator('#login-password').fill(credential.password);
   const first = responseFor('/auth/login', 'POST');
   await page.locator('[data-login-form] button[type=submit]').click();
-  const firstResponse = await first, firstData = await firstResponse.json();
-  if (firstData.mfaRequired || ['MFA_REQUIRED', 'TOTP_REQUIRED'].includes(firstData.error?.code)) {
+  let loginResponse = await first, loginData = await loginResponse.json();
+  if (loginData.mfaRequired || ['MFA_REQUIRED', 'TOTP_REQUIRED'].includes(loginData.error?.code)) {
     stage = 'mfa';
     await page.locator('#login-totp').waitFor();
     await page.locator('#login-totp').fill(totpCode(credential.totpSecret, Math.floor(Date.now() / 30_000)));
     const final = responseFor('/auth/login', 'POST');
     await page.locator('[data-login-form] button[type=submit]').click();
-    assert.equal((await final).status(), 200);
-  } else assert.equal(firstResponse.status(), 200);
+    loginResponse = await final;
+    loginData = await loginResponse.json();
+  }
+  assert.equal(loginResponse.status(), 200);
   signedIn = true;
   credential = undefined;
   await page.waitForURL(url => url.pathname === '/account/');
@@ -131,16 +133,12 @@ async function signedInChecks() {
   const response = await catalogResponse;
   assert.equal(response.status(), 200);
   const catalog = await response.json();
-  assert(catalog.viewer && catalog.view === catalog.viewer.role);
-  const role = page.getByRole('combobox', { name: '视角' });
-  await role.waitFor();
-  const previewResponse = responseFor('/collections');
-  await role.selectOption('guest');
-  const preview = await (await previewResponse).json();
-  assert.equal(preview.view, 'guest');
-  assert(preview.items.every(item => item.visibility === 'public' && !item.canManage));
-  await page.getByText(/正在预览访客视角/).waitFor();
-  assert.equal(await page.getByRole('button', { name: '新建收集' }).count(), 0);
+  assert.equal(catalog.viewer.id, loginData.user.id);
+  assert.equal(catalog.viewer.role, loginData.user.role);
+  const workspace = page.locator('.cw-workspace');
+  await workspace.getByRole('link', { name: '我的提交', exact: true }).waitFor();
+  assert.equal(await workspace.getByRole('combobox', { name: '视角' }).count(), 0);
+  assert.equal(await workspace.getByRole('button', { name: '新建收集', exact: true }).count(), Number(catalog.viewer.canPublish));
   stage = 'logout';
   await logout();
 }
@@ -156,7 +154,7 @@ try {
   if (!guestOnly) await signedInChecks();
   assert.deepEqual(blocked, []);
   success = true;
-  console.log(guestOnly ? 'Live mobile collection navigation and guest visibility passed.' : 'Live collection views, sign-in, account, devices and logout passed.');
+  console.log(guestOnly ? 'Live mobile collection navigation and guest visibility passed.' : 'Live collection access, sign-in, account, devices and logout passed.');
 } catch (error) {
   console.error('Live browser verification failed at ' + stage + ' (' + error.name + '). Account values omitted.');
   process.exitCode = 1;

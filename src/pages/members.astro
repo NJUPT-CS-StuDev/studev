@@ -9,18 +9,11 @@ import '../platform/members.css';
       <h1 data-members-title>成员</h1>
       <a class="p-button secondary" href="/members/" data-members-back hidden>‹ 成员</a>
       <div class="p-members-tools" data-members-tools hidden>
-        <label for="members-view">查看身份</label>
-        <select id="members-view" class="p-input">
-          <option value="owner">所有者</option>
-          <option value="admin">管理员</option>
-          <option value="user">普通用户</option>
-        </select>
         <button class="p-button secondary small" type="button" data-members-orgs hidden>组织管理</button>
         <button class="p-button secondary small" type="button" data-members-import hidden>批量导入</button>
         <button class="p-button secondary small" type="button" data-members-audit hidden>操作记录</button>
       </div>
     </header>
-    <p class="p-help p-members-preview" data-members-preview hidden></p>
     <section data-members-directory>
       <form class="p-toolbar p-members-search" role="search" data-members-search-form>
         <input class="p-input" type="search" aria-label="搜索昵称" placeholder="搜索昵称" maxlength="40" autocomplete="off" data-members-search />

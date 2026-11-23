@@ -5,7 +5,6 @@ import { openMemberRecord, periodFields, valueButton } from './member-record';
 
 // Staff columns and actions for the shared member directory.
 const status = q<HTMLElement>('[data-members-status]');
-let preview = false;
 let current: Session | null = null;
 let members: User[] = [];
 let organizations: OrganizationNode[] = [];
@@ -228,7 +227,7 @@ async function refreshMembers(signal = directorySignal) {
 
 export function renderManagedMembers() {
   if (!current || directorySignal?.aborted) return;
-  const isOwner = !preview && current.user.role === 'owner';
+  const isOwner = current.user.role === 'owner';
   const term = q<HTMLInputElement>('[data-members-search]').value.trim().normalize('NFKC').toLowerCase();
   const scope = orgFilter.value;
   const orgList = organizations.length ? organizations : namedOrganizations;
@@ -257,7 +256,7 @@ export function renderManagedMembers() {
     const ref = user.studentId || user.qq;
     const isSelf = user.id === current?.user.id;
     const row = el('tr');
-    const mayManage = !preview && (isOwner || user.role === 'user');
+    const mayManage = isOwner || user.role === 'user';
     const openRecord = (focusEdit: boolean) => openMemberRecord(user, mayManage, updated => {
       members = members.map(member => member.id === updated.id ? updated : member);
       refreshFilters();
@@ -496,9 +495,8 @@ async function refreshAudit() {
   root.append(wrap);
 }
 
-export async function showManagement(who: Session, readOnly: boolean, signal: AbortSignal, visit: AbortSignal) {
+export async function showManagement(who: Session, signal: AbortSignal, visit: AbortSignal) {
   current = who;
-  preview = readOnly;
   directorySignal = visit;
   members = [];
   await refreshMembers(signal);
