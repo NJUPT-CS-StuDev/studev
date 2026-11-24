@@ -14,7 +14,7 @@ import { Back, Chevron, Cross, Magnifier, Sheet } from '@/world/ui';
 import { campusTime, openingLabel, openingStatus, recommendations } from './model/homePolicy';
 import { displayName } from './model/displayName';
 import { labelRule } from './model/labels';
-import { loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
+import { loadNetwork, loadSpace, loadStyle, spaceBase, type Place, type Space } from './model/space';
 import { formLink } from '@/world/product';
 import { visibleRouteText } from './model/routeText';
 import type { ModelIndex } from './models';
@@ -242,19 +242,19 @@ export default function MapApp() {
     /* Routes. */
     const destination = navId ? world?.space.byId.get(navId) : undefined;
     const routeInfo = useMemo(() => world && destination ? routeContext(origin ? world.space.byId.get(origin) : undefined, destination, world.space.byId) : null, [destination, origin, world]);
-    const network = destination && routeInfo && !routeInfo.withinBuilding ? world?.space.network : undefined;
+    const routeSpace = routeInfo && !routeInfo.withinBuilding ? world?.space : undefined;
     const [routing, setRouting] = useState<Router | 'unavailable' | null>(null);
     useEffect(() => {
-        if (!network) return;
+        if (!routeSpace) return;
         let active = true;
         let router: Router | undefined;
-        void initializeRouting().then(() => {
+        void Promise.all([loadNetwork(routeSpace), initializeRouting()]).then(([network]) => {
             if (!active) return;
             router = new Router(network);
             setRouting(router);
         }).catch(() => { if (active) setRouting('unavailable'); });
         return () => { active = false; router?.free(); setRouting(null); };
-    }, [network]);
+    }, [routeSpace]);
     const planned = useMemo<{ routes: Route[]; notice: string | null }>(() => {
         if (!destination || !world || routeInfo?.withinBuilding) return { routes: [], notice: null };
         const from = origin ? world.space.byId.get(origin)?.routing : me ? { type: 'position' as const, position: me as [number, number] } : null;

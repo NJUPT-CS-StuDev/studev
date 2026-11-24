@@ -36,8 +36,10 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
 
     const classId = who.type === 'me' ? prefs.class ?? null : who.type === 'class' ? who.id : null;
     const key = `${who.type}:${who.type === 'me' ? prefs.class : who.id}`;
+    // A shared URL already names the schedule. Only one's own class waits for preferences.
+    const readyToRead = who.type !== 'me' || (ready && Boolean(classId));
     useEffect(() => {
-        if (!ready || (who.type === 'me' && !prefs.class)) return;
+        if (!readyToRead) return;
         let live = true;
         const load = classId
             ? Promise.all([loadClassMeetings(classId), loadClassLabs(classId), loadClassExams(classId)]).then(([meetings, labs, exams]) => ({ meetings, labs, exams }))
@@ -52,7 +54,7 @@ export function useTimeline(who: Who, prefs: Preferences, ready: boolean, previe
             }));
         load.then(value => { if (live) setSource({ key, ...value }); }).catch(reason => { if (live) setError(String(reason)); });
         return () => { live = false; };
-    }, [classId, key, prefs.class, ready, who]);
+    }, [classId, key, readyToRead, who]);
 
     const term = base?.term.term ?? '';
     const edits = useMemo(() => who.type === 'me' ? timetableEdits(prefs, term) : { hidden: [] as string[], added: [] as string[] } as TimetableEdits, [prefs, term, who.type]);

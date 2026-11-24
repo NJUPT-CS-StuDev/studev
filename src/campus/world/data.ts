@@ -49,16 +49,25 @@ export const loadExams = once(() => DATA_RELEASE.exams ? fetchJson<Exam[]>(`${ba
  */
 export interface ExamRecord { changes: ExamChange[]; sources: ExamSource[]; checked: string | null; history: ExamVersion[] }
 const examIndex = once(() => DATA_RELEASE.exams ? fetchJson<{ classes: string[]; sources: ExamSource[]; checked: string | null; history: ExamVersion[] }>(`${base()}/exams/${DATA_RELEASE.exams}/index.json`) : Promise.resolve({ classes: [] as string[], sources: [] as ExamSource[], checked: null as string | null, history: [] as ExamVersion[] }));
+const classExamFiles = new Map<string, Promise<{ exams: Exam[]; changes: ExamChange[] }>>();
+function classExamFile(id: string) {
+    let file = classExamFiles.get(id);
+    if (!file) {
+        file = fetchJson<{ exams: Exam[]; changes: ExamChange[] }>(`${base()}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)
+            .catch(error => { classExamFiles.delete(id); throw error; });
+        classExamFiles.set(id, file);
+    }
+    return file;
+}
 export const loadExamRecord = async (id: string): Promise<ExamRecord> => {
     const { classes, sources, checked, history } = await examIndex();
     if (!classes.includes(id)) return { changes: [], sources, checked, history };
-    return { changes: (await fetchJson<{ changes: ExamChange[] }>(`${base()}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).changes, sources, checked, history };
+    return { changes: (await classExamFile(id)).changes, sources, checked, history };
 };
 export const loadClassExams = async (id: string): Promise<Exam[]> => {
-    if (!DATA_RELEASE.exams) return [];
     const { classes } = await examIndex();
     if (!classes.includes(id)) return [];
-    return (await fetchJson<{ exams: Exam[] }>(`${base()}/exams/${DATA_RELEASE.exams}/classes/${encodeURIComponent(id)}.json`)).exams;
+    return (await classExamFile(id)).exams;
 };
 
 /** Every lab sitting of the term: for a course, a teacher or a room. */

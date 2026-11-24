@@ -2,7 +2,7 @@ import { initialize, Router, type Mode } from 'wayfind';
 import { APP_CONFIG } from './config';
 import { loadPeriods, loadRoomDay, loadRoomIndex } from './data';
 import { buildingWord, isClassroom, makeRoomReader } from './rooms';
-import { loadSpace, type Space } from '@/map/model/space';
+import { loadNetwork, loadSpace, type Space } from '@/map/model/space';
 import { findPlaces, placeMeant, placesAround } from '@/map/model/find';
 import { campusTime, openingStatus } from '@/map/model/homePolicy';
 import { fetchJson } from './fetch';
@@ -84,7 +84,10 @@ export class CampusTools {
         if (context.withinBuilding) return { ...identity, scope: 'within-building', building: context.building,
             ...(placeFloor(from) ? { from_floor: placeFloor(from) } : {}), ...(context.floor ? { to_floor: context.floor } : {}),
             steps: [`起点：${context.fromLocation}`, `目的地：${context.location}`] };
-        const router = await (this.router ??= initialize().then(() => new Router(space.network)));
+        const router = await (this.router ??= Promise.all([loadNetwork(space), initialize()]).then(([network]) => new Router(network)).catch(error => {
+            this.router = undefined;
+            throw error;
+        }));
         const result = router.route({ origin: from.routing, destination: to.routing, mode, avoid_steps: false, max_snap_distance_m: 100, alternatives: 1 });
         const route = result.routes[0];
         if (!route) throw new Error(`地图里没有从${this.nameOf(from)}到${this.nameOf(to)}的路。`);
@@ -92,5 +95,5 @@ export class CampusTools {
             distance_m: Math.round(route.distance_m), duration_s: Math.round(route.duration_s),
             steps: [...route.maneuvers.map(step => step.type === 'arrive' && context.access.kind === 'building' ? `到达${context.arrival}` : step.instruction), ...(context.continuation ? [context.continuation] : [])] };
     }
-    dispose() { void this.router?.then(router => router.free()); }
+    dispose() { void this.router?.then(router => router.free(), () => {}); }
 }

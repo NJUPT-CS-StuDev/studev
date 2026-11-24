@@ -46,12 +46,24 @@ try {
       } catch {return route.fulfill({status:404,body:'Not found'});}
     });
     const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+    let graphs=0, routerModules=0;
+    page.on('request',request=>{
+      const path=new URL(request.url()).pathname;
+      if(path.endsWith('/network.json'))graphs++;
+      if(/wayfind.*\.wasm$/i.test(path))routerModules++;
+    });
+    await page.goto(new URL('/map/',origin).href);
+    await page.locator('.labels .lb').first().waitFor();
+    assert.equal(graphs,0,'The base map does not load the outside routing network');
+    assert.equal(routerModules,0,'The base map does not initialize the route engine');
     for(const [from,to,floor] of [['仙林/教1-102','仙林/教1-101','1'],['仙林/教1-101','仙林/教1-201','2'],['仙林/教1/2','仙林/教1-201','2']]) {
       await page.goto(mapUrl(from,to));await page.locator('.mbody h2').filter({hasText:'同在教1'}).waitFor();
       assert.equal(await page.locator('.from select').inputValue(),from,'The URL retains the requested origin room');
       assert((await page.locator('.mbody .meta').first().innerText()).includes(`${floor} 层`));
       assert.doesNotMatch(await page.locator('.mbody').innerText(),/\d+\s*分钟|\d+\s*米|到达教1-/,'An indoor position does not invent road travel');
       await settledMap(page,'仙林/教1');
+      assert.equal(graphs,0,'Indoor routes do not load the outside routing network');
+      assert.equal(routerModules,0,'Indoor routes do not initialize the route engine');
       await page.screenshot({path:join(output,`${name}-inside-${floor}${from.endsWith('/2')?'-floor-origin':''}.png`),fullPage:false});
       await page.getByRole('button',{name:'查看楼层',exact:true}).click();
       await page.waitForURL(url=>url.searchParams.get('place')===to&&!url.searchParams.has('nav')&&url.searchParams.get('f')===floor);
@@ -63,6 +75,8 @@ try {
     }
     await page.goto(mapUrl('仙林/教1-101','仙林/教2-101'));
     await page.locator('.steps').getByText('到达教2入口',{exact:true}).waitFor();
+    assert.equal(graphs,1,'The first outdoor route loads one routing graph');
+    assert.equal(routerModules,1,'The first outdoor route loads the engine');
     assert.equal(await page.locator('.from select').inputValue(),'仙林/教1-101');
     assert.equal(await page.locator('.mbody .meta').first().innerText(),'到 教2入口');
     assert.equal(await page.locator('.steps li').last().innerText(),'进入教2后，前往1 层 · 教2-101');
@@ -71,6 +85,7 @@ try {
     await page.screenshot({path:join(output,`${name}-entrance.png`),fullPage:false});
     await page.locator('.from select').selectOption('仙林/教2');
     await page.locator('.mbody h2').filter({hasText:'同在教2'}).waitFor();
+    assert.equal(graphs,1);
     assert.equal(await page.locator('.steps').count(),0,'Changing to the same building discards the outdoor itinerary');
     assert.doesNotMatch(await page.locator('.mbody').innerText(),/\d+\s*分钟|\d+\s*米/);
     await page.goto(mapUrl('仙林/教1-101','仙林/教2-101','bike'));

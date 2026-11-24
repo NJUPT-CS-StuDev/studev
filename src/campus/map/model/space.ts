@@ -35,7 +35,6 @@ interface OpeningRecord { hours: NonNullable<Place['hours']>; sources?: string[]
 export interface Space {
     places: Place[];
     byId: Map<string, Place>;
-    network: GraphData;
 }
 
 export const spaceBase = (campus = CAMPUS) =>
@@ -43,15 +42,14 @@ export const spaceBase = (campus = CAMPUS) =>
 
 export async function loadSpace(campus = CAMPUS): Promise<Space> {
     const base = spaceBase(campus);
-    const [places, network, opening, rooms] = await Promise.all([
+    const [places, opening, rooms] = await Promise.all([
         fetchJson<Place[]>(`${base}/entities.json`),
-        fetchJson<GraphData>(`${base}/network.json`),
         fetchJson<Record<string, OpeningRecord>>(`${DATA_RELEASE.base}/hours.json`),
         loadRoomIndex(),
     ]);
     const roomById = new Map(rooms.rooms.map(room => [room.id, room]));
     const joined = places.map(place => {
-        if (!place.routing || place.routing.type !== 'target' || !network.targets[place.routing.id]?.length) {
+        if (place.routing?.type !== 'target' || !place.routing.id) {
             throw new Error(`地图实体缺少规范导航目标：${place.id}`);
         }
         const record = opening[place.id];
@@ -60,7 +58,28 @@ export async function loadSpace(campus = CAMPUS): Promise<Space> {
             ...(room ? { names: [...new Set([...place.names, ...room.names])], seats: room.seats ?? undefined, room_kinds: room.kinds } : {}),
             ...(record ? { hours: record.hours, sources: [...new Set([...place.sources, ...(record.sources ?? [])])] } : {}) };
     });
-    return { places: joined, byId: new Map(joined.map(p => [p.id, p])), network };
+    return { places: joined, byId: new Map(joined.map(p => [p.id, p])) };
+}
+
+const routeNetworks = new WeakMap<Space, Promise<GraphData>>();
+/** Load the routing graph only for a route that leaves a building. */
+export function loadNetwork(space: Space, campus = CAMPUS): Promise<GraphData> {
+    let request = routeNetworks.get(space);
+    if (!request) {
+        request = fetchJson<GraphData>(`${spaceBase(campus)}/network.json`).then(network => {
+            for (const place of space.places) {
+                if (place.routing.type !== 'target' || !network.targets[place.routing.id]?.length) {
+                    throw new Error(`地图实体缺少规范导航目标：${place.id}`);
+                }
+            }
+            return network;
+        }).catch(error => {
+            routeNetworks.delete(space);
+            throw error;
+        });
+        routeNetworks.set(space, request);
+    }
+    return request;
 }
 
 /** The packaged style, with its two tokens bound to this site. */

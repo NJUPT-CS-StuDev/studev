@@ -1,10 +1,16 @@
 // How long it takes to walk somewhere from here, asked only once someone has allowed location.
 import { initialize, Router, type Position } from 'wayfind';
-import { loadSpace } from '@/map/model/space';
+import { loadNetwork, loadSpace } from '@/map/model/space';
 import { routeContext } from './routes';
 
 let world: Promise<{ space: Awaited<ReturnType<typeof loadSpace>>; router: Router }> | null = null;
-const getWorld = () => world ??= Promise.all([loadSpace(), initialize()]).then(([space]) => ({ space, router: new Router(space.network) }));
+const getWorld = () => world ??= Promise.all([
+    loadSpace().then(async space => ({ space, network: await loadNetwork(space) })),
+    initialize(),
+]).then(([{ space, network }]) => ({ space, router: new Router(network) })).catch(error => {
+    world = null;
+    throw error;
+});
 
 async function allowedPosition(): Promise<Position | null> {
     try {

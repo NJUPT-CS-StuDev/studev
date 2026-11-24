@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readdir, readFile, writeFile } from 'node:fs/promises';
 
 export function searchBootstrap(release, origin, bundled) {
     const base = new URL(release.search_base + '/', origin);
@@ -15,8 +15,7 @@ export function searchBootstrap(release, origin, bundled) {
     return { base: base.href.slice(0, -1), manifest, inputs };
 }
 
-/** Fetch the search island's module graph in parallel. The worker owns fetching
- * its WebAssembly and index files. Document preload responses are scoped to the document. */
+/** Start the search island and its WebAssembly download while the visit resolves its campus snapshot. */
 export default function searchPreload() {
     const modules = new Map();
     let warm;
@@ -52,12 +51,14 @@ export default function searchPreload() {
                     for (const dep of imports) if (modules.has(dep)) preload.add(dep);
                 }
                 const links = [...preload].map(path => `<link rel="modulepreload" href="${path}">`).join('');
+                const wasm = (await readdir(new URL('_astro/', dir))).find(name => /^wasm_search_wasm_bg-.+\.wasm$/.test(name));
+                if (!wasm) throw new Error('The search worker has no WebAssembly to preload');
                 const script = `<script type="module" src="${warm}"></script>`;
                 const seed = html.match(/<script[^>]*data-search-base=[^>]*>[\s\S]*?<\/script>/)?.[0];
                 const entry = html.match(/<link[^>]*\bdata-campus-entry\b[^>]*>/)?.[0];
                 if (!seed || !html.includes(script)) throw new Error('The search page has no worker seed');
                 if (!entry) throw new Error('The search page has no campus entry preload');
-                const early = `${entry}${links}${seed}<script type="module" async src="${warm}"></script>`;
+                const early = `${entry}${links}<link rel="preload" href="/_astro/${wasm}" as="fetch" type="application/wasm" crossorigin="anonymous">${seed}<script type="module" async src="${warm}"></script>`;
                 await writeFile(page, html.replace(script, '').replace(seed, '').replace(entry, '').replace(/<meta charset="UTF-8">/i, tag => tag + early));
             },
         },
