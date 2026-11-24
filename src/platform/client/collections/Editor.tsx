@@ -83,7 +83,7 @@ function RecipientPicker({ selected, onChange, organizationId, issuerId, onOrgan
             </option>}
             {organizationOptions.filter(org => org.id !== issuerId).map(org => <option key={org.id} value={org.id}>{org.fullName}</option>)}
         </select><small className="cw-muted">各批次共用这份名单，进度按这个组织下的分支统计。</small></label>
-        <div className="cw-inline"><b>已选 {selected.size} 人</b><button type="button" className="cw-button" aria-pressed={onlySelected} onClick={() => { showOnlySelected(!onlySelected); setPage(1); }}>{onlySelected ? '查看组织名单' : '查看已选'}</button></div>
+        <div className="cw-inline"><button type="button" className="cw-button" aria-pressed={onlySelected} onClick={() => { showOnlySelected(!onlySelected); setPage(1); }}>{onlySelected ? '查看组织名单' : '查看已选'}</button></div>
         <div className="cw-form-grid">{!onlySelected && <label>筛选分支<select value={effectiveScope === rosterScope ? '' : scope} onChange={event => { setScope(event.target.value); setPage(1); }}><option value="">全部分支</option>{organizationOptions.filter(org => org.id !== rosterScope && (!rosterScope || belongs(org.id, rosterScope))).map(org => <option key={org.id} value={org.id}>{org.fullName}</option>)}</select></label>}
             <label>搜索成员<input type="search" placeholder="学号或姓名" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label></div>
         {failure && <div className="cw-inline"><span role="alert">{failure}</span><button type="button" className="cw-button" onClick={() => { setFailure(''); retry(attempt + 1); }}>重试</button></div>}
@@ -193,7 +193,7 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
             await authorize();
             if (creating) {
                 const issuer = options[issuerChoice];
-                if (!issuer) throw new Error('请选择发布身份。');
+                if (!issuer) throw new Error('请选择以什么身份发布。');
                 const result = await api<{ item: Item<Round> }>('/collections/items', { ...details, ...targets, status: action === 'publish' ? 'published' : 'draft', issuerOrganizationId: issuer.organizationId, issuerTitle: issuer.title, rounds: [roundBody] });
                 onSaved(result.item.id);
             } else if (item) {
@@ -213,22 +213,32 @@ export function CollectionEditor({ mode, catalog, item, currentRound, authorize,
     }
     return <Dialog title={titles[mode]} onClose={onClose} busy={busy} wide={creating || mode === 'round' || mode === 'new-round'}>
         <form className="cw-dialog-form" onSubmit={save}>
+            {itemFields && <label>名称<input autoFocus required maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label>}
+            {(itemFields || targetFields) && <div className="cw-access-settings">
+                {creating ? <label>以什么身份发布<select value={issuerChoice} onChange={event => setIssuerChoice(+event.target.value)}>{options.map((option, index) => <option key={`${option.organizationId}:${option.title}`} value={index}>{option.label}</option>)}</select></label>
+                    : mode === 'item' && item && <div className="cw-access-fact"><strong>以什么身份发布</strong><span>{[item.issuer.organizationName, item.issuer.title].filter(Boolean).join(' · ')}</span></div>}
+                <div className="cw-form-grid">
+                    {targetFields ? <fieldset className="cw-audience-choice">
+                        <legend>谁能填写</legend>
+                        <div className="cw-inline"><label className="cw-check"><input type="radio" name="collection-audience" value="open" checked={targetMode === 'open'} onChange={() => setTarget('open')} />所有已登录用户</label>
+                            <label className="cw-check"><input type="radio" name="collection-audience" value="selected" checked={targetMode === 'selected'} onChange={() => setTarget('selected')} />指定成员</label></div>
+                        {targetMode === 'selected' && <small className="cw-muted" role="status">已选 {recipients.size} 人</small>}
+                    </fieldset> : <div className="cw-access-fact"><strong>谁能填写</strong><span>{targetMode === 'selected' ? `指定成员 · ${item?.recipientCount ?? 0} 人` : '所有已登录用户'}</span></div>}
+                    {itemFields && <label>谁能看到<select value={visibility} disabled={pinned} onChange={event => setVisibility(event.target.value as Item['visibility'])}>
+                        <option value="members">{targetMode === 'selected' ? '仅指定成员和管理者可见' : '仅登录用户可见'}</option><option value="public">所有人可见</option>
+                    </select></label>}
+                </div>
+                {targetFields && targetMode === 'selected' && <RecipientPicker selected={recipients} onChange={setRecipients}
+                    organizationId={audienceOrganizationId} issuerId={issuerId} onOrganizationChange={setAudienceOrganization} />}
+            </div>}
             {itemFields && <>
-                {creating && <label>发布身份<select value={issuerChoice} onChange={event => setIssuerChoice(+event.target.value)}>{options.map((option, index) => <option key={`${option.organizationId}:${option.title}`} value={index}>{option.label}</option>)}</select></label>}
-                <label>名称<input autoFocus required maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label>
                 <label>填写说明<textarea rows={3} maxLength={5000} value={description} onChange={event => setDescription(event.target.value)} /></label>
                 <label>标签<input placeholder="例如 实验报告、活动报名" value={tags} onChange={event => setTags(event.target.value)} /></label>
-                <div className="cw-form-grid"><label>学期<select required value={selectedTerm} onChange={event => setTerm(event.target.value)}>{semesters.map(id => <option key={id} value={id}>{semesterLabel(id)}</option>)}</select></label>
-                    <label>可见范围<select value={visibility} disabled={pinned} onChange={event => setVisibility(event.target.value as Item['visibility'])}><option value="members">登录用户</option><option value="public">公开</option></select></label></div>
+                <label>学期<select required value={selectedTerm} onChange={event => setTerm(event.target.value)}>{semesters.map(id => <option key={id} value={id}>{semesterLabel(id)}</option>)}</select></label>
                 <CoursePicker value={course} onChange={setCourse} />
                 <div><label className="cw-check"><input type="checkbox" checked={showProgress} onChange={event => setShowProgress(event.target.checked)} />允许参与者查看提交进度</label>
                     <small className="cw-muted">适用于全部批次。参与者可查看汇总人数，填写内容和附件仍只对本人和有管理权限的人开放。</small></div>
                 {!creating && <label>发布状态<select value={status} onChange={event => setStatus(event.target.value as Item['status'])}>{item?.status === 'draft' && <option value="draft">草稿</option>}<option value="published">已发布</option>{item?.status !== 'draft' && <option value="closed">停止收集</option>}</select></label>}
-            </>}
-            {targetFields && <>
-                <label>填写对象<select value={targetMode} onChange={event => setTarget(event.target.value as TargetMode)}><option value="open">登录后可填写</option><option value="selected">指定成员</option></select></label>
-                {targetMode === 'selected' && <RecipientPicker selected={recipients} onChange={setRecipients}
-                    organizationId={audienceOrganizationId} issuerId={issuerId} onOrganizationChange={setAudienceOrganization} />}
             </>}
             {(roundFields || mode === 'deadline') && <>
                 {roundFields && <><h3>批次设置</h3><label>批次名称<input required maxLength={80} value={round.label} onChange={event => changeRound({ label: event.target.value })} /></label></>}

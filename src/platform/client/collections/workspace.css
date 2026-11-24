@@ -55,7 +55,7 @@
     width: 100%; min-height: 42px; padding: 8px 11px; color: var(--ink); border: 1px solid var(--line); border-radius: 9px;
     background: var(--surface); font: inherit;
 }
-.cw-workspace input[type='checkbox'], .cw-dialog input[type='checkbox'] { width: 17px; min-height: auto; height: 17px; margin: 0; flex: none; accent-color: var(--brand); }
+.cw-workspace input[type='checkbox'], .cw-dialog input:is([type='checkbox'], [type='radio']) { width: 17px; min-height: auto; height: 17px; margin: 0; flex: none; accent-color: var(--brand); }
 .cw-workspace input[type='file'] { max-width: 100%; }
 .cw-workspace textarea, .cw-dialog textarea { resize: vertical; }
 .cw-search {
@@ -170,6 +170,15 @@
 .cw-dialog-form { display: grid; gap: 14px; padding: 16px 18px 0; }
 .cw-dialog-form label:not(.cw-check), .collection-course-picker { display: grid; gap: 5px; font-weight: 550; }
 .cw-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; }
+.cw-access-settings, .cw-access-fact { display: grid; gap: 5px; min-width: 0; }
+.cw-access-settings { gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.cw-access-settings label, .cw-access-settings select { min-width: 0; }
+.cw-access-settings > .cw-form-grid { align-items: start; }
+.cw-access-fact strong, .cw-audience-choice legend { font-weight: 550; }
+.cw-access-fact span { overflow-wrap: anywhere; }
+.cw-audience-choice { border: 0; margin: 0; padding: 0; min-width: 0; }
+.cw-audience-choice legend { padding: 0; margin-bottom: 5px; }
+.cw-audience-choice .cw-check { min-height: 32px; }
 .cw-dialog-actions { position: sticky; bottom: 0; display: flex; justify-content: end; gap: 8px; flex-wrap: wrap; padding: 11px 18px; margin: 0 -18px; border-top: 1px solid var(--line); background: var(--surface); }
 .cw-fields-editor { display: grid; gap: 12px; }
 .cw-fields-editor > .cw-button { justify-self: start; }
