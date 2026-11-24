@@ -58,9 +58,23 @@ export default function searchPreload() {
                 const entry = html.match(/<link[^>]*\bdata-campus-entry\b[^>]*>/)?.[0];
                 if (!seed || !html.includes(script)) throw new Error('The search page has no worker seed');
                 if (!entry) throw new Error('The search page has no campus entry preload');
-                const early = `${entry}${links}<link rel="preload" href="/_astro/${wasm}" as="fetch" type="application/wasm" crossorigin="anonymous">${seed}<script type="module" async src="${warm}"></script>`;
+                const kernel = `<script data-search-wasm="/_astro/${wasm}">(${preloadKernel})()</script>`;
+                const early = `${entry}${links}${kernel}${seed}<script type="module" async src="${warm}"></script>`;
                 await writeFile(page, html.replace(script, '').replace(seed, '').replace(entry, '').replace(/<meta charset="UTF-8">/i, tag => tag + early));
             },
         },
     };
+}
+
+function preloadKernel() {
+    const url = document.currentScript.dataset.searchWasm;
+    if (navigator.connection?.saveData) return;
+    try { if (localStorage.getItem('studev-search-kernel') === url) return; } catch { /* The cold path still works without storage. */ }
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'fetch';
+    link.type = 'application/wasm';
+    link.crossOrigin = 'anonymous';
+    link.href = url;
+    document.head.append(link);
 }

@@ -17,7 +17,10 @@ export function searchClient(): SearchClient {
 export function warmSearch() {
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
     if (connection?.saveData) return;
-    const start = () => void searchClient().initialize().catch(() => undefined);
+    const start = () => void searchClient().initialize().then(() => {
+        const wasm = document.querySelector<HTMLScriptElement>('script[data-search-wasm]')?.dataset.searchWasm;
+        if (wasm) localStorage.setItem('studev-search-kernel', wasm);
+    }).catch(() => undefined);
     if (location.pathname === '/search/') { start(); return; }
     if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 8000 }); else setTimeout(start, 3000);
 }
